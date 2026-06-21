@@ -1,0 +1,45 @@
+# Dependencies - never send these, Docker installs them fresh
+node_modules
+.pnp
+.pnp.js
+
+# Next.js build output
+.next
+out
+
+# Environment files - use docker env_file instead
+.env
+.env.*
+!.env.*.example
+
+# Development files
+.git
+.gitignore
+*.md
+docs
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode
+.idea
+*.swp
+
+# Test files
+coverage
+__tests__
+*.test.*
+*.spec.*
+
+# Additional large folders/data not needed for build
+.npm-offline
+pgadmin-data
+shipments-Files
+.claude
+tsconfig.tsbuildinfo

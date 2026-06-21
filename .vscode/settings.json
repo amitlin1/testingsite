@@ -1,0 +1,23 @@
+{
+    "sqltools.connections": [
+        {
+            "connectionTimeout": 15,
+            "mssqlOptions": {
+                "appName": "SQLTools",
+                "useUTC": false,
+                "encrypt": false,
+                "trustServerCertificate": true,
+                "abortTransactionOnError": true,
+                "tdsVersion": "7_4"
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 1433,
+            "driver": "MSSQL",
+            "name": "Local SQL Server",
+            "username": "sa",
+            "password": "Strong!Passw0rd"
+        }
+    ]
+}

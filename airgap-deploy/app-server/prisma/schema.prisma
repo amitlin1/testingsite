@@ -1,0 +1,646 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Central registry of every object stored in MinIO.
+/// MinIO holds the bytes; this table is the index/audit log used for
+/// orphan detection, auditing, dedup and fast listing.
+model file_objects {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bucket          String    @db.VarChar(255)
+  object_key      String    @unique @db.VarChar(1024)
+  file_name       String    @db.VarChar(512)
+  content_type    String?   @db.VarChar(255)
+  size_bytes      BigInt    @default(0)
+  checksum_sha256 String?   @db.VarChar(64)
+  /// What owns this object: 'shipment_signature' | 'shipment_history_signature' | 'file_manager' | 'item_attachment'
+  entity_type     String?   @db.VarChar(64)
+  /// Owner id (shipment id, log id, item id, ...) as a string for flexibility
+  entity_id       String?   @db.VarChar(64)
+  metadata        Json?
+  /// 'active' | 'deleted' (soft delete; bytes may still exist as a MinIO version)
+  status          String    @default("active") @db.VarChar(20)
+  created_by      String?   @db.VarChar(255)
+  /// Who last modified the row (upload/replace/edit). Mirrors created_by for the first write.
+  updated_by      String?   @db.VarChar(255)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+
+  @@index([entity_type, entity_id], map: "idx_file_objects_entity")
+  @@index([status], map: "idx_file_objects_status")
+  @@index([created_at], map: "idx_file_objects_created_at")
+}
+
+model customer_snapshots {
+  snapshot_date              DateTime @db.Date
+  customer_id                Int
+  customer_code              String?  @db.VarChar(255)
+  customer_name              String?  @db.VarChar(255)
+  total_items                Int      @default(0)
+  items_in_queue             Int      @default(0)
+  items_in_test              Int      @default(0)
+  items_waiting_for_research Int      @default(0)
+  items_in_research          Int      @default(0)
+  finished_items             Int      @default(0)
+  items_in_routes            Int      @default(0)
+  success_percentage         Decimal  @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
+  average_time_minutes       Decimal? @db.Decimal(10, 2)
+  created_at                 DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, customer_id])
+  @@index([customer_id], map: "idx_customer_snapshot_customer")
+  @@index([snapshot_date], map: "idx_customer_snapshot_date")
+}
+
+model customer_snapshots_daily {
+  snapshot_id                Int       @id @default(autoincrement())
+  customer_id                Int
+  snapshot_date              DateTime  @db.Date
+  total_items                Int?      @default(0)
+  items_in_queue             Int?      @default(0)
+  items_in_test              Int?      @default(0)
+  items_finished             Int?      @default(0)
+  items_waiting_for_research Int?      @default(0)
+  items_in_research          Int?      @default(0)
+  items_in_routes            Int?      @default(0)
+  total_processed_in_period  Int?      @default(0)
+  created_at                 DateTime? @default(now()) @db.Timestamp(6)
+
+  @@unique([snapshot_date, customer_id])
+}
+
+model customer_snapshots_monthly {
+  snapshot_date              DateTime @db.Date
+  customer_id                Int
+  customer_code              String?  @db.VarChar(255)
+  customer_name              String?  @db.VarChar(255)
+  total_items                Int      @default(0)
+  items_in_queue             Int      @default(0)
+  items_in_test              Int      @default(0)
+  items_waiting_for_research Int      @default(0)
+  items_in_research          Int      @default(0)
+  finished_items             Int      @default(0)
+  items_in_routes            Int      @default(0)
+  success_percentage         Decimal  @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
+  average_time_minutes       Decimal? @db.Decimal(10, 2)
+  created_at                 DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, customer_id])
+  @@index([customer_id], map: "idx_customer_snapshot_monthly_customer")
+  @@index([snapshot_date], map: "idx_customer_snapshot_monthly_date")
+}
+
+model customer_snapshots_quarterly {
+  snapshot_date              DateTime @db.Date
+  customer_id                Int
+  customer_code              String?  @db.VarChar(255)
+  customer_name              String?  @db.VarChar(255)
+  total_items                Int      @default(0)
+  items_in_queue             Int      @default(0)
+  items_in_test              Int      @default(0)
+  items_waiting_for_research Int      @default(0)
+  items_in_research          Int      @default(0)
+  finished_items             Int      @default(0)
+  items_in_routes            Int      @default(0)
+  success_percentage         Decimal  @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
+  average_time_minutes       Decimal? @db.Decimal(10, 2)
+  created_at                 DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, customer_id])
+  @@index([customer_id], map: "idx_customer_snapshot_quarterly_customer")
+  @@index([snapshot_date], map: "idx_customer_snapshot_quarterly_date")
+}
+
+model customers {
+  id            Int    @id @default(autoincrement())
+  name          String @db.Char(50)
+  customer_code String @db.VarChar(100)
+}
+
+model daily_counters {
+  date_key DateTime @id @db.Date
+  counter  Int?     @default(0)
+}
+
+model finished_item {
+  item_id               Int       @id @default(autoincrement())
+  item_type_id          Int
+  current_status        Int
+  current_route_step    Int
+  test_station_id       Int?
+  created_at            DateTime  @db.Timestamp(6)
+  finished_at           DateTime? @db.Timestamp(6)
+  is_finished           Boolean   @default(false)
+  processing_start_time DateTime? @db.Timestamp(6)
+  q_start_time          DateTime? @db.Timestamp(6)
+}
+
+model item_route_history {
+  log_id                Int       @id @default(autoincrement())
+  item_id               BigInt
+  test_station_id       Int
+  current_route_step    Int
+  queue_start_time      DateTime? @db.Timestamp(6)
+  processing_start_time DateTime? @db.Timestamp(6)
+  processing_end_time   DateTime? @db.Timestamp(6)
+  worker_id             Int?
+  route_number          Int       @default(1)
+
+  @@index([item_id], map: "idx_irh_item_id")
+  @@index([test_station_id], map: "idx_irh_station_id")
+  @@index([processing_end_time], map: "idx_irh_processing_end_time")
+  @@index([worker_id], map: "idx_irh_worker_id")
+}
+
+model item_routes {
+  item_id               BigInt         @id @default(autoincrement())
+  item_type_id          Int
+  current_status        Int
+  current_route_step    Int
+  test_station_id       Int?
+  created_at            DateTime       @db.Timestamp(6)
+  finished_at           DateTime?      @db.Timestamp(6)
+  is_finished           Boolean        @default(false)
+  queue_start_time      DateTime       @db.Timestamp(6)
+  processing_start_time DateTime?      @db.Timestamp(6)
+  route_number          Int            @default(1)
+  item_types            item_types     @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_item_routes_item_type")
+  test_stations         test_stations? @relation(fields: [test_station_id], references: [test_station_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_item_routes_test_station")
+
+  @@index([current_status], map: "idx_ir_current_status")
+  @@index([test_station_id], map: "idx_ir_test_station_id")
+  @@index([finished_at], map: "idx_ir_finished_at")
+  @@index([is_finished], map: "idx_ir_is_finished")
+}
+
+model item_status {
+  item_status_id   Int    @id @default(autoincrement())
+  item_status_desc String @db.Char(50)
+}
+
+model item_type_snapshots {
+  snapshot_date              DateTime @db.Date
+  item_type_id               Int
+  item_type_desc             String?  @db.VarChar(255)
+  total_items                Int      @default(0)
+  items_in_queue             Int      @default(0)
+  items_in_test              Int      @default(0)
+  items_waiting_for_research Int      @default(0)
+  items_in_research          Int      @default(0)
+  items_finished             Int      @default(0)
+  items_in_routes            Int      @default(0)
+  completion_percentage      Decimal  @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
+  created_at                 DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, item_type_id])
+  @@index([snapshot_date], map: "idx_item_type_snapshot_date")
+  @@index([item_type_id], map: "idx_item_type_snapshot_type")
+}
+
+model item_type_snapshots_monthly {
+  snapshot_date              DateTime @db.Date
+  item_type_id               Int
+  item_type_desc             String?  @db.VarChar(255)
+  total_items                Int      @default(0)
+  items_in_queue             Int      @default(0)
+  items_in_test              Int      @default(0)
+  items_waiting_for_research Int      @default(0)
+  items_in_research          Int      @default(0)
+  items_finished             Int      @default(0)
+  items_in_routes            Int      @default(0)
+  completion_percentage      Decimal  @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
+  created_at                 DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, item_type_id])
+  @@index([snapshot_date], map: "idx_item_type_snapshot_monthly_date")
+  @@index([item_type_id], map: "idx_item_type_snapshot_monthly_type")
+}
+
+model item_type_snapshots_quarterly {
+  snapshot_date              DateTime @db.Date
+  item_type_id               Int
+  item_type_desc             String?  @db.VarChar(255)
+  total_items                Int      @default(0)
+  items_in_queue             Int      @default(0)
+  items_in_test              Int      @default(0)
+  items_waiting_for_research Int      @default(0)
+  items_in_research          Int      @default(0)
+  items_finished             Int      @default(0)
+  items_in_routes            Int      @default(0)
+  completion_percentage      Decimal  @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
+  created_at                 DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, item_type_id])
+  @@index([snapshot_date], map: "idx_item_type_snapshot_quarterly_date")
+  @@index([item_type_id], map: "idx_item_type_snapshot_quarterly_type")
+}
+
+model item_types {
+  item_type_id     Int                @id @default(autoincrement())
+  item_type_desc   String             @db.Char(50)
+  item_routes      item_routes[]
+  shipment_history shipment_history[]
+  shipment_items   shipment_items[]
+  testing_routes   testing_routes[]
+}
+
+model items {
+  item_id           BigInt  @id
+  customer_id       Int
+  item_type_id      Int
+  serial_no         String
+  makat             Int
+  model             String  @db.Char(50)
+  manufacturer_name String  @db.Char(50)
+  manufacturer_no   String
+  shipment_id       Int
+  parent_item_id    BigInt?
+  items             items?  @relation("itemsToitems", fields: [parent_item_id], references: [item_id], onDelete: NoAction, onUpdate: NoAction)
+  other_items       items[] @relation("itemsToitems")
+}
+
+model kpi_snapshots {
+  snapshot_date                   DateTime @id @db.Date
+  average_queue_time_minutes      Decimal? @db.Decimal(10, 2)
+  average_processing_time_minutes Decimal? @db.Decimal(10, 2)
+  total_items_processed           Int      @default(0)
+  items_currently_in_queue        Int      @default(0)
+  items_currently_in_test         Int      @default(0)
+  busiest_station_id              Int?
+  busiest_station_name            String?  @db.VarChar(255)
+  busiest_station_count           Int      @default(0)
+  created_at                      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([snapshot_date], map: "idx_kpi_snapshot_date")
+}
+
+model kpi_snapshots_monthly {
+  snapshot_date                   DateTime @id @db.Date
+  average_queue_time_minutes      Decimal? @db.Decimal(10, 2)
+  average_processing_time_minutes Decimal? @db.Decimal(10, 2)
+  total_items_processed           Int      @default(0)
+  items_currently_in_queue        Int      @default(0)
+  items_currently_in_test         Int      @default(0)
+  busiest_station_id              Int?
+  busiest_station_name            String?  @db.VarChar(255)
+  busiest_station_count           Int      @default(0)
+  created_at                      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([snapshot_date], map: "idx_kpi_snapshot_monthly_date")
+}
+
+model kpi_snapshots_quarterly {
+  snapshot_date                   DateTime @id @db.Date
+  average_queue_time_minutes      Decimal? @db.Decimal(10, 2)
+  average_processing_time_minutes Decimal? @db.Decimal(10, 2)
+  total_items_processed           Int      @default(0)
+  items_currently_in_queue        Int      @default(0)
+  items_currently_in_test         Int      @default(0)
+  busiest_station_id              Int?
+  busiest_station_name            String?  @db.VarChar(255)
+  busiest_station_count           Int      @default(0)
+  created_at                      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([snapshot_date], map: "idx_kpi_snapshot_quarterly_date")
+}
+
+model research_history {
+  research_id Int       @id @default(autoincrement())
+  item_id     Int
+  station_id  Int
+  sent_at     DateTime? @db.Timestamp(6)
+  return_at   DateTime? @db.Timestamp(6)
+  result      Int
+  comments    String?
+  worker_id   Int?
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model shipment_history {
+  log_id             Int         @id @default(autoincrement())
+  shipment_id        Int
+  sent_shipment_code String
+  sent_date          DateTime    @db.Timestamp(6)
+  sending_worker_id  Int?
+  item_type_id       Int?
+  makat              Int?
+  amount             Int
+  created_at         DateTime?   @default(now()) @db.Timestamp(6)
+  signature_path     String?
+  item_types         item_types? @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction)
+  workers            workers?    @relation(fields: [sending_worker_id], references: [worker_id], onDelete: NoAction, onUpdate: NoAction)
+  shipments          shipments   @relation(fields: [shipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([shipment_id], map: "idx_shipment_history_shipment_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model shipment_items {
+  id           Int         @id @default(autoincrement())
+  shipment_id  Int?
+  item_type_id Int?
+  quantity     Int
+  created_at   DateTime?   @default(now()) @db.Timestamp(6)
+  makat        Int?
+  item_types   item_types? @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction)
+  shipments    shipments?  @relation(fields: [shipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model shipment_snapshots {
+  snapshot_date              DateTime  @db.Date
+  shipment_id                Int
+  shipment_code              String?   @db.VarChar(255)
+  shipment_date              DateTime? @db.Date
+  customer_id                Int?
+  customer_code              String?   @db.VarChar(255)
+  customer_name              String?   @db.VarChar(255)
+  total_items                Int       @default(0)
+  items_in_queue             Int       @default(0)
+  items_in_test              Int       @default(0)
+  items_waiting_for_research Int       @default(0)
+  items_in_research          Int       @default(0)
+  items_finished             Int       @default(0)
+  items_in_routes            Int       @default(0)
+  completion_percentage      Decimal   @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal   @default(0) @db.Decimal(5, 2)
+  created_at                 DateTime  @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, shipment_id])
+  @@index([customer_id], map: "idx_shipment_snapshot_customer")
+  @@index([snapshot_date], map: "idx_shipment_snapshot_date")
+  @@index([shipment_id], map: "idx_shipment_snapshot_shipment")
+}
+
+model shipment_snapshots_monthly {
+  snapshot_date              DateTime  @db.Date
+  shipment_id                Int
+  shipment_code              String?   @db.VarChar(255)
+  shipment_date              DateTime? @db.Date
+  customer_id                Int?
+  customer_code              String?   @db.VarChar(255)
+  customer_name              String?   @db.VarChar(255)
+  total_items                Int       @default(0)
+  items_in_queue             Int       @default(0)
+  items_in_test              Int       @default(0)
+  items_waiting_for_research Int       @default(0)
+  items_in_research          Int       @default(0)
+  items_finished             Int       @default(0)
+  items_in_routes            Int       @default(0)
+  completion_percentage      Decimal   @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal   @default(0) @db.Decimal(5, 2)
+  created_at                 DateTime  @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, shipment_id])
+  @@index([snapshot_date], map: "idx_shipment_snapshot_monthly_date")
+  @@index([shipment_id], map: "idx_shipment_snapshot_monthly_shipment")
+}
+
+model shipment_snapshots_quarterly {
+  snapshot_date              DateTime  @db.Date
+  shipment_id                Int
+  shipment_code              String?   @db.VarChar(255)
+  shipment_date              DateTime? @db.Date
+  customer_id                Int?
+  customer_code              String?   @db.VarChar(255)
+  customer_name              String?   @db.VarChar(255)
+  total_items                Int       @default(0)
+  items_in_queue             Int       @default(0)
+  items_in_test              Int       @default(0)
+  items_waiting_for_research Int       @default(0)
+  items_in_research          Int       @default(0)
+  items_finished             Int       @default(0)
+  items_in_routes            Int       @default(0)
+  completion_percentage      Decimal   @default(0) @db.Decimal(5, 2)
+  items_in_routes_percentage Decimal   @default(0) @db.Decimal(5, 2)
+  created_at                 DateTime  @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, shipment_id])
+  @@index([snapshot_date], map: "idx_shipment_snapshot_quarterly_date")
+  @@index([shipment_id], map: "idx_shipment_snapshot_quarterly_shipment")
+}
+
+model shipments {
+  id                                             Int                @id @default(autoincrement())
+  shipment_code                                  String             @db.VarChar(20)
+  customer_id                                    Int
+  shipment_date                                  DateTime           @db.Timestamp(6)
+  makat                                          Int
+  amount                                         Int
+  shipment_sent_date                             DateTime?          @db.Timestamp(6)
+  is_sent                                        Boolean?           @default(false)
+  recieving_worker_id                            Int?
+  source_id                                      Int?
+  sending_worker_id                              Int?
+  finished_at                                    DateTime?          @db.Timestamptz(6)
+  signature_path                                 String?
+  shipment_history                               shipment_history[]
+  shipment_items                                 shipment_items[]
+  workers_shipments_recieving_worker_idToworkers workers?           @relation("shipments_recieving_worker_idToworkers", fields: [recieving_worker_id], references: [worker_id], onDelete: NoAction, onUpdate: NoAction)
+  workers_shipments_sending_worker_idToworkers   workers?           @relation("shipments_sending_worker_idToworkers", fields: [sending_worker_id], references: [worker_id], onDelete: NoAction, onUpdate: NoAction)
+  poc_details                                    String?            @db.VarChar(255)
+}
+
+model sources {
+  source_id   Int    @id @default(autoincrement())
+  source_desc String @db.VarChar(100)
+
+  @@index([source_desc], map: "idx_sources_desc")
+}
+
+model station_snapshots {
+  snapshot_date                      DateTime @db.Date
+  station_id                         Int
+  station_name                       String?  @db.VarChar(255)
+  station_type_name                  String?  @db.VarChar(255)
+  items_in_queue                     Int      @default(0)
+  items_in_test                      Int      @default(0)
+  average_current_queue_time_minutes Decimal? @db.Decimal(10, 2)
+  total_processed_in_period          Int      @default(0)
+  created_at                         DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, station_id])
+  @@index([snapshot_date], map: "idx_station_snapshot_date")
+  @@index([station_id], map: "idx_station_snapshot_station")
+}
+
+model station_snapshots_monthly {
+  snapshot_date                      DateTime @db.Date
+  station_id                         Int
+  station_name                       String?  @db.VarChar(255)
+  station_type_name                  String?  @db.VarChar(255)
+  items_in_queue                     Int      @default(0)
+  items_in_test                      Int      @default(0)
+  average_current_queue_time_minutes Decimal? @db.Decimal(10, 2)
+  total_processed_in_period          Int      @default(0)
+  created_at                         DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, station_id])
+  @@index([snapshot_date], map: "idx_station_snapshot_monthly_date")
+  @@index([station_id], map: "idx_station_snapshot_monthly_station")
+}
+
+model station_snapshots_quarterly {
+  snapshot_date                      DateTime @db.Date
+  station_id                         Int
+  station_name                       String?  @db.VarChar(255)
+  station_type_name                  String?  @db.VarChar(255)
+  items_in_queue                     Int      @default(0)
+  items_in_test                      Int      @default(0)
+  average_current_queue_time_minutes Decimal? @db.Decimal(10, 2)
+  total_processed_in_period          Int      @default(0)
+  created_at                         DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, station_id])
+  @@index([snapshot_date], map: "idx_station_snapshot_quarterly_date")
+  @@index([station_id], map: "idx_station_snapshot_quarterly_station")
+}
+
+model status_distribution_snapshots {
+  snapshot_date DateTime @db.Date
+  status_id     Int
+  status_name   String?  @db.VarChar(255)
+  count         Int      @default(0)
+  percentage    Decimal  @default(0) @db.Decimal(5, 2)
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, status_id])
+  @@index([snapshot_date], map: "idx_status_dist_snapshot_date")
+  @@index([status_id], map: "idx_status_dist_snapshot_status")
+}
+
+model status_distribution_snapshots_monthly {
+  snapshot_date DateTime @db.Date
+  status_id     Int
+  status_name   String?  @db.VarChar(255)
+  count         Int      @default(0)
+  percentage    Decimal  @default(0) @db.Decimal(5, 2)
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, status_id])
+  @@index([snapshot_date], map: "idx_status_dist_snapshot_monthly_date")
+  @@index([status_id], map: "idx_status_dist_snapshot_monthly_status")
+}
+
+model status_distribution_snapshots_quarterly {
+  snapshot_date DateTime @db.Date
+  status_id     Int
+  status_name   String?  @db.VarChar(255)
+  count         Int      @default(0)
+  percentage    Decimal  @default(0) @db.Decimal(5, 2)
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+
+  @@id([snapshot_date, status_id])
+  @@index([snapshot_date], map: "idx_status_dist_snapshot_quarterly_date")
+  @@index([status_id], map: "idx_status_dist_snapshot_quarterly_status")
+}
+
+model system_snapshots_daily {
+  snapshot_id                Int       @id @default(autoincrement())
+  snapshot_date              DateTime  @unique @db.Date
+  total_items                Int?      @default(0)
+  items_in_queue             Int?      @default(0)
+  items_in_test              Int?      @default(0)
+  items_finished             Int?      @default(0)
+  items_waiting_for_research Int?      @default(0)
+  items_in_research          Int?      @default(0)
+  items_in_routes            Int?      @default(0)
+  created_at                 DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model system_snapshots_monthly {
+  snapshot_id                Int       @id @default(autoincrement())
+  snapshot_date              DateTime  @unique @db.Date
+  total_items                Int?      @default(0)
+  items_in_queue             Int?      @default(0)
+  items_in_test              Int?      @default(0)
+  items_finished             Int?      @default(0)
+  items_waiting_for_research Int?      @default(0)
+  items_in_research          Int?      @default(0)
+  items_in_routes            Int?      @default(0)
+  created_at                 DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model system_snapshots {
+  snapshot_date              DateTime @id @db.Date
+  total_items                Int      @default(0)
+  items_in_queue             Int      @default(0)
+  items_in_test              Int      @default(0)
+  items_finished             Int      @default(0)
+  items_waiting_for_research Int      @default(0)
+  items_in_research          Int      @default(0)
+  items_in_routes            Int      @default(0)
+  created_at                 DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([snapshot_date], map: "idx_system_snapshot_date")
+}
+
+model station_hourly_snapshots {
+  id              Int      @id @default(autoincrement())
+  snapshot_hour   DateTime @db.Timestamp(6)
+  station_id      Int
+  items_processed Int      @default(0)
+  avg_queue_time  Float?
+  avg_test_time   Float?
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+
+  @@unique([snapshot_hour, station_id])
+  @@index([snapshot_hour], map: "idx_station_hourly_snapshot_hour")
+}
+
+model station_live_counters {
+  station_id     Int @id
+  items_in_queue Int @default(0)
+  items_in_test  Int @default(0)
+}
+
+model test_station_status {
+  test_station_status_id   Int    @id @default(autoincrement())
+  test_station_status_desc String @db.Char(50)
+}
+
+model test_stations {
+  test_station_id      Int                @id @default(autoincrement())
+  test_station_type_id Int
+  test_station_desc    String             @db.Char(50)
+  status               Int
+  is_research          Boolean            @default(false)
+  item_routes          item_routes[]
+  test_stations_type   test_stations_type @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_test_stations_test_station_type")
+}
+
+model test_stations_type {
+  test_station_type_id Int              @id @default(autoincrement())
+  test_type_desc       String           @db.Char(50)
+  test_stations        test_stations[]
+  testing_routes       testing_routes[]
+}
+
+model testing_routes {
+  test_route_id        Int                @id @default(autoincrement())
+  item_type_id         Int
+  test_station_type_id Int
+  route_steps          Int[]              @default([])
+  route_number         Int                @default(1)
+  item_types           item_types         @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_testing_routes_item_type")
+  test_stations_type   test_stations_type @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_testing_routes_test_station_type")
+}
+
+model workers {
+  worker_id                                        Int                @id
+  worker_name                                      String             @db.VarChar(100)
+  shipment_history                                 shipment_history[]
+  shipments_shipments_recieving_worker_idToworkers shipments[]        @relation("shipments_recieving_worker_idToworkers")
+  shipments_shipments_sending_worker_idToworkers   shipments[]        @relation("shipments_sending_worker_idToworkers")
+  stokekeeper                                      Boolean            @default(false)
+}

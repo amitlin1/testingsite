@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx prisma init:*)",
+      "Bash(npx prisma migrate resolve:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx prisma validate:*)",
+      "Bash(npx tsx:*)",
+      "Bash(node scripts/test-prisma.js:*)",
+      "Bash(npx prisma:*)",
+      "Bash(node --import tsx/esm:*)",
+      "Bash(npx tsc:*)",
+      "Bash(docker compose build:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker system df:*)",
+      "Bash(docker builder:*)",
+      "Bash(du:*)",
+      "Bash(powershell -Command \"Get-ChildItem -Exclude node_modules,.next,.git | ForEach-Object { $size = \\(Get-ChildItem $_.FullName -Recurse -ErrorAction SilentlyContinue | Measure-Object Length -Sum\\).Sum; [PSCustomObject]@{Name=$_.Name; SizeMB=[math]::Round\\($size/1MB,2\\)} } | Sort-Object SizeMB -Descending | Select-Object -First 15 | Format-Table -AutoSize\")",
+      "Bash(xargs head *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(ls *)",
+      "Bash(cat C:/Amit_Projects/testingSite/nginx/*.conf)",
+      "PowerShell(docker exec postgres psql -U appuser -d InventoryDB -c \"INSERT INTO item_status \\(item_status_id, item_status_desc\\) VALUES \\(3, '����'\\), \\(4, '����� �����'\\), \\(5, '�����'\\) ON CONFLICT \\(item_status_id\\) DO NOTHING RETURNING item_status_id, item_status_desc;\")",
+      "PowerShell(docker exec postgres psql -U appuser -d InventoryDB -c \"WITH selected_station AS \\(SELECT test_station_type_id, is_research FROM test_stations WHERE test_station_id = 2\\) SELECT t1.item_id, t1.current_status, TRIM\\(t3.item_status_desc\\) AS status_desc, t1.test_station_id FROM item_routes t1 INNER JOIN items i ON i.item_id = t1.item_id JOIN testing_routes t2 ON t1.item_type_id = t2.item_type_id AND t1.route_number = t2.route_number JOIN item_status t3 ON t1.current_status = t3.item_status_id CROSS JOIN selected_station ss WHERE \\(t1.current_status = 1 AND t1.test_station_id = 2 AND t1.finished_at IS NULL\\) OR \\(t1.current_status = 2 AND t2.route_steps[t1.current_route_step] = ss.test_station_type_id AND t1.finished_at IS NULL\\) OR \\(ss.is_research = true AND \\(\\(t1.current_status = 5 AND t1.test_station_id = 2 AND t1.finished_at IS NULL\\) OR \\(t1.current_status = 4 AND t1.finished_at IS NULL\\)\\)\\);\")"
+    ]
+  }
+}

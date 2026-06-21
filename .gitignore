@@ -1,0 +1,120 @@
+# ============================================================
+#  STRICT .gitignore
+#  Commit ONLY source code, config & docs.
+#  Dependencies, build output, data, secrets and EVERY archive
+#  (zip / tar / gz / 7z / iso ...) are deliberately kept out.
+#  Ref: https://help.github.com/articles/ignoring-files/
+# ============================================================
+
+# ---------- Dependencies ----------
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ---------- Offline / air-gapped npm caches ----------
+.npm-offline/
+/.temp-npm-cache
+/OFFLINE_NPM
+/OFFLINE_NPM_LINUX
+
+# ---------- Build / output ----------
+/.next/
+/out/
+/build
+/dist
+*.tsbuildinfo
+next-env.d.ts
+
+# ---------- Generated code ----------
+/src/generated/prisma
+
+# ---------- Tests / coverage ----------
+/coverage
+
+# ============================================================
+#  Archives & compressed files  — NEVER commit
+# ============================================================
+*.zip
+*.tar
+*.tar.*
+*.tgz
+*.gz
+*.bz2
+*.bz
+*.xz
+*.7z
+*.rar
+*.lz
+*.lzma
+*.lz4
+*.zst
+*.cab
+
+# Air-gap docker image bundles (e.g. airgap-deploy/**/images/*.tar)
+**/images/*.tar
+**/images/*.tar.gz
+
+# ---------- Disk / VM / container images ----------
+*.iso
+*.img
+*.dmg
+*.vhd
+*.vhdx
+*.vmdk
+*.qcow2
+*.ova
+*.ovf
+
+# ---------- Compiled binaries ----------
+*.exe
+*.dll
+*.so
+*.so.*
+*.dylib
+*.o
+*.a
+*.lib
+*.class
+*.jar
+*.war
+*.node
+
+# ---------- Databases & data directories ----------
+/pgadmin-data
+/minio-data
+/postgres-data
+*.sqlite
+*.sqlite3
+*.db
+
+# ============================================================
+#  Secrets / environment  — NEVER commit
+# ============================================================
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# ---------- Logs / debug ----------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---------- Editor / OS cruft ----------
+.DS_Store
+Thumbs.db
+nul
+
+# ---------- Deploy / misc ----------
+.vercel
