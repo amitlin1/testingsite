@@ -38,11 +38,13 @@ import {
     Send as SendIcon,
     History as HistoryIcon,
     PictureAsPdf as PictureAsPdfIcon,
-    CheckCircle as CheckCircleIcon
+    CheckCircle as CheckCircleIcon,
+    QrCode2 as QrCode2Icon
 } from "@mui/icons-material";
 import Tooltip from "@mui/material/Tooltip";
 import { useReactToPrint } from 'react-to-print';
 import { ShipmentPDFDocument } from './ShipmentPDFDocument';
+import ShipmentBarcodesDialog from './ShipmentBarcodesDialog';
 
 export default function ShipmentTable() {
     const theme = useTheme();
@@ -64,6 +66,7 @@ export default function ShipmentTable() {
     const [updateOpen, setUpdateOpen] = useState(false);
     const [sendOpen, setSendOpen] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
+    const [barcodesOpen, setBarcodesOpen] = useState(false);
     const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
 
     // PDF printing
@@ -358,6 +361,11 @@ export default function ShipmentTable() {
                                             <PictureAsPdfIcon fontSize="small" />
                                         </IconButton>
                                     </Tooltip>
+                                    <Tooltip title="הדפס ברקודים לכל הפריטים">
+                                        <IconButton onClick={(e) => { e.stopPropagation(); setSelectedShipment(row); setBarcodesOpen(true); }} size="small" sx={{ color: theme.palette.success.main, bgcolor: alpha(theme.palette.success.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.success.main, 0.2) } }}>
+                                            <QrCode2Icon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
                                 </Stack>
                             </TableCell>
                         </>
@@ -369,6 +377,7 @@ export default function ShipmentTable() {
                 open={insertOpen}
                 onClose={() => setInsertOpen(false)}
                 onCreate={handleInsertResult}
+                existingShipments={rows}
             />
 
             <ShipmentUpdatePopup
@@ -398,6 +407,12 @@ export default function ShipmentTable() {
             <ShipmentHistoryPopup
                 open={historyOpen}
                 onClose={() => setHistoryOpen(false)}
+                shipment={selectedShipment}
+            />
+
+            <ShipmentBarcodesDialog
+                open={barcodesOpen}
+                onClose={() => setBarcodesOpen(false)}
                 shipment={selectedShipment}
             />
 

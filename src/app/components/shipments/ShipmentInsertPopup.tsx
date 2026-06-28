@@ -18,8 +18,11 @@ import {
 } from "@mui/material";
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import CloseIcon from '@mui/icons-material/Close';
+import LockIcon from '@mui/icons-material/Lock';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { Card, Stack } from "@mui/material";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
-import { NewShipment, Customers } from "@/types";
+import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
 import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat } from '@/app/lib/qrParser';
 
@@ -27,6 +30,7 @@ type ShipmentInsertPopupProps = {
     open: boolean;
     onClose: () => void;
     onCreate: (success: boolean) => void;
+    existingShipments?: Shipment[];
 };
 
 const defaultShipment: NewShipment = {
@@ -46,6 +50,7 @@ export default function ShipmentInsertPopup({
     open,
     onClose,
     onCreate,
+    existingShipments = [],
 }: ShipmentInsertPopupProps) {
     const [customers, setCustomers] = useState<Customers[]>([]);
     const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; stokekeeper?: boolean }[]>([]);
@@ -79,39 +84,64 @@ export default function ShipmentInsertPopup({
     const [manualBarcodeInput, setManualBarcodeInput] = useState('');
     const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // When a shipment is filled from a scanned barcode its details are locked for
+    // manual editing — only the fields the barcode does not provide stay editable.
+    const [scanned, setScanned] = useState(false);
+
+    // Duplicate-shipment dialog (shown when a scanned shipment already exists).
+    const [duplicate, setDuplicate] = useState<Shipment | null>(null);
+
     // Handle QR scan result
     const handleQrScan = useCallback((decodedText: string) => {
         const parsedData = parseShipmentQr(decodedText);
-        
-        if (parsedData) {
-            // Fill shipment number
-            setValue('shipment_code', parsedData.shipmentNumber);
-            
-            // Find and set customer by customer_code
-            const matchingCustomer = customers.find(
-                c => c.customer_code === parsedData.customer
-            );
-            if (matchingCustomer) {
-                setValue('customer_id', matchingCustomer.id);
-            }
-            
-            // Set POC details
-            if (parsedData.poc) {
-                setValue('poc_details', parsedData.poc);
-            }
 
-            // Convert and set shipment date
-            const convertedDate = convertQrDateToInputFormat(parsedData.supplyDate);
-            if (convertedDate) {
-                setValue('shipment_date', new Date(convertedDate));
-            }
+        if (!parsedData) {
+            setScanError('פורמט QR לא תקין');
+            return;
+        }
 
+        // Guard against scanning a shipment that is already in the system with the
+        // same identifying details (shipment number + customer).
+        const existingMatch = existingShipments.find(
+            (s) =>
+                s.shipment_code?.trim() === parsedData.shipmentNumber.trim() &&
+                s.customer_code?.trim() === parsedData.customer.trim()
+        );
+        if (existingMatch) {
+            setDuplicate(existingMatch);
             setScanError(null);
             setScannerOpen(false);
-        } else {
-            setScanError('פורמט QR לא תקין');
+            setManualBarcodeInput('');
+            return;
         }
-    }, [customers, setValue]);
+
+        // Fill shipment number
+        setValue('shipment_code', parsedData.shipmentNumber);
+
+        // Find and set customer by customer_code
+        const matchingCustomer = customers.find(
+            c => c.customer_code === parsedData.customer
+        );
+        if (matchingCustomer) {
+            setValue('customer_id', matchingCustomer.id);
+        }
+
+        // Set POC details
+        if (parsedData.poc) {
+            setValue('poc_details', parsedData.poc);
+        }
+
+        // Convert and set shipment date
+        const convertedDate = convertQrDateToInputFormat(parsedData.supplyDate);
+        if (convertedDate) {
+            setValue('shipment_date', new Date(convertedDate));
+        }
+
+        // Lock the barcode-derived fields against manual editing.
+        setScanned(true);
+        setScanError(null);
+        setScannerOpen(false);
+    }, [customers, setValue, existingShipments]);
 
     // Auto-calculate total amount
     const shipmentItems = watch("shipment_items");
@@ -163,6 +193,8 @@ export default function ShipmentInsertPopup({
     useEffect(() => {
         if (open) {
             reset({ ...defaultShipment, source_id: 1, shipment_items: [{ item_type_id: 0, quantity: 0 }] });
+            setScanned(false);
+            setDuplicate(null);
         }
     }, [open, reset]);
 
@@ -333,8 +365,66 @@ export default function ShipmentInsertPopup({
                 </DialogContent>
             </Dialog>
 
+            {/* Duplicate shipment dialog — same template as the testing page station-move message */}
+            <Dialog
+                open={!!duplicate}
+                onClose={() => setDuplicate(null)}
+                PaperProps={{ sx: { borderRadius: 3, p: 2, minWidth: 400 } }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ErrorOutlineIcon color="error" fontSize="large" />
+                    <Typography variant="h6" component="span" fontWeight="bold">
+                        המשלוח כבר קיים במערכת
+                    </Typography>
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <Box sx={{ p: 2, bgcolor: alpha(theme.palette.error.main, 0.1), borderRadius: 2 }}>
+                            <Typography variant="body1" fontWeight="600" color="error.main">
+                                לא ניתן לקלוט את המשלוח — קיים כבר משלוח עם אותם הפרטים.
+                            </Typography>
+                        </Box>
+                        {duplicate && (
+                            <Card variant="outlined" sx={{ p: 2, bgcolor: "#f8f9fa" }}>
+                                <Stack spacing={1}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        מס׳ משלוח: <strong>{duplicate.shipment_code}</strong>
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        קוד לקוח: <strong>{duplicate.customer_code}</strong>
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        תאריך קבלה: <strong>{new Date(duplicate.shipment_date).toLocaleDateString("he-IL")}</strong>
+                                    </Typography>
+                                </Stack>
+                            </Card>
+                        )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => setDuplicate(null)}
+                        variant="contained"
+                        color="error"
+                        size="large"
+                        sx={{ borderRadius: 2, px: 4 }}
+                    >
+                        אישור
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
             <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <DialogContent>
+                    {scanned && (
+                        <Alert
+                            severity="info"
+                            icon={<LockIcon fontSize="inherit" />}
+                            sx={{ mb: 2, borderRadius: 2 }}
+                        >
+                            הנתונים מולאו מסריקת ברקוד ונעולים לעריכה. ניתן להזין ידנית רק את שדות הפריטים שאינם כלולים בברקוד.
+                        </Alert>
+                    )}
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
                         <Box sx={{ width: { xs: "100%", sm: "100%" } }}>
                              <Controller
@@ -347,6 +437,7 @@ export default function ShipmentInsertPopup({
                                         fullWidth
                                         multiline
                                         rows={2}
+                                        disabled={scanned}
                                     />
                                 )}
                             />
@@ -365,6 +456,7 @@ export default function ShipmentInsertPopup({
                                         label="מס' משלוח"
                                         fullWidth
                                         required
+                                        disabled={scanned}
                                         error={!!errors.shipment_code}
                                         helperText={errors.shipment_code?.message}
                                         inputProps={{ maxLength: 20 }}
@@ -380,6 +472,7 @@ export default function ShipmentInsertPopup({
                                 render={({ field: { onChange, value, ref, onBlur } }) => (
                                     <Autocomplete
                                         options={customers}
+                                        disabled={scanned}
                                         getOptionLabel={(option) => option.customer_code}
                                         value={customers.find((c) => c.id === value) || null}
                                         onChange={(_, newValue) => onChange(newValue?.id ?? null)}
@@ -461,6 +554,7 @@ export default function ShipmentInsertPopup({
                                         type="date"
                                         fullWidth
                                         required
+                                        disabled={scanned}
                                         InputLabelProps={{ shrink: true }}
                                         value={value ? new Date(value).toISOString().split("T")[0] : ""}
                                         onChange={(e) => onChange(e.target.value ? new Date(e.target.value) : null)}
