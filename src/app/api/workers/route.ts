@@ -10,8 +10,8 @@ export async function GET() {
     });
 
     const workers = rows.map((row) => ({
-      id: row.worker_id,
-      name: row.worker_name,
+      worker_id: row.worker_id,
+      worker_name: row.worker_name,
       stokekeeper: row.stokekeeper,
     }));
 

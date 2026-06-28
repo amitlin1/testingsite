@@ -82,11 +82,11 @@ export default function ShipmentInsertPopup({
     // Handle QR scan result
     const handleQrScan = useCallback((decodedText: string) => {
         const parsedData = parseShipmentQr(decodedText);
-        
+
         if (parsedData) {
             // Fill shipment number
             setValue('shipment_code', parsedData.shipmentNumber);
-            
+
             // Find and set customer by customer_code
             const matchingCustomer = customers.find(
                 c => c.customer_code === parsedData.customer
@@ -94,7 +94,7 @@ export default function ShipmentInsertPopup({
             if (matchingCustomer) {
                 setValue('customer_id', matchingCustomer.id);
             }
-            
+
             // Set POC details
             if (parsedData.poc) {
                 setValue('poc_details', parsedData.poc);
@@ -138,14 +138,14 @@ export default function ShipmentInsertPopup({
                 if (!cancelled) {
                     setCustomers(Array.isArray(custData) ? custData : []);
                     // Map API raw format { id, name, stokekeeper } to expected format { worker_id, worker_name, stokekeeper }
-                    setWorkers(Array.isArray(workersData) 
-                        ? workersData.map((w: any) => ({ worker_id: w.id, worker_name: w.name, stokekeeper: w.stokekeeper })) 
+                    setWorkers(Array.isArray(workersData)
+                        ? workersData.map((w: any) => ({ worker_id: w.id, worker_name: w.name, stokekeeper: w.stokekeeper }))
                         : []
                     );
                     setItemTypes(Array.isArray(typesData) ? typesData : []);
                     const loadedSources = Array.isArray(sourcesData) ? sourcesData : [];
                     setSources(loadedSources);
-                    
+
                     // Default source to ID 1 if exists
                     if (loadedSources.find((s: any) => s.id === 1)) {
                         setValue("source_id", 1);
@@ -211,10 +211,10 @@ export default function ShipmentInsertPopup({
     };
 
     return (
-        <Dialog 
-            open={open} 
-            onClose={onClose} 
-            fullWidth 
+        <Dialog
+            open={open}
+            onClose={onClose}
+            fullWidth
             maxWidth="md"
             PaperProps={{
                 sx: {
@@ -226,8 +226,8 @@ export default function ShipmentInsertPopup({
                 }
             }}
         >
-            <DialogTitle sx={{ 
-                fontWeight: 800, 
+            <DialogTitle sx={{
+                fontWeight: 800,
                 background: "linear-gradient(45deg, #1976d2, #90caf9)",
                 backgroundClip: "text",
                 textFillColor: "transparent",
@@ -337,7 +337,7 @@ export default function ShipmentInsertPopup({
                 <DialogContent>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
                         <Box sx={{ width: { xs: "100%", sm: "100%" } }}>
-                             <Controller
+                            <Controller
                                 name="poc_details"
                                 control={control}
                                 render={({ field }) => (
@@ -569,19 +569,19 @@ export default function ShipmentInsertPopup({
 
                 </DialogContent>
                 <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
-                    <Button 
+                    <Button
                         onClick={onClose}
                         variant="outlined"
                         sx={{ borderRadius: 2, px: 3, borderColor: 'rgba(0,0,0,0.12)' }}
                     >
                         ביטול
                     </Button>
-                    <Button 
-                        type="submit" 
-                        disabled={!isValid} 
+                    <Button
+                        type="submit"
+                        disabled={!isValid}
                         variant="contained"
-                        sx={{ 
-                            borderRadius: 2, 
+                        sx={{
+                            borderRadius: 2,
                             px: 4,
                             fontWeight: 700,
                             background: "linear-gradient(45deg, #1976d2, #42a5f5)",

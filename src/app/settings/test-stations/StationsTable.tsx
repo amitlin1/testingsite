@@ -28,13 +28,13 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
   const [statuses, setStatuses] = useState<TestStationStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Dialog
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRow, setEditingRow] = useState<TestStation | null>(null);
   const [formData, setFormData] = useState<Partial<TestStation>>({});
   const [saveLoading, setSaveLoading] = useState(false);
-  
+
   // Delete
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState<TestStation | null>(null);
@@ -64,7 +64,7 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
     } catch (err) { // Keep err usage minimal or log it
-       console.error(err);
+      console.error(err);
       setSnackbar({ open: true, message: "שגיאה בטעינת עמדות", severity: "error" });
     } finally {
       setLoading(false);
@@ -77,7 +77,7 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
 
   const handleAdd = () => {
     setEditingRow(null);
-    setFormData({ 
+    setFormData({
       test_station_type_id: typeId,
       status: 1, // Default active?
       is_research: false
@@ -101,7 +101,7 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow.test_station_id}` : apiUrl;
-      
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -131,8 +131,8 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
     try {
       const res = await fetch(`${apiUrl}/${rowToDelete.test_station_id}`, { method: "DELETE" });
       if (!res.ok) {
-          if (res.status === 409) throw new Error("לא ניתן למחוק כי העמדה בשימוש");
-          throw new Error("Failed to delete");
+        if (res.status === 409) throw new Error("לא ניתן למחוק כי העמדה בשימוש");
+        throw new Error("Failed to delete");
       }
       setRows(rows.filter(r => r.test_station_id !== rowToDelete.test_station_id));
       setSnackbar({ open: true, message: "נמחק בהצלחה", severity: "success" });
@@ -145,11 +145,11 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
     }
   };
 
-  const filteredRows = rows.filter(r => 
+  const filteredRows = rows.filter(r =>
     r.test_station_desc.toLowerCase().includes(searchTerm.toLowerCase())
   );
-// ... Rest of the file is mostly generic JSX but let me verify if I need to change anything else
-// Returning the same JSX structure but with types available
+  // ... Rest of the file is mostly generic JSX but let me verify if I need to change anything else
+  // Returning the same JSX structure but with types available
   return (
     <Box sx={{ p: 2, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2, alignItems: "center", flexShrink: 0 }}>
@@ -160,7 +160,7 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
           הוסף עמדה
         </Button>
       </Box>
-      
+
       <TextField
         size="small"
         placeholder="חיפוש עמדה..."
@@ -183,9 +183,9 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
           </TableHead>
           <TableBody>
             {loading ? (
-               <TableRow><TableCell colSpan={4} align="center"><CircularProgress size={20} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} align="center"><CircularProgress size={20} /></TableCell></TableRow>
             ) : filteredRows.length === 0 ? (
-                <TableRow><TableCell colSpan={4} align="center">אין עמדות</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} align="center">אין עמדות</TableCell></TableRow>
             ) : filteredRows.map(row => (
               <TableRow key={row.test_station_id} hover>
                 <TableCell align="right">{row.test_station_desc}</TableCell>

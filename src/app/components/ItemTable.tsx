@@ -424,21 +424,29 @@ export default function ItemTable() {
               </TableCell>
               <TableCell onClick={() => setSelected(row)}>
                 {(() => {
+                  if (row.parent_item_id !== null && row.parent_item_id !== undefined) {
+                    return (
+                      <Typography variant="body2" color="text.secondary">
+                        -
+                      </Typography>
+                    );
+                  }
+
                   const currentStep = row.current_route_step || 0;
                   const totalSteps = row.total_steps || 0;
-                  
+
                   let pct = 0;
                   let text = "-";
 
                   if (row.current_status === 3 || row.is_finished) {
-                     pct = 100;
-                     text = totalSteps > 0 ? `${totalSteps}/${totalSteps}` : "Finished";
+                    pct = 100;
+                    text = totalSteps > 0 ? `${totalSteps}/${totalSteps}` : "Finished";
                   } else if (totalSteps > 0) {
-                     // Calculate percentage based on current step
-                     // If step 1 of 5, we show it as "Step 1" and maybe 1/5th filled?
-                     // Let's use simple logic: currentStep / totalSteps
-                     pct = Math.min((currentStep / totalSteps) * 100, 100);
-                     text = `${currentStep}/${totalSteps}`;
+                    // Calculate percentage based on current step
+                    // If step 1 of 5, we show it as "Step 1" and maybe 1/5th filled?
+                    // Let's use simple logic: currentStep / totalSteps
+                    pct = Math.min((currentStep / totalSteps) * 100, 100);
+                    text = `${currentStep}/${totalSteps}`;
                   }
 
                   // Determine color
