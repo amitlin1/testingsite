@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Grid, Paper, Typography, Box, Autocomplete, TextField, Button, 
+  Grid, Paper, Typography, Box, Autocomplete, TextField, Button,
   List, ListItem, IconButton,
   Chip, Snackbar, Alert, GlobalStyles
 } from "@mui/material";
@@ -27,7 +27,7 @@ export default function TestingRoutesPage() {
   // Options
   const [itemTypes, setItemTypes] = useState<Option[]>([]);
   const [stationTypes, setStationTypes] = useState<Option[]>([]);
-  
+
   // Selection
   const [selectedItemType, setSelectedItemType] = useState<Option | null>(null);
   const [routeNumber, setRouteNumber] = useState<number | null>(null);
@@ -82,7 +82,7 @@ export default function TestingRoutesPage() {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
       const data = await res.json();
-      
+
       if (Array.isArray(data) && data.length > 0) {
         const route = data[0];
         setCurrentRoute(route);
@@ -132,7 +132,7 @@ export default function TestingRoutesPage() {
 
   const handleSave = async () => {
     if (!selectedItemType || routeNumber === null || routeNumber === undefined) return;
-    
+
     try {
       const body = {
         item_type_id: selectedItemType.id,
@@ -158,7 +158,7 @@ export default function TestingRoutesPage() {
         const errorData = await res.json();
         throw new Error(errorData.error || "Failed to save");
       }
-      
+
       const saved = await res.json();
       setCurrentRoute(saved);
       setIsNew(false);
@@ -174,20 +174,20 @@ export default function TestingRoutesPage() {
 
   return (
     <>
-      <GlobalStyles 
-        styles={{ 
-          html: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" }, 
+      <GlobalStyles
+        styles={{
+          html: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" },
           body: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" },
-          "#__next": { height: "100%", width: "100%" } 
-        }} 
+          "#__next": { height: "100%", width: "100%" }
+        }}
       />
-      
+
       {/* 
         Root Layout Override 
         Using position: fixed to breakout of parent containers (like SettingsLayout) 
         that enforce max-width or padding. 
       */}
-      <Box sx={{ 
+      <Box sx={{
         position: "fixed",
         top: { xs: "56px", sm: "64px" }, // Adjust for Navbar height
         left: 0,
@@ -199,47 +199,47 @@ export default function TestingRoutesPage() {
         direction: "rtl",
         bgcolor: "background.default",
         zIndex: 100, // Ensure it sits above parent background but below AppBar (usually 1100)
-        display: "flex", 
+        display: "flex",
         flexDirection: "column",
         m: 0,
         p: 0,
       }}>
-        
+
         {/* Page Header */}
-        <Box sx={{ 
-          textAlign: "center", 
+        <Box sx={{
+          textAlign: "center",
           flexShrink: 0,
-          width: "100%", 
+          width: "100%",
           p: 1,
           borderBottom: "1px solid",
           borderColor: "divider"
         }}>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: "#333", fontSize: "1.4rem" }}>
-              ניהול מסלולי בדיקה
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.8rem" }}>
-              הגדרת סדר התחנות לפי סוג פריט ומספר מסלול
-            </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#333", fontSize: "1.4rem" }}>
+            ניהול מסלולי בדיקה
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.8rem" }}>
+            הגדרת סדר התחנות לפי סוג פריט ומספר מסלול
+          </Typography>
         </Box>
 
         {/* Main Content Grid Container */}
-        <Box sx={{ 
-          flex: 1, 
-          overflow: "hidden", 
-          width: "100%", 
-          p: 0 
+        <Box sx={{
+          flex: 1,
+          overflow: "hidden",
+          width: "100%",
+          p: 0
         }}>
           <Grid container spacing={0} sx={{ height: "100%", minHeight: 0, width: "100%", m: 0 }}>
-            
+
             {/* Right Panel: Selection */}
             <Grid size={{ xs: 12, md: 4 }} sx={{ height: "100%", minHeight: 0 }}>
-              <Paper 
-                elevation={0} 
-                square 
-                sx={{ 
-                  p: 2, 
-                  height: "100%", 
-                  display: "flex", 
+              <Paper
+                elevation={0}
+                square
+                sx={{
+                  p: 2,
+                  height: "100%",
+                  display: "flex",
                   flexDirection: "column",
                   overflow: "hidden",
                   borderLeft: "1px solid", // Separator for RTL
@@ -249,7 +249,7 @@ export default function TestingRoutesPage() {
                 <Typography variant="h6" sx={{ fontSize: "1rem", mb: 2, fontWeight: 600, borderBottom: "1px solid #eee", pb: 1 }}>
                   בחירת מסלול
                 </Typography>
-                
+
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", flex: 1, px: 1 }}>
                   <Autocomplete
                     options={itemTypes}
@@ -259,7 +259,7 @@ export default function TestingRoutesPage() {
                     onChange={(_, newValue) => setSelectedItemType(newValue)}
                     renderInput={(params) => <TextField {...params} label="סוג פריט" size="small" variant="outlined" />}
                   />
-                  
+
                   <TextField
                     label="מספר מסלול"
                     type="number"
@@ -274,8 +274,8 @@ export default function TestingRoutesPage() {
                   />
 
                   {selectedItemType && routeNumber !== null && routeNumber !== undefined && (
-                    <Alert 
-                      severity={isNew ? "info" : "success"} 
+                    <Alert
+                      severity={isNew ? "info" : "success"}
                       variant="outlined"
                       sx={{ mt: 1, py: 0, alignItems: "center", '& .MuiAlert-message': { padding: '4px 0' } }}
                     >
@@ -288,24 +288,24 @@ export default function TestingRoutesPage() {
 
             {/* Left Panel: Editor */}
             <Grid size={{ xs: 12, md: 8 }} sx={{ height: "100%", minHeight: 0 }}>
-              <Paper 
-                elevation={0} 
-                square 
-                sx={{ 
-                  p: 2, 
-                  height: "100%", 
-                  display: "flex", 
+              <Paper
+                elevation={0}
+                square
+                sx={{
+                  p: 2,
+                  height: "100%",
+                  display: "flex",
                   flexDirection: "column",
                   overflow: "hidden"
                 }}
               >
                 {/* Header Row */}
-                <Box sx={{ 
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center", 
-                  mb: 2, 
-                  borderBottom: "1px solid #eee", 
+                <Box sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 2,
+                  borderBottom: "1px solid #eee",
                   pb: 1,
                   minHeight: "40px",
                   flexShrink: 0
@@ -313,10 +313,10 @@ export default function TestingRoutesPage() {
                   <Typography variant="h6" sx={{ fontSize: "1rem", fontWeight: 600 }}>
                     עריכת שלבים
                   </Typography>
-                  <Button 
-                    variant="contained" 
+                  <Button
+                    variant="contained"
                     color="primary"
-                    startIcon={<SaveIcon />} 
+                    startIcon={<SaveIcon />}
                     onClick={handleSave}
                     disabled={!selectedItemType || routeNumber === null || routeNumber === undefined || loadingRoute}
                     size="small"
@@ -344,11 +344,11 @@ export default function TestingRoutesPage() {
                         renderInput={(params) => <TextField {...params} label="הוסף שלב (סוג עמדה)" size="small" />}
                         sx={{ flexGrow: 1 }}
                       />
-                      <Button 
-                        variant="outlined" 
-                        onClick={handleAddStep} 
-                        disabled={!stepToAdd} 
-                        size="small" 
+                      <Button
+                        variant="outlined"
+                        onClick={handleAddStep}
+                        disabled={!stepToAdd}
+                        size="small"
                         sx={{ minWidth: "80px" }}
                       >
                         הוסף
@@ -356,10 +356,10 @@ export default function TestingRoutesPage() {
                     </Box>
 
                     {/* Scrollable List */}
-                    <Box sx={{ 
-                      flex: 1, 
-                      overflowY: "auto", 
-                      border: "1px solid #eee", 
+                    <Box sx={{
+                      flex: 1,
+                      overflowY: "auto",
+                      border: "1px solid #eee",
                       borderRadius: 1,
                       bgcolor: "#fafafa",
                       px: 1
@@ -368,27 +368,27 @@ export default function TestingRoutesPage() {
                         {steps.map((stepId, index) => (
                           <ListItem key={index} divider sx={{ py: 1, '&:last-child': { borderBottom: 'none' } }}>
                             <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1.5 }}>
-                               <Chip 
-                                 label={index + 1} 
-                                 color="primary" 
-                                 size="small" 
-                                 sx={{ minWidth: "30px", height: "24px", fontWeight: "bold" }} 
-                               />
-                               <Typography sx={{ flexGrow: 1, fontSize: "0.9rem", fontWeight: 500 }}>
-                                 {getStationName(stepId)}
-                               </Typography>
-                               
-                               <Box sx={{ display: "flex" }}>
-                                 <IconButton size="small" onClick={() => handleMoveStep(index, "up")} disabled={index === 0}>
-                                   <ArrowUpwardIcon fontSize="small" />
-                                 </IconButton>
-                                 <IconButton size="small" onClick={() => handleMoveStep(index, "down")} disabled={index === steps.length - 1}>
-                                   <ArrowDownwardIcon fontSize="small" />
-                                 </IconButton>
-                                 <IconButton size="small" color="error" onClick={() => handleRemoveStep(index)} sx={{ ml: 1 }}>
-                                   <DeleteIcon fontSize="small" />
-                                 </IconButton>
-                               </Box>
+                              <Chip
+                                label={index + 1}
+                                color="primary"
+                                size="small"
+                                sx={{ minWidth: "30px", height: "24px", fontWeight: "bold" }}
+                              />
+                              <Typography sx={{ flexGrow: 1, fontSize: "0.9rem", fontWeight: 500 }}>
+                                {getStationName(stepId)}
+                              </Typography>
+
+                              <Box sx={{ display: "flex" }}>
+                                <IconButton size="small" onClick={() => handleMoveStep(index, "up")} disabled={index === 0}>
+                                  <ArrowUpwardIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton size="small" onClick={() => handleMoveStep(index, "down")} disabled={index === steps.length - 1}>
+                                  <ArrowDownwardIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton size="small" color="error" onClick={() => handleRemoveStep(index)} sx={{ ml: 1 }}>
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
                             </Box>
                           </ListItem>
                         ))}

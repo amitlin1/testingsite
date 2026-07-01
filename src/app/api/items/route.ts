@@ -56,11 +56,11 @@ ORDER BY i.item_id DESC
 
     // Use a custom stringify to handle any remaining BigInts safely
     const json = JSON.stringify(normalizedRows, (key, value) =>
-        typeof value === 'bigint' ? value.toString() : value
+      typeof value === 'bigint' ? value.toString() : value
     );
 
-    return new NextResponse(json, { 
-        headers: { 'Content-Type': 'application/json' } 
+    return new NextResponse(json, {
+      headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error("Error loading items:", error);

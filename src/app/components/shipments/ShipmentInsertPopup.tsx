@@ -169,14 +169,14 @@ export default function ShipmentInsertPopup({
                 if (!cancelled) {
                     setCustomers(Array.isArray(custData) ? custData : []);
                     // Map API raw format { id, name, stokekeeper } to expected format { worker_id, worker_name, stokekeeper }
-                    setWorkers(Array.isArray(workersData) 
-                        ? workersData.map((w: any) => ({ worker_id: w.id, worker_name: w.name, stokekeeper: w.stokekeeper })) 
+                    setWorkers(Array.isArray(workersData)
+                        ? workersData.map((w: any) => ({ worker_id: w.id, worker_name: w.name, stokekeeper: w.stokekeeper }))
                         : []
                     );
                     setItemTypes(Array.isArray(typesData) ? typesData : []);
                     const loadedSources = Array.isArray(sourcesData) ? sourcesData : [];
                     setSources(loadedSources);
-                    
+
                     // Default source to ID 1 if exists
                     if (loadedSources.find((s: any) => s.id === 1)) {
                         setValue("source_id", 1);
