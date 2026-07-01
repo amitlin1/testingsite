@@ -329,7 +329,7 @@ export default function ItemTable() {
               getOptionLabel={(o) => `${o.shipment_code} - ${o.customer_name} (${new Date(o.shipment_date).toLocaleDateString()})`}
               value={shipmentFilter}
               onChange={(_, v) => setShipmentFilter(v)}
-              renderInput={(params) => <TextField {...params} InputLabelProps={{ shrink: true }} label="משלוח" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              renderInput={(params) => <TextField {...params} label="משלוח" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
             />
           </Grid>
 
