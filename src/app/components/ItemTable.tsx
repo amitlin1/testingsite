@@ -307,7 +307,7 @@ export default function ItemTable() {
               getOptionLabel={(o) => o.label}
               value={statusFilter}
               onChange={(_, v) => setStatusFilter(v)}
-              renderInput={(params) => <TextField {...params} label="סטטוס" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              renderInput={(params) => <TextField {...params} InputLabelProps={{ shrink: true }} label="סטטוס" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
             />
           </Grid>
 
@@ -318,7 +318,7 @@ export default function ItemTable() {
               getOptionLabel={(o) => o.item_type_desc}
               value={typeFilter}
               onChange={(_, v) => setTypeFilter(v)}
-              renderInput={(params) => <TextField {...params} label="סוג פריט" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              renderInput={(params) => <TextField {...params} InputLabelProps={{ shrink: true }} label="סוג פריט" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
             />
           </Grid>
 
@@ -329,7 +329,7 @@ export default function ItemTable() {
               getOptionLabel={(o) => `${o.shipment_code} - ${o.customer_name} (${new Date(o.shipment_date).toLocaleDateString()})`}
               value={shipmentFilter}
               onChange={(_, v) => setShipmentFilter(v)}
-              renderInput={(params) => <TextField {...params} label="משלוח" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              renderInput={(params) => <TextField {...params} InputLabelProps={{ shrink: true }} label="משלוח" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
             />
           </Grid>
 
