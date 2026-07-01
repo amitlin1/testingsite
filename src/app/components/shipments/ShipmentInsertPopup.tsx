@@ -168,11 +168,9 @@ export default function ShipmentInsertPopup({
 
                 if (!cancelled) {
                     setCustomers(Array.isArray(custData) ? custData : []);
-                    // Map API raw format { id, name, stokekeeper } to expected format { worker_id, worker_name, stokekeeper }
-                    setWorkers(Array.isArray(workersData)
-                        ? workersData.map((w: any) => ({ worker_id: w.id, worker_name: w.name, stokekeeper: w.stokekeeper }))
-                        : []
-                    );
+                    // /api/workers now returns { worker_id, worker_name, stokekeeper } directly
+                    // (aligned with the Send/Update popups), so consume it as-is.
+                    setWorkers(Array.isArray(workersData) ? workersData : []);
                     setItemTypes(Array.isArray(typesData) ? typesData : []);
                     const loadedSources = Array.isArray(sourcesData) ? sourcesData : [];
                     setSources(loadedSources);
