@@ -7,11 +7,12 @@ import {
     DialogActions,
     Button,
     TextField,
-    Autocomplete,
     Box,
-    useTheme,
-    alpha
+    Typography,
+    useTheme
 } from "@mui/material";
+import SearchableCombobox from "../common/SearchableCombobox";
+import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { Shipment, NewShipment, Customers } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
@@ -159,29 +160,16 @@ export default function ShipmentUpdatePopup({
     };
 
     return (
-        <Dialog 
-            open={open} 
-            onClose={onClose} 
-            fullWidth 
+        <Dialog
+            open={open}
+            onClose={onClose}
+            fullWidth
             maxWidth="md"
-            PaperProps={{
-                sx: {
-                    borderRadius: 4,
-                    background: "rgba(255, 255, 255, 0.9)",
-                    backdropFilter: "blur(24px)",
-                    boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.15)",
-                    border: "1px solid rgba(255, 255, 255, 0.3)"
-                }
-            }}
         >
-            <DialogTitle sx={{ 
-                fontWeight: 800, 
-                background: "linear-gradient(45deg, #1976d2, #90caf9)",
-                backgroundClip: "text",
-                textFillColor: "transparent",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            <DialogTitle sx={{
+                fontWeight: 700,
+                color: "text.primary",
+                borderBottom: `1px solid ${theme.palette.divider}`,
                 pb: 2
             }}>
                 עדכון משלוח
@@ -190,19 +178,20 @@ export default function ShipmentUpdatePopup({
                 <DialogContent>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>מס' משלוח</FieldLabel>
                             <Controller
                                 name="shipment_code"
                                 control={control}
                                 rules={{
-                                    required: "Required",
-                                    maxLength: { value: 20, message: "Max 20 chars" },
+                                    required: "שדה חובה",
+                                    maxLength: { value: 20, message: "מקסימום 20 תווים" },
                                 }}
                                 render={({ field }) => (
                                     <TextField
                                         {...field}
-                                        label="מס' משלוח"
+                                        placeholder="מס' משלוח"
                                         fullWidth
-                                        required
+                                        size="small"
                                         error={!!errors.shipment_code}
                                         helperText={errors.shipment_code?.message}
                                         inputProps={{ maxLength: 20 }}
@@ -211,93 +200,76 @@ export default function ShipmentUpdatePopup({
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>קוד לקוח</FieldLabel>
                             <Controller
                                 name="customer_id"
                                 control={control}
-                                rules={{ required: "Required" }}
-                                render={({ field: { onChange, value, ref, onBlur } }) => (
-                                    <Autocomplete
+                                rules={{ required: "שדה חובה" }}
+                                render={({ field: { onChange, value } }) => (
+                                    <SearchableCombobox<Customers>
                                         options={customers}
                                         getOptionLabel={(option) => option.customer_code}
+                                        isOptionEqualToValue={(o, v) => o.id === v.id}
                                         value={customers.find((c) => c.id === value) || null}
-                                        onChange={(_, newValue) => onChange(newValue?.id ?? null)}
-                                        renderInput={(params) => (
-                                            <TextField
-                                                {...params}
-                                                inputRef={ref}
-                                                onBlur={onBlur}
-                                                label="קוד לקוח"
-                                                required
-                                                error={!!errors.customer_id}
-                                                helperText={errors.customer_id?.message}
-                                            />
-                                        )}
+                                        onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                        placeholder="בחר לקוח…"
+                                        error={!!errors.customer_id}
+                                        helperText={errors.customer_id?.message}
                                     />
                                 )}
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel>עובד מקבל</FieldLabel>
                             <Controller
                                 name="recieving_worker_id"
                                 control={control}
-                                render={({ field: { onChange, value, ref, onBlur } }) => (
-                                    <Autocomplete
+                                render={({ field: { onChange, value } }) => (
+                                    <SearchableCombobox<{ worker_id: number; worker_name: string }>
                                         options={workers}
                                         getOptionLabel={(option) => option.worker_name}
+                                        isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
-                                        onChange={(_, newValue) => onChange(newValue?.worker_id ?? null)}
-                                        renderInput={(params) => (
-                                            <TextField
-                                                {...params}
-                                                inputRef={ref}
-                                                onBlur={onBlur}
-                                                label="עובד מקבל"
-                                                error={!!errors.recieving_worker_id}
-                                                helperText={errors.recieving_worker_id?.message}
-                                            />
-                                        )}
+                                        onChange={(newValue) => onChange(newValue?.worker_id ?? null)}
+                                        placeholder="בחר עובד…"
+                                        error={!!errors.recieving_worker_id}
+                                        helperText={errors.recieving_worker_id?.message}
                                     />
                                 )}
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel>מקור</FieldLabel>
                             <Controller
                                 name="source_id"
                                 control={control}
-                                render={({ field: { onChange, value, ref, onBlur } }) => (
-                                    <Autocomplete
+                                render={({ field: { onChange, value } }) => (
+                                    <SearchableCombobox<{ id: number; desc: string }>
                                         options={sources}
                                         getOptionLabel={(option) => option.desc}
+                                        isOptionEqualToValue={(o, v) => o.id === v.id}
                                         value={sources.find((s) => s.id === value) || null}
-                                        onChange={(_, newValue) => onChange(newValue?.id ?? null)}
-                                        renderInput={(params) => (
-                                            <TextField
-                                                {...params}
-                                                inputRef={ref}
-                                                onBlur={onBlur}
-                                                label="מקור"
-                                                error={!!errors.source_id}
-                                                helperText={errors.source_id?.message}
-                                            />
-                                        )}
+                                        onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                        placeholder="בחר מקור…"
+                                        error={!!errors.source_id}
+                                        helperText={errors.source_id?.message}
                                     />
                                 )}
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>תאריך משלוח</FieldLabel>
                             <Controller
                                 name="shipment_date"
                                 control={control}
                                 rules={{
-                                    required: "Required",
+                                    required: "שדה חובה",
                                 }}
                                 render={({ field: { onChange, value } }) => (
                                     <TextField
-                                        label="תאריך משלוח"
                                         type="date"
                                         fullWidth
-                                        required
-                                        InputLabelProps={{ shrink: true }}
+                                        size="small"
                                         value={value ? new Date(value).toLocaleDateString('en-CA', { timeZone: DISPLAY_TIMEZONE }) : ""}
                                         onChange={(e) => onChange(e.target.value ? new Date(e.target.value) : null)}
                                         error={!!errors.shipment_date}
@@ -310,48 +282,45 @@ export default function ShipmentUpdatePopup({
                     </Box>
 
                     {/* Dynamic Items Section */}
-                    <Box sx={{ mt: 3, borderTop: '1px solid #ccc', pt: 2 }}>
+                    <Box sx={{ mt: 3, borderTop: `1px solid ${theme.palette.divider}`, pt: 2 }}>
                         <Button variant="outlined" onClick={() => append({ item_type_id: 0, quantity: 0 })} sx={{ mb: 2 }}>
                             הוסף סוג פריט
                         </Button>
                         {fields.map((item, index) => (
                             <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
+                                <Box sx={{ width: 300 }}>
                                 <Controller
                                     name={`shipment_items.${index}.item_type_id` as const}
                                     control={control}
                                     rules={{ required: true }}
                                     render={({ field: { onChange, value } }) => (
-                                        <Autocomplete
+                                        <SearchableCombobox<{ id: number; name: string }>
                                             options={itemTypes}
                                             getOptionLabel={(option) => option.name}
+                                            isOptionEqualToValue={(o, v) => o.id === v.id}
                                             value={itemTypes.find((t) => t.id === value) || null}
-                                            onChange={(_, newValue) => onChange(newValue?.id ?? null)}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="סוג פריט"
-                                                    required
-                                                    sx={{ width: 300 }}
-                                                    error={!!errors.shipment_items?.[index]?.item_type_id}
-                                                />
-                                            )}
+                                            onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                            placeholder="סוג פריט"
+                                            error={!!errors.shipment_items?.[index]?.item_type_id}
                                         />
                                     )}
                                 />
+                                </Box>
                                 <Controller
                                     name={`shipment_items.${index}.makat` as const}
                                     control={control}
                                     rules={{
-                                        required: "Required",
+                                        required: "שדה חובה",
                                         validate: (value) =>
-                                            value && Number(value) > 0 ? true : "Must be > 0",
+                                            value && Number(value) > 0 ? true : "חייב להיות > 0",
                                     }}
                                     render={({ field }) => (
                                         <TextField
                                             {...field}
-                                            label="מקט"
+                                            placeholder="מקט"
                                             type="number"
                                             required
+                                            size="small"
                                             sx={{ width: 100 }}
                                             value={field.value ?? ""}
                                             onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
@@ -366,9 +335,10 @@ export default function ShipmentUpdatePopup({
                                     render={({ field }) => (
                                         <TextField
                                             {...field}
-                                            label="כמות"
+                                            placeholder="כמות"
                                             type="number"
                                             required
+                                            size="small"
                                             sx={{ width: 100 }}
                                             onChange={(e) => field.onChange(Number(e.target.value))}
                                             error={!!errors.shipment_items?.[index]?.quantity}
@@ -383,29 +353,27 @@ export default function ShipmentUpdatePopup({
                             </Box>
                         ))}
                     </Box>
+
+                    {/* Auto-calculated total = Σ quantities */}
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            סה״כ כמות: <Box component="span" sx={{ color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>{watch("amount") || 0}</Box>
+                        </Typography>
+                    </Box>
                 </DialogContent>
-                <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
-                    <Button 
+                <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+                    <Button
                         onClick={onClose}
                         variant="outlined"
-                        sx={{ borderRadius: 2, px: 3, borderColor: 'rgba(0,0,0,0.12)' }}
+                        sx={{ borderRadius: 9999, px: 3, borderColor: 'rgba(0,0,0,0.12)', color: 'text.primary' }}
                     >
                         ביטול
                     </Button>
-                    <Button 
-                        type="submit" 
-                        disabled={!isValid} 
+                    <Button
+                        type="submit"
+                        disabled={!isValid}
                         variant="contained"
-                        sx={{ 
-                            borderRadius: 2, 
-                            px: 4,
-                            fontWeight: 700,
-                            background: "linear-gradient(45deg, #FF9800, #F57C00)",
-                            boxShadow: "0 4px 12px rgba(245, 124, 0, 0.2)",
-                            "&:hover": {
-                                boxShadow: "0 6px 16px rgba(245, 124, 0, 0.3)"
-                            }
-                        }}
+                        sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >
                         עדכן
                     </Button>

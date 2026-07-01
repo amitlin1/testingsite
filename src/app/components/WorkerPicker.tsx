@@ -1,7 +1,8 @@
 "use client";
 import * as React from "react";
-import { Autocomplete, TextField, Box, Typography, alpha, useTheme } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
+import SearchableCombobox from "./common/SearchableCombobox";
 
 export type Worker = {
   worker_id: number;
@@ -29,6 +30,9 @@ type WorkerPickerProps = {
   fullWidth?: boolean;
   /** Smaller variant for headers/toolbars. */
   size?: "small" | "medium";
+  /** Forwarded to the underlying combobox (e.g. to pin a hover panel open). */
+  onOpen?: () => void;
+  onClose?: () => void;
 };
 
 /**
@@ -49,8 +53,9 @@ export default function WorkerPicker({
   disabled = false,
   fullWidth = true,
   size = "medium",
+  onOpen,
+  onClose,
 }: WorkerPickerProps) {
-  const theme = useTheme();
   const [workers, setWorkers] = React.useState<Worker[]>(workersProp ?? []);
   const [loading, setLoading] = React.useState(false);
 
@@ -93,34 +98,19 @@ export default function WorkerPicker({
           </Typography>
         </Box>
       )}
-      <Autocomplete
+      <SearchableCombobox<Worker>
         size={size}
         disabled={disabled}
         options={workers}
         getOptionLabel={(option) => option.worker_name}
+        isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
         value={workers.find((w) => w.worker_id === value) || null}
-        onChange={(_, newValue) => onChange(newValue?.worker_id ?? null)}
+        onChange={(newValue) => onChange(newValue?.worker_id ?? null)}
         loading={loading}
         fullWidth={fullWidth}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            placeholder={placeholder}
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                borderRadius: 2,
-                bgcolor: "#f8f9fa",
-                transition: "all 0.2s",
-                "&:hover": { bgcolor: "white" },
-                "&.Mui-focused": {
-                  bgcolor: "white",
-                  boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
-                },
-              },
-              "& .MuiOutlinedInput-notchedOutline": { border: "1px solid rgba(0,0,0,0.08)" },
-            }}
-          />
-        )}
+        placeholder={placeholder}
+        onOpen={onOpen}
+        onClose={onClose}
       />
     </Box>
   );
