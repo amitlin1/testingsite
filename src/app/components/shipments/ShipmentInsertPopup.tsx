@@ -7,7 +7,6 @@ import {
     DialogActions,
     Button,
     TextField,
-    Autocomplete,
     Box,
     Typography,
     useTheme,
@@ -16,10 +15,15 @@ import {
     Tooltip,
     Alert
 } from "@mui/material";
+import SearchableCombobox from "../common/SearchableCombobox";
+import FieldLabel from "../common/FieldLabel";
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import CloseIcon from '@mui/icons-material/Close';
+import LockIcon from '@mui/icons-material/Lock';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { Card, Stack } from "@mui/material";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
-import { NewShipment, Customers } from "@/types";
+import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
 import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat } from '@/app/lib/qrParser';
 
@@ -27,6 +31,7 @@ type ShipmentInsertPopupProps = {
     open: boolean;
     onClose: () => void;
     onCreate: (success: boolean) => void;
+    existingShipments?: Shipment[];
 };
 
 const defaultShipment: NewShipment = {
@@ -46,6 +51,7 @@ export default function ShipmentInsertPopup({
     open,
     onClose,
     onCreate,
+    existingShipments = [],
 }: ShipmentInsertPopupProps) {
     const [customers, setCustomers] = useState<Customers[]>([]);
     const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; stokekeeper?: boolean }[]>([]);
@@ -79,39 +85,64 @@ export default function ShipmentInsertPopup({
     const [manualBarcodeInput, setManualBarcodeInput] = useState('');
     const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // When a shipment is filled from a scanned barcode its details are locked for
+    // manual editing — only the fields the barcode does not provide stay editable.
+    const [scanned, setScanned] = useState(false);
+
+    // Duplicate-shipment dialog (shown when a scanned shipment already exists).
+    const [duplicate, setDuplicate] = useState<Shipment | null>(null);
+
     // Handle QR scan result
     const handleQrScan = useCallback((decodedText: string) => {
         const parsedData = parseShipmentQr(decodedText);
 
-        if (parsedData) {
-            // Fill shipment number
-            setValue('shipment_code', parsedData.shipmentNumber);
+        if (!parsedData) {
+            setScanError('פורמט QR לא תקין');
+            return;
+        }
 
-            // Find and set customer by customer_code
-            const matchingCustomer = customers.find(
-                c => c.customer_code === parsedData.customer
-            );
-            if (matchingCustomer) {
-                setValue('customer_id', matchingCustomer.id);
-            }
-
-            // Set POC details
-            if (parsedData.poc) {
-                setValue('poc_details', parsedData.poc);
-            }
-
-            // Convert and set shipment date
-            const convertedDate = convertQrDateToInputFormat(parsedData.supplyDate);
-            if (convertedDate) {
-                setValue('shipment_date', new Date(convertedDate));
-            }
-
+        // Guard against scanning a shipment that is already in the system with the
+        // same identifying details (shipment number + customer).
+        const existingMatch = existingShipments.find(
+            (s) =>
+                s.shipment_code?.trim() === parsedData.shipmentNumber.trim() &&
+                s.customer_code?.trim() === parsedData.customer.trim()
+        );
+        if (existingMatch) {
+            setDuplicate(existingMatch);
             setScanError(null);
             setScannerOpen(false);
-        } else {
-            setScanError('פורמט QR לא תקין');
+            setManualBarcodeInput('');
+            return;
         }
-    }, [customers, setValue]);
+
+        // Fill shipment number
+        setValue('shipment_code', parsedData.shipmentNumber);
+
+        // Find and set customer by customer_code
+        const matchingCustomer = customers.find(
+            c => c.customer_code === parsedData.customer
+        );
+        if (matchingCustomer) {
+            setValue('customer_id', matchingCustomer.id);
+        }
+
+        // Set POC details
+        if (parsedData.poc) {
+            setValue('poc_details', parsedData.poc);
+        }
+
+        // Convert and set shipment date
+        const convertedDate = convertQrDateToInputFormat(parsedData.supplyDate);
+        if (convertedDate) {
+            setValue('shipment_date', new Date(convertedDate));
+        }
+
+        // Lock the barcode-derived fields against manual editing.
+        setScanned(true);
+        setScanError(null);
+        setScannerOpen(false);
+    }, [customers, setValue, existingShipments]);
 
     // Auto-calculate total amount
     const shipmentItems = watch("shipment_items");
@@ -137,11 +168,9 @@ export default function ShipmentInsertPopup({
 
                 if (!cancelled) {
                     setCustomers(Array.isArray(custData) ? custData : []);
-                    // Map API raw format { id, name, stokekeeper } to expected format { worker_id, worker_name, stokekeeper }
-                    setWorkers(Array.isArray(workersData)
-                        ? workersData.map((w: any) => ({ worker_id: w.id, worker_name: w.name, stokekeeper: w.stokekeeper }))
-                        : []
-                    );
+                    // /api/workers now returns { worker_id, worker_name, stokekeeper } directly
+                    // (aligned with the Send/Update popups), so consume it as-is.
+                    setWorkers(Array.isArray(workersData) ? workersData : []);
                     setItemTypes(Array.isArray(typesData) ? typesData : []);
                     const loadedSources = Array.isArray(sourcesData) ? sourcesData : [];
                     setSources(loadedSources);
@@ -163,6 +192,8 @@ export default function ShipmentInsertPopup({
     useEffect(() => {
         if (open) {
             reset({ ...defaultShipment, source_id: 1, shipment_items: [{ item_type_id: 0, quantity: 0 }] });
+            setScanned(false);
+            setDuplicate(null);
         }
     }, [open, reset]);
 
@@ -216,24 +247,11 @@ export default function ShipmentInsertPopup({
             onClose={onClose}
             fullWidth
             maxWidth="md"
-            PaperProps={{
-                sx: {
-                    borderRadius: 4,
-                    background: "rgba(255, 255, 255, 0.9)",
-                    backdropFilter: "blur(24px)",
-                    boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.15)",
-                    border: "1px solid rgba(255, 255, 255, 0.3)"
-                }
-            }}
         >
             <DialogTitle sx={{
-                fontWeight: 800,
-                background: "linear-gradient(45deg, #1976d2, #90caf9)",
-                backgroundClip: "text",
-                textFillColor: "transparent",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                fontWeight: 700,
+                color: "text.primary",
+                borderBottom: `1px solid ${theme.palette.divider}`,
                 pb: 2,
                 display: 'flex',
                 alignItems: 'center',
@@ -244,11 +262,9 @@ export default function ShipmentInsertPopup({
                     <IconButton
                         onClick={() => setScannerOpen(true)}
                         sx={{
-                            background: "linear-gradient(45deg, #1976d2, #42a5f5)",
+                            bgcolor: "primary.main",
                             color: 'white',
-                            '&:hover': {
-                                background: "linear-gradient(45deg, #1565c0, #1976d2)",
-                            }
+                            '&:hover': { bgcolor: "primary.dark" },
                         }}
                     >
                         <QrCodeScannerIcon />
@@ -333,38 +349,101 @@ export default function ShipmentInsertPopup({
                 </DialogContent>
             </Dialog>
 
+            {/* Duplicate shipment dialog — same template as the testing page station-move message */}
+            <Dialog
+                open={!!duplicate}
+                onClose={() => setDuplicate(null)}
+                PaperProps={{ sx: { borderRadius: 3, p: 2, minWidth: 400 } }}
+            >
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ErrorOutlineIcon color="error" fontSize="large" />
+                    <Typography variant="h6" component="span" fontWeight="bold">
+                        המשלוח כבר קיים במערכת
+                    </Typography>
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <Box sx={{ p: 2, bgcolor: alpha(theme.palette.error.main, 0.1), borderRadius: 2 }}>
+                            <Typography variant="body1" fontWeight="600" color="error.main">
+                                לא ניתן לקלוט את המשלוח — קיים כבר משלוח עם אותם הפרטים.
+                            </Typography>
+                        </Box>
+                        {duplicate && (
+                            <Card variant="outlined" sx={{ p: 2, bgcolor: "#f8f9fa" }}>
+                                <Stack spacing={1}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        מס׳ משלוח: <strong>{duplicate.shipment_code}</strong>
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        קוד לקוח: <strong>{duplicate.customer_code}</strong>
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        תאריך קבלה: <strong>{new Date(duplicate.shipment_date).toLocaleDateString("he-IL")}</strong>
+                                    </Typography>
+                                </Stack>
+                            </Card>
+                        )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => setDuplicate(null)}
+                        variant="contained"
+                        color="error"
+                        size="large"
+                        sx={{ borderRadius: 2, px: 4 }}
+                    >
+                        אישור
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
             <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <DialogContent>
+                    {scanned && (
+                        <Alert
+                            severity="info"
+                            icon={<LockIcon fontSize="inherit" />}
+                            sx={{ mb: 2, borderRadius: 2 }}
+                        >
+                            הנתונים מולאו מסריקת ברקוד ונעולים לעריכה. ניתן להזין ידנית רק את שדות הפריטים שאינם כלולים בברקוד.
+                        </Alert>
+                    )}
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
-                        <Box sx={{ width: { xs: "100%", sm: "100%" } }}>
-                            <Controller
+                        <Box sx={{ width: "100%" }}>
+                             <FieldLabel>פרטי איש קשר (POC Details)</FieldLabel>
+                             <Controller
                                 name="poc_details"
                                 control={control}
                                 render={({ field }) => (
                                     <TextField
                                         {...field}
-                                        label="פרטי איש קשר (POC Details)"
+                                        placeholder="פרטי איש קשר"
                                         fullWidth
+                                        size="small"
                                         multiline
                                         rows={2}
+                                        disabled={scanned}
                                     />
                                 )}
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>מס' משלוח</FieldLabel>
                             <Controller
                                 name="shipment_code"
                                 control={control}
                                 rules={{
-                                    required: "Required",
-                                    maxLength: { value: 20, message: "Max 20 chars" },
+                                    required: "שדה חובה",
+                                    maxLength: { value: 20, message: "מקסימום 20 תווים" },
                                 }}
                                 render={({ field }) => (
                                     <TextField
                                         {...field}
-                                        label="מס' משלוח"
+                                        placeholder="מס' משלוח"
                                         fullWidth
-                                        required
+                                        size="small"
+                                        disabled={scanned}
                                         error={!!errors.shipment_code}
                                         helperText={errors.shipment_code?.message}
                                         inputProps={{ maxLength: 20 }}
@@ -373,95 +452,79 @@ export default function ShipmentInsertPopup({
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>קוד לקוח</FieldLabel>
                             <Controller
                                 name="customer_id"
                                 control={control}
-                                rules={{ required: "Required" }}
-                                render={({ field: { onChange, value, ref, onBlur } }) => (
-                                    <Autocomplete
+                                rules={{ required: "שדה חובה" }}
+                                render={({ field: { onChange, value } }) => (
+                                    <SearchableCombobox<Customers>
                                         options={customers}
+                                        disabled={scanned}
                                         getOptionLabel={(option) => option.customer_code}
+                                        isOptionEqualToValue={(o, v) => o.id === v.id}
                                         value={customers.find((c) => c.id === value) || null}
-                                        onChange={(_, newValue) => onChange(newValue?.id ?? null)}
-                                        renderInput={(params) => (
-                                            <TextField
-                                                {...params}
-                                                inputRef={ref}
-                                                onBlur={onBlur}
-                                                label="קוד לקוח"
-                                                required
-                                                error={!!errors.customer_id}
-                                                helperText={errors.customer_id?.message}
-                                            />
-                                        )}
+                                        onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                        placeholder="בחר לקוח…"
+                                        error={!!errors.customer_id}
+                                        helperText={errors.customer_id?.message}
                                     />
                                 )}
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel>עובד מקבל</FieldLabel>
                             <Controller
                                 name="recieving_worker_id"
                                 control={control}
-                                render={({ field: { onChange, value, ref, onBlur } }) => (
-                                    <Autocomplete
+                                render={({ field: { onChange, value } }) => (
+                                    <SearchableCombobox<{ worker_id: number; worker_name: string; stokekeeper?: boolean }>
                                         options={workers.filter(w => w.stokekeeper)}
                                         getOptionLabel={(option) => option.worker_name}
+                                        isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
-                                        onChange={(_, newValue) => onChange(newValue?.worker_id ?? null)}
-                                        renderInput={(params) => (
-                                            <TextField
-                                                {...params}
-                                                inputRef={ref}
-                                                onBlur={onBlur}
-                                                label="עובד מקבל"
-                                                error={!!errors.recieving_worker_id}
-                                                helperText={errors.recieving_worker_id?.message}
-                                            />
-                                        )}
+                                        onChange={(newValue) => onChange(newValue?.worker_id ?? null)}
+                                        placeholder="בחר עובד…"
+                                        error={!!errors.recieving_worker_id}
+                                        helperText={errors.recieving_worker_id?.message}
                                     />
                                 )}
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>מקור</FieldLabel>
                             <Controller
                                 name="source_id"
                                 control={control}
                                 rules={{ required: "חובה לבחור מקור" }}
-                                render={({ field: { onChange, value, ref, onBlur } }) => (
-                                    <Autocomplete
+                                render={({ field: { onChange, value } }) => (
+                                    <SearchableCombobox<{ id: number; desc: string }>
                                         options={sources}
                                         getOptionLabel={(option) => option.desc}
+                                        isOptionEqualToValue={(o, v) => o.id === v.id}
                                         value={sources.find((s) => s.id === value) || null}
-                                        onChange={(_, newValue) => onChange(newValue?.id ?? null)}
-                                        renderInput={(params) => (
-                                            <TextField
-                                                {...params}
-                                                inputRef={ref}
-                                                onBlur={onBlur}
-                                                label="מקור"
-                                                required
-                                                error={!!errors.source_id}
-                                                helperText={errors.source_id?.message}
-                                            />
-                                        )}
+                                        onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                        placeholder="בחר מקור…"
+                                        error={!!errors.source_id}
+                                        helperText={errors.source_id?.message}
                                     />
                                 )}
                             />
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>תאריך משלוח</FieldLabel>
                             <Controller
                                 name="shipment_date"
                                 control={control}
                                 rules={{
-                                    required: "Required",
+                                    required: "שדה חובה",
                                 }}
                                 render={({ field: { onChange, value } }) => (
                                     <TextField
-                                        label="תאריך משלוח"
                                         type="date"
                                         fullWidth
-                                        required
-                                        InputLabelProps={{ shrink: true }}
+                                        size="small"
+                                        disabled={scanned}
                                         value={value ? new Date(value).toISOString().split("T")[0] : ""}
                                         onChange={(e) => onChange(e.target.value ? new Date(e.target.value) : null)}
                                         error={!!errors.shipment_date}
@@ -473,34 +536,30 @@ export default function ShipmentInsertPopup({
                     </Box>
 
                     {/* Dynamic Items Section */}
-                    <Box sx={{ mt: 3, borderTop: '1px solid #ccc', pt: 2 }}>
+                    <Box sx={{ mt: 3, borderTop: `1px solid ${theme.palette.divider}`, pt: 2 }}>
                         <Button variant="outlined" onClick={() => append({ item_type_id: 0, quantity: 0 })} sx={{ mb: 2 }}>
                             הוסף סוג פריט
                         </Button>
                         {fields.map((item, index) => (
                             <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
+                                <Box sx={{ width: 300 }}>
                                 <Controller
                                     name={`shipment_items.${index}.item_type_id` as const}
                                     control={control}
                                     rules={{ required: true }}
                                     render={({ field: { onChange, value } }) => (
-                                        <Autocomplete
+                                        <SearchableCombobox<{ id: number; name: string }>
                                             options={itemTypes}
                                             getOptionLabel={(option) => option.name}
+                                            isOptionEqualToValue={(o, v) => o.id === v.id}
                                             value={itemTypes.find((t) => t.id === value) || null}
-                                            onChange={(_, newValue) => onChange(newValue?.id ?? null)}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="סוג פריט"
-                                                    required
-                                                    sx={{ width: 300 }}
-                                                    error={!!errors.shipment_items?.[index]?.item_type_id}
-                                                />
-                                            )}
+                                            onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                            placeholder="סוג פריט"
+                                            error={!!errors.shipment_items?.[index]?.item_type_id}
                                         />
                                     )}
                                 />
+                                </Box>
                                 <Controller
                                     name={`shipment_items.${index}.makat` as const}
                                     control={control}
@@ -511,8 +570,9 @@ export default function ShipmentInsertPopup({
                                     render={({ field }) => (
                                         <TextField
                                             {...field}
-                                            label="מקט"
+                                            placeholder="מקט"
                                             type="number"
+                                            size="small"
                                             sx={{ width: 130 }}
                                             value={field.value ?? ""}
                                             onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
@@ -534,9 +594,10 @@ export default function ShipmentInsertPopup({
                                     render={({ field }) => (
                                         <TextField
                                             {...field}
-                                            label="כמות"
+                                            placeholder="כמות"
                                             type="number"
                                             required
+                                            size="small"
                                             sx={{ width: 100 }}
                                             value={field.value === 0 ? '' : field.value ?? ''}
                                             onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
@@ -552,27 +613,33 @@ export default function ShipmentInsertPopup({
                             </Box>
                         ))}
                     </Box>
-                    {/* Signature Section */}
-                    <Box sx={{ mt: 3, borderTop: '1px solid #ccc', pt: 2 }}>
-                        <Typography variant="subtitle1" gutterBottom>חתימה (Signature)</Typography>
-                        <Box sx={{ border: '1px solid #ccc', borderRadius: 2, overflow: 'hidden', bgcolor: '#fafafa' }}>
+                    {/* Auto-calculated total = Σ quantities */}
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            סה״כ כמות: <Box component="span" sx={{ color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>{watch("amount") || 0}</Box>
+                        </Typography>
+                    </Box>
+                    {/* Signature Section — compact */}
+                    <Box sx={{ mt: 2, borderTop: `1px solid ${theme.palette.divider}`, pt: 1.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>חתימה</Typography>
+                            <Button size="small" onClick={() => sigCanvas.current?.clear()}>נקה חתימה</Button>
+                        </Box>
+                        <Box sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 2, overflow: 'hidden', bgcolor: '#fafafa' }}>
                             <SignatureCanvas
                                 ref={sigCanvas}
-                                canvasProps={{ width: 800, height: 200, className: 'sigCanvas' }}
+                                canvasProps={{ width: 800, height: 120, className: 'sigCanvas' }}
                                 backgroundColor="#fafafa"
                             />
                         </Box>
-                        <Button size="small" onClick={() => sigCanvas.current?.clear()} sx={{ mt: 1 }}>
-                            נקה חתימה
-                        </Button>
                     </Box>
 
                 </DialogContent>
-                <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+                <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
                     <Button
                         onClick={onClose}
                         variant="outlined"
-                        sx={{ borderRadius: 2, px: 3, borderColor: 'rgba(0,0,0,0.12)' }}
+                        sx={{ borderRadius: 9999, px: 3, borderColor: 'rgba(0,0,0,0.12)', color: 'text.primary' }}
                     >
                         ביטול
                     </Button>
@@ -580,16 +647,7 @@ export default function ShipmentInsertPopup({
                         type="submit"
                         disabled={!isValid}
                         variant="contained"
-                        sx={{
-                            borderRadius: 2,
-                            px: 4,
-                            fontWeight: 700,
-                            background: "linear-gradient(45deg, #1976d2, #42a5f5)",
-                            boxShadow: "0 4px 12px rgba(25, 118, 210, 0.2)",
-                            "&:hover": {
-                                boxShadow: "0 6px 16px rgba(25, 118, 210, 0.3)"
-                            }
-                        }}
+                        sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >
                         הוספה
                     </Button>

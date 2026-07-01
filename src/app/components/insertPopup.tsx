@@ -7,7 +7,6 @@ import {
     DialogActions,
     Button,
     TextField,
-    Autocomplete,
     Box,
     IconButton,
     Divider,
@@ -25,6 +24,7 @@ import {
     Skeleton
 } from '@mui/material'
 import { useForm, Controller, useFieldArray } from 'react-hook-form'
+import SearchableCombobox from './common/SearchableCombobox'
 import { NewItem, ItemTypeOption, Customers, Shipment } from '@/types'
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -341,12 +341,13 @@ export default function InsertPopup({
                                     name="shipment"
                                     control={control}
                                     rules={{ required: 'Required' }}
-                                    render={({ field: { onChange, value, ref, onBlur } }) => (
-                                        <Autocomplete
+                                    render={({ field: { onChange, value } }) => (
+                                        <SearchableCombobox<Shipment>
                                             options={shipments}
                                             getOptionLabel={(option) => `${option.shipment_code} | ${new Date(option.shipment_date).toLocaleDateString("he-IL")} | ${option.customer_code}`}
+                                            isOptionEqualToValue={(o, v) => o.id === v.id}
                                             value={shipments.find(s => s.id === value) || null}
-                                            onChange={(_, newValue) => {
+                                            onChange={(newValue) => {
                                                 onChange(newValue?.id ?? null);
                                                 if (newValue) {
                                                     reset({
@@ -358,9 +359,10 @@ export default function InsertPopup({
                                                     });
                                                 }
                                             }}
-                                            renderInput={(params) =>
-                                                <TextField {...params} label="בחר משלוח" required inputRef={ref} onBlur={onBlur} error={!!errors.shipment} helperText={errors.shipment?.message} />
-                                            }
+                                            floatingLabel="בחר משלוח"
+                                            required
+                                            error={!!errors.shipment}
+                                            helperText={errors.shipment?.message}
                                         />
                                     )}
                                 />
@@ -533,13 +535,17 @@ export default function InsertPopup({
                                     name="customer"
                                     control={control}
                                     rules={{ required: 'Required' }}
-                                    render={({ field: { onChange, value, ref, onBlur } }) => (
-                                        <Autocomplete
+                                    render={({ field: { onChange, value } }) => (
+                                        <SearchableCombobox<Customers>
                                             options={customers}
                                             getOptionLabel={(option) => option.customer_code}
+                                            isOptionEqualToValue={(o, v) => o.id === v.id}
                                             value={customers.find(c => c.id === value) || null}
-                                            onChange={(_, newValue) => onChange(newValue?.id ?? null)}
-                                            renderInput={(params) => <TextField {...params} inputRef={ref} onBlur={onBlur} label="לקוח" required error={!!errors.customer} helperText={errors.customer?.message} />}
+                                            onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                            floatingLabel="לקוח"
+                                            required
+                                            error={!!errors.customer}
+                                            helperText={errors.customer?.message}
                                         />
                                     )}
                                 />
@@ -551,18 +557,22 @@ export default function InsertPopup({
                                     name="itemType"
                                     control={control}
                                     rules={{ required: 'Required' }}
-                                    render={({ field: { onChange, value, ref, onBlur } }) => (
-                                        <Autocomplete
+                                    render={({ field: { onChange, value } }) => (
+                                        <SearchableCombobox<ItemTypeOption>
                                             options={filteredItemTypes}
                                             getOptionLabel={(option) => option.item_type_desc}
+                                            isOptionEqualToValue={(o, v) => o.item_type_id === v.item_type_id}
                                             value={filteredItemTypes.find(it => it.item_type_id === value) || null}
-                                            onChange={(_, newValue) => {
+                                            onChange={(newValue) => {
                                                 onChange(newValue?.item_type_id ?? null);
                                                 // Reset route
                                                 const currentVals = getValues();
                                                 reset({ ...currentVals, itemType: newValue?.item_type_id ?? null, routeNumber: 1, subItems: currentVals.subItems });
                                             }}
-                                            renderInput={(params) => <TextField {...params} inputRef={ref} onBlur={onBlur} label="סוג פריט" required error={!!errors.itemType} helperText={errors.itemType?.message} />}
+                                            floatingLabel="סוג פריט"
+                                            required
+                                            error={!!errors.itemType}
+                                            helperText={errors.itemType?.message}
                                         />
                                     )}
                                 />
@@ -574,17 +584,21 @@ export default function InsertPopup({
                                     name="routeNumber"
                                     control={control}
                                     rules={{ required: 'Required' }}
-                                    render={({ field: { onChange, value, ref, onBlur } }) => {
+                                    render={({ field: { onChange, value } }) => {
                                         const currentItemType = getValues("itemType");
                                         const availableRoutes = testingRoutes.filter(r => r.item_type_id === currentItemType);
                                         return (
-                                            <Autocomplete
+                                            <SearchableCombobox<(typeof availableRoutes)[number]>
                                                 options={availableRoutes}
                                                 getOptionLabel={(option) => `מסלול ${option.route_number}`}
+                                                isOptionEqualToValue={(o, v) => o.route_number === v.route_number}
                                                 value={availableRoutes.find(r => r.route_number === value) || null}
-                                                onChange={(_, newValue) => onChange(newValue?.route_number ?? 1)}
+                                                onChange={(newValue) => onChange(newValue?.route_number ?? 1)}
                                                 disabled={!currentItemType}
-                                                renderInput={(params) => <TextField {...params} inputRef={ref} onBlur={onBlur} label="מסלול בדיקה" required error={!!errors.routeNumber} helperText={errors.routeNumber?.message} />}
+                                                floatingLabel="מסלול בדיקה"
+                                                required
+                                                error={!!errors.routeNumber}
+                                                helperText={errors.routeNumber?.message}
                                             />
                                         );
                                     }}
@@ -666,12 +680,15 @@ export default function InsertPopup({
                                                     control={control}
                                                     rules={{ required: 'Required' }}
                                                     render={({ field: { onChange, value } }) => (
-                                                        <Autocomplete
+                                                        <SearchableCombobox<ItemTypeOption>
                                                             options={itemTypes}
                                                             getOptionLabel={(o) => o.item_type_desc}
+                                                            isOptionEqualToValue={(o, v) => o.item_type_id === v.item_type_id}
                                                             value={itemTypes.find(it => it.item_type_id === value) || null}
-                                                            onChange={(_, n) => onChange(n?.item_type_id ?? null)}
-                                                            renderInput={(params) => <TextField {...params} label="סוג פריט" size="small" required error={!!errors.subItems?.[index]?.itemType} />}
+                                                            onChange={(n) => onChange(n?.item_type_id ?? null)}
+                                                            floatingLabel="סוג פריט"
+                                                            required
+                                                            error={!!errors.subItems?.[index]?.itemType}
                                                         />
                                                     )}
                                                 />

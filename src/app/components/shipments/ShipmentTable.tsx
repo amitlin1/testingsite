@@ -18,13 +18,11 @@ import {
     Snackbar,
     Alert,
     Skeleton,
-    Autocomplete,
-    FormControl,
-    InputLabel,
-    MenuItem,
+    Chip,
     useTheme,
     alpha
 } from "@mui/material";
+import SearchableCombobox from "../common/SearchableCombobox";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
@@ -38,11 +36,14 @@ import {
     Send as SendIcon,
     History as HistoryIcon,
     PictureAsPdf as PictureAsPdfIcon,
-    CheckCircle as CheckCircleIcon
+    CheckCircle as CheckCircleIcon,
+    QrCode2 as QrCode2Icon,
+    Edit as EditIcon
 } from "@mui/icons-material";
 import Tooltip from "@mui/material/Tooltip";
 import { useReactToPrint } from 'react-to-print';
 import { ShipmentPDFDocument } from './ShipmentPDFDocument';
+import ShipmentBarcodesDialog from './ShipmentBarcodesDialog';
 
 export default function ShipmentTable() {
     const theme = useTheme();
@@ -64,6 +65,7 @@ export default function ShipmentTable() {
     const [updateOpen, setUpdateOpen] = useState(false);
     const [sendOpen, setSendOpen] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
+    const [barcodesOpen, setBarcodesOpen] = useState(false);
     const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
 
     // PDF printing
@@ -205,60 +207,60 @@ export default function ShipmentTable() {
         <>
             {/* Filter Bar */}
             <Paper
-                elevation={3}
+                elevation={0}
                 sx={{
                     p: 2,
                     mb: 3,
-                    borderRadius: 4,
-                    background: "rgba(255, 255, 255, 0.8)",
-                    backdropFilter: "blur(20px)",
-                    border: "1px solid rgba(255, 255, 255, 0.3)",
-                    boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.15)"
+                    borderRadius: `${theme.tokens.radius.card}px`,
+                    bgcolor: "#fff",
+                    border: `1px solid ${theme.palette.divider}`,
                 }}
             >
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center" justifyContent="space-between">
-                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ width: '100%' }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ width: '100%' }} alignItems={{ md: 'center' }}>
                         <TextField
                             placeholder="חפש לפי קוד, לקוח, תיאור..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            sx={{ flex: 2, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 2 }}
+                            size="small"
+                            sx={{ flex: 2 }}
                             InputProps={{
                                 startAdornment: <SearchIcon sx={{ color: 'action.active', mr: 1 }} />,
-                                sx: { borderRadius: 2 }
                             }}
                         />
-                        <Autocomplete
-                            options={customerOptions}
-                            value={customerFilter}
-                            onChange={(_, v) => setCustomerFilter(v)}
-                            sx={{ flex: 1, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 2 }}
-                            renderInput={(params) => <TextField {...params} label="סנן לפי לקוח" sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }} />}
-                        />
+                        <Box sx={{ flex: 1, minWidth: 180 }}>
+                            <SearchableCombobox<string>
+                                options={customerOptions}
+                                getOptionLabel={(o) => o}
+                                value={customerFilter}
+                                onChange={(v) => setCustomerFilter(v)}
+                                placeholder="סנן לפי לקוח"
+                            />
+                        </Box>
                         <TextField
                             type="date"
                             label="מתאריך"
+                            size="small"
                             InputLabelProps={{ shrink: true }}
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
-                            sx={{ flex: 0.5, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 2 }}
-                            InputProps={{ sx: { borderRadius: 2 } }}
+                            sx={{ flex: 0.5, minWidth: 140 }}
                         />
                         <TextField
                             type="date"
                             label="עד תאריך"
+                            size="small"
                             InputLabelProps={{ shrink: true }}
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
-                            sx={{ flex: 0.5, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 2 }}
-                            InputProps={{ sx: { borderRadius: 2 } }}
+                            sx={{ flex: 0.5, minWidth: 140 }}
                         />
                         <Button
                             onClick={clearFilters}
                             variant="outlined"
                             color="inherit"
                             startIcon={<ClearIcon />}
-                            sx={{ borderRadius: 2, borderColor: 'rgba(0,0,0,0.12)' }}
+                            sx={{ borderColor: 'rgba(0,0,0,0.12)', color: 'text.secondary', whiteSpace: 'nowrap' }}
                         >
                             נקה
                         </Button>
@@ -270,39 +272,54 @@ export default function ShipmentTable() {
                         onClick={() => setInsertOpen(true)}
                         sx={{
                             px: 4,
-                            py: 1.5,
-                            borderRadius: 3,
+                            py: 1.2,
+                            borderRadius: 9999,
                             fontWeight: 700,
-                            boxShadow: "0 8px 16px rgba(25, 118, 210, 0.2)",
-                            background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
                             whiteSpace: 'nowrap',
-                            "&:hover": { transform: "translateY(-1px)", boxShadow: "0 12px 20px rgba(25, 118, 210, 0.3)" }
                         }}
                     >
                         משלוח חדש
                     </Button>
                 </Stack>
+
+                {/* Active filter chips — each ✕ clears that one filter */}
+                {(search || customerFilter || startDate || endDate) && (
+                    <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap', gap: 1 }}>
+                        {search && (
+                            <Chip label={`חיפוש: ${search}`} onDelete={() => setSearch("")} size="small" sx={{ borderRadius: 9999 }} />
+                        )}
+                        {customerFilter && (
+                            <Chip label={`לקוח: ${customerFilter}`} onDelete={() => setCustomerFilter(null)} size="small" color="primary" variant="outlined" sx={{ borderRadius: 9999 }} />
+                        )}
+                        {startDate && (
+                            <Chip label={`מתאריך: ${startDate}`} onDelete={() => setStartDate("")} size="small" sx={{ borderRadius: 9999 }} />
+                        )}
+                        {endDate && (
+                            <Chip label={`עד תאריך: ${endDate}`} onDelete={() => setEndDate("")} size="small" sx={{ borderRadius: 9999 }} />
+                        )}
+                    </Stack>
+                )}
             </Paper>
 
             {/* Table Container */}
             <Paper
+                elevation={0}
                 sx={{
                     height: "70vh",
-                    borderRadius: 4,
+                    borderRadius: `${theme.tokens.radius.card}px`,
                     overflow: 'hidden',
-                    background: "rgba(255, 255, 255, 0.8)",
-                    backdropFilter: "blur(20px)",
-                    border: "1px solid rgba(255, 255, 255, 0.3)",
-                    boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.15)"
+                    bgcolor: "#fff",
+                    border: `1px solid ${theme.palette.divider}`,
                 }}
             >
                 <TableVirtuoso
                     data={filteredRows}
                     components={{
                         Scroller: TableContainer,
-                        Table: (props) => <Table {...props} stickyHeader sx={{ borderCollapse: 'separate', borderSpacing: '0 8px' }} />,
-                        TableHead: React.forwardRef((props, ref) => <TableHead {...props} ref={ref} sx={{ "& th": { bgcolor: "rgba(255, 255, 255, 0.9)", backdropFilter: "blur(10px)", borderBottom: 'none', zIndex: 10 } }} />),
-                        TableRow: ({ item, ...props }) => <TableRow {...props} sx={{ "&:hover td": { bgcolor: "rgba(25, 118, 210, 0.08) !important" }, cursor: "pointer", bgcolor: "rgba(255,255,255,0.4)" }} />,
+                        Table: (props) => <Table {...props} stickyHeader sx={{ borderCollapse: 'collapse' }} />,
+                        TableHead: React.forwardRef((props, ref) => <TableHead {...props} ref={ref} sx={{ "& th": { bgcolor: "#f5f5f7", borderBottom: `1px solid ${theme.palette.divider}`, zIndex: 10 } }} />),
+                        // Dense rows with zebra striping + hover highlight.
+                        TableRow: ({ item, ...props }) => <TableRow {...props} sx={{ cursor: "pointer", bgcolor: "#fff", "&:nth-of-type(even) td": { bgcolor: theme.tokens.surface.subtle }, "&:hover td": { bgcolor: `${alpha(theme.palette.primary.main, 0.06)} !important` } }} />,
                         TableBody: React.forwardRef((props, ref) => <TableBody {...props} ref={ref} />),
                     }}
                     fixedHeaderContent={() => (
@@ -342,7 +359,12 @@ export default function ShipmentTable() {
                             <TableCell onClick={() => handleRowClick(row)} sx={{ borderBottom: '1px solid rgba(0,0,0,0.02)' }}>{row.sub_items_sampled_amount || 0}</TableCell>
                             <TableCell onClick={() => handleRowClick(row)} sx={{ borderBottom: '1px solid rgba(0,0,0,0.02)' }}>{row.valid_amount || 0}</TableCell>
                             <TableCell sx={{ borderBottom: '1px solid rgba(0,0,0,0.02)' }}>
-                                <Stack direction="row" spacing={2} justifyContent="space-between">
+                                <Stack direction="row" spacing={1.5} justifyContent="space-between">
+                                    <Tooltip title="עריכת משלוח">
+                                        <IconButton onClick={(e) => { e.stopPropagation(); handleRowClick(row); }} size="small" sx={{ color: theme.palette.text.secondary, bgcolor: alpha(theme.palette.text.primary, 0.06), '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.12) } }}>
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
                                     <Tooltip title="החזר משלוח">
                                         <IconButton onClick={(e) => { e.stopPropagation(); setSelectedShipment(row); setSendOpen(true); }} size="small" sx={{ color: theme.palette.primary.main, bgcolor: alpha(theme.palette.primary.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) } }}>
                                             <SendIcon fontSize="small" />
@@ -358,6 +380,11 @@ export default function ShipmentTable() {
                                             <PictureAsPdfIcon fontSize="small" />
                                         </IconButton>
                                     </Tooltip>
+                                    <Tooltip title="הדפס ברקודים לכל הפריטים">
+                                        <IconButton onClick={(e) => { e.stopPropagation(); setSelectedShipment(row); setBarcodesOpen(true); }} size="small" sx={{ color: theme.palette.success.main, bgcolor: alpha(theme.palette.success.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.success.main, 0.2) } }}>
+                                            <QrCode2Icon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
                                 </Stack>
                             </TableCell>
                         </>
@@ -369,6 +396,7 @@ export default function ShipmentTable() {
                 open={insertOpen}
                 onClose={() => setInsertOpen(false)}
                 onCreate={handleInsertResult}
+                existingShipments={rows}
             />
 
             <ShipmentUpdatePopup
@@ -398,6 +426,12 @@ export default function ShipmentTable() {
             <ShipmentHistoryPopup
                 open={historyOpen}
                 onClose={() => setHistoryOpen(false)}
+                shipment={selectedShipment}
+            />
+
+            <ShipmentBarcodesDialog
+                open={barcodesOpen}
+                onClose={() => setBarcodesOpen(false)}
                 shipment={selectedShipment}
             />
 

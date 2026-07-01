@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v14-appRouter";
-import { Box } from "@mui/material";
 import Providers from "./components/providers";
-import NavBar from "./components/navBar";
+import AppShell from "./components/AppShell";
 
 const rubik = localFont({
   src: [
@@ -36,10 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           margin: 0,
           minHeight: "100vh",
           overflowX: "hidden",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          backgroundColor: "white",
+          backgroundColor: "#f5f5f7",
         }}
       >
         <AppRouterCacheProvider
@@ -49,17 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         >
           <Providers>
-            <NavBar />
-            <Box
-              sx={{
-                flex: 1,
-                minHeight: 0,
-                overflowX: "hidden",
-                overflowY: "auto",
-              }}
-            >
-              <Box sx={{ minHeight: "100%", width: "100%" }}>{children}</Box>
-            </Box>
+            <AppShell>{children}</AppShell>
           </Providers>
         </AppRouterCacheProvider>
       </body>

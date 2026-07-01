@@ -7,13 +7,13 @@ import {
     DialogActions,
     Button,
     TextField,
-    Autocomplete,
     Box,
     Typography,
     useTheme,
-    alpha,
     Alert,
 } from "@mui/material";
+import SearchableCombobox from "../common/SearchableCombobox";
+import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { Shipment } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
@@ -172,24 +172,11 @@ export default function ShipmentSendPopup({
             onClose={onClose}
             fullWidth
             maxWidth="md"
-            PaperProps={{
-                sx: {
-                    borderRadius: 4,
-                    background: "rgba(255, 255, 255, 0.9)",
-                    backdropFilter: "blur(24px)",
-                    boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.15)",
-                    border: "1px solid rgba(255, 255, 255, 0.3)"
-                }
-            }}
         >
             <DialogTitle sx={{
-                fontWeight: 800,
-                background: "linear-gradient(45deg, #1976d2, #90caf9)",
-                backgroundClip: "text",
-                textFillColor: "transparent",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                fontWeight: 700,
+                color: "text.primary",
+                borderBottom: `1px solid ${theme.palette.divider}`,
                 pb: 2
             }}>
                 שליחת פריטים (Shipment Send)
@@ -207,16 +194,17 @@ export default function ShipmentSendPopup({
                         </Box>
 
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>קוד משלוח יוצא</FieldLabel>
                             <Controller
                                 name="sent_shipment_code"
                                 control={control}
-                                rules={{ required: "Required" }}
+                                rules={{ required: "שדה חובה" }}
                                 render={({ field }) => (
                                     <TextField
                                         {...field}
-                                        label="קוד משלוח יוצא"
+                                        placeholder="קוד משלוח יוצא"
                                         fullWidth
-                                        required
+                                        size="small"
                                         error={!!errors.sent_shipment_code}
                                         helperText={errors.sent_shipment_code?.message}
                                     />
@@ -225,18 +213,17 @@ export default function ShipmentSendPopup({
                         </Box>
 
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel required>תאריך שליחה</FieldLabel>
                             <Controller
                                 name="sent_date"
                                 control={control}
-                                rules={{ required: "Required" }}
+                                rules={{ required: "שדה חובה" }}
                                 render={({ field }) => (
                                     <TextField
                                         {...field}
-                                        label="תאריך שליחה"
                                         type="date"
                                         fullWidth
-                                        required
-                                        InputLabelProps={{ shrink: true }}
+                                        size="small"
                                         error={!!errors.sent_date}
                                         helperText={errors.sent_date?.message}
                                     />
@@ -245,22 +232,19 @@ export default function ShipmentSendPopup({
                         </Box>
 
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
+                            <FieldLabel>עובד מוציא</FieldLabel>
                             <Controller
                                 name="sending_worker_id"
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
-                                    <Autocomplete
+                                    <SearchableCombobox<{ worker_id: number; worker_name: string }>
                                         options={workers}
                                         getOptionLabel={(option) => option.worker_name}
+                                        isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
-                                        onChange={(_, newValue) => onChange(newValue?.worker_id ?? null)}
-                                        renderInput={(params) => (
-                                            <TextField
-                                                {...params}
-                                                label="עובד מוציא"
-                                                error={!!errors.sending_worker_id}
-                                            />
-                                        )}
+                                        onChange={(newValue) => onChange(newValue?.worker_id ?? null)}
+                                        placeholder="בחר עובד…"
+                                        error={!!errors.sending_worker_id}
                                     />
                                 )}
                             />
@@ -268,7 +252,7 @@ export default function ShipmentSendPopup({
                     </Box>
 
                     {/* Dynamic Items Selection */}
-                    <Box sx={{ mt: 3, borderTop: '1px solid #ccc', pt: 2 }}>
+                    <Box sx={{ mt: 3, borderTop: `1px solid ${theme.palette.divider}`, pt: 2 }}>
                         <Button variant="outlined" onClick={() => append({ item_type_id: null, makat: null, amount: '' })} sx={{ mb: 2 }}>
                             הוסף פריט לשליחה
                         </Button>
@@ -278,20 +262,20 @@ export default function ShipmentSendPopup({
                                     name={`items.${index}` as const}
                                     control={control}
                                     rules={{
-                                        validate: (val) => val.item_type_id ? true : "Select an item"
+                                        validate: (val) => val.item_type_id ? true : "בחר פריט"
                                     }}
                                     render={({ field: { onChange, value } }) => (
-                                        <Autocomplete
+                                        <Box sx={{ width: 400 }}>
+                                        <SearchableCombobox<(typeof availableItems)[number]>
                                             options={availableItems}
                                             getOptionLabel={(option) =>
                                                 `${option.item_type_desc || 'Unknown'} - Makat: ${option.makat || 'N/A'} (Qty: ${option.quantity})`
                                             }
-                                            sx={{ width: 400 }}
                                             // Find the matching option based on item_type_id and makat
                                             value={availableItems.find(opt =>
                                                 opt.item_type_id === value.item_type_id && opt.makat == value.makat
                                             ) || null}
-                                            onChange={(_, newValue) => {
+                                            onChange={(newValue) => {
                                                 if (newValue) {
                                                     onChange({
                                                         item_type_id: newValue.item_type_id,
@@ -302,15 +286,10 @@ export default function ShipmentSendPopup({
                                                     onChange({ item_type_id: null, makat: null, amount: '' });
                                                 }
                                             }}
-                                            renderInput={(params) => (
-                                                <TextField
-                                                    {...params}
-                                                    label="בחירת פריט"
-                                                    required
-                                                    error={!!errors.items?.[index]}
-                                                />
-                                            )}
+                                            placeholder="בחירת פריט"
+                                            error={!!errors.items?.[index]}
                                         />
+                                        </Box>
                                     )}
                                 />
 
@@ -362,10 +341,11 @@ export default function ShipmentSendPopup({
                                                 label={`כמות (Max: ${maxAllowed})`}
                                                 type="number"
                                                 required
-                                                sx={{ width: 140 }}
+                                                size="small"
+                                                sx={{ width: 160 }}
                                                 onChange={(e) => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
                                                 error={!!errors.items?.[index]?.amount}
-                                                helperText={errors.items?.[index]?.amount ? (errors.items[index]?.amount?.message || "Invalid amount") : ""}
+                                                helperText={errors.items?.[index]?.amount ? (errors.items[index]?.amount?.message || "כמות לא תקינה") : ""}
                                             />
                                         );
                                     }}
@@ -377,27 +357,27 @@ export default function ShipmentSendPopup({
                         ))}
                     </Box>
 
-                    {/* Signature Section */}
-                    <Box sx={{ mt: 3, borderTop: '1px solid #ccc', pt: 2 }}>
-                        <Typography variant="subtitle1" gutterBottom>חתימה (Signature)</Typography>
-                        <Box sx={{ border: '1px solid #ccc', borderRadius: 2, overflow: 'hidden', bgcolor: '#fafafa' }}>
+                    {/* Signature Section — compact */}
+                    <Box sx={{ mt: 2, borderTop: `1px solid ${theme.palette.divider}`, pt: 1.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>חתימה</Typography>
+                            <Button size="small" onClick={() => sigCanvas.current?.clear()}>נקה חתימה</Button>
+                        </Box>
+                        <Box sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 2, overflow: 'hidden', bgcolor: '#fafafa' }}>
                             <SignatureCanvas
                                 ref={sigCanvas}
-                                canvasProps={{ width: 800, height: 200, className: 'sigCanvas' }}
+                                canvasProps={{ width: 800, height: 120, className: 'sigCanvas' }}
                                 backgroundColor="#fafafa"
                             />
                         </Box>
-                        <Button size="small" onClick={() => sigCanvas.current?.clear()} sx={{ mt: 1 }}>
-                            נקה חתימה
-                        </Button>
                     </Box>
 
                 </DialogContent>
-                <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+                <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
                     <Button
                         onClick={onClose}
                         variant="outlined"
-                        sx={{ borderRadius: 2, px: 3, borderColor: 'rgba(0,0,0,0.12)' }}
+                        sx={{ borderRadius: 9999, px: 3, borderColor: 'rgba(0,0,0,0.12)', color: 'text.primary' }}
                     >
                         ביטול
                     </Button>
@@ -405,16 +385,8 @@ export default function ShipmentSendPopup({
                         type="submit"
                         disabled={!isValid}
                         variant="contained"
-                        sx={{
-                            borderRadius: 2,
-                            px: 4,
-                            fontWeight: 700,
-                            background: "linear-gradient(45deg, #4CAF50, #81C784)",
-                            boxShadow: "0 4px 12px rgba(76, 175, 80, 0.2)",
-                            "&:hover": {
-                                boxShadow: "0 6px 16px rgba(76, 175, 80, 0.3)"
-                            }
-                        }}
+                        color="success"
+                        sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >
                         שלח
                     </Button>

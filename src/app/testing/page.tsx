@@ -2,7 +2,6 @@
 import * as React from "react";
 import {
   Typography,
-  Autocomplete,
   TextField,
   Paper,
   Box,
@@ -50,7 +49,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 
 import PopUpTestDialog from "../components/PopUpTestDialog";
 import StationHistoryDialog from "../components/StationHistoryDialog";
-import WorkerPicker from "../components/WorkerPicker";
+import TestingDock, { type StationLite } from "../components/testing/TestingDock";
 
 export interface TestStationTypeOption {
   id: number;
@@ -175,26 +174,13 @@ function ItemCard({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          borderRadius: 4,
-          background: "rgba(255, 255, 255, 0.7)",
-          backdropFilter: "blur(20px)",
-          border: highlighted ? "2px solid #2196f3" : "1px solid rgba(255, 255, 255, 0.8)",
-          boxShadow: highlighted
-            ? "0 0 0 4px rgba(33, 150, 243, 0.25), 0 8px 32px 0 rgba(31, 38, 135, 0.12)"
-            : "0 8px 32px 0 rgba(31, 38, 135, 0.07)",
-          transition: "all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)",
-          overflow: "visible", // for badges if needed
+          borderRadius: "14px",
+          bgcolor: "#fff",
+          border: highlighted ? "1.5px solid #0066cc" : "1px solid #e0e0e0",
+          boxShadow: highlighted ? "0 0 0 3px rgba(0,102,204,0.18)" : "none",
+          transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+          overflow: "visible", // for the scanned badge
           position: "relative",
-          "&:hover": {
-            transform: "translateY(-8px)",
-            boxShadow: highlighted
-              ? "0 0 0 4px rgba(33, 150, 243, 0.35), 0 12px 40px 0 rgba(31, 38, 135, 0.18)"
-              : "0 12px 40px 0 rgba(31, 38, 135, 0.15)",
-            zIndex: 2,
-            "& .action-button": {
-                transform: "scale(1.05)",
-            }
-          },
         }}
       >
         {highlighted && (
@@ -206,27 +192,14 @@ function ItemCard({
                 sx={{
                     position: "absolute",
                     top: -10,
-                    right: 12,
-                    fontWeight: 700,
+                    right: 14,
+                    fontWeight: 600,
                     zIndex: 3,
-                    boxShadow: "0 4px 12px rgba(33, 150, 243, 0.4)",
                 }}
             />
         )}
-        {/* Card Header Gradient Line */}
-        <Box 
-            sx={{ 
-                height: 6, 
-                width: "100%", 
-                background: isWaiting 
-                    ? "linear-gradient(90deg, #FFC107 0%, #FF9800 100%)" 
-                    : "linear-gradient(90deg, #2196F3 0%, #21CBF3 100%)",
-                borderTopLeftRadius: 16,
-                borderTopRightRadius: 16,
-            }} 
-        />
 
-        <CardContent sx={{ p: 3, flexGrow: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+        <CardContent sx={{ p: 2, flexGrow: 1, display: "flex", flexDirection: "column", gap: 1.25, "&:last-child": { pb: 2 } }}>
             
             {/* Header: ID and Status */}
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -368,25 +341,13 @@ function ItemCard({
                     onAddTestResult(item);
                   }
                 }}
+                color={isWaiting ? "warning" : "primary"}
                 sx={{
-                  mt: 2,
-                  py: 1.2,
-                  borderRadius: 3,
-                  fontWeight: 700,
-                  textTransform: "none",
-                  fontSize: "1rem",
-                  boxShadow: isWaiting 
-                    ? "0 4px 14px 0 rgba(255, 152, 0, 0.39)"
-                    : "0 4px 14px 0 rgba(33, 150, 243, 0.39)",
-                  background: isWaiting
-                    ? "linear-gradient(45deg, #FFC107 30%, #FF9800 90%)"
-                    : "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                  transition: "all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)",
-                  "&:hover": {
-                     boxShadow: isWaiting
-                        ? "0 6px 20px 0 rgba(255, 152, 0, 0.5)"
-                        : "0 6px 20px 0 rgba(33, 150, 243, 0.5)",
-                  }
+                  mt: 1,
+                  height: 44,
+                  borderRadius: "11px",
+                  fontWeight: 600,
+                  fontSize: "0.95rem",
                 }}
                 endIcon={isWaiting ? <PlayArrowRoundedIcon /> : <CheckCircleOutlineIcon />}
             >
@@ -433,6 +394,18 @@ export default function TestingPage() {
   } | null>(null);
 
   const [filterMakat, setFilterMakat] = React.useState("");
+
+  // Flat list of every station (across all types) for the dock's all-stations
+  // search — picking one sets type + station in a single step.
+  const [allStations, setAllStations] = React.useState<StationLite[]>([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    fetch("/api/stations")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => { if (!cancelled) setAllStations(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) setAllStations([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Page-level "who's working" picker — single source of truth for any action
   // taken from this page (finish test, file upload, replace, edit). Persisted
@@ -745,185 +718,56 @@ export default function TestingPage() {
     }
   };
 
+  // Dock all-stations pick: set type + station in one step. Mirrors the scan
+  // flow — when the type differs we stage the station and let the stationType
+  // effect adopt it once that type's stations load.
+  const handlePickAllStation = React.useCallback((station: StationLite | null) => {
+    if (!station) { setSelectedStationType(null); setSelectedStation(null); setItems([]); return; }
+    setHighlightedItemId(null);
+    setFilterMakat("");
+    const typeOption = stationTypes.find((t) => t.id === station.typeId);
+    if (!typeOption) return;
+    const synthetic: TestStationOption = { id: station.id, name: station.name, typeId: station.typeId, status: 0, isResearch: false };
+    if (selectedStationType?.id === typeOption.id) {
+      const found = stations.find((s) => s.id === station.id);
+      setSelectedStation(found ?? synthetic);
+    } else {
+      pendingScanStationRef.current = synthetic;
+      setSelectedStationType(typeOption);
+    }
+  }, [stationTypes, selectedStationType, stations]);
+
+  const typeNameById = React.useCallback(
+    (typeId: number) => stationTypes.find((t) => t.id === typeId)?.name ?? "",
+    [stationTypes]
+  );
+
   return (
     <Box
       sx={{
         width: "100%",
-        minHeight: "100vh", // Use minHeight to allow scrolling
-        bgcolor: "#f0f2f5", // Light grey clean background
-        backgroundImage: "radial-gradient(#e0e0e0 1px, transparent 1px)",
-        backgroundSize: "20px 20px",
+        minHeight: "100%",
+        bgcolor: "#f5f5f7",
         display: "flex",
         flexDirection: "column",
         overflowX: "hidden", // Prevent horizontal overflow
       }}
     >
-        {/* Header Section */}
-        <Paper
-          elevation={0}
-          sx={{
-            py: 2,
-            px: 3,
-            bgcolor: "rgba(255, 255, 255, 0.9)",
-            backdropFilter: "blur(12px)",
-            borderBottom: "1px solid rgba(0,0,0,0.05)",
-            position: "sticky",
-            top: 0,
-            zIndex: 100,
-          }}
-        >
-          <Container maxWidth="xl" disableGutters>
-              <Grid container spacing={3} alignItems="center">
-                  <Grid size={{ xs: 12, md: 3 }}>
-                      <Stack direction="row" alignItems="center" spacing={6}>
-                          <Box 
-                            sx={{ 
-                                width: 48, 
-                                height: 48, 
-                                borderRadius: 3, 
-                                background: "linear-gradient(135deg, #1A237E 0%, #0D47A1 100%)",
-                                display: "flex", 
-                                alignItems: "center", 
-                                justifyContent: "center",
-                                boxShadow: "0 8px 16px rgba(13, 71, 161, 0.2)"
-                            }}
-                          >
-                               <ScienceIcon sx={{ fontSize: 28, color: "white" }} />
-                          </Box>
-                          <Box>
-                             <Typography variant="h5" fontWeight="800" sx={{ background: "-webkit-linear-gradient(45deg, #1A237E, #0D47A1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                                 מסך בדיקות
-                             </Typography>
-                             <Typography variant="body2" color="text.secondary" fontWeight="500">
-                                 ניהול תהליך בדיקה ודיווח
-                             </Typography>
-                          </Box>
-                      </Stack>
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 9 }}>
-                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ width: '100%' }}>
-                        <Autocomplete
-                          options={stationTypes}
-                          getOptionLabel={(option) => option.name}
-                          value={selectedStationType}
-                          onChange={(_, n) => { setHighlightedItemId(null); setSelectedStationType(n); if (!n) { setStations([]); setSelectedStation(null); setItems([]); } }}
-                          loading={stationTypesLoading}
-                          fullWidth
-                          renderInput={(params) => 
-                            <TextField 
-                                {...params} 
-                                label="בחר סוג עמדה" 
-                                variant="outlined" 
-                                sx={{ 
-                                    bgcolor: "white", 
-                                    borderRadius: 2,
-                                    "& .MuiOutlinedInput-input": {
-                                        paddingLeft: "50px !important",
-                                        paddingRight: "14px !important"
-                                    },
-                                    "& .MuiInputLabel-root": {
-                                        paddingLeft: "50px !important",
-                                        width: "calc(100% - 50px)"
-                                    }
-                                }} 
-                            />
-                          }
-                        />
-                        <Autocomplete
-                          options={stations.filter((s) => s.status !== 3)}
-                          getOptionLabel={(option) => option.name}
-                          value={selectedStation}
-                          onChange={(_, n) => { setHighlightedItemId(null); setSelectedStation(n); }}
-                          loading={stationsLoading}
-                          disabled={!selectedStationType}
-                          fullWidth
-                          renderInput={(params) =>
-                            <TextField
-                                {...params}
-                                label="בחר עמדה פעילה"
-                                variant="outlined" 
-                                sx={{ 
-                                    bgcolor: "white", 
-                                    borderRadius: 2,
-                                    "& .MuiOutlinedInput-input": {
-                                        paddingLeft: "50px !important",
-                                        paddingRight: "14px !important"
-                                    },
-                                    "& .MuiInputLabel-root": {
-                                        paddingLeft: "50px !important",
-                                        width: "calc(100% - 50px)"
-                                    }
-                                }}
-                            />
-                          }
-                        />
-                        <Button
-                          variant="contained"
-                          onClick={() => { setScanError(null); setScanInput(""); setScannerOpen(true); }}
-                          startIcon={<QrCodeScannerIcon />}
-                          sx={{
-                              minWidth: { xs: "100%", md: 180 },
-                              borderRadius: 2,
-                              fontWeight: 700,
-                              textTransform: "none",
-                              fontSize: "0.95rem",
-                              py: 1.3,
-                              background: "linear-gradient(135deg, #1A237E 0%, #0D47A1 100%)",
-                              boxShadow: "0 4px 14px rgba(13, 71, 161, 0.35)",
-                              "& .MuiButton-startIcon": {
-                                  marginRight: 0,
-                                  marginLeft: 1.5
-                              },
-                              "&:hover": {
-                                  background: "linear-gradient(135deg, #0D47A1 0%, #1A237E 100%)",
-                                  boxShadow: "0 6px 20px rgba(13, 71, 161, 0.5)",
-                              }
-                          }}
-                        >
-                          סרוק ברקוד
-                        </Button>
-                     </Stack>
-                  </Grid>
-
-                  {/* Page-level worker picker — single source of truth for any
-                      action taken from this page (finish test, file actions). */}
-                  <Grid size={{ xs: 12 }}>
-                      <Box
-                          sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 2,
-                              p: 1.25,
-                              borderRadius: 2,
-                              bgcolor: activeWorkerId ? alpha("#1A237E", 0.04) : alpha("#FF9800", 0.08),
-                              border: `1px solid ${activeWorkerId ? alpha("#1A237E", 0.1) : alpha("#FF9800", 0.25)}`,
-                          }}
-                      >
-                          <Typography
-                              variant="body2"
-                              sx={{
-                                  fontWeight: 700,
-                                  color: activeWorkerId ? "text.primary" : "warning.dark",
-                                  whiteSpace: "nowrap",
-                              }}
-                          >
-                              {activeWorkerId ? "פעולות יתועדו על שם:" : "בחר עובד לפני תחילת עבודה:"}
-                          </Typography>
-                          <Box sx={{ flex: 1, maxWidth: 360 }}>
-                              <WorkerPicker
-                                  value={activeWorkerId}
-                                  onChange={handleWorkerChange}
-                                  hideHeader
-                                  size="small"
-                                  placeholder="בחר עובד..."
-                              />
-                          </Box>
-                      </Box>
-                  </Grid>
-              </Grid>
-          </Container>
-        </Paper>
+        {/* Auto-hiding context dock (station + worker + scan) */}
+        <TestingDock
+          hasStation={!!selectedStation}
+          stationName={selectedStation?.name ?? null}
+          stationTypeName={selectedStationType?.name ?? null}
+          itemCount={filteredItems.length}
+          allStations={allStations}
+          typeNameById={typeNameById}
+          selectedStationId={selectedStation?.id ?? null}
+          onPickStation={handlePickAllStation}
+          activeWorkerId={activeWorkerId}
+          activeWorkerName={activeWorkerName}
+          onWorkerChange={handleWorkerChange}
+          onScan={() => { setScanError(null); setScanInput(""); setScannerOpen(true); }}
+        />
 
         {/* Main Content Area */}
         <Container maxWidth="xl" sx={{ mt: 3, mb: 5, flex: 1 }}>
@@ -1000,30 +844,27 @@ export default function TestingPage() {
                              </Box>
                         </Paper>
 
-                        {/* Items Grid */}
+                        {/* Items Grid — dense auto-fill, ~258px min column */}
                         {itemsLoading ? (
-                            <Grid container spacing={3}>
+                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(258px, 1fr))", gap: "14px" }}>
                                 {[1, 2, 3, 4].map((i) => (
-                                    <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={i}>
-                                        <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 4 }} />
-                                    </Grid>
+                                    <Skeleton key={i} variant="rectangular" height={260} sx={{ borderRadius: "14px" }} />
                                 ))}
-                            </Grid>
+                            </Box>
                         ) : filteredItems.length > 0 ? (
-                            <Grid container spacing={3} paddingBottom={4}>
+                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(258px, 1fr))", gap: "14px", pb: 4 }}>
                                 {filteredItems.map((item, index) => (
-                                    <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3, xl: 2.4 }} key={`${item.itemId}-${index}`}>
-                                        <ItemCard
-                                            item={item}
-                                            onAddTestResult={handleAddTestResult}
-                                            onStartTest={handleStartTest}
-                                            onRefresh={handleRefreshItems}
-                                            index={index}
-                                            highlighted={highlightedItemId != null && Number(item.itemId) === Number(highlightedItemId)}
-                                        />
-                                    </Grid>
+                                    <ItemCard
+                                        key={`${item.itemId}-${index}`}
+                                        item={item}
+                                        onAddTestResult={handleAddTestResult}
+                                        onStartTest={handleStartTest}
+                                        onRefresh={handleRefreshItems}
+                                        index={index}
+                                        highlighted={highlightedItemId != null && Number(item.itemId) === Number(highlightedItemId)}
+                                    />
                                 ))}
-                            </Grid>
+                            </Box>
                         ) : (
                             <Box sx={{ textAlign: "center", py: 10, opacity: 0.6 }}>
                                 <InventoryIcon sx={{ fontSize: 60, color: "text.secondary", mb: 2 }} />

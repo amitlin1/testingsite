@@ -115,7 +115,10 @@ export default function ItemDialog({
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle sx={{ pb: 1 }}>
+      {/* Compact header (density pass — round 2). The real item record exposes
+          fewer fields than the mock's airy grid, so we keep the chip summary but
+          tighten type, spacing and section gaps. */}
+      <DialogTitle sx={{ pb: 1, fontWeight: 700, fontSize: 18, letterSpacing: "-0.2px" }}>
         פריט #{itemId} — {item?.serial_no ?? ""}
       </DialogTitle>
       <DialogContent dividers>
@@ -123,20 +126,20 @@ export default function ItemDialog({
           <Typography>טוען…</Typography>
         ) : (
           <>
-            <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap" }}>
-              <Chip label={`מקט: ${item.makat}`} />
-              <Chip label={`סוג: ${item.item_type_desc ?? "-"}`} />
-              <Chip label={`סטטוס: ${statusLabel || item.item_status_desc || "-"}`} color="primary" />
+            <Stack direction="row" spacing={0.75} sx={{ mb: 1.5, flexWrap: "wrap", gap: 0.75 }}>
+              <Chip size="small" label={`מקט: ${item.makat}`} />
+              <Chip size="small" label={`סוג: ${item.item_type_desc ?? "-"}`} />
+              <Chip size="small" label={`סטטוס: ${statusLabel || item.item_status_desc || "-"}`} color="primary" />
               {item.test_station_id && item.item_status_id === 1 ? (
-                <Chip label={`עמדה נוכחית: ${item.test_station_desc}`} />
+                <Chip size="small" label={`עמדה נוכחית: ${item.test_station_desc}`} />
               ) : (
-                <Chip label={`עמדה רצויה: ${item.test_station_desc}`} />
+                <Chip size="small" label={`עמדה רצויה: ${item.test_station_desc}`} />
               )}
             </Stack>
 
             {/* Connected Items Section */}
             {item.connected_items && item.connected_items.length > 0 && (
-              <Box sx={{ mb: 3 }}>
+              <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
                   פריטים מחוברים:
                 </Typography>
@@ -165,8 +168,8 @@ export default function ItemDialog({
               </Box>
             )}
 
-            <Box sx={{ my: 3 }}>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>
+            <Box sx={{ my: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
                 מסלול בדיקה
               </Typography>
               <Stepper

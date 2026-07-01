@@ -2,9 +2,10 @@
 import * as React from "react";
 import {
   Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Autocomplete, TextField, Skeleton, Box, Toolbar, Stack, IconButton, Button,
-  Fab, Snackbar, Alert, Chip, alpha, LinearProgress, Typography
+  TextField, Skeleton, Box, Toolbar, Stack, IconButton, Button,
+  Fab, Snackbar, Alert, Chip, alpha, LinearProgress, Typography, useTheme
 } from "@mui/material";
+import SearchableCombobox from "./common/SearchableCombobox";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
@@ -21,6 +22,7 @@ import InventoryIcon from '@mui/icons-material/Inventory'; // New icon for manag
 import TuneIcon from '@mui/icons-material/Tune';
 
 export default function ItemTable() {
+  const theme = useTheme();
   const [rows, setRows] = React.useState<ItemRow[]>([]);
   const [statuses, setStatuses] = React.useState<StatusOption[]>([]);
   const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
@@ -224,10 +226,9 @@ export default function ItemTable() {
         sx={{
           p: 3,
           mb: 3,
-          borderRadius: 4,
-          background: 'linear-gradient(145deg, #ffffff 0%, #f5f7fa 100%)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.05)',
-          border: '1px solid rgba(255,255,255,0.6)'
+          borderRadius: `${theme.tokens.radius.card}px`,
+          bgcolor: '#fff',
+          border: `1px solid ${theme.palette.divider}`,
         }}
       >
         <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
@@ -242,7 +243,7 @@ export default function ItemTable() {
             }}>
               <InventoryIcon color="primary" />
             </Box>
-            <Typography variant="h5" fontWeight="700" color="#1e293b" sx={{ letterSpacing: '-0.5px' }}>
+            <Typography variant="h5" fontWeight={700} color="text.primary" sx={{ letterSpacing: '-0.5px' }}>
               ניהול פריטים
             </Typography>
           </Stack>
@@ -260,18 +261,11 @@ export default function ItemTable() {
             startIcon={<AddIcon />}
             onClick={() => setInsertOpen(true)}
             sx={{
-              borderRadius: 3,
+              borderRadius: 9999,
               px: 4,
               py: 1,
-              textTransform: 'none',
               fontWeight: 600,
               fontSize: '1rem',
-              boxShadow: '0 4px 14px 0 rgba(25, 118, 210, 0.39)',
-              transition: 'transform 0.2s',
-              '&:hover': {
-                transform: 'scale(1.02)',
-                boxShadow: '0 6px 20px 0 rgba(25, 118, 210, 0.39)',
-              }
             }}
           >
             הוסף פריט
@@ -301,35 +295,35 @@ export default function ItemTable() {
 
           {/* Filters */}
           <Grid size={{ xs: 12, md: 2 }}>
-            <Autocomplete
-              size="small"
+            <SearchableCombobox<StatusOption>
               options={statuses}
               getOptionLabel={(o) => o.label}
+              isOptionEqualToValue={(o, v) => o.id === v.id}
               value={statusFilter}
               onChange={(_, v) => setStatusFilter(v)}
-              renderInput={(params) => <TextField {...params} InputLabelProps={{ shrink: true }} label="סטטוס" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              renderInput={(params) => <TextField {...params} label="סטטוס" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
             />
           </Grid>
 
           <Grid size={{ xs: 12, md: 2 }}>
-            <Autocomplete
-              size="small"
+            <SearchableCombobox<ItemTypeOption>
               options={itemTypes}
               getOptionLabel={(o) => o.item_type_desc}
+              isOptionEqualToValue={(o, v) => o.item_type_id === v.item_type_id}
               value={typeFilter}
               onChange={(_, v) => setTypeFilter(v)}
-              renderInput={(params) => <TextField {...params} InputLabelProps={{ shrink: true }} label="סוג פריט" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              renderInput={(params) => <TextField {...params} label="סוג פריט" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
             />
           </Grid>
 
           <Grid size={{ xs: 12, md: 3 }}>
-            <Autocomplete
-              size="small"
+            <SearchableCombobox<Shipment>
               options={shipments}
               getOptionLabel={(o) => `${o.shipment_code} - ${o.customer_name} (${new Date(o.shipment_date).toLocaleDateString()})`}
+              isOptionEqualToValue={(o, v) => o.id === v.id}
               value={shipmentFilter}
-              onChange={(_, v) => setShipmentFilter(v)}
-              renderInput={(params) => <TextField {...params} label="משלוח" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              onChange={(v) => setShipmentFilter(v)}
+              placeholder="משלוח"
             />
           </Grid>
 
@@ -348,7 +342,7 @@ export default function ItemTable() {
         </Grid>
       </Paper>
 
-      <Paper sx={{ height: '70vh', p: 1 }}>
+      <Paper elevation={0} sx={{ height: '70vh', p: 1, border: `1px solid ${theme.palette.divider}` }}>
         <TableVirtuoso
           data={filteredRows}
           components={{
