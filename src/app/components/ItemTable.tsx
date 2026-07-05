@@ -258,7 +258,7 @@ export default function ItemTable() {
           <Button
             variant="contained"
             color="primary"
-            startIcon={<AddIcon />}
+            startIcon={<AddIcon sx={{ ml: 0.5 }} />}
             onClick={() => setInsertOpen(true)}
             sx={{
               borderRadius: 9999,
@@ -300,8 +300,8 @@ export default function ItemTable() {
               getOptionLabel={(o) => o.label}
               isOptionEqualToValue={(o, v) => o.id === v.id}
               value={statusFilter}
-              onChange={(_, v) => setStatusFilter(v)}
-              renderInput={(params) => <TextField {...params} label="סטטוס" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              onChange={(v) => setStatusFilter(v)}
+              placeholder="סטטוס"
             />
           </Grid>
 
@@ -311,8 +311,8 @@ export default function ItemTable() {
               getOptionLabel={(o) => o.item_type_desc}
               isOptionEqualToValue={(o, v) => o.item_type_id === v.item_type_id}
               value={typeFilter}
-              onChange={(_, v) => setTypeFilter(v)}
-              renderInput={(params) => <TextField {...params} label="סוג פריט" sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />}
+              onChange={(v) => setTypeFilter(v)}
+              placeholder="סוג פריט"
             />
           </Grid>
 
@@ -332,7 +332,7 @@ export default function ItemTable() {
               variant="outlined"
               color="inherit"
               onClick={clearFilters}
-              startIcon={<ClearIcon />}
+              startIcon={<ClearIcon sx={{ ml: 1 }} />}
               fullWidth
               sx={{ height: 40, borderRadius: 2, borderColor: '#bdbdbd', color: '#757575' }}
             >

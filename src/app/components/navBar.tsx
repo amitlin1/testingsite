@@ -12,7 +12,7 @@ import {
 } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 // Icons
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -34,11 +34,6 @@ import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturi
 import AltRouteIcon from "@mui/icons-material/AltRoute";
 import BadgeIcon from "@mui/icons-material/Badge";
 
-/** Fixed left navigation rail (240px) per the redesign. Below 980px it becomes
- *  an off-canvas drawer driven by AppShell (open/isMobile/onClose). RTL:
- *  `inset-inline-start` places it on the right edge, so it slides out via
- *  translateX(100%). Fake top-bar features (global search / notifications /
- *  user profile / logout) are intentionally omitted until they have backing. */
 export const SIDEBAR_WIDTH = 240;
 
 const SIDEBAR_BG = "#15171a";
@@ -46,6 +41,49 @@ const ACTIVE_BG = "rgba(41,151,255,0.14)";
 const ACTIVE_BAR = "#2997ff";
 const INACTIVE_TEXT = "#b8bcc2";
 
+// ==========================================
+// 1. קומפוננטת טמפלט (DRY) לפריט ניווט בתפריט
+// ==========================================
+type NavItemProps = {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClose?: () => void;
+  isNested?: boolean; // מאפשר להקטין קצת את הטקסט בתת-תפריט
+};
+
+function NavItem({ href, label, icon, active, onClose, isNested = false }: NavItemProps) {
+  return (
+    <ListItemButton
+      component={Link}
+      href={href}
+      onClick={onClose} // יופעל רק בלחיצה שמאלית, לחיצה על הגלגל תפתח טאב חדש ותתעלם מזה
+      sx={{
+        minHeight: isNested ? 38 : 42,
+        borderRadius: "9px",
+        px: 1.5,
+        mb: "3px",
+        color: active ? "#fff" : INACTIVE_TEXT,
+        bgcolor: active ? ACTIVE_BG : "transparent",
+        borderInlineStart: `3px solid ${active ? ACTIVE_BAR : "transparent"}`,
+        "&:hover": { bgcolor: alpha("#ffffff", 0.06), color: "#fff" },
+        "& .MuiListItemIcon-root": { color: "inherit", minWidth: 34 },
+        "& .MuiListItemText-primary": {
+          fontSize: isNested ? 13 : 14,
+          fontWeight: active ? 600 : 400,
+        },
+      }}
+    >
+      <ListItemIcon>{icon}</ListItemIcon>
+      <ListItemText primary={label} />
+    </ListItemButton>
+  );
+}
+
+// ==========================================
+// 2. קומפוננטת ה-NavBar הראשית
+// ==========================================
 type SidebarProps = {
   isMobile?: boolean;
   open?: boolean;
@@ -53,7 +91,6 @@ type SidebarProps = {
 };
 
 export default function NavBar({ isMobile = false, open = false, onClose }: SidebarProps) {
-  const router = useRouter();
   const theme = useTheme();
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -79,25 +116,9 @@ export default function NavBar({ isMobile = false, open = false, onClose }: Side
 
   const isSettingsActive = pathname?.startsWith("/settings");
 
-  const itemSx = (active: boolean) => ({
-    minHeight: 42,
-    borderRadius: "9px",
-    px: 1.5,
-    mb: "3px",
-    color: active ? "#fff" : INACTIVE_TEXT,
-    bgcolor: active ? ACTIVE_BG : "transparent",
-    borderInlineStart: `3px solid ${active ? ACTIVE_BAR : "transparent"}`,
-    "&:hover": { bgcolor: alpha("#ffffff", 0.06), color: "#fff" },
-    "& .MuiListItemIcon-root": { color: "inherit", minWidth: 34 },
-    "& .MuiListItemText-primary": { fontSize: 14, fontWeight: active ? 600 : 400 },
-  });
-
   return (
     <Box
       component="aside"
-      // Off-canvas slide on mobile (RTL: rail sits on the right → slide right).
-      // Applied via inline `style` because MUI `sx` is unreliable for `transform`
-      // in this emotion/RTL/CSS-layer setup (same reason as marginInlineStart).
       style={{
         transform: isMobile ? (open ? "translateX(0)" : "translateX(100%)") : "none",
         transition: "transform 0.2s ease",
@@ -133,7 +154,7 @@ export default function NavBar({ isMobile = false, open = false, onClose }: Side
             width: 26,
             height: 26,
             borderRadius: "7px",
-            bgcolor: theme.tokens.accent,
+            bgcolor: theme.tokens?.accent || ACTIVE_BAR, // גיבוי למקרה שהטוקן חסר
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -150,20 +171,36 @@ export default function NavBar({ isMobile = false, open = false, onClose }: Side
       {/* Navigation */}
       <Box sx={{ flex: 1, overflowY: "auto", p: "10px 14px" }}>
         <List disablePadding>
-          {mainLinks.map((link) => {
-            const active = pathname === link.href;
-            return (
-              <ListItemButton key={link.href} component={Link} href={link.href} onClick={onClose} sx={itemSx(active)}>
-                <ListItemIcon>{link.icon}</ListItemIcon>
-                <ListItemText primary={link.label} />
-              </ListItemButton>
-            );
-          })}
+          {/* Main Links */}
+          {mainLinks.map((link) => (
+            <NavItem
+              key={link.href}
+              href={link.href}
+              label={link.label}
+              icon={link.icon}
+              active={pathname === link.href}
+              onClose={onClose}
+            />
+          ))}
 
           <Box sx={{ height: "1px", bgcolor: alpha("#ffffff", 0.08), my: 1.25, mx: 0.5 }} />
 
-          {/* Settings (expandable) */}
-          <ListItemButton onClick={() => setSettingsOpen((o) => !o)} sx={itemSx(!!isSettingsActive)}>
+          {/* Settings Toggle Button (לא מפעיל ניווט, רק פותח/סוגר את הרשימה) */}
+          <ListItemButton
+            onClick={() => setSettingsOpen((o) => !o)}
+            sx={{
+              minHeight: 42,
+              borderRadius: "9px",
+              px: 1.5,
+              mb: "3px",
+              color: isSettingsActive ? "#fff" : INACTIVE_TEXT,
+              bgcolor: isSettingsActive && !settingsOpen ? ACTIVE_BG : "transparent",
+              borderInlineStart: `3px solid ${isSettingsActive ? ACTIVE_BAR : "transparent"}`,
+              "&:hover": { bgcolor: alpha("#ffffff", 0.06), color: "#fff" },
+              "& .MuiListItemIcon-root": { color: "inherit", minWidth: 34 },
+              "& .MuiListItemText-primary": { fontSize: 14, fontWeight: isSettingsActive ? 600 : 400 },
+            }}
+          >
             <ListItemIcon>
               <SettingsIcon sx={{ fontSize: 20 }} />
             </ListItemIcon>
@@ -176,24 +213,21 @@ export default function NavBar({ isMobile = false, open = false, onClose }: Side
               }}
             />
           </ListItemButton>
+
+          {/* Settings Links */}
           <Collapse in={settingsOpen} timeout="auto" unmountOnExit>
             <List disablePadding sx={{ pr: 1 }}>
-              {settingsLinks.map((item) => {
-                const active = pathname === item.path;
-                return (
-                  <ListItemButton
-                    key={item.path}
-                    onClick={() => {
-                      router.push(item.path);
-                      onClose?.();
-                    }}
-                    sx={{ ...itemSx(active), minHeight: 38, "& .MuiListItemText-primary": { fontSize: 13 } }}
-                  >
-                    <ListItemIcon>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.label} />
-                  </ListItemButton>
-                );
-              })}
+              {settingsLinks.map((item) => (
+                <NavItem
+                  key={item.path}
+                  href={item.path}
+                  label={item.label}
+                  icon={item.icon}
+                  active={pathname === item.path}
+                  onClose={onClose}
+                  isNested={true}
+                />
+              ))}
             </List>
           </Collapse>
         </List>

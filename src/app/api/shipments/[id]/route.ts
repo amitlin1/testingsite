@@ -81,3 +81,58 @@ export async function PUT(
         );
     }
 }
+
+export async function DELETE(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { id } = await params;
+    const shipmentId = parseInt(id, 10);
+
+    try {
+        // 1. בדיקה אם המשלוח קיים
+        const shipment = await prisma.shipments.findUnique({
+            where: { id: shipmentId },
+        });
+
+        if (!shipment) {
+            return NextResponse.json({ error: "המשלוח לא נמצא" }, { status: 404 });
+        }
+
+        // 2. בדיקה: האם המשלוח כבר בשימוש?
+        // נבדוק האם קיימים פריטים בטבלת items שמשויכים למשלוח הזה
+        const itemsCount = await prisma.items.count({
+            where: { shipment_id: shipmentId },
+        });
+
+        // חסימת מחיקה אם: המשלוח נשלח או שיש פריטים משויכים
+        if (shipment.is_sent || itemsCount > 0) {
+            return NextResponse.json(
+                { error: "לא ניתן למחוק משלוח שכבר נכנס לניהול פריטים או שנשלח" },
+                { status: 400 }
+            );
+        }
+
+        // 3. מחיקה בטרנזקציה (בטוחה)
+        await prisma.$transaction(async (tx) => {
+            // מחיקת כל הפריטים המשויכים למשלוח בטבלת shipment_items
+            await tx.shipment_items.deleteMany({
+                where: { shipment_id: shipmentId },
+            });
+
+            // מחיקת המשלוח עצמו
+            await tx.shipments.delete({
+                where: { id: shipmentId },
+            });
+        });
+
+        return NextResponse.json({ message: "המשלוח נמחק בהצלחה" }, { status: 200 });
+
+    } catch (e: any) {
+        console.error("Error deleting shipment:", e);
+        return NextResponse.json(
+            { error: "שגיאה בביצוע המחיקה" },
+            { status: 500 }
+        );
+    }
+}

@@ -20,7 +20,12 @@ import {
     Skeleton,
     Chip,
     useTheme,
-    alpha
+    alpha,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Typography
 } from "@mui/material";
 import SearchableCombobox from "../common/SearchableCombobox";
 import AddIcon from "@mui/icons-material/Add";
@@ -38,6 +43,7 @@ import {
     PictureAsPdf as PictureAsPdfIcon,
     CheckCircle as CheckCircleIcon,
     QrCode2 as QrCode2Icon,
+    Delete as DeleteIcon,
     Edit as EditIcon
 } from "@mui/icons-material";
 import Tooltip from "@mui/material/Tooltip";
@@ -67,6 +73,9 @@ export default function ShipmentTable() {
     const [historyOpen, setHistoryOpen] = useState(false);
     const [barcodesOpen, setBarcodesOpen] = useState(false);
     const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [shipmentToDelete, setShipmentToDelete] = useState<Shipment | null>(null);
 
     // PDF printing
     const pdfRef = React.useRef<HTMLDivElement>(null);
@@ -166,11 +175,11 @@ export default function ShipmentTable() {
 
     const handleInsertResult = (success: boolean) => {
         if (success) {
-            setSnackbarMessage("Shipment created successfully");
+            setSnackbarMessage("המשלוח נוצר בהצלחה");
             setSnackbarSeverity("success");
             loadShipments();
         } else {
-            setSnackbarMessage("Failed to create shipment");
+            setSnackbarMessage("שגיאה ביצירת המשלוח");
             setSnackbarSeverity("error");
         }
         setSnackbarOpen(true);
@@ -178,11 +187,11 @@ export default function ShipmentTable() {
 
     const handleUpdateResult = (success: boolean) => {
         if (success) {
-            setSnackbarMessage("Shipment updated successfully");
+            setSnackbarMessage("המשלוח עודכן בהצלחה");
             setSnackbarSeverity("success");
             loadShipments();
         } else {
-            setSnackbarMessage("Failed to update shipment");
+            setSnackbarMessage("שגיאה בעדכון המשלוח");
             setSnackbarSeverity("error");
         }
         setSnackbarOpen(true);
@@ -192,7 +201,6 @@ export default function ShipmentTable() {
         setSelectedShipment(row);
         setUpdateOpen(true);
     };
-
     if (loading) {
         return (
             <Paper sx={{ height: 600, p: 2 }}>
@@ -202,6 +210,42 @@ export default function ShipmentTable() {
             </Paper>
         );
     }
+
+    const handleDelete = async () => {
+        if (!shipmentToDelete) return;
+        try {
+            const res = await fetch(`/api/shipments/${shipmentToDelete.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setSnackbarMessage("המשלוח נמחק בהצלחה");
+                setSnackbarSeverity("success");
+                loadShipments();
+            } else {
+                const data = await res.json();
+                setSnackbarMessage(data.error || "שגיאה במחיקת המשלוח");
+                setSnackbarSeverity("error");
+            }
+        } catch {
+            setSnackbarMessage("שגיאת תקשורת");
+            setSnackbarSeverity("error");
+        } finally {
+            setSnackbarOpen(true);
+            setDeleteDialogOpen(false);
+            setShipmentToDelete(null);
+        }
+    };
+    // בדיקה לפני פתיחת דיאלוג
+    const initiateDelete = (row: Shipment) => {
+        // התנאי שביקשת
+        const isRestricted = row.is_sent || (row.valid_amount ?? 0) > 0 || (row.sampled_amount ?? 0) > 0;
+        if (isRestricted) {
+            setSnackbarMessage("לא ניתן למחוק משלוח שכבר נכנס לניהול פריטים או שנשלח");
+            setSnackbarSeverity("error");
+            setSnackbarOpen(true);
+        } else {
+            setShipmentToDelete(row);
+            setDeleteDialogOpen(true);
+        }
+    };
 
     return (
         <>
@@ -244,7 +288,7 @@ export default function ShipmentTable() {
                             InputLabelProps={{ shrink: true }}
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
-                            sx={{ flex: 0.5, minWidth: 140 }}
+                            sx={{ flex: 0.5, minWidth: 160 }}
                         />
                         <TextField
                             type="date"
@@ -253,22 +297,21 @@ export default function ShipmentTable() {
                             InputLabelProps={{ shrink: true }}
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
-                            sx={{ flex: 0.5, minWidth: 140 }}
+                            sx={{ flex: 0.5, minWidth: 160 }}
                         />
                         <Button
                             onClick={clearFilters}
                             variant="outlined"
                             color="inherit"
-                            startIcon={<ClearIcon />}
+                            startIcon={<ClearIcon sx={{ ml: 1 }} />}
                             sx={{ borderColor: 'rgba(0,0,0,0.12)', color: 'text.secondary', whiteSpace: 'nowrap' }}
                         >
                             נקה
                         </Button>
                     </Stack>
-
                     <Button
                         variant="contained"
-                        startIcon={<AddIcon />}
+                        startIcon={<AddIcon sx={{ ml: 1 }} />}
                         onClick={() => setInsertOpen(true)}
                         sx={{
                             px: 4,
@@ -360,6 +403,49 @@ export default function ShipmentTable() {
                             <TableCell onClick={() => handleRowClick(row)} sx={{ borderBottom: '1px solid rgba(0,0,0,0.02)' }}>{row.valid_amount || 0}</TableCell>
                             <TableCell sx={{ borderBottom: '1px solid rgba(0,0,0,0.02)' }}>
                                 <Stack direction="row" spacing={1.5} justifyContent="space-between">
+                                    <Tooltip title="מחיקת משלוח">
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => { e.stopPropagation(); initiateDelete(row); }}
+                                            sx={{
+                                                color: theme.palette.error.main,
+                                                bgcolor: alpha(theme.palette.error.main, 0.1),
+                                                '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.2) }
+                                            }}
+                                        >
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                    {/* <Tooltip title="מחיקת משלוח">
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => { e.stopPropagation(); initiateDelete(row); }}
+                                            sx={{
+                                                color: theme.palette.error.main,
+                                                bgcolor: alpha(theme.palette.error.main, 0.1),
+                                                '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.2) }
+                                            }}
+                                        >
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip> */}
+                                    {/* <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} slotProps={{
+                                        backdrop: {
+                                            sx: {
+                                                backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                                                backdropFilter: 'blur',
+                                            },
+                                        },
+                                    }}>
+                                        <DialogTitle>מחיקת משלוח</DialogTitle>
+                                        <DialogContent>
+                                            האם אתה בטוח שברצונך למחוק את משלוח {shipmentToDelete?.shipment_code}? פעולה זו אינה הפיכה.
+                                        </DialogContent>
+                                        <DialogActions>
+                                            <Button onClick={() => setDeleteDialogOpen(false)}>ביטול</Button>
+                                            <Button onClick={handleDelete} color="error" variant="contained">מחק</Button>
+                                        </DialogActions>
+                                    </Dialog> */}
                                     <Tooltip title="עריכת משלוח">
                                         <IconButton onClick={(e) => { e.stopPropagation(); handleRowClick(row); }} size="small" sx={{ color: theme.palette.text.secondary, bgcolor: alpha(theme.palette.text.primary, 0.06), '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.12) } }}>
                                             <EditIcon fontSize="small" />
@@ -391,6 +477,24 @@ export default function ShipmentTable() {
                     )}
                 />
             </Paper>
+            {/* Delete Confirmation Dialog - ממוקם פעם אחת בלבד מחוץ לטבלה */}
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+                PaperProps={{ sx: { borderRadius: 3 } }}
+            >
+                <DialogTitle>מחיקת משלוח</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        האם אתה בטוח שברצונך למחוק את משלוח <strong>{shipmentToDelete?.shipment_code}</strong>?
+                        פעולה זו אינה הפיכה.
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={() => setDeleteDialogOpen(false)}>ביטול</Button>
+                    <Button onClick={handleDelete} color="error" variant="contained">מחק</Button>
+                </DialogActions>
+            </Dialog>
 
             <ShipmentInsertPopup
                 open={insertOpen}

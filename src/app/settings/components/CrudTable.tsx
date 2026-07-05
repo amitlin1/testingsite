@@ -52,13 +52,13 @@ export default function CrudTable({
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Dialog State
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRow, setEditingRow] = useState<any | null>(null);
   const [formData, setFormData] = useState<any>({});
   const [saveLoading, setSaveLoading] = useState(false);
-  
+
   // Delete Confirm State
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState<any | null>(null);
@@ -112,18 +112,26 @@ export default function CrudTable({
   const handleSave = async () => {
     // Simple validation
     for (const col of columns) {
-       if (col.field === idField) continue;
-       if (!formData[col.field] || !String(formData[col.field]).trim()) {
-          showSnackbar(`${col.headerName} שדה חובה`, "error");
-          return;
-       }
+      if (col.field === idField) continue;
+      if (!formData[col.field] || !String(formData[col.field]).trim()) {
+        showSnackbar(`${col.headerName} שדה חובה`, "error");
+        return;
+      }
+    }
+    const isDuplicate = rows.some(r =>
+      r[nameField].toLowerCase().trim() === formData[nameField].toLowerCase().trim() &&
+      r[idField] !== editingRow?.[idField] // התעלמות מהשורה הנוכחית בעריכה
+    );
+    if (isDuplicate) {
+      showSnackbar("סוג פריט זה כבר קיים", "error");
+      return; // עוצר את התהליך ולא שולח בקשה לשרת
     }
 
     setSaveLoading(true);
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow[idField]}` : apiUrl;
-      
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -131,12 +139,12 @@ export default function CrudTable({
       });
 
       if (!res.ok) {
-         const errorData = await res.json();
-         throw new Error(errorData.error || "Failed to save");
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to save");
       }
 
       const savedRow = await res.json();
-      
+
       if (editingRow && savedRow) {
         setRows(rows.map(r => r[idField] === savedRow[idField] ? savedRow : r));
         showSnackbar(`${entityName} עודכן בהצלחה`, "success");
@@ -148,7 +156,7 @@ export default function CrudTable({
     } catch (err: any) {
       showSnackbar(err.message, "error");
     } finally {
-        setSaveLoading(false);
+      setSaveLoading(false);
     }
   };
 
@@ -160,8 +168,8 @@ export default function CrudTable({
       });
 
       if (!res.ok) {
-         const errorData = await res.json();
-         throw new Error(errorData.error || "Failed to delete");
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete");
       }
 
       setRows(rows.filter(r => r[idField] !== rowToDelete[idField]));
@@ -175,23 +183,23 @@ export default function CrudTable({
   };
 
   const filteredRows = rows.filter(row => {
-     if (!searchTerm) return true;
-     return columns.some(col => {
-        const val = row[col.field];
-        return String(val).toLowerCase().includes(searchTerm.toLowerCase());
-     });
+    if (!searchTerm) return true;
+    return columns.some(col => {
+      const val = row[col.field];
+      return String(val).toLowerCase().includes(searchTerm.toLowerCase());
+    });
   });
 
   return (
-    <Paper 
-      elevation={0} 
+    <Paper
+      elevation={0}
       square
-      sx={{ 
-        flex: 1, 
-        display: "flex", 
-        flexDirection: "column", 
-        m: 0, 
-        p: 2, 
+      sx={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        m: 0,
+        p: 2,
         borderRadius: 0,
         boxSizing: "border-box",
         overflow: "hidden"
@@ -200,18 +208,18 @@ export default function CrudTable({
       {/* Toolbar */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2, gap: 2, flexShrink: 0 }}>
         <TextField
-            size="small"
-            placeholder="חיפוש..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ maxWidth: 300 }}
+          size="small"
+          placeholder="חיפוש..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ maxWidth: 300 }}
         />
         <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd}>
           הוסף {entityName}
@@ -239,7 +247,7 @@ export default function CrudTable({
                 </TableCell>
               </TableRow>
             ) : filteredRows.length === 0 ? (
-               <TableRow>
+              <TableRow>
                 <TableCell colSpan={columns.length + 1} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">לא נמצאו נתונים</Typography>
                 </TableCell>
@@ -273,25 +281,25 @@ export default function CrudTable({
         <DialogContent dir="rtl">
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
             {columns.map(col => {
-                if (col.field === idField) return null;
-                return (
-                  <TextField
-                    key={col.field}
-                    label={col.headerName}
-                    value={formData[col.field] || ""}
-                    onChange={(e) => setFormData({ ...formData, [col.field]: e.target.value })}
-                    fullWidth
-                    required
-                  />
-                );
+              if (col.field === idField) return null;
+              return (
+                <TextField
+                  key={col.field}
+                  label={col.headerName}
+                  value={formData[col.field] || ""}
+                  onChange={(e) => setFormData({ ...formData, [col.field]: e.target.value })}
+                  fullWidth
+                  required
+                />
+              );
             })}
           </Box>
         </DialogContent>
         <DialogActions sx={{ justifyContent: "flex-start", px: 3, pb: 2, direction: "rtl" }}>
-           <Button onClick={() => setOpenDialog(false)}>ביטול</Button>
-           <Button onClick={handleSave} variant="contained" disabled={saveLoading}>
-             {saveLoading ? "שומר..." : "שמור"}
-           </Button>
+          <Button onClick={() => setOpenDialog(false)}>ביטול</Button>
+          <Button onClick={handleSave} variant="contained" disabled={saveLoading}>
+            {saveLoading ? "שומר..." : "שמור"}
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -307,8 +315,8 @@ export default function CrudTable({
           </Typography>
         </DialogContent>
         <DialogActions sx={{ justifyContent: "flex-start", px: 3, pb: 2, direction: "rtl" }}>
-           <Button onClick={() => setDeleteConfirmOpen(false)}>ביטול</Button>
-           <Button onClick={handleDeleteConfirm} color="error" variant="contained">מחק</Button>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>ביטול</Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">מחק</Button>
         </DialogActions>
       </Dialog>
 

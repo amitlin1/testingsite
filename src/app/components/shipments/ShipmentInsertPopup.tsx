@@ -92,6 +92,8 @@ export default function ShipmentInsertPopup({
     // Duplicate-shipment dialog (shown when a scanned shipment already exists).
     const [duplicate, setDuplicate] = useState<Shipment | null>(null);
 
+    const [isSigned, setIsSigned] = useState(false);
+
     // Handle QR scan result
     const handleQrScan = useCallback((decodedText: string) => {
         const parsedData = parseShipmentQr(decodedText);
@@ -194,6 +196,8 @@ export default function ShipmentInsertPopup({
             reset({ ...defaultShipment, source_id: 1, shipment_items: [{ item_type_id: 0, quantity: 0 }] });
             setScanned(false);
             setDuplicate(null);
+            setIsSigned(false);
+            sigCanvas.current?.clear();
         }
     }, [open, reset]);
 
@@ -201,11 +205,6 @@ export default function ShipmentInsertPopup({
         try {
             // Filter out empty rows
             const validItems = data.shipment_items?.filter(i => i.item_type_id && i.quantity > 0) || [];
-
-            if (validItems.length === 0) {
-                alert("Must add at least one item with valid type and quantity");
-                return;
-            }
 
             // Recalculate total amount
             const totalAmount = validItems.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0);
@@ -411,11 +410,20 @@ export default function ShipmentInsertPopup({
                     )}
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
                         <Box sx={{ width: "100%" }}>
-                             <FieldLabel>פרטי איש קשר (POC Details)</FieldLabel>
-                             <Controller
+                            <FieldLabel>פרטי איש קשר (POC Details)</FieldLabel>
+                            <Controller
                                 name="poc_details"
                                 control={control}
-                                render={({ field }) => (
+                                rules={{
+                                    validate: (value) => {
+                                        const englishOnlyRegex = /^[A-Za-z0-9\s\.,!\?'-]*$/;
+                                        if (!value || englishOnlyRegex.test(value)) {
+                                            return true;
+                                        }
+                                        return "ניתן להזין באנגלית בלבד";
+                                    }
+                                }}
+                                render={({ field, fieldState: { error } }) => (
                                     <TextField
                                         {...field}
                                         placeholder="פרטי איש קשר"
@@ -424,6 +432,8 @@ export default function ShipmentInsertPopup({
                                         multiline
                                         rows={2}
                                         disabled={scanned}
+                                        error={!!error}
+                                        helperText={error?.message}
                                     />
                                 )}
                             />
@@ -436,16 +446,22 @@ export default function ShipmentInsertPopup({
                                 rules={{
                                     required: "שדה חובה",
                                     maxLength: { value: 20, message: "מקסימום 20 תווים" },
+                                    validate: (value) => {
+                                        const isExists = existingShipments.some(
+                                            (s) => s.shipment_code?.trim() === value.trim()
+                                        );
+                                        return isExists ? "משלוח עם מספר זה כבר קיים במערכת" : true;
+                                    }
                                 }}
-                                render={({ field }) => (
+                                render={({ field, fieldState: { error } }) => (
                                     <TextField
                                         {...field}
                                         placeholder="מס' משלוח"
                                         fullWidth
                                         size="small"
                                         disabled={scanned}
-                                        error={!!errors.shipment_code}
-                                        helperText={errors.shipment_code?.message}
+                                        error={!!error}
+                                        helperText={error?.message}
                                         inputProps={{ maxLength: 20 }}
                                     />
                                 )}
@@ -543,22 +559,22 @@ export default function ShipmentInsertPopup({
                         {fields.map((item, index) => (
                             <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
                                 <Box sx={{ width: 300 }}>
-                                <Controller
-                                    name={`shipment_items.${index}.item_type_id` as const}
-                                    control={control}
-                                    rules={{ required: true }}
-                                    render={({ field: { onChange, value } }) => (
-                                        <SearchableCombobox<{ id: number; name: string }>
-                                            options={itemTypes}
-                                            getOptionLabel={(option) => option.name}
-                                            isOptionEqualToValue={(o, v) => o.id === v.id}
-                                            value={itemTypes.find((t) => t.id === value) || null}
-                                            onChange={(newValue) => onChange(newValue?.id ?? null)}
-                                            placeholder="סוג פריט"
-                                            error={!!errors.shipment_items?.[index]?.item_type_id}
-                                        />
-                                    )}
-                                />
+                                    <Controller
+                                        name={`shipment_items.${index}.item_type_id` as const}
+                                        control={control}
+                                        rules={{ required: true }}
+                                        render={({ field: { onChange, value } }) => (
+                                            <SearchableCombobox<{ id: number; name: string }>
+                                                options={itemTypes}
+                                                getOptionLabel={(option) => option.name}
+                                                isOptionEqualToValue={(o, v) => o.id === v.id}
+                                                value={itemTypes.find((t) => t.id === value) || null}
+                                                onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                                placeholder="סוג פריט"
+                                                error={!!errors.shipment_items?.[index]?.item_type_id}
+                                            />
+                                        )}
+                                    />
                                 </Box>
                                 <Controller
                                     name={`shipment_items.${index}.makat` as const}
@@ -622,16 +638,34 @@ export default function ShipmentInsertPopup({
                     {/* Signature Section — compact */}
                     <Box sx={{ mt: 2, borderTop: `1px solid ${theme.palette.divider}`, pt: 1.5 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>חתימה</Typography>
-                            <Button size="small" onClick={() => sigCanvas.current?.clear()}>נקה חתימה</Button>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: !isSigned ? 'error.main' : 'text.secondary' }}>
+                                חתימה (חובה)
+                            </Typography>
+                            <Button size="small" onClick={() => {
+                                sigCanvas.current?.clear();
+                                setIsSigned(false);
+                            }}>נקה חתימה</Button>
                         </Box>
-                        <Box sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 2, overflow: 'hidden', bgcolor: '#fafafa' }}>
+                        <Box sx={{
+                            border: `1px solid ${!isSigned ? theme.palette.error.main : theme.palette.divider}`,
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            bgcolor: '#fafafa'
+                        }}>
                             <SignatureCanvas
                                 ref={sigCanvas}
                                 canvasProps={{ width: 800, height: 120, className: 'sigCanvas' }}
                                 backgroundColor="#fafafa"
+                                // בכל סיום ציור בודקים אם הקנבס אינו ריק
+                                onEnd={() => setIsSigned(!sigCanvas.current?.isEmpty())}
                             />
                         </Box>
+                        {/* הודעת שגיאה במקום Snackbar */}
+                        {!isSigned && (
+                            <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                                * חובה לחתום לפני הוספת המשלוח
+                            </Typography>
+                        )}
                     </Box>
 
                 </DialogContent>
@@ -645,7 +679,8 @@ export default function ShipmentInsertPopup({
                     </Button>
                     <Button
                         type="submit"
-                        disabled={!isValid}
+                        // הכפתור יהיה חסום אם הטופס לא תקין או שעדיין לא חתמו
+                        disabled={!isValid || !isSigned}
                         variant="contained"
                         sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >

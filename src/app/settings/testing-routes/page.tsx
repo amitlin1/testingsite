@@ -188,21 +188,9 @@ export default function TestingRoutesPage() {
         that enforce max-width or padding. 
       */}
       <Box sx={{
-        position: "fixed",
-        top: { xs: "56px", sm: "64px" }, // Adjust for Navbar height
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: "100vw",
-        // Height is implicitly defined by top/bottom, ensuring full viewport usage
-        overflow: "hidden",
-        direction: "rtl",
-        bgcolor: "background.default",
-        zIndex: 100, // Ensure it sits above parent background but below AppBar (usually 1100)
         display: "flex",
         flexDirection: "column",
-        m: 0,
-        p: 0,
+        height: "100%",
       }}>
 
         {/* Page Header */}

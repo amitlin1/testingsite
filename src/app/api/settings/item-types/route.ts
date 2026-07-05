@@ -33,6 +33,21 @@ export async function POST(req: Request) {
   const trimmedDesc = item_type_desc.trim();
 
   try {
+    const existing = await prisma.item_types.findFirst({
+      where: {
+        item_type_desc: {
+          equals: trimmedDesc,
+          mode: 'insensitive'
+        }
+      }
+    });
+    if (existing) {
+      return NextResponse.json(
+        { error: "סוג פריט זה כבר קיים במערכת" },
+        { status: 400 }
+      );
+    }
+
     const created = await prisma.item_types.create({
       data: { item_type_desc: trimmedDesc },
     });

@@ -135,6 +135,13 @@ export async function POST(request: Request) {
           poc_details: poc_details || null,
         },
       });
+      const hasHebrew = /[\u0590-\u05FF]/.test(poc_details || "");
+      if (hasHebrew) {
+        return NextResponse.json(
+          { error: "POC details must be in English only" },
+          { status: 400 }
+        );
+      }
 
       // Now save signature with shipment ID for folder organization
       let signaturePath = null;

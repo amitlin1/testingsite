@@ -24,20 +24,9 @@ export default function TestStationsPage() {
       />
 
       <Box sx={{
-        position: "fixed",
-        top: { xs: "56px", sm: "64px" }, // Adjust for Navbar height
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: "100vw",
-        overflow: "hidden",
-        direction: "rtl",
-        bgcolor: "background.default",
-        zIndex: 100,
         display: "flex",
         flexDirection: "column",
-        m: 0,
-        p: 0,
+        height: "100%",
       }}>
 
         {/* Page Header */}

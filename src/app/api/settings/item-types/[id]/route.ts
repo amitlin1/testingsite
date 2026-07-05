@@ -7,26 +7,38 @@ export const runtime = "nodejs";
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const idNum = Number(id);
     const { item_type_desc } = await req.json();
 
     if (!item_type_desc || typeof item_type_desc !== "string" || !item_type_desc.trim()) {
       return NextResponse.json({ error: "Description is required" }, { status: 400 });
     }
 
+    const trimmedDesc = item_type_desc.trim();
+
+    const existing = await prisma.item_types.findFirst({
+      where: {
+        item_type_desc: { equals: trimmedDesc, mode: 'insensitive' },
+        NOT: { item_type_id: idNum }
+      }
+    });
+
+    if (existing) {
+      return NextResponse.json({ error: "סוג פריט זה כבר קיים במערכת" }, { status: 400 });
+    }
+
     const updated = await prisma.item_types.update({
-      where: { item_type_id: Number(id) },
-      data: { item_type_desc: item_type_desc.trim() },
+      where: { item_type_id: idNum },
+      data: { item_type_desc: trimmedDesc },
     });
 
     return NextResponse.json({
       item_type_id: updated.item_type_id,
       item_type_desc: updated.item_type_desc.trim(),
     });
+
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return NextResponse.json({ error: "Item type not found" }, { status: 404 });
     }
     console.error("Error updating item type:", error);
