@@ -42,6 +42,12 @@ export async function POST(request: Request) {
                 { status: 400 }
             );
         }
+        if (!signature_base64) {
+            return NextResponse.json(
+                { error: "Signature is required" },
+                { status: 400 } // Bad Request - הלקוח לא עמד בתנאים
+            );
+        }
 
         await prisma.$transaction(async (tx) => {
             let signaturePath = null;

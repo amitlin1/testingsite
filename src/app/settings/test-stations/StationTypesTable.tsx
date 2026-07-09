@@ -19,13 +19,13 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Dialog
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRow, setEditingRow] = useState<any | null>(null);
   const [formData, setFormData] = useState<any>({});
   const [saveLoading, setSaveLoading] = useState(false);
-  
+
   // Delete
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState<any | null>(null);
@@ -65,7 +65,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow.test_station_type_id}` : apiUrl;
-      
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -78,7 +78,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
       if (editingRow && savedRow) {
         setRows(rows.map(r => r.test_station_type_id === savedRow.test_station_type_id ? savedRow : r));
         if (selectedId === savedRow.test_station_type_id) {
-           onSelect(savedRow.test_station_type_id, savedRow.test_type_desc);
+          onSelect(savedRow.test_station_type_id, savedRow.test_type_desc);
         }
       } else {
         setRows([...rows, savedRow]);
@@ -97,9 +97,9 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     try {
       const res = await fetch(`${apiUrl}/${rowToDelete.test_station_type_id}`, { method: "DELETE" });
       if (!res.ok) {
-          // Check for 409
-          if (res.status === 409) throw new Error("לא ניתן למחוק כי קיימות עמדות משויכות");
-          throw new Error("Failed to delete");
+        // Check for 409
+        if (res.status === 409) throw new Error("לא ניתן למחוק כי קיימות עמדות משויכות");
+        throw new Error("Failed to delete");
       }
       setRows(rows.filter(r => r.test_station_type_id !== rowToDelete.test_station_type_id));
       if (selectedId === rowToDelete.test_station_type_id) {
@@ -114,7 +114,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     }
   };
 
-  const filteredRows = rows.filter(r => 
+  const filteredRows = rows.filter(r =>
     r.test_type_desc.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -122,7 +122,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     <Box sx={{ p: 2, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2, alignItems: "center", flexShrink: 0 }}>
         <Typography variant="h6" fontWeight="bold" sx={{ fontSize: "1rem" }}>סוגי עמדות</Typography>
-        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => {
+        <Button variant="contained" size="small" startIcon={<AddIcon sx={{ ml: 0.5 }} />} onClick={() => {
           setEditingRow(null);
           setFormData({});
           setOpenDialog(true);
@@ -130,7 +130,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
           הוסף
         </Button>
       </Box>
-      
+
       <TextField
         size="small"
         placeholder="חיפוש..."
@@ -151,11 +151,11 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
           </TableHead>
           <TableBody>
             {loading ? (
-               <TableRow><TableCell colSpan={2} align="center"><CircularProgress size={20} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={2} align="center"><CircularProgress size={20} /></TableCell></TableRow>
             ) : filteredRows.map(row => (
-              <TableRow 
-                key={row.test_station_type_id} 
-                hover 
+              <TableRow
+                key={row.test_station_type_id}
+                hover
                 selected={selectedId === row.test_station_type_id}
                 onClick={() => onSelect(row.test_station_type_id, row.test_type_desc)}
                 sx={{ cursor: "pointer" }}

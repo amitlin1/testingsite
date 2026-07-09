@@ -304,7 +304,7 @@ export default function TestingRoutesPage() {
                   <Button
                     variant="contained"
                     color="primary"
-                    startIcon={<SaveIcon />}
+                    startIcon={<SaveIcon sx={{ ml: 1 }} />}
                     onClick={handleSave}
                     disabled={!selectedItemType || routeNumber === null || routeNumber === undefined || loadingRoute}
                     size="small"

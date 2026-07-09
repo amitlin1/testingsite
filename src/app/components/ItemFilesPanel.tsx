@@ -256,7 +256,7 @@ export default function ItemFilesPanel({
         <Button
           variant="outlined"
           size="small"
-          startIcon={<CloudUploadIcon />}
+          startIcon={<CloudUploadIcon sx={{ ml: 1 }} />}
           onClick={() => inputRef.current?.click()}
           disabled={uploading || (standalone && effectiveWorkerId == null)}
         >

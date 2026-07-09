@@ -35,16 +35,16 @@ export default function WorkersTable() {
   const [rows, setRows] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Dialog State
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRow, setEditingRow] = useState<Worker | null>(null);
   const [formData, setFormData] = useState<Partial<Worker>>({});
   const [saveLoading, setSaveLoading] = useState(false);
-  
+
   // Form validation errors
   const [errors, setErrors] = useState<{ worker_id?: string; worker_name?: string }>({});
-  
+
   // Delete Confirm State
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState<Worker | null>(null);
@@ -140,7 +140,7 @@ export default function WorkersTable() {
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow.worker_id}` : apiUrl;
-      
+
       // Prepare data: trim worker_name, ensure worker_id is number for POST
       const payload: Partial<Worker> = {
         worker_name: String(formData.worker_name).trim(),
@@ -151,7 +151,7 @@ export default function WorkersTable() {
       if (!editingRow) {
         payload.worker_id = parseInt(String(formData.worker_id).trim(), 10);
       }
-      
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -164,7 +164,7 @@ export default function WorkersTable() {
       }
 
       const savedRow = await res.json();
-      
+
       if (editingRow && savedRow) {
         setRows(rows.map(r => r.worker_id === savedRow.worker_id ? savedRow : r));
         showSnackbar("עובד עודכן בהצלחה", "success");
@@ -214,15 +214,15 @@ export default function WorkersTable() {
   });
 
   return (
-    <Paper 
-      elevation={0} 
+    <Paper
+      elevation={0}
       square
-      sx={{ 
-        flex: 1, 
-        display: "flex", 
-        flexDirection: "column", 
-        m: 0, 
-        p: 2, 
+      sx={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        m: 0,
+        p: 2,
         borderRadius: 0,
         boxSizing: "border-box",
         overflow: "hidden"
@@ -244,7 +244,7 @@ export default function WorkersTable() {
           }}
           sx={{ maxWidth: 300 }}
         />
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd}>
+        <Button variant="contained" startIcon={<AddIcon sx={{ ml: 1 }} />} onClick={handleAdd}>
           הוסף עובד
         </Button>
       </Box>
@@ -334,7 +334,7 @@ export default function WorkersTable() {
                 pattern: '[0-9]*'
               }}
             />
-            
+
             {/* Worker Name field */}
             <TextField
               label="שם עובד"

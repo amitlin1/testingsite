@@ -111,7 +111,7 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                 <Button
                     onClick={() => handlePrint()}
                     variant="contained"
-                    startIcon={<PrintIcon />}
+                    startIcon={<PrintIcon sx={{ ml: 1 }} />}
                     disabled={total <= 0}
                 >
                     הדפס הכל ({total})

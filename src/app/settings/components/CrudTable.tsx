@@ -221,7 +221,7 @@ export default function CrudTable({
           }}
           sx={{ maxWidth: 300 }}
         />
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd}>
+        <Button variant="contained" startIcon={<AddIcon sx={{ ml: 1 }} />} onClick={handleAdd}>
           הוסף {entityName}
         </Button>
       </Box>

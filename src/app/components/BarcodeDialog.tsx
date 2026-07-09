@@ -60,7 +60,7 @@ export default function BarcodeDialog({ open, onClose, itemId, sourceId, itemSer
                 <Button
                     onClick={() => handlePrint()}
                     variant="contained"
-                    startIcon={<PrintIcon />}
+                    startIcon={<PrintIcon sx={{ ml: 1 }} />}
                 >
                     הדפס
                 </Button>

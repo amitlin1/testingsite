@@ -49,6 +49,8 @@ export default function ShipmentSendPopup({
     const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string }[]>([]);
     const [history, setHistory] = useState<{ item_type_id: number; makat: number | null; total_sent: number }[]>([]);
 
+    const [isSigned, setIsSigned] = useState(false);
+
     const {
         control,
         handleSubmit,
@@ -266,29 +268,29 @@ export default function ShipmentSendPopup({
                                     }}
                                     render={({ field: { onChange, value } }) => (
                                         <Box sx={{ width: 400 }}>
-                                        <SearchableCombobox<(typeof availableItems)[number]>
-                                            options={availableItems}
-                                            getOptionLabel={(option) =>
-                                                `${option.item_type_desc || 'Unknown'} - Makat: ${option.makat || 'N/A'} (Qty: ${option.quantity})`
-                                            }
-                                            // Find the matching option based on item_type_id and makat
-                                            value={availableItems.find(opt =>
-                                                opt.item_type_id === value.item_type_id && opt.makat == value.makat
-                                            ) || null}
-                                            onChange={(newValue) => {
-                                                if (newValue) {
-                                                    onChange({
-                                                        item_type_id: newValue.item_type_id,
-                                                        makat: newValue.makat || null,
-                                                        amount: value.amount // Keep typed amount or reset? User didn't specify. Keeping it is safer unless we change item.
-                                                    });
-                                                } else {
-                                                    onChange({ item_type_id: null, makat: null, amount: '' });
+                                            <SearchableCombobox<(typeof availableItems)[number]>
+                                                options={availableItems}
+                                                getOptionLabel={(option) =>
+                                                    `${option.item_type_desc || 'Unknown'} - Makat: ${option.makat || 'N/A'} (Qty: ${option.quantity})`
                                                 }
-                                            }}
-                                            placeholder="בחירת פריט"
-                                            error={!!errors.items?.[index]}
-                                        />
+                                                // Find the matching option based on item_type_id and makat
+                                                value={availableItems.find(opt =>
+                                                    opt.item_type_id === value.item_type_id && opt.makat == value.makat
+                                                ) || null}
+                                                onChange={(newValue) => {
+                                                    if (newValue) {
+                                                        onChange({
+                                                            item_type_id: newValue.item_type_id,
+                                                            makat: newValue.makat || null,
+                                                            amount: value.amount // Keep typed amount or reset? User didn't specify. Keeping it is safer unless we change item.
+                                                        });
+                                                    } else {
+                                                        onChange({ item_type_id: null, makat: null, amount: '' });
+                                                    }
+                                                }}
+                                                placeholder="בחירת פריט"
+                                                error={!!errors.items?.[index]}
+                                            />
                                         </Box>
                                     )}
                                 />
@@ -300,7 +302,7 @@ export default function ShipmentSendPopup({
                                         validate: (value, formValues) => {
                                             // Allow empty or 0 during input
                                             if (value === '' || value === 0) return true;
-                                            
+
                                             const currentItem = formValues.items[index];
                                             if (!currentItem.item_type_id) return true; // Skip if no item selected yet
 
@@ -368,6 +370,7 @@ export default function ShipmentSendPopup({
                                 ref={sigCanvas}
                                 canvasProps={{ width: 800, height: 120, className: 'sigCanvas' }}
                                 backgroundColor="#fafafa"
+                                onEnd={() => setIsSigned(!sigCanvas.current?.isEmpty())}
                             />
                         </Box>
                     </Box>
@@ -383,7 +386,7 @@ export default function ShipmentSendPopup({
                     </Button>
                     <Button
                         type="submit"
-                        disabled={!isValid}
+                        disabled={!isValid || !isSigned}
                         variant="contained"
                         color="success"
                         sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
