@@ -55,6 +55,11 @@ export async function GET(req: Request) {
 
     const normalizedRows = rows.map((row: any) => ({
       ...row,
+      logId: Number(row.logId),
+      itemId: Number(row.itemId),
+      currentRouteStep: Number(row.currentRouteStep),
+      testStationId: Number(row.testStationId),
+      workerId: row.workerId !== null ? Number(row.workerId) : null,
       queueStartTime: normalizeToUtcIso(row.queueStartTime),
       processingStartTime: normalizeToUtcIso(row.processingStartTime),
       processingEndTime: normalizeToUtcIso(row.processingEndTime),
