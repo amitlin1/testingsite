@@ -1,17 +1,47 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Expose Shifthouse tokens as Tailwind 4 utilities (bg-primary, text-ink,
+   rounded-pill, font-display, …). `inline` makes utilities reference the raw
+   token vars from tokens.css instead of re-emitting them. */
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-focus: var(--color-primary-focus);
+  --color-primary-on-dark: var(--color-primary-on-dark);
+  --color-on-primary: var(--color-on-primary);
+  --color-destructive: var(--color-destructive);
+  --color-destructive-hover: var(--color-destructive-hover);
 
+  --color-canvas: var(--color-canvas);
+  --color-parchment: var(--color-canvas-parchment);
+  --color-pearl: var(--color-surface-pearl);
+  --color-tile-1: var(--color-surface-tile-1);
+  --color-chip-translucent: var(--color-surface-chip-translucent);
 
+  --color-ink: var(--color-ink);
+  --color-on-dark: var(--color-on-dark);
+  --color-body-muted: var(--color-body-muted);
+  --color-ink-muted-80: var(--color-ink-muted-80);
+  --color-ink-muted-48: var(--color-ink-muted-48);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-divider-soft: var(--color-divider-soft);
+  --color-hairline: var(--color-hairline);
+
+  --color-status-on: var(--color-status-on);
+  --color-status-late: var(--color-status-late);
+  --color-status-absent: var(--color-status-absent);
+  --color-status-approved: var(--color-status-approved);
+
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-pill: var(--r-pill);
+
+  --font-display: var(--font-display);
+  --font-text: var(--font-text);
+  --font-mono: var(--font-mono);
 }
 
 html,
@@ -23,7 +53,11 @@ body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-rubik), "Segoe UI", "Arial", sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

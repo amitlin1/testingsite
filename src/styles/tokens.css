@@ -1,0 +1,88 @@
+/* =========================================================================
+   Shifthouse — design tokens
+   Single source of truth for the whole app. Use ONLY these values; never
+   inline a raw hex. Imported once from globals.css.
+
+   Fonts: this app is air-gapped (no CDN at runtime), so --font-display /
+   --font-text point at the locally-bundled Rubik variable font (loaded via
+   next/font in layout.tsx as --font-rubik). Do NOT add a Google Fonts import.
+   ========================================================================= */
+
+:root {
+  /* Brand & accent */
+  --color-primary:#0066cc;            /* Action Blue — every clickable thing on light */
+  --color-primary-hover:#0058b3;
+  --color-primary-focus:#0071e3;      /* 2px focus ring */
+  --color-primary-on-dark:#2997ff;    /* links on dark tiles ONLY */
+  --color-on-primary:#ffffff;
+  --color-destructive:#bf3535;
+  --color-destructive-hover:#a82d2d;
+
+  /* Surface */
+  --color-canvas:#ffffff;
+  --color-canvas-parchment:#f5f5f7;
+  --color-surface-pearl:#fafafc;
+  --color-surface-tile-1:#272729;
+  --color-surface-black:#000000;
+  --color-surface-chip-translucent:rgba(210,210,215,.64);
+
+  /* Ink / text */
+  --color-ink:#1d1d1f;
+  --color-body:#1d1d1f;
+  --color-on-dark:#ffffff;
+  --color-body-muted:#cccccc;
+  --color-ink-muted-80:#333333;
+  --color-ink-muted-48:#7a7a7a;
+
+  /* Hairlines */
+  --color-divider-soft:#f0f0f0;
+  --color-hairline:#e0e0e0;
+  --color-hairline-rgba:rgba(0,0,0,.08);
+
+  /* Status (functional, not brand) */
+  --color-status-on:#0066cc;
+  --color-status-late:#d97706;
+  --color-status-absent:#7a7a7a;
+  --color-status-approved:#1f8a5b;
+
+  /* Type — Rubik locally (air-gapped); SF Pro/Inter kept as fallbacks only */
+  --font-display:var(--font-rubik),'SF Pro Display',system-ui,-apple-system,'Inter',sans-serif;
+  --font-text:var(--font-rubik),'SF Pro Text',system-ui,-apple-system,'Inter',sans-serif;
+  --font-mono:'SF Mono',ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;
+  --fw-light:300; --fw-regular:400; --fw-semibold:600; --fw-bold:700; /* NO 500 */
+
+  --fs-hero:56px; --fs-display-lg:40px; --fs-display-md:34px; --fs-lead:28px;
+  --fs-lead-airy:24px; --fs-tagline:21px; --fs-body:17px; --fs-caption:14px;
+  --fs-button-large:18px; --fs-fine:12px; --fs-micro:10px;
+
+  --lh-hero:1.07; --lh-display:1.10; --lh-body:1.47; --lh-tight:1.0;
+  --ls-hero:-0.28px; --ls-display:-0.374px; --ls-body:-0.374px; --ls-caption:-0.224px;
+
+  /* Spacing — 8px base */
+  --space-xxs:4px; --space-xs:8px; --space-sm:12px; --space-md:17px;
+  --space-lg:24px; --space-xl:32px; --space-xxl:48px; --space-section:80px;
+
+  /* Radii */
+  --r-none:0; --r-xs:5px; --r-sm:8px; --r-md:11px; --r-lg:18px; --r-pill:9999px; --r-full:9999px;
+
+  /* Elevation — the ONE product shadow (only under a photograph) + frosted blur */
+  --shadow-product:rgba(0,0,0,.22) 3px 5px 30px 0;
+  --blur-frosted:saturate(180%) blur(20px);
+  --bg-frosted-parchment:rgba(245,245,247,.80);
+
+  /* Motion */
+  --ease-press:cubic-bezier(0.4,0,0.6,1);
+  --ease-page:cubic-bezier(0.25,0.1,0.25,1);
+  --t-press:90ms; --t-page:200ms;
+
+  /* Layout */
+  --content-max:1440px; --sidebar-w:248px; --sidebar-w-collapsed:56px;
+  --topnav-h:44px; --subnav-h:52px;
+}
+
+/* Press affordance: the only button motion in the system */
+.sh-press:active { transform: scale(0.95); }
+
+/* Spinner + skeleton shimmer keyframes used by ui/Progress + ui/Skeleton */
+@keyframes sh-spin { to { transform: rotate(360deg); } }
+@keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }

@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="18" fill="#f5f5f7"/><rect x="30" y="30" width="40" height="40" rx="9" fill="#1d1d1f"/><text x="50" y="50" dy="7" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="600" font-size="24" fill="#fff">S</text></svg>
+</template>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  :root {
+    --color-primary:#0066cc; --color-primary-focus:#0071e3; --color-primary-on-dark:#2997ff; --color-on-primary:#ffffff;
+    --color-destructive:#bf3535; --color-destructive-hover:#a82d2d;
+    --color-canvas:#ffffff; --color-canvas-parchment:#f5f5f7; --color-surface-pearl:#fafafc;
+    --color-surface-tile-1:#272729; --color-surface-black:#000000; --color-surface-chip-translucent:rgba(210,210,215,0.64);
+    --color-ink:#1d1d1f; --color-body:#1d1d1f; --color-on-dark:#ffffff; --color-body-muted:#cccccc;
+    --color-ink-muted-80:#333333; --color-ink-muted-48:#7a7a7a;
+    --color-divider-soft:#f0f0f0; --color-hairline:#e0e0e0; --color-hairline-rgba:rgba(0,0,0,0.08);
+    --color-status-on:#0066cc; --color-status-late:#d97706; --color-status-absent:#7a7a7a; --color-status-approved:#1f8a5b;
+    --font-display:'SF Pro Display',system-ui,-apple-system,'Inter',sans-serif;
+    --font-text:'SF Pro Text',system-ui,-apple-system,'Inter',sans-serif;
+    --font-mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+    --fw-light:300; --fw-regular:400; --fw-semibold:600; --fw-bold:700;
+    --r-xs:5px; --r-sm:8px; --r-md:11px; --r-lg:18px; --r-pill:9999px;
+    --shadow-product:rgba(0,0,0,0.22) 3px 5px 30px 0;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--color-canvas-parchment); font-family:var(--font-text); color:var(--color-ink); -webkit-font-smoothing:antialiased; }
+  a { color:var(--color-primary); text-decoration:none; }
+  a:hover { color:#0058b3; }
+  [data-lucide] { display:inline-block; vertical-align:middle; }
+</style>
+</helmet>
+<div dir="rtl" style="min-height:100vh; padding:48px 40px 96px;">
+  <div style="max-width:1080px; margin:0 auto;">
+
+    <!-- ===== Masthead ===== -->
+    <header style="margin-bottom:56px;">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+        <div style="width:34px; height:34px; border-radius:8px; background:var(--color-ink); display:flex; align-items:center; justify-content:center; color:#fff; font-family:var(--font-display); font-weight:600; font-size:19px;">S</div>
+        <span style="font-family:var(--font-text); font-size:14px; color:var(--color-ink-muted-48); letter-spacing:-0.2px;">Shifthouse · ספריית קומפוננטות</span>
+      </div>
+      <h1 style="font-family:var(--font-display); font-weight:600; font-size:52px; line-height:1.05; letter-spacing:-0.28px; margin:0 0 16px;">שפת רכיבים אחת.<br>ללא MUI.</h1>
+      <p style="font-size:19px; line-height:1.5; color:var(--color-ink-muted-80); max-width:640px; margin:0; font-weight:300;">כל אבן יסוד לבניית מסכים, בנויה על טוקני Shifthouse — שטוחה, כחול פעולה יחיד, פינות וטיפוגרפיה מדויקות. זו התבנית להחלפת MUI ולבניית מסכים עתידיים.</p>
+    </header>
+
+    <!-- ===== FOUNDATIONS ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">יסודות</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Foundations</span>
+      </div>
+
+      <h3 style="font-size:14px; font-weight:600; color:var(--color-ink-muted-48); text-transform:uppercase; letter-spacing:0.5px; margin:0 0 14px;">צבעים</h3>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-bottom:36px;">
+        <sc-for list="{{ swatches }}" as="s" hint-placeholder-count="8">
+          <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); overflow:hidden;">
+            <div style="height:64px; background:{{ s.value }}; border-bottom:1px solid var(--color-hairline);"></div>
+            <div style="padding:10px 12px;">
+              <div style="font-size:13px; font-weight:600;">{{ s.name }}</div>
+              <div style="font-size:11px; color:var(--color-ink-muted-48); font-family:var(--font-mono);">{{ s.hex }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:32px;">
+        <div>
+          <h3 style="font-size:14px; font-weight:600; color:var(--color-ink-muted-48); text-transform:uppercase; letter-spacing:0.5px; margin:0 0 14px;">טיפוגרפיה</h3>
+          <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:24px; display:flex; flex-direction:column; gap:14px;">
+            <div style="font-family:var(--font-display); font-weight:600; font-size:40px; line-height:1.1; letter-spacing:-0.374px;">Display 40</div>
+            <div style="font-size:28px; font-weight:400; letter-spacing:0.196px;">Lead 28</div>
+            <div style="font-size:21px; font-weight:600; letter-spacing:0.231px;">Tagline 21</div>
+            <div style="font-size:17px; line-height:1.47; letter-spacing:-0.374px;">Body 17 — ברירת המחדל לקריאה. שורה בגובה 1.47.</div>
+            <div style="font-size:14px; color:var(--color-ink-muted-80);">Caption 14 — משני</div>
+            <div style="font-size:10px; font-weight:600; letter-spacing:0.6px; text-transform:uppercase; color:var(--color-ink-muted-48);">MICRO 10 · STATUS</div>
+          </div>
+        </div>
+        <div>
+          <h3 style="font-size:14px; font-weight:600; color:var(--color-ink-muted-48); text-transform:uppercase; letter-spacing:0.5px; margin:0 0 14px;">פינות · מרווח · צל</h3>
+          <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:24px; display:flex; flex-direction:column; gap:20px;">
+            <div style="display:flex; gap:14px; align-items:flex-end;">
+              <sc-for list="{{ radii }}" as="r" hint-placeholder-count="5">
+                <div style="text-align:center;">
+                  <div style="width:52px; height:52px; background:var(--color-canvas-parchment); border:1px solid var(--color-hairline); border-radius:{{ r.value }};"></div>
+                  <div style="font-size:11px; color:var(--color-ink-muted-48); margin-top:6px;">{{ r.name }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="border-top:1px solid var(--color-divider-soft); padding-top:18px;">
+              <div style="font-size:12px; color:var(--color-ink-muted-48); margin-bottom:12px;">הצל היחיד במערכת — רק מתחת לתצלום</div>
+              <div style="display:flex; gap:20px; align-items:center;">
+                <div style="width:64px; height:64px; border-radius:var(--r-lg); background:linear-gradient(135deg,#c9b8a5,#8a7a68); box-shadow:var(--shadow-product);"></div>
+                <span style="font-family:var(--font-mono); font-size:11px; color:var(--color-ink-muted-48);">rgba(0,0,0,.22) 3px 5px 30px</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== BUTTONS ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">כפתורים</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Button · IconButton</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:32px; display:flex; flex-direction:column; gap:24px;">
+        <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center;">
+          <button style="all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:var(--color-primary); color:#fff; font-size:17px; border-radius:var(--r-pill); padding:11px 22px; min-height:38px;">שמור שינויים</button>
+          <button style="all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:transparent; color:var(--color-primary); border:1px solid var(--color-primary); font-size:17px; border-radius:var(--r-pill); padding:10px 21px; min-height:38px;">ביטול</button>
+          <button style="all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:var(--color-ink); color:#fff; font-size:14px; border-radius:var(--r-sm); padding:8px 15px; min-height:32px;">כלי עזר</button>
+          <button style="all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:var(--color-destructive); color:#fff; font-size:17px; border-radius:var(--r-pill); padding:11px 22px; min-height:38px;">מחק</button>
+          <button style="all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:6px; cursor:not-allowed; background:var(--color-canvas-parchment); color:var(--color-ink-muted-48); font-size:17px; border-radius:var(--r-pill); padding:11px 22px; min-height:38px;">מושבת</button>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center;">
+          <button style="all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:8px; cursor:pointer; background:var(--color-primary); color:#fff; font-size:17px; border-radius:var(--r-pill); padding:11px 22px; min-height:38px;"><i data-lucide="check" style="width:18px;height:18px;"></i>אשר קליטה</button>
+          <button style="all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:8px; cursor:pointer; background:transparent; color:var(--color-primary); border:1px solid var(--color-primary); font-size:17px; border-radius:var(--r-pill); padding:10px 21px; min-height:38px;"><i data-lucide="qr-code" style="width:18px;height:18px;"></i>סרוק ברקוד</button>
+          <span style="width:1px; height:32px; background:var(--color-hairline);"></span>
+          <button title="עריכה" style="all:unset; box-sizing:border-box; width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--color-ink); border-radius:var(--r-sm);"><i data-lucide="pencil" style="width:20px;height:20px;"></i></button>
+          <button title="מחיקה" style="all:unset; box-sizing:border-box; width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--color-ink); border-radius:var(--r-sm);"><i data-lucide="trash-2" style="width:20px;height:20px;"></i></button>
+          <button title="עוד" style="all:unset; box-sizing:border-box; width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--color-ink); border-radius:var(--r-full); background:var(--color-surface-chip-translucent);"><i data-lucide="more-horizontal" style="width:20px;height:20px;"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== INPUTS ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">שדות קלט</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">TextField · Search · Textarea</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:32px; display:grid; grid-template-columns:1fr 1fr; gap:28px;">
+        <div>
+          <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px;">שם עובד</label>
+          <input type="text" value="מרתה לוי" style="width:100%; height:40px; background:var(--color-canvas); color:var(--color-ink); font-family:var(--font-text); font-size:17px; border:1px solid var(--color-hairline); border-radius:var(--r-sm); padding:10px 14px; outline:none;">
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px;">חיפוש</label>
+          <div style="position:relative; display:flex; align-items:center;">
+            <i data-lucide="search" style="position:absolute; inset-inline-start:16px; width:18px; height:18px; color:var(--color-ink-muted-48);"></i>
+            <input type="text" placeholder="חפש עובד או משמרת" style="width:100%; height:44px; background:var(--color-canvas); font-family:var(--font-text); font-size:17px; border:1px solid var(--color-hairline-rgba); border-radius:var(--r-pill); padding:12px 46px; outline:none;">
+          </div>
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px;">שדה במיקוד</label>
+          <input type="text" value="14:30" style="width:100%; height:40px; font-family:var(--font-text); font-size:17px; border:1px solid var(--color-primary-focus); border-radius:var(--r-sm); padding:10px 14px; outline:2px solid var(--color-primary-focus); outline-offset:1px;">
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px; color:var(--color-destructive);">שדה עם שגיאה</label>
+          <input type="text" value="—" style="width:100%; height:40px; font-family:var(--font-text); font-size:17px; border:1px solid var(--color-destructive); border-radius:var(--r-sm); padding:10px 14px; outline:none;">
+          <div style="font-size:12px; color:var(--color-destructive); margin-top:6px;">שדה חובה</div>
+        </div>
+        <div style="grid-column:1 / -1;">
+          <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px;">הערות</label>
+          <textarea rows="3" style="width:100%; font-family:var(--font-text); font-size:17px; line-height:1.47; border:1px solid var(--color-hairline); border-radius:var(--r-sm); padding:10px 14px; outline:none; resize:vertical;">נקלט בשלמות. אריזה תקינה.</textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SELECT / COMBOBOX / SEGMENTED ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">בחירה</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Select · Combobox · Segmented</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:32px; display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:start;">
+        <div>
+          <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px;">משמרת</label>
+          <button onClick="{{ toggleSelect }}" style="all:unset; box-sizing:border-box; width:100%; height:40px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-family:var(--font-text); font-size:17px; border:1px solid var(--color-hairline); border-radius:var(--r-sm); padding:10px 14px;">
+            <span>{{ selectValue }}</span>
+            <i data-lucide="chevron-down" style="width:18px; height:18px; color:var(--color-ink-muted-48);"></i>
+          </button>
+          <sc-if value="{{ selectOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:6px; border:1px solid var(--color-hairline); border-radius:var(--r-sm); background:var(--color-canvas); overflow:hidden;">
+              <sc-for list="{{ selectOptions }}" as="opt" hint-placeholder-count="3">
+                <div onClick="{{ opt.onClick }}" style="padding:10px 14px; cursor:pointer; font-size:17px; display:flex; align-items:center; justify-content:space-between;" style-hover="background:var(--color-canvas-parchment)">
+                  <span>{{ opt.label }}</span>
+                  <sc-if value="{{ opt.selected }}" hint-placeholder-val="{{ false }}"><i data-lucide="check" style="width:16px;height:16px; color:var(--color-primary);"></i></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px;">בקרת פלח — תוצאת בדיקה</label>
+          <div style="display:inline-flex; border:1px solid var(--color-hairline); border-radius:var(--r-sm); overflow:hidden; background:var(--color-canvas);">
+            <sc-for list="{{ segments }}" as="sg" hint-placeholder-count="2">
+              <button onClick="{{ sg.onClick }}" style="{{ sg.style }}">{{ sg.label }}</button>
+            </sc-for>
+          </div>
+          <div style="margin-top:24px;">
+            <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px;">Combobox עם תגים</label>
+            <div style="min-height:44px; display:flex; align-items:center; flex-wrap:wrap; gap:6px; border:1px solid var(--color-hairline); border-radius:var(--r-sm); padding:6px 10px;">
+              <span style="display:inline-flex; align-items:center; gap:4px; background:var(--color-canvas-parchment); border-radius:var(--r-xs); padding:4px 8px; font-size:14px;">קו 3<i data-lucide="x" style="width:14px;height:14px; color:var(--color-ink-muted-48); cursor:pointer;"></i></span>
+              <span style="display:inline-flex; align-items:center; gap:4px; background:var(--color-canvas-parchment); border-radius:var(--r-xs); padding:4px 8px; font-size:14px;">משמרת A<i data-lucide="x" style="width:14px;height:14px; color:var(--color-ink-muted-48); cursor:pointer;"></i></span>
+              <input placeholder="הוסף…" style="flex:1; min-width:60px; border:0; outline:none; font-family:var(--font-text); font-size:15px; background:transparent;">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TOGGLES ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">בוררים</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Switch · Checkbox · Radio</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:32px; display:grid; grid-template-columns:repeat(3,1fr); gap:32px;">
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <span style="font-size:13px; font-weight:600; color:var(--color-ink-muted-48);">Switch</span>
+          <sc-for list="{{ switches }}" as="sw" hint-placeholder-count="2">
+            <label style="display:flex; align-items:center; gap:12px; cursor:pointer;" onClick="{{ sw.onClick }}">
+              <span style="{{ sw.track }}"><span style="{{ sw.knob }}"></span></span>
+              <span style="font-size:15px;">{{ sw.label }}</span>
+            </label>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <span style="font-size:13px; font-weight:600; color:var(--color-ink-muted-48);">Checkbox</span>
+          <sc-for list="{{ checks }}" as="ck" hint-placeholder-count="2">
+            <label style="display:flex; align-items:center; gap:12px; cursor:pointer;" onClick="{{ ck.onClick }}">
+              <span style="{{ ck.box }}"><sc-if value="{{ ck.on }}" hint-placeholder-val="{{ true }}"><i data-lucide="check" style="width:14px;height:14px; color:#fff;"></i></sc-if></span>
+              <span style="font-size:15px;">{{ ck.label }}</span>
+            </label>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <span style="font-size:13px; font-weight:600; color:var(--color-ink-muted-48);">Radio</span>
+          <sc-for list="{{ radios }}" as="rd" hint-placeholder-count="3">
+            <label style="display:flex; align-items:center; gap:12px; cursor:pointer;" onClick="{{ rd.onClick }}">
+              <span style="{{ rd.ring }}"><sc-if value="{{ rd.on }}" hint-placeholder-val="{{ false }}"><span style="width:10px;height:10px;border-radius:50%;background:var(--color-primary);"></span></sc-if></span>
+              <span style="font-size:15px;">{{ rd.label }}</span>
+            </label>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CHIPS & STATUS ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">תגיות ומצב</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Chip · StatusPill · Badge</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:32px; display:flex; flex-direction:column; gap:24px;">
+        <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+          <sc-for list="{{ statusPills }}" as="p" hint-placeholder-count="4">
+            <span style="display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; letter-spacing:0.6px; text-transform:uppercase; color:var(--color-ink); background:var(--color-canvas-parchment); border:1px solid var(--color-hairline); border-radius:var(--r-pill); padding:5px 11px; line-height:1;">
+              <span style="width:6px; height:6px; border-radius:50%; background:{{ p.dot }};"></span>{{ p.label }}
+            </span>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+          <span style="display:inline-flex; align-items:center; gap:6px; background:var(--color-canvas-parchment); border-radius:var(--r-xs); padding:6px 12px; font-size:14px;">קו 3</span>
+          <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(0,102,204,0.08); color:var(--color-primary); border-radius:var(--r-xs); padding:6px 12px; font-size:14px; font-weight:600;">נבחר</span>
+          <span style="position:relative; display:inline-flex; align-items:center; gap:6px; background:var(--color-canvas-parchment); border-radius:var(--r-xs); padding:6px 12px; font-size:14px;">התראות<span style="position:absolute; top:-6px; inset-inline-start:-6px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--color-destructive); color:#fff; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center;">4</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CARDS ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">כרטיסים</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Card · KPI · Worker row</span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px;">
+        <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:24px;">
+          <div style="display:flex; align-items:center; gap:8px; color:var(--color-ink-muted-48); margin-bottom:16px;"><i data-lucide="clock" style="width:20px;height:20px;"></i><span style="font-size:14px;">זמן ממוצע לעמדה</span></div>
+          <div style="font-family:var(--font-display); font-weight:600; font-size:40px; letter-spacing:-0.374px; line-height:1;">7h 42m</div>
+          <div style="font-size:13px; color:var(--color-status-approved); margin-top:8px; display:flex; align-items:center; gap:4px;"><i data-lucide="trending-up" style="width:14px;height:14px;"></i>4% מהשבוע שעבר</div>
+        </div>
+        <div style="background:var(--color-surface-tile-1); border-radius:var(--r-lg); padding:24px; color:#fff;">
+          <div style="font-size:14px; color:var(--color-body-muted); margin-bottom:16px;">על הרצפה כעת</div>
+          <div style="font-family:var(--font-display); font-weight:600; font-size:40px; letter-spacing:-0.374px; line-height:1;">128</div>
+          <a href="#" style="font-size:14px; color:var(--color-primary-on-dark); margin-top:8px; display:inline-block;">צפה בעובדים</a>
+        </div>
+        <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:20px; display:flex; align-items:center; gap:14px;">
+          <div style="width:52px; height:52px; border-radius:var(--r-full); background:linear-gradient(135deg,#c9b8a5,#8a7a68); flex-shrink:0; box-shadow:var(--shadow-product);"></div>
+          <div style="flex:1;">
+            <div style="font-size:17px; font-weight:600;">מרתה לוי</div>
+            <div style="font-size:13px; color:var(--color-ink-muted-48);">קו 3 · משמרת A · 06:02</div>
+          </div>
+          <span style="display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; letter-spacing:0.6px; text-transform:uppercase; background:var(--color-canvas-parchment); border:1px solid var(--color-hairline); border-radius:var(--r-pill); padding:5px 10px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--color-status-on);"></span>ON SHIFT</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TABS ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">לשוניות</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Tabs</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:0 32px 32px;">
+        <div style="display:flex; gap:28px; border-bottom:1px solid var(--color-hairline); margin-bottom:24px;">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+        <p style="margin:0; font-size:17px; line-height:1.47; color:var(--color-ink-muted-80);">{{ tabBody }}</p>
+      </div>
+    </section>
+
+    <!-- ===== ALERTS ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">התראות</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Alert · Banner</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div style="display:flex; align-items:flex-start; gap:12px; background:var(--color-canvas); border:1px solid var(--color-hairline); border-inline-start:3px solid var(--color-primary); border-radius:var(--r-sm); padding:14px 18px;"><i data-lucide="info" style="width:20px;height:20px; color:var(--color-primary); flex-shrink:0;"></i><span style="font-size:15px; line-height:1.47;">יש לך 4 משמרות לאישור בתור.</span></div>
+        <div style="display:flex; align-items:flex-start; gap:12px; background:var(--color-canvas); border:1px solid var(--color-hairline); border-inline-start:3px solid var(--color-status-approved); border-radius:var(--r-sm); padding:14px 18px;"><i data-lucide="check-circle-2" style="width:20px;height:20px; color:var(--color-status-approved); flex-shrink:0;"></i><span style="font-size:15px; line-height:1.47;">גיליון הנוכחות אושר בהצלחה.</span></div>
+        <div style="display:flex; align-items:flex-start; gap:12px; background:var(--color-canvas); border:1px solid var(--color-hairline); border-inline-start:3px solid var(--color-destructive); border-radius:var(--r-sm); padding:14px 18px;"><i data-lucide="alert-triangle" style="width:20px;height:20px; color:var(--color-destructive); flex-shrink:0;"></i><span style="font-size:15px; line-height:1.47;">הברקוד שנסרק אינו תקין. נסה שוב.</span></div>
+      </div>
+    </section>
+
+    <!-- ===== PROGRESS & SKELETON ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">טעינה והתקדמות</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Progress · Skeleton · Spinner</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:32px; display:grid; grid-template-columns:1fr 1fr; gap:32px; align-items:center;">
+        <div style="display:flex; flex-direction:column; gap:20px;">
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:8px;"><span>השלמת קליטה</span><span style="color:var(--color-ink-muted-48);">72%</span></div>
+            <div style="height:6px; background:var(--color-canvas-parchment); border-radius:var(--r-pill); overflow:hidden;"><div style="width:72%; height:100%; background:var(--color-primary);"></div></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <span style="width:28px; height:28px; border:2.5px solid var(--color-hairline); border-top-color:var(--color-primary); border-radius:50%; animation:cl-spin 0.8s linear infinite;"></span>
+            <span style="font-size:15px; color:var(--color-ink-muted-48);">טוען נתונים…</span>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="height:14px; width:60%; border-radius:var(--r-xs); background:linear-gradient(90deg,#eee,#f5f5f7,#eee); background-size:200% 100%; animation:cl-shimmer 1.4s infinite;"></div>
+          <div style="height:14px; width:90%; border-radius:var(--r-xs); background:linear-gradient(90deg,#eee,#f5f5f7,#eee); background-size:200% 100%; animation:cl-shimmer 1.4s infinite;"></div>
+          <div style="height:14px; width:75%; border-radius:var(--r-xs); background:linear-gradient(90deg,#eee,#f5f5f7,#eee); background-size:200% 100%; animation:cl-shimmer 1.4s infinite;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TABLE ===== -->
+    <section style="margin-bottom:64px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">טבלה</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Table · DataGrid</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); overflow:hidden;">
+        <table style="width:100%; border-collapse:collapse; font-size:15px;">
+          <thead>
+            <tr style="background:var(--color-canvas-parchment);">
+              <th style="text-align:start; padding:14px 20px; font-size:13px; font-weight:600; color:var(--color-ink-muted-48); text-transform:uppercase; letter-spacing:0.4px;">עובד</th>
+              <th style="text-align:start; padding:14px 20px; font-size:13px; font-weight:600; color:var(--color-ink-muted-48); text-transform:uppercase; letter-spacing:0.4px;">קו</th>
+              <th style="text-align:start; padding:14px 20px; font-size:13px; font-weight:600; color:var(--color-ink-muted-48); text-transform:uppercase; letter-spacing:0.4px;">כניסה</th>
+              <th style="text-align:start; padding:14px 20px; font-size:13px; font-weight:600; color:var(--color-ink-muted-48); text-transform:uppercase; letter-spacing:0.4px;">מצב</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+              <tr style="border-top:1px solid var(--color-divider-soft);">
+                <td style="padding:14px 20px; font-weight:600;">{{ r.name }}</td>
+                <td style="padding:14px 20px; color:var(--color-ink-muted-80);">{{ r.line }}</td>
+                <td style="padding:14px 20px; font-family:var(--font-mono); color:var(--color-ink-muted-80);">{{ r.time }}</td>
+                <td style="padding:14px 20px;"><span style="display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; letter-spacing:0.6px; text-transform:uppercase; background:var(--color-canvas-parchment); border:1px solid var(--color-hairline); border-radius:var(--r-pill); padding:4px 10px;"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.dot }};"></span>{{ r.status }}</span></td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== DIALOG ===== -->
+    <section style="margin-bottom:32px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--color-hairline); padding-bottom:12px;">
+        <h2 style="font-family:var(--font-display); font-weight:600; font-size:28px; letter-spacing:-0.374px; margin:0;">חלון קופץ</h2>
+        <span style="font-size:13px; color:var(--color-ink-muted-48);">Dialog · Modal</span>
+      </div>
+      <div style="background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-lg); padding:32px; display:flex; align-items:center; gap:16px;">
+        <button onClick="{{ openDialog }}" style="all:unset; box-sizing:border-box; display:inline-flex; align-items:center; gap:8px; cursor:pointer; background:var(--color-primary); color:#fff; font-size:17px; border-radius:var(--r-pill); padding:11px 22px;"><i data-lucide="external-link" style="width:18px;height:18px;"></i>פתח דוגמה</button>
+        <span style="font-size:14px; color:var(--color-ink-muted-48);">חלון שטוח, ללא צל elevation — כותרת, גוף, ופוטר מחובר.</span>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Dialog overlay -->
+  <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDialog }}" style="position:fixed; inset:0; background:rgba(0,0,0,0.32); backdrop-filter:saturate(180%) blur(4px); display:flex; align-items:center; justify-content:center; z-index:100; padding:24px;">
+      <div onClick="{{ stop }}" dir="rtl" style="width:100%; max-width:520px; background:var(--color-canvas); border-radius:var(--r-lg); overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:24px 28px 16px;">
+          <h3 style="margin:0; font-family:var(--font-display); font-weight:600; font-size:24px; letter-spacing:-0.374px;">אישור קליטה</h3>
+          <button onClick="{{ closeDialog }}" style="all:unset; box-sizing:border-box; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--color-ink-muted-48); border-radius:var(--r-sm);"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+        </div>
+        <div style="padding:0 28px 24px;">
+          <p style="margin:0 0 20px; font-size:17px; line-height:1.47; color:var(--color-ink-muted-80);">האם לאשר את קליטת המשלוח לקו 3, משמרת A? הפעולה תירשם בגיליון הנוכחות.</p>
+          <label style="display:block; font-size:14px; font-weight:600; margin-bottom:8px;">הערה (אופציונלי)</label>
+          <input type="text" placeholder="הוסף הערה" style="width:100%; height:40px; font-family:var(--font-text); font-size:17px; border:1px solid var(--color-hairline); border-radius:var(--r-sm); padding:10px 14px; outline:none;">
+        </div>
+        <div style="display:flex; justify-content:flex-start; gap:12px; padding:16px 28px; background:var(--color-canvas-parchment); border-top:1px solid var(--color-hairline);">
+          <button onClick="{{ closeDialog }}" style="all:unset; box-sizing:border-box; cursor:pointer; background:var(--color-primary); color:#fff; font-size:17px; border-radius:var(--r-pill); padding:11px 22px;">אשר קליטה</button>
+          <button onClick="{{ closeDialog }}" style="all:unset; box-sizing:border-box; cursor:pointer; background:transparent; color:var(--color-primary); border:1px solid var(--color-primary); font-size:17px; border-radius:var(--r-pill); padding:10px 21px;">ביטול</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <div style="position:absolute; width:0; height:0; overflow:hidden;">
+    <style>
+      @keyframes cl-spin { to { transform:rotate(360deg); } }
+      @keyframes cl-shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }
+    </style>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    selectOpen: false, selectValue: "משמרת A",
+    seg: "pass", tab: 0,
+    sw: [true, false], ck: [true, false], radio: 0,
+    dialog: false,
+  };
+  componentDidMount() { this.icons(); }
+  componentDidUpdate() { this.icons(); }
+  icons() { if (window.lucide) window.lucide.createIcons({ attrs: { "stroke-width": 1.75 } }); }
+
+  renderVals() {
+    const s = this.state;
+
+    const swatches = [
+      { name: "Action Blue", hex: "#0066cc", value: "#0066cc" },
+      { name: "Ink", hex: "#1d1d1f", value: "#1d1d1f" },
+      { name: "Parchment", hex: "#f5f5f7", value: "#f5f5f7" },
+      { name: "Dark Tile", hex: "#272729", value: "#272729" },
+      { name: "Muted 48", hex: "#7a7a7a", value: "#7a7a7a" },
+      { name: "Hairline", hex: "#e0e0e0", value: "#e0e0e0" },
+      { name: "Approved", hex: "#1f8a5b", value: "#1f8a5b" },
+      { name: "Destructive", hex: "#bf3535", value: "#bf3535" },
+    ];
+    const radii = [
+      { name: "xs 5", value: "5px" }, { name: "sm 8", value: "8px" },
+      { name: "md 11", value: "11px" }, { name: "lg 18", value: "18px" },
+      { name: "pill", value: "9999px" },
+    ];
+
+    const selectOptions = ["משמרת A", "משמרת B", "משמרת C"].map((label) => ({
+      label,
+      selected: label === s.selectValue,
+      onClick: () => this.setState({ selectValue: label, selectOpen: false }),
+    }));
+
+    const segDefs = [{ k: "pass", label: "עבר" }, { k: "fail", label: "נכשל" }];
+    const segments = segDefs.map((d, i) => {
+      const active = s.seg === d.k;
+      const tint = d.k === "pass" ? "rgba(31,138,91,0.10)" : "rgba(191,53,53,0.10)";
+      const col = d.k === "pass" ? "#1f8a5b" : "#bf3535";
+      return {
+        label: d.label,
+        onClick: () => this.setState({ seg: d.k }),
+        style: `all:unset; box-sizing:border-box; cursor:pointer; padding:9px 22px; font-family:var(--font-text); font-size:15px; text-align:center; min-width:80px; border-inline-start:${i === 0 ? "0" : "1px solid var(--color-hairline)"}; background:${active ? tint : "transparent"}; color:${active ? col : "var(--color-ink-muted-48)"}; font-weight:${active ? "600" : "400"};`,
+      };
+    });
+
+    const tabLabels = ["סקירה", "עובדים", "משמרות", "היעדרויות"];
+    const tabBodies = [
+      "128 עובדים על הרצפה כעת. שני חריגים ממתינים לאישור.",
+      "רשימת כל העובדים לפי קו ומשמרת, עם שעות מצטברות.",
+      "פריסת משמרות A/B/C לשבוע הקרוב.",
+      "6 היעדרויות ממתינות לבדיקה.",
+    ];
+    const tabs = tabLabels.map((label, i) => {
+      const active = s.tab === i;
+      return {
+        label,
+        onClick: () => this.setState({ tab: i }),
+        style: `all:unset; box-sizing:border-box; cursor:pointer; padding:16px 2px; font-family:var(--font-text); font-size:16px; color:${active ? "var(--color-ink)" : "var(--color-ink-muted-48)"}; font-weight:${active ? "600" : "400"}; border-bottom:2px solid ${active ? "var(--color-ink)" : "transparent"}; margin-bottom:-1px;`,
+      };
+    });
+
+    const swLabels = ["הצג משמרות שהושלמו", "התראות בזמן אמת"];
+    const switches = swLabels.map((label, i) => {
+      const on = s.sw[i];
+      return {
+        label,
+        onClick: () => this.setState((st) => { const a = [...st.sw]; a[i] = !a[i]; return { sw: a }; }),
+        track: `width:44px; height:26px; border-radius:9999px; background:${on ? "var(--color-primary)" : "#d2d2d7"}; position:relative; transition:background 0.2s; flex-shrink:0;`,
+        knob: `position:absolute; top:3px; ${on ? "left:3px" : "right:3px"}; width:20px; height:20px; border-radius:50%; background:#fff; transition:all 0.2s;`,
+      };
+    });
+
+    const ckLabels = ["דרוש צילום", "נעילה אוטומטית"];
+    const checks = ckLabels.map((label, i) => {
+      const on = s.ck[i];
+      return {
+        label, on,
+        onClick: () => this.setState((st) => { const a = [...st.ck]; a[i] = !a[i]; return { ck: a }; }),
+        box: `width:20px; height:20px; border-radius:var(--r-xs); display:flex; align-items:center; justify-content:center; flex-shrink:0; background:${on ? "var(--color-primary)" : "var(--color-canvas)"}; border:1px solid ${on ? "var(--color-primary)" : "var(--color-hairline)"};`,
+      };
+    });
+
+    const rdLabels = ["קו 1", "קו 2", "קו 3"];
+    const radios = rdLabels.map((label, i) => {
+      const on = s.radio === i;
+      return {
+        label, on,
+        onClick: () => this.setState({ radio: i }),
+        ring: `width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1px solid ${on ? "var(--color-primary)" : "var(--color-hairline)"};`,
+      };
+    });
+
+    const statusPills = [
+      { label: "ON SHIFT", dot: "var(--color-status-on)" },
+      { label: "LATE", dot: "var(--color-status-late)" },
+      { label: "ABSENT", dot: "var(--color-status-absent)" },
+      { label: "APPROVED", dot: "var(--color-status-approved)" },
+    ];
+
+    const rows = [
+      { name: "מרתה לוי", line: "קו 3", time: "06:02", status: "ON SHIFT", dot: "var(--color-status-on)" },
+      { name: "דני כהן", line: "קו 1", time: "06:14", status: "LATE", dot: "var(--color-status-late)" },
+      { name: "רות אבידן", line: "קו 2", time: "—", status: "ABSENT", dot: "var(--color-status-absent)" },
+      { name: "יוסי בר", line: "קו 3", time: "05:58", status: "APPROVED", dot: "var(--color-status-approved)" },
+    ];
+
+    return {
+      swatches, radii,
+      selectOpen: s.selectOpen, selectValue: s.selectValue, selectOptions,
+      toggleSelect: () => this.setState((st) => ({ selectOpen: !st.selectOpen })),
+      segments, tabs, tabBody: tabBodies[s.tab],
+      switches, checks, radios, statusPills, rows,
+      dialogOpen: s.dialog,
+      openDialog: () => this.setState({ dialog: true }),
+      closeDialog: () => this.setState({ dialog: false }),
+      stop: (e) => e.stopPropagation(),
+    };
+  }
+}
+</script>
+</body>
+</html>
