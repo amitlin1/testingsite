@@ -86,3 +86,8 @@
 /* Spinner + skeleton shimmer keyframes used by ui/Progress + ui/Skeleton */
 @keyframes sh-spin { to { transform: rotate(360deg); } }
 @keyframes sh-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes sh-indeterminate {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+@keyframes sh-pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }

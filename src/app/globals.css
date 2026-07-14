@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
+@import "../components/ui/ui.css";
 
 /* Expose Shifthouse tokens as Tailwind 4 utilities (bg-primary, text-ink,
    rounded-pill, font-display, …). `inline` makes utilities reference the raw
