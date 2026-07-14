@@ -1,28 +1,15 @@
 "use client";
 import * as React from "react";
-import {
-  Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TextField, Skeleton, Box, Toolbar, Stack, IconButton, Button,
-  Fab, Snackbar, Alert, Chip, alpha, LinearProgress, Typography, useTheme
-} from "@/components/ui";
-import SearchableCombobox from "./common/SearchableCombobox";
-import { Add as AddIcon } from "@/components/ui/icons";
-import { Search as SearchIcon } from "@/components/ui/icons";
-import { Clear as ClearIcon } from "@/components/ui/icons";
-import { TableVirtuoso } from "react-virtuoso";
+import { Snackbar, Alert } from "@/components/ui";
+import { QrCode } from "lucide-react";
+import ItemsToolbar from "@/components/ItemsToolbar";
+import DataTable, { StatusPill, ProgressCell, type Column } from "@/components/DataTable";
 import ItemDialog from "./ItemDialog";
 import InsertPopup from "./insertPopup";
 import BarcodeDialog from "./BarcodeDialog";
-import { QrCode as QrCodeIcon } from "@/components/ui/icons";
 import { ItemRow, StatusOption, NewItem, ItemTypeOption, Customers, Shipment } from "@/types";
-import { Grid, InputAdornment, Tooltip, Divider } from "@/components/ui";
-import { FilterList as FilterListIcon } from "@/components/ui/icons";
-import { Refresh as RefreshIcon } from "@/components/ui/icons";
-import { Inventory as InventoryIcon } from "@/components/ui/icons";
-import { Tune as TuneIcon } from "@/components/ui/icons";
 
 export default function ItemTable() {
-  const theme = useTheme();
   const [rows, setRows] = React.useState<ItemRow[]>([]);
   const [statuses, setStatuses] = React.useState<StatusOption[]>([]);
   const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
@@ -31,43 +18,37 @@ export default function ItemTable() {
 
   const [loading, setLoading] = React.useState(true);
   const [selected, setSelected] = React.useState<ItemRow | null>(null);
-
-  // new: control insert popup
   const [insertOpen, setInsertOpen] = React.useState(false);
 
-  // snackbar state to display result of insert
+  // snackbar
   const [snackbarOpen, setSnackbarOpen] = React.useState(false);
   const [snackbarMessage, setSnackbarMessage] = React.useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = React.useState<'success' | 'error'>('success');
+  const [snackbarSeverity, setSnackbarSeverity] = React.useState<"success" | "error">("success");
 
-  // filtering state
+  // filters (string ids — "" = none)
   const [search, setSearch] = React.useState("");
-  const [statusFilter, setStatusFilter] = React.useState<StatusOption | null>(null);
-  const [typeFilter, setTypeFilter] = React.useState<ItemTypeOption | null>(null);
-  const [shipmentFilter, setShipmentFilter] = React.useState<Shipment | null>(null);
+  const [statusFilter, setStatusFilter] = React.useState("");
+  const [typeFilter, setTypeFilter] = React.useState("");
+  const [shipFilter, setShipFilter] = React.useState("");
 
-  // Barcode dialog state
+  // barcode dialog
   const [barcodeOpen, setBarcodeOpen] = React.useState(false);
   const [barcodeItem, setBarcodeItem] = React.useState<{ id: number; sourceId?: number | null; serial?: string } | null>(null);
 
-  const handleOpenBarcode = (e: React.MouseEvent, row: ItemRow) => {
-    e.stopPropagation(); // Prevent row click
+  const openBarcode = (e: React.MouseEvent, row: ItemRow) => {
+    e.stopPropagation();
     setBarcodeItem({ id: row.item_id, sourceId: row.source_id || null, serial: row.serial_no || undefined });
     setBarcodeOpen(true);
   };
 
-  // load items (can be reused to refresh table after popup closes)
   const loadItems = React.useCallback(async () => {
     try {
       setLoading(true);
       const r = await fetch("/api/items");
-      if (!r.ok) {
-        throw new Error(`HTTP error! status: ${r.status}`);
-      }
+      if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
       const items = await r.json();
       setRows(Array.isArray(items) ? items : []);
     } catch (e) {
-      // keep previous rows on error
       console.error("Failed to load items", e);
       setRows([]);
     } finally {
@@ -75,7 +56,6 @@ export default function ItemTable() {
     }
   }, []);
 
-  // initial load: items + statuses + customers + itemTypes
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -85,14 +65,13 @@ export default function ItemTable() {
           fetch("/api/statuses"),
           fetch("/api/customers"),
           fetch("/api/itemTypes"),
-          fetch("/api/shipments")
+          fetch("/api/shipments"),
         ]);
         const items = r1.ok ? await r1.json() : [];
         const stats = r2.ok ? await r2.json() : [];
         const custs = r3.ok ? await r3.json() : [];
         const types = r4.ok ? await r4.json() : [];
         const ships = r5.ok ? await r5.json() : [];
-        console.log("Fetched shipments in ItemTable:", ships);
         if (cancelled) return;
         setRows(Array.isArray(items) ? items : []);
         setStatuses(Array.isArray(stats) ? stats : []);
@@ -102,381 +81,127 @@ export default function ItemTable() {
         setLoading(false);
       } catch (error) {
         console.error("Error loading data:", error);
-        if (!cancelled) {
-          setRows([]);
-          setStatuses([]);
-          setCustomers([]);
-          setItemTypes([]);
-          setShipments([]);
-          setLoading(false);
-        }
+        if (!cancelled) { setRows([]); setStatuses([]); setCustomers([]); setItemTypes([]); setShipments([]); setLoading(false); }
       }
     })();
     return () => { cancelled = true; };
   }, []);
 
-  const handleStatusChange = async (row: ItemRow, newStatus: StatusOption | null) => {
-    if (!newStatus) return;
-    await fetch(`/api/items/${row.item_id}/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ statusId: newStatus.id }),
-    });
-    setRows((prev) =>
-      prev.map((r) =>
-        r.item_id === row.item_id
-          ? { ...r, current_status: newStatus.id, item_status_desc: newStatus.label }
-          : r
-      )
-    );
-  };
+  // filter option lists for the toolbar
+  const statusOpts = React.useMemo(() => statuses.map((s) => ({ value: String(s.id), label: s.label })), [statuses]);
+  const typeOpts = React.useMemo(() => itemTypes.map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })), [itemTypes]);
+  const shipOpts = React.useMemo(
+    () => shipments.map((s) => ({ value: String(s.id), label: `${s.shipment_code} · ${s.customer_name}` })),
+    [shipments]
+  );
 
-  // derived list of item types for filtering
-  const typeOptions = React.useMemo(() => {
-    if (!Array.isArray(rows)) return [];
-    const sett = new Set<string>();
-    rows.forEach((r) => sett.add(r.item_type_desc ?? "-"));
-    return Array.from(sett);
-  }, [rows]);
-
-  const getStatusColor = (statusId: number | null) => {
-    if (!statusId) return "#757575";
-    switch (statusId) {
-      case 1: return "#1976d2"; // Blue
-      case 2: return "#ff9800"; // Orange
-      case 3: return "#4caf50"; // Green
-      case 4: return "#ffeb3b"; // Yellow
-      case 5: return "#9c27b0"; // Purple
-      default: return "#757575"; // Grey
-    }
-  };
-
-  // filtered rows
   const filteredRows = React.useMemo(() => {
     if (!Array.isArray(rows)) return [];
     const q = search.trim().toLowerCase();
     return rows.filter((row) => {
       if (q) {
-        const name = `${row.model ?? ""} ${row.customer_code ?? ""}`.toLowerCase();
+        const name = `${row.model ?? ""} ${row.customer_code ?? ""} ${row.makat ?? ""}`.toLowerCase();
         const serial = (row.serial_no ?? "").toString().toLowerCase();
         if (!name.includes(q) && !serial.includes(q)) return false;
       }
-
       if (statusFilter) {
-        if (row.current_status !== statusFilter.id) {
-          return false;
-        }
-      } else {
-        // Default: hide items with status 3 (finished/green) unless explicitly filtered
-        if (row.current_status === 3) return false;
+        if (row.current_status !== Number(statusFilter)) return false;
+      } else if (row.current_status === 3) {
+        // Default: hide finished items unless explicitly filtered.
+        return false;
       }
-
-      if (typeFilter) {
-        if (row.item_type_id !== typeFilter.item_type_id) return false;
-      }
-
-      if (shipmentFilter) {
-        if (row.shipment_id !== shipmentFilter.id) return false;
-      }
+      if (typeFilter && row.item_type_id !== Number(typeFilter)) return false;
+      if (shipFilter && row.shipment_id !== Number(shipFilter)) return false;
       return true;
     });
-  }, [rows, search, statusFilter, typeFilter, shipmentFilter]);
+  }, [rows, search, statusFilter, typeFilter, shipFilter]);
 
-  const clearFilters = () => {
-    setSearch("");
-    setStatusFilter(null);
-    setTypeFilter(null);
-    setShipmentFilter(null);
-  };
-
-  // create handler for InsertPopup — now receives success boolean and optional created item
-  const displaySnackbar = (data: NewItem, success: boolean) => {
-    // only display snackbar based on success — do not mutate local rows here.
-    if (success) {
-      setSnackbarMessage("Listing created successfully");
-      setSnackbarSeverity("success");
-    } else {
-      setSnackbarMessage("Failed to create listing on server");
-      setSnackbarSeverity("error");
-    }
+  const onCreateResult = (_data: NewItem, success: boolean) => {
+    setSnackbarMessage(success ? "הפריט נוצר בהצלחה" : "יצירת הפריט נכשלה");
+    setSnackbarSeverity(success ? "success" : "error");
     setSnackbarOpen(true);
   };
 
-  // close handler for the insert popup — closes popup and refreshes items
   const closeInsertPopup = () => {
     setInsertOpen(false);
-    // refresh items after popup closes (either cancel or create)
     loadItems();
   };
 
-  if (loading) {
-    return (
-      <Paper sx={{ height: 600, p: 2 }}>
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} variant="rectangular" height={50} sx={{ my: 1 }} />
-        ))}
-      </Paper>
-    );
-  }
+  const progressOf = (row: ItemRow): { pct: number; text: string; sub: boolean } => {
+    if (row.parent_item_id !== null && row.parent_item_id !== undefined) return { pct: 0, text: "—", sub: true };
+    const currentStep = row.current_route_step || 0;
+    const totalSteps = row.total_steps || 0;
+    if (row.current_status === 3 || row.is_finished) {
+      return { pct: 100, text: totalSteps > 0 ? `${totalSteps}/${totalSteps}` : "הושלם", sub: false };
+    }
+    if (totalSteps > 0) return { pct: Math.min((currentStep / totalSteps) * 100, 100), text: `${currentStep}/${totalSteps}`, sub: false };
+    return { pct: 0, text: "—", sub: false };
+  };
+
+  const columns: Column<ItemRow>[] = [
+    {
+      key: "barcode", header: "ברקוד", align: "center", width: 56,
+      cell: (r) => (
+        <button className="shx-icon-btn" onClick={(e) => openBarcode(e, r)} aria-label="ברקוד" title="הצג ברקוד">
+          <QrCode size={18} strokeWidth={1.75} />
+        </button>
+      ),
+    },
+    { key: "type", header: "סוג", nowrap: true, muted: true, cell: (r) => r.item_type_desc ?? "—" },
+    { key: "serial", header: "מס׳ סיריאלי", nums: true, bold: true, nowrap: true, cell: (r) => r.serial_no ?? "—" },
+    { key: "makat", header: "מק״ט", nums: true, cell: (r) => r.makat ?? "—" },
+    { key: "model", header: "דגם", nowrap: true, cell: (r) => r.model ?? "—" },
+    { key: "manufacturer", header: "יצרן", nowrap: true, muted: true, cell: (r) => r.manufacturer_name ?? "—" },
+    { key: "man_no", header: "מס׳ יצרן", nums: true, muted: true, cell: (r) => r.manufacturer_no ?? "—" },
+    { key: "shipment", header: "מס׳ משלוח", nowrap: true, cell: (r) => r.shipment_code ?? "—" },
+    { key: "customer", header: "לקוח", nowrap: true, cell: (r) => r.customer_code ?? "—" },
+    {
+      key: "status", header: "סטטוס",
+      cell: (r) => (r.item_status_desc ? <StatusPill label={r.item_status_desc} active={r.current_status === 2} /> : "—"),
+    },
+    {
+      key: "progress", header: "התקדמות", width: 180,
+      cell: (r) => {
+        const p = progressOf(r);
+        return p.sub ? <span style={{ color: "#7a7a7a" }}>—</span> : <ProgressCell pct={p.pct} text={p.text} />;
+      },
+    },
+    {
+      key: "date", header: "תאריך קליטה", width: 140, muted: true, nums: true, nowrap: true,
+      cell: (r) => (r.created_at ? new Date(r.created_at).toLocaleDateString("he-IL") : "—"),
+    },
+  ];
 
   return (
-    <>
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3,
-          mb: 3,
-          borderRadius: `${theme.tokens.radius.card}px`,
-          bgcolor: '#fff',
-          border: `1px solid ${theme.palette.divider}`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <Box sx={{
-              p: 1,
-              borderRadius: 2,
-              bgcolor: alpha('#1976d2', 0.1),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <InventoryIcon color="primary" />
-            </Box>
-            <Typography variant="h5" fontWeight={700} color="text.primary" sx={{ letterSpacing: '-0.5px' }}>
-              ניהול פריטים
-            </Typography>
-          </Stack>
-          <Box sx={{ flexGrow: 1 }} />
-          {/* Refresh button hidden as requested
-          <Tooltip title="רענן נתונים">
-             <IconButton onClick={loadItems} size="small" sx={{ bgcolor: 'white', border: '1px solid #e0e0e0' }}>
-                <RefreshIcon />
-             </IconButton>
-          </Tooltip>
-          */}
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon sx={{ ml: 0.5 }} />}
-            onClick={() => setInsertOpen(true)}
-            sx={{
-              borderRadius: 9999,
-              px: 4,
-              py: 1,
-              fontWeight: 600,
-              fontSize: '1rem',
-            }}
-          >
-            הוסף פריט
-          </Button>
-        </Stack>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <ItemsToolbar
+        search={search}
+        onSearch={setSearch}
+        onAdd={() => setInsertOpen(true)}
+        filters={[
+          { key: "status", placeholder: "סטטוס", value: statusFilter, options: statusOpts, onChange: setStatusFilter },
+          { key: "type", placeholder: "סוג פריט", value: typeFilter, options: typeOpts, onChange: setTypeFilter, width: 190 },
+          { key: "ship", placeholder: "משלוח", value: shipFilter, options: shipOpts, onChange: setShipFilter, width: 220 },
+        ]}
+      />
 
-        <Divider sx={{ mb: 2 }} />
-
-        <Grid container spacing={2}>
-          {/* Search */}
-          <Grid size={{ xs: 12, md: 3 }}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="חיפוש חופשי (שם, סדורי...)"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              InputProps={{
-                startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment>,
-                endAdornment: search ? (
-                  <IconButton size="small" onClick={() => setSearch("")} edge="end"><ClearIcon fontSize="small" /></IconButton>
-                ) : null
-              }}
-              sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-            />
-          </Grid>
-
-          {/* Filters */}
-          <Grid size={{ xs: 12, md: 2 }}>
-            <SearchableCombobox<StatusOption>
-              options={statuses}
-              getOptionLabel={(o) => o.label}
-              isOptionEqualToValue={(o, v) => o.id === v.id}
-              value={statusFilter}
-              onChange={(v) => setStatusFilter(v)}
-              placeholder="סטטוס"
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 2 }}>
-            <SearchableCombobox<ItemTypeOption>
-              options={itemTypes}
-              getOptionLabel={(o) => o.item_type_desc}
-              isOptionEqualToValue={(o, v) => o.item_type_id === v.item_type_id}
-              value={typeFilter}
-              onChange={(v) => setTypeFilter(v)}
-              placeholder="סוג פריט"
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 3 }}>
-            <SearchableCombobox<Shipment>
-              options={shipments}
-              getOptionLabel={(o) => `${o.shipment_code} - ${o.customer_name} (${new Date(o.shipment_date).toLocaleDateString()})`}
-              isOptionEqualToValue={(o, v) => o.id === v.id}
-              value={shipmentFilter}
-              onChange={(v) => setShipmentFilter(v)}
-              placeholder="משלוח"
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 2 }}>
-            <Button
-              variant="outlined"
-              color="inherit"
-              onClick={clearFilters}
-              startIcon={<ClearIcon sx={{ ml: 1 }} />}
-              fullWidth
-              sx={{ height: 40, borderRadius: 2, borderColor: '#bdbdbd', color: '#757575' }}
-            >
-              נקה הכל
-            </Button>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      <Paper elevation={0} sx={{ height: '70vh', p: 1, border: `1px solid ${theme.palette.divider}` }}>
-        <TableVirtuoso
-          data={filteredRows}
-          components={{
-            Scroller: TableContainer,
-            Table: (props) => <Table {...props} stickyHeader aria-label="items table" />,
-            TableHead,
-            TableRow,
-            TableBody,
-          }}
-          fixedHeaderContent={() => (
-            <TableRow>
-              {[
-                { id: 'barcode', label: 'ברקוד', width: 60 },
-                { id: 'type', label: 'סוג מוצר', width: 100 },
-                { id: 'serial', label: 'מס\' סיריאלי', width: 100 },
-                { id: 'makat', label: 'מקט', width: 80 },
-                { id: 'model', label: 'דגם', width: 100 },
-                { id: 'manufacturer', label: 'יצרן', width: 100 },
-                { id: 'man_no', label: 'מס\' יצרן', width: 100 },
-                { id: 'shipment_code', label: 'מס\' משלוח', width: 100 },
-                { id: 'customer', label: 'לקוח', width: 90 },
-                { id: 'status', label: 'סטטוס', width: 100 },
-                { id: 'progress', label: 'התקדמות', width: 150 },
-                { id: 'date', label: 'תאריך קליטה', width: 140 },
-              ].map((head) => (
-                <TableCell
-                  key={head.id}
-                  style={{
-                    backgroundColor: '#f8fafc',
-                    color: '#475569',
-                    fontWeight: 700,
-                    fontSize: '0.875rem',
-                    borderBottom: '2px solid #e2e8f0',
-                    width: head.width
-                  }}
-                >
-                  {head.label}
-                </TableCell>
-              ))}
-            </TableRow>
-          )}
-          itemContent={(_, row) => (
-            <>
-              <TableCell>
-                <IconButton size="small" onClick={(e) => handleOpenBarcode(e, row)}>
-                  <QrCodeIcon />
-                </IconButton>
-              </TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.item_type_desc ?? "-"}</TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.serial_no ?? "-"}</TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.makat ?? "-"}</TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.model ?? "-"}</TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.manufacturer_name}</TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.manufacturer_no}</TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.shipment_code}</TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.customer_code}</TableCell>
-              <TableCell onClick={() => setSelected(row)}>
-                {row.item_status_desc ? (
-                  <Chip
-                    label={row.item_status_desc}
-                    size="small"
-                    sx={{
-                      borderRadius: 4,
-                      fontWeight: 600,
-                      fontSize: "0.75rem",
-                      bgcolor: alpha(getStatusColor(row.current_status), 0.1),
-                      color: getStatusColor(row.current_status),
-                    }}
-                  />
-                ) : (
-                  "-"
-                )}
-              </TableCell>
-              <TableCell onClick={() => setSelected(row)}>
-                {(() => {
-                  if (row.parent_item_id !== null && row.parent_item_id !== undefined) {
-                    return (
-                      <Typography variant="body2" color="text.secondary">
-                        -
-                      </Typography>
-                    );
-                  }
-
-                  const currentStep = row.current_route_step || 0;
-                  const totalSteps = row.total_steps || 0;
-
-                  let pct = 0;
-                  let text = "-";
-
-                  if (row.current_status === 3 || row.is_finished) {
-                    pct = 100;
-                    text = totalSteps > 0 ? `${totalSteps}/${totalSteps}` : "Finished";
-                  } else if (totalSteps > 0) {
-                    // Calculate percentage based on current step
-                    // If step 1 of 5, we show it as "Step 1" and maybe 1/5th filled?
-                    // Let's use simple logic: currentStep / totalSteps
-                    pct = Math.min((currentStep / totalSteps) * 100, 100);
-                    text = `${currentStep}/${totalSteps}`;
-                  }
-
-                  // Determine color
-                  let barColor = '#1976d2'; // Default Blue
-                  if (pct >= 100) barColor = 'green';
-                  else if (pct >= 50) barColor = '#ff9800'; // Orange
-
-                  return (
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Box sx={{ width: '100%', mr: 1 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={pct}
-                          sx={{
-                            height: 10,
-                            borderRadius: 5,
-                            '& .MuiLinearProgress-bar': {
-                              backgroundColor: barColor
-                            }
-                          }}
-                        />
-                      </Box>
-                      <Box sx={{ minWidth: 35 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {text}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  );
-                })()}
-              </TableCell>
-              <TableCell onClick={() => setSelected(row)}>{row.created_at ? new Date(row.created_at).toLocaleString("he-IL") : "-"}</TableCell>
-            </>
-          )}
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,#eee,#f5f5f7,#eee)", backgroundSize: "200% 100%", animation: "shx-shimmer 1.4s infinite" }} />
+          ))}
+          <style>{`@keyframes shx-shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }`}</style>
+        </div>
+      ) : (
+        <DataTable<ItemRow>
+          columns={columns}
+          rows={filteredRows}
+          getRowKey={(r) => r.item_id}
+          onRowClick={setSelected}
+          minWidth={1100}
+          empty={<div style={{ fontSize: 15 }}>לא נמצאו פריטים תואמים.</div>}
         />
-      </Paper>
+      )}
 
       {selected && (
         <ItemDialog
@@ -486,7 +211,6 @@ export default function ItemTable() {
         />
       )}
 
-      {/* Barcode Dialog */}
       {barcodeItem && (
         <BarcodeDialog
           open={barcodeOpen}
@@ -497,23 +221,18 @@ export default function ItemTable() {
         />
       )}
 
-      {/* Insert popup */}
-      <InsertPopup
-        open={insertOpen}
-        onClose={closeInsertPopup}
-        onCreate={displaySnackbar}
-      />
+      <InsertPopup open={insertOpen} onClose={closeInsertPopup} onCreate={onCreateResult} />
 
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={4000}
         onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: '100%' }}>
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: "100%" }}>
           {snackbarMessage}
         </Alert>
       </Snackbar>
-    </>
+    </div>
   );
 }
