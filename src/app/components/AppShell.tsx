@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, IconButton, Typography, useMediaQuery } from "@mui/material";
+import { Box, IconButton, Typography, useMediaQuery } from "@/components/ui";
 import { usePathname } from "next/navigation";
 import { Menu as MenuIcon } from "@/components/ui/icons";
 import { Dashboard as DashboardIcon } from "@/components/ui/icons";

@@ -4,12 +4,14 @@
  */
 import type { CSSProperties } from "react";
 
-// Type aliases so `import type { SxProps, Theme } from "@/components/ui"` works.
-export type SxProps = Record<string, unknown>;
-export type Theme = Record<string, unknown>;
+// Type aliases so `import type { SxProps } from "@/components/ui"` works.
+// Generic to accept the MUI `SxProps<Theme>` form; the param is ignored.
+export type SxProps<_T = unknown> = import("./sx").SxInput;
 export type { SxInput } from "./sx";
 export { sxToStyle, resolveColor, splitSystemProps } from "./sx";
 export { cn } from "./utils";
+export { useTheme, useMediaQuery, alpha, theme, tokens } from "./theme";
+export type { Theme } from "./theme";
 
 export { Box, Stack, Divider, Container } from "./primitives";
 export { Typography } from "./Typography";
@@ -32,6 +34,7 @@ export {
 export { Tooltip } from "./Tooltip";
 export { Menu } from "./Menu";
 export { Autocomplete } from "./Autocomplete";
+export type { AutocompleteProps } from "./Autocomplete";
 export {
   Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, ListItemAvatar, ListSubheader,
   Collapse, Toolbar, Breadcrumbs,
@@ -40,20 +43,4 @@ export {
   Fab, Avatar, Link, CardActionArea, Fade, Grow, Popover, Stepper, Step, StepLabel, StepConnector,
 } from "./Misc";
 
-/** Passthrough helpers for a couple of MUI utilities used in a few spots. */
-export const useTheme = (): { direction: string; palette: Record<string, unknown> } => ({
-  direction: "rtl",
-  palette: {},
-});
-export const alpha = (color: string, value: number): string => {
-  const c = color.trim();
-  if (c.startsWith("#")) {
-    const hex = c.slice(1);
-    const full = hex.length === 3 ? hex.split("").map((x) => x + x).join("") : hex;
-    const r = parseInt(full.slice(0, 2), 16), g = parseInt(full.slice(2, 4), 16), b = parseInt(full.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${value})`;
-  }
-  return c;
-};
-export const styled = undefined as unknown; // guard: styled() not supported — migrate call sites
 export type { CSSProperties };

@@ -10,7 +10,7 @@ import {
     Typography,
     Alert,
     IconButton,
-} from "@mui/material";
+} from "@/components/ui";
 import Barcode from "react-barcode";
 import { useReactToPrint } from "react-to-print";
 import { Print as PrintIcon } from "@/components/ui/icons";

@@ -1,5 +1,5 @@
 "use client";
-import { Box } from "@mui/material";
+import { Box } from "@/components/ui";
 import CrudTable, { Column } from "../components/CrudTable";
 import PageHeader from "../components/PageHeader";
 

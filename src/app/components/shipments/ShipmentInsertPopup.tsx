@@ -14,14 +14,14 @@ import {
     IconButton,
     Tooltip,
     Alert
-} from "@mui/material";
+} from "@/components/ui";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
 import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { Lock as LockIcon } from "@/components/ui/icons";
 import { ErrorOutline as ErrorOutlineIcon } from "@/components/ui/icons";
-import { Card, Stack } from "@mui/material";
+import { Card, Stack } from "@/components/ui";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';

@@ -156,6 +156,9 @@ export interface PopoverProps {
   anchorOrigin?: { vertical: "top" | "center" | "bottom"; horizontal: "left" | "center" | "right" };
   transformOrigin?: { vertical: "top" | "center" | "bottom"; horizontal: "left" | "center" | "right" };
   children?: React.ReactNode;
+  id?: string;
+  disableRestoreFocus?: boolean;
+  keepMounted?: boolean;
   sx?: SxInput;
   PaperProps?: { sx?: SxInput; style?: React.CSSProperties };
 }

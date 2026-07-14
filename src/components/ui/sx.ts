@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { theme, type Theme } from "./theme";
 
 /**
  * Minimal MUI-`sx`-compatible → React inline-style translator, backed by
@@ -11,7 +12,10 @@ import type { CSSProperties } from "react";
  * per screen when migrating.
  */
 
-export type SxInput = Record<string, unknown> | undefined | false | null;
+export interface SxObject {
+  [key: string]: string | number | boolean | null | undefined | ((theme: Theme) => string | number | boolean) | SxObject;
+}
+export type SxInput = SxObject | ((theme: Theme) => SxObject) | undefined | false | null;
 
 const SPACE = 8; // MUI spacing unit (this app's theme uses the default 8px)
 
@@ -106,6 +110,8 @@ function translateOne(sx: Record<string, unknown>): CSSProperties {
     }
     // Responsive array values → take the last (largest breakpoint) entry.
     let value: unknown = Array.isArray(raw) ? raw[raw.length - 1] : raw;
+    // Per-property theme callback: sx={{ color: (theme) => ... }}.
+    if (typeof value === "function") value = (value as (t: Theme) => unknown)(theme);
 
     if (key in SPACING_MAP) {
       out[SPACING_MAP[key] as string] = scaledSpace(value);
@@ -120,12 +126,15 @@ function translateOne(sx: Record<string, unknown>): CSSProperties {
   return out as CSSProperties;
 }
 
-/** Merge one or more `sx` inputs into a single style object. */
+/** Merge one or more `sx` inputs into a single style object. Resolves the
+ *  `sx={(theme) => ({...})}` callback form against the compat theme. */
 export function sxToStyle(...inputs: SxInput[]): CSSProperties {
   let acc: CSSProperties = {};
   for (const input of inputs) {
     if (!input) continue;
-    acc = { ...acc, ...translateOne(input as Record<string, unknown>) };
+    const obj = typeof input === "function" ? input(theme) : input;
+    if (!obj) continue;
+    acc = { ...acc, ...translateOne(obj as Record<string, unknown>) };
   }
   return acc;
 }
@@ -202,5 +211,5 @@ export function splitSystemProps<T extends Record<string, unknown>>(
     else if (SYSTEM_PROP_KEYS.has(k)) systemObj[k] = v;
     else rest[k] = v;
   }
-  return { style: { ...sxToStyle(systemObj, sx), ...styleProp }, rest };
+  return { style: { ...sxToStyle(systemObj as unknown as SxInput, sx), ...styleProp }, rest };
 }

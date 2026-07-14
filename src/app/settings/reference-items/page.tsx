@@ -8,7 +8,7 @@ import {
   Dialog,
   TextField,
   CircularProgress,
-} from "@mui/material";
+} from "@/components/ui";
 import { Add as AddIcon } from "@/components/ui/icons";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { EditOutlined as EditOutlinedIcon } from "@/components/ui/icons";

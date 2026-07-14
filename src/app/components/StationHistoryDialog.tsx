@@ -19,7 +19,7 @@ import {
   Chip,
   Stack,
   alpha,
-} from "@mui/material";
+} from "@/components/ui";
 import { formatDateTime, formatTime } from "@/app/lib/datetime";
 import { History as HistoryIcon } from "@/components/ui/icons";
 

@@ -13,7 +13,7 @@ import {
   Autocomplete,
   TextField,
   Stack,
-} from "@mui/material";
+} from "@/components/ui";
 import { Fullscreen as FullscreenIcon } from "@/components/ui/icons";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";

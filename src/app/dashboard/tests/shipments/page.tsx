@@ -1,7 +1,7 @@
 "use client";
 // Imports updated
 import * as React from "react";
-import { ToggleButton, ToggleButtonGroup, Box, Typography, Alert } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup, Box, Typography, Alert } from "@/components/ui";
 import { TableChart as TableChartIcon } from "@/components/ui/icons";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import { Business as BusinessIcon } from "@/components/ui/icons";

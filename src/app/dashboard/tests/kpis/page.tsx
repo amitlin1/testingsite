@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, Paper, Typography, Grid, Card, CardContent, CircularProgress, Alert } from "@mui/material";
+import { Box, Paper, Typography, Grid, Card, CardContent, CircularProgress, Alert } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, DashboardKpis } from "@/types/dashboard";
 import { getDateRange } from "@/app/lib/dashboard-date-range";
 import { useDashboardOptions } from "@/app/lib/hooks/useDashboardOptions";

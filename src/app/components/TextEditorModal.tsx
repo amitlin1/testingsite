@@ -13,7 +13,7 @@ import {
   CircularProgress,
   Typography,
   Box,
-} from "@mui/material";
+} from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { Save as SaveIcon } from "@/components/ui/icons";
 import { Description as DescriptionIcon } from "@/components/ui/icons";

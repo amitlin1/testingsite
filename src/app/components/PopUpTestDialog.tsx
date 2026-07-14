@@ -15,7 +15,7 @@ import {
   alpha,
   CircularProgress,
   Chip
-} from "@mui/material";
+} from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { Assignment as AssignmentIcon } from "@/components/ui/icons";
 import { Speed as SpeedIcon } from "@/components/ui/icons";

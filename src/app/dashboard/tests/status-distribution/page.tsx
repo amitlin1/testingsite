@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, Typography, Alert, Grid } from "@mui/material";
+import { Box, Typography, Alert, Grid } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, StatusDistribution, CustomerOption } from "@/types/dashboard";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { getDateRange } from "@/app/lib/dashboard-date-range";

@@ -1,8 +1,8 @@
 "use client";
 import * as React from "react";
-import { Autocomplete, TextField, Box, Typography, Chip } from "@mui/material";
+import { Autocomplete, TextField, Box, Typography, Chip } from "@/components/ui";
 import { StatusFilter } from "@/types/dashboard";
-import { alpha } from "@mui/material/styles";
+import { alpha } from "@/components/ui";
 import { Info as InfoIcon } from "@/components/ui/icons";
 
 interface StatusFilterProps {

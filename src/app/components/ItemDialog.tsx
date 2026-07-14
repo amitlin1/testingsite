@@ -3,12 +3,11 @@ import * as React from "react";
 import {
   Box, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Typography, Stepper, Step, StepLabel, Chip, Stack, Divider,
-  StepConnector, stepConnectorClasses, styled
-} from "@mui/material";
+} from "@/components/ui";
 import { formatDateTime, calculateWorkDuration, formatDuration } from "@/app/lib/datetime";
 import {
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper
-} from "@mui/material";
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+} from "@/components/ui";
 import ItemFilesPanel from "./ItemFilesPanel";
 
 type ItemData = {
@@ -48,29 +47,6 @@ type HistoryRow = {
   worker_id: number | null;
   worker_name: string | null;
 };
-
-const QontoConnector = styled(StepConnector)(({ theme }) => ({
-  [`&.${stepConnectorClasses.alternativeLabel}`]: {
-    top: 10,
-    left: 'calc(50% + 20px)',
-    right: 'calc(-50% + 20px)',
-  },
-  [`&.${stepConnectorClasses.active}`]: {
-    [`& .${stepConnectorClasses.line}`]: {
-      borderColor: theme.palette.primary.main, // Or whatever color is needed
-    },
-  },
-  [`&.${stepConnectorClasses.completed}`]: {
-    [`& .${stepConnectorClasses.line}`]: {
-      borderColor: theme.palette.primary.main,
-    },
-  },
-  [`& .${stepConnectorClasses.line}`]: {
-    borderColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : '#eaeaf0',
-    borderTopWidth: 3,
-    borderRadius: 1,
-  },
-}));
 
 export default function ItemDialog({
   itemId,
@@ -143,7 +119,7 @@ export default function ItemDialog({
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
                   פריטים מחוברים:
                 </Typography>
-                <TableContainer component={Paper} variant="outlined">
+                <TableContainer sx={{ border: "1px solid var(--color-hairline)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
@@ -172,11 +148,7 @@ export default function ItemDialog({
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
                 מסלול בדיקה
               </Typography>
-              <Stepper
-                activeStep={activeStep}
-                alternativeLabel
-                connector={<QontoConnector />}
-              >
+              <Stepper activeStep={activeStep} alternativeLabel>
                 {Array.from({ length: stepsCount })
                   .map((_, i) => i)
                   .map((i) => (

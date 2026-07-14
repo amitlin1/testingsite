@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, Typography, Button } from "@mui/material";
+import { Box, Typography, Button } from "@/components/ui";
 import { Science as ScienceIcon } from "@/components/ui/icons";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";

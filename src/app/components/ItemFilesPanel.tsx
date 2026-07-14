@@ -17,7 +17,7 @@ import {
   FormControlLabel,
   alpha,
   useTheme,
-} from "@mui/material";
+} from "@/components/ui";
 import { AttachFile as AttachFileIcon } from "@/components/ui/icons";
 import { CloudUpload as CloudUploadIcon } from "@/components/ui/icons";
 import { Download as DownloadIcon } from "@/components/ui/icons";

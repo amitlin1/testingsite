@@ -1,5 +1,5 @@
 "use client";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography } from "@/components/ui";
 
 interface PageHeaderProps {
   title: string;

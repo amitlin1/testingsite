@@ -161,23 +161,23 @@ export const ListItemButton = forwardRef<HTMLDivElement, ListItemButtonProps>(fu
   );
 });
 
-export function ListItemIcon({ children, style, ...rest }: React.HTMLAttributes<HTMLSpanElement>) {
+export function ListItemIcon({ children, style, sx, ...rest }: React.HTMLAttributes<HTMLSpanElement> & { sx?: SxInput }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", minWidth: 32, color: "var(--color-ink-muted-48)", ...style }} {...rest}>
+    <span style={{ display: "inline-flex", alignItems: "center", minWidth: 32, color: "var(--color-ink-muted-48)", ...sxToStyle(sx), ...style }} {...rest}>
       {children}
     </span>
   );
 }
-export function ListItemText({ primary, secondary, style, primaryTypographyProps: _p, secondaryTypographyProps: _s, ...rest }: { primary?: React.ReactNode; secondary?: React.ReactNode; primaryTypographyProps?: unknown; secondaryTypographyProps?: unknown } & React.HTMLAttributes<HTMLSpanElement>) {
+export function ListItemText({ primary, secondary, style, sx, primaryTypographyProps: _p, secondaryTypographyProps: _s, ...rest }: { primary?: React.ReactNode; secondary?: React.ReactNode; sx?: SxInput; primaryTypographyProps?: unknown; secondaryTypographyProps?: unknown } & React.HTMLAttributes<HTMLSpanElement>) {
   return (
-    <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, ...style }} {...rest}>
+    <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, ...sxToStyle(sx), ...style }} {...rest}>
       {primary != null && <span style={{ fontSize: 15 }}>{primary}</span>}
       {secondary != null && <span style={{ fontSize: 13, color: "var(--color-ink-muted-48)" }}>{secondary}</span>}
     </span>
   );
 }
-export function ListItemAvatar({ children, style, ...rest }: React.HTMLAttributes<HTMLSpanElement>) {
-  return <span style={{ display: "inline-flex", minWidth: 40, ...style }} {...rest}>{children}</span>;
+export function ListItemAvatar({ children, style, sx, ...rest }: React.HTMLAttributes<HTMLSpanElement> & { sx?: SxInput }) {
+  return <span style={{ display: "inline-flex", minWidth: 40, ...sxToStyle(sx), ...style }} {...rest}>{children}</span>;
 }
 export function ListSubheader({ children, style, ...rest }: React.HTMLAttributes<HTMLLIElement>) {
   return (
@@ -244,10 +244,13 @@ export const Toolbar = forwardRef<HTMLDivElement, ToolbarProps>(function Toolbar
 /* ---------------------------------------------------------- Breadcrumbs -- */
 export interface BreadcrumbsProps extends React.HTMLAttributes<HTMLElement> {
   separator?: React.ReactNode;
+  maxItems?: number;
+  itemsAfterCollapse?: number;
+  itemsBeforeCollapse?: number;
   sx?: SxInput;
 }
 export const Breadcrumbs = forwardRef<HTMLElement, BreadcrumbsProps>(function Breadcrumbs(
-  { separator = "/", sx, style, children, ...rest },
+  { separator = "/", maxItems: _mi, itemsAfterCollapse: _ac, itemsBeforeCollapse: _bc, sx, style, children, ...rest },
   ref,
 ) {
   const items = React.Children.toArray(children).filter(Boolean);

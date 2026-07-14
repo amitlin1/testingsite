@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
-import { Autocomplete, TextField, Avatar, Box, Typography } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { Autocomplete, TextField, Avatar, Box, Typography } from "@/components/ui";
+import { alpha } from "@/components/ui";
 
 interface Option {
   id: number | string;

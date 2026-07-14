@@ -18,7 +18,7 @@ import {
   DialogTitle,
   IconButton,
   Paper,
-} from "@mui/material";
+} from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { TableChart as TableChartIcon } from "@/components/ui/icons";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";

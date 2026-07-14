@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Grid, Paper, Typography, alpha } from "@mui/material";
+import { Grid, Paper, Typography, alpha } from "@/components/ui";
 import { 
   DashboardKpis, 
   // TimeSeriesPoint, // COMMENTED: TimeSeriesChart component is disabled

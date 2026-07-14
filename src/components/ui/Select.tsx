@@ -12,15 +12,27 @@ const toRadix = (v: unknown) => (v === "" || v == null ? EMPTY : String(v));
 export interface MenuItemProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>, "value"> {
   value?: unknown;
   disabled?: boolean;
+  dense?: boolean;
+  selected?: boolean;
+  divider?: boolean;
   /** danger styling when used inside a Menu (ignored in Select). */
   danger?: boolean;
   sx?: SxInput;
 }
 
 /** Dual purpose: read as an option by Select, or rendered standalone in a Menu. */
-export function MenuItem({ value: _v, danger, sx, style, className, children, ...rest }: MenuItemProps) {
+export function MenuItem({ value: _v, danger, dense: _d, selected, divider, sx, style, className, children, ...rest }: MenuItemProps) {
   return (
-    <li className={cn("sh-menu-item", danger && "sh-menu-item--danger", className)} style={{ ...sxToStyle(sx), ...style }} {...rest}>
+    <li
+      className={cn("sh-menu-item", danger && "sh-menu-item--danger", className)}
+      style={{
+        background: selected ? "var(--color-canvas-parchment)" : undefined,
+        borderBottom: divider ? "1px solid var(--color-divider-soft)" : undefined,
+        ...sxToStyle(sx),
+        ...style,
+      }}
+      {...rest}
+    >
       {children}
     </li>
   );
@@ -39,7 +51,7 @@ function collectOptions(children: React.ReactNode): Option[] {
   return out;
 }
 
-type ChangeHandler = (e: { target: { value: unknown; name?: string } }, child?: React.ReactNode) => void;
+type ChangeHandler = (e: { target: { value: any; name?: string } }, child?: React.ReactNode) => void;
 
 export interface SelectProps {
   value?: unknown;

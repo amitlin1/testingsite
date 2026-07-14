@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography } from "@/components/ui";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import SearchableCombobox from "./common/SearchableCombobox";
 

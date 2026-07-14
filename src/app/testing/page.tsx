@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-} from "@mui/material";
+} from "@/components/ui";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
 // Icons
 import { Search as SearchIcon } from "@/components/ui/icons";

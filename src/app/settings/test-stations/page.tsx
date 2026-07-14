@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { Grid, Paper, Typography, Box } from "@mui/material";
+import { Grid, Paper, Typography, Box } from "@/components/ui";
 import StationTypesTable from "./StationTypesTable";
 import StationsTable from "./StationsTable";
 

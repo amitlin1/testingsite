@@ -4,7 +4,7 @@ import {
   Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Skeleton, Box, Toolbar, Stack, IconButton, Button,
   Fab, Snackbar, Alert, Chip, alpha, LinearProgress, Typography, useTheme
-} from "@mui/material";
+} from "@/components/ui";
 import SearchableCombobox from "./common/SearchableCombobox";
 import { Add as AddIcon } from "@/components/ui/icons";
 import { Search as SearchIcon } from "@/components/ui/icons";
@@ -15,7 +15,7 @@ import InsertPopup from "./insertPopup";
 import BarcodeDialog from "./BarcodeDialog";
 import { QrCode as QrCodeIcon } from "@/components/ui/icons";
 import { ItemRow, StatusOption, NewItem, ItemTypeOption, Customers, Shipment } from "@/types";
-import { Grid, InputAdornment, Tooltip, Divider } from "@mui/material";
+import { Grid, InputAdornment, Tooltip, Divider } from "@/components/ui";
 import { FilterList as FilterListIcon } from "@/components/ui/icons";
 import { Refresh as RefreshIcon } from "@/components/ui/icons";
 import { Inventory as InventoryIcon } from "@/components/ui/icons";

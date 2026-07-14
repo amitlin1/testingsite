@@ -1,6 +1,6 @@
 "use client";
 import React, { forwardRef } from "react";
-import { resolveColor, sxToStyle, type SxInput } from "./sx";
+import { resolveColor, splitSystemProps, sxToStyle, type SxInput, type SystemProps } from "./sx";
 
 type Variant =
   | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
@@ -48,7 +48,9 @@ function resolveTextColor(c?: string): string | undefined {
   return resolveColor(c) as string;
 }
 
-export interface TypographyProps extends Omit<React.HTMLAttributes<HTMLElement>, "color"> {
+export interface TypographyProps
+  extends Omit<React.HTMLAttributes<HTMLElement>, "color">,
+    Partial<Omit<SystemProps, "fontWeight" | "fontSize">> {
   variant?: Variant;
   component?: React.ElementType;
   color?: string;
@@ -62,25 +64,12 @@ export interface TypographyProps extends Omit<React.HTMLAttributes<HTMLElement>,
 }
 
 export const Typography = forwardRef<HTMLElement, TypographyProps>(function Typography(
-  {
-    variant = "body1",
-    component,
-    color,
-    align,
-    gutterBottom,
-    paragraph,
-    noWrap,
-    fontWeight,
-    fontSize,
-    sx,
-    style,
-    children,
-    ...rest
-  },
+  { variant = "body1", component, color, align, gutterBottom, paragraph, noWrap, fontWeight, fontSize, sx, children, ...rest },
   ref,
 ) {
   const Component = (component || (variant === "inherit" ? "span" : TAG[variant])) as React.ElementType;
   const base = variant === "inherit" ? {} : VARIANTS[variant];
+  const { style: sysStyle, rest: domRest } = splitSystemProps(rest as Record<string, unknown>);
   const extra: React.CSSProperties = {
     color: resolveTextColor(color),
     textAlign: align,
@@ -90,7 +79,7 @@ export const Typography = forwardRef<HTMLElement, TypographyProps>(function Typo
     ...(noWrap ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : null),
   };
   return (
-    <Component ref={ref} style={{ ...base, ...extra, ...sxToStyle(sx), ...style }} {...rest}>
+    <Component ref={ref} style={{ ...base, ...extra, ...sysStyle, ...sxToStyle(sx) }} {...(domRest as Record<string, unknown>)}>
       {children}
     </Component>
   );

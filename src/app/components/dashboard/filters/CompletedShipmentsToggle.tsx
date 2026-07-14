@@ -1,9 +1,9 @@
 "use client";
 import * as React from "react";
-import { ToggleButton, Tooltip, Box, Typography } from "@mui/material";
+import { ToggleButton, Tooltip, Box, Typography } from "@/components/ui";
 import { LocalShipping as LocalShippingIcon } from "@/components/ui/icons";
 import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
-import { alpha } from "@mui/material/styles";
+import { alpha } from "@/components/ui";
 
 interface CompletedShipmentsToggleProps {
   showSent: boolean;

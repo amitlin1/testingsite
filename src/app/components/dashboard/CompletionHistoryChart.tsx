@@ -10,7 +10,7 @@ import {
 
   ToggleButton,
   ToggleButtonGroup,
-} from "@mui/material";
+} from "@/components/ui";
 import { TableChart as TableChartIcon } from "@/components/ui/icons";
 import { ShowChart as ShowChartIcon } from "@/components/ui/icons";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";

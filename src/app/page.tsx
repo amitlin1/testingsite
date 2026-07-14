@@ -1,5 +1,5 @@
 "use client";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography } from "@/components/ui";
 import ItemTable from "./components/ItemTable";
 
 export default function Page() {

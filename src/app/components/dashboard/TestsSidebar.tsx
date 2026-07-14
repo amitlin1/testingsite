@@ -15,7 +15,7 @@ import {
   Paper,
   useTheme,
   alpha
-} from "@mui/material";
+} from "@/components/ui";
 import {
   Dashboard as DashboardIcon,
   Assessment as AssessmentIcon,

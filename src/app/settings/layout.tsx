@@ -1,5 +1,5 @@
 "use client";
-import { Box } from "@mui/material";
+import { Box } from "@/components/ui";
 import SettingsSubNav from "./components/SettingsSubNav";
 
 /**

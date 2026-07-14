@@ -3,7 +3,7 @@ import * as React from "react";
 import {
   Dialog, Box, Typography, Button, TextField, Stack, Chip, Alert, IconButton,
   MenuItem, CircularProgress, LinearProgress, Divider,
-} from "@mui/material";
+} from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { ArrowForward as ArrowForwardIcon } from "@/components/ui/icons";
 import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";

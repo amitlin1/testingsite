@@ -36,8 +36,9 @@ export interface IconProps extends Omit<React.SVGAttributes<SVGSVGElement>, "ref
   sx?: SxInput;
 }
 
-/** Compatible replacement for MUI's SvgIconComponent type. */
+/** Compatible replacements for MUI's SvgIcon types. */
 export type SvgIconComponent = React.ComponentType<IconProps>;
+export type SvgIconProps = IconProps;
 
 const MUI_COLOR: Record<string, string> = {
   inherit: "currentColor",

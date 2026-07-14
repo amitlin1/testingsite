@@ -10,7 +10,7 @@ import {
     Box,
     Typography,
     useTheme
-} from "@mui/material";
+} from "@/components/ui";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray } from "react-hook-form";

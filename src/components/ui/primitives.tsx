@@ -9,6 +9,18 @@ type AnyProps = Record<string, unknown>;
 export interface BoxProps extends React.HTMLAttributes<HTMLElement>, Partial<SystemProps> {
   sx?: SxInput;
   component?: React.ElementType;
+  // Attributes for polymorphic `component` (img/a/button/input …).
+  src?: string;
+  alt?: string;
+  href?: string;
+  target?: string;
+  rel?: string;
+  download?: string | boolean;
+  type?: string;
+  name?: string;
+  value?: string | number | readonly string[];
+  disabled?: boolean;
+  loading?: "lazy" | "eager";
 }
 
 export const Box = forwardRef<HTMLElement, BoxProps>(function Box(
@@ -88,35 +100,40 @@ export interface DividerProps extends React.HTMLAttributes<HTMLElement> {
   orientation?: "horizontal" | "vertical";
   flexItem?: boolean;
   light?: boolean;
+  textAlign?: "center" | "left" | "right" | "start" | "end";
   component?: React.ElementType;
 }
 
 export const Divider = forwardRef<HTMLElement, DividerProps>(function Divider(
-  { orientation = "horizontal", flexItem, light, sx, style, component: Component = "div", children, ...rest },
+  { orientation = "horizontal", flexItem, light, textAlign = "center", sx, style, component: Component = "div", children, ...rest },
   ref,
 ) {
   const vertical = orientation === "vertical";
+  const lineColor = light ? "var(--color-divider-soft)" : "var(--color-hairline)";
+
+  // Text divider: line — text — line, weighted by textAlign.
+  if (!vertical && children != null && children !== "") {
+    const startFlex = textAlign === "left" || textAlign === "start" ? 0.08 : 1;
+    const endFlex = textAlign === "right" || textAlign === "end" ? 0.08 : 1;
+    return (
+      <Component
+        ref={ref}
+        role="separator"
+        style={{ display: "flex", alignItems: "center", gap: 12, ...sxToStyle(sx), ...style }}
+        {...rest}
+      >
+        <span style={{ flex: startFlex, height: 1, background: lineColor }} />
+        <span style={{ fontSize: 14, color: "var(--color-ink-muted-48)", whiteSpace: "nowrap" }}>{children}</span>
+        <span style={{ flex: endFlex, height: 1, background: lineColor }} />
+      </Component>
+    );
+  }
+
   const base: React.CSSProperties = vertical
-    ? {
-        alignSelf: "stretch",
-        width: 1,
-        minHeight: flexItem ? undefined : "1em",
-        backgroundColor: light ? "var(--color-divider-soft)" : "var(--color-hairline)",
-      }
-    : {
-        height: 1,
-        width: "100%",
-        border: "none",
-        backgroundColor: light ? "var(--color-divider-soft)" : "var(--color-hairline)",
-      };
+    ? { alignSelf: "stretch", width: 1, minHeight: flexItem ? undefined : "1em", backgroundColor: lineColor }
+    : { height: 1, width: "100%", border: "none", backgroundColor: lineColor };
   return (
-    <Component
-      ref={ref}
-      role="separator"
-      aria-orientation={orientation}
-      style={{ ...base, ...sxToStyle(sx), ...style }}
-      {...rest}
-    >
+    <Component ref={ref} role="separator" aria-orientation={orientation} style={{ ...base, ...sxToStyle(sx), ...style }} {...rest}>
       {children}
     </Component>
   );

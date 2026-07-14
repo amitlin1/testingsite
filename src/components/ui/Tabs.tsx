@@ -20,7 +20,7 @@ export function Tab(_props: TabProps) {
 
 export interface TabsProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange"> {
   value?: unknown;
-  onChange?: (event: React.SyntheticEvent, value: unknown) => void;
+  onChange?: (event: React.SyntheticEvent, value: any) => void;
   variant?: "standard" | "scrollable" | "fullWidth";
   centered?: boolean;
   orientation?: "horizontal" | "vertical";

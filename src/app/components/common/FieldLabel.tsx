@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
-import { Typography } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
+import { Typography } from "@/components/ui";
+import { useTheme } from "@/components/ui";
 
 /**
  * Above-field label matching the redesign spec (12-13px, weight 600, #555),

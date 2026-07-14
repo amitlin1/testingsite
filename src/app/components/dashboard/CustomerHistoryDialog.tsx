@@ -16,7 +16,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
-} from "@mui/material";
+} from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { ShowChart as ShowChartIcon } from "@/components/ui/icons";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";

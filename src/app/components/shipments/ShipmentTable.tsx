@@ -26,7 +26,7 @@ import {
     DialogContent,
     DialogActions,
     Typography
-} from "@mui/material";
+} from "@/components/ui";
 import SearchableCombobox from "../common/SearchableCombobox";
 import { Add as AddIcon } from "@/components/ui/icons";
 import { Search as SearchIcon } from "@/components/ui/icons";
@@ -46,7 +46,7 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon
 } from "@/components/ui/icons";
-import Tooltip from "@mui/material/Tooltip";
+import { Tooltip } from "@/components/ui";
 import { useReactToPrint } from 'react-to-print';
 import { ShipmentPDFDocument } from './ShipmentPDFDocument';
 import ShipmentBarcodesDialog from './ShipmentBarcodesDialog';

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, Typography, Alert, CircularProgress, ToggleButton, ToggleButtonGroup } from "@mui/material";
+import { Box, Typography, Alert, CircularProgress, ToggleButton, ToggleButtonGroup } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, StationLoadRow } from "@/types/dashboard";
 import { getDateRange } from "@/app/lib/dashboard-date-range";
 import { useDashboardOptions } from "@/app/lib/hooks/useDashboardOptions";

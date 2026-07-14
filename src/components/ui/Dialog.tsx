@@ -15,8 +15,10 @@ export interface DialogProps {
   disableEscapeKeyDown?: boolean;
   scroll?: "paper" | "body";
   children?: React.ReactNode;
+  dir?: string;
   sx?: SxInput;
   PaperProps?: { sx?: SxInput; style?: React.CSSProperties; className?: string };
+  slotProps?: { paper?: { sx?: SxInput; style?: React.CSSProperties; className?: string } };
   "aria-labelledby"?: string;
 }
 
@@ -28,9 +30,12 @@ export function Dialog({
   fullScreen,
   disableEscapeKeyDown,
   children,
+  dir = "rtl",
   sx,
   PaperProps,
+  slotProps,
 }: DialogProps) {
+  const paper = { ...slotProps?.paper, ...PaperProps };
   const contentStyle: React.CSSProperties = fullScreen
     ? { width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", borderRadius: 0, top: 0, left: 0, transform: "none" }
     : {
@@ -45,9 +50,9 @@ export function Dialog({
       <RDialog.Portal>
         <RDialog.Overlay className="sh-dialog-overlay" />
         <RDialog.Content
-          dir="rtl"
-          className={cn("sh-dialog-content", PaperProps?.className)}
-          style={{ ...contentStyle, ...sxToStyle(sx), ...sxToStyle(PaperProps?.sx), ...PaperProps?.style }}
+          dir={dir}
+          className={cn("sh-dialog-content", paper.className)}
+          style={{ ...contentStyle, ...sxToStyle(sx), ...sxToStyle(paper.sx), ...paper.style }}
           onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); }}
           onPointerDownOutside={(e) => { onClose?.(e, "backdropClick"); }}
           aria-describedby={undefined}

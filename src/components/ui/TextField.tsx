@@ -11,7 +11,9 @@ export function InputAdornment({ children }: { position?: "start" | "end"; child
 
 /* -------------------------------------------------------------- Field --- */
 export interface TextFieldProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size" | "prefix"> {
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size" | "prefix" | "value"> {
+  // react-hook-form fields can hand us null.
+  value?: string | number | readonly string[] | null;
   label?: React.ReactNode;
   error?: boolean;
   helperText?: React.ReactNode;
@@ -19,6 +21,8 @@ export interface TextFieldProps
   multiline?: boolean;
   rows?: number;
   minRows?: number;
+  maxRows?: number;
+  hiddenLabel?: boolean;
   size?: "small" | "medium";
   variant?: string;
   margin?: string;
@@ -31,6 +35,8 @@ export interface TextFieldProps
   };
   inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
   inputRef?: React.Ref<HTMLInputElement>;
+  InputLabelProps?: Record<string, unknown>;
+  FormHelperTextProps?: Record<string, unknown>;
   sx?: SxInput;
   containerClassName?: string;
   wrapClassName?: string;
@@ -45,6 +51,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     multiline,
     rows = 3,
     minRows,
+    maxRows: _mr,
+    hiddenLabel: _hl,
     size,
     variant: _v,
     margin: _m,
@@ -52,6 +60,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     InputProps,
     inputProps,
     inputRef,
+    InputLabelProps: _il,
+    FormHelperTextProps: _fh,
     sx,
     style,
     className,
@@ -118,7 +128,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           disabled={disabled}
           readOnly={InputProps?.readOnly}
           className={className}
-          {...rest}
+          {...(rest as React.InputHTMLAttributes<HTMLInputElement>)}
           {...inputProps}
         />
       )}

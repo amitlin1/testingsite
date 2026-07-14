@@ -29,7 +29,7 @@ export interface ToggleButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLB
   selected?: boolean;
   color?: TColor;
   size?: "small" | "medium" | "large";
-  onChange?: (e: React.MouseEvent, value: unknown) => void;
+  onChange?: (e: any, value: any) => void;
   sx?: SxInput;
 }
 
@@ -86,7 +86,7 @@ export const ToggleButton = forwardRef<HTMLButtonElement, ToggleButtonProps>(fun
 export interface ToggleButtonGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange"> {
   value?: unknown;
   exclusive?: boolean;
-  onChange?: (event: React.MouseEvent, value: unknown) => void;
+  onChange?: (event: any, value: any) => void;
   size?: "small" | "medium" | "large";
   color?: TColor;
   orientation?: "horizontal" | "vertical";

@@ -1,5 +1,5 @@
 "use client";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography } from "@/components/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { settingsLinks } from "../settingsNav";

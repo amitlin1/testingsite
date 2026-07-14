@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, Typography, Alert } from "@mui/material";
+import { Box, Typography, Alert } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, SlowItemRow } from "@/types/dashboard";
 import {
   Category,

@@ -12,9 +12,12 @@ export interface MenuProps {
   anchorOrigin?: { vertical: "top" | "center" | "bottom"; horizontal: "left" | "center" | "right" };
   transformOrigin?: { vertical: "top" | "center" | "bottom"; horizontal: "left" | "center" | "right" };
   keepMounted?: boolean;
+  marginThreshold?: number;
+  disableScrollLock?: boolean;
   sx?: SxInput;
   MenuListProps?: React.HTMLAttributes<HTMLUListElement>;
   PaperProps?: { sx?: SxInput; style?: React.CSSProperties };
+  slotProps?: { paper?: { sx?: SxInput; style?: React.CSSProperties } };
 }
 
 export function Menu({ anchorEl, open, onClose, children, anchorOrigin, sx, MenuListProps, PaperProps }: MenuProps) {

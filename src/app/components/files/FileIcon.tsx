@@ -8,7 +8,7 @@ import { Folder as FolderIcon } from "@/components/ui/icons";
 import { InsertDriveFile as InsertDriveFileIcon } from "@/components/ui/icons";
 import { AudioFile as AudioFileIcon } from "@/components/ui/icons";
 import { Code as CodeIcon } from "@/components/ui/icons";
-import { SxProps } from '@mui/material';
+import { SxProps } from "@/components/ui";
 
 interface FileIconProps {
   name: string;

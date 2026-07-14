@@ -33,8 +33,8 @@ import {
   Stack,
   Divider,
   Link as MuiLink,
-} from "@mui/material";
-import { alpha } from "@mui/material/styles";
+} from "@/components/ui";
+import { alpha } from "@/components/ui";
 import { FolderCopy as FolderCopyIcon } from "@/components/ui/icons";
 import { UploadFile as UploadFileIcon } from "@/components/ui/icons";
 import { CreateNewFolder as CreateNewFolderIcon } from "@/components/ui/icons";

@@ -4,7 +4,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Button, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Snackbar, Alert, Box, InputAdornment, CircularProgress, Typography
-} from "@mui/material";
+} from "@/components/ui";
 import { Edit as EditIcon } from "@/components/ui/icons";
 import { Delete as DeleteIcon } from "@/components/ui/icons";
 import { Add as AddIcon } from "@/components/ui/icons";

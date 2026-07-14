@@ -17,7 +17,7 @@ import {
   DialogTitle,
   IconButton,
   Paper,
-} from "@mui/material";
+} from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { SlowItemRow } from "@/types/dashboard";
 import { formatDuration } from "@/app/lib/datetime";

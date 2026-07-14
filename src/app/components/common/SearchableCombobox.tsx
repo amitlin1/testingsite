@@ -7,10 +7,10 @@ import {
   Typography,
   CircularProgress,
   type AutocompleteProps,
-} from "@mui/material";
-import { useTheme } from "@mui/material/styles";
+  type SxProps,
+} from "@/components/ui";
+import { useTheme } from "@/components/ui";
 import { Check as CheckIcon } from "@/components/ui/icons";
-import { KeyboardArrowDown as KeyboardArrowDownIcon } from "@/components/ui/icons";
 
 /**
  * Shared searchable combobox used everywhere a value is selected (the
@@ -48,7 +48,7 @@ export interface ComboboxProps<T>
   /** Custom content for an option row (rendered next to the checkmark slot). */
   renderOptionContent?: (option: T, selected: boolean) => React.ReactNode;
   /** Forwarded to the trigger TextField. */
-  inputSx?: object;
+  inputSx?: SxProps;
 }
 
 export default function SearchableCombobox<T>({
@@ -103,13 +103,6 @@ export default function SearchableCombobox<T>({
         getOptionLabel={getOptionLabel}
         isOptionEqualToValue={isOptionEqualToValue}
         noOptionsText={noOptionsText}
-        popupIcon={<KeyboardArrowDownIcon sx={{ color: theme.tokens.muted }} />}
-        // Portaled popper floats above dialogs; keep it above the modal layer.
-        slotProps={{
-          popper: {
-            sx: { zIndex: (t) => t.zIndex.modal + 2 },
-          },
-        }}
         renderOption={(props, option, { selected }) => {
           const { key, ...liProps } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
           return (
@@ -146,28 +139,16 @@ export default function SearchableCombobox<T>({
             placeholder={floatingLabel ? undefined : placeholder}
             error={error}
             helperText={helperText}
-            slotProps={{
-              input: {
-                ...params.InputProps,
-                endAdornment: (
-                  <>
-                    {loading ? <CircularProgress color="inherit" size={16} /> : null}
-                    {params.InputProps.endAdornment}
-                  </>
-                ),
-              },
+            InputProps={{
+              ...params.InputProps,
+              endAdornment: (
+                <>
+                  {loading ? <CircularProgress size={16} /> : null}
+                  {params.InputProps.endAdornment}
+                </>
+              ),
             }}
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                borderRadius: `${theme.tokens.radius.field}px`,
-                bgcolor: "#fff",
-              },
-              "& .MuiInputBase-input::placeholder": {
-                color: theme.tokens.mutedSoft,
-                opacity: 1,
-              },
-              ...inputSx,
-            }}
+            sx={inputSx}
           />
         )}
       />

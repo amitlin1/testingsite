@@ -8,7 +8,7 @@ import {
   Typography,
   Alert,
   CircularProgress,
-} from "@mui/material";
+} from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 
 /**
@@ -339,7 +339,7 @@ export default function OnlyOfficeEditorModal({
           appended imperatively inside the effect above so React never sees it.
           Ref callback sets state so the editor effect waits for actual mount.
         */}
-        <Box ref={setContainer} sx={{ width: "100%", height: "100%" }} />
+        <Box ref={setContainer as unknown as React.Ref<HTMLElement>} sx={{ width: "100%", height: "100%" }} />
       </Box>
     </Dialog>
   );

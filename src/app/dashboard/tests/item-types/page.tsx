@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Box, Typography, Button } from "@mui/material";
+import { Box, Typography, Button } from "@/components/ui";
 import { ArrowForward as ArrowForwardIcon } from "@/components/ui/icons";
 import Link from "next/link";
 import ItemTypeTrackingTable from "@/app/components/dashboard/ItemTypeTrackingTable";

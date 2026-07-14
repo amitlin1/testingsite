@@ -12,7 +12,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
-} from "@mui/material";
+} from "@/components/ui";
 import { ShowChart as ShowChartIcon } from "@/components/ui/icons";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import {

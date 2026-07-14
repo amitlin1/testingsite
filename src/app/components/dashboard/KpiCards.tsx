@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Paper, Box, Typography, Skeleton, alpha, Divider, Stack, Grid, useTheme } from "@mui/material";
+import { Paper, Box, Typography, Skeleton, alpha, Divider, Stack, Grid, useTheme } from "@/components/ui";
 import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";
 import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
 import { Queue as QueueIcon } from "@/components/ui/icons";
@@ -8,7 +8,7 @@ import { Science as ScienceIcon } from "@/components/ui/icons";
 import { TrendingUp as TrendingUpIcon } from "@/components/ui/icons";
 import { DashboardKpis } from "@/types/dashboard";
 import { formatDuration } from "@/app/lib/datetime";
-import { SvgIconProps } from "@mui/material/SvgIcon";
+import { SvgIconProps } from "@/components/ui/icons";
 
 interface KpiCardsProps {
   kpis: DashboardKpis | null;

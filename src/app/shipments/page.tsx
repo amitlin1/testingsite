@@ -1,5 +1,5 @@
 // import React from "react";
-// import { Box, Typography } from "@mui/material";
+// import { Box, Typography } from "@/components/ui";
 // import ShipmentTable from "../components/shipments/ShipmentTable";
 
 // export default function ShipmentsPage() {
@@ -27,7 +27,7 @@
 
 "use client";
 import React from "react";
-import { Box } from "@mui/material";
+import { Box } from "@/components/ui";
 import ShipmentTable from "../components/shipments/ShipmentTable";
 import PageHeader from "../settings/components/PageHeader";
 

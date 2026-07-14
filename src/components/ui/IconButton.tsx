@@ -18,6 +18,8 @@ export interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLBut
   round?: boolean;
   edge?: "start" | "end" | false;
   href?: string;
+  download?: string | boolean;
+  target?: string;
   component?: React.ElementType;
   sx?: SxInput;
 }

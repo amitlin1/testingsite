@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useState, useLayoutEffect, useMemo } from "react";
+import React, { useRef, useState, useLayoutEffect, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronDown } from "lucide-react";
 import { CircularProgress } from "./Progress";
@@ -7,17 +7,24 @@ import { sxToStyle, type SxInput } from "./sx";
 
 type Reason = "selectOption" | "removeOption" | "clear" | "createOption" | "blur" | "input";
 
-export interface AutocompleteProps<T> {
+export interface AutocompleteProps<
+  T,
+  _Multiple = boolean | undefined,
+  _DisableClearable = boolean | undefined,
+  _FreeSolo = boolean | undefined,
+> {
   options: T[];
   value?: T | T[] | null;
   defaultValue?: T | T[] | null;
-  onChange?: (event: React.SyntheticEvent, value: T | T[] | null, reason: Reason) => void;
+  onChange?: (event: React.SyntheticEvent, value: any, reason: Reason) => void;
+  onOpen?: (event?: React.SyntheticEvent) => void;
+  onClose?: (event?: React.SyntheticEvent, reason?: string) => void;
   inputValue?: string;
   onInputChange?: (event: React.SyntheticEvent | null, value: string, reason: Reason) => void;
   getOptionLabel?: (option: T) => string;
   isOptionEqualToValue?: (option: T, value: T) => boolean;
   renderInput: (params: RenderInputParams) => React.ReactNode;
-  renderOption?: (props: React.HTMLAttributes<HTMLLIElement>, option: T, state: { selected: boolean }) => React.ReactNode;
+  renderOption?: (props: React.HTMLAttributes<HTMLLIElement> & { key?: React.Key }, option: T, state: { selected: boolean }) => React.ReactNode;
   renderTags?: (value: T[], getTagProps: (opts: { index: number }) => { key: number; onDelete: () => void }) => React.ReactNode;
   filterOptions?: (options: T[], state: { inputValue: string }) => T[];
   multiple?: boolean;
@@ -29,8 +36,13 @@ export interface AutocompleteProps<T> {
   noOptionsText?: React.ReactNode;
   disableClearable?: boolean;
   size?: "small" | "medium";
+  popupIcon?: React.ReactNode;
+  clearIcon?: React.ReactNode;
+  slotProps?: Record<string, unknown>;
+  componentsProps?: Record<string, unknown>;
   sx?: SxInput;
   id?: string;
+  className?: string;
 }
 
 export interface RenderInputParams {
@@ -45,9 +57,14 @@ export interface RenderInputParams {
 
 const defaultLabel = (o: unknown) => (typeof o === "string" ? o : String((o as { label?: string })?.label ?? ""));
 
-export function Autocomplete<T>(props: AutocompleteProps<T>) {
+export function Autocomplete<
+  T,
+  _Multiple = boolean | undefined,
+  _DisableClearable = boolean | undefined,
+  _FreeSolo = boolean | undefined,
+>(props: AutocompleteProps<T>) {
   const {
-    options, value, defaultValue, onChange, inputValue: inputValueProp, onInputChange,
+    options, value, defaultValue, onChange, onOpen, onClose, inputValue: inputValueProp, onInputChange,
     getOptionLabel = defaultLabel as (o: T) => string,
     isOptionEqualToValue = (a: T, b: T) => a === b,
     renderInput, renderOption, filterOptions, multiple, freeSolo, disabled, fullWidth,
@@ -56,6 +73,12 @@ export function Autocomplete<T>(props: AutocompleteProps<T>) {
 
   const anchorRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const prevOpen = useRef(open);
+  useEffect(() => {
+    if (open && !prevOpen.current) onOpen?.();
+    else if (!open && prevOpen.current) onClose?.();
+    prevOpen.current = open;
+  }, [open, onOpen, onClose]);
   const [internalValue, setInternalValue] = useState<T | T[] | null>(defaultValue ?? (multiple ? ([] as T[]) : null));
   const val = value !== undefined ? value : internalValue;
   const [inputText, setInputText] = useState("");
@@ -182,13 +205,15 @@ export function Autocomplete<T>(props: AutocompleteProps<T>) {
           ) : (
             filtered.map((o, i) => {
               const selected = isSelected(o);
-              const liProps: React.HTMLAttributes<HTMLLIElement> = {
+              const liProps: React.HTMLAttributes<HTMLLIElement> & { key?: React.Key } = {
+                key: i,
                 className: "sh-select-item",
                 onClick: (e) => handleSelect(e, o),
                 style: selected ? { color: "var(--color-primary)", fontWeight: 600 } : undefined,
               };
-              if (renderOption) return <React.Fragment key={i}>{renderOption(liProps, o, { selected })}</React.Fragment>;
-              return <li key={i} {...liProps}>{getOptionLabel(o)}</li>;
+              if (renderOption) return renderOption(liProps, o, { selected });
+              const { key: _k, ...liRest } = liProps;
+              return <li key={i} {...liRest}>{getOptionLabel(o)}</li>;
             })
           )}
         </ul>,

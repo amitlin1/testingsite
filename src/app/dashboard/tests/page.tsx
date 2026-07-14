@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Box, Typography, Grid, Paper, CardActionArea, alpha, useTheme } from "@mui/material";
+import { Box, Typography, Grid, Paper, CardActionArea, alpha, useTheme } from "@/components/ui";
 import {
   Assessment,
   Speed,
