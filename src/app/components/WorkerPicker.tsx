@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Box, Typography } from "@mui/material";
-import PersonIcon from "@mui/icons-material/Person";
+import { Person as PersonIcon } from "@/components/ui/icons";
 import SearchableCombobox from "./common/SearchableCombobox";
 
 export type Worker = {

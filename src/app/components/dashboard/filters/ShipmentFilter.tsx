@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Autocomplete, TextField, Box, Typography, Chip } from "@mui/material";
-import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import { LocalShipping as LocalShippingIcon } from "@/components/ui/icons";
 import { alpha } from "@mui/material/styles";
 
 interface ShipmentOption {

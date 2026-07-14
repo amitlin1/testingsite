@@ -13,8 +13,8 @@ import DateFilter from "@/app/components/dashboard/filters/DateFilter";
 import SelectFilter from "@/app/components/dashboard/filters/SelectFilter";
 import ShipmentFilter from "@/app/components/dashboard/filters/ShipmentFilter";
 import CompletedShipmentsToggle from "@/app/components/dashboard/filters/CompletedShipmentsToggle";
-import Business from "@mui/icons-material/Business";
-import Category from "@mui/icons-material/Category";
+import { Business } from "@/components/ui/icons";
+import { Category } from "@/components/ui/icons";
 
 export default function CustomerPerformancePage() {
   const [datePreset, setDatePreset] = React.useState<DateRangePreset>("today");

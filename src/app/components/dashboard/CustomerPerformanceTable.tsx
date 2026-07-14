@@ -19,7 +19,7 @@ import {
   IconButton,
   Paper,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
+import { Close as CloseIcon } from "@/components/ui/icons";
 import { CustomerPerformanceRow } from "@/types/dashboard";
 import { formatDuration } from "@/app/lib/datetime";
 import DashboardCard from "@/app/components/dashboard/DashboardCard";

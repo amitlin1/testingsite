@@ -2,10 +2,10 @@
 // Imports updated
 import * as React from "react";
 import { ToggleButton, ToggleButtonGroup, Box, Typography, Alert } from "@mui/material";
-import TableChartIcon from "@mui/icons-material/TableChart";
-import BarChartIcon from "@mui/icons-material/BarChart";
-import BusinessIcon from "@mui/icons-material/Business";
-import CategoryIcon from "@mui/icons-material/Category";
+import { TableChart as TableChartIcon } from "@/components/ui/icons";
+import { BarChart as BarChartIcon } from "@/components/ui/icons";
+import { Business as BusinessIcon } from "@/components/ui/icons";
+import { Category as CategoryIcon } from "@/components/ui/icons";
 import { ShipmentTrackingRow, DateRangePreset, CustomerOption, DashboardFilters } from "@/types/dashboard";
 import { formatDate, getCurrentUtcIso } from "@/app/lib/datetime";
 import { getDateRange } from "@/app/lib/dashboard-date-range";

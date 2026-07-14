@@ -9,15 +9,15 @@ import {
   TextField,
   CircularProgress,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import CloseIcon from "@mui/icons-material/Close";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
-import StarIcon from "@mui/icons-material/Star";
-import StarBorderIcon from "@mui/icons-material/StarBorder";
-import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import { Add as AddIcon } from "@/components/ui/icons";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { EditOutlined as EditOutlinedIcon } from "@/components/ui/icons";
+import { DeleteOutline as DeleteOutlineIcon } from "@/components/ui/icons";
+import { CloudUploadOutlined as CloudUploadOutlinedIcon } from "@/components/ui/icons";
+import { Star as StarIcon } from "@/components/ui/icons";
+import { StarBorder as StarBorderIcon } from "@/components/ui/icons";
+import { Inventory2Outlined as Inventory2OutlinedIcon } from "@/components/ui/icons";
+import { ErrorOutline as ErrorOutlineIcon } from "@/components/ui/icons";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 
 // ---- Types -----------------------------------------------------------------

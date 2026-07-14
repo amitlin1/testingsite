@@ -19,9 +19,9 @@ import {
   IconButton,
   Paper,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import TableChartIcon from "@mui/icons-material/TableChart";
-import BarChartIcon from "@mui/icons-material/BarChart";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { TableChart as TableChartIcon } from "@/components/ui/icons";
+import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import {
   BarChart,
   Bar,

@@ -17,10 +17,10 @@ import {
 } from "@mui/material";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
-import CloseIcon from '@mui/icons-material/Close';
-import LockIcon from '@mui/icons-material/Lock';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { Lock as LockIcon } from "@/components/ui/icons";
+import { ErrorOutline as ErrorOutlineIcon } from "@/components/ui/icons";
 import { Card, Stack } from "@mui/material";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { NewShipment, Customers, Shipment } from "@/types";

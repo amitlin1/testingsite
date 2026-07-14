@@ -10,7 +10,7 @@ import {
   Info,
   Badge,
   QrCode
-} from "@mui/icons-material";
+} from "@/components/ui/icons";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { getDateRange } from "@/app/lib/dashboard-date-range";
 import { useDashboardOptions } from "@/app/lib/hooks/useDashboardOptions";

@@ -28,9 +28,9 @@ import {
     Typography
 } from "@mui/material";
 import SearchableCombobox from "../common/SearchableCombobox";
-import AddIcon from "@mui/icons-material/Add";
-import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
+import { Add as AddIcon } from "@/components/ui/icons";
+import { Search as SearchIcon } from "@/components/ui/icons";
+import { Clear as ClearIcon } from "@/components/ui/icons";
 import { TableVirtuoso } from "react-virtuoso";
 import { Shipment } from "@/types";
 import ShipmentInsertPopup from "./ShipmentInsertPopup";
@@ -45,7 +45,7 @@ import {
     QrCode2 as QrCode2Icon,
     Delete as DeleteIcon,
     Edit as EditIcon
-} from "@mui/icons-material";
+} from "@/components/ui/icons";
 import Tooltip from "@mui/material/Tooltip";
 import { useReactToPrint } from 'react-to-print';
 import { ShipmentPDFDocument } from './ShipmentPDFDocument';

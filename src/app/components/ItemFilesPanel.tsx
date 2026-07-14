@@ -18,13 +18,13 @@ import {
   alpha,
   useTheme,
 } from "@mui/material";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import DownloadIcon from "@mui/icons-material/Download";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import EditNoteIcon from "@mui/icons-material/EditNote";
+import { AttachFile as AttachFileIcon } from "@/components/ui/icons";
+import { CloudUpload as CloudUploadIcon } from "@/components/ui/icons";
+import { Download as DownloadIcon } from "@/components/ui/icons";
+import { DeleteOutline as DeleteOutlineIcon } from "@/components/ui/icons";
+import { OpenInNew as OpenInNewIcon } from "@/components/ui/icons";
+import { SwapHoriz as SwapHorizIcon } from "@/components/ui/icons";
+import { EditNote as EditNoteIcon } from "@/components/ui/icons";
 import { FileIcon } from "@/app/components/files/FileIcon";
 import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
 import WorkerPicker from "./WorkerPicker";

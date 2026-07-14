@@ -21,7 +21,7 @@ import {
   Business,
   Place,
   Info
-} from "@mui/icons-material";
+} from "@/components/ui/icons";
 import FilterContainer from "@/app/components/dashboard/filters/FilterContainer";
 import DateFilter from "@/app/components/dashboard/filters/DateFilter";
 import SelectFilter from "@/app/components/dashboard/filters/SelectFilter";

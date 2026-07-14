@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Box, Typography, Button } from "@mui/material";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import { ArrowForward as ArrowForwardIcon } from "@/components/ui/icons";
 import Link from "next/link";
 import ItemTypeTrackingTable from "@/app/components/dashboard/ItemTypeTrackingTable";
 import { ItemTypeTrackingRow } from "@/types/dashboard";

@@ -13,8 +13,8 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import BarChartIcon from "@mui/icons-material/BarChart";
+import { ShowChart as ShowChartIcon } from "@/components/ui/icons";
+import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import {
   ResponsiveContainer,
   LineChart,

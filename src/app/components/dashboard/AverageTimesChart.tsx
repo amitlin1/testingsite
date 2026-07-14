@@ -14,9 +14,9 @@ import {
   TextField,
   Stack,
 } from "@mui/material";
-import FullscreenIcon from "@mui/icons-material/Fullscreen";
-import CloseIcon from "@mui/icons-material/Close";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import { Fullscreen as FullscreenIcon } from "@/components/ui/icons";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";
 import {
   LineChart,
   Line,

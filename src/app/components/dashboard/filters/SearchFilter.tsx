@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { TextField, InputAdornment } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
+import { Search as SearchIcon } from "@/components/ui/icons";
 import { alpha } from "@mui/material/styles";
 
 interface SearchFilterProps {

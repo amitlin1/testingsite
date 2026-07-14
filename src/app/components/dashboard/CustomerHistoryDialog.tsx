@@ -17,9 +17,9 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import BarChartIcon from "@mui/icons-material/BarChart";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { ShowChart as ShowChartIcon } from "@/components/ui/icons";
+import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import {
   ResponsiveContainer,
   LineChart,

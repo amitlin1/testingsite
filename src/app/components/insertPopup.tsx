@@ -26,11 +26,11 @@ import {
 import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import SearchableCombobox from './common/SearchableCombobox'
 import { NewItem, ItemTypeOption, Customers, Shipment } from '@/types'
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
-import InventoryIcon from '@mui/icons-material/Inventory';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
-import CloseIcon from '@mui/icons-material/Close';
+import { Delete as DeleteIcon } from "@/components/ui/icons";
+import { Add as AddIcon } from "@/components/ui/icons";
+import { Inventory as InventoryIcon } from "@/components/ui/icons";
+import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
+import { Close as CloseIcon } from "@/components/ui/icons";
 import { parseItemQr, ParsedItemData } from '@/app/lib/itemQrParser';
 
 type TestingRoute = {

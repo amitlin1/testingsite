@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import Barcode from 'react-barcode';
 import { useReactToPrint } from 'react-to-print';
-import PrintIcon from '@mui/icons-material/Print';
+import { Print as PrintIcon } from "@/components/ui/icons";
 
 type BarcodeDialogProps = {
     open: boolean;

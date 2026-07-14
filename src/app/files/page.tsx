@@ -35,21 +35,21 @@ import {
   Link as MuiLink,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import FolderCopyIcon from "@mui/icons-material/FolderCopy";
-import UploadFileIcon from "@mui/icons-material/UploadFile";
-import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import ViewModuleIcon from "@mui/icons-material/ViewModule";
-import ViewListIcon from "@mui/icons-material/ViewList";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import DeleteIcon from "@mui/icons-material/Delete";
-import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
-import DownloadIcon from "@mui/icons-material/Download";
-import HomeIcon from "@mui/icons-material/Home";
-import InboxIcon from "@mui/icons-material/Inbox";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ErrorIcon from "@mui/icons-material/Error";
+import { FolderCopy as FolderCopyIcon } from "@/components/ui/icons";
+import { UploadFile as UploadFileIcon } from "@/components/ui/icons";
+import { CreateNewFolder as CreateNewFolderIcon } from "@/components/ui/icons";
+import { Refresh as RefreshIcon } from "@/components/ui/icons";
+import { ViewModule as ViewModuleIcon } from "@/components/ui/icons";
+import { ViewList as ViewListIcon } from "@/components/ui/icons";
+import { MoreVert as MoreVertIcon } from "@/components/ui/icons";
+import { Delete as DeleteIcon } from "@/components/ui/icons";
+import { DriveFileRenameOutline as DriveFileRenameOutlineIcon } from "@/components/ui/icons";
+import { Download as DownloadIcon } from "@/components/ui/icons";
+import { Home as HomeIcon } from "@/components/ui/icons";
+import { Inbox as InboxIcon } from "@/components/ui/icons";
+import { CloudUpload as CloudUploadIcon } from "@/components/ui/icons";
+import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
+import { Error as ErrorIcon } from "@/components/ui/icons";
 import { FileIcon } from "@/app/components/files/FileIcon";
 import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
 

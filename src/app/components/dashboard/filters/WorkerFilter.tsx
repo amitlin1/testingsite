@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { TextField, InputAdornment } from "@mui/material";
-import BadgeIcon from "@mui/icons-material/Badge";
+import { Badge as BadgeIcon } from "@/components/ui/icons";
 import { alpha } from "@mui/material/styles";
 
 interface WorkerFilterProps {

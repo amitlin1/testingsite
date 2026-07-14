@@ -21,7 +21,7 @@ import {
   alpha,
 } from "@mui/material";
 import { formatDateTime, formatTime } from "@/app/lib/datetime";
-import HistoryIcon from "@mui/icons-material/History";
+import { History as HistoryIcon } from "@/components/ui/icons";
 
 type StationHistoryEntry = {
   logId: number;

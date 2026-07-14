@@ -11,9 +11,9 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "@mui/material";
-import TableChartIcon from "@mui/icons-material/TableChart"; // Not used but keeping imports clean
-import ShowChartIcon from '@mui/icons-material/ShowChart';
-import BarChartIcon from '@mui/icons-material/BarChart';
+import { TableChart as TableChartIcon } from "@/components/ui/icons";
+import { ShowChart as ShowChartIcon } from "@/components/ui/icons";
+import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import {
   LineChart,
   Line,

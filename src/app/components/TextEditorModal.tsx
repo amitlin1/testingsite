@@ -14,9 +14,9 @@ import {
   Typography,
   Box,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import SaveIcon from "@mui/icons-material/Save";
-import DescriptionIcon from "@mui/icons-material/Description";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { Save as SaveIcon } from "@/components/ui/icons";
+import { Description as DescriptionIcon } from "@/components/ui/icons";
 
 type TextEditorModalProps = {
   open: boolean;

@@ -1,13 +1,15 @@
-import type { SvgIconComponent } from "@mui/icons-material";
-import PeopleIcon from "@mui/icons-material/People";
-import CategoryIcon from "@mui/icons-material/Category";
-import SourceIcon from "@mui/icons-material/Source";
-import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
-import EventNoteIcon from "@mui/icons-material/EventNote";
-import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
-import AltRouteIcon from "@mui/icons-material/AltRoute";
-import BadgeIcon from "@mui/icons-material/Badge";
-import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
+import type { SvgIconComponent } from "@/components/ui/icons";
+import {
+  People as PeopleIcon,
+  Category as CategoryIcon,
+  Source as SourceIcon,
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
+  EventNote as EventNoteIcon,
+  PrecisionManufacturing as PrecisionManufacturingIcon,
+  AltRoute as AltRouteIcon,
+  Badge as BadgeIcon,
+  PhotoLibrary as PhotoLibraryIcon,
+} from "@/components/ui/icons";
 
 /**
  * Single source of truth for the /settings/* routes.

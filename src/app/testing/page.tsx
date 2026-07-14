@@ -29,22 +29,22 @@ import {
 } from "@mui/material";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
 // Icons
-import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
-import ScienceIcon from "@mui/icons-material/Science"; // For Testing Screen
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import InventoryIcon from "@mui/icons-material/Inventory";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import HistoryIcon from "@mui/icons-material/History";
-import LinkIcon from "@mui/icons-material/Link";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
-import SpeedIcon from "@mui/icons-material/Speed";
-import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
-import QrCodeIcon from "@mui/icons-material/QrCode";
-import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
-import CloseIcon from "@mui/icons-material/Close";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import { Search as SearchIcon } from "@/components/ui/icons";
+import { Clear as ClearIcon } from "@/components/ui/icons";
+import { Science as ScienceIcon } from "@/components/ui/icons";
+import { CheckCircleOutline as CheckCircleOutlineIcon } from "@/components/ui/icons";
+import { Inventory as InventoryIcon } from "@/components/ui/icons";
+import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";
+import { History as HistoryIcon } from "@/components/ui/icons";
+import { Link as LinkIcon } from "@/components/ui/icons";
+import { KeyboardArrowDown as KeyboardArrowDownIcon } from "@/components/ui/icons";
+import { PlayArrowRounded as PlayArrowRoundedIcon } from "@/components/ui/icons";
+import { Speed as SpeedIcon } from "@/components/ui/icons";
+import { PrecisionManufacturing as PrecisionManufacturingIcon } from "@/components/ui/icons";
+import { QrCode as QrCodeIcon } from "@/components/ui/icons";
+import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { TrendingUp as TrendingUpIcon } from "@/components/ui/icons";
 // MoreVertIcon removed
 import { getStartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
 import StationHistoryDialog from "../components/StationHistoryDialog";

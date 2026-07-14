@@ -18,7 +18,7 @@ import {
     CircularProgress,
     IconButton
 } from "@mui/material";
-import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import { PictureAsPdf as PictureAsPdfIcon } from "@/components/ui/icons";
 import { useReactToPrint } from 'react-to-print';
 import { ShipmentPDFDocument } from './ShipmentPDFDocument';
 import { Shipment } from "@/types";

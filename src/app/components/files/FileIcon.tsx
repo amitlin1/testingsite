@@ -1,13 +1,13 @@
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import ImageIcon from '@mui/icons-material/Image';
-import DescriptionIcon from '@mui/icons-material/Description';
-import TableChartIcon from '@mui/icons-material/TableChart';
-import FolderZipIcon from '@mui/icons-material/FolderZip';
-import VideoFileIcon from '@mui/icons-material/VideoFile';
-import FolderIcon from '@mui/icons-material/Folder';
-import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
-import AudioFileIcon from '@mui/icons-material/AudioFile';
-import CodeIcon from '@mui/icons-material/Code';
+import { PictureAsPdf as PictureAsPdfIcon } from "@/components/ui/icons";
+import { Image as ImageIcon } from "@/components/ui/icons";
+import { Description as DescriptionIcon } from "@/components/ui/icons";
+import { TableChart as TableChartIcon } from "@/components/ui/icons";
+import { FolderZip as FolderZipIcon } from "@/components/ui/icons";
+import { VideoFile as VideoFileIcon } from "@/components/ui/icons";
+import { Folder as FolderIcon } from "@/components/ui/icons";
+import { InsertDriveFile as InsertDriveFileIcon } from "@/components/ui/icons";
+import { AudioFile as AudioFileIcon } from "@/components/ui/icons";
+import { Code as CodeIcon } from "@/components/ui/icons";
 import { SxProps } from '@mui/material';
 
 interface FileIconProps {

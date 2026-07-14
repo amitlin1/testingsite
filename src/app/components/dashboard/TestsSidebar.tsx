@@ -25,7 +25,7 @@ import {
   AccessTime as AccessTimeIcon,
   DonutLarge as StatusIcon,
   Business as BusinessIcon,
-} from "@mui/icons-material";
+} from "@/components/ui/icons";
 
 const menuItems = [
   { text: "סקירה כללית", icon: <DashboardIcon />, path: "/dashboard/tests" },

@@ -22,9 +22,9 @@ import {
   IconButton,
   Tooltip as MuiTooltip,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import TableChartIcon from "@mui/icons-material/TableChart";
-import BarChartIcon from "@mui/icons-material/BarChart";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { TableChart as TableChartIcon } from "@/components/ui/icons";
+import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import {
   BarChart,
   Bar,
@@ -41,7 +41,7 @@ import DashboardCard from "@/app/components/dashboard/DashboardCard";
 import { formatDate } from "@/app/lib/datetime";
 import ShipmentHistoryDialog from "./ShipmentHistoryDialog";
 import CompletionHistoryChart from "./CompletionHistoryChart";
-import TimelineIcon from '@mui/icons-material/Timeline';
+import { Timeline as TimelineIcon } from "@/components/ui/icons";
 
 interface ShipmentTrackingTableProps {
   data: ShipmentTrackingRow[];

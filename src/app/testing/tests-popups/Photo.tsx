@@ -4,13 +4,13 @@ import {
   Dialog, Box, Typography, Button, TextField, Stack, Chip, Alert, IconButton,
   MenuItem, CircularProgress, LinearProgress, Divider,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import AddAPhotoIcon from "@mui/icons-material/AddAPhoto";
-import CheckIcon from "@mui/icons-material/Check";
-import AddIcon from "@mui/icons-material/Add";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { ArrowForward as ArrowForwardIcon } from "@/components/ui/icons";
+import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";
+import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
+import { AddAPhoto as AddAPhotoIcon } from "@/components/ui/icons";
+import { Check as CheckIcon } from "@/components/ui/icons";
+import { Add as AddIcon } from "@/components/ui/icons";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
 
 // ---- Design tokens (Shifthouse handoff) ----

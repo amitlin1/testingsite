@@ -17,16 +17,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // Icons
-import SettingsIcon from "@mui/icons-material/Settings";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import ScienceIcon from "@mui/icons-material/Science";
-import AnalyticsIcon from "@mui/icons-material/Analytics";
-import LocalShippingIcon from "@mui/icons-material/LocalShipping";
-import FolderCopyIcon from "@mui/icons-material/FolderCopy";
-import CheckIcon from "@mui/icons-material/Check";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import LogoutIcon from "@mui/icons-material/Logout";
-import MenuIcon from "@mui/icons-material/Menu";
+import { Settings as SettingsIcon } from "@/components/ui/icons";
+import { Dashboard as DashboardIcon } from "@/components/ui/icons";
+import { Science as ScienceIcon } from "@/components/ui/icons";
+import { Analytics as AnalyticsIcon } from "@/components/ui/icons";
+import { LocalShipping as LocalShippingIcon } from "@/components/ui/icons";
+import { FolderCopy as FolderCopyIcon } from "@/components/ui/icons";
+import { Check as CheckIcon } from "@/components/ui/icons";
+import { ExpandMore as ExpandMoreIcon } from "@/components/ui/icons";
+import { Logout as LogoutIcon } from "@/components/ui/icons";
+import { Menu as MenuIcon } from "@/components/ui/icons";
 
 // Settings routes — shared single source of truth (also used by the settings sub-nav)
 import { settingsLinks } from "../settings/settingsNav";

@@ -3,7 +3,7 @@ import * as React from "react";
 import { Autocomplete, TextField, Box, Typography, Chip } from "@mui/material";
 import { StatusFilter } from "@/types/dashboard";
 import { alpha } from "@mui/material/styles";
-import InfoIcon from "@mui/icons-material/Info";
+import { Info as InfoIcon } from "@/components/ui/icons";
 
 interface StatusFilterProps {
   value: StatusFilter;

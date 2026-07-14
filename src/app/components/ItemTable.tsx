@@ -6,20 +6,20 @@ import {
   Fab, Snackbar, Alert, Chip, alpha, LinearProgress, Typography, useTheme
 } from "@mui/material";
 import SearchableCombobox from "./common/SearchableCombobox";
-import AddIcon from "@mui/icons-material/Add";
-import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
+import { Add as AddIcon } from "@/components/ui/icons";
+import { Search as SearchIcon } from "@/components/ui/icons";
+import { Clear as ClearIcon } from "@/components/ui/icons";
 import { TableVirtuoso } from "react-virtuoso";
 import ItemDialog from "./ItemDialog";
 import InsertPopup from "./insertPopup";
 import BarcodeDialog from "./BarcodeDialog";
-import QrCodeIcon from '@mui/icons-material/QrCode';
+import { QrCode as QrCodeIcon } from "@/components/ui/icons";
 import { ItemRow, StatusOption, NewItem, ItemTypeOption, Customers, Shipment } from "@/types";
 import { Grid, InputAdornment, Tooltip, Divider } from "@mui/material";
-import FilterListIcon from '@mui/icons-material/FilterList';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import InventoryIcon from '@mui/icons-material/Inventory'; // New icon for management
-import TuneIcon from '@mui/icons-material/Tune';
+import { FilterList as FilterListIcon } from "@/components/ui/icons";
+import { Refresh as RefreshIcon } from "@/components/ui/icons";
+import { Inventory as InventoryIcon } from "@/components/ui/icons";
+import { Tune as TuneIcon } from "@/components/ui/icons";
 
 export default function ItemTable() {
   const theme = useTheme();

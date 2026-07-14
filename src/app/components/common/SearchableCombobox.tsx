@@ -9,8 +9,8 @@ import {
   type AutocompleteProps,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import CheckIcon from "@mui/icons-material/Check";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import { Check as CheckIcon } from "@/components/ui/icons";
+import { KeyboardArrowDown as KeyboardArrowDownIcon } from "@/components/ui/icons";
 
 /**
  * Shared searchable combobox used everywhere a value is selected (the

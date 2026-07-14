@@ -14,7 +14,7 @@ import FilterContainer from "@/app/components/dashboard/filters/FilterContainer"
 import DateFilter from "@/app/components/dashboard/filters/DateFilter";
 import SelectFilter from "@/app/components/dashboard/filters/SelectFilter";
 import CompletedShipmentsToggle from "@/app/components/dashboard/filters/CompletedShipmentsToggle";
-import { Business, Category, Timeline } from "@mui/icons-material";
+import { Business, Category, Timeline } from "@/components/ui/icons";
 import ShipmentFilter from "@/app/components/dashboard/filters/ShipmentFilter";
 
 export default function StatusDistributionPage() {

@@ -3,13 +3,13 @@
 import * as React from "react";
 import { Box, IconButton, Typography, useMediaQuery } from "@mui/material";
 import { usePathname } from "next/navigation";
-import MenuIcon from "@mui/icons-material/Menu";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import ScienceIcon from "@mui/icons-material/Science";
-import AnalyticsIcon from "@mui/icons-material/Analytics";
-import LocalShippingIcon from "@mui/icons-material/LocalShipping";
-import FolderCopyIcon from "@mui/icons-material/FolderCopy";
-import SettingsIcon from "@mui/icons-material/Settings";
+import { Menu as MenuIcon } from "@/components/ui/icons";
+import { Dashboard as DashboardIcon } from "@/components/ui/icons";
+import { Science as ScienceIcon } from "@/components/ui/icons";
+import { Analytics as AnalyticsIcon } from "@/components/ui/icons";
+import { LocalShipping as LocalShippingIcon } from "@/components/ui/icons";
+import { FolderCopy as FolderCopyIcon } from "@/components/ui/icons";
+import { Settings as SettingsIcon } from "@/components/ui/icons";
 import Sidebar, { SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "./navBar";
 
 const TOPBAR_HEIGHT = 56;

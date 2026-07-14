@@ -9,7 +9,7 @@ import {
   Alert,
   CircularProgress,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
+import { Close as CloseIcon } from "@/components/ui/icons";
 
 /**
  * In-browser editor for .docx/.xlsx/.pptx attachments using OnlyOffice DocsAPI.

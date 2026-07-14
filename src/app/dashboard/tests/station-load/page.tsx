@@ -12,9 +12,9 @@ import {
   AccountTree,
   Place,
   Info
-} from "@mui/icons-material";
-import TableChartIcon from "@mui/icons-material/TableChart";
-import BarChartIcon from "@mui/icons-material/BarChart";
+} from "@/components/ui/icons";
+import { TableChart as TableChartIcon } from "@/components/ui/icons";
+import { BarChart as BarChartIcon } from "@/components/ui/icons";
 import StationLoadTable from "@/app/components/dashboard/StationLoadTable";
 import FilterContainer from "@/app/components/dashboard/filters/FilterContainer";
 import DateFilter from "@/app/components/dashboard/filters/DateFilter";

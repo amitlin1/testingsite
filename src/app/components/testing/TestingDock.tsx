@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { Box, Typography, Button } from "@mui/material";
-import ScienceIcon from "@mui/icons-material/Science";
-import PersonIcon from "@mui/icons-material/Person";
-import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import { Science as ScienceIcon } from "@/components/ui/icons";
+import { Person as PersonIcon } from "@/components/ui/icons";
+import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
+import { KeyboardArrowDown as KeyboardArrowDownIcon } from "@/components/ui/icons";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
 import WorkerPicker from "../WorkerPicker";

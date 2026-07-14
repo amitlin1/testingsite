@@ -13,9 +13,9 @@ import {
 } from "@mui/material";
 import Barcode from "react-barcode";
 import { useReactToPrint } from "react-to-print";
-import PrintIcon from "@mui/icons-material/Print";
-import CloseIcon from "@mui/icons-material/Close";
-import QrCode2Icon from "@mui/icons-material/QrCode2";
+import { Print as PrintIcon } from "@/components/ui/icons";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { QrCode2 as QrCode2Icon } from "@/components/ui/icons";
 import { Shipment } from "@/types";
 
 type ShipmentBarcodesDialogProps = {

@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Paper, Typography, Box, Skeleton, useTheme, Dialog, DialogContent, DialogTitle, IconButton, alpha } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
+import { Close as CloseIcon } from "@/components/ui/icons";
 import {
   LineChart,
   Line,

@@ -16,14 +16,14 @@ import {
   CircularProgress,
   Chip
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import SpeedIcon from "@mui/icons-material/Speed";
-import SaveIcon from "@mui/icons-material/Save";
-import ScienceIcon from "@mui/icons-material/Science";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import PersonIcon from "@mui/icons-material/Person";
+import { Close as CloseIcon } from "@/components/ui/icons";
+import { Assignment as AssignmentIcon } from "@/components/ui/icons";
+import { Speed as SpeedIcon } from "@/components/ui/icons";
+import { Save as SaveIcon } from "@/components/ui/icons";
+import { Science as ScienceIcon } from "@/components/ui/icons";
+import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";
+import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
+import { Person as PersonIcon } from "@/components/ui/icons";
 import ItemFilesPanel from "./ItemFilesPanel";
 import type { StationTestDialogProps } from "@/types";
 

@@ -13,7 +13,7 @@ import {
   Business,
   Category,
   ArrowBack // Changed to ArrowBack for RTL or keep ArrowForward if direction is RTL
-} from "@mui/icons-material";
+} from "@/components/ui/icons";
 
 const dashboards = [
   {

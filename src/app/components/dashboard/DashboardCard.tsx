@@ -1,8 +1,8 @@
 "use client";
 import * as React from "react";
 import { Paper, Typography, Box, IconButton, Collapse, alpha } from "@mui/material";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import { KeyboardArrowDown as KeyboardArrowDownIcon } from "@/components/ui/icons";
+import { KeyboardArrowUp as KeyboardArrowUpIcon } from "@/components/ui/icons";
 
 interface DashboardCardProps {
   title: string;

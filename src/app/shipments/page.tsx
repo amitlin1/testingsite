@@ -1,6 +1,5 @@
 // import React from "react";
 // import { Box, Typography } from "@mui/material";
-// import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 // import ShipmentTable from "../components/shipments/ShipmentTable";
 
 // export default function ShipmentsPage() {

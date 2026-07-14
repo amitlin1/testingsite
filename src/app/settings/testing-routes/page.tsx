@@ -5,10 +5,10 @@ import {
   List, ListItem, IconButton,
   Chip, Snackbar, Alert
 } from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import SaveIcon from "@mui/icons-material/Save";
+import { Delete as DeleteIcon } from "@/components/ui/icons";
+import { ArrowUpward as ArrowUpwardIcon } from "@/components/ui/icons";
+import { ArrowDownward as ArrowDownwardIcon } from "@/components/ui/icons";
+import { Save as SaveIcon } from "@/components/ui/icons";
 
 interface Option {
   id: number;

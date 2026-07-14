@@ -1,11 +1,11 @@
 "use client";
 import * as React from "react";
 import { Paper, Box, Typography, Skeleton, alpha, Divider, Stack, Grid, useTheme } from "@mui/material";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import QueueIcon from "@mui/icons-material/Queue";
-import ScienceIcon from "@mui/icons-material/Science";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";
+import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
+import { Queue as QueueIcon } from "@/components/ui/icons";
+import { Science as ScienceIcon } from "@/components/ui/icons";
+import { TrendingUp as TrendingUpIcon } from "@/components/ui/icons";
 import { DashboardKpis } from "@/types/dashboard";
 import { formatDuration } from "@/app/lib/datetime";
 import { SvgIconProps } from "@mui/material/SvgIcon";

@@ -6,10 +6,10 @@ import {
   TextField, Snackbar, Alert, Box, InputAdornment, CircularProgress, Typography,
   Switch, FormControlLabel, Select, MenuItem, InputLabel, FormControl
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import AddIcon from "@mui/icons-material/Add";
-import SearchIcon from "@mui/icons-material/Search";
+import { Edit as EditIcon } from "@/components/ui/icons";
+import { Delete as DeleteIcon } from "@/components/ui/icons";
+import { Add as AddIcon } from "@/components/ui/icons";
+import { Search as SearchIcon } from "@/components/ui/icons";
 
 interface StationsTableProps {
   typeId: number;
