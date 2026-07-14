@@ -1,8 +1,7 @@
 import { prisma } from "@/app/lib/prisma";
 import { NextResponse } from "next/server";
-import { normalizeToUtcIso, getCurrentUtcIso } from "@/app/lib/datetime";
-import { findStationForRouteStep } from "@/app/lib/station-assignment";
-import { TransactionClient } from "@/app/lib/prisma";
+import { normalizeToUtcIso } from "@/app/lib/datetime";
+import { createItem } from "@/app/lib/create-item";
 
 export const runtime = "nodejs";
 
@@ -84,66 +83,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Helper to create an item inside a Prisma transaction
-    const createItem = async (tx: TransactionClient, itemData: any, parentId: number | null = null) => {
-      const { customer, itemType, serialNumber, makat, model, manufacturer, manufacturerNo, shipment, routeNumber } = itemData;
-
-      // 1. Get customer code (validate customer exists)
-      const customerRecord = await tx.customers.findUnique({
-        where: { id: customer },
-        select: { customer_code: true },
-      });
-      if (!customerRecord) throw new Error("Customer not found");
-
-      // Use customer ID (numeric) for item_id generation
-      const customerId = customer;
-      const customerIdStr = String(customerId).padStart(3, '0');
-
-      // 2. Generate date part (ddMMyy)
-      const now = new Date();
-      const day = String(now.getDate()).padStart(2, '0');
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const year = String(now.getFullYear()).slice(-2);
-      const dateStr = `${day}${month}${year}`;
-      const dateKey = `${now.getFullYear()}-${month}-${day}`;
-
-      // 3. Get and increment daily counter (atomic within transaction)
-      const counterRows = await tx.$queryRaw<any[]>`
-        INSERT INTO daily_counters (date_key, counter)
-        VALUES (${dateKey}, 1)
-        ON CONFLICT (date_key)
-        DO UPDATE SET counter = daily_counters.counter + 1
-        RETURNING counter
-      `;
-
-      const counter = counterRows[0].counter;
-
-      // 4. Construct Item ID: [customer_id_padded][ddMMyy][counter] - ALL NUMERIC
-      const newItemId = parseInt(`${customerIdStr}${dateStr}${counter}`, 10);
-      const newItemIdBig = BigInt(newItemId);
-
-      // 5. Insert Item
-      await tx.$executeRaw`
-        INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model, manufacturer_name, manufacturer_no, shipment_id, parent_item_id)
-        VALUES (${newItemIdBig}, ${customer}, ${itemType}, ${serialNumber}, ${makat}, ${model}, ${manufacturer}, ${manufacturerNo || null}, ${shipment}, ${parentId ? BigInt(parentId) : null})
-      `;
-
-      // Route logic - find best station for first route step
-      const routeNum = routeNumber || 1;
-      const assignedStationId = await findStationForRouteStep(tx, itemType, routeNum, 1);
-
-      // Use the same UTC timestamp format as start-test API for consistency
-      const currentUtcIso = getCurrentUtcIso();
-      const currentUtcDate = new Date(currentUtcIso);
-
-      await tx.$executeRaw`
-        INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step, test_station_id, created_at, is_finished, queue_start_time, route_number)
-        VALUES (${newItemIdBig}, ${itemType}, 2, 1, ${assignedStationId}, ${currentUtcDate}::timestamp, FALSE, ${currentUtcDate}::timestamp, ${routeNum})
-      `;
-
-      return newItemId;
-    };
-
+    // Item + accessory creation lives in the shared createItem helper (also used
+    // by the intake wizard's "add accessory" endpoint).
     let mainItemId: number;
 
     mainItemId = await prisma.$transaction(async (tx) => {

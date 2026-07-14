@@ -25,35 +25,25 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import PersonIcon from "@mui/icons-material/Person";
 import ItemFilesPanel from "./ItemFilesPanel";
-
-type TestResultData = {
-  Result: number;
-  Comments?: string;
-  WorkerID?: number;
-  sendToResearch?: boolean;
-  returnToRoute?: boolean; // החזר למסלול (5→2)
-  finishRoute?: boolean; // סיים מסלול (5→3)
-  // SentAt and ReturnAt are hidden as requested
-  SentAt?: string;
-  ReturnAt?: string;
-};
-
-type PopUpTestDialogProps = {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (data: TestResultData) => Promise<void>;
-  itemId: number;
-  stationId: number;
-  itemName?: string;
-  currentStatus?: number; // סטטוס נוכחי של הפריט
-  /** Worker id chosen on the testing page header. Required to submit. */
-  workerId?: number | null;
-  /** Worker display name — shown as a chip so the tester sees who actions are recorded as. */
-  workerName?: string;
-};
+import type { StationTestDialogProps } from "@/types";
 
 export default function PopUpTestDialog({
   open,
+  onClose,
+  onSubmit,
+  item,
+  station,
+  workerId,
+  workerName,
+}: StationTestDialogProps) {
+  // The dialog renders primitives derived from the ItemRow / TestStation it receives.
+  const itemId = item.item_id;
+  const stationId = station.test_station_id;
+  const itemName = item.model ?? undefined;
+  const currentStatus = item.current_status ?? undefined;
+  const [result, setResult] = React.useState<number>(0);
+  const [comments, setComments] = React.useState<string>("");
+  console.log( open,
   onClose,
   onSubmit,
   itemId,
@@ -61,10 +51,7 @@ export default function PopUpTestDialog({
   itemName,
   currentStatus,
   workerId,
-  workerName,
-}: PopUpTestDialogProps) {
-  const [result, setResult] = React.useState<number>(0);
-  const [comments, setComments] = React.useState<string>("");
+  workerName,)
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const theme = useTheme();
@@ -236,7 +223,7 @@ export default function PopUpTestDialog({
 
           {/* Files attached to this item — uploads/edits use the active worker */}
           <Box>
-            <ItemFilesPanel itemId={itemId} workerId={workerId ?? null} compact maxHeight={300} />
+            <ItemFilesPanel itemId={itemId} workerId={workerId ?? null} stationTypeId={station.test_station_type_id} compact maxHeight={300} />
           </Box>
 
           {/* Comments */}

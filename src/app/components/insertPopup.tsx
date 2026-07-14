@@ -155,7 +155,9 @@ export default function InsertPopup({
                 const shipmentsRes = await fetch("/api/shipments");
                 const shipmentsData = await shipmentsRes.json();
                 if (!cancelled) {
-                    setShipments(Array.isArray(shipmentsData) ? shipmentsData : []);
+                    // Exclude finished shipments (is_sent === the green check on /shipments) — can't add items to a shipment that already left.
+                    const openShipments = Array.isArray(shipmentsData) ? shipmentsData.filter((s: Shipment) => !s.is_sent) : [];
+                    setShipments(openShipments);
                 }
                 const routesRes = await fetch("/api/testing-routes");
                 const routesData = await routesRes.json();

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { Grid, Paper, Typography, Box, GlobalStyles } from "@mui/material";
+import { Grid, Paper, Typography, Box } from "@mui/material";
 import StationTypesTable from "./StationTypesTable";
 import StationsTable from "./StationsTable";
 
@@ -14,20 +14,11 @@ export default function TestStationsPage() {
   };
 
   return (
-    <>
-      <GlobalStyles
-        styles={{
-          html: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" },
-          body: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" },
-          "#__next": { height: "100%", width: "100%" }
-        }}
-      />
-
-      <Box sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-      }}>
+    <Box sx={{
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+    }}>
 
         {/* Page Header */}
         <Box sx={{
@@ -106,7 +97,6 @@ export default function TestStationsPage() {
             </Grid>
           </Grid>
         </Box>
-      </Box>
-    </>
+    </Box>
   );
 }

@@ -27,33 +27,32 @@ export async function GET(req: Request) {
     WHERE test_station_id = ${stationIdNum}
 )
 SELECT
-    t1.item_id AS "itemId",
-    t1.item_type_id AS "itemTypeId",
-    t1.current_status AS "currentStatus",
-    t1.current_route_step AS "currentRouteStep",
-    t1.test_station_id AS "testStationId",
-    t1.created_at AS "createdAt",
-    t1.processing_start_time AS "processingStartTime",
-    t1.queue_start_time AS "qStartTime",
-    t1.finished_at AS "finishedAt",
-    t1.is_finished AS "isFinished",
-    t3.item_status_desc AS "itemStatusDesc",
-    t2.route_steps AS "routeSteps",
-    t2.route_steps[t1.current_route_step] AS "stepIndex",
-    i.serial_no AS "serialNo",
+    t1.item_id,
+    t1.item_type_id,
+    t1.current_status,
+    t1.current_route_step,
+    t1.test_station_id,
+    t1.created_at,
+    t1.processing_start_time,
+    t1.queue_start_time,
+    t1.finished_at,
+    t1.is_finished,
+    t3.item_status_desc,
+    t2.route_steps,
+    i.serial_no,
     i.makat,
     i.model,
-    TRIM(c.customer_code) AS "customerCode",
-    i.manufacturer_name AS "manufacturerName",
-    i.manufacturer_no AS "manufacturerNo",
-    TRIM(it.item_type_desc) AS "itemTypeDesc",
-    t1.route_number AS "routeNumber",
-    i.parent_item_id AS "parentItemId",
-    (EXISTS (SELECT 1 FROM items child WHERE child.parent_item_id = i.item_id)) AS "hasChildren",
+    TRIM(c.customer_code) AS "customer_code",
+    i.manufacturer_name,
+    i.manufacturer_no,
+    TRIM(it.item_type_desc) AS "item_type_desc",
+    t1.route_number,
+    i.parent_item_id,
+    (EXISTS (SELECT 1 FROM items child WHERE child.parent_item_id = i.item_id)) AS "has_children",
     (
         SELECT json_agg(json_build_object(
-            'itemId', connected.item_id,
-            'serialNo', connected.serial_no
+            'item_id', connected.item_id,
+            'serial_no', connected.serial_no
         ))
         FROM items connected
         WHERE
@@ -63,7 +62,7 @@ SELECT
                 (i.parent_item_id IS NULL AND connected.parent_item_id = i.item_id)
             )
             AND connected.item_id != i.item_id
-    ) AS "connectedItems"
+    ) AS "connected_items"
 FROM item_routes t1
 INNER JOIN items i
     ON i.item_id = t1.item_id
@@ -110,20 +109,21 @@ ORDER BY
     t1.created_at DESC
         `;
 
-        // Normalize all timestamp fields to UTC ISO strings and convert BigInt to string
+        // Normalize snake_case rows to the ItemRow shape: numeric ids, UTC ISO
+        // timestamps, and route_steps guaranteed to be an array.
         const normalizedRows = rows.map((row: any) => ({
             ...row,
-            itemId: row.itemId?.toString(),
-            testStationId: row.testStationId?.toString(),
-            parentItemId: row.parentItemId?.toString(),
-            createdAt: normalizeToUtcIso(row.createdAt),
-            processingStartTime: normalizeToUtcIso(row.processingStartTime),
-            qStartTime: normalizeToUtcIso(row.qStartTime),
-            finishedAt: normalizeToUtcIso(row.finishedAt),
-            routeSteps: Array.isArray(row.routeSteps) ? row.routeSteps : (row.routeSteps ? [row.routeSteps] : []),
-            connectedItems: row.connectedItems?.map((ci: any) => ({
+            item_id: row.item_id != null ? Number(row.item_id) : null,
+            test_station_id: row.test_station_id != null ? Number(row.test_station_id) : null,
+            parent_item_id: row.parent_item_id != null ? Number(row.parent_item_id) : null,
+            created_at: normalizeToUtcIso(row.created_at),
+            processing_start_time: normalizeToUtcIso(row.processing_start_time),
+            queue_start_time: normalizeToUtcIso(row.queue_start_time),
+            finished_at: normalizeToUtcIso(row.finished_at),
+            route_steps: Array.isArray(row.route_steps) ? row.route_steps : (row.route_steps ? [row.route_steps] : []),
+            connected_items: row.connected_items?.map((ci: any) => ({
                 ...ci,
-                itemId: ci.itemId?.toString(),
+                item_id: ci.item_id != null ? Number(ci.item_id) : null,
             })),
         }));
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Grid, Paper, Typography, Box, Autocomplete, TextField, Button,
   List, ListItem, IconButton,
-  Chip, Snackbar, Alert, GlobalStyles
+  Chip, Snackbar, Alert
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
@@ -173,25 +173,11 @@ export default function TestingRoutesPage() {
   };
 
   return (
-    <>
-      <GlobalStyles
-        styles={{
-          html: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" },
-          body: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" },
-          "#__next": { height: "100%", width: "100%" }
-        }}
-      />
-
-      {/* 
-        Root Layout Override 
-        Using position: fixed to breakout of parent containers (like SettingsLayout) 
-        that enforce max-width or padding. 
-      */}
-      <Box sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-      }}>
+    <Box sx={{
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+    }}>
 
         {/* Page Header */}
         <Box sx={{
@@ -397,7 +383,6 @@ export default function TestingRoutesPage() {
         <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
           <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
         </Snackbar>
-      </Box>
-    </>
+    </Box>
   );
 }

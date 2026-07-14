@@ -57,6 +57,10 @@ export async function POST(req: Request) {
       item_type_desc: created.item_type_desc.trim(),
     });
   } catch (error: any) {
+    const msg = String(error?.message ?? "");
+    if (error?.code === "P2002" || /unique constraint/i.test(msg)) {
+      return NextResponse.json({ error: "סוג פריט זה כבר קיים במערכת" }, { status: 400 });
+    }
     console.error("Error creating item type:", error);
     return NextResponse.json(
       { error: error.message || "Failed to create item type" },

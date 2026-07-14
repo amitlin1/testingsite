@@ -10,7 +10,7 @@ import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
 import WorkerPicker from "../WorkerPicker";
 
-export type StationLite = { id: number; name: string; typeId: number };
+import type { StationLite } from "@/types";
 
 type TestingDockProps = {
   hasStation: boolean;

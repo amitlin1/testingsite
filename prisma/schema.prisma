@@ -183,7 +183,7 @@ model item_routes {
 
 model item_status {
   item_status_id   Int    @id @default(autoincrement())
-  item_status_desc String @db.Char(50)
+  item_status_desc String @unique @db.Char(50)
 }
 
 model item_type_snapshots {
@@ -248,11 +248,54 @@ model item_type_snapshots_quarterly {
 
 model item_types {
   item_type_id     Int                @id @default(autoincrement())
-  item_type_desc   String             @db.Char(50)
+  item_type_desc   String             @unique @db.Char(50)
   item_routes      item_routes[]
+  reference_items  reference_items[]
   shipment_history shipment_history[]
   shipment_items   shipment_items[]
   testing_routes   testing_routes[]
+}
+
+/// Reference ("golden") items — a prototype per item type + manufacturer SKU,
+/// with reference images used for automatic visual comparison during testing.
+/// Infrastructure screen under Settings (/settings/reference-items).
+/// `manufacturer_sku` is entered manually here (it is NOT sourced from `items`)
+/// so this screen can be linked to other screens/flows in the future.
+model reference_items {
+  reference_item_id Int                     @id @default(autoincrement())
+  item_type_id      Int
+  manufacturer_sku  String                  @db.VarChar(255)
+  manufacturer      String                  @db.VarChar(255)
+  name              String?                 @db.VarChar(255)
+  reference_weight  String?                 @db.VarChar(255)
+  notes             String?                 @db.Text
+  /// reference_item_images.reference_item_image_id of the cover image (app-managed, not a FK).
+  primary_image_id  Int?
+  created_at        DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+  item_types        item_types              @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction)
+  images            reference_item_images[]
+
+  @@index([item_type_id], map: "idx_reference_items_item_type")
+  @@index([manufacturer_sku], map: "idx_reference_items_sku")
+}
+
+/// Image objects for a reference item. The bytes live in MinIO (the dedicated
+/// `ru-reference-items` bucket); this row is the index — same procedure as
+/// `file_objects`, kept alongside it so the whole item's images cascade-delete.
+model reference_item_images {
+  reference_item_image_id Int             @id @default(autoincrement())
+  reference_item_id       Int
+  bucket                  String          @db.VarChar(255)
+  object_key              String          @unique @db.VarChar(1024)
+  file_name               String          @db.VarChar(255)
+  content_type            String?         @db.VarChar(255)
+  size_bytes              BigInt          @default(0)
+  sort_order              Int             @default(0)
+  created_at              DateTime        @default(now()) @db.Timestamptz(6)
+  reference_items         reference_items @relation(fields: [reference_item_id], references: [reference_item_id], onDelete: Cascade)
+
+  @@index([reference_item_id], map: "idx_reference_item_images_item")
 }
 
 model items {
@@ -324,6 +367,32 @@ model research_history {
   result      Int
   comments    String?
   worker_id   Int?
+}
+
+/// Per-item test result captured when a tester finishes a test at a station.
+/// One row PER item — a parent and each of its accessories each get their own
+/// row (accessories stay separate routed items). `details` holds the
+/// station-type-specific structured payload (e.g. the "קליטה וצילום" intake
+/// wizard fields); the station type is known from test_station_type_id, so no
+/// type discriminator is stored inside the JSON. Additive to the existing flow:
+/// item_route_history keeps the route/timing log, this holds the actual result.
+model test_results {
+  test_result_id       Int      @id @default(autoincrement())
+  item_id              BigInt
+  test_station_id      Int
+  test_station_type_id Int
+  route_number         Int      @default(1)
+  route_step           Int
+  worker_id            Int?
+  passed               Boolean?
+  result               Int?
+  comments             String?  @db.Text
+  details              Json?
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([item_id], map: "idx_test_results_item")
+  @@index([test_station_id], map: "idx_test_results_station")
+  @@index([test_station_type_id], map: "idx_test_results_station_type")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -453,7 +522,7 @@ model shipments {
 
 model sources {
   source_id   Int    @id @default(autoincrement())
-  source_desc String @db.VarChar(100)
+  source_desc String @unique @db.VarChar(100)
 
   @@index([source_desc], map: "idx_sources_desc")
 }
@@ -606,13 +675,13 @@ model station_live_counters {
 
 model test_station_status {
   test_station_status_id   Int    @id @default(autoincrement())
-  test_station_status_desc String @db.Char(50)
+  test_station_status_desc String @unique @db.Char(50)
 }
 
 model test_stations {
   test_station_id      Int                @id @default(autoincrement())
   test_station_type_id Int
-  test_station_desc    String             @db.Char(50)
+  test_station_desc    String             @unique @db.Char(50)
   status               Int
   is_research          Boolean            @default(false)
   item_routes          item_routes[]
@@ -621,7 +690,7 @@ model test_stations {
 
 model test_stations_type {
   test_station_type_id Int              @id @default(autoincrement())
-  test_type_desc       String           @db.Char(50)
+  test_type_desc       String           @unique @db.Char(50)
   test_stations        test_stations[]
   testing_routes       testing_routes[]
 }

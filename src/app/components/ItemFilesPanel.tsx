@@ -12,6 +12,9 @@ import {
   Paper,
   Divider,
   LinearProgress,
+  Chip,
+  Checkbox,
+  FormControlLabel,
   alpha,
   useTheme,
 } from "@mui/material";
@@ -37,6 +40,8 @@ type ItemFile = {
   updatedAt: string;
   createdBy: string | null;
   updatedBy: string | null;
+  stationTypeId: number | null;
+  isGlobal: boolean;
 };
 
 type ItemFilesPanelProps = {
@@ -51,6 +56,12 @@ type ItemFilesPanelProps = {
   maxHeight?: number | string;
   /** Tighter spacing for embedding inside dialogs. */
   compact?: boolean;
+  /**
+   * Current station's test_station_type_id. When set, the panel lists only files
+   * uploaded at this station type (+ global files) and tags new uploads with it.
+   * Omit (management view) → shows all files.
+   */
+  stationTypeId?: number | null;
 };
 
 const TEXT_EXTENSIONS = new Set([
@@ -98,6 +109,7 @@ export default function ItemFilesPanel({
   workerId: workerIdProp,
   maxHeight,
   compact = false,
+  stationTypeId = null,
 }: ItemFilesPanelProps) {
   const theme = useTheme();
   const [files, setFiles] = React.useState<ItemFile[]>([]);
@@ -105,6 +117,8 @@ export default function ItemFilesPanel({
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [dragging, setDragging] = React.useState(false);
+  // When on (station context only), new uploads are marked global (shown at all stations).
+  const [globalUpload, setGlobalUpload] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceTargetRef = React.useRef<ItemFile | null>(null);
@@ -125,7 +139,8 @@ export default function ItemFilesPanel({
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(listUrl);
+      const url = stationTypeId != null ? `${listUrl}?stationTypeId=${stationTypeId}` : listUrl;
+      const r = await fetch(url);
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j.error || "שגיאה בטעינת קבצים");
@@ -137,7 +152,7 @@ export default function ItemFilesPanel({
     } finally {
       setLoading(false);
     }
-  }, [listUrl]);
+  }, [listUrl, stationTypeId]);
 
   React.useEffect(() => {
     refresh();
@@ -161,6 +176,8 @@ export default function ItemFilesPanel({
       const fd = new FormData();
       for (const f of arr) fd.append("files", f);
       fd.append("worker_id", String(effectiveWorkerId));
+      if (stationTypeId != null) fd.append("station_type_id", String(stationTypeId));
+      if (globalUpload) fd.append("is_global", "true");
       const r = await fetch(listUrl, { method: "POST", body: fd });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
@@ -284,6 +301,14 @@ export default function ItemFilesPanel({
         />
       </Box>
 
+      {stationTypeId != null && (
+        <FormControlLabel
+          control={<Checkbox size="small" checked={globalUpload} onChange={(e) => setGlobalUpload(e.target.checked)} />}
+          label={<Typography variant="caption">קובץ גלובלי — יוצג בכל התחנות עבור פריט זה</Typography>}
+          sx={{ mb: 1, ml: 0 }}
+        />
+      )}
+
       {standalone && (
         <Box sx={{ mb: 1.5 }}>
           <WorkerPicker
@@ -376,9 +401,15 @@ export default function ItemFilesPanel({
                 </Box>
 
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={600} noWrap title={file.fileName}>
-                    {file.fileName}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={600} noWrap title={file.fileName}>
+                      {file.fileName}
+                    </Typography>
+                    {file.isGlobal && (
+                      <Chip label="גלובלי" size="small" color="primary" variant="outlined"
+                        sx={{ height: 18, fontSize: 10, flexShrink: 0, "& .MuiChip-label": { px: 0.75 } }} />
+                    )}
+                  </Box>
                   <Typography variant="caption" color="text.secondary" noWrap>
                     {formatFileSize(file.size)} • עודכן {formatDate(file.updatedAt)}
                     {file.updatedBy ? ` • עובד ${file.updatedBy}` : ""}

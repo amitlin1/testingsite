@@ -10,10 +10,11 @@ import AnalyticsIcon from "@mui/icons-material/Analytics";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import FolderCopyIcon from "@mui/icons-material/FolderCopy";
 import SettingsIcon from "@mui/icons-material/Settings";
-import Sidebar, { SIDEBAR_WIDTH } from "./navBar";
+import Sidebar, { SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "./navBar";
 
 const TOPBAR_HEIGHT = 56;
 const MOBILE_QUERY = "(max-width: 980px)";
+const COLLAPSED_STORAGE_KEY = "sidebarCollapsed";
 
 /** Page title + icon resolved from the current route, shown in the top bar. */
 function usePageMeta(pathname: string | null) {
@@ -35,8 +36,27 @@ function usePageMeta(pathname: string | null) {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isMobile = useMediaQuery(MOBILE_QUERY);
-  const [navOpen, setNavOpen] = React.useState(false);
+  const [navOpen, setNavOpen] = React.useState(false); // mobile off-canvas drawer
+  const [collapsed, setCollapsed] = React.useState(false); // desktop icon-only rail
   const { title, icon } = usePageMeta(pathname);
+
+  // Restore the desktop collapsed preference once, on mount.
+  React.useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1");
+    } catch {
+      /* localStorage unavailable (SSR/private mode) — keep default */
+    }
+  }, []);
+
+  // Persist the collapsed preference so it survives reloads.
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed]);
 
   // Never keep the drawer "open" on desktop.
   React.useEffect(() => {
@@ -48,11 +68,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setNavOpen(false);
   }, [pathname]);
 
-  const railOffset = isMobile ? 0 : SIDEBAR_WIDTH;
+  // The icon-only variant only applies on desktop; the mobile drawer is always
+  // full-width.
+  const desktopCollapsed = !isMobile && collapsed;
+  const railWidth = desktopCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
+  const railOffset = isMobile ? 0 : railWidth;
+
+  // The single toggle: opens/closes the drawer on mobile, collapses/expands the
+  // rail on desktop.
+  const handleToggle = () =>
+    isMobile ? setNavOpen((o) => !o) : setCollapsed((c) => !c);
 
   return (
     <>
-      <Sidebar isMobile={isMobile} open={navOpen} onClose={() => setNavOpen(false)} />
+      <Sidebar
+        isMobile={isMobile}
+        open={navOpen}
+        collapsed={desktopCollapsed}
+        onClose={() => setNavOpen(false)}
+        onExpand={() => setCollapsed(false)}
+        onToggle={handleToggle}
+      />
 
       {/* Dimming backdrop (mobile drawer only) */}
       {isMobile && navOpen && (
@@ -81,9 +117,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           transition: "inset-inline-start 0.2s ease",
         }}
       >
+        {/* On desktop the toggle lives inside the rail's header (replacing the brand
+            icon) in both states, so the top bar only needs the hamburger on mobile. */}
         {isMobile && (
           <IconButton
-            onClick={() => setNavOpen((o) => !o)}
+            onClick={handleToggle}
             aria-label="תפריט"
             sx={{ border: "1px solid #e0e0e0", borderRadius: "9px", width: 36, height: 36, color: "#1d1d1f" }}
           >

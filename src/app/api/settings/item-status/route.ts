@@ -33,6 +33,13 @@ export async function POST(req: Request) {
   const trimmedDesc = item_status_desc.trim();
 
   try {
+    const existing = await prisma.item_status.findFirst({
+      where: { item_status_desc: { equals: trimmedDesc, mode: "insensitive" } },
+    });
+    if (existing) {
+      return NextResponse.json({ error: "סטטוס פריט בשם זה כבר קיים במערכת" }, { status: 400 });
+    }
+
     const created = await prisma.item_status.create({
       data: { item_status_desc: trimmedDesc },
     });
@@ -42,6 +49,10 @@ export async function POST(req: Request) {
       item_status_desc: created.item_status_desc.trim(),
     });
   } catch (error: any) {
+    const msg = String(error?.message ?? "");
+    if (error?.code === "P2002" || /unique constraint/i.test(msg)) {
+      return NextResponse.json({ error: "סטטוס פריט בשם זה כבר קיים במערכת" }, { status: 400 });
+    }
     console.error("Error creating item status:", error);
     return NextResponse.json(
       { error: error.message || "Failed to create item status" },

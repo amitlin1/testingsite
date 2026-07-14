@@ -15,7 +15,8 @@ export type FileEntityType =
   | 'shipment_signature'
   | 'shipment_history_signature'
   | 'file_manager'
-  | 'item_attachment';
+  | 'item_attachment'
+  | 'reference_item_image';
 
 export interface RegisterInput {
   objectKey: string;

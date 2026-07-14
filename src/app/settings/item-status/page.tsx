@@ -1,5 +1,5 @@
 "use client";
-import { Box, GlobalStyles } from "@mui/material";
+import { Box } from "@mui/material";
 import CrudTable, { Column } from "../components/CrudTable";
 import PageHeader from "../components/PageHeader";
 
@@ -10,15 +10,7 @@ export default function ItemStatusPage() {
   ];
 
   return (
-    <>
-      <GlobalStyles
-        styles={{
-          html: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" },
-          body: { overflow: "hidden", margin: 0, padding: 0, height: "100%", width: "100%" },
-          "#__next": { height: "100%", width: "100%" }
-        }}
-      />
-      <Box sx={{
+    <Box sx={{
         display: "flex",
         flexDirection: "column",
         height: "100%",
@@ -36,7 +28,6 @@ export default function ItemStatusPage() {
             entityName="סטטוס פריט"
           />
         </Box>
-      </Box>
-    </>
+    </Box>
   );
 }

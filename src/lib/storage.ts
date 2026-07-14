@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import type { Readable } from 'stream';
-import minioClient, { BUCKET, ensureBucket } from './minio';
+import minioClient, { BUCKET, REFERENCE_BUCKET, ensureBucket } from './minio';
 
 /**
  * Storage service — the ONLY module that talks to MinIO directly.
@@ -11,7 +11,7 @@ import minioClient, { BUCKET, ensureBucket } from './minio';
  * one-file change.
  */
 
-export { BUCKET, ensureBucket };
+export { BUCKET, REFERENCE_BUCKET, ensureBucket };
 
 export interface StoredObject {
   /** Full object key inside the bucket, e.g. "shipments/12/recv_169..._42.png" */
@@ -35,10 +35,11 @@ export async function putObject(
   buffer: Buffer,
   contentType = 'application/octet-stream',
   metadata: Record<string, string> = {},
+  bucket: string = BUCKET,
 ): Promise<StoredObject> {
-  await ensureBucket();
+  await ensureBucket(bucket);
   const checksum = sha256(buffer);
-  const result = await minioClient.putObject(BUCKET, key, buffer, buffer.length, {
+  const result = await minioClient.putObject(bucket, key, buffer, buffer.length, {
     'Content-Type': contentType,
     'x-amz-meta-uploaded-at': new Date().toISOString(),
     'x-amz-meta-sha256': checksum,
@@ -54,48 +55,48 @@ export async function putObject(
 }
 
 /** Return the raw Node stream for an object (caller is responsible for piping). */
-export async function getObjectStream(key: string): Promise<Readable> {
-  await ensureBucket();
-  return minioClient.getObject(BUCKET, key);
+export async function getObjectStream(key: string, bucket: string = BUCKET): Promise<Readable> {
+  await ensureBucket(bucket);
+  return minioClient.getObject(bucket, key);
 }
 
 /** Stat an object; returns null if it does not exist. */
-export async function statObject(key: string) {
-  await ensureBucket();
+export async function statObject(key: string, bucket: string = BUCKET) {
+  await ensureBucket(bucket);
   try {
-    return await minioClient.statObject(BUCKET, key);
+    return await minioClient.statObject(bucket, key);
   } catch {
     return null;
   }
 }
 
-export async function objectExists(key: string): Promise<boolean> {
-  return (await statObject(key)) !== null;
+export async function objectExists(key: string, bucket: string = BUCKET): Promise<boolean> {
+  return (await statObject(key, bucket)) !== null;
 }
 
-export async function removeObject(key: string): Promise<void> {
-  await ensureBucket();
-  await minioClient.removeObject(BUCKET, key);
+export async function removeObject(key: string, bucket: string = BUCKET): Promise<void> {
+  await ensureBucket(bucket);
+  await minioClient.removeObject(bucket, key);
 }
 
-export async function removeObjects(keys: string[]): Promise<void> {
+export async function removeObjects(keys: string[], bucket: string = BUCKET): Promise<void> {
   if (keys.length === 0) return;
-  await ensureBucket();
-  await minioClient.removeObjects(BUCKET, keys);
+  await ensureBucket(bucket);
+  await minioClient.removeObjects(bucket, keys);
 }
 
-export async function copyObject(srcKey: string, destKey: string): Promise<void> {
-  await ensureBucket();
-  await minioClient.copyObject(BUCKET, destKey, `/${BUCKET}/${srcKey}`);
+export async function copyObject(srcKey: string, destKey: string, bucket: string = BUCKET): Promise<void> {
+  await ensureBucket(bucket);
+  await minioClient.copyObject(bucket, destKey, `/${bucket}/${srcKey}`);
 }
 
 /** List object keys under a prefix. recursive=false returns one folder level. */
-export async function listKeys(prefix: string, recursive = true): Promise<string[]> {
-  await ensureBucket();
+export async function listKeys(prefix: string, recursive = true, bucket: string = BUCKET): Promise<string[]> {
+  await ensureBucket(bucket);
   return new Promise<string[]>((resolve, reject) => {
     const keys: string[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stream = minioClient.listObjectsV2(BUCKET, prefix, recursive) as any;
+    const stream = minioClient.listObjectsV2(bucket, prefix, recursive) as any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     stream.on('data', (obj: any) => {
       if (obj.name) keys.push(obj.name as string);
@@ -106,9 +107,9 @@ export async function listKeys(prefix: string, recursive = true): Promise<string
 }
 
 /** Delete every object under a prefix (e.g. all files for a shipment). */
-export async function removePrefix(prefix: string): Promise<number> {
-  const keys = await listKeys(prefix, true);
-  await removeObjects(keys);
+export async function removePrefix(prefix: string, bucket: string = BUCKET): Promise<number> {
+  const keys = await listKeys(prefix, true, bucket);
+  await removeObjects(keys, bucket);
   return keys.length;
 }
 

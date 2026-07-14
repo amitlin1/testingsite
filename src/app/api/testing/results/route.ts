@@ -24,6 +24,10 @@ type TestResultRequest = {
   // Required for finished_item insert (when isLastStep)
   ItemTypeId: number;
   CreatedAt: string;
+  // Overall pass/fail + station-type-specific structured payload (e.g. intake wizard).
+  // Optional so the plain report dialog (which sends only Result) keeps working.
+  Passed?: boolean;
+  Details?: unknown;
 };
 
 export async function POST(req: Request) {
@@ -32,10 +36,6 @@ export async function POST(req: Request) {
     const {
       ItemID,
       StationID,
-      CurrentRouteStep,
-      RouteStepsLength,
-      QueueStartTime,
-      ProcessingStartTime,
       Result,
       Comments,
       WorkerID,
@@ -44,11 +44,38 @@ export async function POST(req: Request) {
       finishRoute,
       SentAt,
       ReturnAt,
-      ItemTypeId,
-      CreatedAt,
+      Passed,
+      Details,
     } = body;
+    // Route/timing fields may be omitted (e.g. the intake wizard submitting one
+    // result per accessory, where the client doesn't hold each child's route data).
+    // Resolve any missing ones from the DB before validating.
+    let { CurrentRouteStep, RouteStepsLength, QueueStartTime, ProcessingStartTime, ItemTypeId, CreatedAt } = body;
 
-    if (!ItemID || !StationID || Result === undefined || CurrentRouteStep === undefined || !QueueStartTime || RouteStepsLength === undefined || RouteStepsLength <= 0) {
+    if (!ItemID || !StationID) {
+      return NextResponse.json({ error: "ItemID and StationID are required" }, { status: 400 });
+    }
+
+    if (CurrentRouteStep === undefined || RouteStepsLength === undefined || !QueueStartTime || !ItemTypeId || !CreatedAt) {
+      const infoRows = await prisma.$queryRaw<any[]>`
+        SELECT ir.current_route_step, ir.queue_start_time, ir.processing_start_time, ir.item_type_id, ir.created_at,
+               COALESCE(array_length(tr.route_steps, 1), 0) AS route_len
+        FROM item_routes ir
+        LEFT JOIN testing_routes tr ON tr.item_type_id = ir.item_type_id AND tr.route_number = ir.route_number
+        WHERE ir.item_id = ${BigInt(ItemID)}
+      `;
+      const info = infoRows[0];
+      if (info) {
+        if (CurrentRouteStep === undefined) CurrentRouteStep = info.current_route_step;
+        if (RouteStepsLength === undefined) RouteStepsLength = Number(info.route_len) || 0;
+        if (!QueueStartTime && info.queue_start_time) QueueStartTime = new Date(info.queue_start_time).toISOString();
+        if (ProcessingStartTime === undefined) ProcessingStartTime = info.processing_start_time ? new Date(info.processing_start_time).toISOString() : null;
+        if (!ItemTypeId) ItemTypeId = info.item_type_id;
+        if (!CreatedAt && info.created_at) CreatedAt = new Date(info.created_at).toISOString();
+      }
+    }
+
+    if (Result === undefined || CurrentRouteStep === undefined || !QueueStartTime || RouteStepsLength === undefined || RouteStepsLength <= 0) {
       return NextResponse.json(
         { error: "ItemID, StationID, CurrentRouteStep, RouteStepsLength (must be > 0), QueueStartTime, and Result are required" },
         { status: 400 }
@@ -255,6 +282,25 @@ export async function POST(req: Request) {
         `;
         researchId = researchRows[0]?.research_id || null;
       }
+
+      // Persist the actual test result for THIS item (parent or accessory —
+      // each is its own routed item). Additive: item_route_history keeps the
+      // route/timing log; this row holds the result value + structured details.
+      const stationTypeRows = await tx.$queryRaw<any[]>`
+        SELECT test_station_type_id FROM test_stations WHERE test_station_id = ${StationID}
+      `;
+      const testStationTypeId = stationTypeRows[0]?.test_station_type_id ?? null;
+      await tx.$executeRaw`
+        INSERT INTO test_results (
+          item_id, test_station_id, test_station_type_id, route_number, route_step,
+          worker_id, passed, result, comments, details
+        )
+        VALUES (
+          ${itemIdBig}, ${StationID}, ${testStationTypeId}, ${routeNumber}, ${CurrentRouteStep},
+          ${WorkerID || null}, ${Passed ?? null}, ${Result}, ${Comments || null},
+          ${Details != null ? JSON.stringify(Details) : null}::jsonb
+        )
+      `;
 
       // Update test_stations status to 2 (Available/Waiting)
       await tx.test_stations.update({

@@ -45,7 +45,7 @@ async function ensureItemExists(itemId: bigint): Promise<boolean> {
 
 // GET /api/items/[id]/files — list active attachments
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -54,6 +54,12 @@ export async function GET(
     if (!(await ensureItemExists(itemId))) {
       return NextResponse.json({ error: 'הפריט לא נמצא' }, { status: 404 });
     }
+
+    // Optional station scope: when provided, return only files uploaded at this
+    // station type, plus files marked global. Omit it (management view) → all files.
+    const stationTypeParam = new URL(request.url).searchParams.get('stationTypeId');
+    const stationTypeId =
+      stationTypeParam != null && stationTypeParam !== '' ? Number(stationTypeParam) : null;
 
     const rows = await prisma.file_objects.findMany({
       where: {
@@ -64,16 +70,28 @@ export async function GET(
       orderBy: { created_at: 'desc' },
     });
 
-    const files = rows.map((r) => ({
-      objectKey: r.object_key,
-      fileName: r.file_name,
-      contentType: r.content_type,
-      size: Number(r.size_bytes),
-      createdAt: r.created_at.toISOString(),
-      updatedAt: r.updated_at.toISOString(),
-      createdBy: r.created_by,
-      updatedBy: r.updated_by,
-    }));
+    let files = rows.map((r) => {
+      const meta = (r.metadata ?? {}) as { stationTypeId?: number | null; isGlobal?: boolean };
+      return {
+        objectKey: r.object_key,
+        fileName: r.file_name,
+        contentType: r.content_type,
+        size: Number(r.size_bytes),
+        createdAt: r.created_at.toISOString(),
+        updatedAt: r.updated_at.toISOString(),
+        createdBy: r.created_by,
+        updatedBy: r.updated_by,
+        stationTypeId: meta.stationTypeId ?? null,
+        isGlobal: !!meta.isGlobal,
+      };
+    });
+
+    if (stationTypeId != null) {
+      // Strict scoping: a station shows only files tagged to its type, plus files
+      // explicitly marked global. Untagged files (incl. legacy) show only in the
+      // unfiltered management view.
+      files = files.filter((f) => f.isGlobal || f.stationTypeId === stationTypeId);
+    }
 
     return NextResponse.json({ files });
   } catch (error) {
@@ -97,6 +115,12 @@ export async function POST(
     const formData = await request.formData();
     const workerIdRaw = formData.get('worker_id');
     const workerId = workerIdRaw ? String(workerIdRaw) : null;
+    // Station scope of this upload: the test_station_type_id it was taken at, and
+    // whether it's a global file (visible across all stations for the item).
+    const stationTypeRaw = formData.get('station_type_id');
+    const stationTypeId =
+      stationTypeRaw != null && String(stationTypeRaw) !== '' ? Number(stationTypeRaw) : null;
+    const isGlobal = String(formData.get('is_global') ?? '') === 'true';
     const files = formData.getAll('files') as File[];
 
     if (files.length === 0) {
@@ -129,7 +153,7 @@ export async function POST(
         checksum: stored.checksum,
         entityType: 'item_attachment',
         entityId: id,
-        metadata: { originalName: file.name },
+        metadata: { originalName: file.name, stationTypeId, isGlobal },
         createdBy: workerId,
         updatedBy: workerId,
       });

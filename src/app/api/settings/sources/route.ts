@@ -33,6 +33,13 @@ export async function POST(req: Request) {
   const trimmedDesc = source_desc.trim();
 
   try {
+    const existing = await prisma.sources.findFirst({
+      where: { source_desc: { equals: trimmedDesc, mode: "insensitive" } },
+    });
+    if (existing) {
+      return NextResponse.json({ error: "מקור בשם זה כבר קיים במערכת" }, { status: 400 });
+    }
+
     const created = await prisma.sources.create({
       data: { source_desc: trimmedDesc },
     });
@@ -42,6 +49,10 @@ export async function POST(req: Request) {
       source_desc: created.source_desc.trim(),
     });
   } catch (error: any) {
+    const msg = String(error?.message ?? "");
+    if (error?.code === "P2002" || /unique constraint/i.test(msg)) {
+      return NextResponse.json({ error: "מקור בשם זה כבר קיים במערכת" }, { status: 400 });
+    }
     console.error("Error creating source:", error);
     return NextResponse.json(
       { error: error.message || "Failed to create source" },

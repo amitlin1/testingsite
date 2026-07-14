@@ -61,6 +61,16 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
       return;
     }
 
+    // Validate the id when editing (it may be changed by the user).
+    if (editingRow) {
+      const idStr = `${formData.test_station_type_id ?? ""}`.trim();
+      const idNum = parseInt(idStr, 10);
+      if (!idStr || !Number.isInteger(idNum) || idNum <= 0) {
+        setSnackbar({ open: true, message: "מזהה חייב להיות מספר שלם חיובי", severity: "error" });
+        return;
+      }
+    }
+
     setSaveLoading(true);
     try {
       const method = editingRow ? "PUT" : "POST";
@@ -72,12 +82,16 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         body: JSON.stringify(formData),
       });
 
-      if (!res.ok) throw new Error("Failed to save");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error || "Failed to save");
+      }
       const savedRow = await res.json();
 
       if (editingRow && savedRow) {
-        setRows(rows.map(r => r.test_station_type_id === savedRow.test_station_type_id ? savedRow : r));
-        if (selectedId === savedRow.test_station_type_id) {
+        // The id may have changed, so match on the row being edited, not the saved id.
+        setRows(rows.map(r => r.test_station_type_id === editingRow.test_station_type_id ? savedRow : r));
+        if (selectedId === editingRow.test_station_type_id) {
           onSelect(savedRow.test_station_type_id, savedRow.test_type_desc);
         }
       } else {
@@ -85,8 +99,8 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
       }
       setOpenDialog(false);
       setSnackbar({ open: true, message: "נשמר בהצלחה", severity: "success" });
-    } catch (err) {
-      setSnackbar({ open: true, message: "שגיאה בשמירה", severity: "error" });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || "שגיאה בשמירה", severity: "error" });
     } finally {
       setSaveLoading(false);
     }
@@ -145,13 +159,14 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
+              <TableCell align="center" width={70} sx={{ fontWeight: "bold", bgcolor: "#f5f5f5" }}>מזהה</TableCell>
               <TableCell align="right" sx={{ fontWeight: "bold", bgcolor: "#f5f5f5" }}>תיאור</TableCell>
               <TableCell align="center" width={80} sx={{ fontWeight: "bold", bgcolor: "#f5f5f5" }}>פעולות</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={2} align="center"><CircularProgress size={20} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={3} align="center"><CircularProgress size={20} /></TableCell></TableRow>
             ) : filteredRows.map(row => (
               <TableRow
                 key={row.test_station_type_id}
@@ -160,6 +175,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                 onClick={() => onSelect(row.test_station_type_id, row.test_type_desc)}
                 sx={{ cursor: "pointer" }}
               >
+                <TableCell align="center">{row.test_station_type_id}</TableCell>
                 <TableCell align="right">{row.test_type_desc}</TableCell>
                 <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                   <Box sx={{ display: "flex" }}>
@@ -184,6 +200,17 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth dir="rtl">
         <DialogTitle>{editingRow ? "ערוך סוג" : "הוסף סוג"}</DialogTitle>
         <DialogContent>
+          {editingRow && (
+            <TextField
+              margin="dense"
+              label="מזהה (ID)"
+              type="number"
+              fullWidth
+              value={formData.test_station_type_id ?? ""}
+              onChange={(e) => setFormData({ ...formData, test_station_type_id: e.target.value })}
+              helperText="שינוי המזהה יעדכן גם את כל העמדות והמסלולים המשויכים"
+            />
+          )}
           <TextField
             autoFocus
             margin="dense"

@@ -6,6 +6,11 @@ export type ItemRow = {
   current_status: number | null;
   item_status_desc: string | null;
   current_route_step: number | null;
+  processing_start_time: string | null;
+  queue_start_time: string | null;
+  route_steps: number[] | null;
+  route_number: number | null;
+  has_children: boolean | null;
   test_station_id: number | null;
   test_station_desc: string | null;
   created_at: string | null;
@@ -108,3 +113,34 @@ export type Worker = {
   worker_name: string;
   stokekeeper?: boolean;
 };
+/** Payload a test/finish dialog reports back to the page on submit. */
+export type TestResultData = {
+  Result: number;
+  Comments?: string;
+  WorkerID?: number;
+  sendToResearch?: boolean;
+  returnToRoute?: boolean; // החזר למסלול (5→2)
+  finishRoute?: boolean; // סיים מסלול (5→3)
+  SentAt?: string;
+  ReturnAt?: string;
+  Passed?: boolean; // overall pass/fail (station-type dialogs like the intake wizard)
+  Details?: unknown; // station-type-specific structured payload → test_results.details
+};
+
+export interface StationTestDialogProps {
+  open: boolean;
+  onClose: () => void;
+  item: ItemRow;
+  station: TestStation;
+  workerId: number | null;
+  workerName: string;
+  /** Called with the test result — the page persists it and drives the follow-up dialogs. */
+  onSubmit: (data: TestResultData) => Promise<void>;
+}
+export interface TestStationType {
+  id: number;
+  name: string;
+}
+
+/** Lightweight station used by the testing dock's all-stations picker (from /api/stations). */
+export type StationLite = { id: number; name: string; typeId: number };

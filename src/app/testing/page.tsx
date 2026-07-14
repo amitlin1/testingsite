@@ -27,7 +27,7 @@ import {
   DialogContent,
   DialogActions,
 } from "@mui/material";
-
+import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
 // Icons
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
@@ -46,48 +46,11 @@ import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import CloseIcon from "@mui/icons-material/Close";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 // MoreVertIcon removed
-
-import PopUpTestDialog from "../components/PopUpTestDialog";
+import { getStartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
 import StationHistoryDialog from "../components/StationHistoryDialog";
-import TestingDock, { type StationLite } from "../components/testing/TestingDock";
+import TestingDock from "../components/testing/TestingDock";
 
-export interface TestStationTypeOption {
-  id: number;
-  name: string;
-}
-export interface TestStationOption {
-  id: number;
-  name: string;
-  typeId: number;
-  status: number;
-  isResearch: boolean;
-}
-
-type Item = {
-  itemId: number;
-  itemTypeId: number;
-  serialNo: number;
-  makat: number;
-  model: string;
-  manufacturerName: string;
-  manufacturerNo: number;
-  currentStatus: number; // 1=InTest, 2=InQueue, 3=Finished, 4=WaitingResearch, 5=InResearch
-  currentRouteStep: number;
-  createdAt: string;
-  processingStartTime: string | null;
-  qStartTime: string | null;
-  finishedAt: string | null;
-  isFinished: boolean;
-  itemStatusDesc: string | null;
-  itemTypeDesc: string | null;
-  routeSteps: number[] | null;
-  routeNumber: number;
-  customerCode: string | null;
-  parentItemId?: number | null;
-  hasChildren?: boolean;
-  connectedItems?: { itemId: number; serialNo: string | null }[] | null;
-  total_steps?: number; // Added if available from API, otherwise we might not show progress bar correctly
-};
+// Item / station types now live in src/types (ItemRow, TestStation, TestStationType, StationLite).
 
 // Custom hook for live elapsed time display
 function useElapsedTime(createdAt: string | null | undefined): string {
@@ -133,25 +96,27 @@ function ItemCard({
   onRefresh,
   index,
   highlighted = false,
+  hasWizard = false,
 }: {
-  item: Item;
-  onAddTestResult: (item: Item) => void;
+  item: ItemRow;
+  onAddTestResult: (item: ItemRow) => void;
   onStartTest: (itemId: number) => Promise<void>;
   onRefresh: () => void;
   index: number;
   highlighted?: boolean;
+  hasWizard?: boolean;
 }) {
   const theme = useTheme();
   const baseTimeString =
-    item.currentStatus === 1 || item.currentStatus === 5
-      ? item.processingStartTime
-      : item.currentStatus === 2 || item.currentStatus === 4
-        ? item.qStartTime
+    item.current_status === 1 || item.current_status === 5
+      ? item.processing_start_time
+      : item.current_status === 2 || item.current_status === 4
+        ? item.queue_start_time
         : null;
 
   const elapsedTime = useElapsedTime(baseTimeString);
-  const isInTest = item.currentStatus === 1 || item.currentStatus === 5;
-  const isWaiting = item.currentStatus === 2 || item.currentStatus === 4;
+  const isInTest = item.current_status === 1 || item.current_status === 5;
+  const isWaiting = item.current_status === 2 || item.current_status === 4;
 
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -161,6 +126,9 @@ function ItemCard({
   const handleMenuClose = () => {
     setAnchorEl(null);
   };
+
+  
+
 
   // Status Colors
   const statusColor = isWaiting ? "#ff9800" : isInTest ? "#2196f3" : "#4caf50";
@@ -205,7 +173,7 @@ function ItemCard({
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                <Box>
                     <Typography variant="h5" fontWeight="800" color="text.primary" sx={{ letterSpacing: "-0.5px" }}>
-                        #{item.itemId}
+                        #{item.item_id}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" fontWeight="500">
                         {item.model}
@@ -213,7 +181,7 @@ function ItemCard({
                </Box>
                
                <Chip
-                 label={item.itemStatusDesc || "סטטוס לא ידוע"}
+                 label={item.item_status_desc || "סטטוס לא ידוע"}
                  size="small"
                  sx={{
                      bgcolor: statusBg,
@@ -234,7 +202,7 @@ function ItemCard({
                  <Grid size={{ xs: 6 }}>
                       <Stack spacing={0.5}>
                           <Typography variant="caption" color="text.secondary">סריאלי</Typography>
-                          <Typography variant="body2" fontWeight="600">{item.serialNo}</Typography>
+                          <Typography variant="body2" fontWeight="600">{item.serial_no}</Typography>
                       </Stack>
                  </Grid>
                  <Grid size={{ xs: 6 }}>
@@ -246,7 +214,7 @@ function ItemCard({
                  <Grid size={{ xs: 6 }}>
                       <Stack spacing={0.5}>
                           <Typography variant="caption" color="text.secondary">לקוח</Typography>
-                          <Typography variant="body2" fontWeight="600">{item.customerCode || "-"}</Typography>
+                          <Typography variant="body2" fontWeight="600">{item.customer_code || "-"}</Typography>
                       </Stack>
                  </Grid>
                  <Grid size={{ xs: 6 }}>
@@ -254,7 +222,7 @@ function ItemCard({
                           <Typography variant="caption" color="text.secondary">שלב נוכחי</Typography>
                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                 <SpeedIcon sx={{ fontSize: 18, color: "primary.main" }} />
-                                <Typography variant="body2" fontWeight="700" color="text.primary">{item.currentRouteStep}</Typography>
+                                <Typography variant="body2" fontWeight="700" color="text.primary">{item.current_route_step}</Typography>
                            </Box>
                       </Stack>
                  </Grid>
@@ -271,7 +239,7 @@ function ItemCard({
                     </Box>
                 )}
 
-                {(item.parentItemId || item.hasChildren) && (
+                {(item.parent_item_id || item.has_children) && (
                     <Button
                         variant="outlined"
                         color="secondary"
@@ -308,14 +276,14 @@ function ItemCard({
                           }
                       }}
                  >
-                    {item.connectedItems && item.connectedItems.length > 0 ? (
-                        item.connectedItems.map((conn) => (
-                          <MenuItem key={conn.itemId} onClick={handleMenuClose} dense>
+                    {item.connected_items && item.connected_items.length > 0 ? (
+                        item.connected_items.map((conn) => (
+                          <MenuItem key={conn.item_id} onClick={handleMenuClose} dense>
                              <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", gap: 1 }}>
                                 <QrCodeIcon fontSize="small" color="action" />
                                 <Box>
-                                    <Typography variant="subtitle2">#{conn.itemId}</Typography>
-                                    <Typography variant="caption" color="text.secondary">S/N: {conn.serialNo || '-'}</Typography>
+                                    <Typography variant="subtitle2">#{conn.item_id}</Typography>
+                                    <Typography variant="caption" color="text.secondary">S/N: {conn.serial_no || '-'}</Typography>
                                 </Box>
                              </Stack>
                           </MenuItem>
@@ -335,8 +303,13 @@ function ItemCard({
                 fullWidth
                 onClick={async () => {
                   if (isWaiting) {
-                    await onStartTest(item.itemId);
-                    onRefresh();
+                    if (hasWizard) {
+                      // Station-type wizard runs the intake in place of the plain start.
+                      onAddTestResult(item);
+                    } else {
+                      await onStartTest(item.item_id);
+                      onRefresh();
+                    }
                   } else if (isInTest) {
                     onAddTestResult(item);
                   }
@@ -351,7 +324,7 @@ function ItemCard({
                 }}
                 endIcon={isWaiting ? <PlayArrowRoundedIcon /> : <CheckCircleOutlineIcon />}
             >
-              {isWaiting ? (item.currentStatus === 4 ? "התחל מחקר" : "התחל בדיקה") : "סיום ודיווח"}
+              {isWaiting ? (item.current_status === 4 ? "התחל מחקר" : "התחל בדיקה") : "סיום ודיווח"}
             </Button>
         </CardContent>
       </Card>
@@ -361,16 +334,16 @@ function ItemCard({
 
 // --- Main Page Component ---
 export default function TestingPage() {
-  const [stationTypes, setStationTypes] = React.useState<TestStationTypeOption[]>([]);
-  const [selectedStationType, setSelectedStationType] = React.useState<TestStationTypeOption | null>(null);
-  const [stations, setStations] = React.useState<TestStationOption[]>([]);
-  const [selectedStation, setSelectedStation] = React.useState<TestStationOption | null>(null);
-  const [items, setItems] = React.useState<Item[]>([]);
+  const [stationTypes, setStationTypes] = React.useState<TestStationType[]>([]);
+  const [selectedStationType, setSelectedStationType] = React.useState<TestStationType | null>(null);
+  const [stations, setStations] = React.useState<TestStation[]>([]);
+  const [selectedStation, setSelectedStation] = React.useState<TestStation | null>(null);
+  const [items, setItems] = React.useState<ItemRow[]>([]);
   const [stationTypesLoading, setStationTypesLoading] = React.useState(false);
   const [stationsLoading, setStationsLoading] = React.useState(false);
   const [itemsLoading, setItemsLoading] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [selectedItem, setSelectedItem] = React.useState<Item | null>(null);
+  const [selectedItem, setSelectedItem] = React.useState<ItemRow | null>(null);
   const [historyDialogOpen, setHistoryDialogOpen] = React.useState(false);
   const [nextStationDialogOpen, setNextStationDialogOpen] = React.useState(false);
   const [nextStationInfo, setNextStationInfo] = React.useState<{
@@ -471,20 +444,20 @@ export default function TestingPage() {
   const scanTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   // When a scan flow changes stationType, we hold the pending station here so the
   // stationType effect doesn't blow it away with setSelectedStation(null).
-  const pendingScanStationRef = React.useRef<TestStationOption | null>(null);
+  const pendingScanStationRef = React.useRef<TestStation | null>(null);
 
   const filteredItems = React.useMemo(() => {
     const base = filterMakat
       ? items.filter((item) =>
           item.makat?.toString().includes(filterMakat) ||
-          item.serialNo?.toString().includes(filterMakat) ||
-          item.itemId?.toString().includes(filterMakat)
+          item.serial_no?.toString().includes(filterMakat) ||
+          item.item_id?.toString().includes(filterMakat)
         )
       : items;
 
     // Hoist the scanned item to the front of the list (if present).
     if (highlightedItemId == null) return base;
-    const idx = base.findIndex((it) => Number(it.itemId) === Number(highlightedItemId));
+    const idx = base.findIndex((it) => Number(it.item_id) === Number(highlightedItemId));
     if (idx <= 0) return base;
     return [base[idx], ...base.slice(0, idx), ...base.slice(idx + 1)];
   }, [items, filterMakat, highlightedItemId]);
@@ -520,13 +493,13 @@ export default function TestingPage() {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         if (!cancelled) {
-          const list: TestStationOption[] = Array.isArray(data) ? data : [];
+          const list: TestStation[] = Array.isArray(data) ? data : [];
           setStations(list);
           // If a scan flow staged a target station for this type, honor it
           // instead of clearing the selection (avoids a flicker / lost selection).
           const pending = pendingScanStationRef.current;
-          if (pending && list.some((s) => s.id === pending.id)) {
-            const fresh = list.find((s) => s.id === pending.id)!;
+          if (pending && list.some((s) => s.test_station_id === pending.test_station_id)) {
+            const fresh = list.find((s) => s.test_station_id === pending.test_station_id)!;
             pendingScanStationRef.current = null;
             setSelectedStation(fresh);
           } else {
@@ -549,7 +522,7 @@ export default function TestingPage() {
     (async () => {
       setItemsLoading(true);
       try {
-        const res = await fetch(`/api/testing/items?stationId=${selectedStation.id}`);
+        const res = await fetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         if (!cancelled) setItems(Array.isArray(data) ? data : []);
@@ -562,7 +535,7 @@ export default function TestingPage() {
     return () => { cancelled = true; };
   }, [selectedStation]);
 
-  const handleAddTestResult = (item: Item) => {
+  const handleAddTestResult = (item: ItemRow) => {
     setSelectedItem(item);
     setDialogOpen(true);
   };
@@ -605,7 +578,7 @@ export default function TestingPage() {
 
       if (selectedStationType?.id === typeOption.id) {
         // Same type already selected: find the station in the loaded list and switch directly.
-        const stationOption = stations.find((s) => s.id === data.stationId);
+        const stationOption = stations.find((s) => s.test_station_id === data.stationId);
         if (!stationOption) {
           setScanError("העמדה של הפריט לא נמצאה ברשימה הטעונה");
           return;
@@ -614,11 +587,11 @@ export default function TestingPage() {
       } else {
         // Stage the target station and let the stationType effect adopt it once stations load.
         pendingScanStationRef.current = {
-          id: data.stationId,
-          name: "",
-          typeId: data.stationTypeId,
+          test_station_id: data.stationId,
+          test_station_desc: "",
+          test_station_type_id: data.stationTypeId,
           status: 0,
-          isResearch: false,
+          is_research: false,
         };
         setSelectedStationType(typeOption);
       }
@@ -640,7 +613,7 @@ export default function TestingPage() {
       const response = await fetch("/api/testing/start-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, stationId: selectedStation.id }),
+        body: JSON.stringify({ itemId, stationId: selectedStation.test_station_id }),
       });
       if (!response.ok) {
         const error = await response.json();
@@ -656,7 +629,7 @@ export default function TestingPage() {
     if (!selectedStation) return;
     setItemsLoading(true);
     try {
-      const res = await fetch(`/api/testing/items?stationId=${selectedStation.id}`);
+      const res = await fetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
@@ -670,21 +643,21 @@ export default function TestingPage() {
 
   const handleSubmitTestResult = async (testData: Record<string, any>) => {
     if (!selectedItem || !selectedStation) return;
-    const routeStepsLength = selectedItem.routeSteps?.length || 0;
+    const routeStepsLength = selectedItem.route_steps?.length || 0;
     if (routeStepsLength === 0) throw new Error("Route steps information is missing.");
 
     const response = await fetch("/api/testing/results", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ItemID: selectedItem.itemId,
-        StationID: selectedStation.id,
-        CurrentRouteStep: selectedItem.currentRouteStep,
+        ItemID: selectedItem.item_id,
+        StationID: selectedStation.test_station_id,
+        CurrentRouteStep: selectedItem.current_route_step,
         RouteStepsLength: routeStepsLength,
-        QueueStartTime: selectedItem.createdAt,
-        ProcessingStartTime: selectedItem.processingStartTime,
-        ItemTypeId: selectedItem.itemTypeId,
-        CreatedAt: selectedItem.createdAt,
+        QueueStartTime: selectedItem.created_at,
+        ProcessingStartTime: selectedItem.processing_start_time,
+        ItemTypeId: selectedItem.item_type_id,
+        CreatedAt: selectedItem.created_at,
         ...testData,
       }),
     });
@@ -705,14 +678,14 @@ export default function TestingPage() {
       setResearchDialogOpen(true);
     } else {
       // Check if this was a finishRoute action from research station
-      const isResearchStatus = selectedItem.currentStatus === 5;
+      const is_researchStatus = selectedItem.current_status === 5;
       const isFinishRoute = testData.finishRoute === true;
-      
+
       setNextStationInfo({
         isLastStation: result.isLastStation || false,
         nextStation: result.nextStation || undefined,
-        finishedFromResearch: isResearchStatus && isFinishRoute,
-        finishedAtStep: selectedItem.currentRouteStep,
+        finishedFromResearch: is_researchStatus && isFinishRoute,
+        finishedAtStep: selectedItem.current_route_step ?? undefined,
       });
       setNextStationDialogOpen(true);
     }
@@ -727,9 +700,9 @@ export default function TestingPage() {
     setFilterMakat("");
     const typeOption = stationTypes.find((t) => t.id === station.typeId);
     if (!typeOption) return;
-    const synthetic: TestStationOption = { id: station.id, name: station.name, typeId: station.typeId, status: 0, isResearch: false };
+    const synthetic: TestStation = { test_station_id: station.id, test_station_desc: station.name, test_station_type_id: station.typeId, status: 0, is_research: false };
     if (selectedStationType?.id === typeOption.id) {
-      const found = stations.find((s) => s.id === station.id);
+  const found = stations.find((s) => s. test_station_id=== station.id);
       setSelectedStation(found ?? synthetic);
     } else {
       pendingScanStationRef.current = synthetic;
@@ -756,12 +729,12 @@ export default function TestingPage() {
         {/* Auto-hiding context dock (station + worker + scan) */}
         <TestingDock
           hasStation={!!selectedStation}
-          stationName={selectedStation?.name ?? null}
+          stationName={selectedStation?.test_station_desc ?? null}
           stationTypeName={selectedStationType?.name ?? null}
           itemCount={filteredItems.length}
           allStations={allStations}
           typeNameById={typeNameById}
-          selectedStationId={selectedStation?.id ?? null}
+          selectedStationId={selectedStation?.test_station_id ?? null}
           onPickStation={handlePickAllStation}
           activeWorkerId={activeWorkerId}
           activeWorkerName={activeWorkerName}
@@ -794,7 +767,7 @@ export default function TestingPage() {
                              <Stack direction="row" alignItems="center" spacing={4}>
                                  <PrecisionManufacturingIcon color="primary" />
                                  <Typography variant="h6" fontWeight="700">
-                                     {selectedStation.name}
+                                     {selectedStation.test_station_desc}
                                  </Typography>
                                  <Chip 
                                     label={`${filteredItems.length} פריטים`} 
@@ -855,13 +828,14 @@ export default function TestingPage() {
                             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(258px, 1fr))", gap: "14px", pb: 4 }}>
                                 {filteredItems.map((item, index) => (
                                     <ItemCard
-                                        key={`${item.itemId}-${index}`}
+                                        key={`${item.item_id}-${index}`}
                                         item={item}
                                         onAddTestResult={handleAddTestResult}
                                         onStartTest={handleStartTest}
                                         onRefresh={handleRefreshItems}
                                         index={index}
-                                        highlighted={highlightedItemId != null && Number(item.itemId) === Number(highlightedItemId)}
+                                        highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
+                                        hasWizard={selectedStationType != null && hasStartTestDialog(selectedStationType.id)}
                                     />
                                 ))}
                             </Box>
@@ -887,25 +861,30 @@ export default function TestingPage() {
             )}
         </Container>
 
-        {/* Dialogs */}
-        <PopUpTestDialog
-           open={dialogOpen}
-           onClose={() => setDialogOpen(false)}
-           itemId={selectedItem?.itemId || 0}
-           stationId={selectedStation?.id || 0}
-           itemName={selectedItem?.model}
-           currentStatus={selectedItem?.currentStatus}
-           workerId={activeWorkerId}
-           workerName={activeWorkerName}
-           onSubmit={handleSubmitTestResult}
-        />
+        {/* Dialogs — the per-type finish/report dialog, resolved from the registry. */}
+        {(() => {
+  if (!dialogOpen || !selectedItem || !selectedStation || !selectedStationType) return null;
+  const StartDialog = getStartTestDialog(selectedStationType.id);   // ← השליפה מה-REGISTRY
+  return (
+    <StartDialog
+      open={dialogOpen}
+      onClose={() => setDialogOpen(false)}
+      item={selectedItem}
+      station={selectedStation}
+      workerId={activeWorkerId}
+      workerName={activeWorkerName}
+      onSubmit={handleSubmitTestResult}
+    />
+  );
+})()}
+
 
         {selectedStation && (
             <StationHistoryDialog
                 open={historyDialogOpen}
                 onClose={() => setHistoryDialogOpen(false)}
-                stationId={selectedStation.id}
-                stationName={selectedStation.name}
+                stationId={selectedStation.test_station_id}
+                stationName={selectedStation.test_station_desc}
             />
         )}
 

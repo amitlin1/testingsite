@@ -24,7 +24,17 @@ function createMinioClient(): Client {
   });
 }
 
+/** Default bucket — used by signatures and the file manager. */
 export const BUCKET = process.env.MINIO_BUCKET || 'digitalfactory-files';
+
+/**
+ * Dedicated bucket for reference-item images (the "RU" bucket the user asked
+ * for). MinIO/S3 bucket names must be lowercase and 3–63 chars, so the literal
+ * "RU" is invalid; we use a valid, descriptive name. Same storage procedure as
+ * the default bucket — only the target bucket differs.
+ */
+export const REFERENCE_BUCKET =
+  process.env.MINIO_REFERENCE_BUCKET || 'ru-reference-items';
 
 const globalForMinio = globalThis as unknown as { _minioClient?: Client };
 export const minioClient: Client =
@@ -34,28 +44,28 @@ if (process.env.NODE_ENV !== 'production') {
   globalForMinio._minioClient = minioClient;
 }
 
-// Cache the bucket-ready check so we don't hit MinIO on every request.
-let bucketReady = false;
+// Cache the bucket-ready check per bucket so we don't hit MinIO on every request.
+const readyBuckets = new Set<string>();
 
-export async function ensureBucket(): Promise<void> {
-  if (bucketReady) return;
+export async function ensureBucket(bucket: string = BUCKET): Promise<void> {
+  if (readyBuckets.has(bucket)) return;
 
-  const exists = await minioClient.bucketExists(BUCKET);
+  const exists = await minioClient.bucketExists(bucket);
   if (!exists) {
-    await minioClient.makeBucket(BUCKET);
+    await minioClient.makeBucket(bucket);
   }
 
   // Enable versioning so overwrites and deletes are recoverable (durability).
   // Safe to call repeatedly; ignore if the backend doesn't support it.
   if (process.env.MINIO_VERSIONING !== 'false') {
     try {
-      await minioClient.setBucketVersioning(BUCKET, { Status: 'Enabled' });
+      await minioClient.setBucketVersioning(bucket, { Status: 'Enabled' });
     } catch (err) {
       console.warn('Could not enable bucket versioning:', (err as Error).message);
     }
   }
 
-  bucketReady = true;
+  readyBuckets.add(bucket);
 }
 
 export default minioClient;

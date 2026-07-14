@@ -37,11 +37,11 @@ export async function GET(req: Request) {
 
     return NextResponse.json(
       rows.map((r) => ({
-        id: r.test_station_id,
-        name: r.test_station_desc.trim(),
-        typeId: r.test_station_type_id,
+        test_station_id: r.test_station_id,
+        test_station_desc: r.test_station_desc.trim(),
+        test_station_type_id: r.test_station_type_id,
         status: r.status,
-        isResearch: r.is_research,
+        is_research: r.is_research,
       }))
     );
   } catch (error) {

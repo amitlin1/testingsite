@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
-import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -37,6 +36,13 @@ export async function POST(req: Request) {
 
   const trimmedDesc = test_station_status_desc.trim();
 
+  const existing = await prisma.test_station_status.findFirst({
+    where: { test_station_status_desc: { equals: trimmedDesc, mode: "insensitive" } },
+  });
+  if (existing) {
+    return NextResponse.json({ error: "סטטוס עמדה בשם זה כבר קיים במערכת" }, { status: 400 });
+  }
+
   // Fix sequence before insert
   await fixSequence(prisma, "test_station_status", "test_station_status_id", "test_station_status_test_station_status_id_seq");
 
@@ -50,13 +56,17 @@ export async function POST(req: Request) {
       test_station_status_desc: created.test_station_status_desc.trim(),
     });
   } catch (error: any) {
+    const msg = String(error?.message ?? "");
+    const isDup = error?.code === "P2002" || /unique constraint/i.test(msg);
+
+    if (isDup && msg.includes("test_station_status_desc")) {
+      return NextResponse.json({ error: "סטטוס עמדה בשם זה כבר קיים במערכת" }, { status: 400 });
+    }
+
     console.error("Error creating test station status:", error);
 
-    // If duplicate key, fix sequence and retry
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    // PK/sequence desync duplicate → fix sequence and retry.
+    if (isDup) {
       try {
         console.log("Duplicate key detected, fixing sequence and retrying...");
         await fixSequence(prisma, "test_station_status", "test_station_status_id", "test_station_status_test_station_status_id_seq");
