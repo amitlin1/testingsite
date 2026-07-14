@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import PeriodCombobox from "../common/PeriodCombobox";
 import {
   Dialog,
   DialogTitle,
@@ -176,18 +177,15 @@ export default function ShipmentHistoryDialog({
             <Typography variant="caption" color="text.secondary">{shipment.customerName}</Typography>
         </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>תקופה</InputLabel>
-            <Select
-              value={period}
-              label="תקופה"
-              onChange={(e) => setPeriod(e.target.value as "alldays" | "12months" | "3years")}
-            >
-              <MenuItem value="alldays">כל הימים</MenuItem>
-              <MenuItem value="12months">12 חודשים אחרונים</MenuItem>
-              <MenuItem value="3years">3 שנים (רבעוני)</MenuItem>
-            </Select>
-          </FormControl>
+          <PeriodCombobox
+            value={period}
+            onChange={setPeriod}
+            options={[
+              { id: "alldays", name: "כל הימים" },
+              { id: "12months", name: "12 חודשים אחרונים" },
+              { id: "3years", name: "3 שנים (רבעוני)" },
+            ]}
+          />
           <ToggleButtonGroup
             value={chartType}
             exclusive

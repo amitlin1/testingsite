@@ -47,6 +47,10 @@ export interface ComboboxProps<T>
   helperText?: React.ReactNode;
   /** Custom content for an option row (rendered next to the checkmark slot). */
   renderOptionContent?: (option: T, selected: boolean) => React.ReactNode;
+  /** Icon rendered at the inline-start of the trigger input. */
+  startIcon?: React.ReactNode;
+  /** Fixed container width; when omitted the field is full-width. */
+  width?: number | string;
   /** Forwarded to the trigger TextField. */
   inputSx?: SxProps;
 }
@@ -67,6 +71,8 @@ export default function SearchableCombobox<T>({
   getOptionLabel,
   isOptionEqualToValue,
   renderOptionContent,
+  startIcon,
+  width,
   noOptionsText = "אין תוצאה תואמת",
   inputSx,
   ...rest
@@ -78,7 +84,7 @@ export default function SearchableCombobox<T>({
   );
 
   return (
-    <Box sx={{ width: fullWidth ? "100%" : undefined }}>
+    <Box sx={{ width: width ?? (fullWidth ? "100%" : undefined) }}>
       {!floatingLabel && label && (
         <Typography
           component="label"
@@ -141,6 +147,11 @@ export default function SearchableCombobox<T>({
             helperText={helperText}
             InputProps={{
               ...params.InputProps,
+              startAdornment: startIcon ? (
+                <Box sx={{ display: "flex", alignItems: "center", color: theme.tokens.muted, flexShrink: 0 }}>{startIcon}</Box>
+              ) : (
+                params.InputProps.startAdornment
+              ),
               endAdornment: (
                 <>
                   {loading ? <CircularProgress size={16} /> : null}

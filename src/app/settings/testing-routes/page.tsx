@@ -1,10 +1,11 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Grid, Paper, Typography, Box, Autocomplete, TextField, Button,
+  Grid, Paper, Typography, Box, TextField, Button,
   List, ListItem, IconButton,
   Chip, Snackbar, Alert
 } from "@/components/ui";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { Delete as DeleteIcon } from "@/components/ui/icons";
 import { ArrowUpward as ArrowUpwardIcon } from "@/components/ui/icons";
 import { ArrowDownward as ArrowDownwardIcon } from "@/components/ui/icons";
@@ -225,13 +226,13 @@ export default function TestingRoutesPage() {
                 </Typography>
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", flex: 1, px: 1 }}>
-                  <Autocomplete
+                  <SearchableCombobox<Option>
                     options={itemTypes}
                     getOptionLabel={(option) => option.label}
                     isOptionEqualToValue={(option, value) => option.id === value.id}
                     value={selectedItemType}
-                    onChange={(_, newValue) => setSelectedItemType(newValue)}
-                    renderInput={(params) => <TextField {...params} label="סוג פריט" size="small" variant="outlined" />}
+                    onChange={(newValue) => setSelectedItemType(newValue)}
+                    floatingLabel="סוג פריט"
                   />
 
                   <TextField
@@ -309,15 +310,16 @@ export default function TestingRoutesPage() {
                   <Box sx={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", minHeight: 0 }}>
                     {/* Add Step Row */}
                     <Box sx={{ display: "flex", gap: 1, mb: 2, flexShrink: 0 }}>
-                      <Autocomplete
-                        options={stationTypes}
-                        getOptionLabel={(option) => option.label}
-                        isOptionEqualToValue={(option, value) => option.id === value.id}
-                        value={stepToAdd}
-                        onChange={(_, newValue) => setStepToAdd(newValue)}
-                        renderInput={(params) => <TextField {...params} label="הוסף שלב (סוג עמדה)" size="small" />}
-                        sx={{ flexGrow: 1 }}
-                      />
+                      <Box sx={{ flexGrow: 1 }}>
+                        <SearchableCombobox<Option>
+                          options={stationTypes}
+                          getOptionLabel={(option) => option.label}
+                          isOptionEqualToValue={(option, value) => option.id === value.id}
+                          value={stepToAdd}
+                          onChange={(newValue) => setStepToAdd(newValue)}
+                          floatingLabel="הוסף שלב (סוג עמדה)"
+                        />
+                      </Box>
                       <Button
                         variant="outlined"
                         onClick={handleAddStep}

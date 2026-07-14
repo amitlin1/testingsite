@@ -5,12 +5,10 @@ import {
   Box,
   Skeleton,
   useTheme,
-  Autocomplete,
-  TextField,
-
   ToggleButton,
   ToggleButtonGroup,
 } from "@/components/ui";
+import SearchableCombobox from "../common/SearchableCombobox";
 import { TableChart as TableChartIcon } from "@/components/ui/icons";
 import { ShowChart as ShowChartIcon } from "@/components/ui/icons";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";
@@ -105,18 +103,16 @@ export default function CompletionHistoryChart() {
     <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", direction: "rtl", p: 2 }}>
       <Box sx={{ mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
          {/* Period Filter */}
-         <Autocomplete
+         <SearchableCombobox<(typeof periodFilter.periodOptions)[number]>
             value={periodFilter.selectedPeriod || periodFilter.periodOptions[0]}
-            onChange={(event, newValue) => periodFilter.handlePeriodChange(newValue)}
+            onChange={(newValue) => { if (newValue) periodFilter.handlePeriodChange(newValue); }}
             options={periodFilter.periodOptions}
             getOptionLabel={(option) => option.label}
-            isOptionEqualToValue={(option, value) => 
+            isOptionEqualToValue={(option, value) =>
                option.type === value.type && option.value === value.value
             }
-            sx={{ minWidth: 200 }}
-            renderInput={(params) => (
-              <TextField {...params} label="בחר תקופה" variant="outlined" size="small" />
-            )}
+            floatingLabel="בחר תקופה"
+            width={200}
             disableClearable
           />
           

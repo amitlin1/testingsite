@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import PeriodCombobox from "../common/PeriodCombobox";
 import {
   Box,
   Typography,
@@ -231,18 +232,16 @@ export default function StatusDistributionHistoryChart({
             </ToggleButton>
           </ToggleButtonGroup>
           
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>בחר תקופה</InputLabel>
-            <Select
-              value={period}
-              label="בחר תקופה"
-              onChange={(e) => setPeriod(e.target.value as "30days" | "12months" | "3years")}
-            >
-              <MenuItem value="30days">30 ימים אחרונים</MenuItem>
-              <MenuItem value="12months">12 חודשים אחרונים</MenuItem>
-              <MenuItem value="3years">3 שנים</MenuItem>
-            </Select>
-          </FormControl>
+          <PeriodCombobox
+            value={period}
+            onChange={setPeriod}
+            label="בחר תקופה"
+            options={[
+              { id: "30days", name: "30 ימים אחרונים" },
+              { id: "12months", name: "12 חודשים אחרונים" },
+              { id: "3years", name: "3 שנים" },
+            ]}
+          />
         </Box>
       )}
 

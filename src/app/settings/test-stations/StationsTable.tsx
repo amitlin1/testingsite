@@ -4,8 +4,9 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Button, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Snackbar, Alert, Box, InputAdornment, CircularProgress, Typography,
-  Switch, FormControlLabel, Select, MenuItem, InputLabel, FormControl
+  Switch, FormControlLabel
 } from "@/components/ui";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { Edit as EditIcon } from "@/components/ui/icons";
 import { Delete as DeleteIcon } from "@/components/ui/icons";
 import { Add as AddIcon } from "@/components/ui/icons";
@@ -219,20 +220,15 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
               value={formData.test_station_desc || ""}
               onChange={(e) => setFormData({ ...formData, test_station_desc: e.target.value })}
             />
-            <FormControl fullWidth>
-              <InputLabel>סטטוס</InputLabel>
-              <Select
-                value={formData.status || ""}
-                label="סטטוס"
-                onChange={(e) => setFormData({ ...formData, status: Number(e.target.value) })}
-              >
-                {statuses.map(s => (
-                  <MenuItem key={s.test_station_status_id} value={s.test_station_status_id}>
-                    {s.test_station_status_desc}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SearchableCombobox<(typeof statuses)[number]>
+              options={statuses}
+              value={statuses.find((s) => s.test_station_status_id === formData.status) ?? null}
+              onChange={(v) => { if (v) setFormData({ ...formData, status: Number(v.test_station_status_id) }); }}
+              getOptionLabel={(s) => s.test_station_status_desc}
+              isOptionEqualToValue={(a, b) => a.test_station_status_id === b.test_station_status_id}
+              disableClearable
+              floatingLabel="סטטוס"
+            />
             <FormControlLabel
               control={
                 <Switch

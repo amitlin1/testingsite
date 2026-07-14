@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
-import { Autocomplete, TextField, Avatar, Box, Typography } from "@/components/ui";
-import { alpha } from "@/components/ui";
+import { Avatar, Box, Typography, alpha } from "@/components/ui";
+import SearchableCombobox from "../../common/SearchableCombobox";
 
 interface Option {
   id: number | string;
@@ -23,6 +23,10 @@ interface SelectFilterProps {
   disableClearable?: boolean;
 }
 
+/**
+ * Dashboard filter field — the unified searchable combobox (same look as the
+ * "סוג פריט" field in the add-item popup), preserving per-option avatar icons.
+ */
 export default function SelectFilter({
   label,
   options,
@@ -35,71 +39,37 @@ export default function SelectFilter({
   disableClearable = false,
 }: SelectFilterProps) {
   return (
-    <Autocomplete
+    <SearchableCombobox<Option>
       options={options}
       value={value}
-      onChange={(_, newValue) => onChange(newValue)}
-      getOptionLabel={(option) => option.name}
+      onChange={onChange}
+      getOptionLabel={(o) => o.name}
+      isOptionEqualToValue={(o, v) => o.id === v.id}
       loading={loading}
       disableClearable={disableClearable}
-      size="small"
-      sx={{
-        width: width,
-        "& .MuiOutlinedInput-root": {
-          borderRadius: 2,
-          bgcolor: "white",
-          pr: 1,
-          "&:hover": {
-            bgcolor: alpha("#1976d2", 0.04), // soft hover
-          },
-        },
-      }}
-      renderOption={(props, option) => {
-        const { key, ...otherProps } = props;
-        return (
-          <Box
-            key={key}
-            component="li"
-            {...otherProps}
-            sx={{ display: "flex", gap: 1, alignItems: "center" }}
-          >
-            {option.icon && (
-              <Avatar
-                sx={{
-                  width: 24,
-                  height: 24,
-                  bgcolor: option.color ? alpha(option.color, 0.1) : "transparent",
-                  color: option.color || "text.secondary",
-                  fontSize: 14,
-                }}
-              >
-                {option.icon}
-              </Avatar>
-            )}
-            <Typography variant="body2">{option.name}</Typography>
-          </Box>
-        );
-      }}
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          label={label}
-          placeholder={placeholder || label}
-          variant="outlined"
-          InputProps={{
-            ...params.InputProps,
-            startAdornment: icon ? (
-              <Box sx={{ mr: 1, display: "flex", color: "text.secondary" }}>{icon}</Box>
-            ) : null,
-          }}
-          disabled={loading}
-          size="small"
-          // Keep label readable
-          InputLabelProps={{ sx: { fontSize: "0.85rem" } }}
-        />
-      )}
+      floatingLabel={label}
+      placeholder={placeholder || label}
+      startIcon={icon}
+      width={width}
       noOptionsText="אין תוצאות"
-      isOptionEqualToValue={(option, val) => option.id === val.id}
+      renderOptionContent={(option) => (
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", minWidth: 0 }}>
+          {option.icon && (
+            <Avatar
+              sx={{
+                width: 24,
+                height: 24,
+                bgcolor: option.color ? alpha(option.color, 0.1) : "transparent",
+                color: option.color || "text.secondary",
+                fontSize: 14,
+              }}
+            >
+              {option.icon}
+            </Avatar>
+          )}
+          <Typography variant="body2">{option.name}</Typography>
+        </Box>
+      )}
     />
   );
 }
