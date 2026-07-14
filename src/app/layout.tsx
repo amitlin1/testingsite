@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { AppRouterCacheProvider } from "@mui/material-nextjs/v14-appRouter";
-import Providers from "./components/providers";
 import AppShell from "./components/AppShell";
 
 const rubik = localFont({
@@ -39,16 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           backgroundColor: "#f5f5f7",
         }}
       >
-        <AppRouterCacheProvider
-          options={{
-            enableCssLayer: true,
-            key: "mui",
-          }}
-        >
-          <Providers>
-            <AppShell>{children}</AppShell>
-          </Providers>
-        </AppRouterCacheProvider>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
