@@ -44,21 +44,36 @@ export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
   );
 });
 
+/** Lets TableCell know which section it's in, so header cells render <th>. */
+const TableSectionCtx = React.createContext<"head" | "body" | "foot">("body");
+
 export const TableHead = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement> & { sx?: SxInput }>(
   function TableHead({ sx, style, children, ...rest }, ref) {
-    return <thead ref={ref} style={{ ...sxToStyle(sx), ...style }} {...rest}>{children}</thead>;
+    return (
+      <TableSectionCtx.Provider value="head">
+        <thead ref={ref} style={{ ...sxToStyle(sx), ...style }} {...rest}>{children}</thead>
+      </TableSectionCtx.Provider>
+    );
   },
 );
 
 export const TableBody = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement> & { sx?: SxInput }>(
   function TableBody({ sx, style, children, ...rest }, ref) {
-    return <tbody ref={ref} style={{ ...sxToStyle(sx), ...style }} {...rest}>{children}</tbody>;
+    return (
+      <TableSectionCtx.Provider value="body">
+        <tbody ref={ref} style={{ ...sxToStyle(sx), ...style }} {...rest}>{children}</tbody>
+      </TableSectionCtx.Provider>
+    );
   },
 );
 
 export const TableFooter = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement> & { sx?: SxInput }>(
   function TableFooter({ sx, style, children, ...rest }, ref) {
-    return <tfoot ref={ref} style={{ ...sxToStyle(sx), ...style }} {...rest}>{children}</tfoot>;
+    return (
+      <TableSectionCtx.Provider value="foot">
+        <tfoot ref={ref} style={{ ...sxToStyle(sx), ...style }} {...rest}>{children}</tfoot>
+      </TableSectionCtx.Provider>
+    );
   },
 );
 
@@ -96,7 +111,8 @@ export const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(functi
   { align, component, variant, padding, sortDirection: _sd, sx, style, children, ...rest },
   ref,
 ) {
-  const Component = (component || (variant === "head" ? "th" : "td")) as React.ElementType;
+  const section = React.useContext(TableSectionCtx);
+  const Component = (component || (variant === "head" || section === "head" ? "th" : "td")) as React.ElementType;
   return (
     <Component
       ref={ref}
