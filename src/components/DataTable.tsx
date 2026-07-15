@@ -47,6 +47,8 @@ type Props<T> = {
   rows: T[];
   getRowKey: (row: T, i: number) => React.Key;
   onRowClick?: (row: T) => void;
+  /** Highlight a row as selected (master-detail tables) — blue tint + edge. */
+  rowSelected?: (row: T) => boolean;
   minWidth?: number;
   /** Cap the body height and keep the header pinned (for long lists). */
   maxHeight?: number | string;
@@ -59,7 +61,7 @@ type Props<T> = {
 const alignMap = { start: "right", center: "center", end: "left" } as const;
 
 export default function DataTable<T>({
-  columns, rows, getRowKey, onRowClick, minWidth = 960,
+  columns, rows, getRowKey, onRowClick, rowSelected, minWidth = 960,
   maxHeight, stickyHeader = maxHeight != null, loading = false, loadingRows = 8, empty,
 }: Props<T>) {
   const fill = maxHeight != null;
@@ -96,6 +98,7 @@ export default function DataTable<T>({
                     key={getRowKey(row, i)}
                     className={"shx-row" + (onRowClick ? " shx-row--clickable" : "")}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    style={rowSelected?.(row) ? { background: "#f3f8ff", borderInlineStart: "3px solid #0066cc" } : undefined}
                   >
                     {columns.map((c) => (
                       <td
