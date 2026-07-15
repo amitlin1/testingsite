@@ -56,17 +56,23 @@ type Props<T> = {
   loading?: boolean;
   loadingRows?: number;
   empty?: React.ReactNode;
+  /** Render without the outer card (bg/border/radius) — for embedding inside
+      an existing card/tile/dialog. The table look (header/rows) stays. */
+  plain?: boolean;
 };
 
 const alignMap = { start: "right", center: "center", end: "left" } as const;
 
 export default function DataTable<T>({
   columns, rows, getRowKey, onRowClick, rowSelected, minWidth = 960,
-  maxHeight, stickyHeader = maxHeight != null, loading = false, loadingRows = 8, empty,
+  maxHeight, stickyHeader = maxHeight != null, loading = false, loadingRows = 8, empty, plain = false,
 }: Props<T>) {
   const fill = maxHeight != null;
+  const cardStyle: React.CSSProperties = plain
+    ? { display: "flex", flexDirection: "column", height: maxHeight != null ? "100%" : undefined, maxHeight, overflow: "hidden" }
+    : { background: "#fff", border: "1px solid #e0e0e0", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight };
   return (
-    <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight }}>
+    <div style={cardStyle}>
       <div className="shx-scroll" style={{ overflowX: "auto", overflowY: fill ? "auto" : undefined, flex: fill ? 1 : undefined, minHeight: fill ? 0 : undefined }}>
         <table className={"shx-table" + (stickyHeader ? " shx-table--sticky" : "")} style={{ minWidth }}>
           <thead>
