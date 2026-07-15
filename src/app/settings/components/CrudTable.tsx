@@ -1,31 +1,11 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Button,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Alert,
-  Snackbar,
-  Box,
-  InputAdornment,
-  CircularProgress,
-  Typography
+  Button, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Alert, Snackbar, Box, Typography,
 } from "@/components/ui";
-import { Edit as EditIcon } from "@/components/ui/icons";
-import { Delete as DeleteIcon } from "@/components/ui/icons";
-import { Add as AddIcon } from "@/components/ui/icons";
-import { Search as SearchIcon } from "@/components/ui/icons";
+import DataTable, { RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
+import { Search, Plus, Pencil, Trash2 } from "lucide-react";
 
 export interface Column {
   field: string;
@@ -41,34 +21,23 @@ interface CrudTableProps {
   entityName: string;
 }
 
-export default function CrudTable({
-  apiUrl,
-  columns,
-  idField,
-  nameField,
-  entityName
-}: CrudTableProps) {
-  // State
+export default function CrudTable({ apiUrl, columns, idField, nameField, entityName }: CrudTableProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Dialog State
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRow, setEditingRow] = useState<any | null>(null);
   const [formData, setFormData] = useState<any>({});
   const [saveLoading, setSaveLoading] = useState(false);
 
-  // Delete Confirm State
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState<any | null>(null);
 
-  // Snackbar State
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false,
-    message: "",
-    severity: "success",
+    open: false, message: "", severity: "success",
   });
+  const showSnackbar = (message: string, severity: "success" | "error") => setSnackbar({ open: true, message, severity });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -77,40 +46,20 @@ export default function CrudTable({
       if (!res.ok) throw new Error("Failed to fetch data");
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
-    } catch (err) {
-      showSnackbar("Error loading data", "error");
+    } catch {
+      showSnackbar("שגיאה בטעינת נתונים", "error");
     } finally {
       setLoading(false);
     }
   }, [apiUrl]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const showSnackbar = (message: string, severity: "success" | "error") => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleAdd = () => {
-    setEditingRow(null);
-    setFormData({});
-    setOpenDialog(true);
-  };
-
-  const handleEdit = (row: any) => {
-    setEditingRow(row);
-    setFormData({ ...row });
-    setOpenDialog(true);
-  };
-
-  const handleDeleteClick = (row: any) => {
-    setRowToDelete(row);
-    setDeleteConfirmOpen(true);
-  };
+  const handleAdd = () => { setEditingRow(null); setFormData({}); setOpenDialog(true); };
+  const handleEdit = (row: any) => { setEditingRow(row); setFormData({ ...row }); setOpenDialog(true); };
+  const handleDeleteClick = (row: any) => { setRowToDelete(row); setDeleteConfirmOpen(true); };
 
   const handleSave = async () => {
-    // Simple validation
     for (const col of columns) {
       if (col.field === idField) continue;
       if (!formData[col.field] || !String(formData[col.field]).trim()) {
@@ -118,35 +67,23 @@ export default function CrudTable({
         return;
       }
     }
-    const isDuplicate = rows.some(r =>
+    const isDuplicate = rows.some((r) =>
       r[nameField].toLowerCase().trim() === formData[nameField].toLowerCase().trim() &&
-      r[idField] !== editingRow?.[idField] // התעלמות מהשורה הנוכחית בעריכה
+      r[idField] !== editingRow?.[idField]
     );
-    if (isDuplicate) {
-      showSnackbar("סוג פריט זה כבר קיים", "error");
-      return; // עוצר את התהליך ולא שולח בקשה לשרת
-    }
+    if (isDuplicate) { showSnackbar("ערך זה כבר קיים", "error"); return; }
 
     setSaveLoading(true);
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow[idField]}` : apiUrl;
-
       const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData),
       });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to save");
-      }
-
+      if (!res.ok) { const errorData = await res.json(); throw new Error(errorData.error || "Failed to save"); }
       const savedRow = await res.json();
-
       if (editingRow && savedRow) {
-        setRows(rows.map(r => r[idField] === savedRow[idField] ? savedRow : r));
+        setRows(rows.map((r) => (r[idField] === savedRow[idField] ? savedRow : r)));
         showSnackbar(`${entityName} עודכן בהצלחה`, "success");
       } else {
         setRows([...rows, savedRow]);
@@ -163,16 +100,9 @@ export default function CrudTable({
   const handleDeleteConfirm = async () => {
     if (!rowToDelete) return;
     try {
-      const res = await fetch(`${apiUrl}/${rowToDelete[idField]}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to delete");
-      }
-
-      setRows(rows.filter(r => r[idField] !== rowToDelete[idField]));
+      const res = await fetch(`${apiUrl}/${rowToDelete[idField]}`, { method: "DELETE" });
+      if (!res.ok) { const errorData = await res.json(); throw new Error(errorData.error || "Failed to delete"); }
+      setRows(rows.filter((r) => r[idField] !== rowToDelete[idField]));
       showSnackbar(`${entityName} נמחק בהצלחה`, "success");
     } catch (err: any) {
       showSnackbar(err.message, "error");
@@ -182,105 +112,73 @@ export default function CrudTable({
     }
   };
 
-  const filteredRows = rows.filter(row => {
+  const filteredRows = rows.filter((row) => {
     if (!searchTerm) return true;
-    return columns.some(col => {
-      const val = row[col.field];
-      return String(val).toLowerCase().includes(searchTerm.toLowerCase());
-    });
+    return columns.some((col) => String(row[col.field]).toLowerCase().includes(searchTerm.toLowerCase()));
   });
 
+  const dtColumns: DTColumn<any>[] = [
+    ...columns.map((col) => ({
+      key: col.field,
+      header: col.headerName,
+      cell: (row: any) => (row[col.field] ?? "—") as React.ReactNode,
+      width: typeof col.width === "number" ? col.width : undefined,
+      nowrap: true,
+      bold: col.field === nameField,
+    })),
+    {
+      key: "__actions",
+      header: "פעולות",
+      align: "center" as const,
+      width: 120,
+      cell: (row: any) => (
+        <RowActions>
+          <IconAction title="ערוך" onClick={() => handleEdit(row)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
+          <IconAction title="מחק" danger onClick={() => handleDeleteClick(row)}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
+        </RowActions>
+      ),
+    },
+  ];
+
   return (
-    <Paper
-      elevation={0}
-      square
-      sx={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        m: 0,
-        p: 2,
-        borderRadius: 0,
-        boxSizing: "border-box",
-        overflow: "hidden"
-      }}
-    >
+    <div dir="rtl" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Toolbar */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2, gap: 2, flexShrink: 0 }}>
-        <TextField
-          size="small"
-          placeholder="חיפוש..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-          sx={{ maxWidth: 300 }}
-        />
-        <Button variant="contained" startIcon={<AddIcon sx={{ ml: 1 }} />} onClick={handleAdd}>
-          הוסף {entityName}
-        </Button>
-      </Box>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexShrink: 0, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 320 }}>
+          <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
+            <Search size={16} strokeWidth={1.75} />
+          </span>
+          <input
+            className="shx-input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="חיפוש..."
+            style={{ height: 42, borderRadius: 10, paddingInlineStart: 40, paddingInlineEnd: 14, fontSize: 14 }}
+          />
+        </div>
+        <button className="shx-btn shx-btn-primary" onClick={handleAdd}>
+          <Plus size={18} strokeWidth={2} />הוסף {entityName}
+        </button>
+      </div>
 
       {/* Table */}
-      <TableContainer sx={{ flex: 1, overflow: "auto", border: "1px solid #eee", borderRadius: 1 }}>
-        <Table size="medium" stickyHeader>
-          <TableHead>
-            <TableRow>
-              {columns.map(col => (
-                <TableCell key={col.field} align="right" sx={{ fontWeight: "bold", bgcolor: "#f5f5f5" }} width={col.width}>
-                  {col.headerName}
-                </TableCell>
-              ))}
-              <TableCell sx={{ fontWeight: "bold", textAlign: "center", width: 120, bgcolor: "#f5f5f5" }}>פעולות</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={columns.length + 1} align="center" sx={{ py: 4 }}>
-                  <CircularProgress />
-                </TableCell>
-              </TableRow>
-            ) : filteredRows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length + 1} align="center" sx={{ py: 4 }}>
-                  <Typography color="text.secondary">לא נמצאו נתונים</Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredRows.map((row) => (
-                <TableRow key={row[idField]} hover>
-                  {columns.map(col => (
-                    <TableCell key={col.field} align="right">
-                      {row[col.field]}
-                    </TableCell>
-                  ))}
-                  <TableCell align="center">
-                    <IconButton size="small" color="primary" onClick={() => handleEdit(row)}>
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton size="small" color="error" onClick={() => handleDeleteClick(row)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DataTable
+          columns={dtColumns}
+          rows={filteredRows}
+          getRowKey={(r) => r[idField]}
+          loading={loading}
+          minWidth={520}
+          maxHeight="100%"
+        />
+      </div>
 
       {/* Edit/Add Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ textAlign: "right" }}>{editingRow ? `ערוך ${entityName}` : `הוסף ${entityName}`}</DialogTitle>
+        <DialogTitle>{editingRow ? `ערוך ${entityName}` : `הוסף ${entityName}`}</DialogTitle>
         <DialogContent dir="rtl">
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-            {columns.map(col => {
+            {columns.map((col) => {
               if (col.field === idField) return null;
               return (
                 <TextField
@@ -295,42 +193,41 @@ export default function CrudTable({
             })}
           </Box>
         </DialogContent>
-        <DialogActions sx={{ justifyContent: "flex-start", px: 3, pb: 2, direction: "rtl" }}>
-          <Button onClick={() => setOpenDialog(false)}>ביטול</Button>
+        <DialogActions>
           <Button onClick={handleSave} variant="contained" disabled={saveLoading}>
             {saveLoading ? "שומר..." : "שמור"}
           </Button>
+          <Button variant="outlined" onClick={() => setOpenDialog(false)}>ביטול</Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete Confirm Dialog */}
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle sx={{ textAlign: "right" }}>מחיקת {entityName}</DialogTitle>
+        <DialogTitle>מחיקת {entityName}</DialogTitle>
         <DialogContent dir="rtl">
           <Typography>
             האם אתה בטוח שברצונך למחוק את {entityName} &quot;{rowToDelete?.[nameField]}&quot;?
           </Typography>
-          <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
+          <Typography variant="caption" color="error" sx={{ display: "block", mt: 1 }}>
             פעולה זו לא ניתנת לביטול.
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ justifyContent: "flex-start", px: 3, pb: 2, direction: "rtl" }}>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>ביטול</Button>
+        <DialogActions>
           <Button onClick={handleDeleteConfirm} color="error" variant="contained">מחק</Button>
+          <Button variant="outlined" onClick={() => setDeleteConfirmOpen(false)}>ביטול</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       >
         <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Paper>
+    </div>
   );
 }
