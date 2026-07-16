@@ -1,6 +1,8 @@
 "use client";
 import React, { useState } from "react";
-import { Grid, Paper, Typography, Box } from "@/components/ui";
+import { Box } from "@/components/ui";
+import { LayoutGrid } from "lucide-react";
+import SettingsToolbar from "../components/SettingsToolbar";
 import StationTypesTable from "./StationTypesTable";
 import StationsTable from "./StationsTable";
 
@@ -9,94 +11,65 @@ export default function TestStationsPage() {
   const [selectedTypeName, setSelectedTypeName] = useState<string>("");
 
   const handleTypeSelect = (id: number, name: string) => {
+    // id === 0 signals a cleared selection (e.g. the selected type was deleted)
+    if (!id) {
+      setSelectedTypeId(null);
+      setSelectedTypeName("");
+      return;
+    }
     setSelectedTypeId(id);
     setSelectedTypeName(name);
   };
 
   return (
-    <Box sx={{
-      display: "flex",
-      flexDirection: "column",
-      height: "100%",
-    }}>
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", direction: "rtl" }}>
+      {/* single internal scroll region */}
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <Box sx={{ maxWidth: 1180, mx: "auto", px: 1, py: 1 }}>
+          <SettingsToolbar
+            title="עמדות בדיקה"
+            subtitle="הגדרת סוגי העמדות והעמדות המשויכות אליהן."
+          />
 
-        {/* Page Header */}
-        <Box sx={{
-          textAlign: "center",
-          flexShrink: 0,
-          width: "100%",
-          p: 1,
-          borderBottom: "1px solid",
-          borderColor: "divider"
-        }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: "#333", fontSize: "1.4rem" }}>
-            ניהול עמדות בדיקה
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.8rem" }}>
-            הגדרת סוגי עמדות והעמדות המשויכות אליהן
-          </Typography>
-        </Box>
+          {/* master–detail grid: types (master) · stations (detail) */}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "330px 1fr" },
+              gap: 2.5,
+              mt: 3,
+              alignItems: "start",
+            }}
+          >
+            <StationTypesTable selectedId={selectedTypeId} onSelect={handleTypeSelect} />
 
-        {/* Main Content Grid Container */}
-        <Box sx={{
-          flex: 1,
-          overflow: "hidden",
-          width: "100%",
-          p: 0
-        }}>
-          <Grid container spacing={0} sx={{ height: "100%", minHeight: 0, width: "100%", m: 0 }}>
-
-            {/* Left Panel: Station Types (Master) */}
-            <Grid size={{ xs: 12, md: 4 }} sx={{ height: "100%", minHeight: 0 }}>
-              <Paper
-                elevation={0}
-                square
+            {selectedTypeId ? (
+              <StationsTable typeId={selectedTypeId} typeName={selectedTypeName} />
+            ) : (
+              <Box
                 sx={{
-                  p: 0,
-                  height: "100%",
+                  background: "#fff",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: "16px",
+                  minHeight: 240,
                   display: "flex",
                   flexDirection: "column",
-                  overflow: "hidden",
-                  borderLeft: "1px solid", // Separator for RTL
-                  borderColor: "divider"
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 1.25,
+                  p: "64px 24px",
+                  textAlign: "center",
+                  color: "#7a7a7a",
                 }}
               >
-                <StationTypesTable
-                  selectedId={selectedTypeId}
-                  onSelect={handleTypeSelect}
-                />
-              </Paper>
-            </Grid>
-
-            {/* Right Panel: Stations (Detail) */}
-            <Grid size={{ xs: 12, md: 8 }} sx={{ height: "100%", minHeight: 0 }}>
-              <Paper
-                elevation={0}
-                square
-                sx={{
-                  p: 0,
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden"
-                }}
-              >
-                {selectedTypeId ? (
-                  <StationsTable
-                    typeId={selectedTypeId}
-                    typeName={selectedTypeName}
-                  />
-                ) : (
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 2, opacity: 0.6 }}>
-                    <Box sx={{ fontSize: "3rem", opacity: 0.2 }}>📋</Box>
-                    <Typography variant="h6" sx={{ color: "text.secondary" }}>בחר סוג עמדה לצפייה בעמדות</Typography>
-                    <Typography variant="body2" sx={{ color: "text.secondary" }}>יש לבחור סוג עמדה מהרשימה מימין</Typography>
-                  </Box>
-                )}
-              </Paper>
-            </Grid>
-          </Grid>
+                <LayoutGrid size={34} strokeWidth={1.5} color="#0066cc" />
+                <Box sx={{ fontSize: 15, color: "#1d1d1f", fontWeight: 600 }}>בחר סוג עמדה מהרשימה</Box>
+                <Box sx={{ fontSize: 13 }}>העמדות המשויכות יוצגו כאן.</Box>
+              </Box>
+            )}
+          </Box>
         </Box>
+      </Box>
     </Box>
   );
 }

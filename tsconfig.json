@@ -40,6 +40,6 @@
   ],
   "exclude": [
     "node_modules",
-    "שיפור פרויקט עם design system"
+    "שיפור פרויקט עם design system*"
   ]
 }

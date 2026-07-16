@@ -4,8 +4,13 @@ import {
   Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Snackbar, Alert,
 } from "@/components/ui";
-import DataTable, { RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
 import { Search, Plus, Pencil, Trash2 } from "lucide-react";
+
+interface StationType {
+  test_station_type_id: number;
+  test_type_desc: string;
+  station_count?: number;
+}
 
 interface StationTypesTableProps {
   selectedId: number | null;
@@ -13,7 +18,7 @@ interface StationTypesTableProps {
 }
 
 export default function StationTypesTable({ selectedId, onSelect }: StationTypesTableProps) {
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<StationType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -103,53 +108,79 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
 
   const filteredRows = rows.filter((r) => r.test_type_desc.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  const dtColumns: DTColumn<any>[] = [
-    { key: "id", header: "מזהה", align: "center", width: 80, nums: true, cell: (r) => r.test_station_type_id },
-    { key: "desc", header: "תיאור", bold: true, nowrap: true, cell: (r) => r.test_type_desc },
-    {
-      key: "__actions", header: "פעולות", align: "center", width: 100,
-      cell: (r) => (
-        <RowActions>
-          <IconAction title="ערוך" onClick={() => { setEditingRow(r); setFormData({ ...r }); setOpenDialog(true); }}><Pencil size={16} strokeWidth={1.75} /></IconAction>
-          <IconAction title="מחק" danger onClick={() => { setRowToDelete(r); setDeleteConfirmOpen(true); }}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
-        </RowActions>
-      ),
-    },
-  ];
-
   return (
-    <div dir="rtl" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexShrink: 0 }}>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>סוגי עמדות</div>
-        <button className="shx-btn shx-btn-primary" onClick={() => { setEditingRow(null); setFormData({}); setOpenDialog(true); }}>
-          <Plus size={18} strokeWidth={2} />הוסף
-        </button>
-      </div>
+    <div dir="rtl">
+      <style>{`
+        .stz-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 16px; border-top:1px solid #f0f0f0; cursor:pointer; border-inline-start:3px solid transparent; transition:background 0.12s ease; }
+        .stz-row:hover { background:#f5f5f7; }
+        .stz-row.stz-selected { background:#f3f8ff; border-inline-start-color:#0066cc; }
+        .stz-iconbtn { width:28px; height:28px; border:0; border-radius:7px; background:transparent; color:#9a9aa0; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.12s ease, color 0.12s ease; }
+        .stz-iconbtn:hover { background:#ececf0; color:#0066cc; }
+        .stz-iconbtn.stz-danger:hover { background:rgba(191,53,53,0.08); color:#bf3535; }
+      `}</style>
 
-      <div style={{ position: "relative", flexShrink: 0, maxWidth: 320 }}>
-        <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
-          <Search size={16} strokeWidth={1.75} />
-        </span>
-        <input
-          className="shx-input"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="חיפוש..."
-          style={{ height: 42, borderRadius: 10, paddingInlineStart: 40, paddingInlineEnd: 14, fontSize: 14 }}
-        />
-      </div>
+      <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 16, overflow: "hidden" }}>
+        {/* card header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #e0e0e0" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#1d1d1f" }}>סוגי עמדות</span>
+          <button
+            onClick={() => { setEditingRow(null); setFormData({}); setOpenDialog(true); }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#0066cc", color: "#fff", border: 0, borderRadius: 9999, padding: "7px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <Plus size={15} strokeWidth={2.2} />הוסף
+          </button>
+        </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <DataTable
-          columns={dtColumns}
-          rows={filteredRows}
-          getRowKey={(r) => r.test_station_type_id}
-          onRowClick={(r) => onSelect(r.test_station_type_id, r.test_type_desc)}
-          rowSelected={(r) => selectedId === r.test_station_type_id}
-          loading={loading}
-          minWidth={380}
-          maxHeight="100%"
-        />
+        {/* search */}
+        <div style={{ position: "relative", padding: "10px 12px", borderBottom: "1px solid #f0f0f0" }}>
+          <span style={{ position: "absolute", insetInlineStart: 24, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
+            <Search size={15} strokeWidth={1.75} />
+          </span>
+          <input
+            className="shx-input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="חיפוש..."
+            style={{ height: 38, borderRadius: 9, paddingInlineStart: 36, paddingInlineEnd: 12, fontSize: 14 }}
+          />
+        </div>
+
+        {/* rows */}
+        {loading ? (
+          <div style={{ padding: "40px 0", textAlign: "center", color: "#7a7a7a", fontSize: 14 }}>טוען…</div>
+        ) : filteredRows.length === 0 ? (
+          <div style={{ padding: "40px 0", textAlign: "center", color: "#7a7a7a", fontSize: 14 }}>לא נמצאו סוגי עמדות.</div>
+        ) : (
+          filteredRows.map((r) => {
+            const selected = selectedId === r.test_station_type_id;
+            return (
+              <div
+                key={r.test_station_type_id}
+                className={"stz-row" + (selected ? " stz-selected" : "")}
+                onClick={() => onSelect(r.test_station_type_id, r.test_type_desc)}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: selected ? 600 : 400, color: "#1d1d1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.test_type_desc}
+                  </span>
+                  {r.station_count != null && (
+                    <span style={{ fontSize: 11, color: "#9a9aa0", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "2px 8px", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                      {r.station_count}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                  <button className="stz-iconbtn" title="ערוך" onClick={(e) => { e.stopPropagation(); setEditingRow(r); setFormData({ ...r }); setOpenDialog(true); }}>
+                    <Pencil size={14} strokeWidth={1.75} />
+                  </button>
+                  <button className="stz-iconbtn stz-danger" title="מחק" onClick={(e) => { e.stopPropagation(); setRowToDelete(r); setDeleteConfirmOpen(true); }}>
+                    <Trash2 size={14} strokeWidth={1.75} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Dialogs */}

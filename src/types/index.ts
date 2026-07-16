@@ -77,6 +77,8 @@ export type Shipment = {
   finished_at?: string | null;
   sampled_amount?: number;
   valid_amount?: number;
+  finished_sampled_amount?: number;
+  started_sampled_amount?: number;
   sub_items_sampled_amount?: number;
   poc_details?: string | null;
 };

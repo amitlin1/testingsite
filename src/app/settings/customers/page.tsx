@@ -1,7 +1,5 @@
 "use client";
-import { Box } from "@/components/ui";
 import CrudTable, { Column } from "../components/CrudTable";
-import PageHeader from "../components/PageHeader";
 
 export default function CustomersPage() {
   const columns: Column[] = [
@@ -11,24 +9,15 @@ export default function CustomersPage() {
   ];
 
   return (
-    <Box sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-      }}>
-        <PageHeader
-          title="ניהול לקוחות"
-          subtitle="צפייה, הוספה ועריכה של לקוחות במערכת"
-        />
-        <Box sx={{ flex: 1, overflow: "hidden", width: "100%", p: 0 }}>
-          <CrudTable
-            apiUrl="/api/settings/customers"
-            columns={columns}
-            idField="id"
-            nameField="name"
-            entityName="לקוח"
-          />
-        </Box>
-    </Box>
+    <CrudTable
+      apiUrl="/api/settings/customers"
+      columns={columns}
+      idField="id"
+      nameField="name"
+      entityName="לקוח"
+      title="ניהול לקוחות"
+      subtitle="הלקוחות שעבורם נבדקים פריטים במערכת."
+      countLabel="לקוחות"
+    />
   );
 }

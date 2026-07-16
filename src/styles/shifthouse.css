@@ -36,6 +36,8 @@
   border-bottom:1px solid var(--shx-hairline); white-space:nowrap;
 }
 .shx-th--center { text-align:center; }
+/* pinned header for bounded/scrolling tables (DataTable maxHeight) */
+.shx-table--sticky thead th { position:sticky; top:0; z-index:1; }
 .shx-row { border-top:1px solid var(--shx-divider); transition:background 0.12s ease; }
 .shx-row--clickable { cursor:pointer; }
 .shx-row:hover { background:var(--shx-pearl); }          /* <-- the hover that was missing */

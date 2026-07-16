@@ -1,7 +1,5 @@
 "use client";
-import { Box } from "@/components/ui";
 import CrudTable, { Column } from "../components/CrudTable";
-import PageHeader from "../components/PageHeader";
 
 export default function SourcesPage() {
   const columns: Column[] = [
@@ -10,25 +8,15 @@ export default function SourcesPage() {
   ];
 
   return (
-    <Box sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-      }}>
-        <PageHeader
-          title="ניהול מקורות"
-          subtitle="הגדרת מקורות המשלוחים במערכת"
-        />
-        <Box sx={{ flex: 1, overflow: "hidden", width: "100%", p: 0 }}>
-          <CrudTable
-            apiUrl="/api/settings/sources"
-            columns={columns}
-            idField="source_id"
-            nameField="source_desc"
-            entityName="מקור"
-          />
-        </Box>
-    </Box>
+    <CrudTable
+      apiUrl="/api/settings/sources"
+      columns={columns}
+      idField="source_id"
+      nameField="source_desc"
+      entityName="מקור"
+      title="ניהול מקורות"
+      subtitle="מקורות המשלוחים הנכנסים למערכת."
+      countLabel="מקורות"
+    />
   );
 }
-

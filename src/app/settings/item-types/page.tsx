@@ -1,7 +1,5 @@
 "use client";
-import { Box } from "@/components/ui";
 import CrudTable, { Column } from "../components/CrudTable";
-import PageHeader from "../components/PageHeader";
 
 export default function ItemTypesPage() {
   const columns: Column[] = [
@@ -10,24 +8,15 @@ export default function ItemTypesPage() {
   ];
 
   return (
-    <Box sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-      }}>
-        <PageHeader
-          title="ניהול סוגי פריטים"
-          subtitle="הגדרת סוגי הפריטים הנבדקים במערכת"
-        />
-        <Box sx={{ flex: 1, overflow: "hidden", width: "100%", p: 0 }}>
-          <CrudTable
-            apiUrl="/api/settings/item-types"
-            columns={columns}
-            idField="item_type_id"
-            nameField="item_type_desc"
-            entityName="סוג פריט"
-          />
-        </Box>
-    </Box>
+    <CrudTable
+      apiUrl="/api/settings/item-types"
+      columns={columns}
+      idField="item_type_id"
+      nameField="item_type_desc"
+      entityName="סוג פריט"
+      title="סוגי פריטים"
+      subtitle="הגדרת סוגי הפריטים הנבדקים במערכת."
+      countLabel="סוגים"
+    />
   );
 }

@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  @media (max-width: 980px) { .app-main { padding-inline-start: 0 !important; } }
+  @media (max-width: 640px) { .app-main { padding-top: 52px !important; } .fgrid { grid-template-columns: 1fr !important; } }
+  input, select, textarea, button { font-family: inherit; }
+  ::placeholder { color: #9a9aa0; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d4d4dc; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+  select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237a7a7a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 10px center; padding-inline-end: 30px; }
+  @media print { body * { visibility: hidden; } #sh-print, #sh-print *, #sh-receipt, #sh-receipt * { visibility: visible; } #sh-print { position: fixed; inset: 0; padding: 24px; } #sh-receipt { position: fixed; inset: 0; padding: 32px; background: #fff; } }
+</style>
+</helmet>
+
+<div class="app-main" dir="rtl" style="min-height:100vh;background:#f5f5f7;font-family:'Heebo','Inter',system-ui,-apple-system,sans-serif;color:#1d1d1f;-webkit-font-smoothing:antialiased;text-align:right;padding-inline-start:240px;padding-top:56px">
+
+  <dc-import name="TopNav" active="shipments" hint-size="240px,56px"></dc-import>
+
+  <div style="max-width:1320px;margin:0 auto;padding:36px 24px 64px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap">
+      <div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <h1 style="margin:0;font-size:34px;font-weight:700;letter-spacing:-0.6px;line-height:1.1">משלוחים נכנסים</h1>
+          <span style="font-size:13px;color:#7a7a7a;background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:3px 11px;font-variant-numeric:tabular-nums">{{ countLabel }}</span>
+        </div>
+        <p style="margin:8px 0 0;font-size:16px;color:#444;line-height:1.5">משלוחי פריטים שהתקבלו לבדיקה, כמויות מדגם וסטטוס טיפול.</p>
+      </div>
+      <button onClick="{{ openAdd }}" style="display:inline-flex;align-items:center;gap:7px;background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:12px 22px;font-size:15px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:#0058b3" style-active="transform:scale(0.96)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>משלוח חדש</button>
+    </div>
+
+    <!-- filter bar -->
+    <div style="margin-top:24px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px;max-width:340px">
+        <label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:5px">חיפוש</label>
+        <div style="position:relative">
+          <span style="position:absolute;inset-inline-start:13px;top:50%;transform:translateY(-50%);color:#7a7a7a;pointer-events:none;display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+          <input value="{{ search }}" onChange="{{ setSearch }}" placeholder="קוד, לקוח, מקור או מק״ט" style="width:100%;height:40px;border:1px solid #e0e0e0;border-radius:9px;padding-inline-start:38px;padding-inline-end:12px;font-size:14px;background:#fff;outline:none" style-focus="border-color:#0071e3">
+        </div>
+      </div>
+      <div style="min-width:170px">
+        <label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:5px">לקוח</label>
+        <div style="position:relative">
+          <button onClick="{{ custFilter.onToggle }}" style="width:100%;height:40px;display:inline-flex;align-items:center;gap:10px;border:1px solid {{ custFilter.border }};border-radius:9px;background:#fff;padding:0 12px;font-size:14px;color:#1d1d1f;cursor:pointer;justify-content:space-between" style-hover="border-color:#c4c4cc"><span style="color:{{ custFilter.valueColor }};font-weight:{{ custFilter.weight }}">{{ custFilter.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+          <sc-if value="{{ custFilter.open }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;z-index:25;top:calc(100% + 6px);inset-inline-start:0;min-width:100%;background:#fff;border:1px solid #e0e0e0;border-radius:12px;box-shadow:rgba(0,0,0,0.12) 0 10px 34px 0;overflow:hidden;max-height:280px;overflow-y:auto;white-space:nowrap">
+              <sc-for list="{{ custFilter.options }}" as="opt" hint-placeholder-count="3"><div onClick="{{ opt.onPick }}" style="display:flex;align-items:center;gap:9px;padding:10px 14px;font-size:14px;cursor:pointer;border-top:1px solid #f0f0f0;background:{{ opt.bg }}" style-hover="background:#f5f5f7"><span style="width:14px;display:flex;color:#0066cc">{{ opt.tick }}</span>{{ opt.label }}</div></sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <div style="min-width:150px"><label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:5px">מתאריך</label><input type="date" value="{{ dateFrom }}" onChange="{{ setDateFrom }}" style="height:40px;border:1px solid #e0e0e0;border-radius:9px;padding:0 12px;font-size:14px;background:#fff;outline:none;width:100%;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"></div>
+      <div style="min-width:150px"><label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:5px">עד תאריך</label><input type="date" value="{{ dateTo }}" onChange="{{ setDateTo }}" style="height:40px;border:1px solid #e0e0e0;border-radius:9px;padding:0 12px;font-size:14px;background:#fff;outline:none;width:100%;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"></div>
+      <sc-if value="{{ anyFilter }}" hint-placeholder-val="{{ false }}"><button onClick="{{ clearFilters }}" style="height:40px;display:inline-flex;align-items:center;gap:6px;background:transparent;border:1px solid #d4d4dc;border-radius:9px;color:#1d1d1f;font-size:14px;font-weight:600;cursor:pointer;padding:0 14px" style-hover="background:#f5f5f7"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>נקה</button></sc-if>
+    </div>
+
+    <!-- active filter chips -->
+    <sc-if value="{{ hasChips }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+        <sc-for list="{{ activeChips }}" as="c" hint-placeholder-count="2"><span style="display:inline-flex;align-items:center;gap:7px;background:#e6efff;color:#0a4a99;border:1px solid #b9d4ff;border-radius:9999px;padding:5px 12px;font-size:13px;font-weight:600">{{ c.label }}<button onClick="{{ c.onRemove }}" style="display:flex;border:0;background:transparent;color:#0a4a99;cursor:pointer;padding:0" style-hover="opacity:0.6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span></sc-for>
+      </div>
+    </sc-if>
+
+    <!-- table -->
+    <div style="margin-top:18px;background:#fff;border:1px solid #e0e0e0;border-radius:16px;overflow:hidden">
+      <div style="overflow:auto;max-height:calc(100vh - 240px)">
+        <table style="width:100%;min-width:1180px;border-collapse:collapse;white-space:nowrap">
+          <thead>
+            <tr style="background:#f5f5f7">
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">מקור</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">מס׳ משלוח</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">קוד לקוח</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">תאריך קבלה</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">עובד מקבל</th>
+              <th style="text-align:center;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">כמות כוללת</th>
+              <th style="text-align:center;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">כמות מדגם</th>
+              <th style="text-align:center;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">תת פריטים</th>
+              <th style="text-align:center;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1">כמות תקינה</th>
+              <th style="text-align:center;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:13px 12px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7;z-index:1;width:192px">פעולות</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-if value="{{ loading }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ skeleton }}" as="k" hint-placeholder-count="5"><tr style="border-top:1px solid #f0f0f0"><td colspan="10" style="padding:15px 16px"><div style="height:14px;border-radius:6px;background:#eef0f3"></div></td></tr></sc-for></sc-if>
+            <sc-if value="{{ notLoading }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+              <tr onClick="{{ r.onOpen }}" style="cursor:pointer;border-top:1px solid #f0f0f0" style-hover="background:#fafafc">
+                <td style="padding:12px 16px;font-size:14px;color:#444">{{ r.source }}</td>
+                <td style="padding:12px 16px;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">{{ r.code }}</td>
+                <td style="padding:12px 16px;font-size:14px;color:#444;white-space:nowrap"><span style="display:inline-flex;align-items:center;gap:8px">{{ r.customer }}<sc-if value="{{ r.isSent }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#1d1d1f;background:#f5f5f7;border:1px solid #e0e0e0;border-radius:9999px;padding:3px 8px"><span style="width:5px;height:5px;border-radius:50%;background:#0066cc"></span>נשלח</span></sc-if></span></td>
+                <td style="padding:12px 16px;font-size:14px;color:#444;font-variant-numeric:tabular-nums">{{ r.date }}</td>
+                <td style="padding:12px 16px;font-size:14px;color:#444">{{ r.worker }}</td>
+                <td style="padding:12px 16px;font-size:14px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums">{{ r.amount }}</td>
+                <td style="padding:12px 16px;font-size:14px;text-align:center;font-variant-numeric:tabular-nums">{{ r.sampled }}</td>
+                <td style="padding:12px 16px;font-size:14px;text-align:center;font-variant-numeric:tabular-nums">{{ r.subItems }}</td>
+                <td style="padding:12px 16px;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums">{{ r.valid }}</td>
+                <td style="padding:9px 16px">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:4px">
+                    <button onClick="{{ r.onEdit }}" title="עריכת משלוח" style="width:32px;height:32px;border:0;border-radius:8px;background:#f5f5f7;color:#5a5a5f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#e6efff;color:#0066cc"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+                    <button onClick="{{ r.onSend }}" title="החזר משלוח" style="width:32px;height:32px;border:0;border-radius:8px;background:#f5f5f7;color:#5a5a5f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#e6efff;color:#0066cc"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 21.7a.5.5 0 0 0 .94-.02l6.5-19a.5.5 0 0 0-.64-.63l-19 6.5a.5.5 0 0 0-.02.93l7.93 3.2a2 2 0 0 1 1.1 1.1z"/><path d="m21.85 2.15-10.94 10.94"/></svg></button>
+                    <button onClick="{{ r.onHistory }}" title="היסטוריה" style="width:32px;height:32px;border:0;border-radius:8px;background:#f5f5f7;color:#5a5a5f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#e6efff;color:#0066cc"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
+                    <button onClick="{{ r.onPdf }}" title="הורד PDF" style="width:32px;height:32px;border:0;border-radius:8px;background:#f5f5f7;color:#5a5a5f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#e6efff;color:#0066cc"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15h6"/><path d="M9 18h6"/></svg></button>
+                    <button onClick="{{ r.onBarcodes }}" title="הדפס ברקודים" style="width:32px;height:32px;border:0;border-radius:8px;background:#f5f5f7;color:#5a5a5f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#e6efff;color:#0066cc"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg></button>
+                  </div>
+                </td>
+              </tr>
+            </sc-for></sc-if>
+          </tbody>
+        </table>
+      </div>
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;padding:52px 0;color:#7a7a7a"><div style="font-size:16px;color:#1d1d1f;font-weight:600">לא נמצאו משלוחים תואמים.</div></div></sc-if>
+    </div>
+  </div>
+
+  <sc-if value="{{ comboOpen }}" hint-placeholder-val="{{ false }}"><div onClick="{{ closeCombo }}" style="position:fixed;inset:0;z-index:20"></div></sc-if>
+
+  <!-- ADD / INSERT -->
+  <sc-if value="{{ addOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAdd }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(820px,96vw);max-height:90vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid #e0e0e0">
+          <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">הוספת משלוח חדש</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button onClick="{{ openScan }}" title="סרוק ברקוד למילוי אוטומטי" style="display:inline-flex;align-items:center;gap:7px;background:#0066cc;color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#0058b3"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h1v8H7z"/><path d="M11 8h1v8h-1z"/><path d="M15 8h2v8h-2z"/></svg>סרוק ברקוד</button>
+            <button onClick="{{ closeAdd }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+        </div>
+        <div style="padding:20px 24px;overflow-y:auto">
+          <sc-if value="{{ af.scanned }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:10px;background:#e6efff;border:1px solid #b9d4ff;color:#0a4a99;border-radius:10px;padding:11px 14px;font-size:13px;line-height:1.5;margin-bottom:16px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>הנתונים מולאו מסריקת ברקוד ונעולים לעריכה. ניתן להזין ידנית רק את שדות הפריטים שאינם כלולים בברקוד.</div></sc-if>
+          <div style="margin-bottom:14px">
+            <label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">פרטי איש קשר (POC)</label>
+            <textarea value="{{ af.poc }}" onChange="{{ setAddPoc }}" disabled="{{ af.scanned }}" rows="2" placeholder="שם וטלפון איש קשר…" style="width:100%;min-height:60px;border:1px solid #e0e0e0;border-radius:8px;padding:9px 11px;font-size:14px;outline:none;resize:vertical;line-height:1.5;background:{{ af.lockBg }}" style-focus="border-color:#0071e3"></textarea>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">מס׳ משלוח <span style="color:#bf3535">*</span></label><input value="{{ af.code }}" onChange="{{ setAddCode }}" disabled="{{ af.scanned }}" maxlength="20" placeholder="SH-2042" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums;background:{{ af.lockBg }}" style-focus="border-color:#0071e3"></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">קוד לקוח <span style="color:#bf3535">*</span></label><button onClick="{{ tAddCustomer.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ tAddCustomer.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ tAddCustomer.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tAddCustomer.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">עובד מקבל</label><button onClick="{{ tAddWorker.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ tAddWorker.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ tAddWorker.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tAddWorker.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">מקור <span style="color:#bf3535">*</span></label><button onClick="{{ tAddSource.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ tAddSource.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ tAddSource.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tAddSource.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">תאריך משלוח <span style="color:#bf3535">*</span></label><input type="date" value="{{ af.date }}" onChange="{{ setAddDate }}" disabled="{{ af.scanned }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums;background:{{ af.lockBg }}" style-focus="border-color:#0071e3"></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">כמות כוללת (מחושב)</label><input value="{{ af.total }}" disabled="{{ true }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums;background:#f5f5f7;font-weight:700" readonly></div>
+          </div>
+
+          <div style="margin-top:20px;border-top:1px solid #e0e0e0;padding-top:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">פריטים במשלוח</div><button onClick="{{ addAddItem }}" style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #0066cc;color:#0066cc;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#e6efff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>הוסף סוג פריט</button></div>
+            <div style="display:grid;grid-template-columns:1fr 130px 110px 38px;gap:10px;margin-bottom:6px"><div style="font-size:11px;font-weight:600;color:#9a9aa0">סוג פריט</div><div style="font-size:11px;font-weight:600;color:#9a9aa0">מק״ט</div><div style="font-size:11px;font-weight:600;color:#9a9aa0">כמות</div><div></div></div>
+            <sc-for list="{{ addItems }}" as="it" hint-placeholder-count="1">
+              <div style="display:grid;grid-template-columns:1fr 130px 110px 38px;gap:10px;margin-bottom:8px;align-items:center">
+                <button onClick="{{ it.tType.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ it.tType.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ it.tType.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.tType.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button>
+                <input type="number" value="{{ it.makat }}" onChange="{{ it.onMakat }}" placeholder="מק״ט" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3">
+                <input type="number" value="{{ it.qty }}" onChange="{{ it.onQty }}" placeholder="0" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3">
+                <sc-if value="{{ it.showRemove }}" hint-placeholder-val="{{ false }}"><button onClick="{{ it.onRemove }}" title="מחק" style="width:38px;height:38px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;color:#bf3535;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#fdeaea;border-color:#bf3535"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:12px;border-top:1px solid #e0e0e0;padding-top:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:600;color:#555">חתימה</div><button onClick="{{ clearSig }}" style="background:transparent;border:0;color:#0066cc;font-size:13px;font-weight:600;cursor:pointer">נקה חתימה</button></div>
+            <canvas ref="{{ setSig }}" onPointerDown="{{ sigStart }}" onPointerMove="{{ sigMove }}" onPointerUp="{{ sigEnd }}" onPointerLeave="{{ sigEnd }}" width="760" height="84" style="width:100%;height:84px;border:1px solid #e0e0e0;border-radius:10px;background:#fafafa;touch-action:none;cursor:crosshair;display:block"></canvas>
+          </div>
+
+          <sc-if value="{{ addError }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px;font-size:13px;color:#bf3535;font-weight:600">{{ addError }}</div></sc-if>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-top:1px solid #e0e0e0;background:#fafafc"><div style="flex:1"></div><button onClick="{{ closeAdd }}" style="background:transparent;color:#1d1d1f;border:1px solid #d4d4dc;border-radius:9999px;padding:10px 20px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:rgba(0,0,0,0.03)">ביטול</button><button onClick="{{ saveAdd }}" style="background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 26px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.97)">הוספה</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- QR SCAN sub-dialog -->
+  <sc-if value="{{ scanOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeScan }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:70;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(440px,94vw);background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid #e0e0e0"><div style="font-size:18px;font-weight:700;letter-spacing:-0.3px">סריקת ברקוד</div><button onClick="{{ closeScan }}" style="width:32px;height:32px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div style="padding:26px 24px;display:flex;flex-direction:column;align-items:center;gap:18px">
+          <sc-if value="{{ scanError }}" hint-placeholder-val="{{ false }}"><div style="width:100%;background:#fdeaea;border:1px solid #f3c6c6;color:#bf3535;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600">{{ scanError }}</div></sc-if>
+          <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="#c4c4cc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h1v8H7z"/><path d="M11 8h1v8h-1z"/><path d="M15 8h2v8h-2z"/></svg>
+          <div style="font-size:15px;font-weight:600;color:#1d1d1f;text-align:center">נא לסרוק את הברקוד כעת</div>
+          <input value="{{ scanInput }}" onChange="{{ setScanInput }}" onKeyDown="{{ scanKey }}" placeholder="המתנה לסריקה… או הזן ידנית" autofocus style="width:100%;height:46px;border:1px solid #e0e0e0;border-radius:9px;padding:0 12px;font-size:15px;outline:none;text-align:center" style-focus="border-color:#0071e3">
+          <button onClick="{{ submitScan }}" style="width:100%;background:#0066cc;color:#fff;border:0;border-radius:9px;padding:12px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3">אישור</button>
+          <div style="font-size:11px;color:#9a9aa0;text-align:center;line-height:1.5">פורמט לדוגמה: <span style="font-family:'Inter',monospace">1|SH-2099|RAF|07/01/2026|אבי כהן</span></div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- DUPLICATE dialog -->
+  <sc-if value="{{ dupOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDup }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:75;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(440px,94vw);background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;padding:24px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#bf3535" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg><div style="font-size:18px;font-weight:700">המשלוח כבר קיים במערכת</div></div>
+        <div style="background:#fdeaea;border-radius:10px;padding:12px 14px;font-size:14px;font-weight:600;color:#bf3535;line-height:1.5;margin-bottom:14px">לא ניתן לקלוט את המשלוח — קיים כבר משלוח עם אותם הפרטים.</div>
+        <div style="border:1px solid #e0e0e0;border-radius:10px;padding:14px;background:#fafafc;display:flex;flex-direction:column;gap:7px">
+          <div style="font-size:13px;color:#7a7a7a">מס׳ משלוח: <strong style="color:#1d1d1f">{{ dup.code }}</strong></div>
+          <div style="font-size:13px;color:#7a7a7a">קוד לקוח: <strong style="color:#1d1d1f">{{ dup.customer }}</strong></div>
+          <div style="font-size:13px;color:#7a7a7a">תאריך קבלה: <strong style="color:#1d1d1f">{{ dup.date }}</strong></div>
+        </div>
+        <div style="display:flex;margin-top:18px"><div style="flex:1"></div><button onClick="{{ closeDup }}" style="background:#bf3535;color:#fff;border:0;border-radius:9999px;padding:10px 26px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#a82d2d">אישור</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- EDIT / UPDATE -->
+  <sc-if value="{{ editOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeEdit }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(820px,96vw);max-height:90vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid #e0e0e0"><div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">עדכון משלוח {{ ef.code }}</div><button onClick="{{ closeEdit }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div style="padding:20px 24px;overflow-y:auto">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">מס׳ משלוח <span style="color:#bf3535">*</span></label><input value="{{ ef.code }}" onChange="{{ setEditCode }}" maxlength="20" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">קוד לקוח <span style="color:#bf3535">*</span></label><button onClick="{{ tEditCustomer.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ tEditCustomer.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ tEditCustomer.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tEditCustomer.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">עובד מקבל</label><button onClick="{{ tEditWorker.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ tEditWorker.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ tEditWorker.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tEditWorker.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">מקור</label><button onClick="{{ tEditSource.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ tEditSource.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ tEditSource.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tEditSource.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">תאריך משלוח <span style="color:#bf3535">*</span></label><input type="date" value="{{ ef.date }}" onChange="{{ setEditDate }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">כמות כוללת (מחושב)</label><input value="{{ ef.total }}" disabled="{{ true }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums;background:#f5f5f7;font-weight:700" readonly></div>
+          </div>
+          <div style="margin-top:20px;border-top:1px solid #e0e0e0;padding-top:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">פריטים במשלוח</div><button onClick="{{ addEditItem }}" style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #0066cc;color:#0066cc;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#e6efff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>הוסף סוג פריט</button></div>
+            <div style="display:grid;grid-template-columns:1fr 130px 110px 38px;gap:10px;margin-bottom:6px"><div style="font-size:11px;font-weight:600;color:#9a9aa0">סוג פריט</div><div style="font-size:11px;font-weight:600;color:#9a9aa0">מק״ט</div><div style="font-size:11px;font-weight:600;color:#9a9aa0">כמות</div><div></div></div>
+            <sc-for list="{{ editItems }}" as="it" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:1fr 130px 110px 38px;gap:10px;margin-bottom:8px;align-items:center">
+                <button onClick="{{ it.tType.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ it.tType.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ it.tType.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.tType.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button>
+                <input type="number" value="{{ it.makat }}" onChange="{{ it.onMakat }}" placeholder="מק״ט" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3">
+                <input type="number" value="{{ it.qty }}" onChange="{{ it.onQty }}" placeholder="0" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3">
+                <sc-if value="{{ it.showRemove }}" hint-placeholder-val="{{ false }}"><button onClick="{{ it.onRemove }}" title="מחק" style="width:38px;height:38px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;color:#bf3535;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#fdeaea;border-color:#bf3535"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ editError }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px;font-size:13px;color:#bf3535;font-weight:600">{{ editError }}</div></sc-if>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-top:1px solid #e0e0e0;background:#fafafc"><div style="flex:1"></div><button onClick="{{ closeEdit }}" style="background:transparent;color:#1d1d1f;border:1px solid #d4d4dc;border-radius:9999px;padding:10px 20px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:rgba(0,0,0,0.03)">ביטול</button><button onClick="{{ saveEdit }}" style="background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 26px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.97)">עדכן</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- SEND -->
+  <sc-if value="{{ sendOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeSend }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:61;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(800px,96vw);max-height:90vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid #e0e0e0"><div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">החזרת משלוח</div><button onClick="{{ closeSend }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div style="padding:20px 24px;overflow-y:auto">
+          <div style="display:flex;align-items:center;gap:10px;background:#fff7e6;border:1px solid #f5d9a3;color:#9a6a00;border-radius:10px;padding:11px 14px;font-size:13px;line-height:1.5;margin-bottom:16px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>שים לב: ייתכן וישנם פריטים מחוברים (Sub-items)</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:14px">משלוח מקור: {{ sendInfo }}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">קוד משלוח יוצא <span style="color:#bf3535">*</span></label><input value="{{ sf.code }}" onChange="{{ setSendCode }}" placeholder="SO-101" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">תאריך שליחה <span style="color:#bf3535">*</span></label><input type="date" value="{{ sf.date }}" onChange="{{ setSendDate }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"></div>
+            <div><label style="display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px">עובד מוציא</label><button onClick="{{ tSendWorker.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ tSendWorker.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ tSendWorker.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tSendWorker.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button></div>
+          </div>
+          <div style="margin-top:20px;border-top:1px solid #e0e0e0;padding-top:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">פריטים לשליחה</div><button onClick="{{ addSendItem }}" style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #0066cc;color:#0066cc;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#e6efff"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>הוסף פריט לשליחה</button></div>
+            <sc-for list="{{ sendItems }}" as="it" hint-placeholder-count="1">
+              <div style="display:grid;grid-template-columns:1fr 160px 38px;gap:10px;margin-bottom:8px;align-items:start">
+                <button onClick="{{ it.tSel.onOpen }}" style="width:100%;height:38px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e0e0e0;border-radius:8px;background:{{ it.tSel.bg }};padding:0 11px;font-size:14px;cursor:pointer;text-align:right" style-hover="border-color:#c4c4cc"><span style="color:{{ it.tSel.color }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.tSel.label }}</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7a7a7a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div><input type="number" value="{{ it.amount }}" onChange="{{ it.onAmount }}" placeholder="כמות" style="width:100%;height:38px;border:1px solid {{ it.border }};border-radius:8px;padding:0 11px;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"><div style="font-size:11px;color:{{ it.maxColor }};margin-top:3px">{{ it.maxLabel }}</div></div>
+                <button onClick="{{ it.onRemove }}" title="מחק" style="width:38px;height:38px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;color:#bf3535;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#fdeaea;border-color:#bf3535"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:12px;border-top:1px solid #e0e0e0;padding-top:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:600;color:#555">חתימה</div><button onClick="{{ clearSig }}" style="background:transparent;border:0;color:#0066cc;font-size:13px;font-weight:600;cursor:pointer">נקה חתימה</button></div>
+            <canvas ref="{{ setSig }}" onPointerDown="{{ sigStart }}" onPointerMove="{{ sigMove }}" onPointerUp="{{ sigEnd }}" onPointerLeave="{{ sigEnd }}" width="760" height="84" style="width:100%;height:84px;border:1px solid #e0e0e0;border-radius:10px;background:#fafafa;touch-action:none;cursor:crosshair;display:block"></canvas>
+          </div>
+          <sc-if value="{{ sendError }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px;font-size:13px;color:#bf3535;font-weight:600">{{ sendError }}</div></sc-if>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-top:1px solid #e0e0e0;background:#fafafc"><div style="flex:1"></div><button onClick="{{ closeSend }}" style="background:transparent;color:#1d1d1f;border:1px solid #d4d4dc;border-radius:9999px;padding:10px 20px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:rgba(0,0,0,0.03)">ביטול</button><button onClick="{{ saveSend }}" style="background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 26px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.97)">שלח</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- HISTORY -->
+  <sc-if value="{{ historyOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeHistory }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:61;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(860px,96vw);max-height:88vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid #e0e0e0"><div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">היסטוריית שליחות · {{ histCode }}</div><button onClick="{{ closeHistory }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div style="padding:20px 24px;overflow-y:auto">
+          <div style="background:#f5f5f7;border-radius:12px;padding:16px;margin-bottom:18px">
+            <div style="font-size:15px;font-weight:700;margin-bottom:10px">סיכום</div>
+            <div style="display:flex;gap:28px;flex-wrap:wrap;margin-bottom:12px">
+              <div><div style="font-size:12px;color:#7a7a7a">כמות התקבלה</div><div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums">{{ histSummary.received }}</div></div>
+              <div><div style="font-size:12px;color:#7a7a7a">כמות נשלחה</div><div style="font-size:22px;font-weight:700;color:#1f8a5b;font-variant-numeric:tabular-nums">{{ histSummary.sent }}</div></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <sc-for list="{{ histSummary.items }}" as="st" hint-placeholder-count="2"><span style="font-size:12px;background:#fff;border:1px solid #e0e0e0;border-radius:7px;padding:5px 10px;font-variant-numeric:tabular-nums">{{ st.label }}</span></sc-for>
+            </div>
+          </div>
+          <div style="border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;white-space:nowrap">
+              <thead><tr style="background:#f5f5f7"><th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0">תאריך</th><th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0">מס׳ משלוח</th><th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0">עובד שולח</th><th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0">תיאור פריט</th><th style="text-align:center;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0">כמות נשלחה</th><th style="text-align:center;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0">PDF</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ histGroups }}" as="g" hint-placeholder-count="2">
+                  <tr style="border-top:1px solid #f0f0f0;vertical-align:top">
+                    <td style="padding:12px 14px;font-size:13px;font-variant-numeric:tabular-nums">{{ g.date }}</td>
+                    <td style="padding:12px 14px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">{{ g.code }}</td>
+                    <td style="padding:12px 14px;font-size:13px">{{ g.worker }}</td>
+                    <td style="padding:12px 14px;font-size:13px;white-space:normal"><sc-for list="{{ g.items }}" as="li" hint-placeholder-count="2"><div style="margin-bottom:2px">{{ li.label }}</div></sc-for></td>
+                    <td style="padding:12px 14px;font-size:13px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums">{{ g.total }}</td>
+                    <td style="padding:8px 14px;text-align:center"><button onClick="{{ g.onPdf }}" title="הורד PDF" style="width:32px;height:32px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;color:#bf3535;display:flex;align-items:center;justify-content:center;cursor:pointer;margin:0 auto" style-hover="background:#fdeaea;border-color:#bf3535"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15h6"/><path d="M9 18h6"/></svg></button></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <sc-if value="{{ histEmpty }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;padding:32px 0;color:#7a7a7a;font-size:14px">לא נמצאה היסטוריית שליחות.</div></sc-if>
+          </div>
+        </div>
+        <div style="display:flex;padding:14px 24px;border-top:1px solid #e0e0e0;background:#fafafc"><div style="flex:1"></div><button onClick="{{ closeHistory }}" style="background:transparent;color:#1d1d1f;border:1px solid #d4d4dc;border-radius:9999px;padding:10px 24px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:rgba(0,0,0,0.03)">סגור</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- BARCODES -->
+  <sc-if value="{{ barcodesOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeBarcodes }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:61;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(560px,94vw);max-height:86vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid #e0e0e0"><div><div style="font-size:19px;font-weight:700;letter-spacing:-0.3px">הדפסת מדבקות · {{ barcodeShipCode }}</div><div style="font-size:13px;color:#7a7a7a;margin-top:2px">יודפסו {{ barcodeCount }} מדבקות — מדבקה לכל פריט, עם פרטי המשלוח ומספר מתוך סה״כ</div></div><button onClick="{{ closeBarcodes }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <sc-if value="{{ barcodeEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:32px 24px"><div style="background:#e6efff;border:1px solid #b9d4ff;color:#0a4a99;border-radius:10px;padding:14px;font-size:14px">למשלוח זה לא הוגדרה כמות פריטים להדפסה.</div></div></sc-if>
+        <div id="sh-print" style="padding:20px 24px;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <sc-for list="{{ barcodeLabels }}" as="b" hint-placeholder-count="4">
+            <div style="border:1px solid #e0e0e0;border-radius:10px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:8px;page-break-after:always">
+              <div style="display:flex;align-items:flex-end;height:50px"><sc-for list="{{ b.bars }}" as="bar" hint-placeholder-count="30"><div style="width:{{ bar.w }};height:100%;background:{{ bar.color }}"></div></sc-for></div>
+              <div style="font-family:'Inter',monospace;font-size:14px;font-weight:600;letter-spacing:1px;font-variant-numeric:tabular-nums">{{ b.value }}</div>
+              <div style="font-size:12px;color:#444;text-align:center;line-height:1.5">משלוח: {{ b.value }}<br>לקוח: {{ b.customer }} · {{ b.date }}</div>
+              <div style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums">{{ b.n }} / {{ b.total }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-top:1px solid #e0e0e0;background:#fafafc"><div style="flex:1"></div><button onClick="{{ closeBarcodes }}" style="background:transparent;color:#1d1d1f;border:1px solid #d4d4dc;border-radius:9999px;padding:10px 20px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:rgba(0,0,0,0.03)">סגור</button><button onClick="{{ doPrint }}" style="display:inline-flex;align-items:center;gap:8px;background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 24px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>הדפס הכל ({{ barcodeCount }})</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- PDF RECEIPT (print only) -->
+  <sc-if value="{{ printShipOpen }}" hint-placeholder-val="{{ false }}">
+    <div id="sh-receipt" dir="rtl" style="position:fixed;inset:0;background:#fff;z-index:-1;opacity:0;pointer-events:none">
+      <div style="max-width:680px;margin:0 auto;font-family:'Heebo',sans-serif">
+        <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #1d1d1f;padding-bottom:12px;margin-bottom:18px"><div style="font-size:24px;font-weight:700">תעודת קבלת משלוח</div><div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">{{ printShip.code }}</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px;margin-bottom:18px">
+          <div>לקוח: <strong>{{ printShip.customer }}</strong></div>
+          <div>תאריך קבלה: <strong>{{ printShip.date }}</strong></div>
+          <div>מקור: <strong>{{ printShip.source }}</strong></div>
+          <div>עובד מקבל: <strong>{{ printShip.worker }}</strong></div>
+          <div>כמות כוללת: <strong>{{ printShip.amount }}</strong></div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr><th style="text-align:right;border-bottom:1px solid #1d1d1f;padding:7px">סוג פריט</th><th style="text-align:right;border-bottom:1px solid #1d1d1f;padding:7px">מק״ט</th><th style="text-align:left;border-bottom:1px solid #1d1d1f;padding:7px">כמות</th></tr></thead><tbody><sc-for list="{{ printShip.items }}" as="pi" hint-placeholder-count="2"><tr><td style="padding:7px;border-bottom:1px solid #ddd">{{ pi.desc }}</td><td style="padding:7px;border-bottom:1px solid #ddd;font-variant-numeric:tabular-nums">{{ pi.makat }}</td><td style="padding:7px;border-bottom:1px solid #ddd;text-align:left;font-variant-numeric:tabular-nums">{{ pi.qty }}</td></tr></sc-for></tbody></table>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- floating searchable combobox -->
+  <sc-if value="{{ cbOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeCb }}" style="position:fixed;inset:0;z-index:95"></div>
+    <div style="position:fixed;top:{{ cbTop }}px;left:{{ cbLeft }}px;width:{{ cbWidth }}px;transform:{{ cbTransform }};z-index:96;background:#fff;border:1px solid #e0e0e0;border-radius:12px;box-shadow:rgba(0,0,0,0.16) 0 12px 38px 0;overflow:hidden;display:flex;flex-direction:column">
+      <div style="padding:8px;border-bottom:1px solid #f0f0f0">
+        <input value="{{ cbText }}" onChange="{{ setCbText }}" autofocus placeholder="{{ cbPh }}" style="width:100%;height:34px;border:1px solid #e0e0e0;border-radius:8px;padding:0 10px;font-size:14px;outline:none" style-focus="border-color:#0071e3">
+      </div>
+      <div style="max-height:{{ cbMaxH }}px;overflow-y:auto">
+        <sc-for list="{{ cbOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.onPick }}" style="display:flex;align-items:center;gap:9px;padding:10px 13px;font-size:14px;cursor:pointer;border-top:1px solid #f5f5f7;background:{{ o.bg }}" style-hover="background:#f5f5f7"><span style="width:14px;display:flex;color:#0066cc">{{ o.tick }}</span>{{ o.label }}</div></sc-for>
+        <sc-if value="{{ cbNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:11px 13px;font-size:14px;color:#9a9aa0">אין תוצאה תואמת</div></sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- TOAST -->
+  <sc-if value="{{ toastOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:90;background:{{ toast.bg }};color:#fff;padding:13px 24px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:rgba(0,0,0,0.22) 0 6px 24px">{{ toast.msg }}</div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  // ---- reference data ----
+  customers = [
+    { id: 1, code: "RAF" }, { id: 2, code: "ELB" }, { id: 3, code: "IAI" }, { id: 4, code: "ELT" },
+  ];
+  workers = [
+    { id: 1, name: "יוסי לוי", stokekeeper: true }, { id: 2, name: "דנה כהן", stokekeeper: true },
+    { id: 3, name: "אחמד נסר", stokekeeper: false }, { id: 4, name: "מרים אבני", stokekeeper: true },
+    { id: 5, name: "אבי כהן", stokekeeper: false },
+  ];
+  itemTypes = [
+    { id: 1, name: "כרטיס בקר" }, { id: 2, name: "ספק כוח" }, { id: 3, name: "מחבר" },
+    { id: 4, name: "כבל" }, { id: 5, name: "חיישן" }, { id: 6, name: "מארז" },
+  ];
+  sources = [
+    { id: 1, desc: "קו ייצור A" }, { id: 2, desc: "קו ייצור B" }, { id: 3, desc: "מלאי חוזר" }, { id: 4, desc: "ספק חיצוני" },
+  ];
+
+  state = {
+    loading: true,
+    search: "", customerFilter: "", dateFrom: "", dateTo: "", openCombo: null,
+    cb: { open: false, opts: [], cur: "", setter: null, text: "", top: 0, left: 0, width: 0, transform: "none", maxH: 260, ph: "" },
+    editId: null, sendId: null, historyId: null, barcodesId: null, printId: null,
+    addOpen: false, scanOpen: false, scanInput: "", scanError: "", dupId: null,
+    addError: "", editError: "", sendError: "",
+    af: { poc: "", code: "", customer: "", worker: "", source: "1", date: "", scanned: false, items: [{ type: "", makat: "", qty: "" }] },
+    ef: { id: null, code: "", customer: "", worker: "", source: "", date: "", items: [{ type: "", makat: "", qty: "" }] },
+    sf: { code: "", date: "", worker: "", items: [{ sel: "", amount: "" }] },
+    toast: null,
+    nextId: 100, nextLog: 2000,
+    shipments: [
+      { id: 1, shipment_code: "SH-2041", customer_id: 1, customer_code: "RAF", shipment_date: "2026-05-26", recieving_worker_id: 1, source_id: 1, poc_details: "אבי כהן 050-1234567",
+        sampled_amount: 20, sub_items_sampled_amount: 8, valid_amount: 18, is_sent: false, finished_at: null,
+        shipment_items: [ { item_type_id: 1, makat: 4400, quantity: 80 }, { item_type_id: 3, makat: 745781, quantity: 40 } ], history: [] },
+      { id: 2, shipment_code: "SH-2038", customer_id: 2, customer_code: "ELB", shipment_date: "2026-05-25", recieving_worker_id: 2, source_id: 2, poc_details: "",
+        sampled_amount: 12, sub_items_sampled_amount: 4, valid_amount: 12, is_sent: false, finished_at: null,
+        shipment_items: [ { item_type_id: 2, makat: 245, quantity: 40 }, { item_type_id: 5, makat: 808, quantity: 24 } ],
+        history: [ { log_id: 1, sent_shipment_code: "SO-101", sent_date: "2026-05-28", sending_worker_id: 3, item_type_id: 2, makat: 245, amount: 10 } ] },
+      { id: 3, shipment_code: "SH-2031", customer_id: 3, customer_code: "IAI", shipment_date: "2026-05-24", recieving_worker_id: 4, source_id: 3, poc_details: "",
+        sampled_amount: 30, sub_items_sampled_amount: 15, valid_amount: 29, is_sent: true, finished_at: "2026-05-30",
+        shipment_items: [ { item_type_id: 1, makat: 2210, quantity: 120 }, { item_type_id: 4, makat: 220, quantity: 80 } ],
+        history: [ { log_id: 2, sent_shipment_code: "SO-090", sent_date: "2026-05-29", sending_worker_id: 1, item_type_id: 1, makat: 2210, amount: 120 }, { log_id: 3, sent_shipment_code: "SO-090", sent_date: "2026-05-29", sending_worker_id: 1, item_type_id: 4, makat: 220, amount: 80 } ] },
+      { id: 4, shipment_code: "SH-2027", customer_id: 1, customer_code: "RAF", shipment_date: "2026-05-23", recieving_worker_id: 3, source_id: 1, poc_details: "",
+        sampled_amount: 10, sub_items_sampled_amount: 6, valid_amount: 9, is_sent: true, finished_at: "2026-05-27",
+        shipment_items: [ { item_type_id: 6, makat: 1100, quantity: 28 }, { item_type_id: 1, makat: 9000, quantity: 20 } ],
+        history: [ { log_id: 4, sent_shipment_code: "SO-077", sent_date: "2026-05-26", sending_worker_id: 2, item_type_id: 6, makat: 1100, amount: 28 }, { log_id: 5, sent_shipment_code: "SO-077", sent_date: "2026-05-26", sending_worker_id: 2, item_type_id: 1, makat: 9000, amount: 20 } ] },
+    ],
+  };
+
+  // ---- helpers ----
+  stop = (e) => e.stopPropagation();
+  componentDidMount() { this._lt = setTimeout(() => this.setState({ loading: false }), 650); }
+  componentWillUnmount() { clearTimeout(this._lt); }
+  custCode = (id) => { const c = this.customers.find((x) => x.id === Number(id)); return c ? c.code : "—"; };
+  workerName = (id) => { const w = this.workers.find((x) => x.id === Number(id)); return w ? w.name : "—"; };
+  sourceDesc = (id) => { const s = this.sources.find((x) => x.id === Number(id)); return s ? s.desc : "—"; };
+  typeName = (id) => { const t = this.itemTypes.find((x) => x.id === Number(id)); return t ? t.name : "—"; };
+  shipAmount = (sh) => (sh.shipment_items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  todayIso = () => "2026-06-29";
+  fmtDate = (iso) => { if (!iso) return "—"; const p = String(iso).split("-"); return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : iso; };
+  tick() { return React.createElement("svg", { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" }, React.createElement("path", { d: "M20 6 9 17l-5-5" })); }
+  bars(value) { const out = []; const v = String(value); for (let i = 0; i < v.length; i++) { const code = v.charCodeAt(i) + i * 5; for (let k = 0; k < 3; k++) { const w = ((code >> (k * 2)) & 3) + 1; out.push({ w: w + "px", color: (i + k) % 2 === 0 ? "#1d1d1f" : "transparent" }); } } return out; }
+  find = (id) => this.state.shipments.find((x) => x.id === id);
+  sentFor = (sh, typeId, makat) => (sh.history || []).filter((h) => h.item_type_id === Number(typeId) && String(h.makat) === String(makat)).reduce((s, h) => s + (Number(h.amount) || 0), 0);
+  totalSent = (sh) => (sh.history || []).reduce((s, h) => s + (Number(h.amount) || 0), 0);
+
+  showToast(msg, ok) { this.setState({ toast: { msg, bg: ok ? "#1f8a5b" : "#bf3535" } }); clearTimeout(this._toastT); this._toastT = setTimeout(() => this.setState({ toast: null }), 3000); }
+
+  // ---- filters ----
+  setSearch = (e) => this.setState({ search: e.target.value });
+  setDateFrom = (e) => this.setState({ dateFrom: e.target.value });
+  setDateTo = (e) => this.setState({ dateTo: e.target.value });
+  toggleCombo = (k) => this.setState((s) => ({ openCombo: s.openCombo === k ? null : k }));
+  closeCombo = () => this.setState({ openCombo: null });
+  pick = (k, v) => this.setState({ [k]: v, openCombo: null });
+  clearFilters = () => this.setState({ search: "", customerFilter: "", dateFrom: "", dateTo: "", openCombo: null });
+
+  // ---- floating searchable combobox ----
+  openCb = (e, opts, cur, setter, ph) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const openUp = spaceBelow < 260 && r.top > spaceBelow;
+    const maxH = Math.max(140, Math.min(260, (openUp ? r.top : spaceBelow) - 16));
+    this.setState({ cb: { open: true, opts, cur: String(cur == null ? "" : cur), setter, text: "", top: Math.round(openUp ? r.top - 6 : r.bottom + 6), left: Math.round(r.left), width: Math.round(r.width), transform: openUp ? "translateY(-100%)" : "none", maxH, ph: ph || "חיפוש…" } });
+  };
+  closeCb = () => this.setState({ cb: { open: false, opts: [], cur: "", setter: null, text: "", top: 0, left: 0, width: 0, transform: "none", maxH: 260, ph: "" } });
+  setCbText = (e) => this.setState((s) => ({ cb: { ...s.cb, text: e.target.value } }));
+  trig = (opts, cur, ph, setter, disabled, bg) => {
+    const m = opts.find((o) => String(o.value) === String(cur));
+    return { label: m ? m.label : ph, color: m ? "#1d1d1f" : "#9a9aa0", bg: bg || "#fff", onOpen: disabled ? (() => {}) : ((e) => this.openCb(e, opts, cur, setter, ph)) };
+  };
+
+  // ---- signature ----
+  setSig = (el) => { this._sig = el; };
+  sigStart = (e) => { if (!this._sig) return; this._draw = true; const r = this._sig.getBoundingClientRect(); this._last = { x: (e.clientX - r.left) * (this._sig.width / r.width), y: (e.clientY - r.top) * (this._sig.height / r.height) }; };
+  sigMove = (e) => { if (!this._draw || !this._sig) return; const c = this._sig, ctx = c.getContext("2d"), r = c.getBoundingClientRect(); const x = (e.clientX - r.left) * (c.width / r.width), y = (e.clientY - r.top) * (c.height / r.height); ctx.strokeStyle = "#1d1d1f"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(this._last.x, this._last.y); ctx.lineTo(x, y); ctx.stroke(); this._last = { x, y }; };
+  sigEnd = () => { this._draw = false; };
+  clearSig = () => { if (this._sig) this._sig.getContext("2d").clearRect(0, 0, this._sig.width, this._sig.height); };
+
+  // ---- add / insert ----
+  openAdd = () => this.setState({ addOpen: true, addError: "", af: { poc: "", code: "", customer: "", worker: "", source: "1", date: "", scanned: false, items: [{ type: "", makat: "", qty: "" }] } });
+  closeAdd = () => this.setState({ addOpen: false });
+  setAf = (k, v) => this.setState((s) => ({ af: { ...s.af, [k]: v }, addError: "" }));
+  setAddPoc = (e) => this.setAf("poc", e.target.value);
+  setAddCode = (e) => this.setAf("code", e.target.value);
+  setAddCustomer = (e) => this.setAf("customer", e.target.value);
+  setAddWorker = (e) => this.setAf("worker", e.target.value);
+  setAddSource = (e) => this.setAf("source", e.target.value);
+  setAddDate = (e) => this.setAf("date", e.target.value);
+  addAddItem = () => this.setState((s) => ({ af: { ...s.af, items: [...s.af.items, { type: "", makat: "", qty: "" }] } }));
+
+  // ---- generic form item editing ----
+  setItem = (target, i, key, val) => this.setState((s) => { const items = s[target].items.map((it, idx) => idx === i ? { ...it, [key]: val } : it); return { [target]: { ...s[target], items } }; });
+  removeItem = (target, i) => this.setState((s) => ({ [target]: { ...s[target], items: s[target].items.filter((_, idx) => idx !== i) } }));
+
+  saveAdd = () => {
+    const a = this.state.af;
+    if (!a.code.trim()) return this.setState({ addError: "יש להזין מספר משלוח." });
+    if (!a.customer) return this.setState({ addError: "יש לבחור לקוח." });
+    if (!a.source) return this.setState({ addError: "חובה לבחור מקור." });
+    if (!a.date) return this.setState({ addError: "יש להזין תאריך משלוח." });
+    const validItems = a.items.filter((i) => i.type && Number(i.qty) > 0);
+    if (validItems.length === 0) return this.setState({ addError: "יש להוסיף לפחות פריט אחד עם סוג וכמות." });
+    const items = validItems.map((i) => ({ item_type_id: Number(i.type), makat: i.makat ? Number(i.makat) : null, quantity: Number(i.qty) }));
+    this.setState((s) => ({
+      shipments: [{ id: s.nextId, shipment_code: a.code.trim(), customer_id: Number(a.customer), customer_code: this.custCode(a.customer), shipment_date: a.date, recieving_worker_id: a.worker ? Number(a.worker) : null, source_id: Number(a.source), poc_details: a.poc.trim(), sampled_amount: 0, sub_items_sampled_amount: 0, valid_amount: 0, is_sent: false, finished_at: null, shipment_items: items, history: [] }, ...s.shipments],
+      nextId: s.nextId + 1, addOpen: false,
+    }));
+    this.showToast("המשלוח נוצר בהצלחה", true);
+  };
+
+  // ---- QR scan ----
+  openScan = () => this.setState({ scanOpen: true, scanInput: "", scanError: "" });
+  closeScan = () => this.setState({ scanOpen: false, scanError: "" });
+  setScanInput = (e) => this.setState({ scanInput: e.target.value });
+  scanKey = (e) => { if (e.key === "Enter") this.submitScan(); };
+  parseQr(p) { if (!p || typeof p !== "string") return null; const parts = p.split("|"); if (parts.length < 4 || parts[0] !== "1") return null; return { shipmentNumber: parts[1] || "", customer: parts[2] || "", supplyDate: parts[3] || "", poc: parts[4] || "" }; }
+  convertQrDate(d) { if (!d) return ""; const p = d.split("/"); if (p.length !== 3) return ""; const [day, m, y] = p; if (!day || !m || !y) return ""; return y + "-" + String(m).padStart(2, "0") + "-" + String(day).padStart(2, "0"); }
+  submitScan = () => {
+    const val = this.state.scanInput.trim();
+    const parsed = this.parseQr(val);
+    if (!parsed) return this.setState({ scanError: "פורמט QR לא תקין" });
+    const match = this.state.shipments.find((s) => s.shipment_code.trim() === parsed.shipmentNumber.trim() && s.customer_code.trim() === parsed.customer.trim());
+    if (match) return this.setState({ dupId: match.id, scanError: "", scanOpen: false, scanInput: "" });
+    const cust = this.customers.find((c) => c.code === parsed.customer);
+    this.setState((s) => ({ af: { ...s.af, code: parsed.shipmentNumber, customer: cust ? String(cust.id) : "", poc: parsed.poc || s.af.poc, date: this.convertQrDate(parsed.supplyDate) || s.af.date, scanned: true }, scanOpen: false, scanError: "", scanInput: "", addError: "" }));
+  };
+  closeDup = () => this.setState({ dupId: null });
+
+  // ---- edit / update ----
+  openEdit = (id) => { const sh = this.find(id); if (!sh) return; this.setState({ editId: id, editError: "", ef: { id, code: sh.shipment_code, customer: String(sh.customer_id), worker: sh.recieving_worker_id ? String(sh.recieving_worker_id) : "", source: sh.source_id ? String(sh.source_id) : "", date: sh.shipment_date, items: (sh.shipment_items || []).map((it) => ({ type: String(it.item_type_id), makat: it.makat != null ? String(it.makat) : "", qty: String(it.quantity) })) } }); };
+  closeEdit = () => this.setState({ editId: null });
+  setEf = (k, v) => this.setState((s) => ({ ef: { ...s.ef, [k]: v }, editError: "" }));
+  setEditCode = (e) => this.setEf("code", e.target.value);
+  setEditCustomer = (e) => this.setEf("customer", e.target.value);
+  setEditWorker = (e) => this.setEf("worker", e.target.value);
+  setEditSource = (e) => this.setEf("source", e.target.value);
+  setEditDate = (e) => this.setEf("date", e.target.value);
+  addEditItem = () => this.setState((s) => ({ ef: { ...s.ef, items: [...s.ef.items, { type: "", makat: "", qty: "" }] } }));
+  saveEdit = () => {
+    const a = this.state.ef;
+    if (!a.code.trim()) return this.setState({ editError: "יש להזין מספר משלוח." });
+    if (!a.customer) return this.setState({ editError: "יש לבחור לקוח." });
+    if (!a.date) return this.setState({ editError: "יש להזין תאריך משלוח." });
+    const validItems = a.items.filter((i) => i.type && Number(i.qty) > 0);
+    if (validItems.length === 0) return this.setState({ editError: "יש להוסיף לפחות פריט אחד עם סוג וכמות." });
+    for (const i of validItems) { if (!i.makat || Number(i.makat) <= 0) return this.setState({ editError: "יש להזין מק״ט תקין לכל פריט." }); }
+    const items = validItems.map((i) => ({ item_type_id: Number(i.type), makat: Number(i.makat), quantity: Number(i.qty) }));
+    this.setState((s) => ({ shipments: s.shipments.map((sh) => sh.id === a.id ? { ...sh, shipment_code: a.code.trim(), customer_id: Number(a.customer), customer_code: this.custCode(a.customer), recieving_worker_id: a.worker ? Number(a.worker) : null, source_id: a.source ? Number(a.source) : null, shipment_date: a.date, shipment_items: items } : sh), editId: null }));
+    this.showToast("המשלוח עודכן בהצלחה", true);
+  };
+
+  // ---- send ----
+  openSend = (id) => this.setState({ sendId: id, sendError: "", sf: { code: "", date: this.todayIso(), worker: "", items: [{ sel: "", amount: "" }] } });
+  closeSend = () => this.setState({ sendId: null });
+  setSf = (k, v) => this.setState((s) => ({ sf: { ...s.sf, [k]: v }, sendError: "" }));
+  setSendCode = (e) => this.setSf("code", e.target.value);
+  setSendDate = (e) => this.setSf("date", e.target.value);
+  setSendWorker = (e) => this.setSf("worker", e.target.value);
+  setSendItem = (i, key, val) => this.setState((s) => ({ sf: { ...s.sf, items: s.sf.items.map((it, idx) => idx === i ? { ...it, [key]: val } : it) }, sendError: "" }));
+  addSendItem = () => this.setState((s) => ({ sf: { ...s.sf, items: [...s.sf.items, { sel: "", amount: "" }] } }));
+  removeSendItem = (i) => this.setState((s) => ({ sf: { ...s.sf, items: s.sf.items.filter((_, idx) => idx !== i) } }));
+  saveSend = () => {
+    const sh = this.find(this.state.sendId); if (!sh) return;
+    const sf = this.state.sf;
+    if (!sf.code.trim()) return this.setState({ sendError: "יש להזין קוד משלוח יוצא." });
+    const valid = sf.items.filter((i) => i.sel && Number(i.amount) > 0);
+    if (valid.length === 0) return this.setState({ sendError: "יש להוסיף לפחות פריט אחד לשליחה." });
+    for (const i of valid) { const [t, m] = i.sel.split("__"); const orig = (sh.shipment_items || []).find((o) => o.item_type_id === Number(t) && String(o.makat) === m); const received = orig ? orig.quantity : 0; const prev = this.sentFor(sh, t, m); const max = Math.max(0, received - prev); if (Number(i.amount) > max) return this.setState({ sendError: "כמות חורגת מהמותר (מקסימום " + max + ")." }); }
+    let logId = this.state.nextLog;
+    const newLogs = valid.map((i) => { const [t, m] = i.sel.split("__"); return { log_id: logId++, sent_shipment_code: sf.code.trim(), sent_date: sf.date, sending_worker_id: sf.worker ? Number(sf.worker) : null, item_type_id: Number(t), makat: m === "null" ? null : Number(m), amount: Number(i.amount) }; });
+    this.setState((s) => ({ shipments: s.shipments.map((x) => { if (x.id !== sh.id) return x; const history = [...(x.history || []), ...newLogs]; const sent = history.reduce((a, h) => a + (Number(h.amount) || 0), 0); const fully = sent >= this.shipAmount(x); return { ...x, history, is_sent: fully ? true : x.is_sent, finished_at: fully && !x.finished_at ? this.todayIso() : x.finished_at }; }), nextLog: logId, sendId: null }));
+    this.showToast("המשלוח נשלח בהצלחה", true);
+  };
+
+  // ---- history ----
+  openHistory = (id) => this.setState({ historyId: id });
+  closeHistory = () => this.setState({ historyId: null });
+
+  // ---- barcodes & pdf ----
+  openBarcodes = (id) => this.setState({ barcodesId: id });
+  closeBarcodes = () => this.setState({ barcodesId: null });
+  doPrint = () => window.print();
+  openPdf = (id) => { this.setState({ printId: id }); setTimeout(() => { window.print(); this.setState({ printId: null }); }, 120); };
+
+  renderVals() {
+    const s = this.state;
+    const q = s.search.trim().toLowerCase();
+    let list = s.shipments.filter((sh) => {
+      if (q) { const hit = sh.shipment_code.toLowerCase().includes(q) || sh.customer_code.toLowerCase().includes(q) || this.sourceDesc(sh.source_id).toLowerCase().includes(q) || (sh.shipment_items || []).some((i) => String(i.makat || "").includes(q)); if (!hit) return false; }
+      if (s.customerFilter && sh.customer_code !== s.customerFilter) return false;
+      if (s.dateFrom && sh.shipment_date < s.dateFrom) return false;
+      if (s.dateTo && sh.shipment_date > s.dateTo) return false;
+      return true;
+    });
+    const rows = list.map((sh, ri) => ({
+      rowBg: ri % 2 === 0 ? "#ffffff" : "#fbfbfd",
+      source: this.sourceDesc(sh.source_id), code: sh.shipment_code, customer: sh.customer_code, date: this.fmtDate(sh.shipment_date), worker: this.workerName(sh.recieving_worker_id),
+      amount: this.shipAmount(sh), sampled: sh.sampled_amount || 0, subItems: sh.sub_items_sampled_amount || 0, valid: sh.valid_amount || 0, isSent: !!sh.is_sent,
+      onOpen: () => this.openEdit(sh.id),
+      onEdit: (e) => { e.stopPropagation(); this.openEdit(sh.id); },
+      onSend: (e) => { e.stopPropagation(); this.openSend(sh.id); },
+      onHistory: (e) => { e.stopPropagation(); this.openHistory(sh.id); },
+      onPdf: (e) => { e.stopPropagation(); this.openPdf(sh.id); },
+      onBarcodes: (e) => { e.stopPropagation(); this.openBarcodes(sh.id); },
+    }));
+
+    // option lists
+    const customerOpts = this.customers.map((c) => ({ value: String(c.id), label: c.code }));
+    const workerOpts = this.workers.map((w) => ({ value: String(w.id), label: w.name }));
+    const stokeWorkerOpts = this.workers.filter((w) => w.stokekeeper).map((w) => ({ value: String(w.id), label: w.name }));
+    const sourceOpts = this.sources.map((x) => ({ value: String(x.id), label: x.desc }));
+    const itemTypeOpts = this.itemTypes.map((t) => ({ value: String(t.id), label: t.name }));
+
+    // customer filter combo
+    const custCodes = [...new Set(s.shipments.map((x) => x.customer_code))].sort();
+    const open = s.openCombo === "customerFilter";
+    const custFilter = { label: s.customerFilter || "כל הלקוחות", open, onToggle: () => this.toggleCombo("customerFilter"), border: open ? "#0071e3" : "#e0e0e0", valueColor: s.customerFilter ? "#1d1d1f" : "#7a7a7a", weight: s.customerFilter ? "600" : "400",
+      options: [{ value: "", label: "כל הלקוחות" }, ...custCodes.map((c) => ({ value: c, label: c }))].map((o) => ({ label: o.label, bg: o.value === s.customerFilter ? "#f3f8ff" : "#fff", tick: o.value === s.customerFilter ? this.tick() : "", onPick: () => this.pick("customerFilter", o.value) })) };
+
+    // add form items
+    const af = s.af;
+    const addTotal = af.items.reduce((a, i) => a + (Number(i.qty) || 0), 0);
+    const tAddCustomer = this.trig(customerOpts, af.customer, "בחר לקוח…", (v) => this.setAf("customer", v), af.scanned, af.scanned ? "#f5f5f7" : "#fff");
+    const tAddWorker = this.trig(stokeWorkerOpts, af.worker, "בחר עובד…", (v) => this.setAf("worker", v), false, "#fff");
+    const tAddSource = this.trig(sourceOpts, af.source, "בחר מקור…", (v) => this.setAf("source", v), false, "#fff");
+    const addItems = af.items.map((it, i) => ({ type: it.type, makat: it.makat, qty: it.qty, tType: this.trig(itemTypeOpts, it.type, "בחר…", (v) => this.setItem("af", i, "type", v), false, "#fff"), showRemove: af.items.length > 1, onMakat: (e) => this.setItem("af", i, "makat", e.target.value), onQty: (e) => this.setItem("af", i, "qty", e.target.value), onRemove: () => this.removeItem("af", i) }));
+
+    // edit form items
+    const ef = s.ef;
+    const editTotal = ef.items.reduce((a, i) => a + (Number(i.qty) || 0), 0);
+    const tEditCustomer = this.trig(customerOpts, ef.customer, "בחר לקוח…", (v) => this.setEf("customer", v), false, "#fff");
+    const tEditWorker = this.trig(workerOpts, ef.worker, "בחר עובד…", (v) => this.setEf("worker", v), false, "#fff");
+    const tEditSource = this.trig(sourceOpts, ef.source, "בחר מקור…", (v) => this.setEf("source", v), false, "#fff");
+    const editItems = ef.items.map((it, i) => ({ type: it.type, makat: it.makat, qty: it.qty, tType: this.trig(itemTypeOpts, it.type, "בחר…", (v) => this.setItem("ef", i, "type", v), false, "#fff"), showRemove: ef.items.length > 1, onMakat: (e) => this.setItem("ef", i, "makat", e.target.value), onQty: (e) => this.setItem("ef", i, "qty", e.target.value), onRemove: () => this.removeItem("ef", i) }));
+
+    // duplicate
+    const dupSh = s.dupId != null ? this.find(s.dupId) : null;
+
+    // send
+    const sendSh = s.sendId != null ? this.find(s.sendId) : null;
+    const sf = s.sf;
+    let sendInfo = "", sendItems = [], tSendWorker = {};
+    if (sendSh) {
+      sendInfo = sendSh.shipment_code + " | לקוח: " + sendSh.customer_code;
+      tSendWorker = this.trig(workerOpts, sf.worker, "בחר עובד…", (v) => this.setSf("worker", v), false, "#fff");
+      const availOpts = (sendSh.shipment_items || []).map((o) => ({ value: o.item_type_id + "__" + (o.makat == null ? "null" : o.makat), label: this.typeName(o.item_type_id) + " · מק״ט " + (o.makat ?? "-") + " (כמות: " + o.quantity + ")" }));
+      sendItems = sf.items.map((it, i) => {
+        let max = 0;
+        if (it.sel) { const [t, m] = it.sel.split("__"); const orig = (sendSh.shipment_items || []).find((o) => o.item_type_id === Number(t) && String(o.makat) === m); const received = orig ? orig.quantity : 0; max = Math.max(0, received - this.sentFor(sendSh, t, m)); }
+        const over = it.sel && Number(it.amount) > max;
+        return { sel: it.sel, amount: it.amount, tSel: this.trig(availOpts, it.sel, "בחירת פריט…", (v) => this.setSendItem(i, "sel", v), false, "#fff"), maxLabel: it.sel ? "מקסימום: " + max : "", maxColor: over ? "#bf3535" : "#9a9aa0", border: over ? "#bf3535" : "#e0e0e0", onAmount: (e) => this.setSendItem(i, "amount", e.target.value), onRemove: () => this.removeSendItem(i) };
+      });
+    }
+
+    // history
+    const histSh = s.historyId != null ? this.find(s.historyId) : null;
+    let histCode = "", histSummary = { received: 0, sent: 0, items: [] }, histGroups = [], histEmpty = true;
+    if (histSh) {
+      histCode = histSh.shipment_code;
+      histSummary.received = this.shipAmount(histSh);
+      histSummary.sent = this.totalSent(histSh);
+      histSummary.items = (histSh.shipment_items || []).map((it) => ({ label: this.typeName(it.item_type_id) + " (מק״ט " + (it.makat ?? "-") + "): " + this.sentFor(histSh, it.item_type_id, it.makat) + " / " + it.quantity }));
+      const groups = {};
+      (histSh.history || []).forEach((h) => { const key = h.sent_shipment_code + "_" + h.sent_date; if (!groups[key]) groups[key] = { code: h.sent_shipment_code, dateIso: h.sent_date, worker: this.workerName(h.sending_worker_id), items: [], total: 0 }; groups[key].items.push({ label: this.typeName(h.item_type_id) + " (מק״ט " + (h.makat ?? "-") + ") — " + h.amount }); groups[key].total += Number(h.amount) || 0; });
+      histGroups = Object.values(groups).sort((a, b) => (a.dateIso < b.dateIso ? 1 : -1)).map((g) => ({ code: g.code, date: this.fmtDate(g.dateIso), worker: g.worker, items: g.items, total: g.total, onPdf: () => this.openPdf(histSh.id) }));
+      histEmpty = histGroups.length === 0;
+    }
+
+    // barcodes
+    const bcSh = s.barcodesId != null ? this.find(s.barcodesId) : null;
+    let barcodeLabels = [], barcodeCount = 0, barcodeShipCode = "", barcodeEmpty = false;
+    if (bcSh) {
+      barcodeShipCode = bcSh.shipment_code;
+      barcodeCount = this.shipAmount(bcSh);
+      barcodeEmpty = barcodeCount <= 0;
+      const bars = this.bars(bcSh.shipment_code);
+      for (let n = 1; n <= barcodeCount; n++) barcodeLabels.push({ n, total: barcodeCount, value: bcSh.shipment_code, customer: bcSh.customer_code, date: this.fmtDate(bcSh.shipment_date), bars });
+    }
+
+    // print receipt
+    const prSh = s.printId != null ? this.find(s.printId) : null;
+    const printShip = prSh ? { code: prSh.shipment_code, customer: prSh.customer_code, date: this.fmtDate(prSh.shipment_date), source: this.sourceDesc(prSh.source_id), worker: this.workerName(prSh.recieving_worker_id), amount: this.shipAmount(prSh), items: (prSh.shipment_items || []).map((it) => ({ desc: this.typeName(it.item_type_id), makat: it.makat ?? "-", qty: it.quantity })) } : { items: [] };
+
+    // floating combobox
+    const cb = s.cb;
+    const ctext = (cb.text || "").trim().toLowerCase();
+    const cbOptions = cb.open ? cb.opts.filter((o) => !ctext || o.label.toLowerCase().includes(ctext)).map((o) => ({ label: o.label, tick: String(o.value) === String(cb.cur) ? this.tick() : "", bg: String(o.value) === String(cb.cur) ? "#f3f8ff" : "#fff", onPick: () => { if (cb.setter) cb.setter(o.value); this.closeCb(); } })) : [];
+
+    const activeChips = [];
+    if (s.search.trim()) activeChips.push({ label: "חיפוש: " + s.search.trim(), onRemove: () => this.setState({ search: "" }) });
+    if (s.customerFilter) activeChips.push({ label: "לקוח: " + s.customerFilter, onRemove: () => this.setState({ customerFilter: "" }) });
+    if (s.dateFrom) activeChips.push({ label: "מ־" + this.fmtDate(s.dateFrom), onRemove: () => this.setState({ dateFrom: "" }) });
+    if (s.dateTo) activeChips.push({ label: "עד " + this.fmtDate(s.dateTo), onRemove: () => this.setState({ dateTo: "" }) });
+
+    return {
+      countLabel: s.shipments.length + " משלוחים", rows, isEmpty: rows.length === 0 && !s.loading, stop: this.stop,
+      loading: s.loading, notLoading: !s.loading, skeleton: [1, 2, 3, 4, 5], activeChips, hasChips: activeChips.length > 0,
+      cbOpen: cb.open, closeCb: this.closeCb, cbText: cb.text, setCbText: this.setCbText, cbOptions, cbNoMatch: cb.open && cbOptions.length === 0, cbTop: cb.top, cbLeft: cb.left, cbWidth: cb.width, cbTransform: cb.transform, cbMaxH: cb.maxH, cbPh: cb.ph,
+      tAddCustomer, tAddWorker, tAddSource, tEditCustomer, tEditWorker, tEditSource, tSendWorker,
+      search: s.search, setSearch: this.setSearch, dateFrom: s.dateFrom, dateTo: s.dateTo, setDateFrom: this.setDateFrom, setDateTo: this.setDateTo,
+      custFilter, anyFilter: !!(s.search || s.customerFilter || s.dateFrom || s.dateTo), clearFilters: this.clearFilters,
+      comboOpen: s.openCombo != null, closeCombo: this.closeCombo,
+      customerOpts, workerOpts, stokeWorkerOpts, sourceOpts, itemTypeOpts,
+      // signature
+      setSig: this.setSig, sigStart: this.sigStart, sigMove: this.sigMove, sigEnd: this.sigEnd, clearSig: this.clearSig,
+      // add
+      openAdd: this.openAdd, closeAdd: this.closeAdd, addOpen: s.addOpen, addError: s.addError,
+      af: { poc: af.poc, code: af.code, customer: af.customer, worker: af.worker, source: af.source, date: af.date, scanned: af.scanned, total: addTotal, lockBg: af.scanned ? "#f5f5f7" : "#fff" },
+      setAddPoc: this.setAddPoc, setAddCode: this.setAddCode, setAddCustomer: this.setAddCustomer, setAddWorker: this.setAddWorker, setAddSource: this.setAddSource, setAddDate: this.setAddDate,
+      addItems, addAddItem: this.addAddItem, saveAdd: this.saveAdd, openScan: this.openScan,
+      // scan
+      scanOpen: s.scanOpen, closeScan: this.closeScan, scanInput: s.scanInput, setScanInput: this.setScanInput, scanKey: this.scanKey, submitScan: this.submitScan, scanError: s.scanError,
+      // duplicate
+      dupOpen: !!dupSh, closeDup: this.closeDup, dup: dupSh ? { code: dupSh.shipment_code, customer: dupSh.customer_code, date: this.fmtDate(dupSh.shipment_date) } : {},
+      // edit
+      editOpen: !!s.editId, closeEdit: this.closeEdit, editError: s.editError,
+      ef: { code: ef.code, customer: ef.customer, worker: ef.worker, source: ef.source, date: ef.date, total: editTotal },
+      setEditCode: this.setEditCode, setEditCustomer: this.setEditCustomer, setEditWorker: this.setEditWorker, setEditSource: this.setEditSource, setEditDate: this.setEditDate,
+      editItems, addEditItem: this.addEditItem, saveEdit: this.saveEdit,
+      // send
+      sendOpen: !!sendSh, closeSend: this.closeSend, sendInfo, sendError: s.sendError,
+      sf: { code: sf.code, date: sf.date, worker: sf.worker }, setSendCode: this.setSendCode, setSendDate: this.setSendDate, setSendWorker: this.setSendWorker,
+      sendItems, addSendItem: this.addSendItem, saveSend: this.saveSend,
+      // history
+      historyOpen: !!histSh, closeHistory: this.closeHistory, histCode, histSummary, histGroups, histEmpty,
+      // barcodes
+      barcodesOpen: !!bcSh, closeBarcodes: this.closeBarcodes, barcodeShipCode, barcodeCount, barcodeLabels, barcodeEmpty, doPrint: this.doPrint,
+      // print
+      printShipOpen: !!prSh, printShip,
+      // toast
+      toastOpen: !!s.toast, toast: s.toast || {},
+    };
+  }
+}
+</script>
+</body>
+</html>

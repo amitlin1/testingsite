@@ -1,9 +1,10 @@
 "use client";
 import * as React from "react";
 import { Snackbar, Alert } from "@/components/ui";
-import { QrCode } from "lucide-react";
+import { QrCode, Package, FlaskConical, List, Check } from "lucide-react";
 import ItemsToolbar from "@/components/ItemsToolbar";
 import DataTable, { StatusPill, ProgressCell, type Column } from "@/components/DataTable";
+import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import ItemDialog from "./ItemDialog";
 import InsertPopup from "./insertPopup";
 import BarcodeDialog from "./BarcodeDialog";
@@ -116,6 +117,18 @@ export default function ItemTable() {
     });
   }, [rows, search, statusFilter, typeFilter, shipFilter]);
 
+  // KPI counters — derived from the full list (not filtered), by current_status:
+  // 1 = בבדיקה, 2 = בתור, 3 (or is_finished) = הושלם.
+  const kpis = React.useMemo(() => {
+    let inTest = 0, inQueue = 0, done = 0;
+    for (const r of rows) {
+      if (r.current_status === 1) inTest++;
+      else if (r.current_status === 2) inQueue++;
+      if (r.current_status === 3 || r.is_finished) done++;
+    }
+    return { total: rows.length, inTest, inQueue, done };
+  }, [rows]);
+
   const onCreateResult = (_data: NewItem, success: boolean) => {
     setSnackbarMessage(success ? "הפריט נוצר בהצלחה" : "יצירת הפריט נכשלה");
     setSnackbarSeverity(success ? "success" : "error");
@@ -174,6 +187,18 @@ export default function ItemTable() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* KPI summary strip — sits above the toolbar/filters */}
+      {loading ? (
+        <SummaryStripSkeleton count={4} />
+      ) : (
+        <SummaryStrip>
+          <SummaryTile icon={<Package size={22} strokeWidth={1.85} />} tone="blue" value={kpis.total} label="סה״כ פריטים" />
+          <SummaryTile icon={<FlaskConical size={22} strokeWidth={1.85} />} tone="blue" value={kpis.inTest} label="בבדיקה" />
+          <SummaryTile icon={<List size={22} strokeWidth={1.85} />} tone="amber" value={kpis.inQueue} label="בתור" />
+          <SummaryTile icon={<Check size={22} strokeWidth={1.85} />} tone="green" value={kpis.done} label="הושלמו" />
+        </SummaryStrip>
+      )}
+
       <ItemsToolbar
         search={search}
         onSearch={setSearch}

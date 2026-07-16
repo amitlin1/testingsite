@@ -3,24 +3,18 @@ import * as React from "react";
 import {
   Typography,
   TextField,
-  Paper,
   Box,
   Card,
-  CardContent,
   Button,
   Chip,
   Stack,
   Skeleton,
-  Divider,
   alpha,
   MenuItem,
   Menu,
   InputAdornment,
-  Grid,
   Container,
-  useTheme,
   IconButton,
-  Grow,
   Fade,
   Dialog,
   DialogTitle,
@@ -37,14 +31,15 @@ import { Inventory as InventoryIcon } from "@/components/ui/icons";
 import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";
 import { History as HistoryIcon } from "@/components/ui/icons";
 import { Link as LinkIcon } from "@/components/ui/icons";
-import { KeyboardArrowDown as KeyboardArrowDownIcon } from "@/components/ui/icons";
 import { PlayArrowRounded as PlayArrowRoundedIcon } from "@/components/ui/icons";
-import { Speed as SpeedIcon } from "@/components/ui/icons";
 import { PrecisionManufacturing as PrecisionManufacturingIcon } from "@/components/ui/icons";
 import { QrCode as QrCodeIcon } from "@/components/ui/icons";
 import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { TrendingUp as TrendingUpIcon } from "@/components/ui/icons";
+import { Star as StarIcon } from "@/components/ui/icons";
+import { Check as CheckIcon } from "@/components/ui/icons";
+import { Queue as QueueIcon } from "@/components/ui/icons";
 // MoreVertIcon removed
 import { getStartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
 import StationHistoryDialog from "../components/StationHistoryDialog";
@@ -88,25 +83,33 @@ function useElapsedTime(createdAt: string | null | undefined): string {
   return elapsed;
 }
 
-// --- Item Card Component ---
+// Shifthouse status tokens (waiting amber / in-test blue / done green).
+const STATUS_TOKENS = {
+  waiting: { color: "#d97706", bg: "rgba(217,118,6,0.10)", border: "rgba(217,118,6,0.28)", timerBg: "rgba(217,118,6,0.08)" },
+  inTest: { color: "#0066cc", bg: "rgba(0,102,204,0.10)", border: "rgba(0,102,204,0.25)", timerBg: "rgba(0,102,204,0.06)" },
+  done: { color: "#1f8a5b", bg: "rgba(31,138,91,0.10)", border: "rgba(31,138,91,0.25)", timerBg: "rgba(31,138,91,0.06)" },
+} as const;
+
+// --- Item Row Strip (option 3a: queue rank + step progress) ---
 function ItemCard({
   item,
+  rank,
   onAddTestResult,
   onStartTest,
   onRefresh,
-  index,
   highlighted = false,
+  priority = false,
   hasWizard = false,
 }: {
   item: ItemRow;
+  rank: number;
   onAddTestResult: (item: ItemRow) => void;
   onStartTest: (itemId: number) => Promise<void>;
   onRefresh: () => void;
-  index: number;
   highlighted?: boolean;
+  priority?: boolean;
   hasWizard?: boolean;
 }) {
-  const theme = useTheme();
   const baseTimeString =
     item.current_status === 1 || item.current_status === 5
       ? item.processing_start_time
@@ -127,30 +130,64 @@ function ItemCard({
     setAnchorEl(null);
   };
 
-  
+  const tokens = isWaiting ? STATUS_TOKENS.waiting : isInTest ? STATUS_TOKENS.inTest : STATUS_TOKENS.done;
+  const statusColor = tokens.color;
 
+  const isActionable = isWaiting || isInTest;
 
-  // Status Colors
-  const statusColor = isWaiting ? "#ff9800" : isInTest ? "#2196f3" : "#4caf50";
-  const statusBg = isWaiting ? alpha("#ff9800", 0.1) : isInTest ? alpha("#2196f3", 0.1) : alpha("#4caf50", 0.1);
+  // Steps come from the item's real testing route.
+  const totalSteps = Math.max(item.route_steps?.length || 1, 1);
+  const currentStep = item.current_route_step ?? 1;
+  const rankBg = priority ? "#d97706" : isActionable ? "#15171a" : "#c7c7cf";
 
   return (
-    <Grow in={true} timeout={(index + 1) * 200}>
-      <Card
-        elevation={0}
+      <Box
         sx={{
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          borderRadius: "14px",
-          bgcolor: "#fff",
-          border: highlighted ? "1.5px solid #0066cc" : "1px solid #e0e0e0",
-          boxShadow: highlighted ? "0 0 0 3px rgba(0,102,204,0.18)" : "none",
-          transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-          overflow: "visible", // for the scanned badge
           position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: "15px",
+          bgcolor: "#fff",
+          borderRadius: "14px",
+          padding: "14px 16px",
+          border: highlighted
+            ? "1.5px solid #0066cc"
+            : priority
+              ? "1.5px solid #d97706"
+              : "1px solid #e0e0e0",
+          boxShadow: highlighted
+            ? "0 0 0 3px rgba(0,102,204,0.18)"
+            : priority
+              ? "0 0 0 3px rgba(217,118,6,0.10)"
+              : "none",
+          transition: "border-color 0.15s ease, box-shadow 0.15s ease",
         }}
       >
+        {/* Priority ribbon — the longest-waiting item */}
+        {priority && (
+            <Box
+                sx={{
+                    position: "absolute",
+                    top: -10,
+                    insetInlineStart: 58,
+                    zIndex: 3,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    bgcolor: "#d97706",
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    borderRadius: "9999px",
+                    padding: "3px 10px",
+                    whiteSpace: "nowrap",
+                }}
+            >
+                <StarIcon sx={{ fontSize: 12 }} />
+                ממתין הכי הרבה
+            </Box>
+        )}
+
         {highlighted && (
             <Chip
                 size="small"
@@ -160,147 +197,128 @@ function ItemCard({
                 sx={{
                     position: "absolute",
                     top: -10,
-                    right: 14,
+                    insetInlineEnd: 14,
                     fontWeight: 600,
                     zIndex: 3,
                 }}
             />
         )}
 
-        <CardContent sx={{ p: 2, flexGrow: 1, display: "flex", flexDirection: "column", gap: 1.25, "&:last-child": { pb: 2 } }}>
-            
-            {/* Header: ID and Status */}
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-               <Box>
-                    <Typography variant="h5" fontWeight="800" color="text.primary" sx={{ letterSpacing: "-0.5px" }}>
-                        #{item.item_id}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" fontWeight="500">
-                        {item.model}
-                    </Typography>
-               </Box>
-               
-               <Chip
-                 label={item.item_status_desc || "סטטוס לא ידוע"}
-                 size="small"
-                 sx={{
-                     bgcolor: statusBg,
-                     color: statusColor,
-                     fontWeight: 700,
-                     borderRadius: 2,
-                     border: `1px solid ${alpha(statusColor, 0.2)}`,
-                     height: 28,
-                     px: 1
-                 }}
-               />
-            </Stack>
+        {/* Status color bar */}
+        <Box sx={{ width: 5, alignSelf: "stretch", borderRadius: "9999px", bgcolor: statusColor, flexShrink: 0 }} />
 
-            <Divider sx={{ borderStyle: "dashed", borderColor: alpha(theme.palette.divider, 0.5) }} />
+        {/* Queue rank circle */}
+        <Box
+            sx={{
+                width: 38,
+                height: 38,
+                flexShrink: 0,
+                borderRadius: "9999px",
+                bgcolor: rankBg,
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                fontWeight: 800,
+                fontVariantNumeric: "tabular-nums",
+            }}
+        >
+            {rank}
+        </Box>
 
-            {/* Info Grid */}
-            <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
-                 <Grid size={{ xs: 6 }}>
-                      <Stack spacing={0.5}>
-                          <Typography variant="caption" color="text.secondary">סריאלי</Typography>
-                          <Typography variant="body2" fontWeight="600">{item.serial_no}</Typography>
-                      </Stack>
-                 </Grid>
-                 <Grid size={{ xs: 6 }}>
-                      <Stack spacing={0.5}>
-                          <Typography variant="caption" color="text.secondary">מקט</Typography>
-                          <Typography variant="body2" fontWeight="600">{item.makat}</Typography>
-                      </Stack>
-                 </Grid>
-                 <Grid size={{ xs: 6 }}>
-                      <Stack spacing={0.5}>
-                          <Typography variant="caption" color="text.secondary">לקוח</Typography>
-                          <Typography variant="body2" fontWeight="600">{item.customer_code || "-"}</Typography>
-                      </Stack>
-                 </Grid>
-                 <Grid size={{ xs: 6 }}>
-                      <Stack spacing={0.5}>
-                          <Typography variant="caption" color="text.secondary">שלב נוכחי</Typography>
-                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                <SpeedIcon sx={{ fontSize: 18, color: "primary.main" }} />
-                                <Typography variant="body2" fontWeight="700" color="text.primary">{item.current_route_step}</Typography>
-                           </Box>
-                      </Stack>
-                 </Grid>
-            </Grid>
+        {/* ID + status, model line */}
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                <Typography sx={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.4px", color: "#1d1d1f", fontVariantNumeric: "tabular-nums" }}>
+                    #{item.item_id}
+                </Typography>
+                <Box sx={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: 12, fontWeight: 700, color: statusColor, whiteSpace: "nowrap" }}>
+                    <Box sx={{ width: 6, height: 6, borderRadius: "9999px", bgcolor: statusColor }} />
+                    {item.item_status_desc || "סטטוס לא ידוע"}
+                </Box>
+            </Box>
+            <Typography sx={{ fontSize: 13, color: "#7a7a7a", mt: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {item.model} · מק״ט {item.makat}
+            </Typography>
+        </Box>
 
-            {/* Timers & Connected Items */}
-            <Stack spacing={1} sx={{ mt: 1 }}>
-                {elapsedTime && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1, borderRadius: 2, bgcolor: alpha(statusColor, 0.05) }}>
-                        <AccessTimeIcon sx={{ fontSize: 18, color: statusColor }} />
-                        <Typography variant="body2" fontWeight="700" color={statusColor}>
-                             {isWaiting ? "ממתין:" : "בבדיקה:"} {elapsedTime}
-                        </Typography>
-                    </Box>
-                )}
+        {/* Step progress */}
+        <Box sx={{ flexShrink: 0, width: 150 }}>
+            <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: "#5a5a5f", mb: "5px" }}>
+                שלב {currentStep} / {totalSteps}
+            </Typography>
+            <Box sx={{ display: "flex", gap: "4px" }}>
+                {Array.from({ length: totalSteps }, (_, i) => (
+                    <Box key={i} sx={{ flex: 1, height: 5, borderRadius: "9999px", bgcolor: i < currentStep ? statusColor : "#e6e6ea" }} />
+                ))}
+            </Box>
+        </Box>
 
-                {(item.parent_item_id || item.has_children) && (
-                    <Button
-                        variant="outlined"
-                        color="secondary"
-                        size="small"
-                        startIcon={<LinkIcon />}
-                        endIcon={<KeyboardArrowDownIcon />}
-                        onClick={handleMenuClick}
-                        fullWidth
-                        sx={{ 
-                            justifyContent: "space-between",
-                            borderRadius: 2,
-                            borderColor: alpha(theme.palette.secondary.main, 0.3),
-                            color: theme.palette.secondary.main
-                        }}
-                    >
-                        פריטים מחוברים
-                    </Button>
-                )}
-                
-                 {/* Connected Items Menu */}
-                 <Menu
-                      anchorEl={anchorEl}
-                      open={Boolean(anchorEl)}
-                      onClose={handleMenuClose}
-                      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                      marginThreshold={0}
-                      PaperProps={{
-                          sx: { 
-                              mt: 1, 
-                              borderRadius: 3, 
-                              boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-                              minWidth: 180
-                          }
-                      }}
-                 >
-                    {item.connected_items && item.connected_items.length > 0 ? (
-                        item.connected_items.map((conn) => (
-                          <MenuItem key={conn.item_id} onClick={handleMenuClose} dense>
-                             <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", gap: 1 }}>
-                                <QrCodeIcon fontSize="small" color="action" />
-                                <Box>
-                                    <Typography variant="subtitle2">#{conn.item_id}</Typography>
-                                    <Typography variant="caption" color="text.secondary">S/N: {conn.serial_no || '-'}</Typography>
-                                </Box>
-                             </Stack>
-                          </MenuItem>
-                        ))
-                    ) : (
-                        <MenuItem disabled><Typography variant="caption">טוען...</Typography></MenuItem>
-                    )}
-                 </Menu>
-            </Stack>
+        {/* Timer in the status color */}
+        <Box sx={{ flexShrink: 0, fontSize: 14.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: statusColor, minWidth: 82, textAlign: "center" }}>
+            {elapsedTime || "—"}
+        </Box>
 
-            <Box sx={{ flexGrow: 1 }} />
+        {/* Connected items slot — fixed width so the columns stay aligned */}
+        {(item.parent_item_id || item.has_children) ? (
+            <IconButton
+                onClick={handleMenuClick}
+                aria-label="פריטים מחוברים"
+                sx={{
+                    width: 40,
+                    height: 40,
+                    flexShrink: 0,
+                    borderRadius: "10px",
+                    border: "1px solid #d4d4dc",
+                    color: "#5a5a5f",
+                }}
+            >
+                <LinkIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+        ) : (
+            <Box sx={{ width: 40, flexShrink: 0 }} />
+        )}
 
-            {/* Action Button */}
+        {/* Connected Items Menu */}
+        <Menu
+             anchorEl={anchorEl}
+             open={Boolean(anchorEl)}
+             onClose={handleMenuClose}
+             anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+             transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+             marginThreshold={0}
+             PaperProps={{
+                 sx: {
+                     mt: 1,
+                     borderRadius: 3,
+                     boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+                     minWidth: 180
+                 }
+             }}
+        >
+           {item.connected_items && item.connected_items.length > 0 ? (
+               item.connected_items.map((conn) => (
+                 <MenuItem key={conn.item_id} onClick={handleMenuClose} dense>
+                    <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", gap: 1 }}>
+                       <QrCodeIcon fontSize="small" color="action" />
+                       <Box>
+                           <Typography variant="subtitle2">#{conn.item_id}</Typography>
+                           <Typography variant="caption" color="text.secondary">S/N: {conn.serial_no || '-'}</Typography>
+                       </Box>
+                    </Stack>
+                 </MenuItem>
+               ))
+           ) : (
+               <MenuItem disabled><Typography variant="caption">טוען...</Typography></MenuItem>
+           )}
+        </Menu>
+
+        {/* Action Button — always visible; ghost green when done */}
+        {isActionable ? (
             <Button
                 className="action-button"
                 variant="contained"
-                fullWidth
                 onClick={async () => {
                   if (isWaiting) {
                     if (hasWizard) {
@@ -314,21 +332,85 @@ function ItemCard({
                     onAddTestResult(item);
                   }
                 }}
-                color={isWaiting ? "warning" : "primary"}
+                startIcon={<PlayArrowRoundedIcon sx={{ fontSize: 16 }} />}
                 sx={{
-                  mt: 1,
                   height: 44,
+                  width: 120,
+                  flexShrink: 0,
                   borderRadius: "11px",
                   fontWeight: 600,
-                  fontSize: "0.95rem",
+                  fontSize: 14.5,
+                  gap: "7px",
+                  padding: 0,
+                  justifyContent: "center",
+                  whiteSpace: "nowrap",
                 }}
-                endIcon={isWaiting ? <PlayArrowRoundedIcon /> : <CheckCircleOutlineIcon />}
             >
-              {isWaiting ? (item.current_status === 4 ? "התחל מחקר" : "התחל בדיקה") : "סיום ודיווח"}
+              {isWaiting ? (item.current_status === 4 ? "התחל מחקר" : "התחל בדיקה") : "המשך בדיקה"}
             </Button>
-        </CardContent>
-      </Card>
-    </Grow>
+        ) : (
+            <Button
+                className="action-button"
+                variant="outlined"
+                disabled
+                sx={{
+                  height: 44,
+                  width: 120,
+                  flexShrink: 0,
+                  borderRadius: "11px",
+                  fontWeight: 600,
+                  fontSize: 14.5,
+                  padding: 0,
+                  justifyContent: "center",
+                  border: "1px solid rgba(31,138,91,0.3)",
+                  bgcolor: "rgba(31,138,91,0.07)",
+                  color: "#1f8a5b",
+                  opacity: 1,
+                }}
+            >
+              הושלם
+            </Button>
+        )}
+      </Box>
+  );
+}
+
+// Queue-priority helpers: waiting first (longest wait first), then in-test,
+// then anything else.
+const rankOf = (it: ItemRow) =>
+  it.current_status === 2 || it.current_status === 4 ? 0
+  : it.current_status === 1 || it.current_status === 5 ? 1 : 2;
+const baseTimeOf = (it: ItemRow) =>
+  new Date(it.queue_start_time || it.processing_start_time || 0).getTime();
+
+// --- Summary strip tile ---
+function SummaryTile({
+  icon,
+  iconBg,
+  iconColor,
+  value,
+  label,
+  valueColor = "#1d1d1f",
+}: {
+  icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
+  value: React.ReactNode;
+  label: string;
+  valueColor?: string;
+}) {
+  return (
+    <Box sx={{ bgcolor: "#fff", border: "1px solid #e0e0e0", borderRadius: "16px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px" }}>
+      <Box sx={{ width: 44, height: 44, flexShrink: 0, borderRadius: "12px", bgcolor: iconBg, color: iconColor, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1, color: valueColor, fontVariantNumeric: "tabular-nums" }}>
+          {value}
+        </Typography>
+        <Typography sx={{ fontSize: 13, color: "#7a7a7a", mt: "5px" }}>{label}</Typography>
+      </Box>
+    </Box>
   );
 }
 
@@ -461,6 +543,77 @@ export default function TestingPage() {
     if (idx <= 0) return base;
     return [base[idx], ...base.slice(0, idx), ...base.slice(idx + 1)];
   }, [items, filterMakat, highlightedItemId]);
+
+  // Priority ordering for the grid: waiting (longest wait first) → in-test →
+  // rest. The scanned item stays hoisted to the very front regardless.
+  const { orderedItems, priorityItemId } = React.useMemo(() => {
+    const sorted = [...filteredItems].sort(
+      (a, b) => rankOf(a) - rankOf(b) || baseTimeOf(a) - baseTimeOf(b)
+    );
+    // The longest-waiting item gets the priority ribbon (hidden while filtering).
+    const topWaiting = !filterMakat
+      ? sorted.find((it) => it.current_status === 2 || it.current_status === 4)
+      : undefined;
+    if (highlightedItemId != null) {
+      const idx = sorted.findIndex((it) => Number(it.item_id) === Number(highlightedItemId));
+      if (idx > 0) {
+        const [hit] = sorted.splice(idx, 1);
+        sorted.unshift(hit);
+      }
+    }
+    return {
+      orderedItems: sorted,
+      priorityItemId: topWaiting != null ? Number(topWaiting.item_id) : null,
+    };
+  }, [filteredItems, filterMakat, highlightedItemId]);
+
+  // Summary-strip data — station overview, so derived from the unfiltered list.
+  const waitingCount = React.useMemo(
+    () => items.filter((it) => it.current_status === 2 || it.current_status === 4).length,
+    [items]
+  );
+  const inTestCount = React.useMemo(
+    () => items.filter((it) => it.current_status === 1 || it.current_status === 5).length,
+    [items]
+  );
+  // Longest wait = live timer on the earliest queue_start_time among waiting items.
+  const longestWaitStart = React.useMemo(() => {
+    let earliest: string | null = null;
+    for (const it of items) {
+      if ((it.current_status === 2 || it.current_status === 4) && it.queue_start_time) {
+        if (earliest == null || new Date(it.queue_start_time).getTime() < new Date(earliest).getTime()) {
+          earliest = it.queue_start_time;
+        }
+      }
+    }
+    return earliest;
+  }, [items]);
+  const longestWait = useElapsedTime(longestWaitStart);
+
+  // "Completed today" — count of item_route_history rows for this station with
+  // processing_end_time since the start of the local day.
+  const [completedToday, setCompletedToday] = React.useState<number | null>(null);
+  const fetchCompletedToday = React.useCallback(async (stationId: number) => {
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const res = await fetch(
+        `/api/testing/completed-today?stationId=${stationId}&since=${encodeURIComponent(startOfDay.toISOString())}`
+      );
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      setCompletedToday(typeof data?.count === "number" ? data.count : 0);
+    } catch {
+      setCompletedToday(null);
+    }
+  }, []);
+  React.useEffect(() => {
+    if (!selectedStation) {
+      setCompletedToday(null);
+      return;
+    }
+    fetchCompletedToday(selectedStation.test_station_id);
+  }, [selectedStation, fetchCompletedToday]);
 
   // Load effects
   React.useEffect(() => {
@@ -628,6 +781,7 @@ export default function TestingPage() {
   const handleRefreshItems = async () => {
     if (!selectedStation) return;
     setItemsLoading(true);
+    fetchCompletedToday(selectedStation.test_station_id);
     try {
       const res = await fetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -747,103 +901,131 @@ export default function TestingPage() {
             {selectedStation ? (
                 <Fade in={true}>
                     <Box>
-                        {/* Control Bar */}
-                        <Paper
-                            elevation={0}
-                            sx={{
-                                p: 2,
-                                mb: 4,
-                                borderRadius: 3,
-                                bgcolor: "white",
-                                border: "1px solid rgba(0,0,0,0.04)",
-                                boxShadow: "0 4px 20px rgba(0,0,0,0.02)",
-                                display: "flex",
-                                flexDirection: { xs: "column", md: "row" },
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                gap: 2
-                            }}
-                        >
-                             <Stack direction="row" alignItems="center" spacing={4}>
-                                 <PrecisionManufacturingIcon color="primary" />
-                                 <Typography variant="h6" fontWeight="700">
-                                     {selectedStation.test_station_desc}
-                                 </Typography>
-                                 <Chip 
-                                    label={`${filteredItems.length} פריטים`} 
-                                    sx={{ fontWeight: "bold", bgcolor: alpha("#2196F3", 0.1), color: "primary.main" }} 
-                                 />
-                             </Stack>
+                        {/* Summary strip — station overview KPIs */}
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", mb: "22px" }}>
+                            <SummaryTile
+                                icon={<QueueIcon sx={{ fontSize: 21 }} />}
+                                iconBg="rgba(217,118,6,0.10)"
+                                iconColor="#d97706"
+                                value={waitingCount}
+                                label="בתור"
+                            />
+                            <SummaryTile
+                                icon={<ScienceIcon sx={{ fontSize: 21 }} />}
+                                iconBg="rgba(0,102,204,0.10)"
+                                iconColor="#0066cc"
+                                value={inTestCount}
+                                label="בבדיקה"
+                            />
+                            <SummaryTile
+                                icon={<CheckIcon sx={{ fontSize: 21 }} />}
+                                iconBg="rgba(31,138,91,0.10)"
+                                iconColor="#1f8a5b"
+                                value={completedToday ?? "—"}
+                                label="הושלמו היום"
+                            />
+                            <SummaryTile
+                                icon={<AccessTimeIcon sx={{ fontSize: 21 }} />}
+                                iconBg="rgba(217,118,6,0.10)"
+                                iconColor="#d97706"
+                                value={longestWait ? longestWait.slice(0, 5) : "—"}
+                                label="המתנה הארוכה ביותר"
+                                valueColor="#d97706"
+                            />
+                        </Box>
 
-                             <Box sx={{ display: "flex", gap: 2, width: { xs: "100%", md: "auto" } }}>
-                                 <TextField
-                                     fullWidth
-                                     placeholder="סינון לפי מקט, מספר סריאלי או מזהה פריט..."
-                                     size="small"
-                                     value={filterMakat}
-                                     onChange={(e) => setFilterMakat(e.target.value)}
-                                     InputProps={{
-                                         startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment>,
-                                         endAdornment: filterMakat && (
-                                            <InputAdornment position="end">
-                                                <IconButton size="small" onClick={() => setFilterMakat("")}><ClearIcon fontSize="small"/></IconButton>
-                                            </InputAdornment>
-                                         )
-                                     }}
-                                     sx={{ 
-                                         width: { xs: "100%", md: 350 },
-                                         "& .MuiOutlinedInput-root": {
-                                             bgcolor: "#f8f9fa",
-                                             borderRadius: 2
-                                         }
-                                     }}
-                                 />
-                                 <Button
-                                    variant="outlined"
-                                    color="inherit"
-                                    startIcon={<HistoryIcon />}
-                                    onClick={() => setHistoryDialogOpen(true)}
-                                    sx={{
-                                        borderRadius: 2,
-                                        borderColor: "#e0e0e0",
-                                        "& .MuiButton-startIcon": {
-                                            marginRight: 0,
-                                            marginLeft: 1.5 // Force RTL spacing
-                                        }
+                        {/* Toolbar */}
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", mb: "18px" }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px", color: "#1d1d1f" }}>
+                                    התור לבדיקה
+                                </Typography>
+                                <Typography sx={{ fontSize: 12.5, color: "#7a7a7a" }}>
+                                    ממוינים לפי זמן המתנה — הממתין ביותר קודם
+                                </Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                <TextField
+                                    placeholder="סינון לפי מק״ט, סריאלי או מזהה"
+                                    size="small"
+                                    value={filterMakat}
+                                    onChange={(e) => setFilterMakat(e.target.value)}
+                                    InputProps={{
+                                        startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16, color: "#7a7a7a" }} /></InputAdornment>,
+                                        endAdornment: filterMakat && (
+                                           <InputAdornment position="end">
+                                               <IconButton size="small" onClick={() => setFilterMakat("")}><ClearIcon fontSize="small"/></IconButton>
+                                           </InputAdornment>
+                                        )
                                     }}
-                                 >
-                                    היסטוריה
-                                 </Button>
-                             </Box>
-                        </Paper>
+                                    sx={{ width: 300, maxWidth: "56vw", height: 44, borderRadius: "11px", bgcolor: "#fff" }}
+                                />
+                                <Button
+                                   variant="outlined"
+                                   color="inherit"
+                                   startIcon={<HistoryIcon sx={{ fontSize: 17 }} />}
+                                   onClick={() => setHistoryDialogOpen(true)}
+                                   sx={{
+                                       height: 44,
+                                       borderRadius: "11px",
+                                       borderColor: "#d4d4dc",
+                                       color: "#1d1d1f",
+                                       fontWeight: 600,
+                                       gap: "7px",
+                                       whiteSpace: "nowrap",
+                                   }}
+                                >
+                                   היסטוריה
+                                </Button>
+                            </Box>
+                        </Box>
 
-                        {/* Items Grid — dense auto-fill, ~258px min column */}
+                        {/* Items — row strips (queue rank + step progress) */}
                         {itemsLoading ? (
-                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(258px, 1fr))", gap: "14px" }}>
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                 {[1, 2, 3, 4].map((i) => (
-                                    <Skeleton key={i} variant="rectangular" height={260} sx={{ borderRadius: "14px" }} />
+                                    <Skeleton key={i} variant="rectangular" height={70} sx={{ borderRadius: "14px" }} />
                                 ))}
                             </Box>
-                        ) : filteredItems.length > 0 ? (
-                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(258px, 1fr))", gap: "14px", pb: 4 }}>
-                                {filteredItems.map((item, index) => (
-                                    <ItemCard
-                                        key={`${item.item_id}-${index}`}
-                                        item={item}
-                                        onAddTestResult={handleAddTestResult}
-                                        onStartTest={handleStartTest}
-                                        onRefresh={handleRefreshItems}
-                                        index={index}
-                                        highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
-                                        hasWizard={selectedStationType != null && hasStartTestDialog(selectedStationType.id)}
-                                    />
-                                ))}
+                        ) : orderedItems.length > 0 ? (
+                            <Box sx={{ pb: 4 }}>
+                                {/* Column headers */}
+                                <Box sx={{ display: "flex", alignItems: "center", gap: "15px", padding: "0 16px 12px", fontSize: 12, fontWeight: 700, color: "#9a9aa0" }}>
+                                    <Box sx={{ width: 5, flexShrink: 0 }} />
+                                    <Box sx={{ width: 38, flexShrink: 0, textAlign: "center" }}>תור</Box>
+                                    <Box sx={{ flex: 1 }}>מזהה · דגם</Box>
+                                    <Box sx={{ width: 150, flexShrink: 0 }}>שלב</Box>
+                                    <Box sx={{ minWidth: 82, flexShrink: 0, textAlign: "center" }}>זמן</Box>
+                                    <Box sx={{ width: 40, flexShrink: 0 }} />
+                                    <Box sx={{ width: 120, flexShrink: 0 }} />
+                                </Box>
+                                <Box sx={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                    {orderedItems.map((item, index) => (
+                                        <ItemCard
+                                            key={`${item.item_id}-${index}`}
+                                            item={item}
+                                            rank={index + 1}
+                                            onAddTestResult={handleAddTestResult}
+                                            onStartTest={handleStartTest}
+                                            onRefresh={handleRefreshItems}
+                                            highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
+                                            priority={priorityItemId != null && Number(item.item_id) === Number(priorityItemId)}
+                                            hasWizard={selectedStationType != null && hasStartTestDialog(selectedStationType.id)}
+                                        />
+                                    ))}
+                                </Box>
                             </Box>
                         ) : (
-                            <Box sx={{ textAlign: "center", py: 10, opacity: 0.6 }}>
-                                <InventoryIcon sx={{ fontSize: 60, color: "text.secondary", mb: 2 }} />
-                                <Typography variant="h5" color="text.secondary">לא נמצאו פריטים</Typography>
-                                <Typography variant="body1" color="text.secondary">העמדה ריקה כרגע, ייתכן ואין משימות הממתינות לביצוע</Typography>
+                            <Box sx={{ textAlign: "center", py: "64px", color: "#7a7a7a" }}>
+                                <Box sx={{ width: 64, height: 64, borderRadius: "9999px", bgcolor: "#fff", border: "1px solid #e0e0e0", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#0066cc", mb: "14px" }}>
+                                    <InventoryIcon sx={{ fontSize: 30 }} />
+                                </Box>
+                                <Typography sx={{ fontSize: 17, color: "#1d1d1f", fontWeight: 600, mb: "6px" }}>
+                                    אין פריטים תואמים בעמדה זו.
+                                </Typography>
+                                <Typography sx={{ fontSize: 14 }}>
+                                    נסה לשנות את הסינון, או המתן לפריט הבא.
+                                </Typography>
                             </Box>
                         )}
                     </Box>

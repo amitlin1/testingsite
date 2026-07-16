@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #d9d9de; }
+  input, select, textarea, button { font-family: inherit; }
+  ::placeholder { color: #9a9aa0; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d4d4dc; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+</style>
+</helmet>
+
+<div dir="rtl" style="{{ overlayStyle }}">
+  <div style="{{ dialogStyle }}">
+
+    <!-- ===== Side rail (wide) — vertical stepper ===== -->
+    <sc-if value="{{ showRail }}" hint-placeholder-val="{{ true }}">
+      <div style="width:264px;flex-shrink:0;background:#f5f5f7;border-inline-end:1px solid #e0e0e0;display:flex;flex-direction:column;padding:24px 20px">
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.04em;color:#0066cc;text-transform:uppercase;margin-bottom:12px">קליטה וצילום</div>
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:16px;padding:16px;margin-bottom:22px">
+          <div style="font-size:16px;font-weight:700;letter-spacing:-0.3px">Dell Latitude 5540</div>
+          <div style="font-size:12.5px;color:#7a7a7a;margin-top:4px">#10293 · מק״ט 88214</div>
+          <div style="font-size:12.5px;color:#7a7a7a;margin-top:2px">לקוח ACME · SN-5540-0093</div>
+          <div style="display:inline-flex;align-items:center;gap:6px;margin-top:12px;background:rgba(0,102,204,0.08);border-radius:9999px;padding:4px 11px;font-size:12px;font-weight:600;color:#0066cc"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>מאיה לוי · #204</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ steps }}" as="st" hint-placeholder-count="5">
+            <div onClick="{{ st.onClick }}" style="{{ st.rowStyle }}">
+              <div style="{{ st.circleStyle }}">
+                <sc-if value="{{ st.done }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+                <sc-if value="{{ st.showNum }}" hint-placeholder-val="{{ true }}"><span>{{ st.n }}</span></sc-if>
+              </div>
+              <span style="{{ st.labelStyle }}">{{ st.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:12px;color:#9a9aa0">{{ stepLabel }}</div>
+      </div>
+    </sc-if>
+
+    <!-- ===== Main column ===== -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+      <!-- Header -->
+      <div style="{{ headerStyle }}">
+        <div style="min-width:0;flex:1">
+          <sc-if value="{{ showRail }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:24px;font-weight:700;letter-spacing:-0.4px">{{ title }}</div>
+            <div style="font-size:13px;color:#7a7a7a;margin-top:3px">{{ stepLabel }}</div>
+          </sc-if>
+          <sc-if value="{{ showChips }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:12px;font-weight:600;letter-spacing:0.04em;color:#0066cc;text-transform:uppercase">קליטה וצילום · Dell Latitude 5540</div>
+            <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px;margin-top:2px">{{ title }}</div>
+          </sc-if>
+        </div>
+        <button style="width:36px;height:36px;flex-shrink:0;align-self:flex-start;border:none;border-radius:9999px;background:#f0f0f2;color:#7a7a7a;cursor:pointer;display:flex;align-items:center;justify-content:center" style-hover="background:#e6e6ea"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+
+      <!-- Step chips (narrow / mobile) -->
+      <sc-if value="{{ showChips }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:8px;overflow-x:auto;padding:12px 20px;border-bottom:1px solid #e0e0e0">
+          <sc-for list="{{ steps }}" as="st" hint-placeholder-count="5">
+            <span onClick="{{ st.onClick }}" style="{{ st.chipStyle }}">{{ st.n }}. {{ st.label }}</span>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- Body -->
+      <div style="{{ bodyStyle }}"><div style="max-width:680px;margin:0 auto"><dc-import name="TestStepBody" phase="{{ phase }}" hint-size="640px,420px"></dc-import></div></div>
+
+      <!-- Footer -->
+      <div style="{{ footerStyle }}">
+        <button onClick="{{ onBack }}" style="{{ backStyle }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>חזור</button>
+        <button onClick="{{ onNext }}" style="{{ nextStyle }}">{{ nextLabel }}<span style="display:flex">{{ nextIcon }}</span></button>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  phases = [
+    { key: "sku",         title: "סריקת מק״ט יצרן",     short: "מק״ט" },
+    { key: "pkgPhoto",    title: "צילום האריזה",         short: "צילום" },
+    { key: "count",       title: "פתיחת המארז",          short: "ספירה" },
+    { key: "accessories", title: "בדיקת פריטים נלווים",  short: "נלווים" },
+    { key: "transfer",    title: "העברת המוצר",          short: "העברה" },
+  ];
+
+  state = { vw: 1280, idx: 0 };
+
+  componentDidMount() { this.onResize(); window.addEventListener("resize", this.onResize); }
+  componentWillUnmount() { window.removeEventListener("resize", this.onResize); }
+  onResize = () => this.setState({ vw: window.innerWidth || 1280 });
+  go = (i) => this.setState({ idx: Math.max(0, Math.min(this.phases.length - 1, i)) });
+
+  arrowIcon() {
+    return React.createElement("svg", { width: 17, height: 17, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" },
+      React.createElement("path", { d: "m15 18-6-6 6-6" }));
+  }
+  finishIcon() {
+    return React.createElement("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" },
+      [React.createElement("path", { key: 0, d: "M22 11.08V12a10 10 0 1 1-5.93-9.14" }), React.createElement("path", { key: 1, d: "m9 11 3 3L22 4" })]);
+  }
+
+  renderVals() {
+    const vw = this.state.vw;
+    const mobile = vw < 600;
+    const narrow = vw >= 600 && vw < 920;
+    const wide = vw >= 920;
+    const idx = this.state.idx;
+    const n = this.phases.length;
+    const last = idx === n - 1;
+    const ph = this.phases[idx];
+    const BLUE = "#0066cc", OK = "#1f8a5b", HAIR = "#e0e0e0";
+
+    const radius = mobile ? "0" : "20px";
+    const overlayPad = mobile ? "0" : narrow ? "16px" : "3vh 3vw";
+    const overlayStyle = `position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;padding:${overlayPad};font-family:'Heebo','Inter',system-ui,sans-serif;color:#1d1d1f;text-align:right`;
+    const dialogW = mobile ? "100vw" : narrow ? "94vw" : "max(760px, 65vw)";
+    const dialogH = mobile ? "100dvh" : narrow ? "94vh" : "min(900px, 86vh)";
+    const dialogStyle = `background:#fff;border-radius:${radius};overflow:hidden;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px;display:flex;flex-direction:${wide ? "row" : "column"};width:${dialogW};height:${dialogH}`;
+
+    const headerStyle = `padding:${mobile ? "16px 18px" : "24px 32px"};border-bottom:1px solid ${HAIR};display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0`;
+    const bodyStyle = `flex:1;padding:${mobile ? "20px 18px" : "28px 32px"};overflow-y:auto`;
+    const footerStyle = `padding:${mobile ? "14px 18px" : "18px 32px"};border-top:1px solid ${HAIR};display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0`;
+
+    const steps = this.phases.map((p, i) => {
+      const done = i < idx, current = i === idx;
+      const circle = "width:28px;height:28px;flex-shrink:0;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;";
+      const circleStyle = done ? circle + `background:${OK};color:#fff`
+        : current ? circle + `background:${BLUE};color:#fff`
+        : circle + `background:#fff;border:1.5px solid ${HAIR};color:#9a9aa0`;
+      return {
+        n: i + 1, label: p.title, done, showNum: !done,
+        onClick: () => this.go(i),
+        rowStyle: `display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:12px;cursor:pointer;background:${current ? "rgba(0,102,204,0.07)" : "transparent"}`,
+        circleStyle,
+        labelStyle: `font-size:14px;font-weight:${current ? 700 : 600};color:${current ? "#1d1d1f" : done ? "#1d1d1f" : "#9a9aa0"}`,
+        chipStyle: `white-space:nowrap;font-size:13px;font-weight:600;border-radius:9999px;padding:6px 14px;cursor:pointer;${current ? "background:#0066cc;color:#fff" : done ? "background:rgba(31,138,91,0.1);color:#1f8a5b" : "background:#f0f0f2;color:#7a7a7a"}`,
+      };
+    });
+
+    const backBase = "display:flex;align-items:center;gap:6px;background:none;border:none;font-size:15px;font-weight:600;font-family:inherit;padding:6px 10px;border-radius:8px;color:#7a7a7a;";
+    const nextBase = "display:flex;align-items:center;gap:7px;border:none;border-radius:9999px;padding:0 24px;height:46px;font-size:15px;font-weight:600;font-family:inherit;color:#fff;cursor:pointer;";
+
+    return {
+      overlayStyle, dialogStyle, headerStyle, bodyStyle, footerStyle,
+      showRail: wide, showChips: !wide,
+      phase: ph.key, title: ph.title, stepLabel: `שלב ${idx + 1} מתוך ${n}`,
+      steps,
+      backStyle: backBase + (idx === 0 ? "opacity:0.4;cursor:default" : "cursor:pointer"),
+      onBack: () => this.go(idx - 1),
+      nextStyle: nextBase + (last ? `background:${OK}` : `background:${BLUE}`),
+      nextLabel: last ? "סיום קליטה" : "המשך",
+      nextIcon: last ? this.finishIcon() : this.arrowIcon(),
+      onNext: () => { if (!last) this.go(idx + 1); },
+    };
+  }
+}
+</script>
+</body>
+</html>

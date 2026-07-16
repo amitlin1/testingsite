@@ -6,7 +6,7 @@ import {
 } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import DataTable, { StatusPill, RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
-import { Search, Plus, Pencil, Trash2, Check } from "lucide-react";
+import { Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { TestStation, TestStationStatus } from "@/types";
 
 interface StationsTableProps {
@@ -124,8 +124,10 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
       },
     },
     {
-      key: "research", header: "מחקר", align: "center", width: 90,
-      cell: (r) => (r.is_research ? <Check size={16} strokeWidth={2} color="#0066cc" /> : <span style={{ color: "#7a7a7a" }}>—</span>),
+      key: "research", header: "מחקר", width: 90,
+      cell: (r) => (r.is_research
+        ? <span style={{ fontSize: 11, fontWeight: 600, color: "#0066cc", background: "rgba(0,102,204,0.08)", borderRadius: 9999, padding: "4px 10px" }}>מחקר</span>
+        : <span style={{ fontSize: 13, color: "#c0c0c8" }}>—</span>),
     },
     {
       key: "__actions", header: "פעולות", align: "center", width: 120,
@@ -139,30 +141,34 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
   ];
 
   return (
-    <div dir="rtl" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexShrink: 0 }}>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>עמדות עבור: {typeName}</div>
-        <button className="shx-btn shx-btn-primary" onClick={handleAdd}>
-          <Plus size={18} strokeWidth={2} />הוסף עמדה
+    <div dir="rtl" style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 16, overflow: "hidden" }}>
+      {/* card header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid #e0e0e0", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#1d1d1f" }}>עמדות · {typeName}</span>
+        <button
+          onClick={handleAdd}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#0066cc", color: "#fff", border: 0, borderRadius: 9999, padding: "8px 15px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+        >
+          <Plus size={16} strokeWidth={2.1} />הוסף עמדה
         </button>
       </div>
 
-      <div style={{ position: "relative", flexShrink: 0, maxWidth: 320 }}>
-        <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
-          <Search size={16} strokeWidth={1.75} />
+      {/* search */}
+      <div style={{ position: "relative", padding: "10px 14px", borderBottom: "1px solid #f0f0f0", maxWidth: 360 }}>
+        <span style={{ position: "absolute", insetInlineStart: 26, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
+          <Search size={15} strokeWidth={1.75} />
         </span>
         <input
           className="shx-input"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="חיפוש עמדה..."
-          style={{ height: 42, borderRadius: 10, paddingInlineStart: 40, paddingInlineEnd: 14, fontSize: 14 }}
+          style={{ height: 38, borderRadius: 9, paddingInlineStart: 36, paddingInlineEnd: 12, fontSize: 14 }}
         />
       </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <DataTable columns={dtColumns} rows={filteredRows} getRowKey={(r) => r.test_station_id} loading={loading} minWidth={520} maxHeight="100%" empty={<div style={{ fontSize: 15 }}>אין עמדות</div>} />
-      </div>
+      {/* table (embedded — no double card chrome) */}
+      <DataTable columns={dtColumns} rows={filteredRows} getRowKey={(r) => r.test_station_id} loading={loading} minWidth={520} plain empty={<div style={{ fontSize: 14 }}>אין עמדות. הוסף עמדה לסוג זה.</div>} />
 
       {/* Dialogs */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>

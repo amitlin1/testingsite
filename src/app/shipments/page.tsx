@@ -26,26 +26,13 @@
 // }
 
 "use client";
-import React from "react";
 import { Box } from "@/components/ui";
 import ShipmentTable from "../components/shipments/ShipmentTable";
-import PageHeader from "../settings/components/PageHeader";
 
 export default function ShipmentsPage() {
     return (
-        <Box sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-            p: 2
-        }}>
-            <PageHeader
-                title="ניהול משלוחים נכנסים"
-                subtitle="צפייה וניהול של כל המשלוחים הנכנסים למערכת"
-            />
-            <Box sx={{ flex: 1, overflow: 'hidden', mt: 2 }}>
-                <ShipmentTable />
-            </Box>
+        <Box sx={{ p: 3 }}>
+            <ShipmentTable />
         </Box>
     );
 }

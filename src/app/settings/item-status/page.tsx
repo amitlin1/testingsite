@@ -1,7 +1,5 @@
 "use client";
-import { Box } from "@/components/ui";
 import CrudTable, { Column } from "../components/CrudTable";
-import PageHeader from "../components/PageHeader";
 
 export default function ItemStatusPage() {
   const columns: Column[] = [
@@ -10,24 +8,15 @@ export default function ItemStatusPage() {
   ];
 
   return (
-    <Box sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-      }}>
-        <PageHeader
-          title="ניהול סטטוסי פריט"
-          subtitle="הגדרת הסטטוסים האפשריים לפריט בתהליך"
-        />
-        <Box sx={{ flex: 1, overflow: "hidden", width: "100%", p: 0 }}>
-          <CrudTable
-            apiUrl="/api/settings/item-status"
-            columns={columns}
-            idField="item_status_id"
-            nameField="item_status_desc"
-            entityName="סטטוס פריט"
-          />
-        </Box>
-    </Box>
+    <CrudTable
+      apiUrl="/api/settings/item-status"
+      columns={columns}
+      idField="item_status_id"
+      nameField="item_status_desc"
+      entityName="סטטוס פריט"
+      title="סטטוסי פריט"
+      subtitle="הסטטוסים האפשריים לפריט לאורך תהליך הבדיקה."
+      countLabel="סטטוסים"
+    />
   );
 }

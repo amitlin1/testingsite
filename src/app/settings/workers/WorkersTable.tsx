@@ -5,10 +5,17 @@ import {
   TextField, Alert, Snackbar, Box, Typography, FormControlLabel, Checkbox,
 } from "@/components/ui";
 import DataTable, { RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
-import { Search, Plus, Pencil, Trash2, Check } from "lucide-react";
+import { Pencil, Trash2, Check } from "lucide-react";
 import { Worker } from "@/types";
+import SettingsToolbar from "../components/SettingsToolbar";
 
-export default function WorkersTable() {
+interface WorkersTableProps {
+  title: string;
+  subtitle?: string;
+  countLabel?: string;
+}
+
+export default function WorkersTable({ title, subtitle, countLabel }: WorkersTableProps) {
   const [rows, setRows] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -140,25 +147,19 @@ export default function WorkersTable() {
   ];
 
   return (
-    <div dir="rtl" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Toolbar */}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexShrink: 0, flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 320 }}>
-          <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
-            <Search size={16} strokeWidth={1.75} />
-          </span>
-          <input
-            className="shx-input"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="חיפוש..."
-            style={{ height: 42, borderRadius: 10, paddingInlineStart: 40, paddingInlineEnd: 14, fontSize: 14 }}
-          />
-        </div>
-        <button className="shx-btn shx-btn-primary" onClick={handleAdd}>
-          <Plus size={18} strokeWidth={2} />הוסף עובד
-        </button>
-      </div>
+    <div dir="rtl" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Items-style header: title + subtitle + count pill, blue add pill, then search row */}
+      <SettingsToolbar
+        title={title}
+        subtitle={subtitle}
+        count={rows.length}
+        countLabel={countLabel}
+        onAdd={handleAdd}
+        addLabel="הוסף עובד"
+        search={searchTerm}
+        onSearch={setSearchTerm}
+        searchPlaceholder="חיפוש..."
+      />
 
       {/* Table */}
       <div style={{ flex: 1, minHeight: 0 }}>

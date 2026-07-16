@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #d9d9de; }
+  input, select, textarea, button { font-family: inherit; }
+  ::placeholder { color: #9a9aa0; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d4d4dc; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+</style>
+</helmet>
+
+<!-- Scrim + centered dialog (65% of viewport on desktop, responsive) -->
+<div dir="rtl" style="{{ overlayStyle }}">
+  <div style="{{ dialogStyle }}">
+
+    <!-- ===== Side rail (wide) — section jump-list ===== -->
+    <sc-if value="{{ showRail }}" hint-placeholder-val="{{ true }}">
+      <div style="width:200px;flex-shrink:0;background:#f5f5f7;border-inline-end:1px solid #e0e0e0;display:flex;flex-direction:column;padding:24px 16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:#0066cc;text-transform:uppercase;margin-bottom:14px">מקטעים</div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="4">
+            <div onClick="{{ sec.onClick }}" style="{{ sec.rowStyle }}"><span style="{{ sec.dotStyle }}"></span><span style="{{ sec.labelStyle }}">{{ sec.label }}</span></div>
+          </sc-for>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:11.5px;color:#9a9aa0;line-height:1.4">עמדה ללא שלבים</div>
+      </div>
+    </sc-if>
+
+    <!-- ===== Main column ===== -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+      <!-- Item hero band -->
+      <div style="{{ heroStyle }}">
+        <div style="{{ thumbStyle }}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg></div>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:12px;font-weight:600;letter-spacing:0.04em;color:#0066cc;text-transform:uppercase">בדיקה ויזואלית</div>
+          <div style="font-size:19px;font-weight:700;letter-spacing:-0.3px;margin-top:2px">Dell Latitude 5540</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+            <span style="font-size:11.5px;font-weight:600;background:#f0f0f2;border-radius:9999px;padding:3px 10px">#10293</span>
+            <span style="font-size:11.5px;font-weight:600;background:#f0f0f2;border-radius:9999px;padding:3px 10px">מק״ט 88214</span>
+            <span style="font-size:11.5px;font-weight:600;background:#f0f0f2;border-radius:9999px;padding:3px 10px">ACME</span>
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;background:rgba(0,102,204,0.08);color:#0066cc;border-radius:9999px;padding:3px 10px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>מאיה לוי</span>
+          </div>
+        </div>
+        <button style="width:36px;height:36px;flex-shrink:0;align-self:flex-start;border:none;border-radius:9999px;background:#f0f0f2;color:#7a7a7a;cursor:pointer;display:flex;align-items:center;justify-content:center" style-hover="background:#e6e6ea"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+
+      <!-- Section chips (narrow / mobile only) -->
+      <sc-if value="{{ showChips }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:8px;overflow-x:auto;padding:12px 20px;border-bottom:1px solid #e0e0e0">
+          <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="4">
+            <span onClick="{{ sec.onClick }}" style="{{ sec.chipStyle }}">{{ sec.label }}</span>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- Body — all building blocks in one screen -->
+      <div style="{{ bodyStyle }}"><div style="max-width:680px;margin:0 auto"><dc-import name="TestStepBody" phase="all" hint-size="640px,560px"></dc-import></div></div>
+
+      <!-- Footer actions -->
+      <div style="{{ footerStyle }}">
+        <button style="background:none;border:none;font-size:15px;font-weight:600;font-family:inherit;color:#7a7a7a;padding:6px 8px;border-radius:8px;cursor:pointer;{{ cancelExtra }}" style-hover="background:#f0f0f2">ביטול</button>
+        <div style="{{ actionsStyle }}">
+          <button style="display:flex;align-items:center;justify-content:center;gap:7px;border:1.5px solid #0066cc;background:#fff;color:#0066cc;border-radius:9999px;padding:0 22px;height:46px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;{{ actionBtnExtra }}" style-hover="background:rgba(0,102,204,0.05)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>העבר לחקר</button>
+          <button style="display:flex;align-items:center;justify-content:center;gap:7px;border:none;background:#1f8a5b;color:#fff;border-radius:9999px;padding:0 24px;height:46px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;{{ actionBtnExtra }}" style-hover="background:#186f49"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>שמור וסיים</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { vw: 1280, active: 0 };
+
+  componentDidMount() {
+    this.onResize();
+    window.addEventListener("resize", this.onResize);
+  }
+  componentWillUnmount() { window.removeEventListener("resize", this.onResize); }
+  onResize = () => this.setState({ vw: window.innerWidth || 1280 });
+
+  renderVals() {
+    const vw = this.state.vw;
+    const mobile = vw < 600;
+    const narrow = vw >= 600 && vw < 920;
+    const wide = vw >= 920;
+
+    const radius = mobile ? "0" : "20px";
+    const overlayPad = mobile ? "0" : narrow ? "16px" : "3vh 3vw";
+    const overlayStyle = `position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;padding:${overlayPad};font-family:'Heebo','Inter',system-ui,sans-serif;color:#1d1d1f;text-align:right`;
+
+    // 65% of viewport on desktop; grows on smaller screens; full-screen on mobile
+    const dialogW = mobile ? "100vw" : narrow ? "94vw" : "max(760px, 65vw)";
+    const dialogH = mobile ? "100dvh" : narrow ? "94vh" : "min(900px, 86vh)";
+    const dialogDir = wide ? "row" : "column";
+    const dialogStyle = `background:#fff;border-radius:${radius};overflow:hidden;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px;display:flex;flex-direction:${dialogDir};width:${dialogW};height:${dialogH}`;
+
+    const heroPad = mobile ? "16px 18px" : "20px 32px";
+    const heroStyle = `padding:${heroPad};border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:16px;flex-shrink:0`;
+    const thumbSize = mobile ? 52 : 60;
+    const thumbStyle = `width:${thumbSize}px;height:${thumbSize}px;flex-shrink:0;border-radius:14px;background:#f0f0f2;border:1px solid #e0e0e0;display:flex;align-items:center;justify-content:center;color:#9a9aa0`;
+
+    const bodyPad = mobile ? "20px 18px" : "24px 32px";
+    const bodyStyle = `flex:1;padding:${bodyPad};overflow-y:auto`;
+
+    const footerCol = mobile;
+    const footerStyle = `padding:${mobile ? "14px 18px" : "18px 32px"};border-top:1px solid #e0e0e0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0${footerCol ? ";flex-direction:column-reverse;align-items:stretch" : ""}`;
+    const actionsStyle = `display:flex;gap:12px${mobile ? ";flex-direction:column" : ""}`;
+    const actionBtnExtra = mobile ? "width:100%" : "";
+    const cancelExtra = mobile ? "text-align:center" : "";
+
+    const sectionLabels = ["תיעוד בתמונות", "תקינות", "שקילה", "הערות"];
+    const sections = sectionLabels.map((label, i) => {
+      const on = i === this.state.active;
+      return {
+        label,
+        onClick: () => this.setState({ active: i }),
+        rowStyle: `display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:12px;cursor:pointer;background:${on ? "rgba(0,102,204,0.07)" : "transparent"}`,
+        dotStyle: `width:7px;height:7px;border-radius:9999px;flex-shrink:0;background:${on ? "#0066cc" : "#c7c7cf"}`,
+        labelStyle: `font-size:14px;font-weight:${on ? 700 : 600};color:${on ? "#1d1d1f" : "#7a7a7a"}`,
+        chipStyle: `white-space:nowrap;font-size:13px;font-weight:600;border-radius:9999px;padding:6px 14px;cursor:pointer;${on ? "background:#0066cc;color:#fff" : "background:#f0f0f2;color:#7a7a7a"}`,
+      };
+    });
+
+    return {
+      overlayStyle, dialogStyle, heroStyle, thumbStyle, bodyStyle, footerStyle,
+      actionsStyle, actionBtnExtra, cancelExtra,
+      showRail: wide, showChips: !wide, sections,
+    };
+  }
+}
+</script>
+</body>
+</html>

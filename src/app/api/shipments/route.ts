@@ -17,6 +17,11 @@ export async function GET() {
           COUNT(*) FILTER (WHERE ir.current_status = 1 AND i.parent_item_id IS NULL)::int AS in_work_items,
           COUNT(*) FILTER (WHERE ir.current_status = 3 AND i.parent_item_id IS NULL)::int AS valid_items,
           COUNT(*) FILTER (WHERE ir.is_finished = true AND i.parent_item_id IS NULL)::int AS valid_amount,
+          COUNT(*) FILTER (WHERE (ir.current_status = 3 OR ir.is_finished = true) AND i.parent_item_id IS NULL)::int AS finished_sampled_amount,
+          COUNT(*) FILTER (
+            WHERE ir.item_id IS NOT NULL AND i.parent_item_id IS NULL
+              AND (ir.current_status <> 2 OR ir.current_route_step > 1 OR ir.is_finished = true)
+          )::int AS started_sampled_amount,
           COUNT(*) FILTER (WHERE ir.item_id IS NOT NULL AND i.parent_item_id IS NOT NULL)::int AS sub_items_sampled_amount
         FROM items i
         LEFT JOIN item_routes ir ON ir.item_id = i.item_id
@@ -50,6 +55,8 @@ export async function GET() {
         COALESCE(sc.sampled_amount, 0) as sampled_amount,
         COALESCE(sc.sub_items_sampled_amount, 0) as sub_items_sampled_amount,
         COALESCE(sc.valid_amount, 0) as valid_amount,
+        COALESCE(sc.finished_sampled_amount, 0) as finished_sampled_amount,
+        COALESCE(sc.started_sampled_amount, 0) as started_sampled_amount,
         (
             SELECT json_agg(json_build_object(
                 'id', si.id,

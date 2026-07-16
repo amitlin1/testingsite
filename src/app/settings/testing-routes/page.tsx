@@ -1,15 +1,9 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Grid, Paper, Typography, Box, TextField, Button,
-  List, ListItem, IconButton,
-  Chip, Snackbar, Alert
-} from "@/components/ui";
+import { Box, Snackbar, Alert } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
-import { Delete as DeleteIcon } from "@/components/ui/icons";
-import { ArrowUpward as ArrowUpwardIcon } from "@/components/ui/icons";
-import { ArrowDownward as ArrowDownwardIcon } from "@/components/ui/icons";
-import { Save as SaveIcon } from "@/components/ui/icons";
+import { ArrowUp, ArrowDown, X, Plus, Save, Route } from "lucide-react";
+import SettingsToolbar from "../components/SettingsToolbar";
 
 interface Option {
   id: number;
@@ -173,144 +167,126 @@ export default function TestingRoutesPage() {
     return stationTypes.find(s => s.id === id)?.label || `ID ${id}`;
   };
 
+  const hasSelection = !!selectedItemType && routeNumber !== null && routeNumber !== undefined;
+
   return (
-    <Box sx={{
-      display: "flex",
-      flexDirection: "column",
-      height: "100%",
-    }}>
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", direction: "rtl" }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <Box sx={{ maxWidth: 1180, mx: "auto", px: 1, py: 1 }}>
+          <SettingsToolbar
+            title="מסלולי בדיקה"
+            subtitle="הגדרת סדר העמדות לפי סוג פריט ומספר מסלול."
+          />
 
-        {/* Page Header */}
-        <Box sx={{
-          textAlign: "center",
-          flexShrink: 0,
-          width: "100%",
-          p: 1,
-          borderBottom: "1px solid",
-          borderColor: "divider"
-        }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: "#333", fontSize: "1.4rem" }}>
-            ניהול מסלולי בדיקה
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.8rem" }}>
-            הגדרת סדר התחנות לפי סוג פריט ומספר מסלול
-          </Typography>
-        </Box>
-
-        {/* Main Content Grid Container */}
-        <Box sx={{
-          flex: 1,
-          overflow: "hidden",
-          width: "100%",
-          p: 0
-        }}>
-          <Grid container spacing={0} sx={{ height: "100%", minHeight: 0, width: "100%", m: 0 }}>
-
-            {/* Right Panel: Selection */}
-            <Grid size={{ xs: 12, md: 4 }} sx={{ height: "100%", minHeight: 0 }}>
-              <Paper
-                elevation={0}
-                square
-                sx={{
-                  p: 2,
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden",
-                  borderLeft: "1px solid", // Separator for RTL
-                  borderColor: "divider"
-                }}
-              >
-                <Typography variant="h6" sx={{ fontSize: "1rem", mb: 2, fontWeight: 600, borderBottom: "1px solid #eee", pb: 1 }}>
-                  בחירת מסלול
-                </Typography>
-
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", flex: 1, px: 1 }}>
-                  <SearchableCombobox<Option>
-                    options={itemTypes}
-                    getOptionLabel={(option) => option.label}
-                    isOptionEqualToValue={(option, value) => option.id === value.id}
-                    value={selectedItemType}
-                    onChange={(newValue) => setSelectedItemType(newValue)}
-                    floatingLabel="סוג פריט"
-                  />
-
-                  <TextField
-                    label="מספר מסלול"
-                    type="number"
-                    size="small"
-                    variant="outlined"
-                    value={routeNumber ?? ""}
-                    onChange={(e) => {
-                      const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
-                      setRouteNumber(isNaN(val as number) ? null : val);
-                    }}
-                    inputProps={{ min: 1 }}
-                  />
-
-                  {selectedItemType && routeNumber !== null && routeNumber !== undefined && (
-                    <Alert
-                      severity={isNew ? "info" : "success"}
-                      variant="outlined"
-                      sx={{ mt: 1, py: 0, alignItems: "center", '& .MuiAlert-message': { padding: '4px 0' } }}
-                    >
-                      {loadingRoute ? "טוען..." : isNew ? "לא נמצא - צור חדש" : "מסלול קיים נטען"}
-                    </Alert>
-                  )}
+          {/* selection card */}
+          <Box sx={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: "16px", mt: 3, overflow: "hidden" }}>
+            <Box sx={{ px: 2.25, py: 1.75, borderBottom: "1px solid #e0e0e0", fontSize: 16, fontWeight: 700, color: "#1d1d1f" }}>
+              בחירת מסלול
+            </Box>
+            <Box sx={{ p: 2.25, display: "flex", gap: 2, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <Box sx={{ minWidth: 240, flex: 1, maxWidth: 360 }}>
+                <SearchableCombobox<Option>
+                  options={itemTypes}
+                  getOptionLabel={(option) => option.label}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  value={selectedItemType}
+                  onChange={(newValue) => setSelectedItemType(newValue)}
+                  floatingLabel="סוג פריט"
+                />
+              </Box>
+              <Box sx={{ width: 180 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#333", marginBottom: 8 }}>מספר מסלול</label>
+                <input
+                  className="shx-input"
+                  type="number"
+                  min={1}
+                  value={routeNumber ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
+                    setRouteNumber(isNaN(val as number) ? null : val);
+                  }}
+                  placeholder="מספר מסלול"
+                  style={{ height: 42, borderRadius: 8, fontSize: 15 }}
+                />
+              </Box>
+              {hasSelection && (
+                <Box
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.75,
+                    height: 42,
+                    px: 1.5,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    borderRadius: "9999px",
+                    color: isNew ? "#7a7a7a" : "#0066cc",
+                    background: isNew ? "#f5f5f7" : "rgba(0,102,204,0.08)",
+                    border: `1px solid ${isNew ? "#e0e0e0" : "rgba(0,102,204,0.2)"}`,
+                  }}
+                >
+                  {loadingRoute ? "טוען…" : isNew ? "מסלול חדש — ייווצר בשמירה" : "מסלול קיים נטען"}
                 </Box>
-              </Paper>
-            </Grid>
+              )}
+            </Box>
+          </Box>
 
-            {/* Left Panel: Editor */}
-            <Grid size={{ xs: 12, md: 8 }} sx={{ height: "100%", minHeight: 0 }}>
-              <Paper
-                elevation={0}
-                square
-                sx={{
-                  p: 2,
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden"
-                }}
+          {/* editor card */}
+          <Box sx={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: "16px", mt: 2.5, overflow: "hidden" }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap", px: 2.25, py: 1.75, borderBottom: "1px solid #e0e0e0" }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                <Box component="span" sx={{ display: "flex", color: "#0066cc" }}><Route size={20} strokeWidth={1.75} /></Box>
+                <Box component="span" sx={{ fontSize: 16, fontWeight: 700, color: "#1d1d1f" }}>עריכת שלבים</Box>
+              </Box>
+              <button
+                className="shx-btn shx-btn-primary"
+                onClick={handleSave}
+                disabled={!hasSelection || loadingRoute}
               >
-                {/* Header Row */}
-                <Box sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  mb: 2,
-                  borderBottom: "1px solid #eee",
-                  pb: 1,
-                  minHeight: "40px",
-                  flexShrink: 0
-                }}>
-                  <Typography variant="h6" sx={{ fontSize: "1rem", fontWeight: 600 }}>
-                    עריכת שלבים
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<SaveIcon sx={{ ml: 1 }} />}
-                    onClick={handleSave}
-                    disabled={!selectedItemType || routeNumber === null || routeNumber === undefined || loadingRoute}
-                    size="small"
-                    sx={{ px: 2 }}
-                  >
-                    שמור
-                  </Button>
-                </Box>
+                <Save size={18} strokeWidth={2} />שמור
+              </button>
+            </Box>
 
-                {(!selectedItemType || routeNumber === null || routeNumber === undefined) ? (
-                  <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", flex: 1, opacity: 0.5, flexDirection: "column", gap: 1 }}>
-                    <Box sx={{ fontSize: "3rem", opacity: 0.2 }}>📋</Box>
-                    <Typography variant="body2">נא לבחור סוג פריט ומספר מסלול</Typography>
-                  </Box>
-                ) : (
-                  <Box sx={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", minHeight: 0 }}>
-                    {/* Add Step Row */}
-                    <Box sx={{ display: "flex", gap: 1, mb: 2, flexShrink: 0 }}>
-                      <Box sx={{ flexGrow: 1 }}>
+            <Box sx={{ p: 2.25 }}>
+              {!hasSelection ? (
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1.25, py: 8, color: "#7a7a7a", textAlign: "center" }}>
+                  <Route size={34} strokeWidth={1.5} color="#0066cc" />
+                  <Box sx={{ fontSize: 15, color: "#1d1d1f", fontWeight: 600 }}>בחר סוג פריט ומספר מסלול</Box>
+                  <Box sx={{ fontSize: 13 }}>שלבי המסלול יופיעו כאן לעריכה.</Box>
+                </Box>
+              ) : (
+                <>
+                  <Box sx={{ fontSize: 13, fontWeight: 600, color: "#333", mb: 1.25 }}>שלבי המסלול · לפי הסדר</Box>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxWidth: 560 }}>
+                    {steps.map((stepId, index) => (
+                      <Box
+                        key={index}
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5, background: "#fafafc", border: "1px solid #e0e0e0", borderRadius: "10px", p: "10px 12px" }}
+                      >
+                        <Box sx={{ width: 26, height: 26, borderRadius: "9999px", background: "#0066cc", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                          {index + 1}
+                        </Box>
+                        <Box sx={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#1d1d1f", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {getStationName(stepId)}
+                        </Box>
+                        <StepBtn title="הקדם" disabled={index === 0} onClick={() => handleMoveStep(index, "up")}>
+                          <ArrowUp size={15} strokeWidth={1.9} />
+                        </StepBtn>
+                        <StepBtn title="אחר" disabled={index === steps.length - 1} onClick={() => handleMoveStep(index, "down")}>
+                          <ArrowDown size={15} strokeWidth={1.9} />
+                        </StepBtn>
+                        <StepBtn title="הסר" danger onClick={() => handleRemoveStep(index)}>
+                          <X size={15} strokeWidth={1.9} />
+                        </StepBtn>
+                      </Box>
+                    ))}
+                    {steps.length === 0 && (
+                      <Box sx={{ fontSize: 13, color: "#9a9aa0", py: 1 }}>אין שלבים. הוסף עמדה למסלול.</Box>
+                    )}
+
+                    {/* add-step row */}
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-end", mt: 0.75, flexWrap: "wrap" }}>
+                      <Box sx={{ flex: 1, minWidth: 220, maxWidth: 340 }}>
                         <SearchableCombobox<Option>
                           options={stationTypes}
                           getOptionLabel={(option) => option.label}
@@ -320,71 +296,50 @@ export default function TestingRoutesPage() {
                           floatingLabel="הוסף שלב (סוג עמדה)"
                         />
                       </Box>
-                      <Button
-                        variant="outlined"
+                      <button
                         onClick={handleAddStep}
                         disabled={!stepToAdd}
-                        size="small"
-                        sx={{ minWidth: "80px" }}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 6, height: 42,
+                          background: "#fff", border: "1.5px dashed #c7c7cf", borderRadius: 10,
+                          padding: "0 16px", fontSize: 14, fontWeight: 600,
+                          color: stepToAdd ? "#0066cc" : "#9a9aa0",
+                          cursor: stepToAdd ? "pointer" : "not-allowed",
+                        }}
                       >
-                        הוסף
-                      </Button>
-                    </Box>
-
-                    {/* Scrollable List */}
-                    <Box sx={{
-                      flex: 1,
-                      overflowY: "auto",
-                      border: "1px solid #eee",
-                      borderRadius: 1,
-                      bgcolor: "#fafafa",
-                      px: 1
-                    }}>
-                      <List dense sx={{ p: 0 }}>
-                        {steps.map((stepId, index) => (
-                          <ListItem key={index} divider sx={{ py: 1, '&:last-child': { borderBottom: 'none' } }}>
-                            <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1.5 }}>
-                              <Chip
-                                label={index + 1}
-                                color="primary"
-                                size="small"
-                                sx={{ minWidth: "30px", height: "24px", fontWeight: "bold" }}
-                              />
-                              <Typography sx={{ flexGrow: 1, fontSize: "0.9rem", fontWeight: 500 }}>
-                                {getStationName(stepId)}
-                              </Typography>
-
-                              <Box sx={{ display: "flex" }}>
-                                <IconButton size="small" onClick={() => handleMoveStep(index, "up")} disabled={index === 0}>
-                                  <ArrowUpwardIcon fontSize="small" />
-                                </IconButton>
-                                <IconButton size="small" onClick={() => handleMoveStep(index, "down")} disabled={index === steps.length - 1}>
-                                  <ArrowDownwardIcon fontSize="small" />
-                                </IconButton>
-                                <IconButton size="small" color="error" onClick={() => handleRemoveStep(index)} sx={{ ml: 1 }}>
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Box>
-                            </Box>
-                          </ListItem>
-                        ))}
-                        {steps.length === 0 && (
-                          <Typography color="text.secondary" align="center" sx={{ py: 4, fontSize: "0.875rem" }}>
-                            אין שלבים במסלול זה
-                          </Typography>
-                        )}
-                      </List>
+                        <Plus size={16} strokeWidth={2} />הוסף שלב
+                      </button>
                     </Box>
                   </Box>
-                )}
-              </Paper>
-            </Grid>
-          </Grid>
+                </>
+              )}
+            </Box>
+          </Box>
         </Box>
+      </Box>
 
-        <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-          <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
-        </Snackbar>
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
+      </Snackbar>
     </Box>
+  );
+}
+
+function StepBtn({ children, onClick, title, disabled, danger }: { children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean; danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        width: 28, height: 28, border: "1px solid #e0e0e0", borderRadius: 7,
+        background: "#fff", color: danger ? "#bf3535" : "#7a7a7a",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, flexShrink: 0,
+      }}
+    >
+      {children}
+    </button>
   );
 }

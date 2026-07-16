@@ -8,11 +8,13 @@ export async function GET() {
   try {
     const rows = await prisma.test_stations_type.findMany({
       orderBy: { test_station_type_id: "asc" },
+      include: { _count: { select: { test_stations: true } } },
     });
 
     const result = rows.map((r) => ({
       test_station_type_id: r.test_station_type_id,
       test_type_desc: r.test_type_desc.trim(),
+      station_count: r._count.test_stations,
     }));
 
     return NextResponse.json(result);
