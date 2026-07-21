@@ -14,6 +14,7 @@ export async function GET() {
     const result = rows.map((r) => ({
       test_station_type_id: r.test_station_type_id,
       test_type_desc: r.test_type_desc.trim(),
+      parents_only: r.parents_only,
       station_count: r._count.test_stations,
     }));
 
@@ -28,6 +29,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const body = await req.json();
   const { test_type_desc } = body;
+  const parentsOnly = Boolean(body.parents_only);
 
   if (!test_type_desc || typeof test_type_desc !== "string" || !test_type_desc.trim()) {
     return NextResponse.json(
@@ -50,12 +52,13 @@ export async function POST(req: Request) {
 
   try {
     const created = await prisma.test_stations_type.create({
-      data: { test_type_desc: trimmedDesc },
+      data: { test_type_desc: trimmedDesc, parents_only: parentsOnly },
     });
 
     return NextResponse.json({
       test_station_type_id: created.test_station_type_id,
       test_type_desc: created.test_type_desc.trim(),
+      parents_only: created.parents_only,
     });
   } catch (error: any) {
     const msg = String(error?.message ?? "");
@@ -74,11 +77,12 @@ export async function POST(req: Request) {
         console.log("Duplicate key detected, fixing sequence and retrying...");
         await fixSequence(prisma, "test_stations_type", "test_station_type_id", "test_stations_type_test_station_type_id_seq");
         const retryCreated = await prisma.test_stations_type.create({
-          data: { test_type_desc: trimmedDesc },
+          data: { test_type_desc: trimmedDesc, parents_only: parentsOnly },
         });
         return NextResponse.json({
           test_station_type_id: retryCreated.test_station_type_id,
           test_type_desc: retryCreated.test_type_desc.trim(),
+          parents_only: retryCreated.parents_only,
         });
       } catch (retryError: any) {
         console.error("Retry after sequence fix failed:", retryError);

@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { Snackbar, Alert } from "@/components/ui";
 import { QrCode, Package, FlaskConical, List, Check } from "lucide-react";
 import ItemsToolbar from "@/components/ItemsToolbar";
@@ -11,6 +12,14 @@ import BarcodeDialog from "./BarcodeDialog";
 import { ItemRow, StatusOption, NewItem, ItemTypeOption, Customers, Shipment } from "@/types";
 
 export default function ItemTable() {
+  // Command-palette deep links: ?q=<serial|מק״ט|דגם> seeds the search box, and
+  // ?status= pins the status filter — needed because a finished item (status 3)
+  // is hidden by default, so a link to one would otherwise land on an empty
+  // table. Read once as initial state; the user owns the filters after that.
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams.get("q") ?? "";
+  const initialStatus = searchParams.get("status") ?? "";
+
   const [rows, setRows] = React.useState<ItemRow[]>([]);
   const [statuses, setStatuses] = React.useState<StatusOption[]>([]);
   const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
@@ -19,7 +28,8 @@ export default function ItemTable() {
 
   const [loading, setLoading] = React.useState(true);
   const [selected, setSelected] = React.useState<ItemRow | null>(null);
-  const [insertOpen, setInsertOpen] = React.useState(false);
+  // ?new=1 — the palette's "פריט חדש" quick action opens the intake popup directly.
+  const [insertOpen, setInsertOpen] = React.useState(searchParams.get("new") === "1");
 
   // snackbar
   const [snackbarOpen, setSnackbarOpen] = React.useState(false);
@@ -27,8 +37,8 @@ export default function ItemTable() {
   const [snackbarSeverity, setSnackbarSeverity] = React.useState<"success" | "error">("success");
 
   // filters (string ids — "" = none)
-  const [search, setSearch] = React.useState("");
-  const [statusFilter, setStatusFilter] = React.useState("");
+  const [search, setSearch] = React.useState(initialSearch);
+  const [statusFilter, setStatusFilter] = React.useState(initialStatus);
   const [typeFilter, setTypeFilter] = React.useState("");
   const [shipFilter, setShipFilter] = React.useState("");
 

@@ -57,9 +57,14 @@ export async function GET(
 
     // Optional station scope: when provided, return only files uploaded at this
     // station type, plus files marked global. Omit it (management view) → all files.
-    const stationTypeParam = new URL(request.url).searchParams.get('stationTypeId');
+    const searchParams = new URL(request.url).searchParams;
+    const stationTypeParam = searchParams.get('stationTypeId');
     const stationTypeId =
       stationTypeParam != null && stationTypeParam !== '' ? Number(stationTypeParam) : null;
+    // Optional photo-type scope (photo_types.code, e.g. "package"/"product"):
+    // each wizard screen lists only photos captured for its own group.
+    const photoTypeParam = searchParams.get('photoType');
+    const photoType = photoTypeParam != null && photoTypeParam !== '' ? photoTypeParam : null;
 
     const rows = await prisma.file_objects.findMany({
       where: {
@@ -71,7 +76,11 @@ export async function GET(
     });
 
     let files = rows.map((r) => {
-      const meta = (r.metadata ?? {}) as { stationTypeId?: number | null; isGlobal?: boolean };
+      const meta = (r.metadata ?? {}) as {
+        stationTypeId?: number | null;
+        isGlobal?: boolean;
+        photoType?: string | null;
+      };
       return {
         objectKey: r.object_key,
         fileName: r.file_name,
@@ -83,6 +92,7 @@ export async function GET(
         updatedBy: r.updated_by,
         stationTypeId: meta.stationTypeId ?? null,
         isGlobal: !!meta.isGlobal,
+        photoType: meta.photoType ?? null,
       };
     });
 
@@ -91,6 +101,11 @@ export async function GET(
       // explicitly marked global. Untagged files (incl. legacy) show only in the
       // unfiltered management view.
       files = files.filter((f) => f.isGlobal || f.stationTypeId === stationTypeId);
+    }
+    if (photoType != null) {
+      // Strict scoping (same policy as stationTypeId): untagged files show only
+      // in unfiltered views.
+      files = files.filter((f) => f.photoType === photoType);
     }
 
     return NextResponse.json({ files });
@@ -121,6 +136,11 @@ export async function POST(
     const stationTypeId =
       stationTypeRaw != null && String(stationTypeRaw) !== '' ? Number(stationTypeRaw) : null;
     const isGlobal = String(formData.get('is_global') ?? '') === 'true';
+    // Photo-type tag (photo_types.code): which capture group this photo belongs
+    // to (e.g. "package" from the package-photo step). Optional — generic
+    // uploads (ItemFilesPanel) stay untagged.
+    const photoTypeRaw = String(formData.get('photo_type') ?? '').trim();
+    const photoType = photoTypeRaw || null;
     const files = formData.getAll('files') as File[];
 
     if (files.length === 0) {
@@ -153,7 +173,7 @@ export async function POST(
         checksum: stored.checksum,
         entityType: 'item_attachment',
         entityId: id,
-        metadata: { originalName: file.name, stationTypeId, isGlobal },
+        metadata: { originalName: file.name, stationTypeId, isGlobal, photoType },
         createdBy: workerId,
         updatedBy: workerId,
       });

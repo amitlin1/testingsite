@@ -2,13 +2,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Snackbar, Alert,
+  TextField, Snackbar, Alert, Checkbox, FormControlLabel,
 } from "@/components/ui";
 import { Search, Plus, Pencil, Trash2 } from "lucide-react";
 
 interface StationType {
   test_station_type_id: number;
   test_type_desc: string;
+  /** Queue lists parent items only — accessories are tested alongside the parent. */
+  parents_only?: boolean;
   station_count?: number;
 }
 
@@ -51,6 +53,20 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // A selection can arrive from outside the table — the command palette
+  // deep-links ?type=<id>, which the page turns into `selectedId` before the
+  // rows exist. Once they load, resolve that id to its name and report it back
+  // so the detail pane gets a real header instead of an empty one. The ref
+  // guards against re-reporting (and thus re-rendering) on every fetch.
+  const reportedRef = React.useRef<number | null>(null);
+  useEffect(() => {
+    if (!selectedId || reportedRef.current === selectedId) return;
+    const match = rows.find((r) => r.test_station_type_id === selectedId);
+    if (!match) return;
+    reportedRef.current = selectedId;
+    onSelect(match.test_station_type_id, match.test_type_desc);
+  }, [rows, selectedId, onSelect]);
 
   const handleSave = async () => {
     if (!formData.test_type_desc?.trim()) {
@@ -163,6 +179,11 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                   <span style={{ fontSize: 14, fontWeight: selected ? 600 : 400, color: "#1d1d1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.test_type_desc}
                   </span>
+                  {r.parents_only && (
+                    <span title="בעמדות מסוג זה נשלפים רק פריטי אב" style={{ fontSize: 11, color: "#0066cc", background: "#f3f8ff", border: "1px solid #cfe3fb", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}>
+                      פריטי אב בלבד
+                    </span>
+                  )}
                   {r.station_count != null && (
                     <span style={{ fontSize: 11, color: "#9a9aa0", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "2px 8px", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
                       {r.station_count}
@@ -205,6 +226,15 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
             fullWidth
             value={formData.test_type_desc || ""}
             onChange={(e) => setFormData({ ...formData, test_type_desc: e.target.value })}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={Boolean(formData.parents_only)}
+                onChange={(_e, checked) => setFormData({ ...formData, parents_only: checked })}
+              />
+            }
+            label="שלוף רק פריטי אב (הפריטים הנלווים נבדקים יחד עם פריט האב)"
           />
         </DialogContent>
         <DialogActions>

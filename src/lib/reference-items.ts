@@ -37,6 +37,8 @@ type ImageRow = {
   object_key: string;
   file_name: string;
   sort_order: number;
+  photo_type_id: number;
+  photo_types?: { code: string } | null;
 };
 
 type ReferenceItemRow = {
@@ -62,10 +64,20 @@ export function serializeReferenceItem(it: ReferenceItemRow) {
       id: img.reference_item_image_id,
       file_name: img.file_name,
       sort_order: img.sort_order,
+      photo_type: img.photo_types?.code ?? null,
       url: imageUrl(img.object_key),
       is_primary: img.reference_item_image_id === it.primary_image_id,
     }));
   const cover = images.find((i) => i.is_primary) || images[0] || null;
+
+  // Group by photo-type code so each wizard screen can pull only its own
+  // reference set (e.g. "package" for the package-photo step, "product" for
+  // the item-photo/weighing steps).
+  const imagesByType: Record<string, typeof images> = {};
+  for (const img of images) {
+    if (!img.photo_type) continue;
+    (imagesByType[img.photo_type] ??= []).push(img);
+  }
 
   return {
     reference_item_id: it.reference_item_id,
@@ -78,6 +90,7 @@ export function serializeReferenceItem(it: ReferenceItemRow) {
     notes: it.notes,
     primary_image_id: it.primary_image_id,
     images,
+    images_by_type: imagesByType,
     cover_url: cover?.url ?? null,
     image_count: images.length,
     created_at: it.created_at,
@@ -88,23 +101,76 @@ export function serializeReferenceItem(it: ReferenceItemRow) {
 /** Prisma `include` used everywhere a reference item is read out. */
 export const referenceItemInclude = {
   item_types: { select: { item_type_desc: true } },
-  images: true,
+  images: { include: { photo_types: { select: { code: true } } } },
 } as const;
+
+/**
+ * Pair uploaded files with their photo-type codes from a multipart form.
+ * `image_types` is a JSON array of codes aligned with the `images` file order
+ * (mirrors the primaryIndex "parallel field" pattern); a single `photo_type`
+ * field is accepted as a shorthand that applies to every file in the batch.
+ * Throws (Hebrew, user-facing) when a file arrives without a valid type.
+ */
+export async function pairFilesWithTypes(
+  form: FormData,
+  files: File[],
+): Promise<Array<{ file: File; photoTypeId: number }>> {
+  if (files.length === 0) return [];
+
+  let codes: string[] = [];
+  const raw = String(form.get('image_types') ?? '').trim();
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) codes = parsed.map(String);
+    } catch {
+      throw new Error('image_types אינו JSON תקין');
+    }
+  } else {
+    const single = String(form.get('photo_type') ?? '').trim();
+    if (single) codes = files.map(() => single);
+  }
+  if (codes.length !== files.length) {
+    throw new Error('יש לציין סוג תמונה לכל תמונה שמועלית');
+  }
+
+  const idByCode = await resolvePhotoTypeIds(codes);
+  return files.map((file, i) => ({ file, photoTypeId: idByCode.get(codes[i])! }));
+}
+
+/**
+ * Resolve photo-type codes (the stable strings screens speak, e.g. "package")
+ * to their DB ids. Throws (Hebrew, user-facing) on an unknown/inactive code so
+ * routes can surface it as a 400.
+ */
+export async function resolvePhotoTypeIds(codes: string[]): Promise<Map<string, number>> {
+  const unique = [...new Set(codes)];
+  if (unique.length === 0) return new Map();
+  const rows = await prisma.photo_types.findMany({
+    where: { code: { in: unique }, is_active: true },
+    select: { photo_type_id: true, code: true },
+  });
+  const map = new Map(rows.map((r) => [r.code, r.photo_type_id]));
+  const missing = unique.filter((c) => !map.has(c));
+  if (missing.length > 0) throw new Error(`סוג תמונה לא מוכר: ${missing.join(", ")}`);
+  return map;
+}
 
 /**
  * Upload files to the RU bucket, insert `reference_item_images` rows, and
  * register each object in `file_objects`. Returns the created image rows.
  * Skips non-image files and rejects anything over MAX_IMAGE_SIZE.
+ * Every upload carries its photo-type id (resolve codes via resolvePhotoTypeIds).
  */
 export async function uploadReferenceImages(
   referenceItemId: number,
-  files: File[],
+  uploads: Array<{ file: File; photoTypeId: number }>,
   startSort = 0,
 ): Promise<{ reference_item_image_id: number }[]> {
   const created: { reference_item_image_id: number }[] = [];
   let i = 0;
 
-  for (const file of files) {
+  for (const { file, photoTypeId } of uploads) {
     if (!file || typeof file.arrayBuffer !== 'function') continue;
     if (file.type && !file.type.startsWith('image/')) {
       throw new Error(`הקובץ ${file.name} אינו תמונה`);
@@ -131,6 +197,7 @@ export async function uploadReferenceImages(
         content_type: contentType,
         size_bytes: BigInt(stored.size),
         sort_order: sortOrder,
+        photo_type_id: photoTypeId,
       },
       select: { reference_item_image_id: true },
     });

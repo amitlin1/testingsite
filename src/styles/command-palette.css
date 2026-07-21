@@ -1,0 +1,286 @@
+/* =========================================================================
+   Command palette (Ctrl+K) + top-bar search trigger.
+
+   Style ported from the Tickets app's `.cmdk-*` block, re-expressed in the
+   Shifthouse tokens from tokens.css — no raw hexes except the two derived
+   values below, which are alpha blends of --color-primary/black that CSS
+   can't compute from a hex token. They're declared here (component-scoped
+   names, `cp-` prefix) rather than in tokens.css so the token file stays the
+   single source of truth for the *system* palette.
+   ========================================================================= */
+
+:root {
+  --cp-primary-soft: rgba(0, 102, 204, 0.08);
+  --cp-primary-soft-2: rgba(0, 102, 204, 0.16);
+  /* Tickets hovers to a SOFT primary border (#cdd3f8), not the full brand
+     colour — at full strength the outline reads as an error state. */
+  --cp-primary-border: rgba(0, 102, 204, 0.28);
+  --cp-shadow-pop: 0 10px 34px rgba(17, 21, 31, 0.14);
+  --cp-ring: 0 0 0 3px rgba(0, 113, 227, 0.15);
+  /* Tickets separates the icon/kbd tint (--text-3) from the placeholder
+     (--text-4, lighter). tokens.css has only one muted ink, so the lighter
+     step is derived here. */
+  --cp-ink-placeholder: #a3a3ab;
+}
+
+/* ---- Top-bar trigger (a button that *looks* like an input) ---- */
+.cp-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  width: 280px;
+  max-width: 38vw;
+  padding: 7px 14px;
+  background: var(--color-canvas-parchment);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  color: var(--color-ink-muted-48);
+  transition: border var(--t-press) var(--ease-page),
+    box-shadow var(--t-press) var(--ease-page),
+    background var(--t-press) var(--ease-page);
+}
+.cp-trigger:hover {
+  background: var(--color-canvas);
+  border-color: var(--cp-primary-border);
+}
+.cp-trigger:focus-visible {
+  outline: none;
+  background: var(--color-canvas);
+  border-color: var(--cp-primary-border);
+  box-shadow: var(--cp-ring);
+}
+.cp-trigger-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--cp-ink-placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cp-trigger-kbd {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-48);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: 6px;
+  padding: 2px 6px;
+  letter-spacing: 0.02em;
+  /* Latin shortcut text inside an RTL bar — pin it LTR so "Ctrl K" doesn't
+     render as "K Ctrl". */
+  direction: ltr;
+}
+
+/* ---- Overlay ---- */
+.cp-scrim {
+  position: fixed;
+  inset: 0;
+  /* Above the app shell's fixed top bar (1100) and mobile drawer (1150), and
+     above the Autocomplete portal (1450) so a palette opened over a dialog
+     still wins. */
+  z-index: 1600;
+  background: rgba(29, 29, 31, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 11vh 16px 16px;
+}
+
+.cp-panel {
+  width: 100%;
+  max-width: 640px;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--cp-shadow-pop);
+  overflow: hidden;
+  animation: cp-in 180ms var(--ease-page) both;
+}
+
+/* CRITICAL: animate transform ONLY — never opacity. Animating opacity from 0
+   leaves the palette invisible if the tab is backgrounded and the animation
+   freezes at frame 0. */
+@keyframes cp-in {
+  from { transform: translateY(-8px) scale(0.98); }
+  to   { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-panel { animation: none; }
+}
+
+/* ---- Input row ---- */
+.cp-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-divider-soft);
+  color: var(--color-ink-muted-48);
+}
+.cp-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: 15px;
+  color: var(--color-ink);
+}
+.cp-input::placeholder { color: var(--cp-ink-placeholder); }
+.cp-esc {
+  appearance: none;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-48);
+  font: inherit;
+  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  border-radius: 6px;
+  padding: 3px 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cp-esc:hover { color: var(--color-ink); }
+
+/* ---- Results ---- */
+.cp-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+}
+.cp-group-label {
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  color: var(--cp-ink-placeholder);
+  padding: 10px 10px 4px;
+  letter-spacing: 0.02em;
+}
+.cp-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.cp-item.is-active { background: var(--cp-primary-soft); }
+.cp-item-ico {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-canvas-parchment);
+  border-radius: var(--r-sm);
+  color: var(--color-ink-muted-80);
+}
+.cp-item.is-active .cp-item-ico { color: var(--color-primary); }
+.cp-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cp-item-label {
+  font-size: 13.5px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cp-item-sub {
+  font-size: 11.5px;
+  color: var(--color-ink-muted-48);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Matched substring inside a label/sub — the "why did this match?" cue. */
+.cp-mark {
+  background: var(--cp-primary-soft-2);
+  color: var(--color-primary);
+  border-radius: 3px;
+  font-weight: var(--fw-bold);
+  padding: 0 1px;
+}
+.cp-item-enter {
+  flex-shrink: 0;
+  color: var(--color-ink-muted-48);
+  display: grid;
+  place-items: center;
+}
+.cp-item.is-active .cp-item-enter { color: var(--color-primary); }
+
+/* Trailing count/status pill on a result row (e.g. "4 עמדות"). */
+.cp-item-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-48);
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+  padding: 1px 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cp-item.is-active .cp-item-tag {
+  background: var(--cp-primary-soft-2);
+  border-color: transparent;
+  color: var(--color-primary);
+}
+
+.cp-empty {
+  padding: 30px 16px;
+  text-align: center;
+  color: var(--color-ink-muted-48);
+  font-size: 13px;
+}
+.cp-empty strong { color: var(--color-ink); font-weight: var(--fw-semibold); }
+
+/* ---- Footer legend ---- */
+.cp-foot {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  padding: 9px 14px;
+  border-top: 1px solid var(--color-divider-soft);
+  background: var(--color-surface-pearl);
+  font-size: 11.5px;
+  color: var(--color-ink-muted-48);
+}
+.cp-foot kbd {
+  font-family: inherit;
+  font-size: 11px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  padding: 1px 5px;
+  margin-inline-end: 2px;
+}
+.cp-foot-spinner { margin-inline-start: auto; display: flex; }
+/* Reuses the sh-spin keyframes declared in tokens.css. */
+.cp-spin { animation: sh-spin 900ms linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .cp-spin { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .cp-scrim { padding: 6vh 10px 10px; }
+  .cp-foot { display: none; }
+}

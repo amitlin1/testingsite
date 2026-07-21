@@ -21,10 +21,13 @@ export async function GET(req: Request) {
         const rows = await prisma.$queryRaw<any[]>`
      WITH selected_station AS (
     SELECT
-        test_station_type_id,
-        is_research
-    FROM test_stations
-    WHERE test_station_id = ${stationIdNum}
+        st.test_station_type_id,
+        st.is_research,
+        COALESCE(stt.parents_only, false) AS parents_only
+    FROM test_stations st
+    LEFT JOIN test_stations_type stt
+        ON stt.test_station_type_id = st.test_station_type_id
+    WHERE st.test_station_id = ${stationIdNum}
 )
 SELECT
     t1.item_id,
@@ -48,6 +51,7 @@ SELECT
     TRIM(it.item_type_desc) AS "item_type_desc",
     t1.route_number,
     i.parent_item_id,
+    (SELECT parent.serial_no FROM items parent WHERE parent.item_id = i.parent_item_id) AS "parent_serial_no",
     (EXISTS (SELECT 1 FROM items child WHERE child.parent_item_id = i.item_id)) AS "has_children",
     (
         SELECT json_agg(json_build_object(
@@ -77,30 +81,35 @@ LEFT JOIN item_types it
     ON it.item_type_id = i.item_type_id
 CROSS JOIN selected_station ss
 WHERE
-    (
-        t1.current_status = 1
-        AND t1.test_station_id = ${stationIdNum}
-        AND t1.finished_at IS NULL
-    )
-    OR
-    (
-        t1.current_status = 2
-        AND t2.route_steps[t1.current_route_step] = ss.test_station_type_id
-        AND t1.finished_at IS NULL
-    )
-    OR
-    (
-        ss.is_research = true
-        AND (
-            (
-                t1.current_status = 5
-                AND t1.test_station_id = ${stationIdNum}
-                AND t1.finished_at IS NULL
-            )
-            OR
-            (
-                t1.current_status = 4
-                AND t1.finished_at IS NULL
+    -- Station types flagged parents_only test a parent together with its
+    -- accessories, so the accessories never appear in the queue themselves.
+    (ss.parents_only = false OR i.parent_item_id IS NULL)
+    AND (
+        (
+            t1.current_status = 1
+            AND t1.test_station_id = ${stationIdNum}
+            AND t1.finished_at IS NULL
+        )
+        OR
+        (
+            t1.current_status = 2
+            AND t2.route_steps[t1.current_route_step] = ss.test_station_type_id
+            AND t1.finished_at IS NULL
+        )
+        OR
+        (
+            ss.is_research = true
+            AND (
+                (
+                    t1.current_status = 5
+                    AND t1.test_station_id = ${stationIdNum}
+                    AND t1.finished_at IS NULL
+                )
+                OR
+                (
+                    t1.current_status = 4
+                    AND t1.finished_at IS NULL
+                )
             )
         )
     )

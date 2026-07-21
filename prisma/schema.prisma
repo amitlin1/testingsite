@@ -292,10 +292,27 @@ model reference_item_images {
   content_type            String?         @db.VarChar(255)
   size_bytes              BigInt          @default(0)
   sort_order              Int             @default(0)
+  photo_type_id           Int
   created_at              DateTime        @default(now()) @db.Timestamptz(6)
   reference_items         reference_items @relation(fields: [reference_item_id], references: [reference_item_id], onDelete: Cascade)
+  photo_types             photo_types     @relation(fields: [photo_type_id], references: [photo_type_id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([reference_item_id], map: "idx_reference_item_images_item")
+  @@index([photo_type_id], map: "idx_reference_item_images_type")
+}
+
+/// Global photo classifications ("package", "product", ...). Screens address a
+/// group by the stable `code`; the SERIAL id never leaks into UI code. Also
+/// used (by code, via file_objects.metadata.photoType) to tag worker-captured
+/// item photos so each screen lists only its own group.
+model photo_types {
+  photo_type_id   Int                     @id @default(autoincrement())
+  code            String                  @unique @db.VarChar(50)
+  photo_type_desc String                  @db.VarChar(255)
+  sort_order      Int                     @default(0)
+  is_active       Boolean                 @default(true)
+  created_at      DateTime                @default(now()) @db.Timestamptz(6)
+  images          reference_item_images[]
 }
 
 model items {
@@ -691,6 +708,9 @@ model test_stations {
 model test_stations_type {
   test_station_type_id Int              @id @default(autoincrement())
   test_type_desc       String           @unique @db.Char(50)
+  // Stations of this type test a parent item together with its accessories,
+  // so the queue lists parents only and hides the accessory items.
+  parents_only         Boolean          @default(false)
   test_stations        test_stations[]
   testing_routes       testing_routes[]
 }

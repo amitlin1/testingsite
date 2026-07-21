@@ -45,6 +45,9 @@ export async function GET(req: Request) {
       referenceItem: ref,
       referenceWeight: ref.reference_weight,
       images: ref.images,
+      // Grouped by photo-type code ("package" | "product" | ...): each wizard
+      // screen pulls only its own reference set.
+      imagesByType: ref.images_by_type,
       coverUrl: ref.cover_url,
     });
   } catch (error) {

@@ -1,9 +1,30 @@
 "use client";
-import React, { useRef, useState, useLayoutEffect, useMemo, useEffect } from "react";
+import React, { useRef, useState, useMemo, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronDown } from "lucide-react";
 import { CircularProgress } from "./Progress";
 import { sxToStyle, type SxInput } from "./sx";
+
+/* =============================================================================
+   Autocomplete — Shifthouse (final)
+
+   POSITIONING MODEL — read this before touching it
+   ------------------------------------------------
+   The popup list must satisfy TWO things at once:
+     (1) sit EXACTLY below the field, and
+     (2) never be clipped by a card / dialog with `overflow: hidden`.
+
+   Neither an in-flow `absolute` child (gets clipped by the card) nor a naive
+   `fixed` popup (drifts off the field under transforms / on scroll) does both.
+
+   So the list is PORTALED to <body> (escapes every ancestor's overflow) and
+   positioned with the field's LIVE page coordinates — recomputed on open, on
+   scroll (capture phase, so inner scrollers count) and on resize. Result: glued
+   to the bottom edge of the trigger, and never clipped, in any card or dialog.
+
+   The public API is unchanged, so every consumer (SearchableCombobox,
+   WorkerPicker, dashboard filters, dialog fields) keeps working untouched.
+   ========================================================================== */
 
 type Reason = "selectOption" | "removeOption" | "clear" | "createOption" | "blur" | "input";
 
@@ -83,7 +104,15 @@ export function Autocomplete<
   const val = value !== undefined ? value : internalValue;
   const [inputText, setInputText] = useState("");
   const inputValue = inputValueProp !== undefined ? inputValueProp : inputText;
-  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  // Live page-coordinates of the popup, measured from the field (the anchor).
+  // `placement` flips to "top" when there isn't room below the field.
+  const MENU_MAX_H = 320;
+  const listRef = useRef<HTMLUListElement>(null);
+  const [pos, setPos] = useState<{
+    left: number; width: number; dir: "ltr" | "rtl";
+    placement: "bottom" | "top"; top: number; maxH: number;
+  } | null>(null);
 
   const setValue = (e: React.SyntheticEvent, v: T | T[] | null, reason: Reason) => {
     if (value === undefined) setInternalValue(v);
@@ -104,13 +133,43 @@ export function Autocomplete<
     return options.filter((o) => getOptionLabel(o).toLowerCase().includes(q));
   }, [options, inputValue, filterOptions, selectedSingle, getOptionLabel]);
 
+  // Measure the field and keep the popup glued to it (open, scroll, resize).
   useLayoutEffect(() => {
-    if (!open || !anchorRef.current) return;
-    const update = () => setRect(anchorRef.current!.getBoundingClientRect());
+    if (!open || !anchorRef.current) { setPos(null); return; }
+    const el = anchorRef.current;
+    const GAP = 4, EDGE = 8; // px gap to field, min gap to viewport edge
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - r.bottom;
+      const spaceAbove = r.top;
+      // measured content height (falls back to the cap before first paint)
+      const wanted = Math.min(listRef.current?.scrollHeight || MENU_MAX_H, MENU_MAX_H);
+      // open up only when below can't fit the menu AND above has more room
+      const flip = spaceBelow < wanted + GAP && spaceAbove > spaceBelow;
+      const dir = getComputedStyle(el).direction === "rtl" ? "rtl" : "ltr";
+      if (flip) {
+        const h = Math.max(120, Math.min(wanted, spaceAbove - GAP - EDGE));
+        setPos({
+          placement: "top",
+          top: r.top + window.scrollY - GAP - h,
+          left: r.left + window.scrollX, width: r.width, dir, maxH: h,
+        });
+      } else {
+        setPos({
+          placement: "bottom",
+          top: r.bottom + window.scrollY + GAP,
+          left: r.left + window.scrollX, width: r.width, dir,
+          maxH: Math.max(120, Math.min(wanted, spaceBelow - GAP - EDGE)),
+        });
+      }
+    };
     update();
-    window.addEventListener("scroll", update, true);
+    window.addEventListener("scroll", update, true); // capture: catch inner scrollers too
     window.addEventListener("resize", update);
-    return () => { window.removeEventListener("scroll", update, true); window.removeEventListener("resize", update); };
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
   }, [open, filtered.length]);
 
   const isSelected = (o: T) => {
@@ -174,6 +233,8 @@ export function Autocomplete<
       disabled,
       onChange: (e) => { setInput(e, e.target.value, "input"); if (!open) setOpen(true); },
       onFocus: () => setOpen(true),
+      // Reopen the list on click even when a value is already selected.
+      onClick: () => setOpen(true),
       onBlur: (e) => {
         setTimeout(() => setOpen(false), 120);
         if (!multiple && freeSolo) setValue(e, inputValue as unknown as T, "blur");
@@ -191,11 +252,28 @@ export function Autocomplete<
   return (
     <div ref={anchorRef} style={{ position: "relative", width: fullWidth ? "100%" : undefined, ...sxToStyle(sx) }}>
       {renderInput(params)}
-      {open && rect && typeof document !== "undefined" && createPortal(
+      {open && pos && typeof document !== "undefined" && createPortal(
         <ul
+          ref={listRef}
           role="listbox"
           className="sh-select-content"
-          style={{ position: "fixed", top: rect.bottom + 4, insetInlineStart: rect.left, width: rect.width, maxHeight: 320, overflowY: "auto", listStyle: "none", margin: 0, zIndex: 1450 }}
+          dir={pos.dir}
+          style={{
+            position: "absolute",
+            top: pos.top,
+            left: pos.left,
+            width: pos.width,
+            maxHeight: pos.maxH,
+            overflowY: "auto",
+            listStyle: "none",
+            margin: 0,
+            zIndex: 1450,
+            // Shadow points away from the field: down when below, up when flipped.
+            boxShadow: pos.placement === "top"
+              ? "rgba(0,0,0,0.14) 0 -10px 34px 0"
+              : "rgba(0,0,0,0.14) 0 12px 34px 0",
+            transformOrigin: pos.placement === "top" ? "bottom center" : "top center",
+          }}
           onMouseDown={(e) => e.preventDefault()}
         >
           {loading ? (

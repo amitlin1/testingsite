@@ -1,5 +1,7 @@
 "use client";
 import * as React from "react";
+import NextLink from "next/link";
+import { History as HistoryIcon } from "@/components/ui/icons";
 import {
   Box, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Typography, Stepper, Step, StepLabel, Chip, Stack, Divider,
@@ -197,6 +199,16 @@ export default function ItemDialog({
         )}
       </DialogContent>
       <DialogActions>
+        {/* Full-page reconstruction: the same data plus per-station timings,
+            worker attribution and files grouped by station. */}
+        <Button
+          component={NextLink}
+          href={`/items/${itemId}/history`}
+          variant="outlined"
+          startIcon={<HistoryIcon sx={{ ml: 1 }} />}
+        >
+          היסטוריה מלאה
+        </Button>
         <Button onClick={onClose} variant="contained">סגור</Button>
       </DialogActions>
     </Dialog>

@@ -46,6 +46,27 @@ export async function registerFileObject(input: RegisterInput): Promise<void> {
     // so the row always has a populated actor field even if a caller forgets updatedBy.
     const updatedBy = input.updatedBy ?? input.createdBy ?? null;
 
+    // On UPDATE (same object_key — byte replace, inline edit, OnlyOffice save),
+    // MERGE the incoming metadata into whatever is already stored instead of
+    // overwriting it wholesale. A replace/edit passes only its own marker (e.g.
+    // { replaced: true }); without merging, the classification tags written at
+    // upload time (stationTypeId / isGlobal / photoType) would be silently lost.
+    // New keys win; keys the caller omits survive. `metadata: undefined` still
+    // means "leave the column untouched", so callers that pass nothing are
+    // unaffected.
+    let updateMetadata: Record<string, unknown> | undefined;
+    if (input.metadata != null) {
+      const existing = await prisma.file_objects.findUnique({
+        where: { object_key: input.objectKey },
+        select: { metadata: true },
+      });
+      const prev =
+        existing?.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
+          ? (existing.metadata as Record<string, unknown>)
+          : {};
+      updateMetadata = { ...prev, ...input.metadata };
+    }
+
     await prisma.file_objects.upsert({
       where: { object_key: input.objectKey },
       create: {
@@ -67,7 +88,7 @@ export async function registerFileObject(input: RegisterInput): Promise<void> {
         content_type: input.contentType ?? null,
         size_bytes: BigInt(input.sizeBytes ?? 0),
         checksum_sha256: input.checksum ?? null,
-        metadata: (input.metadata ?? undefined) as never,
+        metadata: (updateMetadata ?? undefined) as never,
         updated_by: updatedBy,
         status: 'active',
         deleted_at: null,

@@ -91,9 +91,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           AND i.item_id != ${itemIdBig}
       `,
       prisma.$queryRaw<any[]>`
-        SELECT h.*, w.worker_name
+        SELECT
+          h.*,
+          w.worker_name,
+          -- The station the step actually ran at, plus its type. The history row
+          -- only stores test_station_id; the item-history screen needs the name
+          -- ("איפה נעצר הפריט") and the type to line steps up with route_steps.
+          TRIM(ts.test_station_desc) AS test_station_desc,
+          ts.test_station_type_id,
+          TRIM(tst.test_type_desc)  AS test_station_type_desc
         FROM item_route_history h
-        LEFT JOIN workers w ON h.worker_id = w.worker_id
+        LEFT JOIN workers w              ON h.worker_id = w.worker_id
+        LEFT JOIN test_stations ts       ON ts.test_station_id = h.test_station_id
+        LEFT JOIN test_stations_type tst ON tst.test_station_type_id = ts.test_station_type_id
         WHERE h.item_id = ${itemIdBig}
         ORDER BY h.log_id DESC
         LIMIT 200

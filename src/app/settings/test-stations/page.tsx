@@ -1,16 +1,26 @@
 "use client";
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Box } from "@/components/ui";
 import { LayoutGrid } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
 import StationTypesTable from "./StationTypesTable";
 import StationsTable from "./StationsTable";
 
-export default function TestStationsPage() {
-  const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
+function TestStationsView() {
+  // Deep-link params from the command palette (Ctrl+K):
+  //   ?type=<id>            → open that station type in the master–detail
+  //   ?type=<id>&station=<id> → …and pre-filter the detail table to that station
+  const params = useSearchParams();
+  const linkedTypeId = Number(params.get("type")) || null;
+  const linkedStationId = Number(params.get("station")) || null;
+
+  const [selectedTypeId, setSelectedTypeId] = useState<number | null>(linkedTypeId);
   const [selectedTypeName, setSelectedTypeName] = useState<string>("");
 
-  const handleTypeSelect = (id: number, name: string) => {
+  // Memoized because StationTypesTable depends on it in the effect that
+  // resolves a deep-linked ?type= id to its name.
+  const handleTypeSelect = React.useCallback((id: number, name: string) => {
     // id === 0 signals a cleared selection (e.g. the selected type was deleted)
     if (!id) {
       setSelectedTypeId(null);
@@ -19,7 +29,7 @@ export default function TestStationsPage() {
     }
     setSelectedTypeId(id);
     setSelectedTypeName(name);
-  };
+  }, []);
 
   return (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column", direction: "rtl" }}>
@@ -44,7 +54,14 @@ export default function TestStationsPage() {
             <StationTypesTable selectedId={selectedTypeId} onSelect={handleTypeSelect} />
 
             {selectedTypeId ? (
-              <StationsTable typeId={selectedTypeId} typeName={selectedTypeName} />
+              <StationsTable
+                typeId={selectedTypeId}
+                typeName={selectedTypeName}
+                // Only honour ?station= while its parent type is the one the
+                // link opened — once the user picks a different type by hand,
+                // the stale highlight would filter the table to nothing.
+                highlightStationId={selectedTypeId === linkedTypeId ? linkedStationId : null}
+              />
             ) : (
               <Box
                 sx={{
@@ -71,5 +88,15 @@ export default function TestStationsPage() {
         </Box>
       </Box>
     </Box>
+  );
+}
+
+export default function TestStationsPage() {
+  // useSearchParams needs a Suspense boundary to avoid opting the whole route
+  // into client-side rendering at build time.
+  return (
+    <Suspense fallback={null}>
+      <TestStationsView />
+    </Suspense>
   );
 }

@@ -8,7 +8,9 @@ export const runtime = "nodejs";
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { test_type_desc, test_station_type_id: newIdRaw } = await req.json();
+    const body = await req.json();
+    const { test_type_desc, test_station_type_id: newIdRaw } = body;
+    const parentsOnly = Boolean(body.parents_only);
 
     if (!test_type_desc || typeof test_type_desc !== "string" || !test_type_desc.trim()) {
       return NextResponse.json(
@@ -36,12 +38,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (newId === oldId) {
       const updated = await prisma.test_stations_type.update({
         where: { test_station_type_id: oldId },
-        data: { test_type_desc: trimmedDesc },
+        data: { test_type_desc: trimmedDesc, parents_only: parentsOnly },
       });
 
       return NextResponse.json({
         test_station_type_id: updated.test_station_type_id,
         test_type_desc: updated.test_type_desc.trim(),
+        parents_only: updated.parents_only,
       });
     }
 
@@ -61,7 +64,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     //  insert the new parent, move children to it, then delete the old parent.)
     await prisma.$transaction(async (tx) => {
       await tx.test_stations_type.create({
-        data: { test_station_type_id: newId, test_type_desc: trimmedDesc },
+        data: { test_station_type_id: newId, test_type_desc: trimmedDesc, parents_only: parentsOnly },
       });
       await tx.test_stations.updateMany({
         where: { test_station_type_id: oldId },
@@ -82,6 +85,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({
       test_station_type_id: newId,
       test_type_desc: trimmedDesc,
+      parents_only: parentsOnly,
     });
   } catch (error: any) {
     if (

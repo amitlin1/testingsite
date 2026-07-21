@@ -6,6 +6,7 @@ import {
   referenceItemInclude,
   uploadReferenceImages,
   deleteReferenceImages,
+  pairFilesWithTypes,
 } from '@/lib/reference-items';
 
 export const runtime = 'nodejs';
@@ -36,7 +37,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const referenceWeight = String(form.get('reference_weight') ?? '').trim();
     const manufacturer = String(form.get('manufacturer') ?? '').trim();
     const name = String(form.get('name') ?? '').trim();
-    // const referenceWeight = String(form.get('reference_weight') ?? '').trim();
     const notes = String(form.get('notes') ?? '').trim();
     const primaryKey = String(form.get('primaryKey') ?? '').trim();
     const files = form.getAll('images').filter((f): f is File => f instanceof File);
@@ -64,6 +64,18 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'סוג הפריט לא נמצא.' }, { status: 400 });
     }
 
+    // Pair new files with photo types BEFORE mutating anything, so a bad type
+    // can't half-apply the update (deletions run only after this passes).
+    let uploads: Awaited<ReturnType<typeof pairFilesWithTypes>>;
+    try {
+      uploads = await pairFilesWithTypes(form, files);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : 'סוג תמונה לא תקין' },
+        { status: 400 },
+      );
+    }
+
     // Remove images the user dropped from the form.
     const toDelete = existing.images.filter(
       (img) => !keepImageIds.includes(img.reference_item_image_id),
@@ -72,7 +84,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     // Upload any new files, appended after the highest existing sort order.
     const maxSort = existing.images.reduce((m, i) => Math.max(m, i.sort_order), -1);
-    const newImageRows = await uploadReferenceImages(refId, files, maxSort + 1);
+    const newImageRows = await uploadReferenceImages(refId, uploads, maxSort + 1);
 
     // Resolve the cover from primaryKey: an existing image id, or "new:<index>".
     let primaryImageId: number | null = null;

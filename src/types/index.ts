@@ -23,6 +23,8 @@ export type ItemRow = {
   model: string | null;
   total_steps: number | null;
   parent_item_id: number | null;
+  /** Serial of the parent item — only set for accessory items. */
+  parent_serial_no?: string | null;
   source_id: number | null;
   connected_items?: {
     item_id: number;

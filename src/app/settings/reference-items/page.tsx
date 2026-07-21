@@ -30,8 +30,17 @@ interface RefImage {
   id: number;
   file_name: string;
   sort_order: number;
+  /** photo_types.code — which group this image belongs to ("package" | "product" | ...). */
+  photo_type: string | null;
   url: string;
   is_primary: boolean;
+}
+
+interface PhotoType {
+  photo_type_id: number;
+  code: string;
+  photo_type_desc: string;
+  sort_order: number;
 }
 
 interface ReferenceItem {
@@ -51,9 +60,10 @@ interface ReferenceItem {
 
 // A form image is either one already stored on the server, or a freshly
 // selected File that hasn't been uploaded yet. `key` is stable within the form.
+// `photoType` is the photo_types.code of the group the image belongs to.
 type FormImage =
-  | { key: string; kind: "existing"; id: number; url: string; fileName: string }
-  | { key: string; kind: "new"; url: string; file: File; fileName: string };
+  | { key: string; kind: "existing"; id: number; url: string; fileName: string; photoType: string }
+  | { key: string; kind: "new"; url: string; file: File; fileName: string; photoType: string };
 
 // ---- Design tokens (Shifthouse) --------------------------------------------
 const C = {
@@ -74,6 +84,7 @@ const nextKey = () => `img_${Date.now()}_${keySeq++}`;
 export default function ReferenceItemsPage() {
   const [itemTypes, setItemTypes] = React.useState<ItemType[]>([]);
   const [selectedType, setSelectedType] = React.useState<ItemType | null>(null);
+  const [photoTypes, setPhotoTypes] = React.useState<PhotoType[]>([]);
 
   const [items, setItems] = React.useState<ReferenceItem[]>([]);
   const [loadingItems, setLoadingItems] = React.useState(false);
@@ -92,6 +103,8 @@ export default function ReferenceItemsPage() {
   const [formNotes, setFormNotes] = React.useState("");
   const [formImages, setFormImages] = React.useState<FormImage[]>([]);
   const [primaryKey, setPrimaryKey] = React.useState<string | null>(null);
+  // Which photo group newly-added files go to (photo_types.code).
+  const [uploadType, setUploadType] = React.useState<string>("");
   const [formError, setFormError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [dragOver, setDragOver] = React.useState(false);
@@ -103,6 +116,14 @@ export default function ReferenceItemsPage() {
       .then((r) => r.json())
       .then((data: ItemType[]) => setItemTypes(Array.isArray(data) ? data : []))
       .catch(() => setItemTypes([]));
+    fetch("/api/settings/photo-types")
+      .then((r) => r.json())
+      .then((data: PhotoType[]) => {
+        const rows = Array.isArray(data) ? data : [];
+        setPhotoTypes(rows);
+        setUploadType((cur) => cur || rows[0]?.code || "");
+      })
+      .catch(() => setPhotoTypes([]));
   }, []);
 
   const loadItems = React.useCallback((typeId: number) => {
@@ -171,6 +192,7 @@ export default function ReferenceItemsPage() {
     setFormNotes("");
     setFormImages([]);
     setPrimaryKey(null);
+    setUploadType(photoTypes[0]?.code ?? "");
     setFormError("");
     setFormOpen(true);
   };
@@ -189,10 +211,12 @@ export default function ReferenceItemsPage() {
       id: img.id,
       url: img.url,
       fileName: img.file_name,
+      photoType: img.photo_type ?? photoTypes[0]?.code ?? "",
     }));
     setFormImages(imgs);
     const primary = it.images.find((i) => i.is_primary) ?? it.images[0];
     setPrimaryKey(primary ? `e_${primary.id}` : null);
+    setUploadType(photoTypes[0]?.code ?? "");
     setFormError("");
     setFormOpen(true);
   };
@@ -205,6 +229,12 @@ export default function ReferenceItemsPage() {
   const addFiles = (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith("image/"));
     if (!imgs.length) return;
+    if (!uploadType) {
+      setFormError("יש לבחור סוג תמונה לפני העלאה.");
+      return;
+    }
+    // Every added file is tagged with the currently selected photo group.
+    const tagType = uploadType;
     setFormImages((prev) => {
       const additions: FormImage[] = imgs.map((f) => ({
         key: nextKey(),
@@ -212,6 +242,7 @@ export default function ReferenceItemsPage() {
         url: URL.createObjectURL(f),
         file: f,
         fileName: f.name,
+        photoType: tagType,
       }));
       const next = [...prev, ...additions];
       setPrimaryKey((pk) => pk ?? next[0]?.key ?? null);
@@ -251,6 +282,8 @@ export default function ReferenceItemsPage() {
       { kind: "new" }
     >[];
     newImages.forEach((img) => fd.append("images", img.file, img.fileName));
+    // Photo-type codes aligned with the images order (parallel-array contract).
+    fd.append("image_types", JSON.stringify(newImages.map((img) => img.photoType)));
 
     if (editingId == null) {
       const primaryIndex = Math.max(
@@ -645,6 +678,40 @@ export default function ReferenceItemsPage() {
           {/* images */}
           <Box>
             <FieldCaption>תמונות ייחוס</FieldCaption>
+
+            {/* Photo-group selector: newly-added files are tagged with the
+                active group ("צילום אריזה" / "צילום פריט" / ...). */}
+            {photoTypes.length > 0 && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.25, flexWrap: "wrap" }}>
+                <Typography sx={{ fontSize: 13, color: C.muted }}>העלאה אל:</Typography>
+                {photoTypes.map((pt) => {
+                  const active = pt.code === uploadType;
+                  return (
+                    <Box
+                      key={pt.code}
+                      component="button"
+                      type="button"
+                      onClick={() => setUploadType(pt.code)}
+                      sx={{
+                        border: `1.5px solid ${active ? C.accent : C.hairline}`,
+                        borderRadius: "9999px",
+                        px: 1.75,
+                        py: 0.6,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        bgcolor: active ? "rgba(0,102,204,0.08)" : C.card,
+                        color: active ? C.accent : C.ink,
+                        "&:hover": { borderColor: C.accent },
+                      }}
+                    >
+                      {pt.photo_type_desc}
+                    </Box>
+                  );
+                })}
+              </Box>
+            )}
+
             <Box
               onClick={() => fileRef.current?.click()}
               onDragOver={(e) => {
@@ -709,70 +776,95 @@ export default function ReferenceItemsPage() {
               />
             </Box>
 
-            {formImages.length > 0 && (
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))",
-                  gap: 1.5,
-                  mt: 1.75,
-                }}
-              >
-                {formImages.map((img) => {
-                  const isPrimary = img.key === primaryKey;
-                  return (
-                    <Box
-                      key={img.key}
-                      sx={{
-                        position: "relative",
-                        aspectRatio: "1 / 1",
-                        borderRadius: "8px",
-                        overflow: "hidden",
-                        border: isPrimary ? `2px solid ${C.accent}` : `1px solid ${C.hairline}`,
-                        bgcolor: "#f5f5f7",
-                      }}
-                    >
-                      {/* contain so the full image is visible in the square preview */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={img.url}
-                        alt={img.fileName}
-                        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                      />
-                      <Box sx={{ position: "absolute", top: 5, insetInlineStart: 5, display: "flex", gap: 0.5 }}>
-                        <MiniBtn title="הגדר כתמונת כריכה" onClick={() => setPrimaryKey(img.key)}>
-                          {isPrimary ? (
-                            <StarIcon sx={{ fontSize: 14, color: C.accent }} />
-                          ) : (
-                            <StarBorderIcon sx={{ fontSize: 14 }} />
-                          )}
-                        </MiniBtn>
-                        <MiniBtn title="הסר" danger onClick={() => removeImage(img.key)}>
-                          <CloseIcon sx={{ fontSize: 14 }} />
-                        </MiniBtn>
-                      </Box>
-                      {isPrimary && (
+            {/* Thumbnails grouped by photo type — one section per group so it's
+                obvious which reference set each image belongs to. */}
+            {formImages.length > 0 && (() => {
+              const knownCodes = photoTypes.map((pt) => pt.code);
+              const groups: Array<{ code: string; label: string; images: FormImage[] }> = [
+                ...photoTypes.map((pt) => ({
+                  code: pt.code,
+                  label: pt.photo_type_desc,
+                  images: formImages.filter((i) => i.photoType === pt.code),
+                })),
+                // Safety net: images whose code isn't in the active list (e.g. a
+                // type deactivated after upload) still render, under their code.
+                ...[...new Set(formImages.map((i) => i.photoType).filter((c) => !knownCodes.includes(c)))]
+                  .map((code) => ({ code, label: code, images: formImages.filter((i) => i.photoType === code) })),
+              ].filter((g) => g.images.length > 0);
+
+              return groups.map((group) => (
+                <Box key={group.code} sx={{ mt: 1.75 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{group.label}</Typography>
+                    <Typography sx={{ fontSize: 12, color: C.mutedSoft, fontVariantNumeric: "tabular-nums" }}>
+                      {group.images.length} תמונות
+                    </Typography>
+                    <Box sx={{ flex: 1, height: "1px", bgcolor: "#f0f0f0" }} />
+                  </Box>
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))",
+                      gap: 1.5,
+                    }}
+                  >
+                    {group.images.map((img) => {
+                      const isPrimary = img.key === primaryKey;
+                      return (
                         <Box
+                          key={img.key}
                           sx={{
-                            position: "absolute",
-                            bottom: 0,
-                            insetInline: 0,
-                            bgcolor: C.accent,
-                            color: "#fff",
-                            fontSize: 10,
-                            fontWeight: 600,
-                            textAlign: "center",
-                            py: 0.25,
+                            position: "relative",
+                            aspectRatio: "1 / 1",
+                            borderRadius: "8px",
+                            overflow: "hidden",
+                            border: isPrimary ? `2px solid ${C.accent}` : `1px solid ${C.hairline}`,
+                            bgcolor: "#f5f5f7",
                           }}
                         >
-                          כריכה
+                          {/* contain so the full image is visible in the square preview */}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={img.url}
+                            alt={img.fileName}
+                            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                          />
+                          <Box sx={{ position: "absolute", top: 5, insetInlineStart: 5, display: "flex", gap: 0.5 }}>
+                            <MiniBtn title="הגדר כתמונת כריכה" onClick={() => setPrimaryKey(img.key)}>
+                              {isPrimary ? (
+                                <StarIcon sx={{ fontSize: 14, color: C.accent }} />
+                              ) : (
+                                <StarBorderIcon sx={{ fontSize: 14 }} />
+                              )}
+                            </MiniBtn>
+                            <MiniBtn title="הסר" danger onClick={() => removeImage(img.key)}>
+                              <CloseIcon sx={{ fontSize: 14 }} />
+                            </MiniBtn>
+                          </Box>
+                          {isPrimary && (
+                            <Box
+                              sx={{
+                                position: "absolute",
+                                bottom: 0,
+                                insetInline: 0,
+                                bgcolor: C.accent,
+                                color: "#fff",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                textAlign: "center",
+                                py: 0.25,
+                              }}
+                            >
+                              כריכה
+                            </Box>
+                          )}
                         </Box>
-                      )}
-                    </Box>
-                  );
-                })}
-              </Box>
-            )}
+                      );
+                    })}
+                  </Box>
+                </Box>
+              ));
+            })()}
           </Box>
 
           {/* notes */}

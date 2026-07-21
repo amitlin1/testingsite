@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Snackbar, Alert, Box, Switch, FormControlLabel,
@@ -12,9 +12,11 @@ import { TestStation, TestStationStatus } from "@/types";
 interface StationsTableProps {
   typeId: number;
   typeName: string;
+  /** Station deep-linked from the command palette (?station=) — highlighted once loaded. */
+  highlightStationId?: number | null;
 }
 
-export default function StationsTable({ typeId, typeName }: StationsTableProps) {
+export default function StationsTable({ typeId, typeName, highlightStationId }: StationsTableProps) {
   const [rows, setRows] = useState<TestStation[]>([]);
   const [statuses, setStatuses] = useState<TestStationStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +60,19 @@ export default function StationsTable({ typeId, typeName }: StationsTableProps) 
   }, [typeId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Arriving from the command palette's ?station=<id> deep link: once the rows
+  // are in, pre-fill the search box with that station's description so the user
+  // lands on exactly the row they picked. It's a seed, not a lock — clearing
+  // the box restores the full list, and the ref stops us re-seeding after that.
+  const seededRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!highlightStationId || seededRef.current === highlightStationId) return;
+    const match = rows.find((r) => r.test_station_id === highlightStationId);
+    if (!match) return;
+    seededRef.current = highlightStationId;
+    setSearchTerm(match.test_station_desc.trim());
+  }, [rows, highlightStationId]);
 
   const handleAdd = () => {
     setEditingRow(null);

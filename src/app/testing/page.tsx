@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Typography,
   TextField,
@@ -31,6 +32,7 @@ import { Inventory as InventoryIcon } from "@/components/ui/icons";
 import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";
 import { History as HistoryIcon } from "@/components/ui/icons";
 import { Link as LinkIcon } from "@/components/ui/icons";
+import { AccountTree as AccountTreeIcon } from "@/components/ui/icons";
 import { PlayArrowRounded as PlayArrowRoundedIcon } from "@/components/ui/icons";
 import { PrecisionManufacturing as PrecisionManufacturingIcon } from "@/components/ui/icons";
 import { QrCode as QrCodeIcon } from "@/components/ui/icons";
@@ -120,6 +122,7 @@ function ItemCard({
   const elapsedTime = useElapsedTime(baseTimeString);
   const isInTest = item.current_status === 1 || item.current_status === 5;
   const isWaiting = item.current_status === 2 || item.current_status === 4;
+  const isAccessory = item.parent_item_id != null;
 
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -260,21 +263,25 @@ function ItemCard({
             {elapsedTime || "—"}
         </Box>
 
-        {/* Connected items slot — fixed width so the columns stay aligned */}
-        {(item.parent_item_id || item.has_children) ? (
+        {/* Connected items slot — fixed width so the columns stay aligned.
+            An accessory gets its own icon that points at its parent item only;
+            a parent keeps the link icon listing all of its accessories. */}
+        {(isAccessory || item.has_children) ? (
             <IconButton
                 onClick={handleMenuClick}
-                aria-label="פריטים מחוברים"
+                aria-label={isAccessory ? `פריט אב: #${item.parent_item_id}` : "פריטים מחוברים"}
+                title={isAccessory ? `פריט אב: #${item.parent_item_id}` : "פריטים מחוברים"}
                 sx={{
                     width: 40,
                     height: 40,
                     flexShrink: 0,
                     borderRadius: "10px",
-                    border: "1px solid #d4d4dc",
-                    color: "#5a5a5f",
+                    border: isAccessory ? "1px solid #cfe3fb" : "1px solid #d4d4dc",
+                    bgcolor: isAccessory ? "#f3f8ff" : "transparent",
+                    color: isAccessory ? "#0066cc" : "#5a5a5f",
                 }}
             >
-                <LinkIcon sx={{ fontSize: 18 }} />
+                {isAccessory ? <AccountTreeIcon sx={{ fontSize: 18 }} /> : <LinkIcon sx={{ fontSize: 18 }} />}
             </IconButton>
         ) : (
             <Box sx={{ width: 40, flexShrink: 0 }} />
@@ -297,7 +304,18 @@ function ItemCard({
                  }
              }}
         >
-           {item.connected_items && item.connected_items.length > 0 ? (
+           {isAccessory ? (
+               <MenuItem onClick={handleMenuClose} dense>
+                  <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", gap: 1 }}>
+                     <AccountTreeIcon fontSize="small" color="action" />
+                     <Box>
+                         <Typography variant="caption" color="text.secondary">פריט אב</Typography>
+                         <Typography variant="subtitle2">#{item.parent_item_id}</Typography>
+                         <Typography variant="caption" color="text.secondary">S/N: {item.parent_serial_no || '-'}</Typography>
+                     </Box>
+                  </Stack>
+               </MenuItem>
+           ) : item.connected_items && item.connected_items.length > 0 ? (
                item.connected_items.map((conn) => (
                  <MenuItem key={conn.item_id} onClick={handleMenuClose} dense>
                     <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", gap: 1 }}>
@@ -415,7 +433,26 @@ function SummaryTile({
 }
 
 // --- Main Page Component ---
-export default function TestingPage() {
+function TestingPageView() {
+  // Command-palette deep link: /testing?type=<typeId>&station=<stationId>
+  // and optionally &item=<itemId>, which seeds the queue filter so the station
+  // opens narrowed to the one item the user searched for.
+  // Applied once, after the station-type list arrives (see the effect below).
+  const searchParams = useSearchParams();
+  const linkTypeId = Number(searchParams.get("type")) || null;
+  const linkStationId = Number(searchParams.get("station")) || null;
+  const linkItemId = searchParams.get("item")?.trim() || "";
+  /** Station staged by the deep link, consumed by the stations effect. */
+  const pendingLinkStationRef = React.useRef<number | null>(linkStationId);
+  /**
+   * Item filter staged by the deep link. Selecting a station clears the filter
+   * (see the items effect), and the linked station is selected asynchronously —
+   * so the seed has to survive that one clear, then behave normally.
+   */
+  const pendingLinkItemRef = React.useRef<string>(linkItemId);
+  /** Guards the one-shot type selection so it can't fight the user's later picks. */
+  const linkAppliedRef = React.useRef(false);
+
   const [stationTypes, setStationTypes] = React.useState<TestStationType[]>([]);
   const [selectedStationType, setSelectedStationType] = React.useState<TestStationType | null>(null);
   const [stations, setStations] = React.useState<TestStation[]>([]);
@@ -634,6 +671,18 @@ export default function TestingPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Deep link, step 1: once the types are loaded, select the linked one. The
+  // station itself is staged in a ref and picked up by the stations effect
+  // below — same handoff the barcode-scan flow uses, so the type change can't
+  // clear the selection out from under us.
+  React.useEffect(() => {
+    if (linkAppliedRef.current || !linkTypeId || stationTypes.length === 0) return;
+    const match = stationTypes.find((t) => t.id === linkTypeId);
+    if (!match) return;
+    linkAppliedRef.current = true;
+    setSelectedStationType(match);
+  }, [stationTypes, linkTypeId]);
+
   React.useEffect(() => {
     if (!selectedStationType) {
       setStations([]); setSelectedStation(null); setItems([]); return;
@@ -650,8 +699,16 @@ export default function TestingPage() {
           setStations(list);
           // If a scan flow staged a target station for this type, honor it
           // instead of clearing the selection (avoids a flicker / lost selection).
+          // Deep link, step 2: a ?station= from the palette resolves here,
+          // alongside the scan flow's staged station.
+          const linked = pendingLinkStationRef.current;
+          const linkedFresh =
+            linked != null ? list.find((s) => s.test_station_id === linked) : undefined;
           const pending = pendingScanStationRef.current;
-          if (pending && list.some((s) => s.test_station_id === pending.test_station_id)) {
+          if (linkedFresh) {
+            pendingLinkStationRef.current = null;
+            setSelectedStation(linkedFresh);
+          } else if (pending && list.some((s) => s.test_station_id === pending.test_station_id)) {
             const fresh = list.find((s) => s.test_station_id === pending.test_station_id)!;
             pendingScanStationRef.current = null;
             setSelectedStation(fresh);
@@ -670,7 +727,13 @@ export default function TestingPage() {
 
   React.useEffect(() => {
     if (!selectedStation) { setItems([]); return; }
-    setFilterMakat("");
+    // Switching stations drops a now-meaningless filter — unless this is the
+    // station a ?item= deep link targeted, whose filter is the whole point.
+    const pendingItem = pendingLinkItemRef.current;
+    pendingLinkItemRef.current = "";
+    setFilterMakat(
+      pendingItem && selectedStation.test_station_id === linkStationId ? pendingItem : "",
+    );
     let cancelled = false;
     (async () => {
       setItemsLoading(true);
@@ -1301,5 +1364,15 @@ export default function TestingPage() {
         </Dialog>
 
     </Box>
+  );
+}
+
+export default function TestingPage() {
+  // useSearchParams (the palette's ?type=/?station= deep link) needs a Suspense
+  // boundary so the route isn't forced into client-side rendering at build time.
+  return (
+    <React.Suspense fallback={null}>
+      <TestingPageView />
+    </React.Suspense>
   );
 }

@@ -10,7 +10,9 @@ import { Analytics as AnalyticsIcon } from "@/components/ui/icons";
 import { LocalShipping as LocalShippingIcon } from "@/components/ui/icons";
 import { FolderCopy as FolderCopyIcon } from "@/components/ui/icons";
 import { Settings as SettingsIcon } from "@/components/ui/icons";
+import { History as HistoryIcon } from "@/components/ui/icons";
 import Sidebar, { SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "./navBar";
+import CommandPaletteTrigger from "@/components/CommandPaletteTrigger";
 
 const TOPBAR_HEIGHT = 56;
 const MOBILE_QUERY = "(max-width: 980px)";
@@ -23,6 +25,7 @@ function usePageMeta(pathname: string | null) {
   if (pathname?.startsWith("/shipments")) return { title: "משלוחים נכנסים", icon: <LocalShippingIcon sx={{ fontSize: 20 }} /> };
   if (pathname?.startsWith("/files")) return { title: "ניהול קבצים", icon: <FolderCopyIcon sx={{ fontSize: 20 }} /> };
   if (pathname?.startsWith("/settings")) return { title: "הגדרות מערכת", icon: <SettingsIcon sx={{ fontSize: 20 }} /> };
+  if (pathname?.startsWith("/items")) return { title: "היסטוריית פריט", icon: <HistoryIcon sx={{ fontSize: 20 }} /> };
   return { title: "דוחות וניהול פריטים", icon: <DashboardIcon sx={{ fontSize: 20 }} /> };
 }
 
@@ -133,6 +136,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <Typography sx={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.2px", whiteSpace: "nowrap" }}>
             {title}
           </Typography>
+        </Box>
+
+        {/* Search sits at the far end of the bar, away from the page title.
+            `marginInlineStart` goes through `style`, not `sx` — sxToStyle drops
+            logical properties (same reason as the rail offsets above). */}
+        <Box style={{ marginInlineStart: "auto" }} sx={{ display: "flex", alignItems: "center" }}>
+          <CommandPaletteTrigger />
         </Box>
       </Box>
 

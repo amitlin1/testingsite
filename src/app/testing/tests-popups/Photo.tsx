@@ -2,8 +2,10 @@
 import * as React from "react";
 import {
   Dialog, Box, Typography, Button, TextField, Stack, Chip, Alert, IconButton,
-  MenuItem, CircularProgress, LinearProgress, Divider, useMediaQuery,
+  CircularProgress, LinearProgress, Divider, useMediaQuery,
 } from "@/components/ui";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
+import ItemLabelsDialog, { type ItemLabel } from "@/app/components/ItemLabelsDialog";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { ArrowForward as ArrowForwardIcon } from "@/components/ui/icons";
 import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";
@@ -12,6 +14,7 @@ import { AddAPhoto as AddAPhotoIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
 import { Add as AddIcon } from "@/components/ui/icons";
 import { Person as PersonIcon } from "@/components/ui/icons";
+import { Print as PrintIcon } from "@/components/ui/icons";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
 
 // ---- Design tokens (Shifthouse handoff — "3A" design language) ----
@@ -26,6 +29,12 @@ const PARCHMENT = "#f5f5f7";
 const CHIP_BG = "#f0f0f2";
 const PRODUCT_SHADOW = "rgba(0,0,0,0.22) 3px 5px 30px";
 const TOLERANCE_PCT = 5;
+
+// Photo-type codes (photo_types.code): the stable strings screens address a
+// photo group by — never the numeric DB id. Each wizard screen pulls only its
+// own reference group and tags its captures with the same code.
+const PT_PACKAGE = "package";
+const PT_PRODUCT = "product";
 
 type RefImg = { id: number; url: string };
 type Shot = { previewUrl: string; objectKey?: string; uploading?: boolean };
@@ -69,7 +78,7 @@ const PHASE_DESC: Record<Phase, string> = {
   pkgPhoto: "צלם את האריזה מכל זווית לפי תמונות הייחוס, ואשר את תקינותה.",
   productPhoto: "צלם את פריט האב מכל זווית לפי תמונות הייחוס, ואשר את תקינותו.",
   parentWeigh: "שקול את פריט האב והזן את המשקל שנמדד. הסטייה מחושבת אוטומטית.",
-  count: "פתח את המארז, ספור את הפריטים וציין אם נדרשות מדבקות.",
+  count: "פתח את המארז, ספור את הפריטים והדפס מדבקות ID לכל פריט במארז.",
   accessories: "בדוק כל פריט נלווה — צילום ושקילה.",
   transfer: "הקליטה הושלמה — העבר את המוצר לעמדה הבאה.",
 };
@@ -90,7 +99,9 @@ async function lookupRU(sku: string, itemTypeId: number | null) {
   return {
     hasRU: !!d.hasRU,
     refWeight: d.referenceWeight != null ? Number(d.referenceWeight) : null,
-    images: (d.images ?? []) as RefImg[],
+    // Keyed by photo-type code ("package" | "product" | ...) so each screen
+    // shows only its own reference set.
+    imagesByType: (d.imagesByType ?? {}) as Record<string, RefImg[]>,
   };
 }
 
@@ -301,14 +312,17 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
 
   const [skuScan, setSkuScan] = React.useState("");
   const [parentHasRU, setParentHasRU] = React.useState<boolean | null>(null);
-  const [parentRefImages, setParentRefImages] = React.useState<RefImg[]>([]);
+  // Reference images grouped by photo-type code — each screen reads its own group.
+  const [parentRefImages, setParentRefImages] = React.useState<Record<string, RefImg[]>>({});
   const [parentRefWeight, setParentRefWeight] = React.useState<number | null>(null);
   const [pkg, setPkg] = React.useState<Photos>(emptyPhotos());
   const [parentProduct, setParentProduct] = React.useState<Photos>(emptyPhotos());
   const [parentMeasWeight, setParentMeasWeight] = React.useState("");
   const [itemCount, setItemCount] = React.useState("");
-  const [needLabels, setNeedLabels] = React.useState<"" | "yes" | "no">("");
-  const [labelQty, setLabelQty] = React.useState("");
+  // ID labels for every item in the package (parent + accessories) — printed
+  // from the "open the package" screen once the contents are known.
+  const [labelsOpen, setLabelsOpen] = React.useState(false);
+  const [labelsPrinted, setLabelsPrinted] = React.useState(false);
 
   const [accessories, setAccessories] = React.useState<Accessory[]>([]);
   const [itemIdx, setItemIdx] = React.useState<number | null>(null);
@@ -319,9 +333,9 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
 
   React.useEffect(() => {
     if (!open) return;
-    setPhase("sku"); setError(null); setSkuScan(""); setParentHasRU(null); setParentRefImages([]); setParentRefWeight(null);
+    setPhase("sku"); setError(null); setSkuScan(""); setParentHasRU(null); setParentRefImages({}); setParentRefWeight(null);
     setPkg(emptyPhotos()); setParentProduct(emptyPhotos()); setParentMeasWeight("");
-    setItemCount(""); setNeedLabels(""); setLabelQty(""); setItemIdx(null);
+    setItemCount(""); setLabelsOpen(false); setLabelsPrinted(false); setItemIdx(null);
     setAccessories((item.connected_items ?? []).map((ci): Accessory => ({
       itemId: ci.item_id, serialNo: ci.serial_no, itemTypeId: null, itemTypeDesc: ci.item_type_desc ?? "",
       sku: "", hasRU: null, refWeight: null, refImages: [], measWeight: "",
@@ -337,12 +351,15 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     setAccessories((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
 
   // ---- real photo upload (reuses the item-files pipeline) ----
-  const uploadToItem = React.useCallback(async (itemId: number, file: File): Promise<string | null> => {
+  // Every capture is tagged with its photo-type code so other screens/stations
+  // list only their own group (GET /files?photoType=...).
+  const uploadToItem = React.useCallback(async (itemId: number, file: File, photoType: string): Promise<string | null> => {
     try {
       const fd = new FormData();
       fd.append("files", file);
       if (workerId != null) fd.append("worker_id", String(workerId));
       fd.append("station_type_id", String(station.test_station_type_id));
+      fd.append("photo_type", photoType);
       const res = await fetch(`/api/items/${itemId}/files`, { method: "POST", body: fd });
       if (!res.ok) return null;
       const d = await res.json();
@@ -355,7 +372,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     const set = kind === "pkg" ? setPkg : setParentProduct;
     const previewUrl = URL.createObjectURL(file);
     set((pk) => ({ ...pk, photos: [...pk.photos, { previewUrl, uploading: true }] }));
-    uploadToItem(item.item_id, file).then((key) =>
+    uploadToItem(item.item_id, file, kind === "pkg" ? PT_PACKAGE : PT_PRODUCT).then((key) =>
       set((pk) => ({ ...pk, photos: pk.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false } : s)) })));
   };
   const removeParentPhoto = (kind: "pkg" | "product", idx: number) => {
@@ -371,7 +388,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     setAccessories((prev) => prev.map((a, i) => (i === idx ? { ...a, product: { ...a.product, photos: [...a.product.photos, { previewUrl, uploading: true }] } } : a)));
     const finishShot = (key: string | null) =>
       setAccessories((prev) => prev.map((a, i) => (i === idx ? { ...a, product: { ...a.product, photos: a.product.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false } : s)) } } : a)));
-    if (targetId != null) uploadToItem(targetId, file).then(finishShot); else finishShot(null);
+    if (targetId != null) uploadToItem(targetId, file, PT_PRODUCT).then(finishShot); else finishShot(null);
   };
   const removeAccPhoto = (shotIdx: number) => {
     if (itemIdx == null) return;
@@ -391,7 +408,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
       case "productPhoto": return parentProduct.ok !== "";
       case "parentWeigh": return parentMeasWeight.trim() !== "";
       // Count mismatch does NOT block here — missing accessories are added on the next screen.
-      case "count": return itemCount.trim() !== "" && needLabels !== "" && (needLabels === "no" || labelQty.trim() !== "");
+      case "count": return itemCount.trim() !== "";
       // Can't move past accessories until every item is tested AND the count matches the system.
       case "accessories": return accessories.every((a) => a.done) && countMatches;
       case "transfer": return true;
@@ -403,7 +420,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     setError(null);
     if (phase === "sku") {
       setBusy(true);
-      try { const ru = await lookupRU(skuScan.trim(), item.item_type_id); setParentHasRU(ru.hasRU); setParentRefImages(ru.images); setParentRefWeight(ru.refWeight); }
+      try { const ru = await lookupRU(skuScan.trim(), item.item_type_id); setParentHasRU(ru.hasRU); setParentRefImages(ru.imagesByType); setParentRefWeight(ru.refWeight); }
       catch { setParentHasRU(false); } finally { setBusy(false); }
       setPhase("pkgPhoto"); return;
     }
@@ -427,7 +444,9 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     const a = accessories[idx];
     if (a.hasRU == null && a.sku.trim()) {
       setBusy(true);
-      try { const ru = await lookupRU(a.sku.trim(), a.itemTypeId); patchAcc(idx, { hasRU: ru.hasRU, refWeight: ru.refWeight, refImages: ru.images }); }
+      // Accessories are photographed as bare products (no packaging of their
+      // own) — only the "product" reference group applies.
+      try { const ru = await lookupRU(a.sku.trim(), a.itemTypeId); patchAcc(idx, { hasRU: ru.hasRU, refWeight: ru.refWeight, refImages: ru.imagesByType[PT_PRODUCT] ?? [] }); }
       finally { setBusy(false); }
     }
   };
@@ -483,7 +502,6 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
   if (!parentMeasWeight.trim()) missingSteps.push("שקילת פריט האב");
   if (!itemCount.trim()) missingSteps.push("הזנת כמות פריטים במארז");
   else if (!countMatches) missingSteps.push(`התאמת כמות הפריטים — הוזן ${Number(itemCount)}, במערכת ${expectedCount} (פריט אב + ${accessories.length} נלווים)`);
-  if (needLabels === "" || (needLabels === "yes" && !labelQty.trim())) missingSteps.push("מענה על שאלת המדבקות");
   if (accessories.some((a) => !a.done)) missingSteps.push("השלמת בדיקת כל הפריטים הנלווים");
   const allComplete = missingSteps.length === 0;
 
@@ -515,7 +533,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
           pkg: { ok: pkg.ok, note: pkg.note, photos: keysOf(pkg) },
           product: { ok: parentProduct.ok, note: parentProduct.note, photos: keysOf(parentProduct) },
           weight: parentWeight ? { reference: parentRefWeight, measured: Number(parentMeasWeight), diffPct: Number(parentWeight.diffPct.toFixed(1)), pass: parentWeight.pass } : null,
-          itemCount: Number(itemCount) || 0, needLabels, labelQty: Number(labelQty) || 0,
+          itemCount: Number(itemCount) || 0, labelsPrinted,
           accessoryItemIds: accessories.map((a) => a.itemId),
         },
       };
@@ -528,6 +546,16 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
   const activeAcc = itemIdx != null ? accessories[itemIdx] : null;
   const itemName = item.model?.trim() || `פריט #${item.item_id}`;
 
+  // One ID label per item in the package: the parent plus every accessory known
+  // at this point. Accessories share the parent's source, so the barcode keeps
+  // the app-wide "itemId-sourceId" shape.
+  const packageLabels: ItemLabel[] = React.useMemo(() => [
+    { itemId: item.item_id, sourceId: item.source_id, serialNo: item.serial_no, title: itemName, role: "פריט אב" },
+    ...accessories
+      .filter((a): a is Accessory & { itemId: number } => a.itemId != null)
+      .map((a) => ({ itemId: a.itemId, sourceId: item.source_id, serialNo: a.serialNo, title: a.itemTypeDesc, role: "פריט נלווה" })),
+  ], [item.item_id, item.source_id, item.serial_no, itemName, accessories]);
+
   // Stepper navigation: clicking a step in the rail/chips jumps straight to it,
   // in BOTH directions (footer buttons still drive the sequential flow). Jumping
   // past the SKU step runs the reference lookup once so later steps have images.
@@ -536,7 +564,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     if (i > 0 && parentHasRU == null && skuScan.trim() && !busy) {
       setBusy(true);
       lookupRU(skuScan.trim(), item.item_type_id)
-        .then((ru) => { setParentHasRU(ru.hasRU); setParentRefImages(ru.images); setParentRefWeight(ru.refWeight); })
+        .then((ru) => { setParentHasRU(ru.hasRU); setParentRefImages(ru.imagesByType); setParentRefWeight(ru.refWeight); })
         .catch(() => setParentHasRU(false))
         .finally(() => setBusy(false));
     }
@@ -649,7 +677,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
                 parentRefWeight={parentRefWeight} parentMeasWeight={parentMeasWeight} setParentMeasWeight={setParentMeasWeight}
                 onPickParent={pickParentPhoto} onRemoveParent={removeParentPhoto}
                 itemCount={itemCount} setItemCount={setItemCount}
-                needLabels={needLabels} setNeedLabels={setNeedLabels} labelQty={labelQty} setLabelQty={setLabelQty}
+                labelsPrinted={labelsPrinted} onPrintLabels={() => setLabelsOpen(true)}
                 accessories={accessories} patchAcc={patchAcc}
                 expectedCount={expectedCount} countMatches={countMatches} missingSteps={missingSteps}
                 itemTypes={itemTypes} showAdd={showAdd} setShowAdd={setShowAdd} draft={draft} setDraft={setDraft}
@@ -685,6 +713,14 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
           )}
         </Box>
       </Box>
+
+      <ItemLabelsDialog
+        open={labelsOpen}
+        onClose={() => setLabelsOpen(false)}
+        labels={packageLabels}
+        heading="מדבקות ID לפריטי המארז"
+        onPrinted={() => setLabelsPrinted(true)}
+      />
     </Dialog>
   );
 }
@@ -693,12 +729,12 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
 type PhaseBodyProps = {
   phase: Phase; busy: boolean;
   skuScan: string; setSkuScan: (v: string) => void;
-  parentHasRU: boolean | null; pkg: Photos; setPkg: React.Dispatch<React.SetStateAction<Photos>>; parentRefImages: RefImg[];
+  parentHasRU: boolean | null; pkg: Photos; setPkg: React.Dispatch<React.SetStateAction<Photos>>; parentRefImages: Record<string, RefImg[]>;
   parentProduct: Photos; setParentProduct: React.Dispatch<React.SetStateAction<Photos>>;
   parentRefWeight: number | null; parentMeasWeight: string; setParentMeasWeight: (v: string) => void;
   onPickParent: (kind: "pkg" | "product", file: File) => void; onRemoveParent: (kind: "pkg" | "product", idx: number) => void;
   itemCount: string; setItemCount: (v: string) => void;
-  needLabels: "" | "yes" | "no"; setNeedLabels: (v: "" | "yes" | "no") => void; labelQty: string; setLabelQty: (v: string) => void;
+  labelsPrinted: boolean; onPrintLabels: () => void;
   accessories: Accessory[]; patchAcc: (idx: number, patch: Partial<Accessory>) => void;
   expectedCount: number; countMatches: boolean; missingSteps: string[];
   itemTypes: ItemTypeOption[]; showAdd: boolean; setShowAdd: (v: boolean) => void;
@@ -724,9 +760,10 @@ function PhaseBody(p: PhaseBodyProps) {
           <Chip size="small" label="לא נמצא פריט ייחוס — נא להודיע לגורם אחראי"
             sx={{ alignSelf: "flex-start", bgcolor: "rgba(217,118,6,0.10)", color: "#9a5b06", fontWeight: 600 }} />
         )}
-        {/* Vertical, photos-first: full-width photo block on top, verdict card below. */}
+        {/* Vertical, photos-first: full-width photo block on top, verdict card below.
+            Reference set: the "package" photo group only. */}
         <PhotoSection>
-          <PhotoUploader photos={p.pkg.photos} refImages={p.parentRefImages} onPick={(f) => p.onPickParent("pkg", f)} onRemove={(i) => p.onRemoveParent("pkg", i)} />
+          <PhotoUploader photos={p.pkg.photos} refImages={p.parentRefImages[PT_PACKAGE] ?? []} onPick={(f) => p.onPickParent("pkg", f)} onRemove={(i) => p.onRemoveParent("pkg", i)} />
         </PhotoSection>
         <VerdictCard ok={p.pkg.ok} note={p.pkg.note}
           onOk={(v) => p.setPkg((pk) => ({ ...pk, ok: v }))}
@@ -741,8 +778,9 @@ function PhaseBody(p: PhaseBodyProps) {
           <Chip size="small" label="לא נמצא פריט ייחוס — נא להודיע לגורם אחראי"
             sx={{ alignSelf: "flex-start", bgcolor: "rgba(217,118,6,0.10)", color: "#9a5b06", fontWeight: 600 }} />
         )}
+        {/* Reference set: the "product" photo group only. */}
         <PhotoSection>
-          <PhotoUploader photos={p.parentProduct.photos} refImages={p.parentRefImages} onPick={(f) => p.onPickParent("product", f)} onRemove={(i) => p.onRemoveParent("product", i)} />
+          <PhotoUploader photos={p.parentProduct.photos} refImages={p.parentRefImages[PT_PRODUCT] ?? []} onPick={(f) => p.onPickParent("product", f)} onRemove={(i) => p.onRemoveParent("product", i)} />
         </PhotoSection>
         <VerdictCard ok={p.parentProduct.ok} note={p.parentProduct.note}
           onOk={(v) => p.setParentProduct((pk) => ({ ...pk, ok: v }))}
@@ -767,16 +805,16 @@ function PhaseBody(p: PhaseBodyProps) {
             בשלב הבא ניתן להוסיף פריטים חסרים, או לחזור לכאן ולעדכן את הכמות.
           </Alert>
         )}
-        <Typography sx={{ fontSize: 14, fontWeight: 600, color: INK }}>האם יש צורך בהדפסת מדבקות ברקוד נוספות?</Typography>
-        <Stack direction="row" spacing={1.5}>
-          {(["yes", "no"] as const).map((v) => (
-            <Button key={v} onClick={() => p.setNeedLabels(v)} disableElevation variant={p.needLabels === v ? "contained" : "outlined"}
-              sx={{ flex: 1, borderRadius: "9999px", textTransform: "none", boxShadow: "none", ...(p.needLabels === v ? { bgcolor: BLUE, "&:hover": { bgcolor: "#0058b3", boxShadow: "none" } } : { color: BLUE, borderColor: BLUE }) }}>
-              {v === "yes" ? "כן" : "לא"}
-            </Button>
-          ))}
-        </Stack>
-        {p.needLabels === "yes" && <TextField label="כמות מדבקות (ID זהה למארז)" type="number" value={p.labelQty} onChange={(e) => p.setLabelQty(e.target.value)} fullWidth />}
+        {/* One ID label per physical item in the package (parent + accessories). */}
+        <Typography sx={{ fontSize: 14, fontWeight: 600, color: INK }}>הדפס מדבקות ברקוד עבור כל הפריטים במארז</Typography>
+        <Button onClick={p.onPrintLabels} disableElevation variant="contained" startIcon={<PrintIcon sx={{ ml: 1 }} />}
+          sx={{ alignSelf: "flex-start", borderRadius: "9999px", textTransform: "none", boxShadow: "none", bgcolor: BLUE, "&:hover": { bgcolor: "#0058b3", boxShadow: "none" } }}>
+          הדפס מדבקות ID ({p.expectedCount})
+        </Button>
+        <Typography sx={{ fontSize: 13, color: MUTED }}>
+          תודפס מדבקה אחת לכל פריט — פריט האב ו-{p.accessories.length} פריטים נלווים.
+          {p.labelsPrinted && " ✓ המדבקות נשלחו להדפסה."}
+        </Typography>
       </Stack>
     );
   }
@@ -811,9 +849,14 @@ function PhaseBody(p: PhaseBodyProps) {
         {p.showAdd ? (
           <Box sx={{ border: `1px dashed ${BLUE}`, borderRadius: "12px", p: 2 }}>
             <Stack spacing={1.5}>
-              <TextField select size="small" label="סוג פריט" value={p.draft.itemTypeId} onChange={(e) => p.setDraft((d) => ({ ...d, itemTypeId: e.target.value }))} fullWidth>
-                {p.itemTypes.map((t) => <MenuItem key={t.item_type_id} value={String(t.item_type_id)}>{t.item_type_desc?.trim()}</MenuItem>)}
-              </TextField>
+              <SearchableCombobox<ItemTypeOption>
+                floatingLabel="סוג פריט"
+                options={p.itemTypes}
+                value={p.itemTypes.find((t) => String(t.item_type_id) === p.draft.itemTypeId) ?? null}
+                onChange={(t) => p.setDraft((d) => ({ ...d, itemTypeId: t ? String(t.item_type_id) : "" }))}
+                getOptionLabel={(t) => t.item_type_desc?.trim() ?? ""}
+                isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
+              />
               <Stack direction="row" spacing={1.5}>
                 <TextField size="small" label="מק״ט יצרן" value={p.draft.sku} onChange={(e) => p.setDraft((d) => ({ ...d, sku: e.target.value }))} fullWidth />
                 <TextField size="small" label="מספר סריאלי" value={p.draft.serialNumber} onChange={(e) => p.setDraft((d) => ({ ...d, serialNumber: e.target.value }))} fullWidth />

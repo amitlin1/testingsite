@@ -4,6 +4,7 @@ import {
   serializeReferenceItem,
   referenceItemInclude,
   uploadReferenceImages,
+  pairFilesWithTypes,
 } from '@/lib/reference-items';
 
 export const runtime = 'nodejs';
@@ -33,14 +34,15 @@ export async function GET(request: Request) {
 
 // POST /api/settings/reference-items  (multipart/form-data)
 // Fields: item_type_id, manufacturer_sku, manufacturer, name?, notes?,
-//         images[] (files), primaryIndex? (index into images for the cover).
+//         images[] (files), image_types (JSON array of photo-type codes aligned
+//         with images order) or photo_type (one code for the whole batch),
+//         primaryIndex? (index into images for the cover).
 export async function POST(request: Request) {
   try {
     const form = await request.formData();
 
     const itemTypeId = Number(form.get('item_type_id'));
     const manufacturerSku = String(form.get('manufacturer_sku') ?? '').trim();
-    const reference_weight = String(form.get('reference_weight') ?? '').trim();
     const manufacturer = String(form.get('manufacturer') ?? '').trim();
     const name = String(form.get('name') ?? '').trim();
     const referenceWeight = String(form.get('reference_weight') ?? '').trim();
@@ -63,6 +65,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'סוג הפריט לא נמצא.' }, { status: 400 });
     }
 
+    // Pair files with photo types BEFORE creating the row, so a bad/missing
+    // type can't leave an orphan reference item behind.
+    let uploads: Awaited<ReturnType<typeof pairFilesWithTypes>>;
+    try {
+      uploads = await pairFilesWithTypes(form, files);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : 'סוג תמונה לא תקין' },
+        { status: 400 },
+      );
+    }
+
     const created = await prisma.reference_items.create({
       data: {
         item_type_id: itemTypeId,
@@ -75,7 +89,7 @@ export async function POST(request: Request) {
       select: { reference_item_id: true },
     });
 
-    const imageRows = await uploadReferenceImages(created.reference_item_id, files);
+    const imageRows = await uploadReferenceImages(created.reference_item_id, uploads);
 
     // Resolve the cover: the chosen upload index (falls back to the first image).
     if (imageRows.length > 0) {
