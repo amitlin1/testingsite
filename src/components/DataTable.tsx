@@ -166,15 +166,16 @@ export function RowActions({ children }: { children: React.ReactNode }) {
   return <div style={{ display: "inline-flex", alignItems: "center", gap: 4, justifyContent: "center" }}>{children}</div>;
 }
 
-export function IconAction({ title, danger, onClick, children }: { title?: string; danger?: boolean; onClick?: (e: React.MouseEvent) => void; children: React.ReactNode }) {
+export function IconAction({ title, danger, disabled, onClick, children }: { title?: string; danger?: boolean; disabled?: boolean; onClick?: (e: React.MouseEvent) => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       title={title}
       aria-label={title}
-      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
+      disabled={disabled}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onClick?.(e); }}
       className="shx-icon-btn"
-      style={danger ? { color: "#bf3535" } : undefined}
+      style={{ ...(danger ? { color: "#bf3535" } : {}), ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : {}) }}
     >
       {children}
     </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { Box, Typography, Button } from "@/components/ui";
 import { ArrowForward as ArrowForwardIcon } from "@/components/ui/icons";
 import Link from "next/link";
@@ -17,7 +18,7 @@ export default function ItemTypesPage() {
 
   const fetchData = async () => {
     try {
-      const res = await fetch("/api/dashboard/tests/item-types");
+      const res = await apiFetch("/api/dashboard/tests/item-types");
       if (res.ok) {
         const result = await res.json();
         setData(result);

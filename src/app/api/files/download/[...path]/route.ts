@@ -1,11 +1,27 @@
 import { NextResponse } from 'next/server';
 import minioClient, { BUCKET, ensureBucket } from '@/lib/minio';
+import { hasAppSession } from '@/lib/auth/session-guard';
+import { verifyJwt } from '@/lib/onlyoffice-jwt';
 
 export const runtime = 'nodejs';
 
+/** A short-lived signed token (issued by the OnlyOffice config route) bound to a
+ *  specific object key — lets the cookieless OnlyOffice document server fetch
+ *  that one file without a browser session. */
+async function validDownloadToken(request: Request, fullPath: string): Promise<boolean> {
+  try {
+    const tok = new URL(request.url).searchParams.get('dl');
+    if (!tok) return false;
+    const payload = await verifyJwt<{ key?: string; purpose?: string }>(tok);
+    return payload?.purpose === 'download' && payload.key === fullPath;
+  } catch {
+    return false;
+  }
+}
+
 // GET /api/files/download/[...path]
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ path: string[] }> },
 ) {
   const { path } = await context.params;
@@ -13,6 +29,13 @@ export async function GET(
 
   if (!fullPath || fullPath.includes('..')) {
     return NextResponse.json({ error: 'נתיב לא תקין' }, { status: 400 });
+  }
+
+  // Auth: a logged-in browser session (any role), OR a valid signed download
+  // token (cookieless OnlyOffice). This route's URL contains a dot, so the edge
+  // middleware skips it — it must self-guard.
+  if (!(await hasAppSession()) && !(await validDownloadToken(request, fullPath))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {

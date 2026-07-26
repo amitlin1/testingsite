@@ -13,6 +13,7 @@ import ShipmentHistoryPopup from "./ShipmentHistoryPopup";
 import { useReactToPrint } from "react-to-print";
 import { ShipmentPDFDocument } from "./ShipmentPDFDocument";
 import ShipmentBarcodesDialog from "./ShipmentBarcodesDialog";
+import { apiFetch } from "@/lib/api/client";
 
 /* Shifthouse field label — sits above each filter control (matches Items). */
 const fieldLabel: React.CSSProperties = {
@@ -106,7 +107,7 @@ export default function ShipmentTable() {
     const loadShipments = async () => {
         try {
             setLoading(true);
-            const res = await fetch("/api/shipments");
+            const res = await apiFetch("/api/shipments");
             const data = await res.json();
             setRows(Array.isArray(data) ? data : []);
         } catch (error) {
@@ -121,7 +122,7 @@ export default function ShipmentTable() {
         // Load customers for filter
         (async () => {
             try {
-                const res = await fetch("/api/customers");
+                const res = await apiFetch("/api/customers");
                 const data = await res.json();
                 setCustomers(Array.isArray(data) ? data : []);
             } catch (error) {

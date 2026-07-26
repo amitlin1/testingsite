@@ -15,6 +15,9 @@ import {
 import { useTheme, alpha } from "@/components/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { fullLogout } from "@/lib/auth/logout";
+import { resolveAccess } from "@/lib/routes";
 
 // Icons
 import { Settings as SettingsIcon } from "@/components/ui/icons";
@@ -118,6 +121,23 @@ export default function NavBar({
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Real identity from the Keycloak session (replaces the old static placeholder).
+  const { data: session } = useSession();
+  const roles = session?.roles ?? null;
+  const displayName =
+    session?.user?.displayName ||
+    session?.user?.name ||
+    session?.user?.preferredUsername ||
+    "משתמש";
+  const ROLE_LABELS_HE: Record<string, string> = {
+    manager: "מנהל",
+    tester: "בודק",
+    storekeeper: "מחסנאי",
+  };
+  const roleLabel =
+    (session?.roles ?? []).map((r) => ROLE_LABELS_HE[r]).find(Boolean) ?? "משתמש";
+  const avatarChar = displayName.trim().charAt(0) || "מ";
+
   const mainLinks = [
     { href: "/", label: "דוחות/ניהול פריטים", icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
     { href: "/testing", label: "מסך בדיקה", icon: <ScienceIcon sx={{ fontSize: 20 }} /> },
@@ -125,6 +145,15 @@ export default function NavBar({
     { href: "/shipments", label: "משלוחים נכנסים", icon: <LocalShippingIcon sx={{ fontSize: 20 }} /> },
     { href: "/files", label: "ניהול קבצים", icon: <FolderCopyIcon sx={{ fontSize: 20 }} /> },
   ];
+
+  // Hide nav entries the current role may not open (same source of truth as the
+  // middleware, so the sidebar never offers a link that ends in /no-auth).
+  const visibleMainLinks = mainLinks.filter(
+    (l) => resolveAccess(l.href, roles).kind !== "forbidden",
+  );
+  const visibleSettingsLinks = settingsLinks.filter(
+    (s) => resolveAccess(s.path, roles).kind !== "forbidden",
+  );
 
   const isSettingsActive = pathname?.startsWith("/settings");
 
@@ -233,7 +262,7 @@ export default function NavBar({
       >
         <List disablePadding>
           {/* Main Links */}
-          {mainLinks.map((link) => (
+          {visibleMainLinks.map((link) => (
             <NavItem
               key={link.href}
               href={link.href}
@@ -299,7 +328,7 @@ export default function NavBar({
           {!collapsed && (
             <Collapse in={settingsOpen} timeout="auto" unmountOnExit>
               <List disablePadding sx={{ pr: 1 }}>
-                {settingsLinks.map((item) => {
+                {visibleSettingsLinks.map((item) => {
                   const Icon = item.icon;
                   return (
                     <NavItem
@@ -332,7 +361,7 @@ export default function NavBar({
           flexShrink: 0,
         }}
       >
-        <Tooltip title={collapsed ? "דנה כהן · מנהלת בקרה" : ""} placement="left" arrow disableHoverListener={!collapsed}>
+        <Tooltip title={collapsed ? `${displayName} · ${roleLabel}` : ""} placement="left" arrow disableHoverListener={!collapsed}>
           <Box
             sx={{
               width: 34,
@@ -348,7 +377,7 @@ export default function NavBar({
               flexShrink: 0,
             }}
           >
-            ד
+            {avatarChar}
           </Box>
         </Tooltip>
         {!collapsed && (
@@ -364,13 +393,14 @@ export default function NavBar({
                   whiteSpace: "nowrap",
                 }}
               >
-                דנה כהן
+                {displayName}
               </Typography>
-              <Typography sx={{ fontSize: 11.5, color: "#9aa0a6" }}>מנהלת בקרה</Typography>
+              <Typography sx={{ fontSize: 11.5, color: "#9aa0a6" }}>{roleLabel}</Typography>
             </Box>
             <IconButton
               title="התנתקות"
               aria-label="התנתקות"
+              onClick={() => fullLogout(session?.idToken)}
               sx={{
                 marginInlineStart: "auto",
                 width: 30,

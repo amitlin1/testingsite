@@ -19,6 +19,7 @@ import { StarBorder as StarBorderIcon } from "@/components/ui/icons";
 import { Inventory2Outlined as Inventory2OutlinedIcon } from "@/components/ui/icons";
 import { ErrorOutline as ErrorOutlineIcon } from "@/components/ui/icons";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
+import { apiFetch } from "@/lib/api/client";
 
 // ---- Types -----------------------------------------------------------------
 interface ItemType {
@@ -112,11 +113,11 @@ export default function ReferenceItemsPage() {
 
   // ---- data loading --------------------------------------------------------
   React.useEffect(() => {
-    fetch("/api/settings/item-types")
+    apiFetch("/api/settings/item-types")
       .then((r) => r.json())
       .then((data: ItemType[]) => setItemTypes(Array.isArray(data) ? data : []))
       .catch(() => setItemTypes([]));
-    fetch("/api/settings/photo-types")
+    apiFetch("/api/settings/photo-types")
       .then((r) => r.json())
       .then((data: PhotoType[]) => {
         const rows = Array.isArray(data) ? data : [];
@@ -128,7 +129,7 @@ export default function ReferenceItemsPage() {
 
   const loadItems = React.useCallback((typeId: number) => {
     setLoadingItems(true);
-    fetch(`/api/settings/reference-items?itemTypeId=${typeId}`)
+    apiFetch(`/api/settings/reference-items?itemTypeId=${typeId}`)
       .then((r) => r.json())
       .then((data: ReferenceItem[]) => setItems(Array.isArray(data) ? data : []))
       .catch(() => setItems([]))
@@ -312,7 +313,7 @@ export default function ReferenceItemsPage() {
         editingId == null
           ? "/api/settings/reference-items"
           : `/api/settings/reference-items/${editingId}`;
-      const res = await fetch(url, { method: editingId == null ? "POST" : "PUT", body: fd });
+      const res = await apiFetch(url, { method: editingId == null ? "POST" : "PUT", body: fd });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "שגיאה בשמירה");
@@ -336,7 +337,7 @@ export default function ReferenceItemsPage() {
     if (!window.confirm("למחוק את פריט הייחוס? פעולה זו אינה הפיכה.")) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/settings/reference-items/${editingId}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/settings/reference-items/${editingId}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "שגיאה במחיקה");

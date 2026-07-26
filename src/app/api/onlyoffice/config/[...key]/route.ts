@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { statObject } from '@/lib/storage';
 import { signJwt } from '@/lib/onlyoffice-jwt';
+import { hasAppSession } from '@/lib/auth/session-guard';
 
 export const runtime = 'nodejs';
 
@@ -34,6 +35,11 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ key: string[] }> },
 ) {
+  // Browser-only route (mints a signed editor config). Its dotted URL bypasses
+  // the middleware, so require a session here.
+  if (!(await hasAppSession())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const { key: keyParts } = await context.params;
     const objectKey = keyParts.join('/');
@@ -80,7 +86,8 @@ export async function GET(
     const docKey = docKeyRaw.replace(/[^0-9a-zA-Z_=.-]/g, '_').slice(0, 128);
 
     const encodedPath = objectKey.split('/').map(encodeURIComponent).join('/');
-    const documentUrl = `${APP_PUBLIC_URL}/api/files/download/${encodedPath}`;
+    const dlToken = await signJwt({ key: objectKey, purpose: 'download' }, 3600);
+    const documentUrl = `${APP_PUBLIC_URL}/api/files/download/${encodedPath}?dl=${encodeURIComponent(dlToken)}`;
     const callbackUrl = `${APP_PUBLIC_URL}/api/onlyoffice/callback/${encodedPath}?worker_id=${encodeURIComponent(workerId)}`;
 
     const config = {

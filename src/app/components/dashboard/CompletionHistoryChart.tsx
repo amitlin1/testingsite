@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import {
   Typography,
   Box,
@@ -60,7 +61,7 @@ export default function CompletionHistoryChart() {
         const { startDate, endDate } = periodFilter;
         if (!startDate || !endDate) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/dashboard/stats/completion-history?startDate=${startDate}&endDate=${endDate}`
         );
         if (response.ok) {

@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Stack, Chip } from "@/components/ui";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
+import { apiFetch } from "@/lib/api/client";
 import {
   type Photos, type RefImg, emptyPhotos, lookupRU,
   SkuScreen, PhotoSection, PhotoUploader, VerdictCard,
@@ -67,7 +68,7 @@ export default function PhotoStation({
       if (workerId != null) fd.append("worker_id", String(workerId));
       fd.append("station_type_id", String(station.test_station_type_id));
       fd.append("photo_type", config.photoType);
-      const res = await fetch(`/api/items/${itemId}/files`, { method: "POST", body: fd });
+      const res = await apiFetch(`/api/items/${itemId}/files`, { method: "POST", body: fd });
       if (!res.ok) return null;
       const d = await res.json();
       return d.uploaded?.[0]?.objectKey ?? null;

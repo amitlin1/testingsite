@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma, TransactionClient } from "@/app/lib/prisma";
 import { MetricsService } from "@/app/lib/dashboard/metrics-service";
 
+import { cronSecretGuard } from "@/lib/auth/cron-secret";
+
 export const runtime = "nodejs";
 
 /**
@@ -21,7 +23,9 @@ export const runtime = "nodejs";
  * - kpi_snapshots
  * - system_snapshots
  */
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = cronSecretGuard(req);
+  if (denied) return denied;
   try {
     // Snapshot targets YESTERDAY — if the cron runs at 00:30, we want
     // the full previous day's "items processed" count, not today's empty one.

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { MetricsService } from "@/app/lib/dashboard/metrics-service";
 import { prisma } from "@/app/lib/prisma";
 
+import { cronSecretGuard } from "@/lib/auth/cron-secret";
+
 export const runtime = "nodejs";
 
 /**
@@ -11,7 +13,9 @@ export const runtime = "nodejs";
  * Should be called every 10 minutes for near-real-time aggregation
  * without impacting live query performance.
  */
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = cronSecretGuard(req);
+  if (denied) return denied;
   try {
     await MetricsService.refreshMaterializedViews(prisma);
 

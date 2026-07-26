@@ -16,6 +16,7 @@ import { Add as AddIcon } from "@/components/ui/icons";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import { Print as PrintIcon } from "@/components/ui/icons";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
+import { apiFetch } from "@/lib/api/client";
 
 // ---- Design tokens (Shifthouse handoff — "3A" design language) ----
 const BLUE = "#0066cc";
@@ -94,7 +95,7 @@ function weightResult(refWeight: number | null, measured: string) {
 async function lookupRU(sku: string, itemTypeId: number | null) {
   const qs = new URLSearchParams({ sku });
   if (itemTypeId != null) qs.set("itemTypeId", String(itemTypeId));
-  const res = await fetch(`/api/testing/reference-lookup?${qs.toString()}`);
+  const res = await apiFetch(`/api/testing/reference-lookup?${qs.toString()}`);
   const d = await res.json();
   return {
     hasRU: !!d.hasRU,
@@ -344,7 +345,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
   }, [open, item]);
 
   React.useEffect(() => {
-    fetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
+    apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
   }, []);
 
   const patchAcc = (idx: number, patch: Partial<Accessory>) =>
@@ -360,7 +361,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
       if (workerId != null) fd.append("worker_id", String(workerId));
       fd.append("station_type_id", String(station.test_station_type_id));
       fd.append("photo_type", photoType);
-      const res = await fetch(`/api/items/${itemId}/files`, { method: "POST", body: fd });
+      const res = await apiFetch(`/api/items/${itemId}/files`, { method: "POST", body: fd });
       if (!res.ok) return null;
       const d = await res.json();
       return d.uploaded?.[0]?.objectKey ?? null;
@@ -464,7 +465,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/testing/accessory", {
+      const res = await apiFetch("/api/testing/accessory", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           parentItemId: item.item_id, itemType: Number(draft.itemTypeId), serialNumber: draft.serialNumber,
@@ -513,7 +514,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
       for (const a of accessories) {
         if (a.itemId == null) continue;
         const w = weightResult(a.refWeight, a.measWeight);
-        await fetch("/api/testing/results", {
+        await apiFetch("/api/testing/results", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ItemID: a.itemId, StationID: station.test_station_id, WorkerID: workerId,

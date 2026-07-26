@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { Box, Typography, Alert } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, SlowItemRow } from "@/types/dashboard";
 import {
@@ -82,7 +83,7 @@ export default function SlowItemsPage() {
     params.append("limit", "50"); // Fetch top 50 slow items
 
     try {
-        const res = await fetch(`/api/dashboard/tests/slow-items?${params.toString()}`);
+        const res = await apiFetch(`/api/dashboard/tests/slow-items?${params.toString()}`);
         if (!res.ok) throw new Error("Failed to fetch slow items");
         const json = await res.json();
         setData(json);

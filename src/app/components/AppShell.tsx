@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Box, IconButton, Typography, useMediaQuery } from "@/components/ui";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { withBasePath } from "@/lib/base-path";
 import { Menu as MenuIcon } from "@/components/ui/icons";
 import { Dashboard as DashboardIcon } from "@/components/ui/icons";
 import { Science as ScienceIcon } from "@/components/ui/icons";
@@ -42,6 +44,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = React.useState(false); // mobile off-canvas drawer
   const [collapsed, setCollapsed] = React.useState(false); // desktop icon-only rail
   const { title, icon } = usePageMeta(pathname);
+
+  // Idle-tab dead-session redirect (the third of the three redirect sites;
+  // middleware + apiFetch are the others). When a session dies while this tab
+  // sits open with NO in-flight request, SessionProvider's refetch surfaces
+  // session.error and we do ONE full navigation to /login. Keyed on the error
+  // only, so a healthy session never navigates.
+  const { data: session } = useSession();
+  React.useEffect(() => {
+    if (session?.error !== "RefreshAccessTokenError") return;
+    if (typeof window === "undefined") return;
+    const cb = window.location.pathname + window.location.search;
+    window.location.href = `${withBasePath("/login")}?callbackUrl=${encodeURIComponent(cb)}`;
+  }, [session?.error]);
 
   // Restore the desktop collapsed preference once, on mount.
   React.useEffect(() => {

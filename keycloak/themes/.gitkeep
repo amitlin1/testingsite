@@ -1,0 +1,2 @@
+# Custom Keycloak login theme goes here (added in a later step); mounted at
+# /opt/keycloak/themes. Empty for now — Keycloak uses its built-in theme.

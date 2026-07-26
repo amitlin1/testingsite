@@ -11,6 +11,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from "@/components/ui";
 import ItemFilesPanel from "./ItemFilesPanel";
+import { apiFetch } from "@/lib/api/client";
 
 type ItemData = {
   item_id: number;
@@ -66,7 +67,7 @@ export default function ItemDialog({
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`/api/items/${itemId}`);
+        const r = await apiFetch(`/api/items/${itemId}`);
         if (!r.ok) {
           throw new Error(`HTTP error! status: ${r.status}`);
         }

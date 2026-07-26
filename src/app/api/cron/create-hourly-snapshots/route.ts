@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 
+import { cronSecretGuard } from "@/lib/auth/cron-secret";
+
 export const runtime = "nodejs";
 
 /**
@@ -12,7 +14,9 @@ export const runtime = "nodejs";
  * Aggregates item_route_history for the last hour window per station,
  * capturing throughput and average queue/test times.
  */
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = cronSecretGuard(req);
+  if (denied) return denied;
   try {
     // Snapshot the hour that just ended (truncate current time to the hour)
     const now = new Date();

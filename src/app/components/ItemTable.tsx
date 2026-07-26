@@ -10,6 +10,7 @@ import ItemDialog from "./ItemDialog";
 import InsertPopup from "./insertPopup";
 import BarcodeDialog from "./BarcodeDialog";
 import { ItemRow, StatusOption, NewItem, ItemTypeOption, Customers, Shipment } from "@/types";
+import { apiFetch } from "@/lib/api/client";
 
 export default function ItemTable() {
   // Command-palette deep links: ?q=<serial|מק״ט|דגם> seeds the search box, and
@@ -55,7 +56,7 @@ export default function ItemTable() {
   const loadItems = React.useCallback(async () => {
     try {
       setLoading(true);
-      const r = await fetch("/api/items");
+      const r = await apiFetch("/api/items");
       if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
       const items = await r.json();
       setRows(Array.isArray(items) ? items : []);
@@ -72,11 +73,11 @@ export default function ItemTable() {
     (async () => {
       try {
         const [r1, r2, r3, r4, r5] = await Promise.all([
-          fetch("/api/items"),
-          fetch("/api/statuses"),
-          fetch("/api/customers"),
-          fetch("/api/itemTypes"),
-          fetch("/api/shipments"),
+          apiFetch("/api/items"),
+          apiFetch("/api/statuses"),
+          apiFetch("/api/customers"),
+          apiFetch("/api/itemTypes"),
+          apiFetch("/api/shipments"),
         ]);
         const items = r1.ok ? await r1.json() : [];
         const stats = r2.ok ? await r2.json() : [];

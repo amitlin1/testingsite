@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { Box, Typography, Alert } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, AverageTimesPoint, AverageTimesPeriod, CustomerOption } from "@/types/dashboard";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
@@ -82,7 +83,7 @@ export default function AverageTimesPage() {
 
 
     try {
-        const res = await fetch(`/api/dashboard/tests/average-times?${params.toString()}`);
+        const res = await apiFetch(`/api/dashboard/tests/average-times?${params.toString()}`);
         if (!res.ok) throw new Error("Failed to fetch average times");
         const json = await res.json();
         setData(json);

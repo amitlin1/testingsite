@@ -7,6 +7,7 @@ import {
 import DataTable, { RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
 import { Pencil, Trash2 } from "lucide-react";
 import SettingsToolbar from "./SettingsToolbar";
+import { apiFetch } from "@/lib/api/client";
 
 export interface Column {
   field: string;
@@ -49,7 +50,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl);
+      const res = await apiFetch(apiUrl);
       if (!res.ok) throw new Error("Failed to fetch data");
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
@@ -84,7 +85,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow[idField]}` : apiUrl;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData),
       });
       if (!res.ok) { const errorData = await res.json(); throw new Error(errorData.error || "Failed to save"); }
@@ -107,7 +108,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
   const handleDeleteConfirm = async () => {
     if (!rowToDelete) return;
     try {
-      const res = await fetch(`${apiUrl}/${rowToDelete[idField]}`, { method: "DELETE" });
+      const res = await apiFetch(`${apiUrl}/${rowToDelete[idField]}`, { method: "DELETE" });
       if (!res.ok) { const errorData = await res.json(); throw new Error(errorData.error || "Failed to delete"); }
       setRows(rows.filter((r) => r[idField] !== rowToDelete[idField]));
       showSnackbar(`${entityName} נמחק בהצלחה`, "success");

@@ -10,6 +10,7 @@ import {
 } from "@/app/lib/datetime";
 import { STATUS_NAMES } from "@/app/lib/status-names";
 import { formatFileSize } from "@/lib/minioFileUtils";
+import { apiFetch } from "@/lib/api/client";
 
 /*
  * היסטוריית פריט — the full-page reconstruction of a single item's path through
@@ -239,11 +240,11 @@ export default function ItemHistoryPage() {
       setError(null);
       try {
         const [itemRes, filesRes, workersRes, typesRes, photoRes] = await Promise.all([
-          fetch(`/api/items/${encodeURIComponent(itemId)}`),
-          fetch(`/api/items/${encodeURIComponent(itemId)}/files`),
-          fetch("/api/workers"),
-          fetch("/api/settings/test-stations-type"),
-          fetch("/api/settings/photo-types"),
+          apiFetch(`/api/items/${encodeURIComponent(itemId)}`),
+          apiFetch(`/api/items/${encodeURIComponent(itemId)}/files`),
+          apiFetch("/api/workers"),
+          apiFetch("/api/settings/test-stations-type"),
+          apiFetch("/api/settings/photo-types"),
         ]);
 
         if (!itemRes.ok) throw new Error("שגיאה בטעינת הפריט");

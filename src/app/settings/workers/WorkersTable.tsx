@@ -8,6 +8,7 @@ import DataTable, { RowActions, IconAction, type Column as DTColumn } from "@/co
 import { Pencil, Trash2, Check } from "lucide-react";
 import { Worker } from "@/types";
 import SettingsToolbar from "../components/SettingsToolbar";
+import { apiFetch } from "@/lib/api/client";
 
 interface WorkersTableProps {
   title: string;
@@ -39,7 +40,7 @@ export default function WorkersTable({ title, subtitle, countLabel }: WorkersTab
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl);
+      const res = await apiFetch(apiUrl);
       if (!res.ok) throw new Error("Failed to fetch data");
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
@@ -90,7 +91,7 @@ export default function WorkersTable({ title, subtitle, countLabel }: WorkersTab
         stokekeeper: !!formData.stokekeeper,
       };
       if (!editingRow) payload.worker_id = parseInt(String(formData.worker_id).trim(), 10);
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!res.ok) { const errorData = await res.json(); throw new Error(errorData.error || "שגיאה בשמירה"); }
       const savedRow = await res.json();
       if (editingRow && savedRow) {
@@ -111,7 +112,7 @@ export default function WorkersTable({ title, subtitle, countLabel }: WorkersTab
   const handleDeleteConfirm = async () => {
     if (!rowToDelete) return;
     try {
-      const res = await fetch(`${apiUrl}/${rowToDelete.worker_id}`, { method: "DELETE" });
+      const res = await apiFetch(`${apiUrl}/${rowToDelete.worker_id}`, { method: "DELETE" });
       if (!res.ok) { const errorData = await res.json(); throw new Error(errorData.error || "שגיאה במחיקה"); }
       setRows(rows.filter((r) => r.worker_id !== rowToDelete.worker_id));
       showSnackbar("עובד נמחק בהצלחה", "success");

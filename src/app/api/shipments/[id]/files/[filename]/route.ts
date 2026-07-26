@@ -6,6 +6,7 @@ import {
     contentTypeFromName,
 } from "@/lib/storage";
 import { signatureObjectKey } from "@/lib/file-utils";
+import { hasAppSession } from "@/lib/auth/session-guard";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,7 @@ export async function GET(
     request: NextRequest,
     context: { params: Promise<{ id: string; filename: string }> }
 ) {
+    if (!(await hasAppSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id, filename } = await context.params;
 
     // Security: prevent traversal / key injection

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { Box, Typography, Alert, CircularProgress, ToggleButton, ToggleButtonGroup } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, StationLoadRow } from "@/types/dashboard";
 import { getDateRange } from "@/app/lib/dashboard-date-range";
@@ -89,7 +90,7 @@ export default function StationLoadPage() {
     const params = buildDashboardQueryParams(startDate, endDate, filters);
 
     try {
-      const res = await fetch(`/api/dashboard/tests/by-station?${params.toString()}`);
+      const res = await apiFetch(`/api/dashboard/tests/by-station?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch station load data");
       const json = await res.json();
       setData(json);

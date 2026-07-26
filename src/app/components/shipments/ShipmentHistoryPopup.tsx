@@ -23,6 +23,7 @@ import { useReactToPrint } from 'react-to-print';
 import { ShipmentPDFDocument } from './ShipmentPDFDocument';
 import { Shipment } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
+import { apiFetch } from "@/lib/api/client";
 
 type ShipmentHistoryPopupProps = {
     open: boolean;
@@ -82,7 +83,7 @@ export default function ShipmentHistoryPopup({
     useEffect(() => {
         if (open && shipment) {
             setLoading(true);
-            fetch(`/api/shipment-history/${shipment.id}`)
+            apiFetch(`/api/shipment-history/${shipment.id}`)
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) {

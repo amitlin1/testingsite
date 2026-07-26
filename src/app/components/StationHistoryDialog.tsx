@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import {
   Dialog,
   DialogTitle,
@@ -100,7 +101,7 @@ export default function StationHistoryDialog({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/testing/station-history?stationId=${stationId}`);
+        const res = await apiFetch(`/api/testing/station-history?stationId=${stationId}`);
         if (!res.ok) {
           const errorData = await res.json();
           throw new Error(errorData.error || "Failed to load history");

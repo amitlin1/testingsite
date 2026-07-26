@@ -1,0 +1,18 @@
+# Optimized production Keycloak image.
+#
+# Pre-builds Keycloak with the Postgres provider + health/metrics baked in, so
+# the runtime can use `start --optimized` (fast boot, no per-start augmentation).
+#
+# AIR-GAP: pull the base image on a connected machine first, then transfer it:
+#   docker pull quay.io/keycloak/keycloak:26.7.0
+#   docker save quay.io/keycloak/keycloak:26.7.0 -o keycloak-26.7.0.tar   # copy in
+#   docker load -i keycloak-26.7.0.tar
+FROM quay.io/keycloak/keycloak:26.7.0 AS builder
+ENV KC_DB=postgres
+ENV KC_HEALTH_ENABLED=true
+ENV KC_METRICS_ENABLED=true
+RUN /opt/keycloak/bin/kc.sh build
+
+FROM quay.io/keycloak/keycloak:26.7.0
+COPY --from=builder /opt/keycloak/ /opt/keycloak/
+ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]

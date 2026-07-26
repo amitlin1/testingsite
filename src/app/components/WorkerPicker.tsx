@@ -3,6 +3,7 @@ import * as React from "react";
 import { Box, Typography } from "@/components/ui";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import SearchableCombobox from "./common/SearchableCombobox";
+import { apiFetch } from "@/lib/api/client";
 
 export type Worker = {
   worker_id: number;
@@ -66,7 +67,7 @@ export default function WorkerPicker({
     }
     let cancelled = false;
     setLoading(true);
-    fetch("/api/settings/workers")
+    apiFetch("/api/settings/workers")
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         if (!cancelled) setWorkers(Array.isArray(data) ? data : []);

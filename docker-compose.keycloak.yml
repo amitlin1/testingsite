@@ -1,0 +1,76 @@
+
+name: keycloak
+
+services:
+  # =========================================
+  # PostgreSQL — Keycloak's dedicated database
+  # =========================================
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: keycloak-db
+    restart: unless-stopped
+    env_file:
+      - .env.keycloak
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    networks:
+      - keycloak-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    shm_size: 128mb
+
+  # =========================================
+  # Keycloak — Identity Provider (OIDC) + user/role management
+  # =========================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.0
+    container_name: keycloak
+    restart: unless-stopped
+    # start-dev = HTTP, relaxed hostname (development). The production server
+    # will use `start --optimized` behind nginx/TLS — see docs when we get there.
+    command: ["start-dev", "--import-realm"]
+    env_file:
+      - .env.keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      # KC_DB_USERNAME / KC_DB_PASSWORD come from .env.keycloak
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      # KC_BOOTSTRAP_ADMIN_USERNAME / KC_BOOTSTRAP_ADMIN_PASSWORD from .env.keycloak
+    ports:
+      - "8080:8080"     # HTTP (admin console + OIDC endpoints)
+    volumes:
+      - ./keycloak/import:/opt/keycloak/data/import:ro   # realm export -> auto-import
+      - ./keycloak/themes:/opt/keycloak/themes:ro        # custom login theme (added later)
+    networks:
+      - keycloak-network
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      # The image has no curl/wget; use the bundled JDK to probe the management
+      # port (9000) /health/ready endpoint. Exit 0 only on HTTP 200.
+      test:
+        - CMD-SHELL
+        - >-
+          echo 'public class H{public static void main(String[] a)throws Exception{System.exit(((java.net.HttpURLConnection)new java.net.URL("http://localhost:9000/health/ready").openConnection()).getResponseCode()==200?0:1);}}'
+          > /tmp/H.java && java /tmp/H.java
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  keycloak-db-data:
+    driver: local
+
+networks:
+  keycloak-network:
+    driver: bridge
+    name: keycloak-network

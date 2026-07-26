@@ -8,6 +8,7 @@ import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import DataTable, { StatusPill, RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
 import { Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { TestStation, TestStationStatus } from "@/types";
+import { apiFetch } from "@/lib/api/client";
 
 interface StationsTableProps {
   typeId: number;
@@ -37,7 +38,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
   const apiUrl = "/api/settings/test-stations";
 
   useEffect(() => {
-    fetch("/api/settings/test-station-status")
+    apiFetch("/api/settings/test-station-status")
       .then((res) => res.json())
       .then((data) => setStatuses(data))
       .catch((err) => console.error("Failed to load statuses", err));
@@ -47,7 +48,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
     if (!typeId) return;
     setLoading(true);
     try {
-      const res = await fetch(`${apiUrl}?typeId=${typeId}`);
+      const res = await apiFetch(`${apiUrl}?typeId=${typeId}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
@@ -90,7 +91,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow.test_station_id}` : apiUrl;
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+      const res = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
       if (!res.ok) throw new Error("Failed to save");
       const savedRow = await res.json();
       if (editingRow && savedRow) {
@@ -111,7 +112,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
   const handleDeleteConfirm = async () => {
     if (!rowToDelete) return;
     try {
-      const res = await fetch(`${apiUrl}/${rowToDelete.test_station_id}`, { method: "DELETE" });
+      const res = await apiFetch(`${apiUrl}/${rowToDelete.test_station_id}`, { method: "DELETE" });
       if (!res.ok) {
         if (res.status === 409) throw new Error("לא ניתן למחוק כי העמדה בשימוש");
         throw new Error("Failed to delete");

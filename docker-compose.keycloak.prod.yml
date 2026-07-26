@@ -1,0 +1,70 @@
+# ===========================================
+# Docker Compose - Keycloak PRODUCTION (air-gapped)
+# ===========================================
+# Topology: Keycloak (this file) runs on the APP machine via Docker Desktop,
+# alongside the Next.js app. Its PostgreSQL database lives on the SEPARATE DB
+# machine (same box as the app's DB + MinIO). So this stack has NO local db
+# service — Keycloak connects to the remote Postgres via KC_DB_URL.
+#
+# Before first start: create the `keycloak` database + role on the DB machine
+# with keycloak/keycloak-db-init.sql (run it in DBeaver). Keycloak creates its
+# own tables on first boot.
+#
+# Differences from dev (docker-compose.keycloak.yml):
+#   - `start --optimized` (production mode) from the optimized Dockerfile.prod
+#   - HTTP behind nginx/TLS (KC_PROXY_HEADERS=xforwarded, KC_HOSTNAME=public URL)
+#   - imports the STRIPPED realm from ./keycloak/import-prod (no dev test users,
+#     no baked client secrets → regenerated in Keycloak)
+#
+# Deploy: docs/KEYCLOAK_PROD_DEPLOY.md
+# ===========================================
+
+name: keycloak
+
+services:
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile.prod
+    image: keycloak-optimized:26.7.0
+    container_name: keycloak
+    restart: always
+    command: ["start", "--optimized", "--import-realm"]
+    env_file:
+      - .env.keycloak.prod
+    environment:
+      KC_DB: postgres
+      # KC_DB_URL (→ the remote DB machine), KC_DB_USERNAME, KC_DB_PASSWORD,
+      # KC_HOSTNAME (public https URL) and KC_BOOTSTRAP_ADMIN_* all come from
+      # .env.keycloak.prod.
+      #
+      # nginx terminates TLS and forwards over HTTP → enable HTTP + trust the
+      # X-Forwarded-* headers so Keycloak builds correct https:// URLs.
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      # Published so nginx (on this same machine) can reverse-proxy TLS to it.
+      # If nginx runs in Docker too, put it on `keycloak-network` and proxy to
+      # http://keycloak:8080 instead of publishing.
+      - "8080:8080"
+    volumes:
+      - ./keycloak/import-prod:/opt/keycloak/data/import:ro
+      - ./keycloak/themes:/opt/keycloak/themes:ro
+    networks:
+      - keycloak-network
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          echo 'public class H{public static void main(String[] a)throws Exception{System.exit(((java.net.HttpURLConnection)new java.net.URL("http://localhost:9000/health/ready").openConnection()).getResponseCode()==200?0:1);}}'
+          > /tmp/H.java && java /tmp/H.java
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+networks:
+  keycloak-network:
+    driver: bridge
+    name: keycloak-network

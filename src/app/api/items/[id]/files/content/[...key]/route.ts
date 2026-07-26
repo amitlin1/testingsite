@@ -7,6 +7,7 @@ import {
   statObject,
 } from '@/lib/storage';
 import { registerFileObject } from '@/lib/file-registry';
+import { hasAppSession } from '@/lib/auth/session-guard';
 
 export const runtime = 'nodejs';
 
@@ -69,6 +70,7 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string; key: string[] }> },
 ) {
+  if (!(await hasAppSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { id, key } = await resolveKey(context.params);
     if (!keyBelongsToItem(key, id)) {
@@ -104,6 +106,7 @@ export async function PUT(
   request: Request,
   context: { params: Promise<{ id: string; key: string[] }> },
 ) {
+  if (!(await hasAppSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { id, key } = await resolveKey(context.params);
     if (!keyBelongsToItem(key, id)) {

@@ -28,8 +28,10 @@ import { EditNote as EditNoteIcon } from "@/components/ui/icons";
 import { FileIcon } from "@/app/components/files/FileIcon";
 import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
 import WorkerPicker from "./WorkerPicker";
+import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
 import TextEditorModal from "./TextEditorModal";
 import OnlyOfficeEditorModal from "./OnlyOfficeEditorModal";
+import { apiFetch } from "@/lib/api/client";
 
 type ItemFile = {
   objectKey: string;
@@ -124,10 +126,16 @@ export default function ItemFilesPanel({
   const replaceTargetRef = React.useRef<ItemFile | null>(null);
 
   // Standalone worker (used when no workerId was passed in from a parent).
+  const tokenWorkerId = useTokenWorkerId();
   const [internalWorkerId, setInternalWorkerId] = React.useState<number | null>(null);
   const effectiveWorkerId =
-    workerIdProp !== undefined && workerIdProp !== null ? workerIdProp : internalWorkerId;
+    workerIdProp !== undefined && workerIdProp !== null
+      ? workerIdProp
+      : (tokenWorkerId ?? internalWorkerId);
   const standalone = workerIdProp === undefined || workerIdProp === null;
+  // Standalone mode: the logged-in user's worker id (from their token) is used
+  // and the picker is locked — no manual self-selection.
+  const workerLocked = standalone && tokenWorkerId != null;
 
   // Editor modal state
   const [textEditorFile, setTextEditorFile] = React.useState<ItemFile | null>(null);
@@ -140,7 +148,7 @@ export default function ItemFilesPanel({
     setError(null);
     try {
       const url = stationTypeId != null ? `${listUrl}?stationTypeId=${stationTypeId}` : listUrl;
-      const r = await fetch(url);
+      const r = await apiFetch(url);
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j.error || "שגיאה בטעינת קבצים");
@@ -178,7 +186,7 @@ export default function ItemFilesPanel({
       fd.append("worker_id", String(effectiveWorkerId));
       if (stationTypeId != null) fd.append("station_type_id", String(stationTypeId));
       if (globalUpload) fd.append("is_global", "true");
-      const r = await fetch(listUrl, { method: "POST", body: fd });
+      const r = await apiFetch(listUrl, { method: "POST", body: fd });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j.error || "שגיאה בהעלאה");
@@ -195,7 +203,7 @@ export default function ItemFilesPanel({
     if (!confirm(`למחוק את "${file.fileName}"?`)) return;
     setError(null);
     try {
-      const r = await fetch(
+      const r = await apiFetch(
         `${listUrl}?key=${encodeURIComponent(file.objectKey)}`,
         { method: "DELETE" },
       );
@@ -226,7 +234,7 @@ export default function ItemFilesPanel({
       const fd = new FormData();
       fd.append("file", file);
       fd.append("worker_id", String(effectiveWorkerId));
-      const r = await fetch(
+      const r = await apiFetch(
         `${listUrl}?key=${encodeURIComponent(target.objectKey)}`,
         { method: "PATCH", body: fd },
       );
@@ -318,6 +326,8 @@ export default function ItemFilesPanel({
             required
             size="small"
             hideHeader={false}
+            disabled={workerLocked}
+            placeholder={workerLocked ? "מזוהה מההתחברות" : undefined}
           />
         </Box>
       )}

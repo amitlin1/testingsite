@@ -108,10 +108,11 @@ export function Autocomplete<
   // Live page-coordinates of the popup, measured from the field (the anchor).
   // `placement` flips to "top" when there isn't room below the field.
   const MENU_MAX_H = 320;
+  const MIN_SPACE = 160; // below this much room under the field, prefer opening up
   const listRef = useRef<HTMLUListElement>(null);
   const [pos, setPos] = useState<{
     left: number; width: number; dir: "ltr" | "rtl";
-    placement: "bottom" | "top"; top: number; maxH: number;
+    placement: "bottom" | "top"; top?: number; bottom?: number; maxH: number;
   } | null>(null);
 
   const setValue = (e: React.SyntheticEvent, v: T | T[] | null, reason: Reason) => {
@@ -134,32 +135,36 @@ export function Autocomplete<
   }, [options, inputValue, filterOptions, selectedSingle, getOptionLabel]);
 
   // Measure the field and keep the popup glued to it (open, scroll, resize).
+  // Raw viewport coordinates from getBoundingClientRect() + position:fixed — no
+  // scroll math — so it's immune to AppShell's inner scroller and any ancestor
+  // with an offset / overflow. When flipped up, we anchor by `bottom` so the
+  // list grows upward hugging the field regardless of how many items it has.
   useLayoutEffect(() => {
     if (!open || !anchorRef.current) { setPos(null); return; }
     const el = anchorRef.current;
     const GAP = 4, EDGE = 8; // px gap to field, min gap to viewport edge
     const update = () => {
       const r = el.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - r.bottom;
+      const vh = window.innerHeight;
+      const spaceBelow = vh - r.bottom;
       const spaceAbove = r.top;
-      // measured content height (falls back to the cap before first paint)
-      const wanted = Math.min(listRef.current?.scrollHeight || MENU_MAX_H, MENU_MAX_H);
-      // open up only when below can't fit the menu AND above has more room
-      const flip = spaceBelow < wanted + GAP && spaceAbove > spaceBelow;
       const dir = getComputedStyle(el).direction === "rtl" ? "rtl" : "ltr";
+      // open up only when there is genuinely no room below AND above has more
+      const flip = spaceBelow < MIN_SPACE && spaceAbove > spaceBelow;
       if (flip) {
-        const h = Math.max(120, Math.min(wanted, spaceAbove - GAP - EDGE));
+        // anchor by bottom => grows upward, glued to the field, item-count-agnostic
         setPos({
           placement: "top",
-          top: r.top + window.scrollY - GAP - h,
-          left: r.left + window.scrollX, width: r.width, dir, maxH: h,
+          bottom: vh - r.top + GAP,
+          left: r.left, width: r.width, dir,
+          maxH: Math.max(120, Math.min(MENU_MAX_H, spaceAbove - GAP - EDGE)),
         });
       } else {
         setPos({
           placement: "bottom",
-          top: r.bottom + window.scrollY + GAP,
-          left: r.left + window.scrollX, width: r.width, dir,
-          maxH: Math.max(120, Math.min(wanted, spaceBelow - GAP - EDGE)),
+          top: r.bottom + GAP,
+          left: r.left, width: r.width, dir,
+          maxH: Math.max(120, Math.min(MENU_MAX_H, spaceBelow - GAP - EDGE)),
         });
       }
     };
@@ -259,8 +264,8 @@ export function Autocomplete<
           className="sh-select-content"
           dir={pos.dir}
           style={{
-            position: "absolute",
-            top: pos.top,
+            position: "fixed",
+            ...(pos.placement === "top" ? { bottom: pos.bottom } : { top: pos.top }),
             left: pos.left,
             width: pos.width,
             maxHeight: pos.maxH,

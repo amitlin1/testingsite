@@ -5,6 +5,7 @@ import {
   TextField, Snackbar, Alert, Checkbox, FormControlLabel,
 } from "@/components/ui";
 import { Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 
 interface StationType {
   test_station_type_id: number;
@@ -41,7 +42,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl);
+      const res = await apiFetch(apiUrl);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
@@ -85,7 +86,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow.test_station_type_id}` : apiUrl;
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+      const res = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
       if (!res.ok) { const errBody = await res.json().catch(() => null); throw new Error(errBody?.error || "Failed to save"); }
       const savedRow = await res.json();
       if (editingRow && savedRow) {
@@ -106,7 +107,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   const handleDeleteConfirm = async () => {
     if (!rowToDelete) return;
     try {
-      const res = await fetch(`${apiUrl}/${rowToDelete.test_station_type_id}`, { method: "DELETE" });
+      const res = await apiFetch(`${apiUrl}/${rowToDelete.test_station_type_id}`, { method: "DELETE" });
       if (!res.ok) {
         if (res.status === 409) throw new Error("לא ניתן למחוק כי קיימות עמדות משויכות");
         throw new Error("Failed to delete");

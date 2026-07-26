@@ -12,6 +12,7 @@ import { AddAPhoto as AddAPhotoIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import type { ItemRow } from "../../../types";
+import { apiFetch } from "@/lib/api/client";
 
 /**
  * stationKit — the shared visual language for the testing-station wizards
@@ -46,7 +47,7 @@ export const SKU_DESC = "סרוק את מק״ט היצרן של המוצר לז�
 export async function lookupRU(sku: string, itemTypeId: number | null) {
   const qs = new URLSearchParams({ sku });
   if (itemTypeId != null) qs.set("itemTypeId", String(itemTypeId));
-  const res = await fetch(`/api/testing/reference-lookup?${qs.toString()}`);
+  const res = await apiFetch(`/api/testing/reference-lookup?${qs.toString()}`);
   const d = await res.json();
   return {
     hasRU: !!d.hasRU,

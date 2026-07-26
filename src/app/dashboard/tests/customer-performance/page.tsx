@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { Box, Typography, Alert } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, CustomerPerformanceRow, CustomerOption } from "@/types/dashboard";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
@@ -82,7 +83,7 @@ export default function CustomerPerformancePage() {
     const params = buildDashboardQueryParams(startDate, endDate, filters);
 
     try {
-      const res = await fetch(`/api/dashboard/tests/customer-performance?${params.toString()}`);
+      const res = await apiFetch(`/api/dashboard/tests/customer-performance?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch customer performance");
       const json = await res.json();
       setData(json);

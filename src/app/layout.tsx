@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import "@/styles/shifthouse.css";
 import AppShell from "./components/AppShell";
+import { Providers } from "@/app/providers";
 
 const rubik = localFont({
   src: [
@@ -38,7 +39,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           backgroundColor: "#f5f5f7",
         }}
       >
-        <AppShell>{children}</AppShell>
+        <Providers isDev={process.env.IS_DEV === "1"}>
+          <AppShell>{children}</AppShell>
+        </Providers>
       </body>
     </html>
   );

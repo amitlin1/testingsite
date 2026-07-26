@@ -16,6 +16,7 @@ import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { Shipment, NewShipment, Customers } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
+import { apiFetch } from "@/lib/api/client";
 
 type ShipmentUpdatePopupProps = {
     open: boolean;
@@ -66,10 +67,10 @@ export default function ShipmentUpdatePopup({
         (async () => {
             try {
                 const [custRes, workersRes, typesRes, sourcesRes] = await Promise.all([
-                    fetch("/api/customers"),
-                    fetch("/api/workers"),
-                    fetch("/api/item-types"),
-                    fetch("/api/sources")
+                    apiFetch("/api/customers"),
+                    apiFetch("/api/workers"),
+                    apiFetch("/api/item-types"),
+                    apiFetch("/api/sources")
                 ]);
                 const custData = await custRes.json();
                 const workersData = await workersRes.json();
@@ -140,7 +141,7 @@ export default function ShipmentUpdatePopup({
                 item_type_id: validItems[0]?.item_type_id || null
             };
 
-            const res = await fetch(`/api/shipments/${shipment.id}`, {
+            const res = await apiFetch(`/api/shipments/${shipment.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

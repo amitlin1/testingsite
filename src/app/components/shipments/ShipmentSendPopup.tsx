@@ -18,6 +18,7 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { Shipment } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import SignatureCanvas from 'react-signature-canvas';
+import { apiFetch } from "@/lib/api/client";
 
 type ShipmentSendPopupProps = {
     open: boolean;
@@ -81,7 +82,7 @@ export default function ShipmentSendPopup({
         let cancelled = false;
         (async () => {
             try {
-                const res = await fetch("/api/workers");
+                const res = await apiFetch("/api/workers");
                 const data = await res.json();
                 if (!cancelled && Array.isArray(data)) {
                     setWorkers(data);
@@ -95,7 +96,7 @@ export default function ShipmentSendPopup({
 
     useEffect(() => {
         if (shipment?.id) {
-            fetch(`/api/shipment-history?shipment_id=${shipment.id}`)
+            apiFetch(`/api/shipment-history?shipment_id=${shipment.id}`)
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) {
@@ -143,7 +144,7 @@ export default function ShipmentSendPopup({
                 signature_base64
             };
 
-            const res = await fetch("/api/shipment-history", {
+            const res = await apiFetch("/api/shipment-history", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

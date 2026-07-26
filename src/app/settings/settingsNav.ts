@@ -9,6 +9,7 @@ import {
   AltRoute as AltRouteIcon,
   Badge as BadgeIcon,
   PhotoLibrary as PhotoLibraryIcon,
+  Lock as LockIcon,
 } from "@/components/ui/icons";
 
 /**
@@ -26,6 +27,7 @@ export interface SettingsLink {
 }
 
 export const settingsLinks: SettingsLink[] = [
+  { path: "/settings/users", label: "משתמשים והרשאות", icon: LockIcon },
   { path: "/settings/customers", label: "לקוחות", icon: PeopleIcon },
   { path: "/settings/item-types", label: "סוגי פריטים", icon: CategoryIcon },
   { path: "/settings/sources", label: "ניהול מקורות", icon: SourceIcon },

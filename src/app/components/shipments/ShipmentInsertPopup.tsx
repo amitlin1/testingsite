@@ -26,6 +26,7 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
 import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat } from '@/app/lib/qrParser';
+import { apiFetch } from "@/lib/api/client";
 
 type ShipmentInsertPopupProps = {
     open: boolean;
@@ -158,10 +159,10 @@ export default function ShipmentInsertPopup({
         (async () => {
             try {
                 const [custRes, workersRes, typesRes, sourcesRes] = await Promise.all([
-                    fetch("/api/customers"),
-                    fetch("/api/workers"),
-                    fetch("/api/item-types"),
-                    fetch("/api/sources")
+                    apiFetch("/api/customers"),
+                    apiFetch("/api/workers"),
+                    apiFetch("/api/item-types"),
+                    apiFetch("/api/sources")
                 ]);
                 const custData = await custRes.json();
                 const workersData = await workersRes.json();
@@ -221,7 +222,7 @@ export default function ShipmentInsertPopup({
                 signature_base64
             };
 
-            const res = await fetch("/api/shipments", {
+            const res = await apiFetch("/api/shipments", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

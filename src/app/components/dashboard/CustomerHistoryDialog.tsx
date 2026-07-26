@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import PeriodCombobox from "../common/PeriodCombobox";
 import {
   Dialog,
@@ -62,7 +63,7 @@ export default function CustomerHistoryDialog({
     if (!customer) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/dashboard/customers/${customer.customerId}/history?period=${period}`);
+      const res = await apiFetch(`/api/dashboard/customers/${customer.customerId}/history?period=${period}`);
       if (res.ok) {
         const result = await res.json();
         

@@ -52,6 +52,7 @@ import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
 import { Error as ErrorIcon } from "@/components/ui/icons";
 import { FileIcon } from "@/app/components/files/FileIcon";
 import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
+import { apiFetch } from "@/lib/api/client";
 
 interface FileItem {
   name: string;
@@ -107,7 +108,7 @@ export default function FilesPage() {
   const fetchFiles = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/files?prefix=${encodeURIComponent(currentPath)}`
       );
       if (!res.ok) throw new Error("fetch failed");
@@ -158,6 +159,8 @@ export default function FilesPage() {
           return next;
         });
 
+        // NOTE: XHR is used here for upload progress events; it does NOT go
+        // through apiFetch, so it should handle its own 401 (token expiry).
         const xhr = new XMLHttpRequest();
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
@@ -263,7 +266,7 @@ export default function FilesPage() {
     if (!deleteTarget) return;
     setActionLoading(true);
     try {
-      const res = await fetch("/api/files", {
+      const res = await apiFetch("/api/files", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paths: [deleteTarget.fullPath] }),
@@ -293,7 +296,7 @@ export default function FilesPage() {
       const parentPath = lastSlash >= 0 ? fullPath.slice(0, lastSlash + 1) : "";
       const newPath = parentPath + renameName.trim() + (isFolder ? "/" : "");
 
-      const res = await fetch("/api/files", {
+      const res = await apiFetch("/api/files", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ oldPath: fullPath, newPath }),
@@ -320,7 +323,7 @@ export default function FilesPage() {
     if (!newFolderName.trim()) return;
     setActionLoading(true);
     try {
-      const res = await fetch("/api/files/folder", {
+      const res = await apiFetch("/api/files/folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: currentPath + newFolderName.trim() + "/" }),

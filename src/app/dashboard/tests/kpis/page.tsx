@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { Box, Paper, Typography, Grid, Card, CardContent, CircularProgress, Alert } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, DashboardKpis } from "@/types/dashboard";
 import { getDateRange } from "@/app/lib/dashboard-date-range";
@@ -111,7 +112,7 @@ export default function APIsPage() {
     const params = buildDashboardQueryParams(startDate, endDate, filters);
 
     try {
-      const res = await fetch(`/api/dashboard/tests/kpis?${params.toString()}`);
+      const res = await apiFetch(`/api/dashboard/tests/kpis?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch KPIs");
       const json = await res.json();
       setData(json);

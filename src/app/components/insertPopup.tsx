@@ -6,6 +6,7 @@ import { NewItem, ItemTypeOption, Customers, Shipment } from '@/types'
 import { Close as CloseIcon } from "@/components/ui/icons"
 import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons"
 import { parseItemQr, ParsedItemData } from '@/app/lib/itemQrParser'
+import { apiFetch } from "@/lib/api/client"
 
 type TestingRoute = {
     test_route_id: number;
@@ -74,8 +75,8 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
         (async () => {
             try {
                 const [customersRes, itemTypesRes] = await Promise.all([
-                    fetch("/api/customers"),
-                    fetch("/api/itemTypes"),
+                    apiFetch("/api/customers"),
+                    apiFetch("/api/itemTypes"),
                 ]);
                 const customersData = customersRes.ok ? await customersRes.json() : [];
                 const itemTypesData = itemTypesRes.ok ? await itemTypesRes.json() : [];
@@ -83,14 +84,14 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
                     setCustomers(Array.isArray(customersData) ? customersData : []);
                     setItemTypes(Array.isArray(itemTypesData) ? itemTypesData : []);
                 }
-                const shipmentsRes = await fetch("/api/shipments");
+                const shipmentsRes = await apiFetch("/api/shipments");
                 const shipmentsData = await shipmentsRes.json();
                 if (!cancelled) {
                     // Exclude finished shipments — can't add items to a shipment that already left.
                     const openShipments = Array.isArray(shipmentsData) ? shipmentsData.filter((s: Shipment) => !s.is_sent) : [];
                     setShipments(openShipments);
                 }
-                const routesRes = await fetch("/api/testing-routes");
+                const routesRes = await apiFetch("/api/testing-routes");
                 const routesData = await routesRes.json();
                 if (!cancelled) setTestingRoutes(Array.isArray(routesData) ? routesData : []);
             } catch (error) {
@@ -116,7 +117,7 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
     useEffect(() => {
         if (selectedShipmentId) {
             setLoadingShipmentItems(true);
-            fetch(`/api/shipments/${selectedShipmentId}/items`)
+            apiFetch(`/api/shipments/${selectedShipmentId}/items`)
                 .then((res) => res.json())
                 .then((data) => setShipmentItems(Array.isArray(data) ? data : []))
                 .catch((err) => { console.error("Error fetching shipment items:", err); setShipmentItems([]); })
@@ -246,7 +247,7 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
         };
 
         try {
-            const res = await fetch("/api/items", {
+            const res = await apiFetch("/api/items", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

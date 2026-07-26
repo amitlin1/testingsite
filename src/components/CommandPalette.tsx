@@ -27,6 +27,7 @@ import type {
   SearchStationType,
 } from "@/app/api/search/index/route";
 import type { SearchItem } from "@/app/api/search/items/route";
+import { apiFetch } from "@/lib/api/client";
 
 /* =========================================================================
    Command palette (Ctrl+K) — one search box for עמדות, פריטים, סוגי עמדות
@@ -432,7 +433,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setRecents(readRecents());
     const t = setTimeout(() => inputRef.current?.focus(), 30);
     let cancelled = false;
-    fetch("/api/search/index")
+    apiFetch("/api/search/index")
       .then((r) => r.json())
       .then((data: SearchIndex) => {
         if (!cancelled) setIndex(data);
@@ -461,7 +462,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setItemsLoading(true);
     let cancelled = false;
     const t = setTimeout(() => {
-      fetch(`/api/search/items?q=${encodeURIComponent(q)}`)
+      apiFetch(`/api/search/items?q=${encodeURIComponent(q)}`)
         .then((r) => r.json())
         .then((data: SearchItem[]) => {
           if (cancelled) return;

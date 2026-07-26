@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { CustomerOption, Option } from "@/types/dashboard";
 
 export interface DashboardOptions {
@@ -28,11 +29,11 @@ export function useDashboardOptions(): DashboardOptions {
       try {
         const [customersRes, stationsRes, stationTypesRes, itemTypesRes, shipmentsRes] =
           await Promise.all([
-            fetch("/api/customers"),
-            fetch("/api/stations"),
-            fetch("/api/testing/stations/types"),
-            fetch("/api/item-types"),
-            fetch("/api/shipments"),
+            apiFetch("/api/customers"),
+            apiFetch("/api/stations"),
+            apiFetch("/api/testing/stations/types"),
+            apiFetch("/api/item-types"),
+            apiFetch("/api/shipments"),
           ]);
 
         if (customersRes.ok) setCustomers(await customersRes.json());

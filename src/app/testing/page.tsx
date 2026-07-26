@@ -23,6 +23,8 @@ import {
   DialogActions,
 } from "@/components/ui";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
+import { apiFetch } from "@/lib/api/client";
+import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
 // Icons
 import { Search as SearchIcon } from "@/components/ui/icons";
 import { Clear as ClearIcon } from "@/components/ui/icons";
@@ -492,7 +494,7 @@ function TestingPageView() {
   const [allStations, setAllStations] = React.useState<StationLite[]>([]);
   React.useEffect(() => {
     let cancelled = false;
-    fetch("/api/stations")
+    apiFetch("/api/stations")
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => { if (!cancelled) setAllStations(Array.isArray(data) ? data : []); })
       .catch(() => { if (!cancelled) setAllStations([]); });
@@ -506,6 +508,8 @@ function TestingPageView() {
   const WORKER_STORAGE_KEY = "testing-page:active-worker-id";
   const [activeWorkerId, setActiveWorkerId] = React.useState<number | null>(null);
   const [activeWorkerName, setActiveWorkerName] = React.useState<string>("");
+  // Auth: the logged-in user's worker id, from their Keycloak employeeNumber.
+  const tokenWorkerId = useTokenWorkerId();
   React.useEffect(() => {
     try {
       const raw = window.localStorage.getItem(WORKER_STORAGE_KEY);
@@ -517,6 +521,18 @@ function TestingPageView() {
       /* ignore */
     }
   }, []);
+  // When the token carries a worker id, THAT is the active worker — it overrides
+  // any manual / localStorage choice (the user can't act as someone else). Falls
+  // back to the manual picker when the user has no employeeNumber.
+  React.useEffect(() => {
+    if (tokenWorkerId == null) return;
+    setActiveWorkerId(tokenWorkerId);
+    try {
+      window.localStorage.setItem(WORKER_STORAGE_KEY, String(tokenWorkerId));
+    } catch {
+      /* ignore */
+    }
+  }, [tokenWorkerId]);
   const handleWorkerChange = (workerId: number | null) => {
     setActiveWorkerId(workerId);
     try {
@@ -533,7 +549,7 @@ function TestingPageView() {
       return;
     }
     let cancelled = false;
-    fetch("/api/settings/workers")
+    apiFetch("/api/settings/workers")
       .then((r) => (r.ok ? r.json() : []))
       .then((rows: Array<{ worker_id: number; worker_name: string }>) => {
         if (cancelled) return;
@@ -634,7 +650,7 @@ function TestingPageView() {
     try {
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/testing/completed-today?stationId=${stationId}&since=${encodeURIComponent(startOfDay.toISOString())}`
       );
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -658,7 +674,7 @@ function TestingPageView() {
     (async () => {
       setStationTypesLoading(true);
       try {
-        const res = await fetch("/api/testing/stations");
+        const res = await apiFetch("/api/testing/stations");
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         if (!cancelled) setStationTypes(Array.isArray(data) ? data : []);
@@ -691,7 +707,7 @@ function TestingPageView() {
     (async () => {
       setStationsLoading(true);
       try {
-        const res = await fetch(`/api/testing/test-stations?typeId=${selectedStationType.id}`);
+        const res = await apiFetch(`/api/testing/test-stations?typeId=${selectedStationType.id}`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         if (!cancelled) {
@@ -738,7 +754,7 @@ function TestingPageView() {
     (async () => {
       setItemsLoading(true);
       try {
-        const res = await fetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
+        const res = await apiFetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         if (!cancelled) setItems(Array.isArray(data) ? data : []);
@@ -763,7 +779,7 @@ function TestingPageView() {
     setScanLoading(true);
     setScanError(null);
     try {
-      const res = await fetch(`/api/testing/locate-by-barcode?barcode=${encodeURIComponent(barcode)}`);
+      const res = await apiFetch(`/api/testing/locate-by-barcode?barcode=${encodeURIComponent(barcode)}`);
       const data = await res.json();
       if (!res.ok) {
         setScanError(data?.error || "שגיאה באיתור הפריט");
@@ -826,7 +842,7 @@ function TestingPageView() {
   const handleStartTest = async (itemId: number) => {
     if (!selectedStation) throw new Error("Station not selected");
     try {
-      const response = await fetch("/api/testing/start-test", {
+      const response = await apiFetch("/api/testing/start-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId, stationId: selectedStation.test_station_id }),
@@ -846,7 +862,7 @@ function TestingPageView() {
     setItemsLoading(true);
     fetchCompletedToday(selectedStation.test_station_id);
     try {
-      const res = await fetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
+      const res = await apiFetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
@@ -863,7 +879,7 @@ function TestingPageView() {
     const routeStepsLength = selectedItem.route_steps?.length || 0;
     if (routeStepsLength === 0) throw new Error("Route steps information is missing.");
 
-    const response = await fetch("/api/testing/results", {
+    const response = await apiFetch("/api/testing/results", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -956,6 +972,7 @@ function TestingPageView() {
           activeWorkerId={activeWorkerId}
           activeWorkerName={activeWorkerName}
           onWorkerChange={handleWorkerChange}
+          workerLocked={tokenWorkerId != null}
           onScan={() => { setScanError(null); setScanInput(""); setScannerOpen(true); }}
         />
 

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { Box, Typography, Alert, Grid } from "@/components/ui";
 import { DateRangePreset, DashboardFilters, StatusDistribution, CustomerOption } from "@/types/dashboard";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
@@ -73,7 +74,7 @@ export default function StatusDistributionPage() {
     if (filters.showSent) params.set("showAllHistory", "true");
 
     try {
-      const res = await fetch(`/api/dashboard/tests/status-distribution?${params.toString()}`);
+      const res = await apiFetch(`/api/dashboard/tests/status-distribution?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch status distribution");
       const json = await res.json();
       setData(json);

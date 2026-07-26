@@ -24,6 +24,9 @@ type TestingDockProps = {
   activeWorkerId: number | null;
   activeWorkerName: string;
   onWorkerChange: (id: number | null) => void;
+  /** When true, the active worker comes from the login (employeeNumber) and the
+   *  picker is read-only — the user can't act as someone else. */
+  workerLocked?: boolean;
   onScan: () => void;
 };
 
@@ -48,6 +51,7 @@ export default function TestingDock({
   activeWorkerId,
   activeWorkerName,
   onWorkerChange,
+  workerLocked = false,
   onScan,
 }: TestingDockProps) {
   const [hover, setHover] = React.useState(false);
@@ -198,7 +202,8 @@ export default function TestingDock({
               onChange={onWorkerChange}
               hideHeader
               size="small"
-              placeholder="חפש עובד…"
+              disabled={workerLocked}
+              placeholder={workerLocked ? "מזוהה מההתחברות" : "חפש עובד…"}
               onOpen={() => setWorkerOpen(true)}
               onClose={() => setWorkerOpen(false)}
             />

@@ -1,6 +1,7 @@
 "use client";
 // Imports updated
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import { ToggleButton, ToggleButtonGroup, Box, Typography, Alert } from "@/components/ui";
 import { TableChart as TableChartIcon } from "@/components/ui/icons";
 import { BarChart as BarChartIcon } from "@/components/ui/icons";
@@ -77,7 +78,7 @@ export default function ShipmentsPage() {
     const params = buildDashboardQueryParams(startDate, endDate, filters);
 
     try {
-      const res = await fetch(`/api/dashboard/tests/shipments?${params.toString()}`);
+      const res = await apiFetch(`/api/dashboard/tests/shipments?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch shipments");
       const json = await res.json();
       setData(json);

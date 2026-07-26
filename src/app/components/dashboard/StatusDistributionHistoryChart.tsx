@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { apiFetch } from "@/lib/api/client";
 import PeriodCombobox from "../common/PeriodCombobox";
 import {
   Box,
@@ -98,7 +99,7 @@ export default function StatusDistributionHistoryChart({
       if (filters?.itemTypeId) params.append("itemTypeId", filters.itemTypeId.toString());
       if (filters?.testStationId) params.append("testStationId", filters.testStationId.toString());
 
-      const res = await fetch(`/api/dashboard/tests/status-distribution/history?${params.toString()}`);
+      const res = await apiFetch(`/api/dashboard/tests/status-distribution/history?${params.toString()}`);
       if (res.ok) {
         const result = await res.json();
         

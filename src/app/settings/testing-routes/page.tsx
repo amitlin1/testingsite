@@ -4,6 +4,7 @@ import { Box, Snackbar, Alert } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { ArrowUp, ArrowDown, X, Plus, Save, Route } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
+import { apiFetch } from "@/lib/api/client";
 
 interface Option {
   id: number;
@@ -44,11 +45,11 @@ export default function TestingRoutesPage() {
   // Load Options
   useEffect(() => {
     Promise.all([
-      fetch("/api/settings/item-types").then(async res => {
+      apiFetch("/api/settings/item-types").then(async res => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
       }),
-      fetch("/api/settings/test-stations-type").then(async res => {
+      apiFetch("/api/settings/test-stations-type").then(async res => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
       })
@@ -72,7 +73,7 @@ export default function TestingRoutesPage() {
     setIsNew(false);
 
     try {
-      const res = await fetch(`/api/settings/testing-routes?itemTypeId=${selectedItemType.id}&routeNumber=${routeNumber}`);
+      const res = await apiFetch(`/api/settings/testing-routes?itemTypeId=${selectedItemType.id}&routeNumber=${routeNumber}`);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
@@ -143,7 +144,7 @@ export default function TestingRoutesPage() {
         method = "PUT";
       }
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)

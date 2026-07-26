@@ -1,0 +1,2 @@
+# Realm export JSON goes here; mounted read-only into Keycloak and applied via
+# the `--import-realm` flag on startup. Empty for now.

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma, TransactionClient } from "@/app/lib/prisma";
 import { MetricsService } from "@/app/lib/dashboard/metrics-service";
 
+import { cronSecretGuard } from "@/lib/auth/cron-secret";
+
 export const runtime = "nodejs";
 
 /**
@@ -22,7 +24,9 @@ export const runtime = "nodejs";
  * - kpi_snapshots_monthly
  * - system_snapshots_monthly
  */
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = cronSecretGuard(req);
+  if (denied) return denied;
   try {
     // Target the 1st of LAST month.
     // If this runs on Feb 1st → snapshot date = Jan 1st
