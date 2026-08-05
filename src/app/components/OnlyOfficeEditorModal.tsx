@@ -57,10 +57,11 @@ declare global {
   }
 }
 
-const ONLYOFFICE_PUBLIC_URL = (
-  process.env.NEXT_PUBLIC_ONLYOFFICE_PUBLIC_URL || "/onlyoffice"
-).replace(/\/+$/, "");
-
+// The DocServer origin is NOT read from a NEXT_PUBLIC_* var: `next build`
+// inlines those into the static bundle, pinning the built image to one
+// environment — fatal for an air-gapped tar built on a connected machine and
+// run in production. It now arrives per-request as `_docServerUrl` on the
+// /api/onlyoffice/config response, which the server resolves at RUNTIME.
 const SCRIPT_ID = "onlyoffice-docs-api";
 const SCRIPT_TIMEOUT_MS = 20_000;
 
@@ -71,8 +72,11 @@ const SCRIPT_TIMEOUT_MS = 20_000;
  *  3. Script never loads (network/CSP/proxy issue). Without a timeout we'd spin forever.
  *
  * The fix is "set up the listeners AND poll AND time out", all racing the same promise.
+ *
+ * `docServerUrl` is the browser-reachable DocServer origin, delivered at runtime
+ * by /api/onlyoffice/config (see the note above SCRIPT_ID).
  */
-function loadDocsApi(): Promise<void> {
+function loadDocsApi(docServerUrl: string): Promise<void> {
   if (typeof window === "undefined") return Promise.reject(new Error("server"));
   if (window.DocsAPI) return Promise.resolve();
 
@@ -98,17 +102,17 @@ function loadDocsApi(): Promise<void> {
     // Race 2: explicit timeout so the modal never spins forever.
     const timeout = setTimeout(() => {
       done(new Error(
-        `OnlyOffice DocsAPI לא נטען (timeout ${SCRIPT_TIMEOUT_MS}ms). בדוק שהשרת באוויר ב-${ONLYOFFICE_PUBLIC_URL}.`,
+        `OnlyOffice DocsAPI לא נטען (timeout ${SCRIPT_TIMEOUT_MS}ms). בדוק שהשרת באוויר ב-${docServerUrl}.`,
       ));
     }, SCRIPT_TIMEOUT_MS);
 
     // Race 3: actually load the script if it isn't in the DOM yet.
     let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
     if (!script) {
-      console.log("[OnlyOffice] injecting DocsAPI script tag", `${ONLYOFFICE_PUBLIC_URL}/web-apps/apps/api/documents/api.js`);
+      console.log("[OnlyOffice] injecting DocsAPI script tag", `${docServerUrl}/web-apps/apps/api/documents/api.js`);
       script = document.createElement("script");
       script.id = SCRIPT_ID;
-      script.src = `${ONLYOFFICE_PUBLIC_URL}/web-apps/apps/api/documents/api.js`;
+      script.src = `${docServerUrl}/web-apps/apps/api/documents/api.js`;
       script.async = true;
       document.head.appendChild(script);
     } else {
@@ -188,10 +192,10 @@ export default function OnlyOfficeEditorModal({
     (async () => {
       try {
         console.log("[OnlyOffice] modal effect start", { objectKey, uniqueId });
-        await loadDocsApi();
-        if (cancelled) return;
-        console.log("[OnlyOffice] DocsAPI ready, fetching editor config…");
 
+        // Config FIRST — it carries the runtime DocServer origin that the script
+        // tag below is loaded from, so this order is required (it used to be the
+        // other way round, back when the origin was baked into the bundle).
         const configUrl = `/api/onlyoffice/config/${encodedPath}?${params.toString()}`;
         const r = await fetch(configUrl);
         console.log("[OnlyOffice] config response", r.status);
@@ -199,7 +203,13 @@ export default function OnlyOfficeEditorModal({
           const j = await r.json().catch(() => ({}));
           throw new Error(j.error || `שגיאה בקבלת תצורת עורך (${r.status})`);
         }
-        const config = await r.json();
+        // Strip the transport-only field: everything else is covered by the
+        // signed `token` and must reach DocsAPI byte-for-byte as signed.
+        const { _docServerUrl: docServerUrl = "/onlyoffice", ...config } = await r.json();
+        if (cancelled) return;
+
+        console.log("[OnlyOffice] config ready, loading DocsAPI from", docServerUrl);
+        await loadDocsApi(docServerUrl);
         if (cancelled || !window.DocsAPI) return;
         console.log("[OnlyOffice] instantiating DocEditor", { documentType: config.documentType, fileType: config?.document?.fileType });
 

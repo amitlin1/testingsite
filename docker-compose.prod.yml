@@ -36,11 +36,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # NEXT_PUBLIC_* must be present at build time so Next.js inlines it into
-        # the static JS bundle. .env.prod's value flows in via docker compose's
-        # ${VAR} interpolation.
-        NEXT_PUBLIC_ONLYOFFICE_PUBLIC_URL: ${NEXT_PUBLIC_ONLYOFFICE_PUBLIC_URL}
+      # No build args: the image is environment-NEUTRAL by design. Every URL the
+      # browser needs is resolved from the server env at request time, so the
+      # same image (and the same air-gap tar) runs in dev and in production.
     image: testingsite-next-app:latest
     container_name: next-app
     restart: unless-stopped
@@ -51,14 +49,13 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
       # RUNTIME server-side env — read by Node.js at request time (config endpoint,
       # callback handler, JWT signing). These do NOT need to be present at build.
+      # ONLYOFFICE_PUBLIC_URL doubles as the origin sent to the BROWSER: the
+      # /api/onlyoffice/config handler returns it so the editor knows where to
+      # load DocsAPI from. Change it here + restart; no rebuild.
       - ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET}
       - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL}
       - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL}
       - APP_PUBLIC_URL=${APP_PUBLIC_URL}
-      # NEXT_PUBLIC_ONLYOFFICE_PUBLIC_URL is intentionally NOT here — it's a
-      # BUILD-time arg (see build.args above). Setting it at runtime has zero
-      # effect because Next.js inlines NEXT_PUBLIC_* values into the static
-      # client bundle during `next build`.
     networks:
       - prod-network
     expose:
@@ -66,11 +63,45 @@ services:
     # No volumes: the app is stateless. All files (signatures + file manager)
     # live in MinIO on the DB server. See docs/STORAGE.md.
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # Probe /api/health, NOT "/" — every app route is auth-gated and the
+      # middleware answers a cookie-less non-browser request with 401, which
+      # would mark a healthy container unhealthy and stop nginx from starting.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # =========================================
+  # Keycloak loopback bridge (single-machine deployments only)
+  # =========================================
+  # AUTH_KEYCLOAK_ISSUER must be ONE string that resolves identically for the
+  # browser and for next-app — Keycloak stamps `iss` from the request host, so a
+  # front-channel/back-channel hostname split makes token validation fail.
+  #
+  # Here Keycloak runs in its OWN compose project (docker-compose.keycloak.yml),
+  # published on the HOST at :8080. The browser reaches it as localhost:8080; a
+  # bridge-network container cannot ("localhost" is the container itself), and
+  # the host's LAN IP is blocked inbound by the Windows firewall.
+  #
+  # This sidecar shares next-app's NETWORK NAMESPACE (network_mode: service:) and
+  # listens on 127.0.0.1:8080 inside it, forwarding to the host. Result: inside
+  # next-app, http://localhost:8080 IS Keycloak — same URL the browser uses.
+  #
+  # On a real prod server Keycloak has its own public URL: point
+  # AUTH_KEYCLOAK_ISSUER at it and delete this service.
+  #
+  # NOTE: with network_mode: service:, Docker forbids `extra_hosts`, `networks`
+  # and `ports` on this container — host.docker.internal is injected by Docker
+  # Desktop, so no extra mapping is needed.
+  kc-bridge:
+    image: alpine/socat:latest
+    container_name: kc-bridge
+    restart: unless-stopped
+    network_mode: "service:next-app"
+    command: ["TCP-LISTEN:8080,fork,reuseaddr", "TCP:host.docker.internal:8080"]
+    depends_on:
+      - next-app
 
   # =========================================
   # OnlyOffice Document Server

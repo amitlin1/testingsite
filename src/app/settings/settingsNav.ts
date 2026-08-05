@@ -10,6 +10,7 @@ import {
   Badge as BadgeIcon,
   PhotoLibrary as PhotoLibraryIcon,
   Lock as LockIcon,
+  AccessTime as AccessTimeIcon,
 } from "@/components/ui/icons";
 
 /**
@@ -37,4 +38,5 @@ export const settingsLinks: SettingsLink[] = [
   { path: "/settings/testing-routes", label: "מסלולי בדיקה", icon: AltRouteIcon },
   { path: "/settings/reference-items", label: "פריטי ייחוס", icon: PhotoLibraryIcon },
   { path: "/settings/workers", label: "ניהול עובדים", icon: BadgeIcon },
+  { path: "/settings/work-hours", label: "שעות עבודה וחופשות", icon: AccessTimeIcon },
 ];

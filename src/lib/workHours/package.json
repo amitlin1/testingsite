@@ -1,0 +1,4 @@
+{
+  "//": "NOT a package — a module-type marker. @hebcal/core is ESM-only (its exports map has an \"import\" condition and no \"require\"), so israeliHolidays.ts must load as ESM under `npm test` (node --import tsx), which decides that from the nearest package.json. Deleting this file breaks israeliHolidays.test.ts with ERR_PACKAGE_PATH_NOT_EXPORTED. Deliberately has no \"name\": it must not look like a resolvable package. App code imports these files via @/lib/workHours/*.",
+  "type": "module"
+}

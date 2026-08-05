@@ -35,11 +35,17 @@ COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build-time client config — NEXT_PUBLIC_* vars are inlined into the static
-# JS bundle by `next build`, so they must be present here, not at runtime.
-# Pass via docker-compose's `build.args` block (see docker-compose.prod.yml).
-ARG NEXT_PUBLIC_ONLYOFFICE_PUBLIC_URL
-ENV NEXT_PUBLIC_ONLYOFFICE_PUBLIC_URL=${NEXT_PUBLIC_ONLYOFFICE_PUBLIC_URL}
+# NO build-time app config. `next build` inlines every NEXT_PUBLIC_* var it sees
+# into the static JS bundle, which would pin this image to ONE environment — the
+# image built here would carry that URL into production and no .env edit could
+# change it. The image must stay environment-neutral so the same tar deploys to
+# any air-gapped site.
+#
+# The two values that used to be baked in are now resolved per-request on the
+# server and handed to the browser:
+#   - Keycloak issuer   → /api/logout                (AUTH_KEYCLOAK_ISSUER)
+#   - OnlyOffice origin → /api/onlyoffice/config     (ONLYOFFICE_PUBLIC_URL)
+# Adding a NEXT_PUBLIC_* var here re-introduces the problem — don't.
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -72,7 +78,9 @@ USER nextjs
 
 EXPOSE 3000
 
+# Probe the public liveness route — "/" is auth-gated and answers 401 to a
+# cookie-less probe (see src/app/api/health/route.ts).
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    CMD node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]

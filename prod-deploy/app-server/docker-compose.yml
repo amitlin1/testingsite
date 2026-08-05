@@ -1,0 +1,233 @@
+# ===========================================================================
+# APP SERVER - production / air-gapped stack   (SINGLE HOST: app + KC + OO)
+# ===========================================================================
+# One host, one stack, four containers:
+#
+#   browser --> nginx :80 --+--> next-app  :3000      (the application)
+#                           +--> keycloak  :8080      (served under /auth)
+#           --> onlyoffice :8082                      (editor iframe, own port)
+#
+# All persistent state lives on the DB SERVER (PostgreSQL + MinIO). This stack is
+# stateless apart from OnlyOffice's scratch volumes, so it can be rebuilt at any
+# time without data loss.
+#
+# Every image is pre-built and shipped as a tar in ./images. Nothing is built
+# here and nothing is downloaded.
+#
+# ---------------------------------------------------------------------------
+# PUBLIC vs INTERNAL URLs - the thing to understand before editing this file
+# ---------------------------------------------------------------------------
+# This site is reached BY IP, and that forces a split.
+#
+# A container on this host CANNOT open a connection back to the host's own LAN
+# IP - Windows Firewall drops inbound LAN traffic arriving from the docker
+# bridge. (Measured: a container reaching the host LAN IP times out, while the
+# same request to a docker-network name returns instantly.) With a DNS name we
+# would give nginx a network alias and be done; an IP cannot be a network alias.
+#
+# So each direction gets its own address:
+#
+#   PUBLIC  (${APP_PUBLIC_URL}, an IP)      what the BROWSER is sent to
+#   INTERNAL (http://nginx, http://keycloak) what CONTAINERS call each other on
+#
+# This is safe for OIDC because Keycloak derives `iss` from KC_HOSTNAME, not
+# from the interface a request arrived on - a token fetched over the internal
+# URL still carries the public issuer, so validation succeeds.
+#
+# Everything is DERIVED from APP_PUBLIC_URL below; the `environment:` entries
+# override anything of the same name in .env, so a stale hand-edited URL cannot
+# break the stack.
+#
+# Usage (from this folder):
+#   scripts\1-load-images.ps1     # once
+#   copy .env.template .env       # then EDIT the marked block
+#   scripts\2-check-env.ps1       # validates .env before anything starts
+#   scripts\3-start.ps1
+#   scripts\4-verify.ps1
+# ===========================================================================
+
+name: shifthouse
+
+services:
+  # =========================================================================
+  # Next.js application
+  # =========================================================================
+  # The image is ENVIRONMENT-NEUTRAL: it contains no baked URLs. Everything the
+  # browser needs is resolved from this env at request time and delivered by a
+  # route handler, so the same tar runs at any site. Change a URL and restart -
+  # never rebuild.
+  next-app:
+    image: testingsite-next-app:latest
+    container_name: next-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+
+      # ---- PUBLIC (browser-facing) ----
+      - APP_PUBLIC_URL=${APP_PUBLIC_URL}
+      # The issuer the browser is redirected to AND the exact string `iss` is
+      # validated against. /auth is baked into the Keycloak image.
+      - AUTH_KEYCLOAK_ISSUER=${APP_PUBLIC_URL}/auth/realms/testing
+      # Auth.js's own external origin (it sits behind nginx).
+      - AUTH_URL=${APP_PUBLIC_URL}/api/auth
+      # Where the browser loads the OnlyOffice editor from.
+      - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL}
+
+      # ---- INTERNAL (container-to-container; see the note at the top) ----
+      # Back channel to Keycloak: discovery, code->token exchange, refresh and
+      # the admin REST calls behind the user-management page. Without this they
+      # would target the host IP and hang until timeout.
+      - KEYCLOAK_INTERNAL_ISSUER=http://keycloak:8080/auth/realms/testing
+      # How the OnlyOffice container reaches this app to fetch a document and to
+      # POST saves back. Points at nginx on the compose network.
+      - APP_INTERNAL_URL=http://nginx
+      # How this app reaches OnlyOffice to pull a saved file. No trailing slash.
+      - ONLYOFFICE_INTERNAL_URL=http://onlyoffice
+
+      # ---- DB SERVER ----
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}
+      - MINIO_ENDPOINT=http://${DB_HOST}:${MINIO_PORT:-9000}
+    networks:
+      - shifthouse-network
+    expose:
+      - "3000"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      # Probe /api/health, NOT "/" - every app route is auth-gated and the
+      # middleware answers a cookie-less non-browser request with 401, which
+      # would mark a healthy container unhealthy and stop nginx from starting.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # =========================================================================
+  # Keycloak - identity provider
+  # =========================================================================
+  # Its database lives on the DB SERVER and is seeded there from
+  # db-server/keycloak-seed/ BEFORE this stack is first started. This container
+  # holds no state of its own.
+  #
+  # There is no --import-realm here on purpose: the realm arrives with the SQL
+  # seed. (An import would be ignored anyway - Keycloak skips importing a realm
+  # that already exists, so that it can never clobber real users.)
+  keycloak:
+    image: keycloak-optimized:26.7.0
+    container_name: keycloak
+    restart: unless-stopped
+    command: ["start", "--optimized"]
+    env_file:
+      - .env
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://${DB_HOST}:${DB_PORT:-5432}/keycloak
+      # The public URL Keycloak is served at, INCLUDING /auth. This is what it
+      # stamps into `iss` and advertises in its discovery document, so it must
+      # match the issuer the app validates against - both derive from
+      # APP_PUBLIC_URL, so they cannot drift.
+      KC_HOSTNAME: ${APP_PUBLIC_URL}/auth
+      # NOTE: the /auth path itself is NOT set here. kc.http-relative-path is a
+      # BUILD-time option, baked into the image by keycloak/Dockerfile.prod.
+      # Passing KC_HTTP_RELATIVE_PATH at runtime to `start --optimized` makes
+      # Keycloak EXIT WITH CODE 2 rather than warn. (Verified.)
+      #
+      # nginx terminates the client connection and forwards over plain HTTP, so
+      # enable HTTP and trust the X-Forwarded-* headers.
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      # KC_DB_USERNAME / KC_DB_PASSWORD / KC_BOOTSTRAP_ADMIN_* come from .env.
+    networks:
+      - shifthouse-network
+    expose:
+      - "8080"
+    healthcheck:
+      # The image ships no curl and no wget, so probe with the bundled JDK.
+      #
+      # NOTE THE /auth PREFIX. KC_HTTP_RELATIVE_PATH applies to the MANAGEMENT
+      # interface on port 9000 as well as to the public one, so the readiness
+      # endpoint lives at /auth/health/ready - plain /health/ready returns 404.
+      # (Verified: 404 vs 200 on the same running container.) With the wrong path
+      # Keycloak never becomes healthy, and next-app - which waits on it - never
+      # starts at all, while Keycloak's own log says it started fine.
+      test:
+        - CMD-SHELL
+        - >-
+          echo 'public class H{public static void main(String[] a)throws Exception{System.exit(((java.net.HttpURLConnection)new java.net.URL("http://localhost:9000/auth/health/ready").openConnection()).getResponseCode()==200?0:1);}}'
+          > /tmp/H.java && java /tmp/H.java
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+  # =========================================================================
+  # OnlyOffice Document Server
+  # =========================================================================
+  # In-browser editor for .docx / .xlsx / .pptx attached to items.
+  # JWT_SECRET must match ONLYOFFICE_JWT_SECRET in the app env - it signs both
+  # the editor config and the file-download token.
+  #
+  # Published on its OWN host port rather than proxied under a path: OnlyOffice
+  # 9.x generates root-relative URLs (/cache/, /coauthoring/, /web-apps/) inside
+  # its editor iframe that do not honour a sub-path prefix, so a proxy mount
+  # silently breaks per-document cache loads.
+  #
+  # FIREWALL: this port must be reachable from END-USER BROWSERS, not just from
+  # the servers - the editor iframe is loaded by the client.
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    container_name: onlyoffice
+    restart: unless-stopped
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=${ONLYOFFICE_JWT_SECRET}
+      - JWT_HEADER=Authorization
+    volumes:
+      - onlyoffice-data:/var/www/onlyoffice/Data
+      - onlyoffice-logs:/var/log/onlyoffice
+    networks:
+      - shifthouse-network
+    ports:
+      - "${ONLYOFFICE_HOST_PORT:-8082}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # =========================================================================
+  # Nginx reverse proxy - the single public entrypoint
+  # =========================================================================
+  # Serves the app at / and Keycloak at /auth, so both share one origin and the
+  # OIDC issuer is a single consistent URL.
+  nginx:
+    image: testingsite-nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    networks:
+      - shifthouse-network
+    depends_on:
+      next-app:
+        condition: service_healthy
+
+volumes:
+  onlyoffice-data:
+    driver: local
+  onlyoffice-logs:
+    driver: local
+
+networks:
+  shifthouse-network:
+    driver: bridge
+    name: shifthouse-network

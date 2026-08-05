@@ -1,0 +1,193 @@
+# ===========================================================================
+# DB SERVER — production / air-gapped stack
+# ===========================================================================
+# PostgreSQL (two databases) + MinIO (object storage) + automated backups.
+#
+#   postgres :5432 ──┬── testingsite   the application database
+#                    └── keycloak      Keycloak's own database (users, realm)
+#   minio    :9000   S3 API   (the app stores every uploaded file here)
+#            :9001   admin console
+#
+# Both databases live here so ONE backup covers the application data AND the
+# user accounts. Losing the Keycloak database means losing every login.
+#
+# Data lives in named docker volumes and survives restarts and image upgrades.
+# Only `docker compose down -v` destroys it.
+#
+# Usage (from this folder):
+#   scripts\1-load-images.ps1     # once
+#   copy .env.template .env       # then EDIT it
+#   scripts\2-start.ps1
+#
+# FIREWALL: open 5432 (Postgres) and 9000 (MinIO API) to the APP SERVER'S IP
+# ONLY. 9001 (MinIO console) should be reachable only from admin machines.
+# ===========================================================================
+
+name: shifthouse-db
+
+services:
+  # =========================================================================
+  # PostgreSQL
+  # =========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      # ONE PostgreSQL serving BOTH databases, so one port covers both.
+      # POSTGRES_PORT changes only the HOST port; inside the docker network
+      # PostgreSQL is always on 5432, which is why the backup container below
+      # still connects to postgres:5432 regardless.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs ONCE, on a fresh volume, before postgres accepts outside
+      # connections: creates the keycloak role + database, then builds the
+      # application schema. On an EXISTING volume these are ignored — use
+      # scripts\3-create-keycloak-db.ps1 / apply init\02-app-schema.sql by hand.
+      - ./init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - db-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    shm_size: 256mb
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "timezone=UTC"
+
+  # =========================================================================
+  # MinIO — S3-compatible object storage
+  # =========================================================================
+  # Holds every uploaded file: item attachments, signatures and reference-item
+  # images. The application creates its buckets on first use.
+  minio:
+    image: minio/minio:latest
+    container_name: FileServiceDB
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    env_file:
+      - .env
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"   # S3 API — the app connects here
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # admin UI — restrict to trusted IPs
+    networks:
+      - db-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # =========================================================================
+  # MinIO backup — incremental mirror to a host folder
+  # =========================================================================
+  # MinIO's own versioning (enabled by the app) protects against overwrite and
+  # delete INSIDE the store; this mirror protects against losing the volume.
+  # `mc mirror` runs WITHOUT --remove, so a file deleted in the bucket stays in
+  # the backup folder and remains recoverable.
+  minio-backup:
+    image: minio/minio:latest
+    container_name: FileServiceDB-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
+      - MINIO_BUCKET=${MINIO_BUCKET:-digitalfactory-files}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until mc alias set src http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+          echo "[minio-backup] waiting for minio..."; sleep 5;
+        done
+        while true; do
+          echo "[minio-backup] $$(date -u +%FT%TZ) mirroring $$MINIO_BUCKET -> /backup";
+          mc mirror --overwrite src/"$$MINIO_BUCKET" /backup || echo "[minio-backup] mirror failed";
+          sleep "$$BACKUP_INTERVAL_SECONDS";
+        done
+    volumes:
+      - "${BACKUP_FILES_PATH:-C:/backups/files}:/backup"
+    networks:
+      - db-network
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  # =========================================================================
+  # PostgreSQL backup — daily + monthly, gzipped, BOTH databases
+  # =========================================================================
+  # Each cycle (default once a day) dumps the application database AND the
+  # keycloak database:
+  #   - DAILY dumps   -> /backup/daily    (pruned after BACKUP_DAILY_RETENTION_DAYS)
+  #   - MONTHLY dumps -> /backup/monthly  (one per month, NEVER pruned)
+  # The monthly copy is idempotent: if this month's file already exists it is
+  # left alone, so restarts and missed days never duplicate or skip.
+  #
+  # The keycloak dump is what makes user accounts recoverable — restoring only
+  # the app database would leave a working system nobody can log into.
+  postgres-backup:
+    image: postgres:16-alpine
+    container_name: postgres-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
+      - BACKUP_DAILY_RETENTION_DAYS=${BACKUP_DAILY_RETENTION_DAYS:-7}
+      - KEYCLOAK_DB_NAME=${KEYCLOAK_DB_NAME:-keycloak}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /backup/daily /backup/monthly;
+        while true; do
+          TS=$$(date -u +%Y%m%d-%H%M%S);
+          MONTH=$$(date -u +%Y-%m);
+          for DB in "$$POSTGRES_DB" "$$KEYCLOAK_DB_NAME"; do
+            echo "[postgres-backup] $$TS dumping $$DB";
+            if PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$DB" | gzip > /backup/daily/$$DB-$$TS.sql.gz; then
+              echo "[postgres-backup] wrote /backup/daily/$$DB-$$TS.sql.gz";
+              if [ ! -f /backup/monthly/$$DB-$$MONTH.sql.gz ]; then
+                cp /backup/daily/$$DB-$$TS.sql.gz /backup/monthly/$$DB-$$MONTH.sql.gz;
+                echo "[postgres-backup] wrote permanent /backup/monthly/$$DB-$$MONTH.sql.gz";
+              fi;
+            else
+              echo "[postgres-backup] dump of $$DB FAILED"; rm -f /backup/daily/$$DB-$$TS.sql.gz;
+            fi;
+          done;
+          find /backup/daily -name '*.sql.gz' -type f -mtime +$$BACKUP_DAILY_RETENTION_DAYS -delete 2>/dev/null || true;
+          sleep "$$BACKUP_INTERVAL_SECONDS";
+        done
+    volumes:
+      - "${BACKUP_PG_PATH:-C:/backups/postgres}:/backup"
+    networks:
+      - db-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+    driver: local
+  minio-data:
+    driver: local
+  # Backups go to HOST folders (see BACKUP_*_PATH in .env), not named volumes —
+  # so they are easy to copy off-site and survive `docker compose down -v`.
+
+networks:
+  db-network:
+    driver: bridge
+    name: db-network

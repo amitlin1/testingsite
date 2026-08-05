@@ -17,7 +17,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { fullLogout } from "@/lib/auth/logout";
-import { resolveAccess } from "@/lib/routes";
+import { canSeeInNav } from "@/lib/routes";
 
 // Icons
 import { Settings as SettingsIcon } from "@/components/ui/icons";
@@ -133,6 +133,7 @@ export default function NavBar({
     manager: "מנהל",
     tester: "בודק",
     storekeeper: "מחסנאי",
+    mashan: "משאן",
   };
   const roleLabel =
     (session?.roles ?? []).map((r) => ROLE_LABELS_HE[r]).find(Boolean) ?? "משתמש";
@@ -148,12 +149,8 @@ export default function NavBar({
 
   // Hide nav entries the current role may not open (same source of truth as the
   // middleware, so the sidebar never offers a link that ends in /no-auth).
-  const visibleMainLinks = mainLinks.filter(
-    (l) => resolveAccess(l.href, roles).kind !== "forbidden",
-  );
-  const visibleSettingsLinks = settingsLinks.filter(
-    (s) => resolveAccess(s.path, roles).kind !== "forbidden",
-  );
+  const visibleMainLinks = mainLinks.filter((l) => canSeeInNav(l.href, roles));
+  const visibleSettingsLinks = settingsLinks.filter((s) => canSeeInNav(s.path, roles));
 
   const isSettingsActive = pathname?.startsWith("/settings");
 

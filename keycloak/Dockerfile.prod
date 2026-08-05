@@ -1,7 +1,13 @@
-# Optimized production Keycloak image.
+# Optimized production Keycloak image — SELF-CONTAINED for air-gap transfer.
 #
 # Pre-builds Keycloak with the Postgres provider + health/metrics baked in, so
-# the runtime can use `start --optimized` (fast boot, no per-start augmentation).
+# the runtime can use `start --optimized` (fast boot, no per-start augmentation),
+# and BAKES IN the `shifthouse` login theme so the shipped tar needs no theme
+# bind-mount on the target machine (Windows bind-mounts of many small files are
+# the usual source of "theme not found" / permission surprises).
+#
+# BUILD CONTEXT: the repo's `keycloak/` directory.
+#   docker build -t keycloak-optimized:26.7.0 -f keycloak/Dockerfile.prod keycloak
 #
 # AIR-GAP: pull the base image on a connected machine first, then transfer it:
 #   docker pull quay.io/keycloak/keycloak:26.7.0
@@ -11,6 +17,21 @@ FROM quay.io/keycloak/keycloak:26.7.0 AS builder
 ENV KC_DB=postgres
 ENV KC_HEALTH_ENABLED=true
 ENV KC_METRICS_ENABLED=true
+
+# Serve Keycloak under /auth so nginx can host it on the SAME origin as the app
+# (that is what lets the OIDC issuer be one string resolving identically for the
+# browser and for next-app).
+#
+# THIS MUST BE SET AT BUILD TIME. kc.http-relative-path is a BUILD-time option:
+# passing KC_HTTP_RELATIVE_PATH as a runtime env var to `start --optimized` does
+# NOT take effect — Keycloak prints "build time options have values that differ
+# from what is persisted" and EXITS WITH CODE 2. Changing the path means
+# rebuilding this image, not editing the compose file.
+ENV KC_HTTP_RELATIVE_PATH=/auth
+
+# Themes must be present BEFORE `kc.sh build` so the optimized image indexes them.
+COPY themes/ /opt/keycloak/themes/
+
 RUN /opt/keycloak/bin/kc.sh build
 
 FROM quay.io/keycloak/keycloak:26.7.0

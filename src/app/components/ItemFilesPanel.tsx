@@ -428,7 +428,7 @@ export default function ItemFilesPanel({
 
                 <Stack direction="row" spacing={0.5}>
                   {(isTextLike(file.fileName) || isOfficeDoc(file.fileName)) && (
-                    <Tooltip title={isTextLike(file.fileName) ? "ערוך" : "פתח ב-OnlyOffice"}>
+                    <Tooltip title="ערוך">
                       <IconButton size="small" color="primary" onClick={() => handleOpen(file)}>
                         {isTextLike(file.fileName) ? (
                           <EditNoteIcon fontSize="small" />

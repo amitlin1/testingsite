@@ -18,8 +18,8 @@ declare module "next-auth" {
     } & DefaultSession["user"];
     /** Merged realm + client roles. */
     roles: string[];
-    /** Raw access token — only needed if calling external resource servers. */
-    accessToken?: string;
+    // NOTE: the raw access token is intentionally absent. Projecting it would
+    // expose a live bearer token through /api/auth/session (see auth.ts).
     /** Raw id token — passed as id_token_hint to Keycloak RP-initiated logout. */
     idToken?: string;
     /** Set to "RefreshAccessTokenError" when silent refresh terminally failed.

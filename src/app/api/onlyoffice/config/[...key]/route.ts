@@ -18,7 +18,29 @@ export const runtime = 'nodejs';
  * refuses configs we didn't issue.
  */
 
-const APP_PUBLIC_URL = (process.env.APP_PUBLIC_URL || 'http://localhost').replace(/\/+$/, '');
+// The URL OnlyOffice's SERVER uses to reach this app — it fetches the source
+// document and POSTs saves back. That is a back-channel call between two
+// containers, NOT something the browser follows, so it must be an address the
+// onlyoffice container can actually open.
+//
+// On an air-gapped host reached by IP, APP_PUBLIC_URL is the host's LAN IP, and
+// a container cannot connect back to it (Windows Firewall drops inbound LAN
+// traffic arriving from the docker bridge). The document would never load and
+// saves would silently fail. APP_INTERNAL_URL points at nginx over the compose
+// network instead. Falls back to APP_PUBLIC_URL when unset. See auth.ts.
+const APP_INTERNAL_URL = (
+  process.env.APP_INTERNAL_URL ||
+  process.env.APP_PUBLIC_URL ||
+  'http://localhost'
+).replace(/\/+$/, '');
+
+// Browser-reachable DocServer origin, handed to the client in the response so it
+// knows where to load DocsAPI (api.js) from. Deliberately resolved HERE and not
+// from a NEXT_PUBLIC_* var in the component: `next build` inlines NEXT_PUBLIC_*
+// into the static bundle, which would pin the built image to a single
+// environment — fatal for an air-gapped tar built here and run in production.
+// Route handlers read process.env at request time, so one image fits any env.
+const DOC_SERVER_URL = (process.env.ONLYOFFICE_PUBLIC_URL || '/onlyoffice').replace(/\/+$/, '');
 
 const EXT_TO_DOCTYPE: Record<string, 'word' | 'cell' | 'slide'> = {
   docx: 'word', doc: 'word', odt: 'word', rtf: 'word', txt: 'word',
@@ -87,8 +109,10 @@ export async function GET(
 
     const encodedPath = objectKey.split('/').map(encodeURIComponent).join('/');
     const dlToken = await signJwt({ key: objectKey, purpose: 'download' }, 3600);
-    const documentUrl = `${APP_PUBLIC_URL}/api/files/download/${encodedPath}?dl=${encodeURIComponent(dlToken)}`;
-    const callbackUrl = `${APP_PUBLIC_URL}/api/onlyoffice/callback/${encodedPath}?worker_id=${encodeURIComponent(workerId)}`;
+    // Both URLs are consumed by the OnlyOffice SERVER, never by the browser, so
+    // both use the internal address (see APP_INTERNAL_URL above).
+    const documentUrl = `${APP_INTERNAL_URL}/api/files/download/${encodedPath}?dl=${encodeURIComponent(dlToken)}`;
+    const callbackUrl = `${APP_INTERNAL_URL}/api/onlyoffice/callback/${encodedPath}?worker_id=${encodeURIComponent(workerId)}`;
 
     const config = {
       document: {
@@ -120,7 +144,11 @@ export async function GET(
 
     const token = await signJwt(config as Record<string, unknown>);
 
-    return NextResponse.json({ ...config, token });
+    // `_docServerUrl` is transport-only: it is NOT part of the signed `config`,
+    // and the client strips it before handing the rest to DocsAPI.DocEditor.
+    // Passing an unsigned extra field through to OnlyOffice would break its
+    // token check (it validates the signature against the config it receives).
+    return NextResponse.json({ ...config, token, _docServerUrl: DOC_SERVER_URL });
   } catch (error) {
     console.error('OnlyOffice config error:', error);
     return NextResponse.json({ error: 'שגיאה ביצירת תצורת עורך' }, { status: 500 });

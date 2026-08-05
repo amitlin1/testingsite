@@ -45,6 +45,12 @@ export const PUT = withAuth(
     }
     const isSelf = !!targetUsername && targetUsername === ctx.session.user.preferredUsername;
 
+    // One body can trip both the role guard and the enabled guard; the answer
+    // can't change mid-request, so resolve it at most once.
+    let lastManager: boolean | undefined;
+    const isLastManager = async () =>
+      (lastManager ??= await isLastEnabledManager(id));
+
     try {
       if (
         typeof body.firstName === "string" ||
@@ -72,7 +78,7 @@ export const PUT = withAuth(
           if (isSelf) {
             return NextResponse.json({ error: "לא ניתן להוריד לעצמך את הרשאת המנהל" }, { status: 400 });
           }
-          if (await isLastEnabledManager(id)) {
+          if (await isLastManager()) {
             return NextResponse.json({ error: "לא ניתן להסיר את המנהל האחרון מהמערכת" }, { status: 400 });
           }
         }
@@ -83,7 +89,7 @@ export const PUT = withAuth(
           if (isSelf) {
             return NextResponse.json({ error: "לא ניתן להשבית את המשתמש שאיתו אתה מחובר" }, { status: 400 });
           }
-          if (await isLastEnabledManager(id)) {
+          if (await isLastManager()) {
             return NextResponse.json({ error: "לא ניתן להשבית את המנהל האחרון מהמערכת" }, { status: 400 });
           }
         }

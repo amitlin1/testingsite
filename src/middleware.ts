@@ -242,8 +242,29 @@ export default async function middleware(
   return forwarded;
 }
 
-// Matcher excludes Auth.js routes, build assets, favicon, and any path with a
-// file extension.
+// TWO patterns on purpose — a single "skip anything containing a dot" rule was
+// an auth bypass:
+//
+//   GET /api/items/1.  →  still matches the [id] route (parseInt("1.") === 1),
+//   but the pathname contains a dot, so middleware never ran and the handler —
+//   which has no guard of its own — served the data to an anonymous caller.
+//   Only ~20 of the ~100 /api routes self-guard, so this reached most of them.
+//
+// So: keep the extension skip for PAGES and static assets (an asset request must
+// not be redirected to /login), and match EVERY /api route unconditionally.
+// Cookieless server-to-server callers (/api/cron, /api/onlyoffice/callback,
+// /api/files/download) stay reachable via PUBLIC_ROUTES in src/lib/routes.ts,
+// which is checked first in the handler above — not via a pattern loophole.
+//
+// NOTE: matchers see the pathname with basePath already stripped. In the
+// non-standard setup where a proxy does NOT strip it, /<base>/api/... is caught
+// by the first pattern instead (it isn't "api/"-prefixed) — see pathWithoutBase.
 export const config = {
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+  matcher: [
+    // Pages + assets: skip Auth.js internals, Next build output, and anything
+    // that looks like a file (has an extension).
+    "/((?!api/|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+    // Every API route except Auth.js's own — dots included.
+    "/api/((?!auth).*)",
+  ],
 };

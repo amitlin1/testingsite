@@ -5,6 +5,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${msg("loginTitle")} · בקרת בדיקות</title>
+  <#-- Inline data-URI icon: without it the browser requests /favicon.ico from
+       the Keycloak root, which Keycloak does not serve → a 404 in the console
+       on the very first screen users (and demo audiences) see. Inline rather
+       than a resource file so it costs no extra request and cannot 404. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230066cc'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11.5' fill='none' stroke='%23ffffff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <#list properties.styles?split(' ') as style>
     <link rel="stylesheet" href="${url.resourcesPath}/${style}">
   </#list>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { settingsLinks } from "../settingsNav";
-import { resolveAccess } from "@/lib/routes";
+import { canSeeInNav } from "@/lib/routes";
 
 /**
  * Settings secondary navigation — a horizontal tab strip pinned to the top of
@@ -17,9 +17,11 @@ export default function SettingsSubNav() {
   const pathname = usePathname();
   // Only show tabs the current role may open (same gate as the middleware), so a
   // tester never sees "לקוחות"/"משתמשים והרשאות" tabs that would bounce to /no-auth.
+  // canSeeInNav (not resolveAccess) so the tab strip stays correct while the
+  // session is still loading — see the note on canSeeInNav.
   const { data: session } = useSession();
   const roles = session?.roles ?? null;
-  const links = settingsLinks.filter((l) => resolveAccess(l.path, roles).kind !== "forbidden");
+  const links = settingsLinks.filter((l) => canSeeInNav(l.path, roles));
 
   return (
     <Box

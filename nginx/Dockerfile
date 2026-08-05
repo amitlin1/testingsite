@@ -17,9 +17,13 @@ RUN chmod +x /entrypoint.sh
 # Create directory for runtime config
 RUN mkdir -p /usr/share/nginx/html
 
-# Health check
+# Health check.
+# Probe 127.0.0.1, NOT "localhost": in this image localhost resolves to [::1]
+# first, while nginx.conf binds IPv4 only (`listen 80;`). wget then fails with
+# "connection refused" and the container is reported unhealthy while it is in
+# fact serving traffic normally.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1/health || exit 1
 
 EXPOSE 80
 

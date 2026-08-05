@@ -10,13 +10,26 @@ import { NextResponse } from "next/server";
  *
  * Contract: the scheduler sends `x-cron-secret: <CRON_SECRET>`. Then:
  *   - CRON_SECRET set   → require an exact header match, else 401.
- *   - CRON_SECRET unset → OPEN (returns null), so local/dev manual runs stay
- *     frictionless.  ⚠ PRODUCTION MUST set CRON_SECRET on the server AND have the
- *     scheduler send the matching header, or these endpoints are unauthenticated.
+ *   - CRON_SECRET unset → CLOSED (503). The endpoints run unauthenticated
+ *     transactions against production data, so "not configured" must mean "off",
+ *     not "open to anyone on the network". This used to return null (open) for
+ *     dev convenience; a deploy that forgot the variable silently published
+ *     snapshot creation to the whole network.
+ *
+ * To run a job manually (dev or prod), set CRON_SECRET on the server and send
+ * the matching header — there is no unauthenticated path any more.
  */
 export function cronSecretGuard(req: Request): NextResponse | null {
   const expected = process.env.CRON_SECRET;
-  if (!expected) return null; // not configured → open (dev convenience)
+  if (!expected) {
+    console.error(
+      "[cron] CRON_SECRET is not set — /api/cron/* is disabled. Set it on the server and in the scheduler to enable these jobs.",
+    );
+    return NextResponse.json(
+      { error: "Cron endpoints are disabled (CRON_SECRET not configured)" },
+      { status: 503 },
+    );
+  }
   const provided = req.headers.get("x-cron-secret") ?? "";
   if (provided === expected) return null;
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

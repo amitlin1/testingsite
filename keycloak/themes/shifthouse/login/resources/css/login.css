@@ -54,8 +54,12 @@ html.sh-html,body.sh-body{margin:0;background:var(--color-canvas-parchment);
   border:1px solid var(--color-hairline);border-radius:var(--r-field);padding-inline:13px;}
 .sh-field:focus-within{border-color:var(--color-primary-focus);box-shadow:0 0 0 3px rgba(0,113,227,.15);}
 .sh-field.error{border-color:var(--color-destructive);}
+.sh-field.readonly{background:var(--color-canvas-parchment);}
+.sh-field.readonly:focus-within{border-color:var(--color-hairline);box-shadow:none;}
 .sh-field input{flex:1;min-width:0;border:0;outline:none;background:transparent;font-size:16px;color:var(--color-ink);height:100%;font-family:inherit;}
+.sh-field input:disabled{color:var(--color-ink-muted-48);-webkit-text-fill-color:var(--color-ink-muted-48);cursor:not-allowed;}
 .sh-field-error{font-size:12.5px;color:var(--color-destructive);margin-top:6px;}
+.sh-req{color:var(--color-destructive);font-weight:700;}
 .sh-btn{width:100%;height:48px;border:0;border-radius:var(--r-pill);
   font-size:17px;font-weight:600;cursor:pointer;background:var(--color-primary);color:#fff;font-family:inherit;}
 .sh-btn:hover{background:var(--color-primary-hover);} .sh-btn:active{transform:scale(.985);}

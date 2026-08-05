@@ -8,7 +8,7 @@
 // regardless of where they're assigned. realm_access also carries noise
 // (default-roles-testing, offline_access, uma_authorization) — only the names
 // below carry meaning in this app.
-export const APP_ROLES = ["manager", "tester", "storekeeper"] as const;
+export const APP_ROLES = ["manager", "tester", "storekeeper", "mashan"] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
 

@@ -55,9 +55,22 @@ next-env.d.ts
 *.zst
 *.cab
 
-# Air-gap docker image bundles (e.g. airgap-deploy/**/images/*.tar)
+# Air-gap docker image bundles (e.g. prod-deploy/**/images/*.tar)
 **/images/*.tar
 **/images/*.tar.gz
+
+# Vendored portable DBeaver shipped alongside the air-gap bundles: a third-party
+# binary distribution (~75 MB of JRE per copy), not project source.
+prod-deploy/*/dbeaver/
+
+# ---------- prod-deploy: everything that carries a real secret ----------
+# The TEMPLATES are committed; the filled-in files never are.
+# (the filled-in prod-deploy/*/.env files are covered by the .env rules further
+# down, together with the negation that keeps the .env.template files tracked)
+#
+# Produced by scripts/export-keycloak-seed.ps1 — a full dump of the Keycloak
+# database, containing password hashes and both client secrets.
+prod-deploy/db-server/keycloak-seed/keycloak-seed.sql
 
 # ---------- Disk / VM / container images ----------
 *.iso
@@ -97,6 +110,11 @@ next-env.d.ts
 # ============================================================
 .env
 .env.*
+# ...but the deployment TEMPLATES carry no secrets and MUST be committed - they
+# are the only documentation of what each server needs. This negation has to sit
+# AFTER the `.env.*` rule above: within one .gitignore the LAST matching pattern
+# wins, so a negation placed earlier is silently overridden.
+!prod-deploy/*/.env.template
 *.pem
 *.key
 *.crt

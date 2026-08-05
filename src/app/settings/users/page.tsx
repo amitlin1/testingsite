@@ -35,7 +35,7 @@ import { apiFetch } from "@/lib/api/client";
 import { useSession } from "next-auth/react";
 
 // ---- types (shape returned by GET /api/users) ----
-type Role = "manager" | "tester" | "storekeeper";
+type Role = "manager" | "tester" | "storekeeper" | "mashan";
 type UserStatus = "active" | "disabled" | "locked" | "pending";
 interface AdminUser {
   id: string;
@@ -51,11 +51,12 @@ interface AdminUser {
 }
 
 // ---- display maps ----
-const ROLE_LABEL: Record<Role, string> = { manager: "מנהל", tester: "בודק", storekeeper: "מחסנאי" };
-const ROLE_CHIP: Record<Role, "primary" | "success" | "warning"> = {
+const ROLE_LABEL: Record<Role, string> = { manager: "מנהל", tester: "בודק", storekeeper: "מחסנאי", mashan: "משאן" };
+const ROLE_CHIP: Record<Role, "primary" | "success" | "warning" | "info"> = {
   manager: "primary",
   tester: "success",
   storekeeper: "warning",
+  mashan: "info",
 };
 const STATUS_META: Record<UserStatus, { label: string; dot: string }> = {
   active: { label: "פעיל", dot: "var(--color-status-approved)" },
@@ -68,6 +69,7 @@ const ROLE_DOT: Record<Role, string> = {
   manager: "var(--color-primary)",
   tester: "var(--color-status-approved)",
   storekeeper: "var(--color-status-late)",
+  mashan: "var(--color-ink-muted-48)",
 };
 
 function initials(u: AdminUser): string {
@@ -193,6 +195,7 @@ export default function UsersPage() {
     manager: users.filter((u) => u.role === "manager").length,
     tester: users.filter((u) => u.role === "tester").length,
     storekeeper: users.filter((u) => u.role === "storekeeper").length,
+    mashan: users.filter((u) => u.role === "mashan").length,
   };
 
   // ---- actions ----
@@ -417,6 +420,7 @@ export default function UsersPage() {
     { key: "manager", label: "מנהל", dot: ROLE_DOT.manager, count: counts.manager },
     { key: "tester", label: "בודק", dot: ROLE_DOT.tester, count: counts.tester },
     { key: "storekeeper", label: "מחסנאי", dot: ROLE_DOT.storekeeper, count: counts.storekeeper },
+    { key: "mashan", label: "משאן", dot: ROLE_DOT.mashan, count: counts.mashan },
   ];
 
   return (
@@ -437,6 +441,7 @@ export default function UsersPage() {
           <ToggleButton value="manager">מנהל</ToggleButton>
           <ToggleButton value="tester">בודק</ToggleButton>
           <ToggleButton value="storekeeper">מחסנאי</ToggleButton>
+          <ToggleButton value="mashan">משאן</ToggleButton>
         </ToggleButtonGroup>
       </SettingsToolbar>
 
@@ -548,6 +553,7 @@ export default function UsersPage() {
                 <ToggleButton value="manager">מנהל</ToggleButton>
                 <ToggleButton value="tester">בודק</ToggleButton>
                 <ToggleButton value="storekeeper">מחסנאי</ToggleButton>
+                <ToggleButton value="mashan">משאן</ToggleButton>
               </ToggleButtonGroup>
               {!!editing && editing.username === currentUsername && (
                 <Typography sx={{ fontSize: 12, color: "#9a9aa0", mt: 0.5 }}>

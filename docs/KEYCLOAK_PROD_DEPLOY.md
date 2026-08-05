@@ -107,7 +107,9 @@ Restart the app. **Do not set `IS_DEV`.**
 ## 7. Post-deploy checklist
 - [ ] `https://<app-host>/` → themed Keycloak login → login works, role in session.
 - [ ] `/settings/users` reachable only by a manager (tester → `/no-auth`).
-- [ ] Cron `.bat`s send `x-cron-secret: $CRON_SECRET`.
+- [ ] `CRON_SECRET` set on the app **and** visible to the Task Scheduler account —
+      `/api/cron/*` answers 503 without it, and the `.bat`s abort instead of
+      sending a bogus header. Verify one job actually returns 200.
 - [ ] OnlyOffice edit→save round-trip works.
 - [ ] Bootstrap Keycloak admin password rotated/removed.
 - [ ] `.env.keycloak.prod` + app prod env backed up securely, NOT in git.

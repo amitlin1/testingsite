@@ -139,7 +139,12 @@ async function attemptRefresh(
   refreshToken: string,
   attempt: number,
 ): Promise<RefreshAttempt> {
-  const issuer = process.env.AUTH_KEYCLOAK_ISSUER;
+  // Back-channel call from this process, so use the INTERNAL issuer when one is
+  // configured (see SPLIT-HORIZON KEYCLOAK URLs below). Using the public URL
+  // here would make every silent token refresh hang until REFRESH_TIMEOUT_MS on
+  // an IP-addressed air-gapped host, logging users out mid-session.
+  const issuer =
+    process.env.KEYCLOAK_INTERNAL_ISSUER || process.env.AUTH_KEYCLOAK_ISSUER;
   const clientId = process.env.AUTH_KEYCLOAK_ID;
   const clientSecret = process.env.AUTH_KEYCLOAK_SECRET;
   if (!issuer || !clientId || !clientSecret) {
@@ -236,6 +241,34 @@ const idpHint = process.env.AUTH_KEYCLOAK_IDP_HINT ?? "";
 const keycloakAuthParams: Record<string, string> = { scope: "openid profile email" };
 if (idpHint) keycloakAuthParams.kc_idp_hint = idpHint;
 
+// ---------------------------------------------------------------------------
+// SPLIT-HORIZON KEYCLOAK URLs
+// ---------------------------------------------------------------------------
+// AUTH_KEYCLOAK_ISSUER is the PUBLIC address (what the browser uses, and the
+// exact string Keycloak stamps into `iss`). KEYCLOAK_INTERNAL_ISSUER, when set,
+// is the address THIS PROCESS uses for its own back-channel calls.
+//
+// Why they must be allowed to differ: on an air-gapped Windows/Docker Desktop
+// host reached by IP, the public address is the host's LAN IP. A container
+// cannot open a connection back to that IP — Windows Firewall drops inbound LAN
+// traffic arriving from the docker bridge — so every server-side call to the
+// public URL hangs until it times out. With a DNS name we solved this with a
+// docker network alias; an IP cannot be a network alias, so the back channel
+// gets its own URL instead (http://keycloak:8080/... over the compose network).
+//
+// This is SAFE because Keycloak derives `iss` from KC_HOSTNAME, not from the
+// interface a request arrived on: a token fetched over the internal URL still
+// carries the PUBLIC issuer, so validation against AUTH_KEYCLOAK_ISSUER passes.
+// Discovery works for the same reason — the document fetched internally still
+// advertises the public issuer, which is what Auth.js checks.
+//
+// Unset (dev, or a single-host deployment where the public URL resolves from
+// inside) → everything falls back to the public issuer and behaviour is
+// unchanged.
+const PUBLIC_ISSUER = process.env.AUTH_KEYCLOAK_ISSUER;
+const INTERNAL_ISSUER =
+  process.env.KEYCLOAK_INTERNAL_ISSUER || process.env.AUTH_KEYCLOAK_ISSUER;
+
 // Roles can be REALM roles (realm_access.roles) OR CLIENT roles
 // (resource_access[clientId].roles). Read and MERGE both — a user whose roles
 // are client-scoped would otherwise have zero permissions. Merging only ADDS.
@@ -263,8 +296,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         Keycloak({
           clientId: process.env.AUTH_KEYCLOAK_ID,
           clientSecret: process.env.AUTH_KEYCLOAK_SECRET,
-          issuer: process.env.AUTH_KEYCLOAK_ISSUER,
-          authorization: { params: keycloakAuthParams },
+          // PUBLIC — the value `iss` is validated against.
+          issuer: PUBLIC_ISSUER,
+          // BACK CHANNEL (this process -> Keycloak). See SPLIT-HORIZON above.
+          // Explicit endpoints override whatever discovery advertises, so the
+          // public URLs in the discovery document don't drag us back onto the
+          // unreachable path.
+          wellKnown: `${INTERNAL_ISSUER}/.well-known/openid-configuration`,
+          token: `${INTERNAL_ISSUER}/protocol/openid-connect/token`,
+          userinfo: `${INTERNAL_ISSUER}/protocol/openid-connect/userinfo`,
+          // FRONT CHANNEL (browser -> Keycloak) — must stay PUBLIC, the user's
+          // browser is the one following this URL.
+          authorization: {
+            url: `${PUBLIC_ISSUER}/protocol/openid-connect/auth`,
+            params: keycloakAuthParams,
+          },
         }),
       ]
     : [],
@@ -412,7 +458,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     /** Project the JWT onto the Session the client sees. */
     async session({ session, token }) {
       session.roles = token.roles ?? [];
-      session.accessToken = token.access_token;
+      // The raw ACCESS token is deliberately NOT projected here. /api/auth/session
+      // is readable by any script on the page, so exposing it would hand a live
+      // bearer token (carrying realm_access.roles) to any XSS — the exact thing
+      // the HttpOnly session cookie prevents. Nothing in the app calls an
+      // external resource server, so there is no reader. If one is ever added,
+      // proxy the call through a route handler instead of re-adding this line.
       // Expose id_token so the client logout helper can pass it as id_token_hint.
       session.idToken = token.id_token;
       session.error = token.error;
