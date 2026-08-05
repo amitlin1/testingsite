@@ -1,23 +1,42 @@
 # Keycloak seed — the realm, as SQL
 
 This is how Keycloak gets its configuration and its user accounts. Two files,
-run in DBeaver against the `keycloak` database, in this order:
+applied to the `keycloak` database in this order:
 
 1. **`keycloak-seed.sql`** — a complete copy of the development Keycloak
    database: the `testing` realm, both clients with their secrets, the roles,
    the `shifthouse` login theme settings, the token lifespans, and the user
    accounts with their password hashes.
-2. **`fixup-after-restore.sql`** — points that copy at *this* server. Edit the
-   one line marked `<<<< EDIT THIS`, then run the whole file.
+2. **`fixup-after-restore.sql`** — points that copy at *this* server.
 
-**Keycloak must be stopped while both run.** Realm and client data are cached in
-memory (Infinispan); editing the database underneath a running Keycloak leaves
-it serving the old values with nothing logged to say why.
+**Do not run these by hand.** Use the two scripts, which drive `psql` inside the
+postgres container and verify their own results:
 
 ```powershell
-# on the APP server
+cd db-server
+.\scripts\5-seed-keycloak.ps1
+.\scripts\6-fixup-keycloak.ps1 -AppUrl http://<APP-SERVER-IP>
+```
+
+The address is a parameter, so there is no line to edit and no way to run the
+fixup with a placeholder still in it.
+
+> **Never open these files in DBeaver.** Keycloak stores i18n keys such as
+> `${offlineAccessScopeConsentText}` as ordinary data. DBeaver's SQL editor
+> reads `${...}` as *its own* variables and pops a "Bind parameter(s)" dialog;
+> accepting it substitutes empty strings and corrupts the realm with no error
+> raised — you find out when consent screens render blank. `psql` executes the
+> file exactly as written.
+
+**Keycloak must be stopped while these run.** Realm and client data are cached
+in memory (Infinispan); editing the database underneath a running Keycloak
+leaves it serving the old values with nothing logged to say why. During a first
+install it has never started, so there is nothing to stop.
+
+```powershell
+# only when re-running against a live system, on the APP server
 docker compose stop keycloak
-#   ... run both files in DBeaver on the DB server ...
+#   ... run the two scripts on the DB server ...
 docker compose start keycloak
 ```
 
@@ -36,9 +55,9 @@ once the host is the same those two rows collapse into one value — which
 violates the unique constraint on `(client_id, value)`. The fixup inserts the
 de-duplicated results and drops the originals instead of running an `UPDATE`.
 
-**2. The restored tables belong to the wrong role.** You will run the seed in
-DBeaver as the admin/superuser, which makes that account the owner of all 100
-tables. Keycloak connects as the `keycloak` role and would fail to start with:
+**2. The restored tables belong to the wrong role.** The seed runs as the
+admin/superuser, which makes that account the owner of all 100 tables. Keycloak
+connects as the `keycloak` role and would fail to start with:
 
 ```
 ERROR: permission denied for table databasechangelog

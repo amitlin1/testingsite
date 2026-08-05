@@ -118,10 +118,15 @@ if ($appUrlHost) {
 }
 
 # ---- 3. the DB server ------------------------------------------------------
+# A loopback DB_HOST is the single most expensive mistake here: inside a
+# container it means the CONTAINER itself, so Keycloak looks for PostgreSQL in
+# its own filesystem and only fails minutes into startup, buried in a Java stack
+# trace ending "Connection to 127.0.0.1:5432 refused".
 $dbHost = Get-Val "DB_HOST"
-if ($dbHost -eq "localhost" -or $dbHost -eq "127.0.0.1") {
-    $errors += "DB_HOST is $dbHost. From inside a container that means the CONTAINER itself, " +
-               "not this machine - use the DB server's real IP."
+if ($dbHost -in @("localhost", "127.0.0.1", "::1", "0.0.0.0")) {
+    $errors += "DB_HOST is '$dbHost' - inside a container that means the CONTAINER ITSELF, " +
+               "not this machine. Separate DB server: use its real IP. " +
+               "App and database on ONE machine: use DB_HOST=host.docker.internal"
 }
 
 # ---- 4. dangerous rather than merely wrong ---------------------------------

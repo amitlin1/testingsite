@@ -45,10 +45,11 @@ prod-deploy/
 │   │   ├── 01-create-keycloak-db.sh    creates the keycloak DB + role
 │   │   └── 02-app-schema.sql           builds the whole application schema
 │   ├── keycloak-seed/          the Keycloak realm, as SQL
-│   │   ├── keycloak-seed.sql          restore this in DBeaver
-│   │   ├── fixup-after-restore.sql    then this (EDIT ONE LINE)
+│   │   ├── keycloak-seed.sql          applied by scripts\5-seed-keycloak
+│   │   ├── fixup-after-restore.sql    applied by scripts\6-fixup-keycloak
 │   │   └── README.md
-│   └── scripts/                1-load-images, 2-start, 3-create-keycloak-db, 4-check
+│   └── scripts/                1-load-images, 2-start, 3-create-keycloak-db,
+│                               4-check, 5-seed-keycloak, 6-fixup-keycloak
 └── app-server/                 <-- install this machine SECOND
     ├── images/                 next-app.tar, nginx.tar, keycloak.tar, onlyoffice.tar
     ├── docker-compose.yml
@@ -63,7 +64,8 @@ of it), DB server ~170 MB.
 
 - Docker Desktop installed and running on both machines, in **Linux container**
   mode, with drive `C:` shared.
-- DBeaver on the DB server.
+- No SQL client needed — every database step runs through `psql` inside the
+  postgres container.
 - Two fixed IPs. Write them down — you will type each one exactly twice.
 - **Firewall, DB server:** allow `5432` and `9000` from the APP server's IP only.
 - **Firewall, app server:** allow `80` and `8082` from the client network.
@@ -78,35 +80,61 @@ of it), DB server ~170 MB.
 cd db-server
 .\scripts\1-load-images.ps1
 copy .env.template .env
-notepad .env                    # set three passwords
+notepad .env                                             # set three passwords
 .\scripts\2-start.ps1
-.\scripts\4-check.ps1           # expect: all checks passed
+.\scripts\4-check.ps1                                    # expect: all 7 passed
+.\scripts\5-seed-keycloak.ps1                            # restore the realm
+.\scripts\6-fixup-keycloak.ps1 -AppUrl http://<APP-IP>   # point it at the app
 ```
 
-On a fresh volume this creates both databases and the entire application schema
-automatically. If the machine already had PostgreSQL data, `initdb.d` is skipped
-by PostgreSQL itself — run `.\scripts\3-create-keycloak-db.ps1` and apply
-`init\02-app-schema.sql` in DBeaver instead.
+That is the whole DB server. **No DBeaver, no SQL to run by hand, no file to
+edit.** Steps 5 and 6 drive `psql` inside the postgres container and verify
+their own results.
 
-### Then seed Keycloak (DBeaver, against the `keycloak` database)
+On a fresh volume, step 2 creates both databases and the entire application
+schema automatically. If the machine already held PostgreSQL data, PostgreSQL
+skips `initdb.d` itself — run `.\scripts\3-create-keycloak-db.ps1` first, and
+apply `init\02-app-schema.sql` to the application database.
 
-1. Run `keycloak-seed\keycloak-seed.sql` — restores the realm, the clients, the
-   roles, the login theme settings and the user accounts.
-2. Open `keycloak-seed\fixup-after-restore.sql`, change the **one** line marked
-   `<<<< EDIT THIS` to the app server's address, and run the whole file.
-3. Read the verification output at the bottom. **"localhost left anywhere" must
-   be 0.**
+### What steps 5 and 6 do
 
-Why step 2 is not optional: the seed is a copy of the development Keycloak, so
-every client URL in it still says `http://localhost`. Until it is rewritten,
-login fails with *"Invalid parameter: redirect_uri"*.
+**5** restores `keycloak-seed\keycloak-seed.sql`: the realm, both clients *with
+their secrets*, the roles, the `shifthouse` login theme and the user accounts.
+It refuses to run if the realm database or its login role is missing, and it
+stops at the first SQL error rather than leaving a half-populated realm. If the
+database already holds tables it offers to drop the schema first (`-Force` skips
+the prompt).
 
-The fixup also re-owns the restored tables to the `keycloak` role. DBeaver
-connects as the admin user, which would otherwise leave Keycloak unable to read
-its own tables and failing to start with `permission denied for table
-databasechangelog`.
+**6** rewrites every URL in the restored realm to `-AppUrl`. This is **not
+optional**: the seed is a copy of the development Keycloak, so every client URL
+in it still says `http://localhost`, and until they are rewritten login fails
+with *"Invalid parameter: redirect_uri"*. The address is passed as a parameter
+and validated (scheme required, no trailing slash), so there is no line to edit
+and no way to run it with a placeholder still in place.
 
-Details and the realm-JSON alternative: [keycloak-seed/README.md](db-server/keycloak-seed/README.md).
+Step 6 also re-owns the restored tables to the `keycloak` role — the restore
+runs as the admin user, and without this Keycloak fails to start with
+`permission denied for table databasechangelog`.
+
+> **Step 6 can only run once meaningfully.** It finds its work by matching
+> `localhost`, so once the URLs are rewritten there is nothing left to match.
+> Re-running it with a *different* address cannot re-target the realm — the
+> script detects this, refuses, and tells you the two real options (re-seed with
+> `5-seed-keycloak.ps1 -Force`, or edit the client in the Keycloak console).
+
+Read the last line of step 6: **`localhost left anywhere` must be 0.** The
+script fails loudly if it is not, because the app server would be unusable.
+
+Why SQL and not a realm JSON import: the client secrets live inside Keycloak's
+database. Importing a JSON would mean regenerating both secrets in the admin
+console and copying them into the app's `.env` by hand. Details and the JSON
+alternative: [keycloak-seed/README.md](db-server/keycloak-seed/README.md).
+
+> Do **not** run these `.sql` files through DBeaver. Its SQL editor treats
+> `${...}` — which Keycloak stores as ordinary data, e.g.
+> `${offlineAccessScopeConsentText}` — as its own variables and pops a "Bind
+> parameter(s)" dialog; accepting it substitutes empty strings and corrupts the
+> realm with no error at all. `psql` executes the file exactly as written.
 
 ---
 
@@ -212,7 +240,7 @@ rebuild. Please keep it that way.
 | Check backups | DB server | `C:\backups\postgres\daily`, `C:\backups\files` |
 | Restore the database | DB server | see `docs/גיבויים-README.md` |
 | New application version | app server | load the new tar, `docker compose up -d` |
-| Schema change | DB server | apply the new migration SQL in DBeaver |
+| Schema change | DB server | apply the new migration SQL to the app database |
 
 Backups run nightly and cover **both** databases plus the MinIO bucket. The
 Keycloak dump is what makes user accounts recoverable — restoring only the
