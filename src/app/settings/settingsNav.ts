@@ -7,7 +7,7 @@ import {
   EventNote as EventNoteIcon,
   PrecisionManufacturing as PrecisionManufacturingIcon,
   AltRoute as AltRouteIcon,
-  Badge as BadgeIcon,
+  // Badge as BadgeIcon, // ניהול עובדים — retired, see below
   PhotoLibrary as PhotoLibraryIcon,
   Lock as LockIcon,
   AccessTime as AccessTimeIcon,
@@ -37,6 +37,11 @@ export const settingsLinks: SettingsLink[] = [
   { path: "/settings/test-stations", label: "עמדות בדיקה", icon: PrecisionManufacturingIcon },
   { path: "/settings/testing-routes", label: "מסלולי בדיקה", icon: AltRouteIcon },
   { path: "/settings/reference-items", label: "פריטי ייחוס", icon: PhotoLibraryIcon },
-  { path: "/settings/workers", label: "ניהול עובדים", icon: BadgeIcon },
+  // RETIRED — ניהול עובדים. The local `workers` table is being removed: every
+  // acting identity now comes from the Keycloak session (employeeNumber), so
+  // there is nothing left for this screen to manage. Users are administered at
+  // /settings/users instead. Removing the entry here drops it from BOTH the main
+  // sidebar group and the settings tab strip (both consume this list).
+  // { path: "/settings/workers", label: "ניהול עובדים", icon: BadgeIcon },
   { path: "/settings/work-hours", label: "שעות עבודה וחופשות", icon: AccessTimeIcon },
 ];
