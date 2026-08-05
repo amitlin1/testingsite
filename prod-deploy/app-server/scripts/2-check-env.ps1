@@ -14,7 +14,14 @@
 # Changes nothing. Safe to run at any time.
 # ===========================================================================
 
-$ErrorActionPreference = "Stop"
+# NOT "Stop". docker writes ordinary progress to stderr - "Network ... Creating",
+# layer output from `docker load` - and Windows PowerShell 5.1 wraps a native
+# command's stderr in an ErrorRecord, which "Stop" turns into a crash. It fires
+# only when docker happens to have something to say, so it looks intermittent:
+# the same script passes on a second run once the network already exists.
+# Every docker call that matters is checked via $LASTEXITCODE, and `throw` stays
+# terminating regardless of this setting.
+$ErrorActionPreference = "Continue"
 
 $root    = Split-Path -Parent $PSScriptRoot
 $envPath = Join-Path $root ".env"
