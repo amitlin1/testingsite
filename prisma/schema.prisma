@@ -320,7 +320,7 @@ model items {
   customer_id       Int
   item_type_id      Int
   serial_no         String
-  makat             Int
+  makat             String
   model             String  @db.Char(50)
   manufacturer_name String  @db.Char(50)
   manufacturer_no   String
@@ -419,13 +419,16 @@ model shipment_history {
   sent_shipment_code String
   sent_date          DateTime    @db.Timestamp(6)
   sending_worker_id  Int?
+  // Keycloak display name at the time this row was written (worker_id is now
+  // the Keycloak employeeNumber, unenforced — no local `workers` table left
+  // to join against).
+  sending_worker_name String?
   item_type_id       Int?
-  makat              Int?
+  makat              String?
   amount             Int
   created_at         DateTime?   @default(now()) @db.Timestamp(6)
   signature_path     String?
   item_types         item_types? @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction)
-  workers            workers?    @relation(fields: [sending_worker_id], references: [worker_id], onDelete: NoAction, onUpdate: NoAction)
   shipments          shipments   @relation(fields: [shipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([shipment_id], map: "idx_shipment_history_shipment_id")
@@ -438,7 +441,7 @@ model shipment_items {
   item_type_id Int?
   quantity     Int
   created_at   DateTime?   @default(now()) @db.Timestamp(6)
-  makat        Int?
+  makat        String?
   item_types   item_types? @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction)
   shipments    shipments?  @relation(fields: [shipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
@@ -521,19 +524,19 @@ model shipments {
   shipment_code                                  String             @db.VarChar(20)
   customer_id                                    Int
   shipment_date                                  DateTime           @db.Timestamp(6)
-  makat                                          Int
+  makat                                          String
   amount                                         Int
   shipment_sent_date                             DateTime?          @db.Timestamp(6)
   is_sent                                        Boolean?           @default(false)
   recieving_worker_id                            Int?
+  recieving_worker_name                          String?
   source_id                                      Int?
   sending_worker_id                              Int?
+  sending_worker_name                            String?
   finished_at                                    DateTime?          @db.Timestamptz(6)
   signature_path                                 String?
   shipment_history                               shipment_history[]
   shipment_items                                 shipment_items[]
-  workers_shipments_recieving_worker_idToworkers workers?           @relation("shipments_recieving_worker_idToworkers", fields: [recieving_worker_id], references: [worker_id], onDelete: NoAction, onUpdate: NoAction)
-  workers_shipments_sending_worker_idToworkers   workers?           @relation("shipments_sending_worker_idToworkers", fields: [sending_worker_id], references: [worker_id], onDelete: NoAction, onUpdate: NoAction)
   poc_details                                    String?            @db.VarChar(255)
 }
 
@@ -723,15 +726,6 @@ model testing_routes {
   route_number         Int                @default(1)
   item_types           item_types         @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_testing_routes_item_type")
   test_stations_type   test_stations_type @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_testing_routes_test_station_type")
-}
-
-model workers {
-  worker_id                                        Int                @id
-  worker_name                                      String             @db.VarChar(100)
-  shipment_history                                 shipment_history[]
-  shipments_shipments_recieving_worker_idToworkers shipments[]        @relation("shipments_recieving_worker_idToworkers")
-  shipments_shipments_sending_worker_idToworkers   shipments[]        @relation("shipments_sending_worker_idToworkers")
-  stokekeeper                                      Boolean            @default(false)
 }
 
 // ============================================================================

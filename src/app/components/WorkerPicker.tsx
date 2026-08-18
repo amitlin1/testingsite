@@ -17,7 +17,7 @@ type WorkerPickerProps = {
   onChange: (workerId: number | null) => void;
   /** Optional label shown above the picker (e.g. "עובד פעיל"). */
   label?: string;
-  /** Pre-fetched worker list. If omitted the component fetches /api/settings/workers itself. */
+  /** Pre-fetched worker list. If omitted the component fetches /api/workers-directory itself. */
   workers?: Worker[];
   /** Show a small required asterisk and red color on the label. */
   required?: boolean;
@@ -37,11 +37,10 @@ type WorkerPickerProps = {
 };
 
 /**
- * Shared worker autocomplete. Two consumers today:
+ * Shared worker autocomplete, backed by Keycloak (/api/workers-directory —
+ * no local `workers` table anymore). Two consumers today:
  *   - testing page header (persists workerId to localStorage)
  *   - ItemFilesPanel standalone mode (used inside ItemDialog where no parent workerId exists)
- *
- * When auth lands (smart-card per the project plan), this is the single place to swap.
  */
 export default function WorkerPicker({
   value,
@@ -67,7 +66,7 @@ export default function WorkerPicker({
     }
     let cancelled = false;
     setLoading(true);
-    apiFetch("/api/settings/workers")
+    apiFetch("/api/workers-directory")
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         if (!cancelled) setWorkers(Array.isArray(data) ? data : []);

@@ -9,7 +9,8 @@ import {
     TextField,
     Box,
     Typography,
-    useTheme
+    useTheme,
+    Alert
 } from "@/components/ui";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
@@ -17,6 +18,9 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { Shipment, NewShipment, Customers } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
+import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
+import { useSession } from "next-auth/react";
+import { hasRole } from "@/lib/auth/roles";
 
 type ShipmentUpdatePopupProps = {
     open: boolean;
@@ -33,9 +37,18 @@ export default function ShipmentUpdatePopup({
 }: ShipmentUpdatePopupProps) {
     const theme = useTheme();
     const [customers, setCustomers] = useState<Customers[]>([]);
-    const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string }[]>([]);
+    const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; roles: string[] }[]>([]);
     const [itemTypes, setItemTypes] = useState<{ id: number; name: string }[]>([]);
     const [sources, setSources] = useState<{ id: number; desc: string }[]>([]);
+
+    // "עובד מקבל" — same rule as ShipmentInsertPopup: a storekeeper is always
+    // attributed as themselves; missing employeeNumber blocks rather than
+    // degrades silently; anyone else keeps the manual picker.
+    const { data: session } = useSession();
+    const tokenWorkerId = useTokenWorkerId();
+    const isStorekeeper = hasRole(session?.roles ?? [], "storekeeper");
+    const canAutoFillReceiver = isStorekeeper && tokenWorkerId != null;
+    const blockedNoEmployeeNumber = isStorekeeper && tokenWorkerId == null;
 
     const {
         control,
@@ -68,7 +81,7 @@ export default function ShipmentUpdatePopup({
             try {
                 const [custRes, workersRes, typesRes, sourcesRes] = await Promise.all([
                     apiFetch("/api/customers"),
-                    apiFetch("/api/workers"),
+                    apiFetch("/api/workers-directory"),
                     apiFetch("/api/item-types"),
                     apiFetch("/api/sources")
                 ]);
@@ -114,9 +127,21 @@ export default function ShipmentUpdatePopup({
                 shipment_items: initialItems,
                 source_id: shipment.source_id,
                 recieving_worker_id: shipment.recieving_worker_id,
+                recieving_worker_name: shipment.recieving_worker_name,
             });
         }
     }, [open, shipment, reset]);
+
+    // "עובד מקבל" — only auto-assign when nobody's attributed yet; editing an
+    // already-received shipment (e.g. fixing the customer code) must not
+    // silently reassign who received it just because a storekeeper opened it.
+    const receiverAlreadySet = shipment?.recieving_worker_id != null;
+    const lockReceiverField = canAutoFillReceiver && !receiverAlreadySet;
+    useEffect(() => {
+        if (!open || !lockReceiverField) return;
+        setValue("recieving_worker_id", tokenWorkerId);
+        setValue("recieving_worker_name", workers.find((w) => w.worker_id === tokenWorkerId)?.worker_name ?? null);
+    }, [open, lockReceiverField, tokenWorkerId, workers, setValue]);
 
     const onSubmit = async (data: NewShipment) => {
         if (!shipment) return;
@@ -177,6 +202,11 @@ export default function ShipmentUpdatePopup({
             </DialogTitle>
             <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <DialogContent>
+                    {blockedNoEmployeeNumber && !receiverAlreadySet && (
+                        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                            לא ניתן לזהות אותך כמחסנאי — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
+                        </Alert>
+                    )}
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
                             <FieldLabel required>מס' משלוח</FieldLabel>
@@ -226,13 +256,17 @@ export default function ShipmentUpdatePopup({
                                 name="recieving_worker_id"
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
-                                    <SearchableCombobox<{ worker_id: number; worker_name: string }>
-                                        options={workers}
+                                    <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
+                                        options={workers.filter(w => w.roles.includes("storekeeper"))}
                                         getOptionLabel={(option) => option.worker_name}
                                         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
-                                        onChange={(newValue) => onChange(newValue?.worker_id ?? null)}
-                                        placeholder="בחר עובד…"
+                                        onChange={(newValue) => {
+                                            onChange(newValue?.worker_id ?? null);
+                                            setValue("recieving_worker_name", newValue?.worker_name ?? null);
+                                        }}
+                                        disabled={lockReceiverField}
+                                        placeholder={lockReceiverField ? "מזוהה מההתחברות" : "בחר עובד…"}
                                         error={!!errors.recieving_worker_id}
                                         helperText={errors.recieving_worker_id?.message}
                                     />
@@ -312,19 +346,16 @@ export default function ShipmentUpdatePopup({
                                     control={control}
                                     rules={{
                                         required: "שדה חובה",
-                                        validate: (value) =>
-                                            value && Number(value) > 0 ? true : "חייב להיות > 0",
                                     }}
                                     render={({ field }) => (
                                         <TextField
                                             {...field}
                                             placeholder="מקט"
-                                            type="number"
                                             required
                                             size="small"
                                             sx={{ width: 100 }}
                                             value={field.value ?? ""}
-                                            onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                                            onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
                                             error={!!errors.shipment_items?.[index]?.makat}
                                         />
                                     )}
@@ -372,7 +403,7 @@ export default function ShipmentUpdatePopup({
                     </Button>
                     <Button
                         type="submit"
-                        disabled={!isValid}
+                        disabled={!isValid || (blockedNoEmployeeNumber && !receiverAlreadySet)}
                         variant="contained"
                         sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >

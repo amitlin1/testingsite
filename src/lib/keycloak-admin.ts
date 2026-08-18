@@ -3,8 +3,9 @@
 // realm-management roles manage-users/view-users/query-users).
 //
 // NEVER import this into a client component — it holds the admin secret and
-// talks straight to Keycloak's admin API. It is used only by the
-// /api/users/* route handlers (which are gated to the `manager` role).
+// talks straight to Keycloak's admin API. Used by the /api/users/* route
+// handlers (manager-gated) and by /api/workers-directory (any authenticated
+// user — read-only identity lookups only, no mutation exposed there).
 
 import { APP_ROLES, type AppRole } from "@/lib/auth/roles";
 
@@ -405,6 +406,44 @@ export async function deleteUser(id: string): Promise<void> {
 /** Username of a single user (used for the self-action guard). "" if not found. */
 export async function getUsername(id: string): Promise<string> {
   return (await getUser(id))?.username ?? "";
+}
+
+// ---- worker directory (any authenticated user — see /api/workers-directory) ----
+
+/** Shape for "pick a person" UI (shipment attribution, testing-station roster).
+ *  Replaces the old local `workers` table: `worker_id` is the Keycloak
+ *  employeeNumber, `worker_name` the display name, `roles` the realm roles. */
+export interface DirectoryWorker {
+  worker_id: number;
+  worker_name: string;
+  roles: string[];
+}
+
+/** Enabled users with a valid numeric employeeNumber, shaped for a picker.
+ *  Users without one are excluded — there's no id to attribute them by. No
+ *  brute-force lookup here (unlike getAdminUsers) since a picker doesn't need
+ *  lock status, just identity — keeps this to one round-trip per user instead
+ *  of two. */
+export async function getWorkersDirectory(): Promise<DirectoryWorker[]> {
+  const users = (await listUsers()).filter(
+    (u) => u.enabled && !u.username?.startsWith("service-account-"),
+  );
+  const out = await mapLimit(users, 8, async (u): Promise<DirectoryWorker | null> => {
+    const empNo = u.attributes?.employeeNumber?.[0];
+    const workerId = empNo ? Number(empNo) : NaN;
+    if (!Number.isFinite(workerId) || workerId <= 0) return null;
+    const roles = await getUserRealmRoles(u.id);
+    const firstName = u.firstName ?? "";
+    const lastName = u.lastName ?? "";
+    return {
+      worker_id: workerId,
+      worker_name: [firstName, lastName].filter(Boolean).join(" ") || u.username,
+      roles: roles.map((r) => r.name),
+    };
+  });
+  return out
+    .filter((w): w is DirectoryWorker => w !== null)
+    .sort((a, b) => a.worker_name.localeCompare(b.worker_name, "he"));
 }
 
 /** Typed error carrying an HTTP status so route handlers map it to a response. */

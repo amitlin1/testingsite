@@ -8,7 +8,7 @@
 -- against the application database. It is NOT idempotent — run it once, on an
 -- empty database.
 --
--- Migrations included (14):
+-- Migrations included (17):
 --   0_init
 --   20260217140614_add_poc_and_stokekeeper
 --   20260218000000_dashboard_optimization
@@ -23,6 +23,9 @@
 --   20260719120000_add_disassembly_assembly_photo_types
 --   20260720100000_add_station_type_parents_only
 --   20260727120000_add_work_hours
+--   20260816103131_add_worker_name_snapshots
+--   20260816103434_drop_local_workers_table
+--   20260816114251_makat_to_text
 -- ===========================================================================
 
 
@@ -1324,6 +1327,49 @@ INSERT INTO "holiday_types" ("name", "is_system") VALUES
 ON CONFLICT ("name") DO NOTHING;
 
 
+-- ---------------------------------------------------------------------------
+-- migration: 20260816103131_add_worker_name_snapshots
+-- ---------------------------------------------------------------------------
+-- AlterTable
+ALTER TABLE "shipment_history" ADD COLUMN     "sending_worker_name" TEXT;
+
+-- AlterTable
+ALTER TABLE "shipments" ADD COLUMN     "recieving_worker_name" TEXT,
+ADD COLUMN     "sending_worker_name" TEXT;
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20260816103434_drop_local_workers_table
+-- ---------------------------------------------------------------------------
+-- DropForeignKey
+ALTER TABLE "shipment_history" DROP CONSTRAINT "shipment_history_sending_worker_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "shipments" DROP CONSTRAINT "shipments_recieving_worker_id_fkey";
+
+-- DropForeignKey
+ALTER TABLE "shipments" DROP CONSTRAINT "shipments_sending_worker_id_fkey";
+
+-- DropTable
+DROP TABLE "workers";
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20260816114251_makat_to_text
+-- ---------------------------------------------------------------------------
+-- AlterTable
+ALTER TABLE "items" ALTER COLUMN "makat" SET DATA TYPE TEXT;
+
+-- AlterTable
+ALTER TABLE "shipment_history" ALTER COLUMN "makat" SET DATA TYPE TEXT;
+
+-- AlterTable
+ALTER TABLE "shipment_items" ALTER COLUMN "makat" SET DATA TYPE TEXT;
+
+-- AlterTable
+ALTER TABLE "shipments" ALTER COLUMN "makat" SET DATA TYPE TEXT;
+
+
 -- ===========================================================================
 -- Prisma migration bookkeeping
 -- ===========================================================================
@@ -1357,45 +1403,57 @@ SELECT gen_random_uuid()::text, 'e51d7ba7fcc2abcdcdecdeeb42f45873af7774145d68e30
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260218000000_dashboard_optimization');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'fd9ca147ba9cc1d41e267fd83031d0d5fcbee6caaec8e7a5af2e08f37b9c3611', now(), '20260224085257_update_database_structure', now(), 1
+SELECT gen_random_uuid()::text, '5bda4bc61d33b49a0c929b01d8493f225ef333c35ae303fe7364c1a344e34c14', now(), '20260224085257_update_database_structure', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260224085257_update_database_structure');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '5f5c338d53746050435f5146bcb086b817508dc44a650a67933f9e8a0cd8f4da', now(), '20260528000000_add_file_objects', now(), 1
+SELECT gen_random_uuid()::text, '4fd64ec766727e98ba5325c148e0f5bba9ffb553d2cb12a2ea4475ba914b83a9', now(), '20260528000000_add_file_objects', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260528000000_add_file_objects');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '8849ed1877e67659e6241892c1b62a0fe54c49adb6613e57efdbbe76f63dfc95', now(), '20260604000000_add_updated_by_to_file_objects', now(), 1
+SELECT gen_random_uuid()::text, '67d6229068ddf572a309e4ee4d0f4dade5e0bcd8f427c9fb071236a2bdcfda58', now(), '20260604000000_add_updated_by_to_file_objects', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260604000000_add_updated_by_to_file_objects');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '8019ca61a68bb2254e047fd3d3e74039244069f5eea58dd41dd9a94a8e6b439d', now(), '20260709084717_add_reference_items', now(), 1
+SELECT gen_random_uuid()::text, '984965ff64ce090e4b4a9693b05896054aa2755ec1f91a129ddabc926ac22214', now(), '20260709084717_add_reference_items', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260709084717_add_reference_items');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '03811785e44dde50a3e52b728279490fb76058180b509576a7795a889a48f691', now(), '20260712085744_add_reference_weight', now(), 1
+SELECT gen_random_uuid()::text, 'a042b6600c184cf096bf46414cf02ccdf3de2fcfaa21e8e4d694971a024ef64d', now(), '20260712085744_add_reference_weight', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260712085744_add_reference_weight');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '2b87f6fd064611824101bb54a63db526aef96cedff932c5c8ad0d8da9dfc0e50', now(), '20260712124950_add_test_results', now(), 1
+SELECT gen_random_uuid()::text, '85143be9c6e79b770348e658904b6cf7cd19680b08f54bfa3dfb27d2678f459d', now(), '20260712124950_add_test_results', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260712124950_add_test_results');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'ab9ff34a02996b1a63010912b0284d7754168c05ff6850586c01f05ff1a32b86', now(), '20260713131814_add_settings_unique_constraints', now(), 1
+SELECT gen_random_uuid()::text, 'b126ca8bdc1eecebc8c1483eae7f75d74878bf87c96f295c306af690a6ebda5d', now(), '20260713131814_add_settings_unique_constraints', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260713131814_add_settings_unique_constraints');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '341b2cd639d9eb4eba5cccb24e60bd9fd1a05dcdd3b6f566f6dd9d6ef450e360', now(), '20260719000000_add_photo_types', now(), 1
+SELECT gen_random_uuid()::text, '269033383c5b5f383f99c739d33f106dff71b66289ea788bdca3ddc567c8aa89', now(), '20260719000000_add_photo_types', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260719000000_add_photo_types');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'db5160d8bb0b64eafd2ab0d683a2ca3ca30dec9aa2d978e6993e94fc20abbde5', now(), '20260719120000_add_disassembly_assembly_photo_types', now(), 1
+SELECT gen_random_uuid()::text, '994f3517b78704e9cd382e1fbf4bd7d7c02b220398ba7a79262378c8916a83cb', now(), '20260719120000_add_disassembly_assembly_photo_types', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260719120000_add_disassembly_assembly_photo_types');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'cc622684f3d31764bb7b66fd99830baf503b0a80b616a545ae23ed8cc4c05497', now(), '20260720100000_add_station_type_parents_only', now(), 1
+SELECT gen_random_uuid()::text, '97781e7899dc56702c8defe52a75032bcca2ed3e4c1144c2af5bbcbc98cf022c', now(), '20260720100000_add_station_type_parents_only', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260720100000_add_station_type_parents_only');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'a8bb17d78a8b08fcd71d77f65a967b69f6ac5e1cb4097f64feea33a720a61850', now(), '20260727120000_add_work_hours', now(), 1
+SELECT gen_random_uuid()::text, 'd13c39f6dc0ec9525209870657c94084208de24743cddc77a5e443a8c1be6c54', now(), '20260727120000_add_work_hours', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260727120000_add_work_hours');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '1c8f7bf35a93b5623e959e43980bc5ad35318de2436c028d72f545f59940eb5f', now(), '20260816103131_add_worker_name_snapshots', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260816103131_add_worker_name_snapshots');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '8e50068c771164ff72bb4fe4783ed75b82c85193028ad0af39ba6d66e9d7f6d9', now(), '20260816103434_drop_local_workers_table', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260816103434_drop_local_workers_table');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '42324749850738357abdbdbcf3543a695398f1d9b7f58b131e7809f85cb4edf3', now(), '20260816114251_makat_to_text', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260816114251_makat_to_text');

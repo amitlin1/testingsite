@@ -23,7 +23,7 @@ export type ShipmentItemRow = {
   item_type_desc: string;
   total_quantity: number;
   sample_count: number;
-  makat: number | null;
+  makat: string | null;
 };
 export type NewItemForm = {
   shipment: string; customer: string; itemType: string; routeNumber: string;
@@ -34,7 +34,10 @@ export type SubItemForm = { itemType: string; serialNumber: string; makat: strin
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSubmit: (form: NewItemForm, subItems: SubItemForm[]) => void;
+  /** `addAnother` is true when the user clicked "הוסף והמשך לפריט הבא" —
+      the container should keep the dialog open (reset via `initialForm` +
+      remount key) instead of closing it after a successful save. */
+  onSubmit: (form: NewItemForm, subItems: SubItemForm[], addAnother: boolean) => void;
   onScan?: () => void;
   shipmentOptions: Option[];
   customerOptions: Option[];
@@ -44,6 +47,9 @@ type Props = {
   loadingShipmentItems?: boolean;
   batchIndex?: number;   // 1-based; 0 = not a batch
   batchTotal?: number;
+  /** Count of items already added to this shipment in the current continuous
+      (non-QR-batch) add-another session. Shown as a badge next to the title. */
+  addedCount?: number;
   /** Fires on every field change so the container can react (e.g. filter
       routeOptions by the selected itemType, refetch shipmentItems, etc). */
   onFormChange?: (form: NewItemForm) => void;
@@ -57,7 +63,7 @@ const REQUIRED: (keyof NewItemForm)[] = ["shipment", "customer", "itemType", "ro
 const empty: NewItemForm = { shipment: "", customer: "", itemType: "", routeNumber: "", serialNumber: "", makat: "", model: "", manufacturer: "", manufacturerNo: "" };
 
 export default function AddItemDialog(props: Props) {
-  const { open, onClose, onSubmit, onScan, shipmentOptions, customerOptions, itemTypeOptions, routeOptions, shipmentItems = [], loadingShipmentItems = false, batchIndex = 0, batchTotal = 0, initialForm } = props;
+  const { open, onClose, onSubmit, onScan, shipmentOptions, customerOptions, itemTypeOptions, routeOptions, shipmentItems = [], loadingShipmentItems = false, batchIndex = 0, batchTotal = 0, addedCount = 0, initialForm } = props;
   const [form, setForm] = React.useState<NewItemForm>(() => ({ ...empty, ...initialForm }));
   const [subs, setSubs] = React.useState<SubItemForm[]>([]);
 
@@ -77,11 +83,15 @@ export default function AddItemDialog(props: Props) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: "1px solid #e0e0e0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>הוספת פריט חדש לבדיקה</div>
-            {batchTotal > 0 && (
+            {batchTotal > 0 ? (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#0066cc", background: "#eaf3ff", border: "1px solid #cfe4ff", borderRadius: 9999, padding: "4px 11px", whiteSpace: "nowrap" }}>
                 פריט {batchIndex} מתוך {batchTotal}
               </span>
-            )}
+            ) : addedCount > 0 ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#0066cc", background: "#eaf3ff", border: "1px solid #cfe4ff", borderRadius: 9999, padding: "4px 11px", whiteSpace: "nowrap" }}>
+                נוספו {addedCount} פריטים למשלוח זה
+              </span>
+            ) : null}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {onScan && (
@@ -209,8 +219,13 @@ export default function AddItemDialog(props: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 24px", borderTop: "1px solid #e0e0e0", background: "#fafafc" }}>
           <div style={{ flex: 1 }} />
           <button className="shx-btn shx-btn-secondary" onClick={onClose}>ביטול</button>
-          <button className="shx-btn shx-btn-primary" disabled={!valid} onClick={() => onSubmit(form, subs)}>
-            {batchTotal > 0 ? `הוסף פריט (${batchIndex}/${batchTotal})` : "הוסף פריט"}
+          {batchTotal === 0 && (
+            <button className="shx-btn shx-btn-secondary" disabled={!valid} onClick={() => onSubmit(form, subs, true)} style={{ color: "#0066cc", borderColor: "#cfe0f5" }}>
+              <Plus size={15} strokeWidth={2} />הוסף והמשך לפריט הבא
+            </button>
+          )}
+          <button className="shx-btn shx-btn-primary" disabled={!valid} onClick={() => onSubmit(form, subs, false)}>
+            {batchTotal > 0 ? `הוסף פריט (${batchIndex}/${batchTotal})` : "הוסף פריט וסגור"}
           </button>
         </div>
       </div>

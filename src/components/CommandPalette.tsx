@@ -159,10 +159,6 @@ const NAV_DEFS: { id: string; label: string; sub: string; icon: LucideIcon; href
   { id: "routes", label: "מסלולי בדיקה", sub: "הגדרות", icon: Settings, href: "/settings/testing-routes" },
   { id: "itemtypes", label: "סוגי פריטים", sub: "הגדרות", icon: Tag, href: "/settings/item-types" },
   { id: "reference", label: "פריטי ייחוס", sub: "הגדרות", icon: Package, href: "/settings/reference-items" },
-  // RETIRED — ניהול עובדים. This list is hand-maintained and does NOT read
-  // settingsNav.ts, so removing the entry there left this one pointing at a page
-  // that now calls notFound(). Users are administered at /settings/users.
-  // { id: "workers", label: "עובדים", sub: "הגדרות", icon: Settings, href: "/settings/workers" },
 ];
 
 /**

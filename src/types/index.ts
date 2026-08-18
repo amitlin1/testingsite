@@ -17,7 +17,7 @@ export type ItemRow = {
   finished_at: string | null;
   is_finished: boolean | null;
   customer_code: string | null;
-  makat: number | null;
+  makat: string | null;
   manufacturer_name: string | null;
   manufacturer_no: string | null;
   model: string | null;
@@ -40,7 +40,7 @@ export type NewItem = {
   customer: number | null
   itemType: number | null
   serialNumber?: string | null
-  makat?: number | null
+  makat?: string | null
   model?: string | null
   manufacturer?: string | null
   manufacturerNo?: string | null
@@ -59,7 +59,7 @@ export type Shipment = {
   customer_code: string;
   customer_name: string;
   shipment_date: string;
-  makat: number | null; // Legacy
+  makat: string | null; // Legacy
   amount: number;
   total_items: number;
   in_work_items: number;
@@ -69,7 +69,7 @@ export type Shipment = {
   item_type_id: number | null; // Legacy
   item_type_desc: string | null; // Legacy
   signature_path?: string | null;
-  shipment_items?: { item_type_id: number; quantity: number; item_type_desc?: string; makat?: number | null }[];
+  shipment_items?: { item_type_id: number; quantity: number; item_type_desc?: string; makat?: string | null }[];
   source_id: number | null;
   source_desc: string | null;
   sending_worker_id: number | null;
@@ -89,13 +89,15 @@ export type NewShipment = {
   shipment_code: string;
   customer_id: number | null;
   shipment_date: Date | null;
-  makat: number | null; // Legacy main makat
+  makat: string | null; // Legacy main makat
   amount: number | null;
   recieving_worker_id?: number | null;
+  recieving_worker_name?: string | null;
   item_type_id?: number | null;
-  shipment_items?: { item_type_id: number; quantity: number; makat?: number | null }[];
+  shipment_items?: { item_type_id: number; quantity: number; makat?: string | null }[];
   source_id?: number | null;
   sending_worker_id: number | null;
+  sending_worker_name?: string | null;
   poc_details?: string | null;
 };
 
@@ -112,11 +114,6 @@ export type TestStationStatus = {
   test_station_status_desc: string;
 };
 
-export type Worker = {
-  worker_id: number;
-  worker_name: string;
-  stokekeeper?: boolean;
-};
 /** Payload a test/finish dialog reports back to the page on submit. */
 export type TestResultData = {
   Result: number;

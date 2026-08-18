@@ -1,6 +1,7 @@
 "use client";
 import React, { useRef, useState, useMemo, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
+import { DismissableLayerBranch } from "@radix-ui/react-dismissable-layer";
 import { X, ChevronDown } from "lucide-react";
 import { CircularProgress } from "./Progress";
 import { sxToStyle, type SxInput } from "./sx";
@@ -258,48 +259,61 @@ export function Autocomplete<
     <div ref={anchorRef} style={{ position: "relative", width: fullWidth ? "100%" : undefined, ...sxToStyle(sx) }}>
       {renderInput(params)}
       {open && pos && typeof document !== "undefined" && createPortal(
-        <ul
-          ref={listRef}
-          role="listbox"
-          className="sh-select-content"
-          dir={pos.dir}
-          style={{
-            position: "fixed",
-            ...(pos.placement === "top" ? { bottom: pos.bottom } : { top: pos.top }),
-            left: pos.left,
-            width: pos.width,
-            maxHeight: pos.maxH,
-            overflowY: "auto",
-            listStyle: "none",
-            margin: 0,
-            zIndex: 1450,
-            // Shadow points away from the field: down when below, up when flipped.
-            boxShadow: pos.placement === "top"
-              ? "rgba(0,0,0,0.14) 0 -10px 34px 0"
-              : "rgba(0,0,0,0.14) 0 12px 34px 0",
-            transformOrigin: pos.placement === "top" ? "bottom center" : "top center",
-          }}
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          {loading ? (
-            <li className="sh-select-item" style={{ color: "var(--color-ink-muted-48)" }}>{loadingText}</li>
-          ) : filtered.length === 0 ? (
-            <li className="sh-select-item" style={{ color: "var(--color-ink-muted-48)" }}>{noOptionsText}</li>
-          ) : (
-            filtered.map((o, i) => {
-              const selected = isSelected(o);
-              const liProps: React.HTMLAttributes<HTMLLIElement> & { key?: React.Key } = {
-                key: i,
-                className: "sh-select-item",
-                onClick: (e) => handleSelect(e, o),
-                style: selected ? { color: "var(--color-primary)", fontWeight: 600 } : undefined,
-              };
-              if (renderOption) return renderOption(liProps, o, { selected });
-              const { key: _k, ...liRest } = liProps;
-              return <li key={i} {...liRest}>{getOptionLabel(o)}</li>;
-            })
-          )}
-        </ul>,
+        // This popup is portaled to <body> as a sibling of any Radix Dialog that
+        // contains the field, not a DOM descendant of it. A modal Radix Dialog
+        // sets `document.body.style.pointerEvents = "none"` while open and only
+        // re-enables `auto` on its own content node — so without `pointerEvents:
+        // "auto"` here, the list is visible but every click passes straight
+        // through it to the page behind, which Radix then sees as an outside
+        // click and dismisses the dialog before a selection is ever made.
+        // DismissableLayerBranch registers this popup in the shared (global,
+        // ancestor-independent) Radix DismissableLayerContext so that once
+        // clicks DO land here, the dialog still doesn't treat them as "outside".
+        <DismissableLayerBranch>
+          <ul
+            ref={listRef}
+            role="listbox"
+            className="sh-select-content"
+            dir={pos.dir}
+            style={{
+              position: "fixed",
+              pointerEvents: "auto",
+              ...(pos.placement === "top" ? { bottom: pos.bottom } : { top: pos.top }),
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxH,
+              overflowY: "auto",
+              listStyle: "none",
+              margin: 0,
+              zIndex: 1450,
+              // Shadow points away from the field: down when below, up when flipped.
+              boxShadow: pos.placement === "top"
+                ? "rgba(0,0,0,0.14) 0 -10px 34px 0"
+                : "rgba(0,0,0,0.14) 0 12px 34px 0",
+              transformOrigin: pos.placement === "top" ? "bottom center" : "top center",
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            {loading ? (
+              <li className="sh-select-item" style={{ color: "var(--color-ink-muted-48)" }}>{loadingText}</li>
+            ) : filtered.length === 0 ? (
+              <li className="sh-select-item" style={{ color: "var(--color-ink-muted-48)" }}>{noOptionsText}</li>
+            ) : (
+              filtered.map((o, i) => {
+                const selected = isSelected(o);
+                const liProps: React.HTMLAttributes<HTMLLIElement> & { key?: React.Key } = {
+                  key: i,
+                  className: "sh-select-item",
+                  onClick: (e) => handleSelect(e, o),
+                  style: selected ? { color: "var(--color-primary)", fontWeight: 600 } : undefined,
+                };
+                if (renderOption) return renderOption(liProps, o, { selected });
+                const { key: _k, ...liRest } = liProps;
+                return <li key={i} {...liRest}>{getOptionLabel(o)}</li>;
+              })
+            )}
+          </ul>
+        </DismissableLayerBranch>,
         document.body,
       )}
     </div>

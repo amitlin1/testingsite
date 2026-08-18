@@ -11,43 +11,46 @@
 -- file loads top to bottom without deferring constraints.
 --
 -- Row counts at generation time:
---   customers                1
---   item_types               2
---   sources                  1
+--   customers                3
+--   item_types               3
+--   sources                  2
 --   item_status              5
 --   test_station_status      3
---   test_stations_type       7
---   workers                  1
+--   test_stations_type       2
 --   photo_types              4
 --   holiday_types            3
 --   weekday_defaults         7
---   workday_overrides        2
---   reference_items          5
---   test_stations            9
---   testing_routes           1
+--   workday_overrides        0
+--   reference_items          1
+--   test_stations            5
+--   testing_routes           4
 --   department_holidays      0
---   reference_item_images    6
+--   reference_item_images    0
 --
--- 6/6 reference-item image(s) exported to settings-seed/minio-files/
+-- (no reference-item images)
 -- ===========================================================================
 
 BEGIN;
 
 -- ---------------------------------------------------------------------------
--- customers  (1 row)
+-- customers  (3 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.customers (id, name, customer_code) VALUES (1, 'המתנה                                             ', '12') ON CONFLICT DO NOTHING;
+INSERT INTO public.customers (id, name, customer_code) VALUES (3, 'מנדי                                              ', '1') ON CONFLICT DO NOTHING;
+INSERT INTO public.customers (id, name, customer_code) VALUES (2, 'מנשה                                              ', '12') ON CONFLICT DO NOTHING;
+INSERT INTO public.customers (id, name, customer_code) VALUES (4, 'ירוחם                                             ', '565') ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- item_types  (2 rows)
+-- item_types  (3 rows)
 -- ---------------------------------------------------------------------------
 INSERT INTO public.item_types (item_type_id, item_type_desc) VALUES (1, 'מחשב                                              ') ON CONFLICT DO NOTHING;
-INSERT INTO public.item_types (item_type_id, item_type_desc) VALUES (2, '����                                              ') ON CONFLICT DO NOTHING;
+INSERT INTO public.item_types (item_type_id, item_type_desc) VALUES (2, 'עכבר                                              ') ON CONFLICT DO NOTHING;
+INSERT INTO public.item_types (item_type_id, item_type_desc) VALUES (3, 'מקלדת                                             ') ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- sources  (1 row)
+-- sources  (2 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.sources (source_id, source_desc) VALUES (1, 'מקור 1') ON CONFLICT DO NOTHING;
+INSERT INTO public.sources (source_id, source_desc) VALUES (1, 'מחסן חיצוני') ON CONFLICT DO NOTHING;
+INSERT INTO public.sources (source_id, source_desc) VALUES (3, 'מחסן פנימי') ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- item_status  (5 rows)
@@ -66,79 +69,63 @@ INSERT INTO public.test_station_status (test_station_status_id, test_station_sta
 INSERT INTO public.test_station_status (test_station_status_id, test_station_status_desc) VALUES (3, 'לא פעילה                                          ') ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- test_stations_type  (7 rows)
+-- test_stations_type  (2 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (2, 'פירוק                                             ', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (4, 'מראה שחורה                                        ', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (3, 'שיקוף                                             ', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (7, 'דוח סופי                                          ', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (5, 'הרכבה                                             ', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (6, 'אריזה                                             ', false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (1, 'צילום                                             ', true) ON CONFLICT DO NOTHING;
-
--- ---------------------------------------------------------------------------
--- workers  (1 row)
--- ---------------------------------------------------------------------------
-INSERT INTO public.workers (worker_id, worker_name, stokekeeper) VALUES (1, 'ישראל ישראלי', true) ON CONFLICT DO NOTHING;
+INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (1, 'חשמל                                              ', false) ON CONFLICT DO NOTHING;
+INSERT INTO public.test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES (2, 'מכניקה                                            ', false) ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- photo_types  (4 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.photo_types (photo_type_id, code, photo_type_desc, sort_order, is_active, created_at) VALUES (1, 'package', 'צילום אריזה', 1, true, '2026-07-19 05:41:58.476483+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.photo_types (photo_type_id, code, photo_type_desc, sort_order, is_active, created_at) VALUES (2, 'product', 'צילום פריט', 2, true, '2026-07-19 05:41:58.476483+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.photo_types (photo_type_id, code, photo_type_desc, sort_order, is_active, created_at) VALUES (3, 'disassembly', 'צילום פירוק', 3, true, '2026-07-19 11:35:58.193401+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.photo_types (photo_type_id, code, photo_type_desc, sort_order, is_active, created_at) VALUES (4, 'assembly', 'צילום הרכבה', 4, true, '2026-07-19 11:35:58.193401+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.photo_types (photo_type_id, code, photo_type_desc, sort_order, is_active, created_at) VALUES (1, 'package', 'צילום אריזה', 1, true, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.photo_types (photo_type_id, code, photo_type_desc, sort_order, is_active, created_at) VALUES (2, 'product', 'צילום פריט', 2, true, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.photo_types (photo_type_id, code, photo_type_desc, sort_order, is_active, created_at) VALUES (3, 'disassembly', 'צילום פירוק', 3, true, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.photo_types (photo_type_id, code, photo_type_desc, sort_order, is_active, created_at) VALUES (4, 'assembly', 'צילום הרכבה', 4, false, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- holiday_types  (3 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.holiday_types (id, name, is_system, created_at) VALUES (1, 'חופשה מרוכזת', true, '2026-07-27 09:46:07.9188+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.holiday_types (id, name, is_system, created_at) VALUES (2, 'יום גיבוש', true, '2026-07-27 09:46:07.9188+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.holiday_types (id, name, is_system, created_at) VALUES (3, 'השבתה', true, '2026-07-27 09:46:07.9188+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.holiday_types (id, name, is_system, created_at) VALUES (1, 'חופשה מרוכזת', true, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.holiday_types (id, name, is_system, created_at) VALUES (2, 'יום גיבוש', true, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.holiday_types (id, name, is_system, created_at) VALUES (3, 'השבתה', true, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- weekday_defaults  (7 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (0, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-07-27 09:46:07.913968+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (1, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-07-27 09:46:07.913968+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (2, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-07-27 09:46:07.913968+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (3, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-07-27 09:46:07.913968+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (4, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-07-27 09:46:07.913968+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (6, false, NULL, NULL, NULL, NULL, NULL, '2026-07-27 09:46:07.913968+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (5, false, NULL, NULL, NULL, NULL, 'admin', '2026-07-27 11:14:11.357+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (0, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (1, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (2, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (3, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (4, true, '07:00', '15:35', '12:00', '13:00', NULL, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (5, false, NULL, NULL, NULL, NULL, NULL, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
+INSERT INTO public.weekday_defaults (weekday, is_working, start_time, end_time, break_start, break_end, updated_by, updated_at) VALUES (6, false, NULL, NULL, NULL, NULL, NULL, '2026-08-14 10:00:00.771947+00') ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- workday_overrides  (2 rows)
+-- workday_overrides  (0 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.workday_overrides (id, work_date, kind, start_time, end_time, break_start, break_end, note, created_by, created_at, updated_at) VALUES (1, '2026-07-01', 'short_day', '07:00', '13:00', '12:00', '13:00', NULL, 'admin', '2026-07-27 11:11:34.307+00', '2026-07-27 11:11:34.307+00') ON CONFLICT DO NOTHING;
-INSERT INTO public.workday_overrides (id, work_date, kind, start_time, end_time, break_start, break_end, note, created_by, created_at, updated_at) VALUES (2, '2026-07-23', 'vacation', NULL, NULL, NULL, NULL, NULL, 'admin', '2026-07-27 11:14:40.632+00', '2026-07-27 11:14:40.632+00') ON CONFLICT DO NOTHING;
+-- (no rows)
 
 -- ---------------------------------------------------------------------------
--- reference_items  (5 rows)
+-- reference_items  (1 row)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.reference_items (reference_item_id, item_type_id, manufacturer_sku, manufacturer, name, notes, primary_image_id, created_at, updated_at, reference_weight) VALUES (2, 1, '11111', 'HP', 'מחשב לתכניתן', NULL, NULL, '2026-07-09 09:02:38.724+00', '2026-07-09 09:05:09.126+00', NULL) ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_items (reference_item_id, item_type_id, manufacturer_sku, manufacturer, name, notes, primary_image_id, created_at, updated_at, reference_weight) VALUES (4, 1, '23343', '666', '777', NULL, NULL, '2026-07-12 08:40:52.846+00', '2026-07-12 08:40:53.109+00', NULL) ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_items (reference_item_id, item_type_id, manufacturer_sku, manufacturer, name, notes, primary_image_id, created_at, updated_at, reference_weight) VALUES (5, 1, '23343', '67', '7', '7', NULL, '2026-07-12 08:45:15.38+00', '2026-07-12 08:45:26.737+00', NULL) ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_items (reference_item_id, item_type_id, manufacturer_sku, manufacturer, name, notes, primary_image_id, created_at, updated_at, reference_weight) VALUES (3, 1, '8888', 'מחשב', '1ג''סג''', NULL, NULL, '2026-07-09 09:04:10.663+00', '2026-07-13 13:42:11.21+00', '5') ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_items (reference_item_id, item_type_id, manufacturer_sku, manufacturer, name, notes, primary_image_id, created_at, updated_at, reference_weight) VALUES (6, 1, '1', '8', '8', '8', 14, '2026-07-12 09:06:02.96+00', '2026-07-22 06:37:59.365+00', '8') ON CONFLICT DO NOTHING;
+INSERT INTO public.reference_items (reference_item_id, item_type_id, manufacturer_sku, manufacturer, name, reference_weight, notes, primary_image_id, created_at, updated_at) VALUES (1, 1, '6512336', 'DF-HHB', 'צמ', '0.5', NULL, NULL, '2026-08-16 06:08:40.447+00', '2026-08-16 06:09:07.764+00') ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- test_stations  (9 rows)
+-- test_stations  (5 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (3, 1, 'חשמל לא פעילה                                     ', 1, false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (1, 1, 'חשמל 21                                           ', 2, false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (5, 5, 'הרכבה 1                                           ', 1, false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (6, 6, 'אריזה 1                                           ', 1, false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (7, 7, 'דוח סופי 1                                        ', 1, false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (8, 3, 'שיקוף 1                                           ', 1, false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (9, 4, 'מראה שחורה 1                                      ', 1, false) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (2, 1, 'בדיקה                                             ', 2, true) ON CONFLICT DO NOTHING;
-INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (4, 2, 'עמדת פירוק                                        ', 2, false) ON CONFLICT DO NOTHING;
+INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (4, 2, 'עגכ                                               ', 2, false) ON CONFLICT DO NOTHING;
+INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (5, 2, 'גה                                                ', 3, false) ON CONFLICT DO NOTHING;
+INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (2, 1, 'להמתין                                            ', 2, false) ON CONFLICT DO NOTHING;
+INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (1, 1, 'ססס                                               ', 2, false) ON CONFLICT DO NOTHING;
+INSERT INTO public.test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES (3, 2, 'dsd                                               ', 2, false) ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- testing_routes  (1 row)
+-- testing_routes  (4 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.testing_routes (test_route_id, item_type_id, test_station_type_id, route_steps, route_number) VALUES (1, 1, 1, '{1,2,3,4,5,6}', 1) ON CONFLICT DO NOTHING;
+INSERT INTO public.testing_routes (test_route_id, item_type_id, test_station_type_id, route_steps, route_number) VALUES (1, 1, 1, '{1,2,1}', 1) ON CONFLICT DO NOTHING;
+INSERT INTO public.testing_routes (test_route_id, item_type_id, test_station_type_id, route_steps, route_number) VALUES (2, 1, 1, '{2,1,2}', 2) ON CONFLICT DO NOTHING;
+INSERT INTO public.testing_routes (test_route_id, item_type_id, test_station_type_id, route_steps, route_number) VALUES (3, 2, 2, '{2,2}', 2) ON CONFLICT DO NOTHING;
+INSERT INTO public.testing_routes (test_route_id, item_type_id, test_station_type_id, route_steps, route_number) VALUES (4, 2, 1, '{1,2,2,1}', 1) ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- department_holidays  (0 rows)
@@ -146,14 +133,9 @@ INSERT INTO public.testing_routes (test_route_id, item_type_id, test_station_typ
 -- (no rows)
 
 -- ---------------------------------------------------------------------------
--- reference_item_images  (6 rows)
+-- reference_item_images  (0 rows)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.reference_item_images (reference_item_image_id, reference_item_id, bucket, object_key, file_name, content_type, size_bytes, sort_order, created_at, photo_type_id) VALUES (14, 6, 'ru-reference-items', 'reference-items/6/1784452832491-0-_2026-07-12_115120.png', 'צילום מסך 2026-07-12 115120.png', 'image/png', 96613, 0, '2026-07-19 09:20:32.621+00', 1) ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_item_images (reference_item_image_id, reference_item_id, bucket, object_key, file_name, content_type, size_bytes, sort_order, created_at, photo_type_id) VALUES (15, 6, 'ru-reference-items', 'reference-items/6/1784452832668-1-_2026-07-12_124254.png', 'צילום מסך 2026-07-12 124254.png', 'image/png', 9867, 1, '2026-07-19 09:20:32.692+00', 2) ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_item_images (reference_item_image_id, reference_item_id, bucket, object_key, file_name, content_type, size_bytes, sort_order, created_at, photo_type_id) VALUES (16, 6, 'ru-reference-items', 'reference-items/6/1784524892875-2-_2026-06-24_110616.png', 'צילום מסך 2026-06-24 110616.png', 'image/png', 34971, 2, '2026-07-20 05:21:33.032+00', 3) ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_item_images (reference_item_image_id, reference_item_id, bucket, object_key, file_name, content_type, size_bytes, sort_order, created_at, photo_type_id) VALUES (17, 6, 'ru-reference-items', 'reference-items/6/1784524893135-3-_2026-07-19_144910.png', 'צילום מסך 2026-07-19 144910.png', 'image/png', 54539, 3, '2026-07-20 05:21:33.184+00', 4) ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_item_images (reference_item_image_id, reference_item_id, bucket, object_key, file_name, content_type, size_bytes, sort_order, created_at, photo_type_id) VALUES (18, 6, 'ru-reference-items', 'reference-items/6/1784525089653-4-_2026-06-22_140031.png', 'צילום מסך 2026-06-22 140031.png', 'image/png', 18331, 4, '2026-07-20 05:24:49.744+00', 1) ON CONFLICT DO NOTHING;
-INSERT INTO public.reference_item_images (reference_item_image_id, reference_item_id, bucket, object_key, file_name, content_type, size_bytes, sort_order, created_at, photo_type_id) VALUES (19, 6, 'ru-reference-items', 'reference-items/6/1784702279143-5-_2026-06-24_080432.png', 'צילום מסך 2026-06-24 080432.png', 'image/png', 48142, 5, '2026-07-22 06:37:59.258+00', 1) ON CONFLICT DO NOTHING;
+-- (no rows)
 
 
 -- ---------------------------------------------------------------------------

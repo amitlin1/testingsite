@@ -209,10 +209,16 @@ export async function POST(req: Request) {
         }
       } else {
         // Status 1: existing logic - increment current_route_step
+        // The current_route_step check is optimistic concurrency: it stops a
+        // duplicate submission for the same step (e.g. two workers who both
+        // had the item's wizard open at once) from advancing the route twice —
+        // the second submit's CurrentRouteStep no longer matches the row the
+        // first submit already advanced, so it matches 0 rows and fails below.
         const updateRows = await tx.$queryRaw<any[]>`
           UPDATE item_routes
           SET current_status = 2, current_route_step = current_route_step + 1, queue_start_time = ${currentUtcDate}::timestamp
           WHERE item_id = ${itemIdBig} AND route_number = ${routeNumber} AND finished_at IS NULL
+            AND current_route_step = ${CurrentRouteStep}
           RETURNING current_status, current_route_step, item_type_id, route_number
         `;
         if (updateRows.length === 0) throw new Error("ITEM_ROUTE_NOT_FOUND_OR_FINISHED");

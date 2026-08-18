@@ -29,7 +29,7 @@ export default function CommandPaletteTrigger() {
       // `e.key === "k"` check never fires — which is exactly how this shortcut
       // came to be dead in this app. e.key stays as a fallback for layouts
       // where code is unavailable/synthetic.
-      const isK = e.code === "KeyK" || e.key.toLowerCase() === "k";
+      const isK = e.code === "KeyK" || e.key?.toLowerCase() === "k";
       if ((e.metaKey || e.ctrlKey) && isK) {
         e.preventDefault();
         setOpen((o) => !o);

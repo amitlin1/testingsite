@@ -27,6 +27,9 @@ import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
 import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat } from '@/app/lib/qrParser';
 import { apiFetch } from "@/lib/api/client";
+import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
+import { useSession } from "next-auth/react";
+import { hasRole } from "@/lib/auth/roles";
 
 type ShipmentInsertPopupProps = {
     open: boolean;
@@ -55,10 +58,21 @@ export default function ShipmentInsertPopup({
     existingShipments = [],
 }: ShipmentInsertPopupProps) {
     const [customers, setCustomers] = useState<Customers[]>([]);
-    const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; stokekeeper?: boolean }[]>([]);
+    const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; roles: string[] }[]>([]);
     const [itemTypes, setItemTypes] = useState<{ id: number; name: string }[]>([]);
     const [sources, setSources] = useState<{ id: number; desc: string }[]>([]);
     const theme = useTheme();
+
+    // The logged-in user IS the receiving worker when they hold the Keycloak
+    // "storekeeper" role — same "can't act as someone else" rule as the testing
+    // page's worker picker (see useTokenWorkerId). A storekeeper with no
+    // employeeNumber set can't be identified at all and is blocked below rather
+    // than silently degraded; anyone else falls back to the manual picker.
+    const { data: session } = useSession();
+    const tokenWorkerId = useTokenWorkerId();
+    const isStorekeeper = hasRole(session?.roles ?? [], "storekeeper");
+    const canAutoFillReceiver = isStorekeeper && tokenWorkerId != null;
+    const blockedNoEmployeeNumber = isStorekeeper && tokenWorkerId == null;
 
     const {
         control,
@@ -160,7 +174,7 @@ export default function ShipmentInsertPopup({
             try {
                 const [custRes, workersRes, typesRes, sourcesRes] = await Promise.all([
                     apiFetch("/api/customers"),
-                    apiFetch("/api/workers"),
+                    apiFetch("/api/workers-directory"),
                     apiFetch("/api/item-types"),
                     apiFetch("/api/sources")
                 ]);
@@ -171,8 +185,6 @@ export default function ShipmentInsertPopup({
 
                 if (!cancelled) {
                     setCustomers(Array.isArray(custData) ? custData : []);
-                    // /api/workers now returns { worker_id, worker_name, stokekeeper } directly
-                    // (aligned with the Send/Update popups), so consume it as-is.
                     setWorkers(Array.isArray(workersData) ? workersData : []);
                     setItemTypes(Array.isArray(typesData) ? typesData : []);
                     const loadedSources = Array.isArray(sourcesData) ? sourcesData : [];
@@ -201,6 +213,17 @@ export default function ShipmentInsertPopup({
             sigCanvas.current?.clear();
         }
     }, [open, reset]);
+
+    // "עובד מקבל" means "the storekeeper who received it" — auto-fill and lock
+    // it to self only when the logged-in user actually holds that role. Their
+    // employeeNumber is trusted as-is now: recieving_worker_id has no DB
+    // foreign key anymore (the local `workers` table is gone), so there's no
+    // FK-safety check needed — just role + presence of an id.
+    useEffect(() => {
+        if (!open || !canAutoFillReceiver) return;
+        setValue("recieving_worker_id", tokenWorkerId);
+        setValue("recieving_worker_name", workers.find((w) => w.worker_id === tokenWorkerId)?.worker_name ?? null);
+    }, [open, canAutoFillReceiver, tokenWorkerId, workers, setValue]);
 
     const onSubmit = async (data: NewShipment) => {
         try {
@@ -409,6 +432,11 @@ export default function ShipmentInsertPopup({
                             הנתונים מולאו מסריקת ברקוד ונעולים לעריכה. ניתן להזין ידנית רק את שדות הפריטים שאינם כלולים בברקוד.
                         </Alert>
                     )}
+                    {blockedNoEmployeeNumber && (
+                        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                            לא ניתן לזהות אותך כמחסנאי — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
+                        </Alert>
+                    )}
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
                         <Box sx={{ width: "100%" }}>
                             <FieldLabel>פרטי איש קשר (POC Details)</FieldLabel>
@@ -495,13 +523,20 @@ export default function ShipmentInsertPopup({
                                 name="recieving_worker_id"
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
-                                    <SearchableCombobox<{ worker_id: number; worker_name: string; stokekeeper?: boolean }>
-                                        options={workers.filter(w => w.stokekeeper)}
+                                    <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
+                                        options={workers.filter(w => w.roles.includes("storekeeper"))}
                                         getOptionLabel={(option) => option.worker_name}
                                         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
-                                        onChange={(newValue) => onChange(newValue?.worker_id ?? null)}
-                                        placeholder="בחר עובד…"
+                                        onChange={(newValue) => {
+                                            onChange(newValue?.worker_id ?? null);
+                                            setValue("recieving_worker_name", newValue?.worker_name ?? null);
+                                        }}
+                                        disabled={scanned || canAutoFillReceiver}
+                                        // canAutoFillReceiver guarantees a matching row, so `value` above always
+                                        // resolves to it and its name renders as the combobox's value — no need
+                                        // to fall back to a raw-id placeholder here.
+                                        placeholder={canAutoFillReceiver ? "מזוהה מההתחברות" : "בחר עובד…"}
                                         error={!!errors.recieving_worker_id}
                                         helperText={errors.recieving_worker_id?.message}
                                     />
@@ -580,19 +615,14 @@ export default function ShipmentInsertPopup({
                                 <Controller
                                     name={`shipment_items.${index}.makat` as const}
                                     control={control}
-                                    rules={{
-                                        validate: (value) =>
-                                            !value || Number(value) > 0 ? true : "Must be > 0",
-                                    }}
                                     render={({ field }) => (
                                         <TextField
                                             {...field}
                                             placeholder="מקט"
-                                            type="number"
                                             size="small"
                                             sx={{ width: 130 }}
                                             value={field.value ?? ""}
-                                            onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                                            onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
                                             error={!!errors.shipment_items?.[index]?.makat}
                                         />
                                     )}
@@ -680,8 +710,8 @@ export default function ShipmentInsertPopup({
                     </Button>
                     <Button
                         type="submit"
-                        // הכפתור יהיה חסום אם הטופס לא תקין או שעדיין לא חתמו
-                        disabled={!isValid || !isSigned}
+                        // הכפתור יהיה חסום אם הטופס לא תקין, שעדיין לא חתמו, או שלא ניתן לזהות את המחסנאי
+                        disabled={!isValid || !isSigned || blockedNoEmployeeNumber}
                         variant="contained"
                         sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >

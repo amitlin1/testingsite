@@ -363,6 +363,7 @@ export default function ShipmentTable() {
                             onChange={(v) => setCustomerFilter(v)}
                             placeholder="כל הלקוחות"
                             width={170}
+                            inputSx={{ height: 42 }}
                         />
                     </div>
 

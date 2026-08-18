@@ -341,11 +341,21 @@ function ItemCard({
                 variant="contained"
                 onClick={async () => {
                   if (isWaiting) {
+                    // start-test is the only call that flips the item to "in
+                    // test" — it must run before the wizard opens too, or the
+                    // item stays "waiting" while the wizard is open and a
+                    // second worker can start (and submit) it independently.
+                    try {
+                      await onStartTest(item.item_id);
+                    } catch (err) {
+                      onRefresh();
+                      alert(err instanceof Error ? err.message : "לא ניתן להתחיל בדיקה — ייתכן שפריט זה כבר נתפס על ידי עובד אחר.");
+                      return;
+                    }
                     if (hasWizard) {
                       // Station-type wizard runs the intake in place of the plain start.
                       onAddTestResult(item);
                     } else {
-                      await onStartTest(item.item_id);
                       onRefresh();
                     }
                   } else if (isInTest) {
@@ -465,6 +475,11 @@ function TestingPageView() {
   const [itemsLoading, setItemsLoading] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [selectedItem, setSelectedItem] = React.useState<ItemRow | null>(null);
+  // Tracks whether the currently-open test dialog actually submitted a result.
+  // start-test locks the item into "in test"/"in research" before the dialog
+  // opens; if it's closed any other way (X button, backdrop, Escape) the item
+  // must be released back to waiting instead of staying locked forever.
+  const dialogSubmittedRef = React.useRef(false);
   const [historyDialogOpen, setHistoryDialogOpen] = React.useState(false);
   const [nextStationDialogOpen, setNextStationDialogOpen] = React.useState(false);
   const [nextStationInfo, setNextStationInfo] = React.useState<{
@@ -549,7 +564,7 @@ function TestingPageView() {
       return;
     }
     let cancelled = false;
-    apiFetch("/api/settings/workers")
+    apiFetch("/api/workers-directory")
       .then((r) => (r.ok ? r.json() : []))
       .then((rows: Array<{ worker_id: number; worker_name: string }>) => {
         if (cancelled) return;
@@ -768,6 +783,7 @@ function TestingPageView() {
   }, [selectedStation]);
 
   const handleAddTestResult = (item: ItemRow) => {
+    dialogSubmittedRef.current = false;
     setSelectedItem(item);
     setDialogOpen(true);
   };
@@ -857,6 +873,25 @@ function TestingPageView() {
     }
   };
 
+  // Reverses start-test for an item whose dialog was closed/cancelled without
+  // a submitted result, so it goes back to "waiting" instead of staying
+  // locked at "in test" forever. Fire-and-forget from the UI's perspective —
+  // the periodic release-stale-tests cron is the backstop if this fails too
+  // (closed tab, lost connection, etc).
+  const releaseTest = async (itemId: number, stationId: number) => {
+    try {
+      await apiFetch("/api/testing/release-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, stationId }),
+      });
+    } catch (error) {
+      console.error("Error releasing test:", error);
+    } finally {
+      handleRefreshItems();
+    }
+  };
+
   const handleRefreshItems = async () => {
     if (!selectedStation) return;
     setItemsLoading(true);
@@ -899,6 +934,9 @@ function TestingPageView() {
       const error = await response.json();
       throw new Error(error.error || "Failed to save test result");
     }
+    // A result was actually recorded — the dialog's onClose (right after this
+    // resolves) must not release the item back to waiting.
+    dialogSubmittedRef.current = true;
 
     const result = await response.json();
 
@@ -1130,7 +1168,12 @@ function TestingPageView() {
   return (
     <StartDialog
       open={dialogOpen}
-      onClose={() => setDialogOpen(false)}
+      onClose={() => {
+        setDialogOpen(false);
+        if (!dialogSubmittedRef.current) {
+          releaseTest(selectedItem.item_id, selectedStation.test_station_id);
+        }
+      }}
       item={selectedItem}
       station={selectedStation}
       workerId={activeWorkerId}

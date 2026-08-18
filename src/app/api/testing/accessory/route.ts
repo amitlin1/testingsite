@@ -40,7 +40,7 @@ export async function POST(req: Request) {
           customer: parent.customer_id,
           itemType: Number(itemType),
           serialNumber,
-          makat: Number(makat),
+          makat,
           model,
           manufacturer,
           manufacturerNo: manufacturerNo ?? null,

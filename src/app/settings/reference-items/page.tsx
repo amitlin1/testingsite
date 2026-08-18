@@ -492,6 +492,7 @@ export default function ReferenceItemsPage() {
                         setSkuFilter(null);
                         setManuFilter(null);
                       }}
+                      variant="text"
                       sx={{
                         height: 46,
                         color: C.accent,
@@ -669,7 +670,7 @@ export default function ReferenceItemsPage() {
             />
             <FieldText
               label="שם הפריט"
-              optional
+              required
               value={formName}
               onChange={setFormName}
               placeholder="תיאור קצר"
@@ -762,7 +763,7 @@ export default function ReferenceItemsPage() {
                 </Box>
               </Typography>
               <Typography sx={{ fontSize: 12, color: C.mutedSoft }}>
-                PNG או JPG · עד 10MB לתמונה · ניתן לבחור כמה
+                PNG או JPG · עד 50MB לתמונה · ניתן לבחור כמה
               </Typography>
               <input
                 ref={fileRef}

@@ -15,8 +15,8 @@ import { registerFileObject, markFileObjectDeleted } from '@/lib/file-registry';
 /** Key prefix inside the reference bucket: `reference-items/{id}/...`. */
 export const REFERENCE_PREFIX = 'reference-items';
 
-/** Max size per reference image (matches the dialog copy: "עד 10MB לתמונה"). */
-export const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+/** Max size per reference image (matches the dialog copy: "עד 50MB לתמונה"). */
+export const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
 
 /** Build the browser-facing URL that streams an object from the RU bucket. */
 export function imageUrl(objectKey: string): string {
@@ -176,7 +176,7 @@ export async function uploadReferenceImages(
       throw new Error(`הקובץ ${file.name} אינו תמונה`);
     }
     if (file.size > MAX_IMAGE_SIZE) {
-      throw new Error(`הקובץ ${file.name} חורג מהגודל המרבי (10MB)`);
+      throw new Error(`הקובץ ${file.name} חורג מהגודל המרבי (50MB)`);
     }
 
     const sortOrder = startSort + i;

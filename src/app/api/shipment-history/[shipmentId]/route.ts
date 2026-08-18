@@ -16,14 +16,13 @@ export async function GET(
                 sh.sent_shipment_code,
                 sh.sent_date,
                 sh.sending_worker_id,
-                w.worker_name as sending_worker_name,
+                sh.sending_worker_name,
                 sh.item_type_id,
                 it.item_type_desc,
                 sh.makat,
                 sh.amount,
                 sh.signature_path
             FROM shipment_history sh
-            LEFT JOIN workers w ON sh.sending_worker_id = w.worker_id
             LEFT JOIN item_types it ON sh.item_type_id = it.item_type_id
             WHERE sh.shipment_id = ${parseInt(shipmentId, 10)}
             ORDER BY sh.sent_date DESC, sh.log_id DESC

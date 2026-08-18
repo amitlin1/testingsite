@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { parseBarcode } from "@/app/lib/barcode-parser";
+import { getWorkersDirectory } from "@/lib/keycloak-admin";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { itemId } = parseBarcode(id);
     const itemIdBig = BigInt(itemId);
 
-    const [itemResult, connectedResult, historyResult] = await Promise.all([
+    const [itemResult, connectedResult, historyResult, workersDirectory] = await Promise.all([
       prisma.$queryRaw<any[]>`
         SELECT
           i.item_id,
@@ -93,7 +94,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       prisma.$queryRaw<any[]>`
         SELECT
           h.*,
-          w.worker_name,
           -- The station the step actually ran at, plus its type. The history row
           -- only stores test_station_id; the item-history screen needs the name
           -- ("איפה נעצר הפריט") and the type to line steps up with route_steps.
@@ -101,13 +101,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           ts.test_station_type_id,
           TRIM(tst.test_type_desc)  AS test_station_type_desc
         FROM item_route_history h
-        LEFT JOIN workers w              ON h.worker_id = w.worker_id
         LEFT JOIN test_stations ts       ON ts.test_station_id = h.test_station_id
         LEFT JOIN test_stations_type tst ON tst.test_station_type_id = ts.test_station_type_id
         WHERE h.item_id = ${itemIdBig}
         ORDER BY h.log_id DESC
         LIMIT 200
       `,
+      // worker_id here is a Keycloak employeeNumber (no local `workers` table
+      // left to join against) — resolve names from the directory instead.
+      getWorkersDirectory().catch(() => []),
     ]);
 
     const normalizedItem = itemResult[0] ? {
@@ -117,8 +119,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       finished_at: normalizeToUtcIso(itemResult[0].finished_at),
     } : null;
 
+    const workerNameById = new Map(workersDirectory.map((w) => [w.worker_id, w.worker_name]));
     const normalizedHistory = historyResult.map((row: any) => ({
       ...row,
+      worker_name: row.worker_id != null ? (workerNameById.get(Number(row.worker_id)) ?? null) : null,
       queue_start_time: normalizeToUtcIso(row.queue_start_time),
       processing_start_time: normalizeToUtcIso(row.processing_start_time),
       processing_end_time: normalizeToUtcIso(row.processing_end_time),

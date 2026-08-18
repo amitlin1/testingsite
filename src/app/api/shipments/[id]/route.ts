@@ -1,18 +1,23 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
+import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
+import { hasRole } from "@/lib/auth/roles";
+
+/** withAuth passes only (req, ctx); recover the [id] from the path. */
+function idFromReq(req: NextRequest): number {
+    const parts = req.nextUrl.pathname.split("/").filter(Boolean); // api / shipments / <id>
+    const i = parts.indexOf("shipments");
+    return parseInt((i >= 0 ? parts[i + 1] : "") ?? "", 10);
+}
 
 // PUT: Update a shipment
-export async function PUT(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params;
-    const shipmentId = parseInt(id, 10);
+export const PUT = withAuth(async (request: NextRequest, { session }: WithAuthCtx) => {
+    const shipmentId = idFromReq(request);
 
     try {
         const body = await request.json();
-        const { shipment_code, customer_id, shipment_date, amount, source_id, shipment_items, sending_worker_id, makat } = body;
+        const { shipment_code, customer_id, shipment_date, amount, source_id, shipment_items, sending_worker_id, sending_worker_name, recieving_worker_id, recieving_worker_name, makat } = body;
 
         // Basic validation
         if (!shipment_code || !customer_id || !shipment_date || !amount) {
@@ -20,6 +25,25 @@ export async function PUT(
                 { error: "Missing required fields" },
                 { status: 400 }
             );
+        }
+
+        // Same rule as POST /api/shipments: a storekeeper is always attributed
+        // as THEMSELVES for "עובד מקבל" — never trust a client-submitted id/name
+        // for that case. Anyone else falls through to the manual picker's
+        // submitted id/name.
+        let finalRecievingWorkerId: number | null = recieving_worker_id || null;
+        let finalRecievingWorkerName: string | null = recieving_worker_name || null;
+        if (hasRole(session.roles ?? [], "storekeeper")) {
+            const empNo = session.user.employeeNumber ? Number(session.user.employeeNumber) : NaN;
+            if (!Number.isFinite(empNo) || empNo <= 0) {
+                return NextResponse.json(
+                    { error: "לא ניתן לזהות אותך כמחסנאי — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו ב'הגדרות > משתמשים'." },
+                    { status: 400 },
+                );
+            }
+            finalRecievingWorkerId = empNo;
+            finalRecievingWorkerName =
+                session.user.displayName ?? session.user.name ?? session.user.preferredUsername;
         }
 
         const currentUtcIso = getCurrentUtcIso();
@@ -35,7 +59,10 @@ export async function PUT(
                     amount = ${amount},
                     shipment_sent_date = CASE WHEN ${sending_worker_id || null}::int IS NOT NULL AND shipment_sent_date IS NULL THEN ${currentUtcDate}::timestamp ELSE shipment_sent_date END,
                     sending_worker_id = ${sending_worker_id || null},
-                    makat = COALESCE(${makat || null}::int, makat),
+                    sending_worker_name = ${sending_worker_name || null},
+                    recieving_worker_id = ${finalRecievingWorkerId},
+                    recieving_worker_name = ${finalRecievingWorkerName},
+                    makat = COALESCE(${makat || null}, makat),
                     source_id = ${source_id || null}::int
                 WHERE id = ${shipmentId}
                 RETURNING *
@@ -80,7 +107,7 @@ export async function PUT(
             { status: 500 }
         );
     }
-}
+});
 
 export async function DELETE(
     request: Request,

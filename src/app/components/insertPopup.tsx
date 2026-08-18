@@ -23,7 +23,7 @@ type ShipmentItem = {
     item_type_desc: string;
     total_quantity: number;
     sample_count: number;
-    makat: number | null;
+    makat: string | null;
 };
 
 type InsertPopupProps = {
@@ -60,6 +60,10 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
     // batch (driven by QR scan of a quantity > 1)
     const [pendingBatchItems, setPendingBatchItems] = useState<ParsedItemData[]>([]);
     const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+
+    // count of items added in the current continuous "add another" session
+    // (manual entry or single-item barcode scans, repeated by the user)
+    const [addedCount, setAddedCount] = useState(0);
 
     // scanner dialog
     const [scannerOpen, setScannerOpen] = useState(false);
@@ -110,6 +114,7 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
         setSeedForm(undefined);
         setPendingBatchItems([]);
         setCurrentBatchIndex(0);
+        setAddedCount(0);
         prevShipmentRef.current = "";
     }, [open]);
 
@@ -221,13 +226,13 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
     };
 
     // ---- submit → build NewItem + POST + batch continuation ----
-    const handleSubmit = async (f: NewItemForm, subItems: SubItemForm[]) => {
+    const handleSubmit = async (f: NewItemForm, subItems: SubItemForm[], addAnother: boolean) => {
         const num = (v: string) => (v ? Number(v) : null);
         const payload: NewItem = {
             customer: num(f.customer),
             itemType: num(f.itemType),
             serialNumber: f.serialNumber || null,
-            makat: f.makat ? Number(f.makat) : null,
+            makat: f.makat || null,
             model: f.model || undefined,
             manufacturer: f.manufacturer || undefined,
             manufacturerNo: f.manufacturerNo || undefined,
@@ -237,7 +242,7 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
                 customer: num(f.customer),
                 itemType: num(sub.itemType),
                 serialNumber: sub.serialNumber || null,
-                makat: sub.makat ? Number(sub.makat) : null,
+                makat: sub.makat || null,
                 model: sub.model || undefined,
                 manufacturer: sub.manufacturer || undefined,
                 manufacturerNo: sub.manufacturerNo || undefined,
@@ -259,14 +264,26 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
                 setCurrentBatchIndex((prev) => prev + 1);
                 seed({ ...f, serialNumber: "" });
                 onCreate(payload, true);
-            } else {
-                onCreate(payload, success);
-                if (currentBatchIndex >= pendingBatchItems.length) {
-                    setPendingBatchItems([]);
-                    setCurrentBatchIndex(0);
-                    onClose();
-                }
+                return;
             }
+
+            if (pendingBatchItems.length > 0) {
+                // the QR-detected batch just finished
+                setPendingBatchItems([]);
+                setCurrentBatchIndex(0);
+            }
+
+            if (success && addAnother) {
+                // stay open for the next item — manual entry or another barcode
+                // scan, same as item 1. Keep every field except the serial number.
+                setAddedCount((c) => c + 1);
+                seed({ ...f, serialNumber: "" });
+                onCreate(payload, true);
+                return;
+            }
+
+            onCreate(payload, success);
+            onClose();
         } catch (error) {
             console.log(error);
             onCreate(payload, false);
@@ -290,6 +307,7 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
                 loadingShipmentItems={loadingShipmentItems}
                 batchIndex={currentBatchIndex}
                 batchTotal={pendingBatchItems.length}
+                addedCount={addedCount}
                 onFormChange={handleFormChange}
                 initialForm={seedForm}
             />

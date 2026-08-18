@@ -31,6 +31,7 @@ type SendFormValues = {
     sent_shipment_code: string;
     sent_date: string; // ISO date string YYYY-MM-DD
     sending_worker_id: number | null;
+    sending_worker_name: string | null;
     items: {
         item_type_id: number | null;
         makat: number | null;
@@ -47,7 +48,7 @@ export default function ShipmentSendPopup({
     shipment,
 }: ShipmentSendPopupProps) {
     const theme = useTheme();
-    const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string }[]>([]);
+    const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; roles: string[] }[]>([]);
     const [history, setHistory] = useState<{ item_type_id: number; makat: number | null; total_sent: number }[]>([]);
 
     const [isSigned, setIsSigned] = useState(false);
@@ -65,6 +66,7 @@ export default function ShipmentSendPopup({
             sent_shipment_code: "",
             sent_date: new Date().toISOString().split("T")[0],
             sending_worker_id: null,
+            sending_worker_name: null,
             items: [{ item_type_id: null, makat: null, amount: '' }],
         }
     });
@@ -82,7 +84,7 @@ export default function ShipmentSendPopup({
         let cancelled = false;
         (async () => {
             try {
-                const res = await apiFetch("/api/workers");
+                const res = await apiFetch("/api/workers-directory");
                 const data = await res.json();
                 if (!cancelled && Array.isArray(data)) {
                     setWorkers(data);
@@ -115,6 +117,7 @@ export default function ShipmentSendPopup({
                 sent_shipment_code: "",
                 sent_date: new Date().toLocaleDateString('en-CA', { timeZone: DISPLAY_TIMEZONE }),
                 sending_worker_id: null,
+                sending_worker_name: null,
                 items: [{ item_type_id: null, makat: null, amount: '' }],
             });
         }
@@ -140,6 +143,7 @@ export default function ShipmentSendPopup({
                 sent_shipment_code: data.sent_shipment_code,
                 sent_date: new Date(data.sent_date).toISOString(),
                 sending_worker_id: data.sending_worker_id,
+                sending_worker_name: data.sending_worker_name,
                 items: validItems,
                 signature_base64
             };
@@ -240,12 +244,15 @@ export default function ShipmentSendPopup({
                                 name="sending_worker_id"
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
-                                    <SearchableCombobox<{ worker_id: number; worker_name: string }>
-                                        options={workers}
+                                    <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
+                                        options={workers.filter(w => w.roles.includes("storekeeper"))}
                                         getOptionLabel={(option) => option.worker_name}
                                         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
-                                        onChange={(newValue) => onChange(newValue?.worker_id ?? null)}
+                                        onChange={(newValue) => {
+                                            onChange(newValue?.worker_id ?? null);
+                                            setValue("sending_worker_name", newValue?.worker_name ?? null);
+                                        }}
                                         placeholder="בחר עובד…"
                                         error={!!errors.sending_worker_id}
                                     />

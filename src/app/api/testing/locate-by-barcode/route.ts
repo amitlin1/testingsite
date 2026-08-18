@@ -75,7 +75,7 @@ export async function GET(req: Request) {
                 finished: true,
                 itemId: Number(row.itemId),
                 serialNo: row.serialNo,
-                makat: row.makat != null ? Number(row.makat) : null,
+                makat: row.makat ?? null,
                 model: row.model,
             });
         }
@@ -127,7 +127,7 @@ export async function GET(req: Request) {
             itemId: Number(row.itemId),
             currentStatus,
             serialNo: row.serialNo,
-            makat: row.makat != null ? Number(row.makat) : null,
+            makat: row.makat ?? null,
             model: row.model,
             stationId,
             stationTypeId,

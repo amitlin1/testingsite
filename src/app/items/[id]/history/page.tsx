@@ -242,7 +242,7 @@ export default function ItemHistoryPage() {
         const [itemRes, filesRes, workersRes, typesRes, photoRes] = await Promise.all([
           apiFetch(`/api/items/${encodeURIComponent(itemId)}`),
           apiFetch(`/api/items/${encodeURIComponent(itemId)}/files`),
-          apiFetch("/api/workers"),
+          apiFetch("/api/workers-directory"),
           apiFetch("/api/settings/test-stations-type"),
           apiFetch("/api/settings/photo-types"),
         ]);

@@ -469,7 +469,7 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           parentItemId: item.item_id, itemType: Number(draft.itemTypeId), serialNumber: draft.serialNumber,
-          makat: Number(draft.makat), model: draft.model, manufacturer: draft.manufacturer, manufacturerNo: draft.manufacturerNo || null,
+          makat: draft.makat, model: draft.model, manufacturer: draft.manufacturer, manufacturerNo: draft.manufacturerNo || null,
         }),
       });
       const d = await res.json();
@@ -863,7 +863,7 @@ function PhaseBody(p: PhaseBodyProps) {
                 <TextField size="small" label="מספר סריאלי" value={p.draft.serialNumber} onChange={(e) => p.setDraft((d) => ({ ...d, serialNumber: e.target.value }))} fullWidth />
               </Stack>
               <Stack direction="row" spacing={1.5}>
-                <TextField size="small" label="מק״ט פנימי" type="number" value={p.draft.makat} onChange={(e) => p.setDraft((d) => ({ ...d, makat: e.target.value }))} fullWidth />
+                <TextField size="small" label="מק״ט פנימי" value={p.draft.makat} onChange={(e) => p.setDraft((d) => ({ ...d, makat: e.target.value }))} fullWidth />
                 <TextField size="small" label="דגם" value={p.draft.model} onChange={(e) => p.setDraft((d) => ({ ...d, model: e.target.value }))} fullWidth />
               </Stack>
               <Stack direction="row" spacing={1.5}>
@@ -877,7 +877,10 @@ function PhaseBody(p: PhaseBodyProps) {
             </Stack>
           </Box>
         ) : (
-          <Button onClick={() => p.setShowAdd(true)} startIcon={<AddIcon />} sx={{ borderRadius: "9999px", color: BLUE, alignSelf: "flex-start" }}>הוסף פריט</Button>
+          <Button onClick={() => p.setShowAdd(true)} variant="contained" disableElevation startIcon={<AddIcon />}
+            sx={{ borderRadius: "9999px", alignSelf: "flex-start", fontSize: 15, fontWeight: 600, textTransform: "none", boxShadow: "none", bgcolor: BLUE, "&:hover": { bgcolor: "#0058b3", boxShadow: "none" } }}>
+            הוסף פריט
+          </Button>
         )}
       </Stack>
     );

@@ -191,7 +191,10 @@ export default function TestingRoutesPage() {
                   getOptionLabel={(option) => option.label}
                   isOptionEqualToValue={(option, value) => option.id === value.id}
                   value={selectedItemType}
-                  onChange={(newValue) => setSelectedItemType(newValue)}
+                  onChange={(newValue) => {
+                    setSelectedItemType(newValue);
+                    if (!newValue) setRouteNumber(null);
+                  }}
                   floatingLabel="סוג פריט"
                 />
               </Box>

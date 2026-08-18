@@ -19,7 +19,7 @@ const MIN_QUERY = 2;
 export interface SearchItem {
   itemId: string;
   serialNo: string;
-  makat: number | null;
+  makat: string | null;
   model: string | null;
   manufacturerName: string | null;
   manufacturerNo: string | null;
@@ -132,7 +132,7 @@ export async function GET(req: Request) {
     const items: SearchItem[] = rows.map((r) => ({
       itemId: String(r.item_id),
       serialNo: String(r.serial_no ?? ""),
-      makat: r.makat == null ? null : Number(r.makat),
+      makat: r.makat == null ? null : String(r.makat),
       model: (r.model as string | null)?.trim() ?? null,
       manufacturerName: (r.manufacturer_name as string | null)?.trim() ?? null,
       manufacturerNo: (r.manufacturer_no as string | null)?.trim() ?? null,

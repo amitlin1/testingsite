@@ -8,9 +8,10 @@
 //
 // WHAT IT CAPTURES: the lookup/configuration tables behind every /settings page
 // — customers, item types, sources, the two status lists, station types and
-// stations, testing routes, workers, photo types, reference items and their
-// image records, and the work-hours calendar. NOT transactional data (items,
+// stations, testing routes, photo types, reference items and their image
+// records, and the work-hours calendar. NOT transactional data (items,
 // shipments, test results, snapshots): a new installation starts empty of those.
+// Identity ("who did this") is Keycloak-only now — no local `workers` table.
 //
 // THREE THINGS THIS FILE HAS TO GET RIGHT, each of which silently breaks the
 // target otherwise:
@@ -64,7 +65,6 @@ const TABLES = [
   "item_status",
   "test_station_status",
   "test_stations_type",
-  "workers",
   "photo_types",
   "holiday_types",
   "weekday_defaults",

@@ -17,7 +17,7 @@ export async function createItem(
     customer: number;
     itemType: number;
     serialNumber: string | number;
-    makat: number;
+    makat: string;
     model: string;
     manufacturer: string;
     manufacturerNo?: string | null;

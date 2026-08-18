@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { shipment_id, sending_worker_id, sent_date, sent_shipment_code, items, signature_base64 } = body;
+        const { shipment_id, sending_worker_id, sending_worker_name, sent_date, sent_shipment_code, items, signature_base64 } = body;
 
         // Basic validation
         if (!shipment_id || !sent_date || !sent_shipment_code || !items || !Array.isArray(items) || items.length === 0) {
@@ -60,8 +60,8 @@ export async function POST(request: Request) {
 
                 await tx.$executeRaw`
                     INSERT INTO shipment_history
-                     (shipment_id, sending_worker_id, sent_date, sent_shipment_code, item_type_id, makat, amount, signature_path)
-                     VALUES (${shipment_id}, ${sending_worker_id || null}, ${new Date(sent_date)}::timestamp, ${sent_shipment_code}, ${item.item_type_id}, ${item.makat || null}, ${item.amount}, ${signaturePath})
+                     (shipment_id, sending_worker_id, sending_worker_name, sent_date, sent_shipment_code, item_type_id, makat, amount, signature_path)
+                     VALUES (${shipment_id}, ${sending_worker_id || null}, ${sending_worker_name || null}, ${new Date(sent_date)}::timestamp, ${sent_shipment_code}, ${item.item_type_id}, ${item.makat || null}, ${item.amount}, ${signaturePath})
                 `;
             }
 
