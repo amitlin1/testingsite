@@ -29,18 +29,13 @@ Write-Host "Step 1: Resetting database (drop + re-create schema)..." -Foreground
 npx prisma migrate reset --force --skip-seed
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host ""
-    Write-Host "migrate reset failed. Trying prisma db push instead..." -ForegroundColor Yellow
-    Write-Host "Step 1b: Pushing schema directly (no migration history)..." -ForegroundColor Cyan
-    
-    # db push is useful when you don't have migration files yet
-    # --force-reset drops all tables before pushing
-    npx prisma db push --force-reset
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Database reset failed!"
-        exit 1
-    }
+    # NO db push fallback. `prisma db push --force-reset` recreates only what
+    # schema.prisma declares — every raw-SQL object from migrations (triggers,
+    # functions, materialized views, EXCLUDE constraints) silently vanishes,
+    # leaving a database that LOOKS right and misbehaves later. If migrate
+    # reset fails, fix the migration instead of bypassing it.
+    Write-Error "prisma migrate reset failed - fix the failing migration (no db push fallback)."
+    exit 1
 }
 
 Write-Host ""

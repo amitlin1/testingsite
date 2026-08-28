@@ -4,6 +4,7 @@ import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
 import { WH_ROLES, actorOf, segmentAfter } from "../../_shared";
 import { toWeekdayDefault } from "@/lib/workHours/serialize";
 import { validateWeekdayDefault } from "@/lib/workHours/validate";
+import { rebuildWorkCalendar } from "@/lib/work-calendar";
 import type { Weekday } from "@/lib/workHours/types";
 
 export const runtime = "nodejs";
@@ -40,6 +41,9 @@ export const PUT = withAuth(async (req: NextRequest, ctx: WithAuthCtx) => {
       update: { is_working: isWorking, start_time: start, end_time: end, break_start: breakStart, break_end: breakEnd, updated_by: actorOf(ctx) },
       create: { weekday, is_working: isWorking, start_time: start, end_time: end, break_start: breakStart, break_end: breakEnd, updated_by: actorOf(ctx) },
     });
+    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
+    // forget — the user's save never waits on, or fails with, the rebuild.
+    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
     return NextResponse.json(toWeekdayDefault(saved));
   } catch (e) {
     console.error("work-hours defaults PUT", e);

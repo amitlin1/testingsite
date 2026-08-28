@@ -6,6 +6,7 @@ import { toOverride, dbDateToString } from "@/lib/workHours/serialize";
 import { getIsraeliHolidayForDate } from "@/lib/workHours/israeliHolidays";
 import { validateOverride } from "@/lib/workHours/validate";
 import { weekdayOf } from "@/lib/workHours/time";
+import { rebuildWorkCalendar } from "@/lib/work-calendar";
 import type { OverrideKind } from "@/lib/workHours/types";
 
 export const runtime = "nodejs";
@@ -50,6 +51,9 @@ export const PUT = withAuth(async (req: NextRequest) => {
         note: input.note,
       },
     });
+    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
+    // forget — the user's save never waits on, or fails with, the rebuild.
+    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
     return NextResponse.json(toOverride(saved));
   } catch (e) {
     console.error("work-hours overrides PUT", e);
@@ -63,6 +67,9 @@ export const DELETE = withAuth(async (req: NextRequest) => {
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "מזהה לא תקין" }, { status: 400 });
   try {
     await prisma.workday_overrides.delete({ where: { id } });
+    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
+    // forget — the user's save never waits on, or fails with, the rebuild.
+    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("work-hours overrides DELETE", e);

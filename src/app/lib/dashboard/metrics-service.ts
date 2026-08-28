@@ -717,27 +717,6 @@ export const MetricsService = {
     );
   },
 
-  /**
-   * Get station stats from live counters — for Settings page consistency.
-   * Returns the same queue/test numbers the Dashboard shows.
-   */
-  async getStationLiveCounters(client: Client): Promise<{
-    stationId: number;
-    itemsInQueue: number;
-    itemsInTest: number;
-  }[]> {
-    const rows = await (client as any).$queryRawUnsafe(`
-      SELECT station_id, items_in_queue, items_in_test
-      FROM station_live_counters
-    `);
-
-    return (rows as any[]).map((row) => ({
-      stationId: row.station_id,
-      itemsInQueue: toNumber(row.items_in_queue),
-      itemsInTest: toNumber(row.items_in_test),
-    }));
-  },
-
   // ═══════════════════════════════════════════════════════════
   // Dashboard-specific methods (filter-aware)
   // ═══════════════════════════════════════════════════════════
@@ -1144,74 +1123,4 @@ export const MetricsService = {
     };
   },
 
-  /**
-   * Get live system stats with optional filters — used by daily-trends for today's data point.
-   */
-  async getLiveSystemStats(
-    client: Client,
-    options?: {
-      customerId?: string | null;
-      shipmentId?: string | null;
-      itemTypeId?: string | null;
-      testStationId?: string | null;
-    }
-  ): Promise<{
-    itemsInQueue: number;
-    itemsInTest: number;
-    itemsWaitingForResearch: number;
-    itemsInResearch: number;
-    itemsFinished: number;
-    itemsActive: number;
-  }> {
-    const liveParams: any[] = [];
-    let liveIdx = 1;
-    const liveConds: string[] = [];
-
-    if (options?.customerId) {
-      liveConds.push(`AND i.customer_id = $${liveIdx}::int`);
-      liveParams.push(options.customerId);
-      liveIdx++;
-    }
-    if (options?.shipmentId) {
-      liveConds.push(`AND i.shipment_id = $${liveIdx}::int`);
-      liveParams.push(options.shipmentId);
-      liveIdx++;
-    }
-    if (options?.itemTypeId) {
-      liveConds.push(`AND i.item_type_id = $${liveIdx}::int`);
-      liveParams.push(options.itemTypeId);
-      liveIdx++;
-    }
-    if (options?.testStationId) {
-      liveConds.push(`AND ir.test_station_id = $${liveIdx}::int`);
-      liveParams.push(options.testStationId);
-      liveIdx++;
-    }
-
-    const liveQuery = `
-      SELECT
-        COUNT(CASE WHEN ir.current_status IN (2, 4) THEN 1 END) as in_queue,
-        COUNT(CASE WHEN ir.current_status IN (1, 5) THEN 1 END) as in_test,
-        COUNT(CASE WHEN ir.current_status = 4 THEN 1 END) as waiting_research,
-        COUNT(CASE WHEN ir.current_status = 5 THEN 1 END) as in_research,
-        COUNT(CASE WHEN ir.finished_at IS NOT NULL THEN 1 END) as finished,
-        COUNT(CASE WHEN ir.finished_at IS NULL THEN 1 END) as active
-      FROM item_routes ir
-      JOIN items i ON i.item_id = ir.item_id
-      WHERE 1=1
-      ${liveConds.join(" ")}
-    `;
-
-    const rows = await (client as any).$queryRawUnsafe(liveQuery, ...liveParams);
-    const row = (rows as any[])[0] || {};
-
-    return {
-      itemsInQueue: toNumber(row.in_queue),
-      itemsInTest: toNumber(row.in_test),
-      itemsWaitingForResearch: toNumber(row.waiting_research),
-      itemsInResearch: toNumber(row.in_research),
-      itemsFinished: toNumber(row.finished),
-      itemsActive: toNumber(row.active),
-    };
-  },
 };

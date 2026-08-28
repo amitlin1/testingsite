@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/withAuth";
 import { prisma } from "@/app/lib/prisma";
 import { MetricsService } from "@/app/lib/dashboard/metrics-service";
 import type { StationLoadRow } from "@/types/dashboard";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+export const GET = withAuth(async (req: Request) => {
   try {
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get("startDate");
@@ -62,4 +63,4 @@ export async function GET(req: Request) {
     console.error("Error fetching station load data:", error);
     return NextResponse.json([]);
   }
-}
+}, { role: "manager" });

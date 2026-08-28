@@ -1,12 +1,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/withAuth";
 import { prisma } from "@/app/lib/prisma";
 
-export async function GET(
+export const GET = withAuth(async (
   request: NextRequest,
-  props: { params: Promise<{ id: string }> }
-) {
-  const params = await props.params;
+  _ctx,
+  routeCtx?: unknown,
+) => {
+  const params = await (routeCtx as { params: Promise<{ id: string }> }).params;
   const { searchParams } = new URL(request.url);
   const period = searchParams.get("period") || "alldays";
   const itemTypeId = params.id;
@@ -150,4 +152,4 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+}, { role: "manager" });

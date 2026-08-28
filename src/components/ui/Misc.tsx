@@ -1,5 +1,5 @@
 "use client";
-import React, { forwardRef, useLayoutEffect, useState } from "react";
+import React, { forwardRef } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
@@ -66,6 +66,9 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(function Avatar(
       }}
       {...rest}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element -- design-system primitive
+          taking an arbitrary caller-supplied URL; next/image needs known dimensions
+          and a configured remote host. */}
       {src ? <img src={src} alt={alt} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : children}
     </div>
   );
@@ -163,20 +166,23 @@ export interface PopoverProps {
   PaperProps?: { sx?: SxInput; style?: React.CSSProperties };
 }
 export function Popover({ open, anchorEl, onClose, anchorOrigin, children, sx, PaperProps }: PopoverProps) {
-  const [pos, setPos] = useState<{ top: number; insetInlineStart: number } | null>(null);
-  useLayoutEffect(() => {
-    if (!open || !anchorEl) return;
-    const r = anchorEl.getBoundingClientRect();
-    const vertical = anchorOrigin?.vertical ?? "bottom";
-    setPos({ top: vertical === "top" ? r.top : vertical === "center" ? r.top + r.height / 2 : r.bottom + 4, insetInlineStart: r.left });
-  }, [open, anchorEl, anchorOrigin]);
-  if (!open || typeof document === "undefined") return null;
+  if (!open || !anchorEl || typeof document === "undefined") return null;
+
+  // anchorEl is already in the DOM (it is the element the caller clicked), so it
+  // can be measured here rather than in a layout effect: one render pass instead
+  // of two, and no state. This also removes the old effect's `anchorOrigin`
+  // dependency — every caller passes it as an inline object literal, so the
+  // effect re-ran and re-set state on every single parent render.
+  const r = anchorEl.getBoundingClientRect();
+  const vertical = anchorOrigin?.vertical ?? "bottom";
+  const top = vertical === "top" ? r.top : vertical === "center" ? r.top + r.height / 2 : r.bottom + 4;
+
   return createPortal(
     <>
       <div onClick={(e) => { e.stopPropagation(); onClose?.(e, "backdropClick"); }} style={{ position: "fixed", inset: 0, zIndex: 1400 }} />
       <div
         style={{
-          position: "fixed", top: pos?.top ?? 0, insetInlineStart: pos?.insetInlineStart ?? 0, zIndex: 1401,
+          position: "fixed", top, insetInlineStart: r.left, zIndex: 1401,
           background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "var(--r-md)", overflow: "hidden",
           ...sxToStyle(sx), ...sxToStyle(PaperProps?.sx), ...PaperProps?.style,
         }}

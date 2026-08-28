@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * Compatibility theme object mirroring the old muiTheme shape (palette +
@@ -82,16 +82,25 @@ export function useTheme(): Theme {
 /** SSR-safe useMediaQuery. Theme-function queries resolve to false (desktop). */
 export function useMediaQuery(query?: string | ((t: Theme) => string)): boolean {
   const q = typeof query === "function" ? "" : query ?? "";
-  const [matches, setMatches] = useState(false);
-  useEffect(() => {
-    if (!q || typeof window === "undefined" || !window.matchMedia) return;
-    const mm = window.matchMedia(q);
-    setMatches(mm.matches);
-    const handler = () => setMatches(mm.matches);
-    mm.addEventListener("change", handler);
-    return () => mm.removeEventListener("change", handler);
-  }, [q]);
-  return matches;
+
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (!q || typeof window === "undefined" || !window.matchMedia) return () => {};
+      const mm = window.matchMedia(q);
+      mm.addEventListener("change", onChange);
+      return () => mm.removeEventListener("change", onChange);
+    },
+    [q],
+  );
+
+  const getSnapshot = useCallback(
+    () => (q && typeof window !== "undefined" && window.matchMedia ? window.matchMedia(q).matches : false),
+    [q],
+  );
+
+  // Server/first-paint snapshot is always false (desktop), matching the old
+  // mount-then-measure behaviour without the extra render.
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
 /** MUI colour helper: alpha("#0066cc", 0.1) → "rgba(0,102,204,0.1)". */

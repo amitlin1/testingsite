@@ -140,6 +140,16 @@ if ($dbHost -in @("localhost", "127.0.0.1", "::1", "0.0.0.0")) {
 if ((Get-Val "IS_DEV") -ne "") {
     $errors += "IS_DEV is set. In production this BYPASSES ALL AUTHENTICATION. Remove it."
 }
+# CRON_SECRET straight from .env.template is NOT a secret - the template is in
+# the repo, so every deployment that skipped this line shares a public value
+# that authorizes /api/cron/* (releasing tests, writing snapshots).
+$cronSecret = Get-Val "CRON_SECRET"
+if ($cronSecret -eq "") {
+    $errors += "CRON_SECRET is empty. The /api/cron endpoints answer 503 until it is set."
+} elseif ($cronSecret -eq "Rw6Yb3Nk9Pz1Cq8Xv4Ts7Md2Hj5Lf0GaUeIoAr1DnE=" -or $cronSecret.StartsWith("CHANGE_ME")) {
+    $errors += "CRON_SECRET still has the .env.template value - that value is public (it is in the repo). Generate a fresh one: 32 random bytes, base64."
+}
+
 $secretNames = @("AUTH_SECRET","AUTH_KEYCLOAK_SECRET","KEYCLOAK_ADMIN_CLIENT_SECRET","ONLYOFFICE_JWT_SECRET","CRON_SECRET")
 $seen = @{}
 foreach ($k in $secretNames) {

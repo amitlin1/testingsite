@@ -42,12 +42,32 @@ Write-Host "  from : $src"
 Write-Host "  to   : $Destination"
 Write-Host ""
 
+# The metrics-ledger migration + Tier-1 backfill travel WITH the bundle:
+# db-server\scripts\8-apply-metrics-ledger.ps1 applies them to an EXISTING
+# data volume, where init\02-app-schema.sql never re-runs. They are refreshed
+# from prisma\ on every sync so the stick can never carry a stale copy.
+$repo = Split-Path -Parent $PSScriptRoot
+foreach ($f in @(
+    @{ From = "prisma\migrations\20260825000000_metrics_ledger_additive\migration.sql"
+       To   = "db-server\metrics-ledger\migration.sql" },
+    @{ From = "prisma\backfill\tier1_backfill.sql"
+       To   = "db-server\metrics-ledger\tier1_backfill.sql" }
+)) {
+    $from = Join-Path $repo $f.From
+    if (-not (Test-Path $from)) { throw "Missing from the repo: $($f.From)" }
+    $to = Join-Path $src $f.To
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+    Copy-Item $from $to -Force
+}
+
 # Refuse to ship a bundle whose seeds are missing - a partial copy on an
 # air-gapped site means another trip with a USB stick.
 foreach ($required in @(
     "db-server\keycloak-seed\keycloak-seed.sql",
     "db-server\settings-seed\settings-seed.sql",
-    "db-server\init\02-app-schema.sql"
+    "db-server\init\02-app-schema.sql",
+    "db-server\metrics-ledger\migration.sql",
+    "db-server\metrics-ledger\tier1_backfill.sql"
 )) {
     if (-not (Test-Path (Join-Path $src $required))) { throw "Missing from the bundle: $required" }
 }

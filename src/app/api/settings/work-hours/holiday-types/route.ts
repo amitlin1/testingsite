@@ -3,6 +3,7 @@ import { prisma } from "@/app/lib/prisma";
 import { withAuth } from "@/lib/auth/withAuth";
 import { WH_ROLES } from "../_shared";
 import { toHolidayType } from "@/lib/workHours/serialize";
+import { rebuildWorkCalendar } from "@/lib/work-calendar";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,9 @@ export const POST = withAuth(async (req: NextRequest) => {
     if (existing) return NextResponse.json({ error: "סוג בשם זה כבר קיים" }, { status: 400 });
 
     const created = await prisma.holiday_types.create({ data: { name, is_system: false } });
+    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
+    // forget — the user's save never waits on, or fails with, the rebuild.
+    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
     return NextResponse.json(toHolidayType(created, 0));
   } catch (e: unknown) {
     if ((e as { code?: string })?.code === "P2002") {

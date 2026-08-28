@@ -41,12 +41,21 @@ services:
       # same image (and the same air-gap tar) runs in dev and in production.
     image: testingsite-next-app:latest
     container_name: next-app
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env.prod
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
+      # Explicit timezone: dev runs on a Windows host already in Israel time,
+      # the container defaults to UTC. Every local `new Date()` bucketing in
+      # app code silently disagrees between the two without this.
+      - TZ=Asia/Jerusalem
       # RUNTIME server-side env — read by Node.js at request time (config endpoint,
       # callback handler, JWT signing). These do NOT need to be present at build.
       # ONLYOFFICE_PUBLIC_URL doubles as the origin sent to the BROWSER: the
@@ -97,6 +106,11 @@ services:
   kc-bridge:
     image: alpine/socat:latest
     container_name: kc-bridge
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     network_mode: "service:next-app"
     command: ["TCP-LISTEN:8080,fork,reuseaddr", "TCP:host.docker.internal:8080"]
@@ -113,6 +127,11 @@ services:
   onlyoffice:
     image: onlyoffice/documentserver:latest
     container_name: onlyoffice
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     environment:
       - JWT_ENABLED=true
@@ -147,6 +166,11 @@ services:
       dockerfile: Dockerfile
     image: testingsite-nginx:latest
     container_name: nginx
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env.prod

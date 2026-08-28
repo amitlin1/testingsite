@@ -12,6 +12,8 @@ interface StationType {
   test_type_desc: string;
   /** Queue lists parent items only — accessories are tested alongside the parent. */
   parents_only?: boolean;
+  /** Minutes in test/research with no result before the item is auto-released. 0 = never. */
+  stale_after_minutes?: number;
   station_count?: number;
 }
 
@@ -38,6 +40,9 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   });
 
   const apiUrl = "/api/settings/test-stations-type";
+
+  /** The column's own DEFAULT — a new type is fail-safe unless it says otherwise. */
+  const DEFAULT_STALE_AFTER_MINUTES = 30;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -72,6 +77,12 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   const handleSave = async () => {
     if (!formData.test_type_desc?.trim()) {
       setSnackbar({ open: true, message: "תיאור חובה", severity: "error" });
+      return;
+    }
+    const staleStr = `${formData.stale_after_minutes ?? ""}`.trim();
+    const staleNum = Number(staleStr);
+    if (!staleStr || !Number.isInteger(staleNum) || staleNum < 0) {
+      setSnackbar({ open: true, message: "זמן שחרור אוטומטי חייב להיות מספר שלם של דקות, 0 או יותר", severity: "error" });
       return;
     }
     if (editingRow) {
@@ -141,7 +152,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #e0e0e0" }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: "#1d1d1f" }}>סוגי עמדות</span>
           <button
-            onClick={() => { setEditingRow(null); setFormData({}); setOpenDialog(true); }}
+            onClick={() => { setEditingRow(null); setFormData({ stale_after_minutes: DEFAULT_STALE_AFTER_MINUTES }); setOpenDialog(true); }}
             style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#0066cc", color: "#fff", border: 0, borderRadius: 9999, padding: "7px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
             <Plus size={15} strokeWidth={2.2} />הוסף
@@ -183,6 +194,16 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                   {r.parents_only && (
                     <span title="בעמדות מסוג זה נשלפים רק פריטי אב" style={{ fontSize: 11, color: "#0066cc", background: "#f3f8ff", border: "1px solid #cfe3fb", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}>
                       פריטי אב בלבד
+                    </span>
+                  )}
+                  {r.stale_after_minutes != null && (
+                    <span
+                      title={r.stale_after_minutes === 0
+                        ? "פריט בעמדה מסוג זה לא משוחרר אוטומטית לעולם"
+                        : `פריט שיושב בבדיקה בעמדה מסוג זה ${r.stale_after_minutes} דקות ללא תוצאה משוחרר אוטומטית`}
+                      style={{ fontSize: 11, color: "#7a7a7a", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}
+                    >
+                      {r.stale_after_minutes === 0 ? "ללא שחרור אוטומטי" : `שחרור אחרי ${r.stale_after_minutes} דק׳`}
                     </span>
                   )}
                   {r.station_count != null && (
@@ -236,6 +257,15 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
               />
             }
             label="שלוף רק פריטי אב (הפריטים הנלווים נבדקים יחד עם פריט האב)"
+          />
+          <TextField
+            margin="dense"
+            label="שחרור אוטומטי אחרי (דקות)"
+            type="number"
+            fullWidth
+            value={formData.stale_after_minutes ?? ""}
+            onChange={(e) => setFormData({ ...formData, stale_after_minutes: e.target.value })}
+            helperText="כמה דקות פריט יכול לשבת בבדיקה או במחקר בעמדה מסוג זה ללא תוצאה, לפני שהמערכת מחזירה אותו לתור ומשחררת את העמדה. יש להתאים את הערך לזמן שבדיקה מסוג זה באמת אורכת. 0 = הסוג הזה לא משוחרר אוטומטית לעולם."
           />
         </DialogContent>
         <DialogActions>

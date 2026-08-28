@@ -31,6 +31,11 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env.db
@@ -62,6 +67,11 @@ services:
   minio:
     image: minio/minio:latest
     container_name: FileServiceDB
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     command: server /data --console-address ":9001"
     env_file:
@@ -91,6 +101,11 @@ services:
   minio-backup:
     image: minio/minio:latest
     container_name: FileServiceDB-backup
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env.db
@@ -129,6 +144,11 @@ services:
   postgres-backup:
     image: postgres:16-alpine
     container_name: digitalfactory-postgres-backup
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env.db

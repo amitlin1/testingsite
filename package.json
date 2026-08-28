@@ -8,18 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
-    "snapshot": "node scripts/create-daily-snapshot.js",
-    "snapshot:monthly": "node scripts/create-monthly-snapshot.js",
-    "snapshot:quarterly": "node scripts/create-quarterly-snapshot.js",
-    "snapshot:backfill": "node scripts/backfill-snapshots.js",
-    "snapshot:seed-all": "node scripts/create-all-snapshots-seed.js",
     "db:status": "prisma migrate status",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
-    "db:baseline": "node scripts/baseline-prisma-migrations.js"
+    "db:baseline": "node scripts/baseline-prisma-migrations.js",
+    "db:airgap-schema": "node scripts/build-airgap-schema.js",
+    "db:check-migration": "node scripts/check-migration-safety.js"
   },
   "dependencies": {
     "@hebcal/core": "^6.8.2",
@@ -78,5 +75,8 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
-  }
+  },
+  "overrides": {
+  "eslint-plugin-react-hooks": "7.1.1"
+}
 }

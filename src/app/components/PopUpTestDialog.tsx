@@ -25,6 +25,7 @@ import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";
 import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import ItemFilesPanel from "./ItemFilesPanel";
+import { newActionId } from "@/app/lib/metrics/action-id";
 import type { StationTestDialogProps } from "@/types";
 
 export default function PopUpTestDialog({
@@ -54,6 +55,10 @@ export default function PopUpTestDialog({
   workerName,)
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Action UUID for the metrics ledger (§4.4): minted on the first submit and
+  // kept across error retries, so clicking again after a failure replays the
+  // same event_key instead of minting a duplicate event. Cleared on success.
+  const submitIdRef = React.useRef<string | null>(null);
   const theme = useTheme();
 
   const handleSubmit = async (action: 'save' | 'sendToResearch' | 'returnToRoute' | 'finishRoute' = 'save') => {
@@ -67,6 +72,7 @@ export default function PopUpTestDialog({
 
     setLoading(true);
     try {
+      submitIdRef.current ??= newActionId();
       await onSubmit({
         Result: result,
         Comments: comments || undefined,
@@ -77,8 +83,10 @@ export default function PopUpTestDialog({
         // Sending undefined for SentAt/ReturnAt as they are hidden
         SentAt: undefined,
         ReturnAt: undefined,
+        SubmitID: submitIdRef.current,
       });
-      // Reset form
+      // Reset form (a fresh submission gets a fresh action UUID)
+      submitIdRef.current = null;
       setResult(0);
       setComments("");
       onClose();

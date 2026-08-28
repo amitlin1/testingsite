@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
-import { MetricsService } from "@/app/lib/dashboard/metrics-service";
+import { getStationLiveCounters } from "@/lib/station-counters";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
 
     // Attach live queue/test counts from station_live_counters
     // so Settings page shows the SAME numbers as Dashboard
-    const liveCounters = await MetricsService.getStationLiveCounters(prisma);
+    const liveCounters = await getStationLiveCounters();
     const countersMap = new Map(
       liveCounters.map((c) => [c.stationId, c])
     );

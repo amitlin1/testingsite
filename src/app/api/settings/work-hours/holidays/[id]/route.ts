@@ -4,6 +4,7 @@ import { withAuth } from "@/lib/auth/withAuth";
 import { WH_ROLES, segmentAfter } from "../../_shared";
 import { toHoliday, stringToDbDate } from "@/lib/workHours/serialize";
 import { validateHoliday } from "@/lib/workHours/validate";
+import { rebuildWorkCalendar } from "@/lib/work-calendar";
 import type { DepartmentHolidayInput } from "@/lib/workHours/types";
 
 export const runtime = "nodejs";
@@ -45,6 +46,9 @@ export const PUT = withAuth(async (req: NextRequest) => {
       },
       include: { type: { select: { name: true } } },
     });
+    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
+    // forget — the user's save never waits on, or fails with, the rebuild.
+    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
     return NextResponse.json(toHoliday(saved));
   } catch (e: unknown) {
     const code = (e as { code?: string })?.code;
@@ -60,6 +64,9 @@ export const DELETE = withAuth(async (req: NextRequest) => {
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "מזהה לא תקין" }, { status: 400 });
   try {
     await prisma.department_holidays.delete({ where: { id } });
+    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
+    // forget — the user's save never waits on, or fails with, the rebuild.
+    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
     if ((e as { code?: string })?.code === "P2025") {

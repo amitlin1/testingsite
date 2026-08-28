@@ -19,12 +19,6 @@ export interface DashboardKpis {
   treatedCount?: number;
 }
 
-export interface TimeSeriesPoint {
-  timestamp: string; // UTC ISO string
-  queueTimeMinutes: number | null;
-  processingTimeMinutes: number | null;
-}
-
 export interface StationLoadRow {
   stationId: number;
   stationName: string;
@@ -102,17 +96,6 @@ export interface CustomerPerformanceRow {
   averageTimeMinutes: number | null;
 }
 
-export interface DailyTrendPoint {
-  date: string; // YYYY-MM-DD
-  itemsStarted: number;
-  itemsFinished: number;
-  itemsInQueue: number;
-  itemsInTest: number;
-  itemsWaitingForResearch: number;
-  itemsInResearch: number;
-  isToday?: boolean;
-}
-
 export interface AverageTimesPoint {
   date: string; // YYYY-MM-DD
   avgWaitingMinutes: number | null;
@@ -138,12 +121,6 @@ export interface CustomerOption {
 }
 
 export type DateRangePreset = "today" | "last7days" | "last30days" | "custom";
-
-export interface DateRange {
-  startDate: string; // UTC ISO string
-  endDate: string; // UTC ISO string
-  preset?: DateRangePreset;
-}
 
 export type StatusFilter = "all" | "queue" | "processing" | "finished";
 

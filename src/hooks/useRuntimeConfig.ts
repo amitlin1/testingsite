@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 
 /**
  * Runtime configuration interface.
@@ -44,34 +44,27 @@ declare global {
  * const apiUrl = config.apiBaseUrl;
  * ```
  */
+// window.__RUNTIME_CONFIG__ is written once by /config.js and never mutated,
+// so the store never emits — subscribing is a no-op.
+const subscribeToConfig = () => () => {};
+const getServerConfigSnapshot = () => defaultConfig;
+
 export function useRuntimeConfig() {
-  const [config, setConfig] = useState<RuntimeConfig>(defaultConfig);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  // Reading through useSyncExternalStore keeps the server render on
+  // defaultConfig while the client picks up the real values, with no
+  // hydration mismatch and no setState during an effect.
+  const config = useSyncExternalStore(subscribeToConfig, getRuntimeConfig, getServerConfigSnapshot);
 
+  // The config script may still be executing; give it a tick before we tell
+  // callers that what they're holding is final.
+  const [timedOut, setTimedOut] = useState(false);
   useEffect(() => {
-    // Check if config is already available from script tag
-    if (typeof window !== "undefined" && window.__RUNTIME_CONFIG__) {
-      setConfig(window.__RUNTIME_CONFIG__);
-      setIsLoaded(true);
-      return;
-    }
-
-    // If not, the config.js script should set it
-    // Wait a tick for the script to execute
-    const timer = setTimeout(() => {
-      if (typeof window !== "undefined" && window.__RUNTIME_CONFIG__) {
-        setConfig(window.__RUNTIME_CONFIG__);
-        setIsLoaded(true);
-      } else {
-        // Config script might not be present (e.g., dev mode)
-        // Use defaults
-        setIsLoaded(true);
-      }
-    }, 100);
-
+    const timer = setTimeout(() => setTimedOut(true), 100);
     return () => clearTimeout(timer);
   }, []);
+
+  const isLoaded = config !== defaultConfig || timedOut;
+  const error: Error | null = null;
 
   return { config, isLoaded, error };
 }

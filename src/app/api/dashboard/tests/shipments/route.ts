@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/withAuth";
 import { prisma } from "@/app/lib/prisma";
 import { ShipmentTrackingRow } from "@/types/dashboard";
 import { buildDashboardFilters } from "@/app/lib/dashboard-filters";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+export const GET = withAuth(async (req: Request) => {
   try {
     const { searchParams } = new URL(req.url);
 
@@ -164,4 +165,4 @@ export async function GET(req: Request) {
       { status: 500 }
     );
   }
-}
+}, { role: "manager" });

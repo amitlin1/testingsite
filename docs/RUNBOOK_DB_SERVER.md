@@ -80,7 +80,7 @@ If you have schema SQL files, run them:
 ```powershell
 # Copy SQL file into container and execute
 docker cp schema.sql postgres:/tmp/
-docker compose -f docker-compose.db.yml exec postgres psql -U appuser -d testingsite -f /tmp/schema.sql
+docker compose -f docker-compose.db.yml exec postgres psql -v ON_ERROR_STOP=1 -U appuser -d testingsite -f /tmp/schema.sql
 ```
 
 Or use init scripts (run only on first start):
@@ -94,59 +94,72 @@ Or use init scripts (run only on first start):
 
 ## Backup Procedures
 
+### Automatic (the `postgres-backup` sidecar — nothing to schedule)
+
+The `postgres-backup` container in `prod-deploy/db-server/docker-compose.yml`
+dumps **both** databases (`testingsite` AND `keycloak`) every
+`BACKUP_INTERVAL_SECONDS` (default: daily) in **`pg_dump -Fc` custom format**
+— a `.dump` file, already compressed, NOT gzip, NOT plain SQL:
+
+| What | Where (under `BACKUP_PG_PATH`, default `C:\backups\postgres`) | Retention |
+|---|---|---|
+| Daily dumps | `daily\<db>-<yyyymmdd-hhmmss>.dump` | pruned after `BACKUP_DAILY_RETENTION_DAYS` (default 7) |
+| Monthly dumps | `monthly\<db>-<yyyy-mm>.dump` | newest **24 per database** kept |
+
+Example filenames: `daily\testingsite-20260825-020000.dump`,
+`monthly\keycloak-2026-08.dump`.
+
+Older backups from before the format change are `.sql.gz` files
+(gzipped plain SQL). They stay restorable — see below — but everything new
+is `.dump`.
+
 ### Manual Backup
 
 ```powershell
-# Create backup directory
-New-Item -ItemType Directory -Force -Path "C:\backups"
-
-# Create timestamped backup
+# From prod-deploy\db-server (custom format, matches the sidecar's output)
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-docker compose -f docker-compose.db.yml exec -T postgres pg_dump -U appuser -d testingsite > "C:\backups\backup-$timestamp.sql"
-
-# Compressed backup
-docker compose -f docker-compose.db.yml exec -T postgres pg_dump -U appuser -d testingsite -Fc > "C:\backups\backup-$timestamp.dump"
+docker compose exec -T postgres pg_dump -U appuser -d testingsite -Fc -f /tmp/manual-$timestamp.dump
+docker cp postgres:/tmp/manual-$timestamp.dump "C:\backups\postgres\daily\testingsite-$timestamp.dump"
+docker compose exec -T postgres rm -f /tmp/manual-$timestamp.dump
 ```
 
-### Scheduled Backup (Windows Task Scheduler)
-
-Create `backup-db.ps1`:
-
-```powershell
-$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$backupDir = "C:\backups"
-docker compose -f C:\app\docker-compose.db.yml exec -T postgres pg_dump -U appuser -d testingsite -Fc > "$backupDir\backup-$timestamp.dump"
-
-# Keep only last 7 days
-Get-ChildItem $backupDir -Filter "backup-*.dump" |
-    Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
-    Remove-Item
-```
-
-Schedule in Task Scheduler: Daily at 2:00 AM.
+(`-f` inside the container + `docker cp`, not `>` redirection — PowerShell
+re-encodes redirected output and corrupts the binary archive.)
 
 ---
 
 ## Restore Procedures
 
-### From SQL Backup
+**Stop application containers on the APP server first!**
 
-```powershell
-# Stop application containers on PROD server first!
+The supported path is `scripts/restore.sh` (run on the DB server, project
+root, db stack up). It detects the format from the extension and handles
+both generations:
 
-# Restore from SQL file
-docker compose -f docker-compose.db.yml exec -T postgres psql -U appuser -d testingsite < "C:\backups\backup-20260122-100000.sql"
+```sh
+# -Fc archive (current backups) -> pg_restore --clean --if-exists -j 4
+./scripts/restore.sh ./backups/daily/testingsite-20260825-020000.dump
+
+# legacy gzipped SQL (old backups) -> gunzip | psql ON_ERROR_STOP=1
+./scripts/restore.sh ./backups/db-20260528-120000.sql.gz
 ```
 
-### From Compressed Backup
+Manually, for a `.dump` archive:
 
 ```powershell
-# Copy backup into container
-docker cp "C:\backups\backup-20260122-100000.dump" postgres:/tmp/
+# Copy backup into container (pg_restore -j needs a seekable file, not stdin)
+docker cp "C:\backups\postgres\daily\testingsite-20260825-020000.dump" postgres:/tmp/restore.dump
 
-# Restore (drops and recreates)
-docker compose -f docker-compose.db.yml exec postgres pg_restore -U appuser -d testingsite --clean --if-exists /tmp/backup-20260122-100000.dump
+# Restore (drops and recreates; -j 4 = parallel, minutes instead of hours)
+docker compose exec postgres pg_restore --exit-on-error --clean --if-exists -j 4 -U appuser -d testingsite /tmp/restore.dump
+docker compose exec postgres rm -f /tmp/restore.dump
 ```
+
+A `.dump` archive is **binary** — `psql` cannot run it. Never try
+`psql < backup.dump`; that is what `pg_restore` is for. Restore the
+`keycloak` database the same way (its dump is what makes user accounts
+recoverable), then run `keycloak-seed\fixup-after-restore.sql` if the app
+server's URL changed.
 
 ---
 

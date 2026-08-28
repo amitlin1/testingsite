@@ -1,9 +1,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/withAuth";
 import { prisma } from "@/app/lib/prisma";
 import { getSnapshotTableName, SNAPSHOT_TABLES } from "@/app/lib/snapshot-tables";
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
@@ -81,4 +82,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { role: "manager" });

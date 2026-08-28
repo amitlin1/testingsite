@@ -128,6 +128,21 @@ export const POST = withAuth(async (request, { session }) => {
       );
     }
 
+    // POC details are English-only. This check MUST stay out here, with the
+    // other input validation: it used to sit AFTER tx.shipments.create() inside
+    // the $transaction callback, and `return NextResponse.json(...)` from
+    // inside that callback does not abort the transaction — it just becomes the
+    // callback's resolved value. So the shipment was committed anyway, the
+    // response object was assigned to `newShipment`, and the handler re-wrapped
+    // it as **201 carrying an error body**. Rejecting before any write is both
+    // the correct answer and the only one that cannot half-happen.
+    if (/[֐-׿]/.test(poc_details || "")) {
+      return NextResponse.json(
+        { error: "POC details must be in English only" },
+        { status: 400 },
+      );
+    }
+
     // "עובד מקבל" (receiving worker): a storekeeper is always attributed as
     // THEMSELVES — never trust a client-submitted id/name for that case, same
     // integrity reasoning as any other server-derived identity field. Someone
@@ -166,14 +181,6 @@ export const POST = withAuth(async (request, { session }) => {
           poc_details: poc_details || null,
         },
       });
-      const hasHebrew = /[\u0590-\u05FF]/.test(poc_details || "");
-      if (hasHebrew) {
-        return NextResponse.json(
-          { error: "POC details must be in English only" },
-          { status: 400 }
-        );
-      }
-
       // Now save signature with shipment ID for folder organization
       let signaturePath = null;
       if (signature_base64) {

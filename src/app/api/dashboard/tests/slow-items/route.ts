@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/withAuth";
 import { prisma } from "@/app/lib/prisma";
 import { SlowItemRow } from "@/types/dashboard";
 import { buildDashboardFilters } from "@/app/lib/dashboard-filters";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+export const GET = withAuth(async (req: Request) => {
   try {
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get("startDate");
@@ -97,4 +98,4 @@ export async function GET(req: Request) {
     console.error("Error fetching slow items:", error);
     return NextResponse.json([]);
   }
-}
+}, { role: "manager" });

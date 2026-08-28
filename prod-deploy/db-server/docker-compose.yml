@@ -32,6 +32,11 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env
@@ -57,12 +62,24 @@ services:
       retries: 5
       start_period: 30s
     shm_size: 256mb
+    # Tuning for the metrics ledger (migration plan section 8, stage 2):
+    # ledger reads are range scans over GiST/partial indexes, the nightly
+    # calendar rebuild and isi_rebuild_run are maintenance-heavy, and the
+    # drift-detector trigger doubles write traffic during the dual-run week.
     command:
       - "postgres"
       - "-c"
       - "max_connections=100"
       - "-c"
-      - "shared_buffers=256MB"
+      - "shared_buffers=1GB"
+      - "-c"
+      - "work_mem=32MB"
+      - "-c"
+      - "maintenance_work_mem=512MB"
+      - "-c"
+      - "effective_cache_size=3GB"
+      - "-c"
+      - "autovacuum_naptime=30s"
       - "-c"
       - "timezone=UTC"
 
@@ -74,6 +91,11 @@ services:
   minio:
     image: minio/minio:latest
     container_name: FileServiceDB
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     command: server /data --console-address ":9001"
     env_file:
@@ -102,6 +124,11 @@ services:
   minio-backup:
     image: minio/minio:latest
     container_name: FileServiceDB-backup
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env
@@ -128,12 +155,17 @@ services:
         condition: service_healthy
 
   # =========================================================================
-  # PostgreSQL backup — daily + monthly, gzipped, BOTH databases
+  # PostgreSQL backup — daily + monthly, pg_dump -Fc, BOTH databases
   # =========================================================================
   # Each cycle (default once a day) dumps the application database AND the
-  # keycloak database:
+  # keycloak database in CUSTOM format (`pg_dump -Fc` -> .dump). -Fc is
+  # already compressed — no gzip wrapper, and no .sql.gz name that would hide
+  # the real format from the runbook: a .dump archive is binary, psql cannot
+  # run it, restore goes through `pg_restore --clean --if-exists -j 4`
+  # (scripts/restore.sh detects the extension and handles the old .sql.gz
+  # generation too — backup format and restore path changed as one pair).
   #   - DAILY dumps   -> /backup/daily    (pruned after BACKUP_DAILY_RETENTION_DAYS)
-  #   - MONTHLY dumps -> /backup/monthly  (one per month, NEVER pruned)
+  #   - MONTHLY dumps -> /backup/monthly  (one per month, newest 24 kept per DB)
   # The monthly copy is idempotent: if this month's file already exists it is
   # left alone, so restarts and missed days never duplicate or skip.
   #
@@ -142,6 +174,11 @@ services:
   postgres-backup:
     image: postgres:16-alpine
     container_name: postgres-backup
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env
@@ -158,17 +195,22 @@ services:
           MONTH=$$(date -u +%Y-%m);
           for DB in "$$POSTGRES_DB" "$$KEYCLOAK_DB_NAME"; do
             echo "[postgres-backup] $$TS dumping $$DB";
-            if PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$DB" | gzip > /backup/daily/$$DB-$$TS.sql.gz; then
-              echo "[postgres-backup] wrote /backup/daily/$$DB-$$TS.sql.gz";
-              if [ ! -f /backup/monthly/$$DB-$$MONTH.sql.gz ]; then
-                cp /backup/daily/$$DB-$$TS.sql.gz /backup/monthly/$$DB-$$MONTH.sql.gz;
-                echo "[postgres-backup] wrote permanent /backup/monthly/$$DB-$$MONTH.sql.gz";
+            if PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$DB" -Fc -f /backup/daily/$$DB-$$TS.dump; then
+              echo "[postgres-backup] wrote /backup/daily/$$DB-$$TS.dump";
+              if [ ! -f /backup/monthly/$$DB-$$MONTH.dump ]; then
+                cp /backup/daily/$$DB-$$TS.dump /backup/monthly/$$DB-$$MONTH.dump;
+                echo "[postgres-backup] wrote /backup/monthly/$$DB-$$MONTH.dump";
               fi;
+              while [ "$$(ls -1 /backup/monthly/"$$DB"-*.dump 2>/dev/null | wc -l)" -gt 24 ]; do
+                OLDEST=$$(ls -1 /backup/monthly/"$$DB"-*.dump | sort | head -n 1);
+                echo "[postgres-backup] monthly cap (24): removing $$OLDEST";
+                rm -f "$$OLDEST";
+              done;
             else
-              echo "[postgres-backup] dump of $$DB FAILED"; rm -f /backup/daily/$$DB-$$TS.sql.gz;
+              echo "[postgres-backup] dump of $$DB FAILED"; rm -f /backup/daily/$$DB-$$TS.dump;
             fi;
           done;
-          find /backup/daily -name '*.sql.gz' -type f -mtime +$$BACKUP_DAILY_RETENTION_DAYS -delete 2>/dev/null || true;
+          find /backup/daily -type f \( -name '*.dump' -o -name '*.sql.gz' \) -mtime +$$BACKUP_DAILY_RETENTION_DAYS -delete 2>/dev/null || true;
           sleep "$$BACKUP_INTERVAL_SECONDS";
         done
     volumes:

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/auth/withAuth";
 import { prisma } from "@/app/lib/prisma";
 import { buildDashboardFilters } from "@/app/lib/dashboard-filters";
 
@@ -11,7 +12,7 @@ export interface AverageTimesPoint {
   recordCount: number;
 }
 
-export async function GET(req: Request) {
+export const GET = withAuth(async (req: Request) => {
   try {
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get("startDate");
@@ -104,4 +105,4 @@ export async function GET(req: Request) {
       { status: 500 }
     );
   }
-}
+}, { role: "manager" });
