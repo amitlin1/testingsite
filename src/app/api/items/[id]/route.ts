@@ -99,7 +99,22 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           -- ("איפה נעצר הפריט") and the type to line steps up with route_steps.
           TRIM(ts.test_station_desc) AS test_station_desc,
           ts.test_station_type_id,
-          TRIM(tst.test_type_desc)  AS test_station_type_desc
+          TRIM(tst.test_type_desc)  AS test_station_type_desc,
+          -- Net work time of the step, on THE work clock: the same
+          -- work_seconds_between() the metrics ledger uses, so the item screens
+          -- and every dashboard number agree by construction. It used to be
+          -- recomputed in the browser by calculateWorkDuration(), which had its
+          -- own hardcoded 07:00-15:30 day, no lunch break and no weekend — a
+          -- third definition that agreed with neither. The columns are
+          -- timestamp-without-zone holding UTC (§7.1), hence AT TIME ZONE 'UTC'.
+          -- The IS NOT NULL guard is load-bearing: LEAST/GREATEST ignore NULLs,
+          -- so work_seconds_between(start, NULL) answers 0 — a step still in
+          -- progress would read "took no time".
+          CASE WHEN h.processing_start_time IS NOT NULL
+                AND h.processing_end_time   IS NOT NULL
+               THEN work_seconds_between(h.processing_start_time AT TIME ZONE 'UTC',
+                                         h.processing_end_time   AT TIME ZONE 'UTC')
+          END AS net_work_seconds
         FROM item_route_history h
         LEFT JOIN test_stations ts       ON ts.test_station_id = h.test_station_id
         LEFT JOIN test_stations_type tst ON tst.test_station_type_id = ts.test_station_type_id
@@ -126,6 +141,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       queue_start_time: normalizeToUtcIso(row.queue_start_time),
       processing_start_time: normalizeToUtcIso(row.processing_start_time),
       processing_end_time: normalizeToUtcIso(row.processing_end_time),
+      // numeric(…) arrives as a string over the wire; NULL while the step is
+      // still open stays NULL — "not finished yet" is not "took no time".
+      net_work_seconds:
+        row.net_work_seconds === null || row.net_work_seconds === undefined
+          ? null
+          : Number(row.net_work_seconds),
     }));
 
     return NextResponse.json(serializeBigInts({

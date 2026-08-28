@@ -22,8 +22,12 @@ export function buildDashboardQueryParams(
   if (filters.testStationTypeId) params.append("testStationTypeId", filters.testStationTypeId.toString());
   if (filters.workerId) params.append("workerId", filters.workerId);
   if (filters.status && filters.status !== "all") params.append("status", filters.status);
-  if (filters.showAllHistory) params.append("showAllHistory", "true");
-  if (filters.showSent) params.append("showSent", "true");
+  // §5.0(1): ONE parameter carries the shipment scope, and it is always sent —
+  // an absent scope is a default the reader cannot see. `showAllHistory` was the
+  // flag spelling of this same choice (the routes still accept it for bookmarked
+  // URLs) and `showSent` was a second spelling that no route ever read, which is
+  // why the toggle bound to it did nothing.
+  params.append("scope", filters.showAllHistory ? "all" : "open_shipments");
 
   return params;
 }

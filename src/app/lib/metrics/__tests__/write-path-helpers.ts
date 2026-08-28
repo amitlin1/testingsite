@@ -67,6 +67,16 @@ export const STATUS = {
 
 let pool: Pool | null = null;
 
+/**
+ * Held for the life of this suite, and taken by read-path.integration.test.ts
+ * too. `node --test` runs test FILES in parallel (measured: two three-second
+ * files finished in 3.99s), and both suites TRUNCATE the ledger — without the
+ * lock the read-path fixture wipes this one's tables mid-test. Session-level,
+ * released in teardown().
+ */
+const LEDGER_TRUNCATE_LOCK = 526050825;
+let lockClient: import("pg").PoolClient | null = null;
+
 type RouteHandler = (req: Request) => Promise<Response>;
 
 type Handlers = {
@@ -134,6 +144,9 @@ export async function setup(): Promise<void> {
 
   pool = new Pool({ connectionString: TEST_DATABASE_URL });
 
+  lockClient = await pool.connect();
+  await lockClient.query("SELECT pg_advisory_lock($1)", [LEDGER_TRUNCATE_LOCK]);
+
   await assertLedgerSchemaPresent();
 
   const results = await import("../../../api/testing/results/route");
@@ -164,6 +177,11 @@ export async function setup(): Promise<void> {
 
 export async function teardown(): Promise<void> {
   if (handlers) await handlers.prisma.$disconnect();
+  if (lockClient) {
+    await lockClient.query("SELECT pg_advisory_unlock($1)", [LEDGER_TRUNCATE_LOCK]);
+    lockClient.release();
+    lockClient = null;
+  }
   if (pool) await pool.end();
   pool = null;
   handlers = null;

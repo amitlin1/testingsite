@@ -6,7 +6,7 @@ import {
   Box, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Typography, Stepper, Step, StepLabel, Chip, Stack, Divider,
 } from "@/components/ui";
-import { formatDateTime, calculateWorkDuration, formatDuration } from "@/app/lib/datetime";
+import { formatDateTime, formatDuration } from "@/app/lib/datetime";
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from "@/components/ui";
@@ -47,6 +47,9 @@ type HistoryRow = {
   queue_start_time: string | null;
   processing_start_time: string | null;
   processing_end_time: string | null;
+  /** Net work time of the step, from the DB's one work calendar. NULL while the
+   *  step is open — "not finished" is not "took no time". */
+  net_work_seconds: number | null;
   worker_id: number | null;
   worker_name: string | null;
 };
@@ -176,9 +179,11 @@ export default function ItemDialog({
                 <Typography color="text.secondary">אין היסטוריה עדיין</Typography>
               ) : (
                 history.map((h) => {
-                  const duration = (h.processing_start_time && h.processing_end_time)
-                    ? calculateWorkDuration(h.processing_start_time, h.processing_end_time)
-                    : null;
+                  // The work clock lives in the database (work_seconds_between,
+                  // the same one every dashboard number uses); the API hands the
+                  // answer over so this screen cannot drift from it.
+                  const duration =
+                    h.net_work_seconds === null ? null : h.net_work_seconds * 1000;
                   return (
                     <Box key={h.log_id} sx={{ p: 1.2, borderRadius: 1, bgcolor: "action.hover" }}>
                       <Typography variant="body2" sx={{ fontWeight: 'bold' }}>

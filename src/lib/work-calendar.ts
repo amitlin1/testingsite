@@ -27,6 +27,7 @@ import { getIsraeliHolidays } from "@/lib/workHours/israeliHolidays";
 import { toWeekdayDefault, toOverride, toHoliday, stringToDbDate, dbDateToString } from "@/lib/workHours/serialize";
 import { toMinutes, daysBetween } from "@/lib/workHours/time";
 import type { DateString, ResolvedDay, Weekday, WeekdayDefault } from "@/lib/workHours/types";
+import type { TransactionClient } from "@/app/lib/prisma";
 
 /** Rolling horizon (§7.4): [-24 months, +12 months] around today. */
 const HORIZON_MONTHS_BACK = 24;
@@ -119,103 +120,119 @@ function spansOfDay(day: ResolvedDay): StageRow[] {
  * are serialized by a pg advisory xact lock — the loser skips healthily.
  */
 export async function rebuildWorkCalendar(prisma: PrismaClient): Promise<RebuildWorkCalendarResult> {
-  const today = todayInJerusalem();
-  const horizonFrom = addMonthsClamped(today, -HORIZON_MONTHS_BACK);
-  const horizonTo = addMonthsClamped(today, HORIZON_MONTHS_FORWARD);
-
   return prisma.$transaction(
     async (tx) => {
       const [{ locked }] = await tx.$queryRaw<{ locked: boolean }[]>`
         SELECT pg_try_advisory_xact_lock(hashtextextended(${ADVISORY_LOCK_KEY}, 0)) AS locked`;
       if (!locked) return { status: "skipped_overlap" as const };
-
-      // Source rows, read inside the transaction so the digest and the spans
-      // are computed from the same snapshot a concurrent settings save cannot
-      // split.
-      const [defaultRows, overrideRows, holidayRows] = await Promise.all([
-        tx.weekday_defaults.findMany({ orderBy: { weekday: "asc" } }),
-        tx.workday_overrides.findMany({
-          where: { work_date: { gte: stringToDbDate(horizonFrom), lte: stringToDbDate(horizonTo) } },
-          orderBy: { work_date: "asc" },
-        }),
-        tx.department_holidays.findMany({
-          where: { start_date: { lte: stringToDbDate(horizonTo) }, end_date: { gte: stringToDbDate(horizonFrom) } },
-          orderBy: { id: "asc" },
-        }),
-      ]);
-
-      const byWeekday = new Map<number, WeekdayDefault>();
-      for (const r of defaultRows) byWeekday.set(r.weekday, toWeekdayDefault(r));
-      const defaults = ([0, 1, 2, 3, 4, 5, 6] as Weekday[])
-        .map((w) => byWeekday.get(w))
-        .filter((d): d is WeekdayDefault => d !== undefined);
-
-      const overrides = overrideRows.map(toOverride);
-      const holidays = holidayRows.map(toHoliday);
-      const israeli = getIsraeliHolidays(horizonFrom, horizonTo);
-
-      // The hebcal year set is part of the digest: the national-holiday data is
-      // computed per civil year, so when the rolling horizon crosses into a new
-      // year the source changed even though no DB row did.
-      const hebcalYears: number[] = [];
-      for (let y = Number(horizonFrom.slice(0, 4)); y <= Number(horizonTo.slice(0, 4)); y++) {
-        hebcalYears.push(y);
-      }
-
-      const sourceDigest = createHash("sha256")
-        .update(
-          JSON.stringify({
-            defaults: defaults.map((d) => [d.weekday, d.isWorking, d.start, d.end, d.breakStart, d.breakEnd]),
-            overrides: overrides.map((o) => [o.date, o.kind, o.start, o.end, o.breakStart, o.breakEnd]),
-            holidays: holidays.map((h) => [h.startDate, h.endDate, h.isHalfDay, h.halfDayEndTime]),
-            hebcalYears,
-          }),
-        )
-        .digest("hex");
-
-      // §7.4: a new version ONLY when the digest changed or the horizon is
-      // short. Same digest + comfortable horizon = nothing to do.
-      const current = await tx.$queryRaw<
-        { calendar_version: number; horizon_to: Date; source_digest: string }[]
-      >`SELECT calendar_version, horizon_to, source_digest FROM work_calendar_version WHERE is_current`;
-      if (current.length > 0) {
-        const cur = current[0];
-        const curHorizonTo = dbDateToString(cur.horizon_to);
-        if (cur.source_digest === sourceDigest && daysBetween(today, curHorizonTo) >= MIN_HORIZON_DAYS) {
-          return { status: "noop" as const, calendarVersion: cur.calendar_version, horizonTo: curHorizonTo };
-        }
-      }
-
-      const stageRows = resolveRange(horizonFrom, horizonTo, { defaults, overrides, holidays, israeli }).flatMap(
-        spansOfDay,
-      );
-
-      const [{ calendar_version: ver }] = await tx.$queryRaw<{ calendar_version: number }[]>`
-        INSERT INTO work_calendar_version (horizon_from, horizon_to, source_digest)
-        VALUES (${horizonFrom}::date, ${horizonTo}::date, ${sourceDigest})
-        RETURNING calendar_version`;
-
-      // TEMP stage table — ON COMMIT DROP replaces any cleanup DELETE (§3.5).
-      await tx.$executeRaw`CREATE TEMP TABLE work_span_stage(
-        work_date date NOT NULL, start_hhmm text NOT NULL, end_hhmm text NOT NULL) ON COMMIT DROP`;
-
-      for (let i = 0; i < stageRows.length; i += INSERT_BATCH_ROWS) {
-        const batch = stageRows.slice(i, i + INSERT_BATCH_ROWS);
-        await tx.$executeRaw`
-          INSERT INTO work_span_stage (work_date, start_hhmm, end_hhmm)
-          VALUES ${Prisma.join(
-            batch.map((r) => Prisma.sql`(${r.workDate}::date, ${r.startHhmm}, ${r.endHhmm})`),
-          )}`;
-      }
-
-      const [{ work_calendar_build: spans }] = await tx.$queryRaw<{ work_calendar_build: number }[]>`
-        SELECT work_calendar_build(${ver}::int)`;
-
-      await tx.$executeRaw`UPDATE work_calendar_version SET is_current = (calendar_version = ${ver})
-                           WHERE is_current OR calendar_version = ${ver}`;
-
-      return { status: "rebuilt" as const, calendarVersion: ver, spans, horizonFrom, horizonTo };
+      return rebuildWorkCalendarInTx(tx);
     },
     { timeout: 240_000, maxWait: 5_000 },
   );
+}
+
+/**
+ * The rebuild itself, on a caller-owned transaction and WITHOUT the lock.
+ *
+ * Split out for the two callers that already hold both: the runJob wrapper
+ * (§10.1), which opens the single transaction and takes the very same
+ * `job:rebuild-work-calendar` advisory key, and the metrics-selfcheck job, whose
+ * §7.4 self-heal has to build the calendar inside its own run. Calling
+ * rebuildWorkCalendar() from inside runJob would open a SECOND transaction on a
+ * SECOND connection and then fail to take a lock the first one already holds —
+ * every nightly rebuild would report a healthy skip and the horizon would rot.
+ */
+export async function rebuildWorkCalendarInTx(
+  tx: TransactionClient,
+): Promise<Exclude<RebuildWorkCalendarResult, { status: "skipped_overlap" }>> {
+  const today = todayInJerusalem();
+  const horizonFrom = addMonthsClamped(today, -HORIZON_MONTHS_BACK);
+  const horizonTo = addMonthsClamped(today, HORIZON_MONTHS_FORWARD);
+
+  // Source rows, read inside the transaction so the digest and the spans
+  // are computed from the same snapshot a concurrent settings save cannot
+  // split.
+  const [defaultRows, overrideRows, holidayRows] = await Promise.all([
+    tx.weekday_defaults.findMany({ orderBy: { weekday: "asc" } }),
+    tx.workday_overrides.findMany({
+      where: { work_date: { gte: stringToDbDate(horizonFrom), lte: stringToDbDate(horizonTo) } },
+      orderBy: { work_date: "asc" },
+    }),
+    tx.department_holidays.findMany({
+      where: { start_date: { lte: stringToDbDate(horizonTo) }, end_date: { gte: stringToDbDate(horizonFrom) } },
+      orderBy: { id: "asc" },
+    }),
+  ]);
+
+  const byWeekday = new Map<number, WeekdayDefault>();
+  for (const r of defaultRows) byWeekday.set(r.weekday, toWeekdayDefault(r));
+  const defaults = ([0, 1, 2, 3, 4, 5, 6] as Weekday[])
+    .map((w) => byWeekday.get(w))
+    .filter((d): d is WeekdayDefault => d !== undefined);
+
+  const overrides = overrideRows.map(toOverride);
+  const holidays = holidayRows.map(toHoliday);
+  const israeli = getIsraeliHolidays(horizonFrom, horizonTo);
+
+  // The hebcal year set is part of the digest: the national-holiday data is
+  // computed per civil year, so when the rolling horizon crosses into a new
+  // year the source changed even though no DB row did.
+  const hebcalYears: number[] = [];
+  for (let y = Number(horizonFrom.slice(0, 4)); y <= Number(horizonTo.slice(0, 4)); y++) {
+    hebcalYears.push(y);
+  }
+
+  const sourceDigest = createHash("sha256")
+    .update(
+      JSON.stringify({
+        defaults: defaults.map((d) => [d.weekday, d.isWorking, d.start, d.end, d.breakStart, d.breakEnd]),
+        overrides: overrides.map((o) => [o.date, o.kind, o.start, o.end, o.breakStart, o.breakEnd]),
+        holidays: holidays.map((h) => [h.startDate, h.endDate, h.isHalfDay, h.halfDayEndTime]),
+        hebcalYears,
+      }),
+    )
+    .digest("hex");
+
+  // §7.4: a new version ONLY when the digest changed or the horizon is
+  // short. Same digest + comfortable horizon = nothing to do.
+  const current = await tx.$queryRaw<
+    { calendar_version: number; horizon_to: Date; source_digest: string }[]
+  >`SELECT calendar_version, horizon_to, source_digest FROM work_calendar_version WHERE is_current`;
+  if (current.length > 0) {
+    const cur = current[0];
+    const curHorizonTo = dbDateToString(cur.horizon_to);
+    if (cur.source_digest === sourceDigest && daysBetween(today, curHorizonTo) >= MIN_HORIZON_DAYS) {
+      return { status: "noop" as const, calendarVersion: cur.calendar_version, horizonTo: curHorizonTo };
+    }
+  }
+
+  const stageRows = resolveRange(horizonFrom, horizonTo, { defaults, overrides, holidays, israeli }).flatMap(
+    spansOfDay,
+  );
+
+  const [{ calendar_version: ver }] = await tx.$queryRaw<{ calendar_version: number }[]>`
+    INSERT INTO work_calendar_version (horizon_from, horizon_to, source_digest)
+    VALUES (${horizonFrom}::date, ${horizonTo}::date, ${sourceDigest})
+    RETURNING calendar_version`;
+
+  // TEMP stage table — ON COMMIT DROP replaces any cleanup DELETE (§3.5).
+  await tx.$executeRaw`CREATE TEMP TABLE work_span_stage(
+    work_date date NOT NULL, start_hhmm text NOT NULL, end_hhmm text NOT NULL) ON COMMIT DROP`;
+
+  for (let i = 0; i < stageRows.length; i += INSERT_BATCH_ROWS) {
+    const batch = stageRows.slice(i, i + INSERT_BATCH_ROWS);
+    await tx.$executeRaw`
+      INSERT INTO work_span_stage (work_date, start_hhmm, end_hhmm)
+      VALUES ${Prisma.join(
+        batch.map((r) => Prisma.sql`(${r.workDate}::date, ${r.startHhmm}, ${r.endHhmm})`),
+      )}`;
+  }
+
+  const [{ work_calendar_build: spans }] = await tx.$queryRaw<{ work_calendar_build: number }[]>`
+    SELECT work_calendar_build(${ver}::int)`;
+
+  await tx.$executeRaw`UPDATE work_calendar_version SET is_current = (calendar_version = ${ver})
+                       WHERE is_current OR calendar_version = ${ver}`;
+
+  return { status: "rebuilt" as const, calendarVersion: ver, spans, horizonFrom, horizonTo };
 }

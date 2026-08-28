@@ -26,9 +26,19 @@ $prefix    = "testingsite-"
 
 # task name (without prefix) -> @{ bat = file; EveryMinutes = N } for a
 # repeating task, or @{ bat = file; DailyAt = "HH:mm" } for a daily one.
+#
+# These three are the whole schedule (plan §10.1). The periods are also the
+# staleness thresholds GET /api/health/jobs grades each job against (SCHEDULED_JOBS
+# in src/app/lib/metrics/jobRun.ts, "no success within 2x the period" = red tile),
+# so a period changed here must be changed there in the same commit.
+#
+# metrics-selfcheck runs an hour AFTER rebuild-work-calendar on purpose: it heals
+# a short calendar horizon and then reconciles the ledger against the calendar,
+# which is wasted work if the nightly rebuild has not happened yet.
 $tasks = @(
     @{ Name = "release-stale-tests";   Bat = "run_release_stale_tests.bat";   EveryMinutes = 5 }
     @{ Name = "rebuild-work-calendar"; Bat = "run_rebuild_work_calendar.bat"; DailyAt = "01:00" }
+    @{ Name = "metrics-selfcheck";     Bat = "run_metrics_selfcheck.bat";     DailyAt = "02:00" }
 )
 
 foreach ($t in $tasks) {

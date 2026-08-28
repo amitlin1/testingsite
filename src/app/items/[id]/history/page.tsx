@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { BarChart3, Check, ChevronRight, Clock, FileText, FlaskConical } from "lucide-react";
 import {
-  calculateWorkDuration,
   formatDuration,
   formatUtcToLocal,
 } from "@/app/lib/datetime";
@@ -65,6 +64,9 @@ type HistoryRow = {
   queue_start_time: string | null;
   processing_start_time: string | null;
   processing_end_time: string | null;
+  /** Net work time of the step, from the DB's one work calendar. NULL while the
+   *  step is open — "not finished" is not "took no time". */
+  net_work_seconds: number | null;
   worker_id: number | null;
   worker_name: string | null;
 };
@@ -306,16 +308,13 @@ export default function ItemHistoryPage() {
   );
 
   /**
-   * Net processing time per entry — work hours only (07:00–15:30), the same
-   * measure ItemDialog reports, so the two screens never disagree.
+   * Net processing time per entry, in ms — work hours only, computed by the
+   * database's work calendar (work_seconds_between) and handed over by the API.
+   * ItemDialog reads the same field, so the two screens never disagree, and
+   * neither can disagree with the dashboard.
    */
   const nets = React.useMemo(
-    () =>
-      chron.map((h) =>
-        h.processing_start_time && h.processing_end_time
-          ? calculateWorkDuration(h.processing_start_time, h.processing_end_time)
-          : null,
-      ),
+    () => chron.map((h) => (h.net_work_seconds === null ? null : h.net_work_seconds * 1000)),
     [chron],
   );
 
@@ -414,7 +413,7 @@ export default function ItemHistoryPage() {
    * it belongs to. So an accessory shows only its parent item, and the full
    * "פריטים מחוברים" card appears only for a parent item (listing its accessories). */
   const isAccessory = item?.parent_item_id != null;
-  const connectedAll = item?.connected_items ?? [];
+  const connectedAll = React.useMemo(() => item?.connected_items ?? [], [item]);
   const parentItem = React.useMemo(
     () =>
       connectedAll.find(

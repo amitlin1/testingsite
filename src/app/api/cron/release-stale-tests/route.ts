@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
 import { cronSecretGuard } from "@/lib/auth/cron-secret";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
+import { runJob } from "@/app/lib/metrics/jobRun";
 
 export const runtime = "nodejs";
 
@@ -66,6 +66,14 @@ const DEFAULT_STALE_MINUTES = 30;
  * ALL of its input, so array_agg forces every `recorded` row to execute.
  * (`recorded` is referenced more than once, so PostgreSQL materializes it —
  * evaluated exactly once; the trailing SELECT reads the materialized rows.)
+ *
+ * Wrapped in runJob (§10.1): the advisory xact lock the reaper never had, plus
+ * a job_run row per run. The lock does not replace the set-based statement's own
+ * safety — it means two overlapping 5-minute ticks stop competing at all, and
+ * the loser is reported as a HEALTHY skip (HTTP 200, status "skipped_overlap"),
+ * because `curl --fail` in the .bat would otherwise turn a benign overlap into a
+ * red Last Run Result. Response fields are unchanged; the seeder reads
+ * releasedCount and stationsFreed off the top level.
  */
 export async function POST(req: Request) {
   const denied = cronSecretGuard(req);
@@ -78,77 +86,96 @@ export async function POST(req: Request) {
   try {
     const now = new Date();
 
-    const rows = await prisma.$queryRaw<
-      { released_count: bigint; item_ids: bigint[] | null; stations_freed: bigint }[]
-    >`
-      WITH due AS (
-        SELECT ir.item_id
-          FROM item_routes ir
-          -- LEFT, not INNER: test_station_id is nullable, and a row parked in
-          -- 1/5 with no station must still be reapable. It has no type, so the
-          -- COALESCE below gives it DEFAULT_STALE_MINUTES.
-          LEFT JOIN test_stations ts
-                 ON ts.test_station_id = ir.test_station_id
-          LEFT JOIN test_stations_type tt
-                 ON tt.test_station_type_id = ts.test_station_type_id
-          CROSS JOIN LATERAL (
-            SELECT COALESCE(tt.stale_after_minutes, ${DEFAULT_STALE_MINUTES}) AS minutes
-          ) threshold
-         WHERE ir.current_status IN (1,5)
-           AND ir.processing_start_time IS NOT NULL
-           AND ir.finished_at IS NULL
-           -- 0 means "this type is never auto-released" — a burn-in chamber, a
-           -- research bench that legitimately holds a unit for days. Excluded
-           -- here rather than modelled as a huge number, so it stays a
-           -- deliberate opt-out and not an arithmetic accident.
-           AND threshold.minutes > 0
-           AND ir.processing_start_time
-                 < ${now}::timestamp - (threshold.minutes * interval '1 minute')
-           -- Orphan guard. ir_item_fk ships NOT VALID because item_routes rows
-           -- with no items row are proven to exist on the production volume.
-           -- metrics_open_run INNER JOINs items, so letting one orphan into
-           -- metrics_record raises inside this single statement and rolls back
-           -- the ENTIRE batch — the release, every other item's event and the
-           -- station frees — forever, since the orphan matches again next run.
-           -- The reaper is the floor's safety net; it must never be hostage to
-           -- one bad legacy row. Orphans are surfaced by metrics_selfcheck.
-           AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ir.item_id)
-      ), released AS (
-        UPDATE item_routes
-           SET current_status = CASE WHEN current_status = 5 THEN 4 ELSE 2 END,
-               processing_start_time = NULL,
-               queue_start_time = NOW()
-         -- item_id is item_routes' primary key, so this is one index probe per
-         -- selected row; the joins in "due" are not re-evaluated here.
-         WHERE item_id IN (SELECT item_id FROM due)
-        RETURNING item_id, current_status, current_route_step, test_station_id
-      ), recorded AS (
-        SELECT metrics_record(
-          'released_stale:'||r.item_id||':'||to_char(clock_timestamp(),'YYYYMMDDHH24MI'),
-          r.item_id,
-          CASE WHEN r.current_status = 4 THEN 'queued_research' ELSE 'queued' END,
-          r.current_route_step, NULL, NULL, NULL, NULL, 'released_stale') AS event_id,
-          r.item_id,
-          r.test_station_id
-        FROM released r
-      ), freed AS (
-        UPDATE test_stations ts SET status = 2
-         WHERE ts.test_station_id = ANY (
-           (SELECT array_agg(test_station_id) FROM recorded
-             WHERE test_station_id IS NOT NULL)::int[])
-        RETURNING ts.test_station_id
-      )
-      SELECT (SELECT count(*) FROM recorded)         AS released_count,
-             (SELECT array_agg(item_id) FROM recorded) AS item_ids,
-             (SELECT count(*) FROM freed)            AS stations_freed
-    `;
+    const outcome = await runJob<{ itemIds: string[]; stationsFreed: number }>(
+      "release-stale-tests",
+      async (tx) => {
+        const rows = await tx.$queryRaw<
+          { released_count: bigint; item_ids: bigint[] | null; stations_freed: bigint }[]
+        >`
+          WITH due AS (
+            SELECT ir.item_id
+              FROM item_routes ir
+              -- LEFT, not INNER: test_station_id is nullable, and a row parked in
+              -- 1/5 with no station must still be reapable. It has no type, so the
+              -- COALESCE below gives it DEFAULT_STALE_MINUTES.
+              LEFT JOIN test_stations ts
+                     ON ts.test_station_id = ir.test_station_id
+              LEFT JOIN test_stations_type tt
+                     ON tt.test_station_type_id = ts.test_station_type_id
+              CROSS JOIN LATERAL (
+                SELECT COALESCE(tt.stale_after_minutes, ${DEFAULT_STALE_MINUTES}) AS minutes
+              ) threshold
+             WHERE ir.current_status IN (1,5)
+               AND ir.processing_start_time IS NOT NULL
+               AND ir.finished_at IS NULL
+               -- 0 means "this type is never auto-released" — a burn-in chamber, a
+               -- research bench that legitimately holds a unit for days. Excluded
+               -- here rather than modelled as a huge number, so it stays a
+               -- deliberate opt-out and not an arithmetic accident.
+               AND threshold.minutes > 0
+               AND ir.processing_start_time
+                     < ${now}::timestamp - (threshold.minutes * interval '1 minute')
+               -- Orphan guard. ir_item_fk ships NOT VALID because item_routes rows
+               -- with no items row are proven to exist on the production volume.
+               -- metrics_open_run INNER JOINs items, so letting one orphan into
+               -- metrics_record raises inside this single statement and rolls back
+               -- the ENTIRE batch — the release, every other item's event and the
+               -- station frees — forever, since the orphan matches again next run.
+               -- The reaper is the floor's safety net; it must never be hostage to
+               -- one bad legacy row. Orphans are surfaced by metrics_selfcheck.
+               AND EXISTS (SELECT 1 FROM items i WHERE i.item_id = ir.item_id)
+          ), released AS (
+            UPDATE item_routes
+               SET current_status = CASE WHEN current_status = 5 THEN 4 ELSE 2 END,
+                   processing_start_time = NULL,
+                   queue_start_time = NOW()
+             -- item_id is item_routes' primary key, so this is one index probe per
+             -- selected row; the joins in "due" are not re-evaluated here.
+             WHERE item_id IN (SELECT item_id FROM due)
+            RETURNING item_id, current_status, current_route_step, test_station_id
+          ), recorded AS (
+            SELECT metrics_record(
+              'released_stale:'||r.item_id||':'||to_char(clock_timestamp(),'YYYYMMDDHH24MI'),
+              r.item_id,
+              CASE WHEN r.current_status = 4 THEN 'queued_research' ELSE 'queued' END,
+              r.current_route_step, NULL, NULL, NULL, NULL, 'released_stale') AS event_id,
+              r.item_id,
+              r.test_station_id
+            FROM released r
+          ), freed AS (
+            UPDATE test_stations ts SET status = 2
+             WHERE ts.test_station_id = ANY (
+               (SELECT array_agg(test_station_id) FROM recorded
+                 WHERE test_station_id IS NOT NULL)::int[])
+            RETURNING ts.test_station_id
+          )
+          SELECT (SELECT count(*) FROM recorded)         AS released_count,
+                 (SELECT array_agg(item_id) FROM recorded) AS item_ids,
+                 (SELECT count(*) FROM freed)            AS stations_freed
+        `;
 
-    const result = rows[0];
+        const result = rows[0];
+        return {
+          rowsAffected: Number(result?.released_count ?? 0),
+          detail: {
+            // The released ids ARE the audit trail: this endpoint takes an item
+            // away from a worker, and "which ones, when" is the only question
+            // asked afterwards. A run big enough to bloat the jsonb is itself the
+            // incident the row exists to record.
+            itemIds: (result?.item_ids ?? []).map((id) => id.toString()),
+            stationsFreed: Number(result?.stations_freed ?? 0),
+          },
+        };
+      },
+    );
+
     return NextResponse.json({
       success: true,
-      releasedCount: Number(result?.released_count ?? 0),
-      itemIds: (result?.item_ids ?? []).map((id) => id.toString()),
-      stationsFreed: Number(result?.stations_freed ?? 0),
+      status: outcome.status,
+      jobRunId: outcome.jobRunId,
+      releasedCount: outcome.rowsAffected ?? 0,
+      itemIds: outcome.detail?.itemIds ?? [],
+      stationsFreed: outcome.detail?.stationsFreed ?? 0,
     });
   } catch (error: any) {
     console.error("Error releasing stale tests:", error);

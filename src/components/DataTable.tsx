@@ -147,13 +147,15 @@ export function StatusPill({ label, active = false }: { label: React.ReactNode; 
   );
 }
 
-/* Single-blue progress. Completion is the fill reaching 100%, not a colour. */
-export function ProgressCell({ pct, text }: { pct: number; text: string }) {
-  const done = pct >= 100;
+/* Single-blue progress. Completion is the fill reaching 100%, not a colour.
+   `pct` accepts null: a ratio whose denominator is 0 has no percentage, and an
+   empty bar is the honest drawing of that — never a bar drawn at 0%. */
+export function ProgressCell({ pct, text }: { pct: number | null; text: string }) {
+  const done = pct !== null && pct >= 100;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <div style={{ flex: 1, height: 5, borderRadius: 9999, background: done ? "#dbe9fb" : "#f0f0f0", overflow: "hidden", minWidth: 80 }}>
-        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: "#0066cc", borderRadius: 9999 }} />
+        <div style={{ height: "100%", width: `${pct === null ? 0 : Math.min(pct, 100)}%`, background: "#0066cc", borderRadius: 9999 }} />
       </div>
       <span style={{ fontSize: 12, color: "#7a7a7a", fontVariantNumeric: "tabular-nums", minWidth: 30 }}>{text}</span>
     </div>
