@@ -32,6 +32,7 @@ import {
   PeriodError,
   resolvePeriod,
   toBusinessDay,
+  UI_MONTH_CAP,
   type ResolvedPeriod,
 } from "./period";
 import type { MetricsClient } from "./queries";
@@ -69,6 +70,45 @@ export function requirePeriod(sp: URLSearchParams): ResolvedPeriod {
     if (err instanceof PeriodError) throw new BadRequest("startDate must be before endDate");
     throw err;
   }
+}
+
+/**
+ * The four history DIALOGS (customer / shipment / station / item type) do not
+ * send dates. They send one of three preset ids, and the old routes turned each
+ * of them into a snapshot TABLE name — `*_snapshots` for "alldays",
+ * `*_snapshots_monthly` for the other two, with a quarterly view faked by
+ * keeping only the rows that fell in January, April, July and October.
+ *
+ * There is one table now, so a preset is only a WINDOW:
+ *
+ *   alldays   the whole window the UI is allowed to ask for — 13 months (§6.3).
+ *             "All days" was never all days; it was as far back as the daily
+ *             snapshot writer happened to have run.
+ *   12months  twelve months back.
+ *   3years    three years back — REQUESTED, then capped to 13 months and
+ *             reported as capped (X-Metrics-Period-Capped + -Requested-From +
+ *             -Cap-Floor). §6.3 is a cap on the UI, not a promise the server
+ *             quietly breaks.
+ *
+ * The grid stays DAILY at every preset, exactly as tests/status-distribution/
+ * history decided in stage 5: the dialogs already aggregate to weekly above 30
+ * points, and inventing a coarser server-side bucket would be a second
+ * definition of the same series. The old quarterly "view" was not a bucket at
+ * all — it was three months in four discarded.
+ *
+ * Explicit startDate/endDate still win, so the harness and any caller that
+ * wants a precise window keeps the §5.1 contract unchanged.
+ */
+export function requireDialogPeriod(sp: URLSearchParams): ResolvedPeriod {
+  if (sp.get("startDate") && sp.get("endDate")) return requirePeriod(sp);
+  const preset = sp.get("period") ?? "alldays";
+  const months = preset === "12months" ? 12 : preset === "3years" ? null : UI_MONTH_CAP;
+  return resolvePeriod({
+    ...(months === null ? { years: 3 } : { months }),
+    granularity: "daily",
+    // §5.0(1): historical endpoint, scope is the constant `all`.
+    scope: "all",
+  });
 }
 
 /**

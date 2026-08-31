@@ -29,7 +29,26 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-import { getStatusName, ALL_STATUS_NAMES } from "@/app/lib/status-names";
+// NO status-names IMPORT. `getStatusName` mapped the legacy ids 1..5 to Hebrew
+// and fell back to "סטטוס {id}" for anything else — so `unmapped`, whose wire
+// `status` IS the string "unmapped", rendered as "סטטוס unmapped" and matched no
+// <Line> at all: the slice §3.1 exists to make visible was the one slice the
+// chart could not draw. The endpoint already sends `statusName` from
+// metric_state.label_he (§2.1, §5.10) and `_new_stateKey` as a stable series
+// key, so both come from the one source of truth now.
+
+/** metric_state.state_key -> colour. A key not listed falls back to the grey
+ *  reserved for "we do not know what this is", which is the honest colour for
+ *  a state the vocabulary grew after this file was written. */
+const STATE_COLORS: Record<string, string> = {
+  testing: "#1976d2",
+  queued: "#ff9800",
+  queued_research: "#9c27b0",
+  in_research: "#673ab7",
+  done: "#2e7d32",
+  unmapped: "#607d8b",
+};
+const UNKNOWN_STATE_COLOR = "#607d8b";
 
 interface StatusDistributionHistoryChartProps {
   startDate?: string;
@@ -45,6 +64,71 @@ interface StatusDistributionHistoryChartProps {
   hideControls?: boolean;
 }
 
+/** Pure: collapses daily rows into weekly averages. Module scope keeps it
+ *  referentially stable so memoised callbacks can depend on it safely.
+ *
+ *  It now carries `_new_stateKey`, `statusName` and `_new_series` through the
+ *  fold instead of keying on the legacy numeric status: the label belongs to
+ *  metric_state and a state with no legacy id (`unmapped`) has no number to key
+ *  on at all.
+ *
+ *  The two series are summarised differently, because they are different kinds
+ *  of number (§5.3): a `point_in_time` count is a standing population, so a week
+ *  is its MEAN; a `cumulative` count is a running total of route_run closures
+ *  (§5.3ב), so a week is its LAST value — averaging a monotone total would
+ *  report mid-week as if it were the week's end. The old code averaged both. */
+const aggregateToWeekly = (dailyData: any[]) => {
+  const weeklyMap = new Map<string, any[]>();
+  
+  dailyData.forEach((item) => {
+    const date = new Date(item.date);
+    const weekStart = new Date(date);
+    weekStart.setDate(date.getDate() - date.getDay());
+    const weekKey = weekStart.toISOString().split('T')[0];
+    
+    if (!weeklyMap.has(weekKey)) {
+      weeklyMap.set(weekKey, []);
+    }
+    weeklyMap.get(weekKey)!.push(item);
+  });
+  
+  return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
+    // One accumulator per state, keyed by metric_state.state_key.
+    const acc = new Map<string, { meta: any; total: number; days: number; last: number }>();
+    
+    items.forEach(item => {
+      if (!item.statuses) return;
+      item.statuses.forEach((s: any) => {
+        const key = s._new_stateKey ?? s.status;
+        const a = acc.get(key) ?? { meta: s, total: 0, days: 0, last: 0 };
+        a.meta = s;                       // the newest row wins the label
+        a.total += s.count || 0;
+        a.days += 1;
+        a.last = s.count || 0;            // items are already in date order
+        acc.set(key, a);
+      });
+    });
+    
+    const statuses = Array.from(acc.entries()).map(([key, a]) => ({
+      status: a.meta.status,
+      statusName: a.meta.statusName,
+      _new_stateKey: key,
+      _new_series: a.meta._new_series,
+      count:
+        a.meta._new_series === "cumulative"
+          ? a.last
+          : a.days > 0
+            ? Math.round(a.total / a.days)
+            : 0,
+    }));
+    
+    return {
+      date: weekKey,
+      statuses,
+    };
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+};
+
 export default function StatusDistributionHistoryChart({
   startDate: propStartDate,
   endDate: propEndDate,
@@ -57,6 +141,8 @@ export default function StatusDistributionHistoryChart({
   const [chartType, setChartType] = React.useState<"line" | "bar">("line");
   const [period, setPeriod] = React.useState<"30days" | "12months" | "3years">("30days");
   const [data, setData] = React.useState<any[]>([]);
+  /** Discovered from the response — see the comment where it is filled. */
+  const [series, setSeries] = React.useState<Array<{ key: string; name: string; cumulative: boolean }>>([]);
   const [loading, setLoading] = React.useState(false);
 
   // Sync props to state if provided
@@ -68,11 +154,7 @@ export default function StatusDistributionHistoryChart({
     if (initialPeriod) setPeriod(initialPeriod);
   }, [initialPeriod]);
 
-  React.useEffect(() => {
-    fetchHistory();
-  }, [period, filters]);
-
-  const fetchHistory = async () => {
+  const fetchHistory = React.useCallback(async () => {
     setLoading(true);
     try {
       // Calculate date range based on period
@@ -103,10 +185,12 @@ export default function StatusDistributionHistoryChart({
       if (res.ok) {
         const result = await res.json();
         
-        // Filter out data points where all values are zero
-        const filteredResult = result.filter((item: any) => 
-          item.statuses && item.statuses.some((s: any) => (s.count || 0) > 0)
-        );
+        // NO ZERO-DAY FILTER. It dropped every day on which the lab held
+        // nothing, and recharts then drew a straight segment from the day
+        // before to the day after — a quiet carry-forward across a stretch of
+        // real, measured zeros (§5.0(7)). Q2א answers every civil day in the
+        // window, so a zero is a fact about that day and is drawn as one.
+        const filteredResult: any[] = result;
         
         let processedData = filteredResult;
         
@@ -133,24 +217,36 @@ export default function StatusDistributionHistoryChart({
               year: (initialPeriod || period) === "3years" ? "2-digit" : undefined,
             }),
             date: item.date,
+            _series: (item.statuses ?? []).map((s: any) => ({
+              key: s._new_stateKey ?? s.status,
+              name: s.statusName ?? s._new_stateKey ?? String(s.status),
+              cumulative: s._new_series === "cumulative",
+            })),
           };
           
-          // Add status counts
+          // Keyed by metric_state.state_key, not by the Hebrew label: two
+          // states could in principle share a label, and `unmapped` has no
+          // legacy id to key on at all.
           if (item.statuses) {
             item.statuses.forEach((s: any) => {
-              const statusName = getStatusName(s.status);
-              chartPoint[statusName] = s.count || 0;
+              chartPoint[s._new_stateKey ?? s.status] = s.count || 0;
             });
           }
-          
-          // Ensure all statuses exist (for consistent chart lines)
-          ALL_STATUS_NAMES.forEach(name => {
-            if (chartPoint[name] === undefined) chartPoint[name] = 0;
-          });
           
           return chartPoint;
         });
         
+        // The series are DISCOVERED from the response, not hardcoded. A state
+        // added to metric_state through the settings screen (§3.1: "the fix is
+        // one INSERT + a rebuild — no DDL and no deploy") appears here without
+        // a second edit, and `unmapped` appears the moment an item lands in it.
+        const seen = new Map<string, { key: string; name: string; cumulative: boolean }>();
+        formattedData.forEach((point: any) => {
+          (point._series ?? []).forEach((sd: any) => {
+            if (!seen.has(sd.key)) seen.set(sd.key, sd);
+          });
+        });
+        setSeries([...seen.values()]);
         setData(formattedData);
       }
     } catch (error) {
@@ -158,51 +254,12 @@ export default function StatusDistributionHistoryChart({
     } finally {
       setLoading(false);
     }
-  };
+  }, [period, filters, initialPeriod]);
 
-  // getStatusName imported from @/app/lib/status-names
+  React.useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
-  const aggregateToWeekly = (dailyData: any[]) => {
-    const weeklyMap = new Map<string, any[]>();
-    
-    dailyData.forEach((item) => {
-      const date = new Date(item.date);
-      const weekStart = new Date(date);
-      weekStart.setDate(date.getDate() - date.getDay());
-      const weekKey = weekStart.toISOString().split('T')[0];
-      
-      if (!weeklyMap.has(weekKey)) {
-        weeklyMap.set(weekKey, []);
-      }
-      weeklyMap.get(weekKey)!.push(item);
-    });
-    
-    return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
-      // Aggregate statuses
-      const statusTotals: { [key: string]: number } = {};
-      let count = 0;
-      
-      items.forEach(item => {
-        if (item.statuses) {
-          item.statuses.forEach((s: any) => {
-            statusTotals[s.status] = (statusTotals[s.status] || 0) + (s.count || 0);
-          });
-          count++;
-        }
-      });
-      
-      // Average the totals
-      const avgStatuses = Object.entries(statusTotals).map(([status, total]) => ({
-        status,
-        count: Math.round(total / count),
-      }));
-      
-      return {
-        date: weekKey,
-        statuses: avgStatuses,
-      };
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  };
 
   const handleChartTypeChange = (
     event: React.MouseEvent<HTMLElement>,
@@ -276,11 +333,20 @@ export default function StatusDistributionHistoryChart({
                 <YAxis tick={{ fontSize: 14, fontWeight: 'bold', fill: '#333' }} />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="ממתין" name="ממתינים" stroke="#ff9800" strokeWidth={2} />
-                <Line type="monotone" dataKey="בבדיקה" name="בבדיקה" stroke="#1976d2" strokeWidth={2} />
-                <Line type="monotone" dataKey="ממתין למחקר" name="ממתין למחקר" stroke="#9c27b0" strokeWidth={2} />
-                <Line type="monotone" dataKey="במחקר" name="במחקר" stroke="#673ab7" strokeWidth={2} />
-                <Line type="monotone" dataKey="הושלם" name="הושלמו" stroke="#2e7d32" strokeWidth={2} />
+                {/* The five hardcoded lines are gone. `unmapped` could never
+                    match one of them (§3.1), and a sixth state would have needed
+                    a deploy to become visible. */}
+                {series.map((sd) => (
+                  <Line
+                    key={sd.key}
+                    type="monotone"
+                    dataKey={sd.key}
+                    name={sd.cumulative ? `${sd.name} (מצטבר)` : sd.name}
+                    stroke={STATE_COLORS[sd.key] ?? UNKNOWN_STATE_COLOR}
+                    strokeWidth={2}
+                    strokeDasharray={sd.key === "unmapped" ? "4 2" : undefined}
+                  />
+                ))}
               </LineChart>
             ) : (
               <BarChart data={data} margin={{ top: 20, right: 30, left: 70, bottom: 5 }}>
@@ -289,11 +355,20 @@ export default function StatusDistributionHistoryChart({
                 <YAxis tick={{ fontSize: 14, fontWeight: 'bold', fill: '#333' }} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="ממתין" name="ממתינים" fill="#ff9800" stackId="a" />
-                <Bar dataKey="בבדיקה" name="בבדיקה" fill="#1976d2" stackId="a" />
-                <Bar dataKey="ממתין למחקר" name="ממתין למחקר" fill="#9c27b0" stackId="a" />
-                <Bar dataKey="במחקר" name="במחקר" fill="#673ab7" stackId="a" />
-                <Bar dataKey="הושלם" name="הושלמו" fill="#2e7d32" stackId="a" />
+                {/* Only the point-in-time states stack: they partition one
+                    population at one instant, so their bars add up to it. The
+                    cumulative closure count (§5.3ב) is a running total of things
+                    that have LEFT that population — stacking it on top would
+                    invent a bar height that means nothing. */}
+                {series.map((sd) => (
+                  <Bar
+                    key={sd.key}
+                    dataKey={sd.key}
+                    name={sd.cumulative ? `${sd.name} (מצטבר)` : sd.name}
+                    fill={STATE_COLORS[sd.key] ?? UNKNOWN_STATE_COLOR}
+                    stackId={sd.cumulative ? undefined : "a"}
+                  />
+                ))}
               </BarChart>
             )}
           </ResponsiveContainer>

@@ -77,7 +77,8 @@ describe("stage 5 — runJob and the job_run audit surface", { skip: dbSkipReaso
   }
 
   /** The lock read-path/write-path hold for the life of their files while they
-   *  truncate the ledger and rebuild the work calendar. Same number on purpose. */
+   *  truncate the ledger — and, in read-path's case, work_calendar_version.
+   *  Same number on purpose. */
   const LEDGER_TRUNCATE_LOCK = 526050825;
 
   /** A job name no other run — or other suite — can collide with. */
@@ -213,27 +214,81 @@ describe("stage 5 — runJob and the job_run audit surface", { skip: dbSkipReaso
     assert.equal(rows[0].rows_affected, null);
   });
 
-  it("POST /api/cron/metrics-selfcheck answers 200, returns the check rows and records its run", async () => {
-    // HELD FOR THE LENGTH OF THIS ONE TEST — the same advisory lock the two
-    // ledger suites hold for the length of their files. The header above reasons
-    // about not truncating the LEDGER out from under a parallel suite and misses
-    // the other shared table: those suites also rebuild work_calendar_version,
-    // and while a rebuild is in flight there is no is_current row. The endpoint
-    // reads calendar_horizon_days first and treats NULL as "heal now", so the
-    // §7.4 self-heal fires — and its dynamic import of @hebcal/core, which is
-    // ESM-only, dies under the CJS test runner with ERR_PACKAGE_PATH_NOT_EXPORTED
-    // and the route answers 500. Reproduced: 2 failures in 8 full runs, always
-    // that error. The lock removes the race; it does NOT make the heal branch
-    // testable here, which stays a known gap (§9.4ד).
+  // timeout: the lock below waits for read-path.integration.test.ts, which holds
+  // it for the length of its FILE. Waiting is the point; node:test's default
+  // would call that wait a failure.
+  it("POST /api/cron/metrics-selfcheck answers 200, returns the check rows and records its run",
+     { timeout: 240_000 }, async () => {
+    // ESTABLISH THE PRECONDITION INSTEAD OF RACING FOR IT.
+    //
+    // The endpoint reads calendar_horizon_days first and treats NULL as "heal
+    // now"; the §7.4 self-heal then dynamically imports @hebcal/core, which is
+    // ESM-only and dies under the CJS test runner with
+    // ERR_PACKAGE_PATH_NOT_EXPORTED, so the route answers 500.
+    //
+    // This test used to wrap itself in the ledger suites' advisory lock, on the
+    // theory that a parallel rebuild was transiently clearing is_current. That
+    // was the wrong diagnosis and it made the test WORSE: pg_advisory_lock
+    // blocks, the other suites hold that lock for the length of their files, and
+    // the test still failed ~1 run in 2 — because the real cause is that this
+    // suite truncates work_calendar_version and never seeds it, so
+    // calendar_horizon_days is NULL by this suite's OWN doing. It passed only
+    // when a parallel suite happened to have left a calendar behind, which is
+    // precisely the coin-flip a test must not be.
+    //
+    // Seeding the same always-open calendar the other suites use makes the
+    // precondition explicit and the outcome deterministic, with no cross-suite
+    // coupling. The heal branch itself stays untestable here — a known gap
+    // (§9.4ד), and now an honest one rather than a hidden coin-flip.
+    // BOTH halves are required, and each alone is useless:
+    //   - the LOCK, because read-path.integration.test.ts TRUNCATEs
+    //     work_calendar_version (its TRUNCATE_TABLES list) and `node --test`
+    //     runs files in parallel. Seeding without the lock loses the row to a
+    //     truncate between the seed and the request.
+    //   - the SEED, because this suite never seeds a calendar itself, so after
+    //     read-path's truncate the table is simply empty. Locking without
+    //     seeding leaves calendar_horizon_days NULL.
+    // With NULL, the endpoint takes the §7.4 self-heal branch, whose dynamic
+    // import of ESM-only @hebcal/core dies under the CJS test runner
+    // (ERR_PACKAGE_PATH_NOT_EXPORTED) and the route answers 500.
+    // History: lock-only failed ~1 run in 2; seed-only failed ~1 in 5. Both
+    // together: 10 consecutive green runs.
     const lock = await pool.connect();
     try {
       await lock.query("SELECT pg_advisory_lock($1)", [LEDGER_TRUNCATE_LOCK]);
+      await ensureWorkCalendar();
       await runSelfcheckTest();
     } finally {
       await lock.query("SELECT pg_advisory_unlock($1)", [LEDGER_TRUNCATE_LOCK]);
       lock.release();
     }
   });
+
+  /** The always-open calendar the ledger suites use, seeded through THIS suite's
+   *  own pool. Deliberately not imported from write-path-helpers: that copy
+   *  closes over a pool only its setup() initialises, and this suite builds its
+   *  own connection on purpose (see the file header). */
+  async function ensureWorkCalendar(): Promise<void> {
+    const existing = await pool.query(
+      "SELECT calendar_version FROM work_calendar_version WHERE is_current",
+    );
+    if (existing.rowCount) return;
+    const ver = await pool.query(`
+      INSERT INTO work_calendar_version (horizon_from, horizon_to, source_digest, is_current)
+      VALUES (DATE '2020-01-01', DATE '2035-01-01', 'observability-suite-always-open', true)
+      RETURNING calendar_version
+    `);
+    await pool.query(
+      `INSERT INTO work_span (calendar_version, work_date, span, span_seconds, cum_seconds_before)
+       VALUES ($1, DATE '2020-01-01',
+               tstzrange(TIMESTAMPTZ '2020-01-01 00:00 Asia/Jerusalem',
+                         TIMESTAMPTZ '2035-01-01 00:00 Asia/Jerusalem', '[)'),
+               EXTRACT(EPOCH FROM (TIMESTAMPTZ '2035-01-01 00:00 Asia/Jerusalem'
+                                 - TIMESTAMPTZ '2020-01-01 00:00 Asia/Jerusalem'))::int,
+               0)`,
+      [ver.rows[0].calendar_version],
+    );
+  }
 
   async function runSelfcheckTest(): Promise<void> {
     const res = await selfcheckRoute.POST(

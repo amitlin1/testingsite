@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch } from "@/lib/api/client";
+import { aggregateEntityHistoryWeekly } from "@/app/lib/metrics/history-fold";
 import PeriodCombobox from "../common/PeriodCombobox";
 import {
   Dialog,
@@ -42,6 +43,16 @@ interface ShipmentHistoryDialogProps {
   shipment: ShipmentTrackingRow | null;
 }
 
+/** The weekly fold, one definition for all four dialogs:
+ *  src/app/lib/metrics/history-fold.ts. It used to be a module-private copy in
+ *  each of these files — four copies of the arithmetic that decides what a
+ *  manager reads, none of them reachable from a test. Q2א's counts are
+ *  averaged, Q2ב's cumulative line is taken at its LAST value (§5.3ב) and the
+ *  additive per-day count is summed. Module scope keeps the reference stable so
+ *  memoised callbacks can depend on it safely. */
+const aggregateToWeekly = (dailyData: any[]) =>
+  aggregateEntityHistoryWeekly(dailyData, "itemsFinished");
+
 export default function ShipmentHistoryDialog({
   open,
   onClose,
@@ -53,13 +64,7 @@ export default function ShipmentHistoryDialog({
   const [data, setData] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
 
-  React.useEffect(() => {
-    if (open && shipment) {
-      fetchHistory();
-    }
-  }, [open, shipment, period]);
-
-  const fetchHistory = async () => {
+  const fetchHistory = React.useCallback(async () => {
     if (!shipment) return;
     setLoading(true);
     try {
@@ -67,16 +72,14 @@ export default function ShipmentHistoryDialog({
       if (res.ok) {
         const result = await res.json();
         
-        // Filter out data points where all values are zero
-        const filteredResult = result.filter((item: any) => 
-          item.isToday || // Always keep "Today"
-          (item.itemsInQueue || 0) > 0 || 
-          (item.itemsInTest || 0) > 0 || 
-          (item.itemsWaitingForResearch || 0) > 0 || 
-          (item.itemsInResearch || 0) > 0 || 
-          (item.itemsFinished || 0) > 0
-        );
+        // NO ZERO-DAY FILTER. It used to drop every day on which this shipment had
+        // nothing standing, and recharts then drew a straight segment from the
+        // day before to the day after — a quiet carry-forward across a stretch
+        // of real, measured zeros (§5.0(7)). The ledger answers every day in the
+        // window, so a zero here is a fact and it is drawn as one.
+        const filteredResult: any[] = result;
         
+        // Aggregate if too many data points
         let processedData = filteredResult;
         if (filteredResult.length > 30) {
           // Check if last point is today (live data)
@@ -108,41 +111,13 @@ export default function ShipmentHistoryDialog({
     } finally {
       setLoading(false);
     }
-  };
+  }, [shipment, period]);
 
-  const aggregateToWeekly = (dailyData: any[]) => {
-    const weeklyMap = new Map<string, any[]>();
-    
-    dailyData.forEach((item) => {
-      const date = new Date(item.date);
-      const weekStart = new Date(date);
-      weekStart.setDate(date.getDate() - date.getDay());
-      const weekKey = weekStart.toISOString().split('T')[0];
-      
-      if (!weeklyMap.has(weekKey)) {
-        weeklyMap.set(weekKey, []);
-      }
-      weeklyMap.get(weekKey)!.push(item);
-    });
-    
-    return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
-      const avg = (key: string) => Math.round(
-        items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
-      );
-      
-      return {
-        date: weekKey,
-        totalItems: avg('totalItems'),
-        itemsInQueue: avg('itemsInQueue'),
-        itemsInTest: avg('itemsInTest'),
-        itemsWaitingForResearch: avg('itemsWaitingForResearch'),
-        itemsInResearch: avg('itemsInResearch'),
-        itemsFinished: avg('itemsFinished'),
-        itemsInRoutes: avg('itemsInRoutes'),
-        completionPercentage: avg('completionPercentage'),
-      };
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  };
+  React.useEffect(() => {
+    if (open && shipment) {
+      fetchHistory();
+    }
+  }, [open, shipment, fetchHistory]);
 
   const handleChartTypeChange = (
     event: React.MouseEvent<HTMLElement>,
@@ -184,7 +159,7 @@ export default function ShipmentHistoryDialog({
             options={[
               { id: "alldays", name: "כל הימים" },
               { id: "12months", name: "12 חודשים אחרונים" },
-              { id: "3years", name: "3 שנים (רבעוני)" },
+              { id: "3years", name: "3 שנים (מוגבל ל-13 חודשים)" },
             ]}
           />
           <ToggleButtonGroup
@@ -229,7 +204,11 @@ export default function ShipmentHistoryDialog({
                   <Line type="monotone" dataKey="itemsInTest" name="בבדיקה" stroke="#1976d2" strokeWidth={2} />
                   <Line type="monotone" dataKey="itemsWaitingForResearch" name="ממתין למחקר" stroke="#9c27b0" strokeWidth={2} />
                   <Line type="monotone" dataKey="itemsInResearch" name="במחקר" stroke="#673ab7" strokeWidth={2} />
-                  <Line type="monotone" dataKey="itemsFinished" name="הושלמו" stroke="#2e7d32" strokeWidth={2} />
+                  <Line type="monotone" dataKey="itemsFinished" name="הושלמו (מצטבר)" stroke="#2e7d32" strokeWidth={2} />
+                  {/* §3.1 — an item whose status has no metric_state row. A slice of
+                      its own, so a status added through the settings screen is
+                      visible instead of silently uncounted. */}
+                  <Line type="monotone" dataKey="_new_unmapped" name="סטטוס לא ידוע" stroke="#607d8b" strokeWidth={2} strokeDasharray="4 2" />
                 </LineChart>
               ) : (
                 <BarChart data={data} margin={{ top: 20, right: 30, left: 70, bottom: 5 }}>
@@ -242,7 +221,11 @@ export default function ShipmentHistoryDialog({
                   <Bar dataKey="itemsInTest" name="בבדיקה" fill="#1976d2" stackId="a" />
                   <Bar dataKey="itemsWaitingForResearch" name="ממתין למחקר" fill="#9c27b0" stackId="a" />
                   <Bar dataKey="itemsInResearch" name="במחקר" fill="#673ab7" stackId="a" />
-                  <Bar dataKey="itemsFinished" name="הושלמו" fill="#2e7d32" stackId="a" />
+                  <Bar dataKey="_new_unmapped" name="סטטוס לא ידוע" fill="#607d8b" stackId="a" />
+                  {/* Q2ב is cumulative and Q2א is a snapshot; stacking them would
+                      add a running total onto a standing population. Its own
+                      bar, outside the stack. */}
+                  <Bar dataKey="itemsFinished" name="הושלמו (מצטבר)" fill="#2e7d32" />
                 </BarChart>
               )}
             </ResponsiveContainer>

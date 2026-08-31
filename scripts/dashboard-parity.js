@@ -31,6 +31,13 @@
 // green run said the adapters agreed with the old routes while the product went
 // ungraded. The routes are the product; the adapters were deleted.
 //
+// The four `[id]/history` routes (§8 stage 6) are graded too, but NOT by a diff:
+// their old sides read snapshot tables that hold 0 rows and staple one live
+// "today" point on the end (item-types/[id]/history raises 42703 and answers 500
+// on every request), so there is no old series to compare against. They run their
+// own matrix of (id x dialog preset) and are graded on the NEW side's invariants;
+// see THE PATH-PARAMETER ENDPOINTS below for the list and the reasoning.
+//
 // MATRIX (§9.3): 6 windows x 11 filter combinations x 2 scope values = 132 runs
 // per endpoint — §9.3's own figure is 3 x 8 x 2, and PERIODS/filterCombos() have
 // grown past it since. The run prints the real number at startup; this comment
@@ -114,7 +121,7 @@ usage: node --import tsx scripts/dashboard-parity.js [options]
   --api-base URL       default http://localhost:<port>   (http mode)
   --port N             default 3000                      (http mode)
   --auth-secret S      default $AUTH_SECRET              (http mode)
-  --endpoint NAME      run one endpoint, e.g. tests/kpis
+  --endpoint NAME      run one endpoint, e.g. tests/kpis or customers/[id]/history
   --case ID            run one matrix case, e.g. 30d/customer/open
   --tolerance F        relative tolerance for numbers (default 1e-6)
   --json PATH          also write the full result as JSON
@@ -766,6 +773,266 @@ const ENDPOINTS = [
 ];
 
 // ===========================================================================
+// THE PATH-PARAMETER ENDPOINTS — the four [id]/history routes (§8 stage 6)
+// ===========================================================================
+//
+// The stage-6 conversions are shaped differently from the ten above in two ways
+// the matrix could not express until now.
+//
+// 1. THEY TAKE AN ID IN THE PATH. A case is (endpoint x id x preset), and the
+//    ids are SAMPLED FROM THE DATABASE at startup rather than hardcoded: the
+//    BUSIEST entity, because it exercises the most rows, and one with NO ledger
+//    data at all, because "an entity with nothing to show" is the case that used
+//    to answer an empty array, and it is the one a zero-fill bug hides in. The
+//    filter combinations of the main matrix do not apply — these routes take
+//    their subject from the path and pin `scope` to the constant `all` (§5.0(1))
+//    — so the presets the dialogs actually send are the whole window axis.
+//
+// 2. THERE IS NOTHING TO DIFF THEM AGAINST, and this harness does not invent a
+//    comparison to look thorough. Stated plainly, the old sides are:
+//
+//      customers/[id]/history  reads customer_snapshots{,_monthly}
+//      shipments/[id]/history  reads shipment_snapshots{,_monthly}
+//      stations/[id]/history   reads station_snapshots{,_monthly}
+//          — all three hold 0 rows on this database (they were written by a
+//            date-less function that stored NOW() under a past date), and each
+//            route then appends ONE live point counted off item_routes. The old
+//            response is therefore a single element labelled "today". Diffing
+//            13 months of daily series against one row would stamp ~395 days
+//            "only-on-new" and grade one number: noise dressed as a comparison.
+//      item-types/[id]/history raises 42703 on EVERY request — its "today"
+//            query joins `shipments.item_type_id`, a column that has never
+//            existed — and answers HTTP 500. There is no old number at all.
+//
+//    So these four are graded on the NEW side's INVARIANTS, and the report says
+//    so on every run. The invariants are the properties the old shape could not
+//    have had, and they are exactly the ones a silent regression would break:
+//
+//      http-200        including for an entity with no data (the item-type
+//                      route's permanent 500 is the bug being fixed)
+//      full-series     one row per civil day of the window the headers report —
+//                      not one row, and not "only the days something happened"
+//      contiguous      day N is the day after day N-1, computed as civil dates,
+//                      so a DST boundary cannot drop or duplicate one (§7.2)
+//      today-once      exactly one row carries isToday, and it is the last one
+//      cap-reported    the 13-month cap (§6.3) moves `from` to the cap floor AND
+//                      sets X-Metrics-Period-Capped; a preset inside the cap
+//                      sets neither
+//      scope-all       X-Metrics-Scope is `all` — a history must not rewrite
+//                      itself the day a shipment is despatched (§5.0(1))
+//      zero-filled     the no-data id returns the SAME field set as the busy
+//                      one, with counts at 0 and durations at null — never an
+//                      empty array, never a missing key, and never a 0 standing
+//                      in for "not measured" (§5.0(7))
+//      plus the same `_new_` contract the diffed endpoints get: no field null in
+//      every case of the matrix, every *Wall* paired with its *Work*, and the
+//      work clock never past the wall clock (§2.8).
+
+const PATH_ENDPOINTS = [
+  {
+    name: "customers/[id]/history",
+    path: (id) => `/api/dashboard/customers/${id}/history`,
+    oldSide:
+      "old reads customer_snapshots{,_monthly} (0 rows here) and appends one live point — a one-element 'history'. No diff is possible; the new side is graded on its invariants.",
+    busiest: "SELECT customer_id AS v FROM route_run GROUP BY 1 ORDER BY count(*) DESC LIMIT 1",
+    empty:
+      "SELECT c.id AS v FROM customers c WHERE NOT EXISTS (SELECT 1 FROM route_run rr WHERE rr.customer_id = c.id) ORDER BY c.id LIMIT 1",
+    emptyFallback: "SELECT COALESCE(max(id), 0) + 1000 AS v FROM customers",
+  },
+  {
+    name: "shipments/[id]/history",
+    path: (id) => `/api/dashboard/shipments/${id}/history`,
+    oldSide:
+      "old reads shipment_snapshots{,_monthly} (0 rows here) plus one live point whose completionPercentage divides by shipments.amount, a stock number §5.8 forbids. No diff is possible.",
+    busiest: "SELECT shipment_id AS v FROM route_run GROUP BY 1 ORDER BY count(*) DESC LIMIT 1",
+    empty:
+      "SELECT s.id AS v FROM shipments s WHERE NOT EXISTS (SELECT 1 FROM route_run rr WHERE rr.shipment_id = s.id) ORDER BY s.id LIMIT 1",
+    emptyFallback: "SELECT COALESCE(max(id), 0) + 1000 AS v FROM shipments",
+  },
+  {
+    name: "item-types/[id]/history",
+    path: (id) => `/api/dashboard/item-types/${id}/history`,
+    oldSide:
+      "old raises 42703 on EVERY request (it joins shipments.item_type_id, a column that has never existed) and answers HTTP 500. There is no old number to compare — the invariants ARE the fix.",
+    busiest: "SELECT item_type_id AS v FROM route_run GROUP BY 1 ORDER BY count(*) DESC LIMIT 1",
+    empty:
+      "SELECT it.item_type_id AS v FROM item_types it WHERE NOT EXISTS (SELECT 1 FROM route_run rr WHERE rr.item_type_id = it.item_type_id) ORDER BY it.item_type_id LIMIT 1",
+    emptyFallback: "SELECT COALESCE(max(item_type_id), 0) + 1000 AS v FROM item_types",
+  },
+  {
+    name: "stations/[id]/history",
+    path: (id) => `/api/dashboard/stations/${id}/history`,
+    oldSide:
+      "old reads station_snapshots{,_monthly} (0 rows here) plus one live point whose averageQueueTime is AVG(now() - queue_start_time) over the CURRENT queue — a state metric plotted as a flow metric (§5.0(3)). No diff is possible.",
+    busiest:
+      "SELECT station_id AS v FROM item_state_interval WHERE station_id IS NOT NULL GROUP BY 1 ORDER BY count(*) DESC LIMIT 1",
+    empty:
+      "SELECT ts.test_station_id AS v FROM test_stations ts WHERE NOT EXISTS (SELECT 1 FROM item_state_interval i WHERE i.station_id = ts.test_station_id) ORDER BY ts.test_station_id LIMIT 1",
+    // A station id that does not exist is a 404 by design, not a zero series, so
+    // there is no synthetic fallback here: if every station has data, the
+    // no-data case is reported as UNAVAILABLE rather than faked.
+    emptyFallback: null,
+  },
+];
+
+/** The three windows the dialogs' own picker offers (see requireDialogPeriod). */
+const DIALOG_PRESETS = [
+  { id: "alldays", qs: "period=alldays", capped: false },
+  { id: "12months", qs: "period=12months", capped: false },
+  { id: "3years", qs: "period=3years", capped: true },
+];
+
+/** endpoint name -> [{ id, kind }] discovered from the database. */
+const PATH_IDS = {};
+
+async function discoverPathIds() {
+  for (const ep of PATH_ENDPOINTS) {
+    const ids = [];
+    const busiest = (await q1(ep.busiest))?.v ?? null;
+    if (busiest !== null) ids.push({ id: busiest, kind: "busiest" });
+    let empty = (await q1(ep.empty))?.v ?? null;
+    let kind = "no-data";
+    if (empty === null && ep.emptyFallback) {
+      // Every row of these three tables is routed on this database, so the
+      // "nothing to show" case is reached with an id that is not in the table at
+      // all — the same thing to these routes (no rows either way), and exactly
+      // what a stale dialog link sends.
+      empty = (await q1(ep.emptyFallback))?.v ?? null;
+      kind = "no-data(absent id)";
+    }
+    if (empty !== null) ids.push({ id: empty, kind });
+    PATH_IDS[ep.name] = ids;
+  }
+}
+
+/** One (id x preset) case list for a path endpoint. */
+function buildPathCases(ep) {
+  const cases = [];
+  for (const { id, kind } of PATH_IDS[ep.name] || []) {
+    for (const preset of DIALOG_PRESETS) {
+      cases.push({ id: `${preset.id}/${kind}`, entityId: id, kind, preset });
+    }
+  }
+  return cases;
+}
+
+/**
+ * Grade one path endpoint on the NEW side's invariants. Returns the same shape
+ * the diffed endpoints report, so main() can print and count it identically.
+ */
+async function runPathEndpoint(ep) {
+  const observations = [];
+  const issues = [];
+  const caseErrors = [];
+  const keysByPreset = new Map(); // preset -> the busiest id's field set
+  const today = P.todayBusinessDay();
+  const capFloor = P.addDays(P.addMonths(today, -P.UI_MONTH_CAP), 1);
+  let ran = 0;
+
+  for (const c of buildPathCases(ep)) {
+    const url = `${ep.path(c.entityId)}?${c.preset.qs}`;
+    let r;
+    try {
+      r = await httpGetRaw(url, NEW_API_BASE);
+    } catch (e) {
+      caseErrors.push({ case: c.id, side: "new", message: e.message });
+      continue;
+    }
+    LATENCY.push({ endpoint: ep.name, side: "new", case: c.id, ms: r.ms, status: r.status });
+    const push = (rule, detail) => issues.push({ case: c.id, id: c.entityId, rule, detail });
+
+    if (r.status !== 200) {
+      push("http-200", `${r.status} ${String(r.text).slice(0, 160)}`);
+      continue;
+    }
+    const rows = r.json;
+    if (!Array.isArray(rows)) {
+      push("array", `answered ${typeof rows}`);
+      continue;
+    }
+    ran++;
+
+    // ---- the window the server says it queried ----------------------------
+    const from = r.headers.get("x-metrics-period-from");
+    const to = r.headers.get("x-metrics-period-to");
+    const scope = r.headers.get("x-metrics-scope");
+    const capped = r.headers.get("x-metrics-period-capped");
+    if (!from || !to) {
+      push("period-headers", "X-Metrics-Period-From/To missing — the caller cannot tell what window it got");
+      continue;
+    }
+    if (scope !== "all") push("scope-all", `X-Metrics-Scope=${scope}; §5.0(1) pins a history endpoint to all`);
+    if (c.preset.capped) {
+      if (capped !== "true") push("cap-reported", `${c.preset.id} was not reported as capped`);
+      if (from !== capFloor) push("cap-reported", `from=${from}, expected the cap floor ${capFloor}`);
+    } else if (capped === "true") {
+      push("cap-reported", `${c.preset.id} is inside the 13-month cap but was reported as capped`);
+    }
+
+    // ---- one row per civil day, in order ----------------------------------
+    const expected = P.daysBetween(from, to);
+    if (rows.length !== expected) {
+      push("full-series", `${rows.length} row(s) for a ${expected}-day window ${from}..${to}`);
+    }
+    let broken = null;
+    for (let i = 0; i < rows.length && broken === null; i++) {
+      const want = P.addDays(from, i);
+      const got = String(rows[i]?.date ?? "").slice(0, 10);
+      if (got !== want) broken = `row ${i} is ${got}, expected ${want}`;
+    }
+    if (broken) push("contiguous", broken);
+
+    const todayRows = rows.filter((x) => x?.isToday === true);
+    if (to === today) {
+      if (todayRows.length !== 1) push("today-once", `${todayRows.length} row(s) carry isToday`);
+      else if (rows[rows.length - 1]?.isToday !== true) push("today-once", "isToday is not on the last row");
+    } else if (todayRows.length !== 0) {
+      push("today-once", `isToday on a window that does not reach today (${to})`);
+    }
+
+    // ---- the field set does not depend on whether there is data -----------
+    const keys = Object.keys(rows[0] || {}).sort();
+    if (c.kind === "busiest") {
+      keysByPreset.set(c.preset.id, keys);
+    } else {
+      const busy = keysByPreset.get(c.preset.id);
+      if (busy) {
+        const missing = busy.filter((k) => !keys.includes(k));
+        const extra = keys.filter((k) => !busy.includes(k));
+        if (missing.length || extra.length) {
+          push(
+            "zero-filled",
+            `field set differs from the busy id: missing [${missing.join(", ")}] extra [${extra.join(", ")}]`
+          );
+        }
+      }
+      // Counts must be measured zeros and durations must be nulls — never a 0
+      // standing in for "no measurement" (§5.0(7)).
+      const wrong = [];
+      for (const row of rows) {
+        for (const [k, v] of Object.entries(row)) {
+          if (k === "date" || k === "isToday") continue;
+          const isDuration = /Min$|Minutes$|Seconds$/.test(k);
+          if (isDuration ? v !== null : v !== 0) wrong.push(`${row.date}.${k}=${fmt(v)}`);
+        }
+      }
+      if (wrong.length) {
+        push("zero-filled", `${wrong.length} field(s) not zero/null, e.g. ${wrong.slice(0, 4).join(", ")}`);
+      }
+    }
+
+    // ---- the shared _new_ contract (§2.8, and finding #1's rule) ----------
+    for (const row of rows) {
+      const out = [];
+      checkNewContract(ep.name, row, out);
+      for (const f of out) observations.push({ ...f, case: c.id });
+    }
+  }
+
+  return { observations, issues, caseErrors, ran };
+}
+
+// ===========================================================================
 // COMPARISON
 // ===========================================================================
 
@@ -853,7 +1120,20 @@ function compareRow(endpoint, oldRow, newRow, out) {
     if (!oldKeys.includes(k)) out.push({ field: k, status: "MISSING_ON_OLD", old: undefined, new: newRow[k], reason: null });
   }
   // ---- the _new_ contract (see NEW_NULLABLE above) ------------------------
+  // Shared with the path-parameter endpoints below, which have no old side to
+  // diff against and are graded on these three rules alone.
+  checkNewContract(endpoint, newRow, out);
+}
+
+/**
+ * The three things asserted about a field the old side never had, and about
+ * every duration on the row (§2.8). Called from compareRow for the diffed
+ * endpoints and from the path-parameter runner for the four `[id]/history`
+ * routes, so the rules cannot drift apart between the two.
+ */
+function checkNewContract(endpoint, newRow, out) {
   const nullable = NEW_NULLABLE[endpoint] || {};
+  const newOnly = Object.keys(newRow || {}).filter((k) => k.startsWith("_new_"));
   for (const k of newOnly) {
     const v = newRow[k];
     out.push({
@@ -1044,6 +1324,14 @@ async function main() {
   await discoverFixtures();
   console.log(`fixtures   : ${JSON.stringify(FIXTURES.legacyStatus ? { ...FIXTURES, legacyStatus: undefined } : FIXTURES)}`);
 
+  // The path-parameter endpoints sample their own ids — the busiest entity and
+  // one with no ledger data at all. Discovered from the database for the same
+  // reason the filter fixtures are: a hardcoded id silently selects nothing.
+  await discoverPathIds();
+  console.log(
+    `path ids   : ${PATH_ENDPOINTS.map((e) => `${e.name.split("/")[0]}=[${(PATH_IDS[e.name] || []).map((x) => `${x.id} ${x.kind}`).join(", ")}]`).join("  ")}`
+  );
+
   const cases = buildCases();
   console.log(`matrix     : ${PERIODS.length} windows x ${filterCombos().length} filters x ${SCOPES.length} scopes = ${cases.length} cases per endpoint\n`);
 
@@ -1062,7 +1350,8 @@ async function main() {
   sessionCookie = await mintSession();
 
   const endpoints = ENDPOINTS.filter((e) => !ONLY_ENDPOINT || e.name === ONLY_ENDPOINT);
-  if (endpoints.length === 0) usage(`unknown --endpoint ${ONLY_ENDPOINT}`);
+  const pathEndpoints = PATH_ENDPOINTS.filter((e) => !ONLY_ENDPOINT || e.name === ONLY_ENDPOINT);
+  if (endpoints.length === 0 && pathEndpoints.length === 0) usage(`unknown --endpoint ${ONLY_ENDPOINT}`);
 
   const report = { database: dbName, oldMode: OLD_MODE, generatedAt: new Date().toISOString(), endpoints: [] };
   let failures = 0;
@@ -1165,6 +1454,67 @@ async function main() {
       rowIssues,
       errors: caseErrors,
       expectedOldErrors,
+    });
+  }
+
+  // =========================================================================
+  // The four [id]/history routes — invariants, because a diff is impossible
+  // =========================================================================
+  for (const ep of pathEndpoints) {
+    console.log(`\n${"=".repeat(78)}\n${ep.name}\n${"=".repeat(78)}`);
+    console.log(`  NO OLD-VS-NEW DIFF. ${ep.oldSide}`);
+    const ids = PATH_IDS[ep.name] || [];
+    console.log(`  ids        : ${ids.map((x) => `${x.id} (${x.kind})`).join(", ") || "NONE DISCOVERED"}`);
+    if (!ids.some((x) => x.kind.startsWith("no-data"))) {
+      // Named, not hidden: an unchecked invariant is not a passing one.
+      console.log(
+        "  NOTE       : no zero-data id exists on this database, so the zero-fill invariant is UNCHECKED here"
+      );
+    }
+
+    const { observations, issues, caseErrors, ran } = await runPathEndpoint(ep);
+    console.log(`  ${ran} case(s) checked (${DIALOG_PRESETS.length} preset(s) x ${ids.length} id(s))\n`);
+
+    const rows = rollUp(observations);
+    const width = Math.max(24, ...rows.map((r) => r.field.length), 24);
+    for (const r of rows.sort((a, b) => a.field.localeCompare(b.field))) {
+      if (!VERBOSE && r.verdict === "NEW_ONLY") continue;
+      console.log(`  ${MARK[r.verdict]} ${r.field.padEnd(width - 2)}  ${r.verdict}`);
+      if (r.reason) console.log(`  ${" ".repeat(width)}    ${r.reason}`);
+      for (const smp of r.samples) console.log(`  ${" ".repeat(width)}    [${smp.case}] new=${fmt(smp.new)}`);
+    }
+    const okFields = rows.filter((r) => r.verdict === "NEW_ONLY").length;
+    if (!VERBOSE && okFields) console.log(`  + ${okFields} _new_ field(s) present and not always-null (use --verbose to list)`);
+
+    // One line per BROKEN invariant, with the first cases that broke it.
+    const byRule = new Map();
+    for (const i of issues) {
+      if (!byRule.has(i.rule)) byRule.set(i.rule, []);
+      byRule.get(i.rule).push(i);
+    }
+    if (byRule.size === 0) console.log(`  = every invariant holds on all ${ran} case(s)`);
+    for (const [rule, list] of byRule) {
+      console.log(`  X ${rule.padEnd(width - 2)}  INVARIANT_BROKEN (${list.length} case(s))`);
+      for (const i of list.slice(0, 3)) console.log(`  ${" ".repeat(width)}    [${i.case}] id=${i.id} ${i.detail}`);
+    }
+    const bad = rows.filter((r) => FAILING.has(r.verdict)).length + byRule.size;
+    failures += bad;
+
+    if (caseErrors.length) {
+      console.log(`\n  ERRORS (${caseErrors.length}):`);
+      for (const e of caseErrors.slice(0, 6)) console.log(`    [${e.case}] ${e.side}: ${e.message}`);
+      errors += caseErrors.length;
+    }
+
+    report.endpoints.push({
+      name: ep.name,
+      mode: "invariants-only",
+      whyNoDiff: ep.oldSide,
+      ids,
+      casesChecked: ran,
+      fields: rows.map((r) => ({ field: r.field, verdict: r.verdict, reason: r.reason || null, samples: r.samples })),
+      invariantIssues: issues,
+      errors: caseErrors,
     });
   }
 
