@@ -506,13 +506,11 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     "item_state_interval",
     "item_state_event",
     "route_run",
-    "metrics_drift",
     "test_results",
     "item_route_history",
     "research_history",
     "item_routes",
     "items",
-    "station_live_counters",
     "testing_routes",
     "test_stations",
     "test_stations_type",
@@ -684,7 +682,12 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
 
   it("fixture sanity: the fold produced a legal ledger state and both clocks disagree exactly once", async () => {
     const [{ n: drift }] = await q<{ n: number }>(
-      "SELECT count(*)::int AS n FROM metrics_drift WHERE resolved_at IS NULL",
+      `SELECT count(*)::int AS n
+           FROM item_routes ir
+           LEFT JOIN item_state_interval i
+                  ON i.item_id = ir.item_id AND upper_inf(i.valid_range)
+          WHERE EXISTS (SELECT 1 FROM item_state_interval x WHERE x.item_id = ir.item_id)
+            AND i.state_key IS DISTINCT FROM state_of(ir.current_status)`,
     );
     assert.equal(drift, 0);
 

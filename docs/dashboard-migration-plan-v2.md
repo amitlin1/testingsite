@@ -1949,7 +1949,7 @@ ALTER TABLE item_routes ENABLE TRIGGER trg_metrics_drift;
 
 ---
 
-### שלב 7 — מיגרציה B: ההריסה
+### שלב 7 — מיגרציה B: ההריסה · **נכתב והוחל על dev 2026-08-31 · פרודקשן חסום בשער**
 
 **רק אחרי שבוע שלם של: `drift_open = 0`, ו־Q3 מתאים ל־`station_live_counters` בכל דגימה.**
 

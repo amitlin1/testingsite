@@ -70,14 +70,14 @@ queries that are already fast enough. It was cut. A **deferred contingency** exi
 daily-grain rollup table, refreshed by one idempotent nightly recompute — built only if measured
 production p95 exceeds 2 s for a week.
 
-## The tables (9)
+## The tables (8 after stage 7; `metrics_drift` was the ninth and is dropped once the dual-run week is green)
 
 | Group | Tables | Grows with |
 |---|---|---|
 | Core ledger | `route_run` (one pass of one item through a route), `item_state_event`, `item_state_interval` | traffic |
 | State vocabulary | `metric_state` (6 rows: status keys + flags; replaces hardcoded 1–5 everywhere) | never |
 | Work calendar | `work_calendar_version`, `work_span` (versioned working-time ladder) | ~300 rows/yr |
-| Operations | `job_run` (cron audit), `metrics_schema_version` (deploy handshake), `metrics_drift` (temporary scaffold, dropped after rollout) | tiny |
+| Operations | `job_run` (cron audit), `metrics_schema_version` (deploy handshake) | tiny |
 
 ## Scheduled jobs: 3, none of them create data
 
@@ -115,9 +115,9 @@ in total **28 files / ~6,450 lines** plus a duplicated 1,600-line SQL tree.
 | 1 | Dead-code demolition (17 files, zero references) | ✅ done 2026-08-24 |
 | 2 | Migration A: new schema + work calendar + backfill script | ✅ done 2026-08-25 (dev; prod awaits USB trip) |
 | 3 | Write path: 31 emission call sites | ✅ done 2026-08-25 |
-| 4 | Backfill verification + dual-run week | next |
-| 5 | Read path: dashboard endpoints on the ledger, behind a parity harness | |
-| 6 | Rewrite 6 history dialogs | |
-| 7 | Migration B: destructive cleanup | gated on green dual-run + sign-off |
+| 4 | Backfill verification + dual-run week | ✅ written & smoke-tested; the dual-run WEEK runs in production |
+| 5 | Read path: dashboard endpoints on the ledger, behind a parity harness | ✅ done 2026-08-28 |
+| 6 | Rewrite 6 history dialogs | ✅ done 2026-08-31 |
+| 7 | Migration B: destructive cleanup | ✅ written + applied on dev 2026-08-31; **production gated** on a green dual-run week |
 
 Estimated effort: **25–33 working days** total.

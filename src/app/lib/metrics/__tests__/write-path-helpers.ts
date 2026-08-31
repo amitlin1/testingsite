@@ -165,13 +165,6 @@ export async function setup(): Promise<void> {
     prisma: prismaMod.prisma as unknown as Handlers["prisma"],
   };
 
-  // THE POINT OF THE SCAFFOLD (§3.8): migration A ships the drift detector
-  // disabled because the old image keeps writing item_routes while the ledger
-  // is still empty. In the scratch DB the ledger is authoritative from row one,
-  // so the detector runs for the whole suite and "0 open drift rows" is the
-  // final assertion of every test.
-  await q("ALTER TABLE item_routes ENABLE TRIGGER trg_metrics_drift");
-
   await seedWorkCalendar();
 }
 
@@ -246,13 +239,11 @@ const TRUNCATE_TABLES = [
   "item_state_interval",
   "item_state_event",
   "route_run",
-  "metrics_drift",
   "test_results",
   "item_route_history",
   "research_history",
   "item_routes",
   "items",
-  "station_live_counters",
   "testing_routes",
   "test_stations",
   "test_stations_type",
@@ -392,12 +383,12 @@ export async function seedItem(o: SeedItemOptions): Promise<number> {
  * real write happens with the detector armed.
  */
 export async function withDriftDetectorOff<T>(fn: () => Promise<T>): Promise<T> {
-  await q("ALTER TABLE item_routes DISABLE TRIGGER trg_metrics_drift");
-  try {
-    return await fn();
-  } finally {
-    await q("ALTER TABLE item_routes ENABLE TRIGGER trg_metrics_drift");
-  }
+  // Kept as a pass-through so the seeding call sites still read as "this write
+  // deliberately bypasses the invariant check". There is nothing to disable any
+  // more — migration B dropped trg_metrics_drift — and openDriftRows() now
+  // computes the check on demand instead, so a seed that leaves item_routes and
+  // the ledger disagreeing is caught by the assertion, not by a trigger.
+  return fn();
 }
 
 /**
@@ -622,11 +613,37 @@ export async function openInterval(itemId: number): Promise<IntervalRow | null> 
   return rows.find((i) => i.is_open) ?? null;
 }
 
+/**
+ * The invariant the drift scaffold used to police, computed directly.
+ *
+ * metrics_drift and its trigger were dropped by migration B: a CONSTRAINT
+ * TRIGGER on every item_routes write is real cost on the hot path of every test
+ * submission, and its job — proving each writer also emits its ledger event —
+ * was finished once the dual-run week was green.
+ *
+ * The tests keep the guarantee, and get a STRONGER one. The trigger only ever
+ * saw rows some transaction happened to touch; this compares EVERY item_routes
+ * row against its open interval, so a row the test never wrote is checked too.
+ * Same comparison the trigger made: state_of(current_status) vs the open
+ * interval's state_key.
+ */
 export function openDriftRows(): Promise<
-  { item_id: number; legacy_status: number | null; ledger_state: string | null; occurrences: number }[]
+  { item_id: number; legacy_status: number | null; ledger_state: string | null }[]
 > {
   return q(
-    `SELECT item_id, legacy_status, ledger_state, occurrences
-       FROM metrics_drift WHERE resolved_at IS NULL ORDER BY item_id`,
+    `SELECT ir.item_id,
+            ir.current_status AS legacy_status,
+            i.state_key       AS ledger_state
+       FROM item_routes ir
+       LEFT JOIN item_state_interval i
+              ON i.item_id = ir.item_id AND upper_inf(i.valid_range)
+      -- Scoped to items the ledger has actually STARTED tracking. An item with
+      -- no interval at all was never claimed by the ledger, so a disagreement
+      -- is not drift: it is the deployment-window case (§4.2) that auto-open
+      -- exists for, and the deliberate legacy/orphan fixtures some tests seed.
+      -- runs_with_zero_intervals in metrics_selfcheck covers that class.
+      WHERE EXISTS (SELECT 1 FROM item_state_interval x WHERE x.item_id = ir.item_id)
+        AND i.state_key IS DISTINCT FROM state_of(ir.current_status)
+      ORDER BY ir.item_id`,
   );
 }

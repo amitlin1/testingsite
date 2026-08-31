@@ -617,13 +617,11 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     "item_state_interval",
     "item_state_event",
     "route_run",
-    "metrics_drift",
     "test_results",
     "item_route_history",
     "research_history",
     "item_routes",
     "items",
-    "station_live_counters",
     "testing_routes",
     "test_stations",
     "test_stations_type",
@@ -650,7 +648,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
   /**
    * The whole fixture in ONE transaction.
    *
-   * Not for speed: trg_metrics_drift is a DEFERRABLE INITIALLY DEFERRED
+   * Not for speed: the drift CONSTRAINT TRIGGER (dropped by migration B) was DEFERRABLE INITIALLY DEFERRED
    * constraint trigger that compares the committed item_routes row against the
    * item's open ledger interval. Seeding item_routes in its own transaction
    * would commit a row whose legacy status has no ledger state yet and leave a
@@ -811,7 +809,12 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
 
   it("fixture sanity: the fold produced the intervals the write path would have, and no drift", async () => {
     const [{ n: drift }] = await q<{ n: number }>(
-      "SELECT count(*)::int AS n FROM metrics_drift WHERE resolved_at IS NULL",
+      `SELECT count(*)::int AS n
+           FROM item_routes ir
+           LEFT JOIN item_state_interval i
+                  ON i.item_id = ir.item_id AND upper_inf(i.valid_range)
+          WHERE EXISTS (SELECT 1 FROM item_state_interval x WHERE x.item_id = ir.item_id)
+            AND i.state_key IS DISTINCT FROM state_of(ir.current_status)`,
     );
     assert.equal(drift, 0);
 

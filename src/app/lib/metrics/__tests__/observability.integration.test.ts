@@ -302,7 +302,7 @@ describe("stage 5 — runJob and the job_run audit surface", { skip: dbSkipReaso
 
     assert.equal(body.success, true);
     assert.equal(body.status, "ok");
-    assert.equal(body.checks.length, 12, "§3.10 — 11 checks plus intervals_negative_offhours");
+    assert.equal(body.checks.length, 11, "§3.10 minus drift_open, which migration B retired with the dual-run scaffold");
     assert.ok(body.checks.some((c: any) => c.checkName === "calendar_horizon_days"));
     assert.equal(typeof body.reconciledIntervals, "number");
     assert.equal(typeof body.healthy, "boolean");
@@ -314,7 +314,7 @@ describe("stage 5 — runJob and the job_run audit surface", { skip: dbSkipReaso
     assert.equal(row.status, "ok");
     // rows_affected is the reconciliation — the only thing this job writes.
     assert.equal(row.rows_affected, body.reconciledIntervals);
-    assert.equal(row.detail.checks.length, 12);
+    assert.equal(row.detail.checks.length, 11); // 12 before migration B retired drift_open
   }
 
   it("the cron endpoint refuses without the shared secret, before touching the database", async () => {
@@ -395,7 +395,7 @@ describe("stage 5 — GET /api/health/jobs is self-gated", { skip: httpSkipReaso
       assert.equal(typeof job.stale, "boolean");
       assert.equal(typeof job.intervalSeconds, "number");
     }
-    assert.equal(body.checks.length, 12);
+    assert.equal(body.checks.length, 11); // 12 before migration B retired drift_open
     assert.equal(typeof body.healthy, "boolean");
     assert.ok(Array.isArray(body.reasons));
   });

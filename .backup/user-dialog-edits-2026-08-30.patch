@@ -1,0 +1,584 @@
+diff --git a/src/app/components/dashboard/CompletionHistoryChart.tsx b/src/app/components/dashboard/CompletionHistoryChart.tsx
+index 70751de..3b738b3 100644
+--- a/src/app/components/dashboard/CompletionHistoryChart.tsx
++++ b/src/app/components/dashboard/CompletionHistoryChart.tsx
+@@ -54,11 +54,12 @@ export default function CompletionHistoryChart() {
+     return colors[index % colors.length];
+   };
+ 
++  const { startDate, endDate } = periodFilter;
++
+   React.useEffect(() => {
+     const fetchData = async () => {
+       setLoading(true);
+       try {
+-        const { startDate, endDate } = periodFilter;
+         if (!startDate || !endDate) return;
+ 
+         const response = await apiFetch(
+@@ -76,7 +77,7 @@ export default function CompletionHistoryChart() {
+     };
+ 
+     fetchData();
+-  }, [periodFilter.startDate, periodFilter.endDate]);
++  }, [startDate, endDate]);
+ 
+   const formatDateLabel = (dateStr: string) => {
+     const date = new Date(dateStr);
+diff --git a/src/app/components/dashboard/CustomerHistoryDialog.tsx b/src/app/components/dashboard/CustomerHistoryDialog.tsx
+index 5341ce8..f7bd5af 100644
+--- a/src/app/components/dashboard/CustomerHistoryDialog.tsx
++++ b/src/app/components/dashboard/CustomerHistoryDialog.tsx
+@@ -42,6 +42,42 @@ interface CustomerHistoryDialogProps {
+   customer: CustomerPerformanceRow | null;
+ }
+ 
++/** Pure: collapses daily rows into weekly averages. Module scope keeps it
++ *  referentially stable so memoised callbacks can depend on it safely. */
++const aggregateToWeekly = (dailyData: any[]) => {
++  const weeklyMap = new Map<string, any[]>();
++  
++  dailyData.forEach((item) => {
++    const date = new Date(item.date);
++    const weekStart = new Date(date);
++    weekStart.setDate(date.getDate() - date.getDay());
++    const weekKey = weekStart.toISOString().split('T')[0];
++    
++    if (!weeklyMap.has(weekKey)) {
++      weeklyMap.set(weekKey, []);
++    }
++    weeklyMap.get(weekKey)!.push(item);
++  });
++  
++  return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
++    const avg = (key: string) => Math.round(
++      items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
++    );
++    
++    return {
++      date: weekKey,
++      totalItems: avg('totalItems'),
++      itemsInQueue: avg('itemsInQueue'),
++      itemsInTest: avg('itemsInTest'),
++      itemsWaitingForResearch: avg('itemsWaitingForResearch'),
++      itemsInResearch: avg('itemsInResearch'),
++      finishedItems: avg('finishedItems'),
++      itemsInRoutes: avg('itemsInRoutes'),
++      successPercentage: avg('successPercentage'),
++    };
++  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
++};
++
+ export default function CustomerHistoryDialog({
+   open,
+   onClose,
+@@ -53,13 +89,7 @@ export default function CustomerHistoryDialog({
+   const [data, setData] = React.useState<any[]>([]);
+   const [loading, setLoading] = React.useState(false);
+ 
+-  React.useEffect(() => {
+-    if (open && customer) {
+-      fetchHistory();
+-    }
+-  }, [open, customer, period]);
+-
+-  const fetchHistory = async () => {
++  const fetchHistory = React.useCallback(async () => {
+     if (!customer) return;
+     setLoading(true);
+     try {
+@@ -109,41 +139,13 @@ export default function CustomerHistoryDialog({
+     } finally {
+       setLoading(false);
+     }
+-  };
++  }, [customer, period]);
+ 
+-  const aggregateToWeekly = (dailyData: any[]) => {
+-    const weeklyMap = new Map<string, any[]>();
+-    
+-    dailyData.forEach((item) => {
+-      const date = new Date(item.date);
+-      const weekStart = new Date(date);
+-      weekStart.setDate(date.getDate() - date.getDay());
+-      const weekKey = weekStart.toISOString().split('T')[0];
+-      
+-      if (!weeklyMap.has(weekKey)) {
+-        weeklyMap.set(weekKey, []);
+-      }
+-      weeklyMap.get(weekKey)!.push(item);
+-    });
+-    
+-    return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
+-      const avg = (key: string) => Math.round(
+-        items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
+-      );
+-      
+-      return {
+-        date: weekKey,
+-        totalItems: avg('totalItems'),
+-        itemsInQueue: avg('itemsInQueue'),
+-        itemsInTest: avg('itemsInTest'),
+-        itemsWaitingForResearch: avg('itemsWaitingForResearch'),
+-        itemsInResearch: avg('itemsInResearch'),
+-        finishedItems: avg('finishedItems'),
+-        itemsInRoutes: avg('itemsInRoutes'),
+-        successPercentage: avg('successPercentage'),
+-      };
+-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+-  };
++  React.useEffect(() => {
++    if (open && customer) {
++      fetchHistory();
++    }
++  }, [open, customer, fetchHistory]);
+ 
+   const handleChartTypeChange = (
+     event: React.MouseEvent<HTMLElement>,
+diff --git a/src/app/components/dashboard/ItemTypeHistoryDialog.tsx b/src/app/components/dashboard/ItemTypeHistoryDialog.tsx
+index 4cce9f6..3ae494b 100644
+--- a/src/app/components/dashboard/ItemTypeHistoryDialog.tsx
++++ b/src/app/components/dashboard/ItemTypeHistoryDialog.tsx
+@@ -42,6 +42,42 @@ interface ItemTypeHistoryDialogProps {
+   itemType: ItemTypeTrackingRow | null;
+ }
+ 
++/** Pure: collapses daily rows into weekly averages. Module scope keeps it
++ *  referentially stable so memoised callbacks can depend on it safely. */
++const aggregateToWeekly = (dailyData: any[]) => {
++  const weeklyMap = new Map<string, any[]>();
++  
++  dailyData.forEach((item) => {
++    const date = new Date(item.date);
++    const weekStart = new Date(date);
++    weekStart.setDate(date.getDate() - date.getDay());
++    const weekKey = weekStart.toISOString().split('T')[0];
++    
++    if (!weeklyMap.has(weekKey)) {
++      weeklyMap.set(weekKey, []);
++    }
++    weeklyMap.get(weekKey)!.push(item);
++  });
++  
++  return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
++    const avg = (key: string) => Math.round(
++      items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
++    );
++    
++    return {
++      date: weekKey,
++      itemsInQueue: avg('itemsInQueue'),
++      itemsInTest: avg('itemsInTest'),
++      itemsWaitingForResearch: avg('itemsWaitingForResearch'),
++      itemsInResearch: avg('itemsInResearch'),
++      itemsFinished: avg('itemsFinished'),
++      itemsInRoutes: avg('itemsInRoutes'),
++      totalItems: avg('totalItems'),
++      completionPercentage: avg('completionPercentage'),
++    };
++  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
++};
++
+ export default function ItemTypeHistoryDialog({
+   open,
+   onClose,
+@@ -53,13 +89,7 @@ export default function ItemTypeHistoryDialog({
+   const [data, setData] = React.useState<any[]>([]);
+   const [loading, setLoading] = React.useState(false);
+ 
+-  React.useEffect(() => {
+-    if (open && itemType) {
+-      fetchHistory();
+-    }
+-  }, [open, itemType, period]);
+-
+-  const fetchHistory = async () => {
++  const fetchHistory = React.useCallback(async () => {
+     if (!itemType) return;
+     setLoading(true);
+     try {
+@@ -108,41 +138,13 @@ export default function ItemTypeHistoryDialog({
+     } finally {
+       setLoading(false);
+     }
+-  };
++  }, [itemType, period]);
+ 
+-  const aggregateToWeekly = (dailyData: any[]) => {
+-    const weeklyMap = new Map<string, any[]>();
+-    
+-    dailyData.forEach((item) => {
+-      const date = new Date(item.date);
+-      const weekStart = new Date(date);
+-      weekStart.setDate(date.getDate() - date.getDay());
+-      const weekKey = weekStart.toISOString().split('T')[0];
+-      
+-      if (!weeklyMap.has(weekKey)) {
+-        weeklyMap.set(weekKey, []);
+-      }
+-      weeklyMap.get(weekKey)!.push(item);
+-    });
+-    
+-    return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
+-      const avg = (key: string) => Math.round(
+-        items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
+-      );
+-      
+-      return {
+-        date: weekKey,
+-        itemsInQueue: avg('itemsInQueue'),
+-        itemsInTest: avg('itemsInTest'),
+-        itemsWaitingForResearch: avg('itemsWaitingForResearch'),
+-        itemsInResearch: avg('itemsInResearch'),
+-        itemsFinished: avg('itemsFinished'),
+-        itemsInRoutes: avg('itemsInRoutes'),
+-        totalItems: avg('totalItems'),
+-        completionPercentage: avg('completionPercentage'),
+-      };
+-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+-  };
++  React.useEffect(() => {
++    if (open && itemType) {
++      fetchHistory();
++    }
++  }, [open, itemType, fetchHistory]);
+ 
+   const handleChartTypeChange = (
+     event: React.MouseEvent<HTMLElement>,
+diff --git a/src/app/components/dashboard/ShipmentHistoryDialog.tsx b/src/app/components/dashboard/ShipmentHistoryDialog.tsx
+index a4cbdef..a8d0a4d 100644
+--- a/src/app/components/dashboard/ShipmentHistoryDialog.tsx
++++ b/src/app/components/dashboard/ShipmentHistoryDialog.tsx
+@@ -42,6 +42,42 @@ interface ShipmentHistoryDialogProps {
+   shipment: ShipmentTrackingRow | null;
+ }
+ 
++/** Pure: collapses daily rows into weekly averages. Module scope keeps it
++ *  referentially stable so memoised callbacks can depend on it safely. */
++const aggregateToWeekly = (dailyData: any[]) => {
++  const weeklyMap = new Map<string, any[]>();
++  
++  dailyData.forEach((item) => {
++    const date = new Date(item.date);
++    const weekStart = new Date(date);
++    weekStart.setDate(date.getDate() - date.getDay());
++    const weekKey = weekStart.toISOString().split('T')[0];
++    
++    if (!weeklyMap.has(weekKey)) {
++      weeklyMap.set(weekKey, []);
++    }
++    weeklyMap.get(weekKey)!.push(item);
++  });
++  
++  return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
++    const avg = (key: string) => Math.round(
++      items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
++    );
++    
++    return {
++      date: weekKey,
++      totalItems: avg('totalItems'),
++      itemsInQueue: avg('itemsInQueue'),
++      itemsInTest: avg('itemsInTest'),
++      itemsWaitingForResearch: avg('itemsWaitingForResearch'),
++      itemsInResearch: avg('itemsInResearch'),
++      itemsFinished: avg('itemsFinished'),
++      itemsInRoutes: avg('itemsInRoutes'),
++      completionPercentage: avg('completionPercentage'),
++    };
++  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
++};
++
+ export default function ShipmentHistoryDialog({
+   open,
+   onClose,
+@@ -53,13 +89,7 @@ export default function ShipmentHistoryDialog({
+   const [data, setData] = React.useState<any[]>([]);
+   const [loading, setLoading] = React.useState(false);
+ 
+-  React.useEffect(() => {
+-    if (open && shipment) {
+-      fetchHistory();
+-    }
+-  }, [open, shipment, period]);
+-
+-  const fetchHistory = async () => {
++  const fetchHistory = React.useCallback(async () => {
+     if (!shipment) return;
+     setLoading(true);
+     try {
+@@ -108,41 +138,13 @@ export default function ShipmentHistoryDialog({
+     } finally {
+       setLoading(false);
+     }
+-  };
++  }, [shipment, period]);
+ 
+-  const aggregateToWeekly = (dailyData: any[]) => {
+-    const weeklyMap = new Map<string, any[]>();
+-    
+-    dailyData.forEach((item) => {
+-      const date = new Date(item.date);
+-      const weekStart = new Date(date);
+-      weekStart.setDate(date.getDate() - date.getDay());
+-      const weekKey = weekStart.toISOString().split('T')[0];
+-      
+-      if (!weeklyMap.has(weekKey)) {
+-        weeklyMap.set(weekKey, []);
+-      }
+-      weeklyMap.get(weekKey)!.push(item);
+-    });
+-    
+-    return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
+-      const avg = (key: string) => Math.round(
+-        items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
+-      );
+-      
+-      return {
+-        date: weekKey,
+-        totalItems: avg('totalItems'),
+-        itemsInQueue: avg('itemsInQueue'),
+-        itemsInTest: avg('itemsInTest'),
+-        itemsWaitingForResearch: avg('itemsWaitingForResearch'),
+-        itemsInResearch: avg('itemsInResearch'),
+-        itemsFinished: avg('itemsFinished'),
+-        itemsInRoutes: avg('itemsInRoutes'),
+-        completionPercentage: avg('completionPercentage'),
+-      };
+-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+-  };
++  React.useEffect(() => {
++    if (open && shipment) {
++      fetchHistory();
++    }
++  }, [open, shipment, fetchHistory]);
+ 
+   const handleChartTypeChange = (
+     event: React.MouseEvent<HTMLElement>,
+diff --git a/src/app/components/dashboard/StationHistoryDialog.tsx b/src/app/components/dashboard/StationHistoryDialog.tsx
+index 7db1334..d2b4d7c 100644
+--- a/src/app/components/dashboard/StationHistoryDialog.tsx
++++ b/src/app/components/dashboard/StationHistoryDialog.tsx
+@@ -42,6 +42,38 @@ interface StationHistoryDialogProps {
+   station: StationLoadRow | null;
+ }
+ 
++/** Pure: collapses daily rows into weekly averages. Module scope keeps it
++ *  referentially stable so memoised callbacks can depend on it safely. */
++const aggregateToWeekly = (dailyData: any[]) => {
++  const weeklyMap = new Map<string, any[]>();
++  
++  dailyData.forEach((item) => {
++    const date = new Date(item.date);
++    const weekStart = new Date(date);
++    weekStart.setDate(date.getDate() - date.getDay());
++    const weekKey = weekStart.toISOString().split('T')[0];
++    
++    if (!weeklyMap.has(weekKey)) {
++      weeklyMap.set(weekKey, []);
++    }
++    weeklyMap.get(weekKey)!.push(item);
++  });
++  
++  return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
++    const avg = (key: string) => Math.round(
++      items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
++    );
++    
++    return {
++      date: weekKey,
++      itemsInQueue: avg('itemsInQueue'),
++      itemsInTest: avg('itemsInTest'),
++      averageQueueTime: avg('averageQueueTime'),
++      totalProcessed: avg('totalProcessed'),
++    };
++  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
++};
++
+ export default function StationHistoryDialog({
+   open,
+   onClose,
+@@ -53,13 +85,7 @@ export default function StationHistoryDialog({
+   const [data, setData] = React.useState<any[]>([]);
+   const [loading, setLoading] = React.useState(false);
+ 
+-  React.useEffect(() => {
+-    if (open && station) {
+-      fetchHistory();
+-    }
+-  }, [open, station, period]);
+-
+-  const fetchHistory = async () => {
++  const fetchHistory = React.useCallback(async () => {
+     if (!station) return;
+     setLoading(true);
+     try {
+@@ -106,37 +132,13 @@ export default function StationHistoryDialog({
+     } finally {
+       setLoading(false);
+     }
+-  };
++  }, [station, period]);
+ 
+-  const aggregateToWeekly = (dailyData: any[]) => {
+-    const weeklyMap = new Map<string, any[]>();
+-    
+-    dailyData.forEach((item) => {
+-      const date = new Date(item.date);
+-      const weekStart = new Date(date);
+-      weekStart.setDate(date.getDate() - date.getDay());
+-      const weekKey = weekStart.toISOString().split('T')[0];
+-      
+-      if (!weeklyMap.has(weekKey)) {
+-        weeklyMap.set(weekKey, []);
+-      }
+-      weeklyMap.get(weekKey)!.push(item);
+-    });
+-    
+-    return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
+-      const avg = (key: string) => Math.round(
+-        items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
+-      );
+-      
+-      return {
+-        date: weekKey,
+-        itemsInQueue: avg('itemsInQueue'),
+-        itemsInTest: avg('itemsInTest'),
+-        averageQueueTime: avg('averageQueueTime'),
+-        totalProcessed: avg('totalProcessed'),
+-      };
+-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+-  };
++  React.useEffect(() => {
++    if (open && station) {
++      fetchHistory();
++    }
++  }, [open, station, fetchHistory]);
+ 
+   const handleChartTypeChange = (
+     event: React.MouseEvent<HTMLElement>,
+diff --git a/src/app/components/dashboard/StatusDistributionHistoryChart.tsx b/src/app/components/dashboard/StatusDistributionHistoryChart.tsx
+index f3ec30d..b6b7f6b 100644
+--- a/src/app/components/dashboard/StatusDistributionHistoryChart.tsx
++++ b/src/app/components/dashboard/StatusDistributionHistoryChart.tsx
+@@ -45,6 +45,50 @@ interface StatusDistributionHistoryChartProps {
+   hideControls?: boolean;
+ }
+ 
++/** Pure: collapses daily rows into weekly averages. Module scope keeps it
++ *  referentially stable so memoised callbacks can depend on it safely. */
++const aggregateToWeekly = (dailyData: any[]) => {
++  const weeklyMap = new Map<string, any[]>();
++  
++  dailyData.forEach((item) => {
++    const date = new Date(item.date);
++    const weekStart = new Date(date);
++    weekStart.setDate(date.getDate() - date.getDay());
++    const weekKey = weekStart.toISOString().split('T')[0];
++    
++    if (!weeklyMap.has(weekKey)) {
++      weeklyMap.set(weekKey, []);
++    }
++    weeklyMap.get(weekKey)!.push(item);
++  });
++  
++  return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
++    // Aggregate statuses
++    const statusTotals: { [key: string]: number } = {};
++    let count = 0;
++    
++    items.forEach(item => {
++      if (item.statuses) {
++        item.statuses.forEach((s: any) => {
++          statusTotals[s.status] = (statusTotals[s.status] || 0) + (s.count || 0);
++        });
++        count++;
++      }
++    });
++    
++    // Average the totals
++    const avgStatuses = Object.entries(statusTotals).map(([status, total]) => ({
++      status,
++      count: Math.round(total / count),
++    }));
++    
++    return {
++      date: weekKey,
++      statuses: avgStatuses,
++    };
++  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
++};
++
+ export default function StatusDistributionHistoryChart({
+   startDate: propStartDate,
+   endDate: propEndDate,
+@@ -68,11 +112,7 @@ export default function StatusDistributionHistoryChart({
+     if (initialPeriod) setPeriod(initialPeriod);
+   }, [initialPeriod]);
+ 
+-  React.useEffect(() => {
+-    fetchHistory();
+-  }, [period, filters]);
+-
+-  const fetchHistory = async () => {
++  const fetchHistory = React.useCallback(async () => {
+     setLoading(true);
+     try {
+       // Calculate date range based on period
+@@ -158,51 +198,13 @@ export default function StatusDistributionHistoryChart({
+     } finally {
+       setLoading(false);
+     }
+-  };
++  }, [period, filters, initialPeriod]);
+ 
+-  // getStatusName imported from @/app/lib/status-names
++  React.useEffect(() => {
++    fetchHistory();
++  }, [fetchHistory]);
+ 
+-  const aggregateToWeekly = (dailyData: any[]) => {
+-    const weeklyMap = new Map<string, any[]>();
+-    
+-    dailyData.forEach((item) => {
+-      const date = new Date(item.date);
+-      const weekStart = new Date(date);
+-      weekStart.setDate(date.getDate() - date.getDay());
+-      const weekKey = weekStart.toISOString().split('T')[0];
+-      
+-      if (!weeklyMap.has(weekKey)) {
+-        weeklyMap.set(weekKey, []);
+-      }
+-      weeklyMap.get(weekKey)!.push(item);
+-    });
+-    
+-    return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
+-      // Aggregate statuses
+-      const statusTotals: { [key: string]: number } = {};
+-      let count = 0;
+-      
+-      items.forEach(item => {
+-        if (item.statuses) {
+-          item.statuses.forEach((s: any) => {
+-            statusTotals[s.status] = (statusTotals[s.status] || 0) + (s.count || 0);
+-          });
+-          count++;
+-        }
+-      });
+-      
+-      // Average the totals
+-      const avgStatuses = Object.entries(statusTotals).map(([status, total]) => ({
+-        status,
+-        count: Math.round(total / count),
+-      }));
+-      
+-      return {
+-        date: weekKey,
+-        statuses: avgStatuses,
+-      };
+-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+-  };
++  // getStatusName imported from @/app/lib/status-names
+ 
+   const handleChartTypeChange = (
+     event: React.MouseEvent<HTMLElement>,

@@ -127,6 +127,30 @@ function statementsOf(sql) {
     .filter((s) => s.length > 0);
 }
 
+// An INTENTIONAL retirement, declared inside the migration that performs it:
+//
+//   -- metrics-guard: intentional-drop trg_metrics_drift, metrics_detect_drift
+//
+// The guard exists to catch drops nobody meant to write — `prisma migrate dev`
+// regenerating a DROP for an object Prisma cannot express. It must not stand in
+// the way of deliberately retiring one, but the exemption has to be narrow and
+// visible: it names the exact objects, it lives in the file that drops them
+// where a reviewer reads it, and it covers that file only. Deleting the names
+// from GUARDED_NAMES instead would silently un-guard them for every future
+// migration too.
+const INTENTIONAL_RE = /--\s*metrics-guard:\s*intentional-drop\s+([^\n]+)/gi;
+
+function intentionalDropsIn(rawSql) {
+  const allowed = new Set();
+  for (const m of rawSql.matchAll(INTENTIONAL_RE)) {
+    for (const name of m[1].split(/[,\s]+/)) {
+      const clean = name.trim().toLowerCase();
+      if (clean) allowed.add(clean);
+    }
+  }
+  return allowed;
+}
+
 const newMigrations = fs
   .readdirSync(migrationsDir, { withFileTypes: true })
   .filter((d) => d.isDirectory())
@@ -141,6 +165,7 @@ for (const name of newMigrations) {
   const sqlPath = path.join(migrationsDir, name, "migration.sql");
   if (!fs.existsSync(sqlPath)) continue;
   const sql = fs.readFileSync(sqlPath, "utf8");
+  const intentional = intentionalDropsIn(sql);
 
   for (const stmt of statementsOf(sql)) {
     const destructive = DESTRUCTIVE_RE.test(stmt);
@@ -149,6 +174,9 @@ for (const name of newMigrations) {
 
     const guarded = guardedNameIn(stmt);
     const extensionDrop = /\bDROP\s+EXTENSION\b[\s\S]*\bbtree_gist\b/i.test(stmt);
+
+    // A declared retirement passes; anything else in the same file still blocks.
+    if (guarded && intentional.has(guarded)) continue;
 
     if (guarded || metricsAlter || extensionDrop) {
       findings.push({

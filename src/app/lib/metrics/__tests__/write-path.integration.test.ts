@@ -9,12 +9,17 @@
 // no bypass is needed; the reaper's cronSecretGuard is satisfied the way the
 // Windows scheduler satisfies it, with the x-cron-secret header.
 //
-// THE FINAL ASSERTION OF EVERY TEST is `assertNoDrift()`. The drift detector
-// (§3.8) is armed for the whole suite: it re-reads the committed item_routes
-// row at commit time and compares it with the item's open ledger interval. A
-// call site that writes item_routes without emitting its event — the exact
-// failure class the ledger exists to eliminate — leaves a row in
-// metrics_drift, and the test fails. That is the point of the scaffold.
+// THE FINAL ASSERTION OF EVERY TEST is `assertNoDrift()`: every item_routes row
+// must agree with its open ledger interval. A call site that writes item_routes
+// without emitting its event — the exact failure class the ledger exists to
+// eliminate — makes the two disagree and the test fails.
+//
+// Until migration B this was policed by a CONSTRAINT TRIGGER writing into
+// metrics_drift. That scaffold was dropped once the dual-run week was green (a
+// trigger on every item_routes write is real cost on the hot path of a test
+// submission). The check is now computed on demand in openDriftRows(), which is
+// strictly stronger: the trigger only saw rows a transaction happened to touch,
+// this compares every row in the table.
 //
 // The suite runs ONLY when TEST_DATABASE_URL points at a throwaway database
 // carrying migration 20260825000000_metrics_ledger_additive. Without it the
@@ -30,7 +35,7 @@ async function assertNoDrift(): Promise<void> {
   assert.deepEqual(
     rows,
     [],
-    `metrics_drift has open rows — a write path changed item_routes without its ledger event: ${JSON.stringify(rows)}`,
+    `item_routes disagrees with the ledger — a write path changed the row without emitting its event: ${JSON.stringify(rows)}`,
   );
 }
 
