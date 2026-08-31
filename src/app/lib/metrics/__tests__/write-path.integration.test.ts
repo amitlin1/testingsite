@@ -437,14 +437,17 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     );
     assert.equal((await H.intervals(itemId)).length, intervalsAfterFirst.length);
 
-    // Both submissions persisted their own result row (row 1 belongs to the
-    // earlier sendToResearch submit), and both point at the ONE note event —
-    // the replay returned the original event_id rather than minting a second.
+    // The replay writes NOTHING — not even the duplicate test_results row it
+    // used to. Idempotency is decided by submit_id before the handler reads or
+    // writes anything, so one human action leaves exactly one result row.
+    // (This test previously asserted 3 rows, documenting the older behaviour
+    // where the same interim save persisted a second row pointing at the same
+    // note event. That was a lesser bug in the same family.)
+    assert.equal(retry.body.replay, true, "the retry is recognised, not re-executed");
     const results = await H.testResults(itemId);
-    assert.equal(results.length, 3);
+    assert.equal(results.length, 2, "row 1 is the sendToResearch submit, row 2 the note");
     const note = eventsAfterRetry.find((e) => e.reason === "research_note")!;
     assert.equal(results[1].state_event_id, note.event_id);
-    assert.equal(results[2].state_event_id, note.event_id);
 
     await assertNoDrift();
   });
@@ -1095,6 +1098,56 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
   // Retry / replay
   // -------------------------------------------------------------------------
 
+  it("R5 — a retry that OMITS CurrentRouteStep on a live multi-step route is a no-op", async () => {
+    // The shape the intake wizard actually sends, and the one that bit us: a
+    // stable SubmitID, no CurrentRouteStep, on a route the item survives.
+    //
+    // Found end-to-end against the deployed image, not here — the test above
+    // misses it by construction. It sends an explicit CurrentRouteStep on a
+    // ONE-step route, so the first submit finishes the item and the retry is
+    // rejected by `finished_at IS NULL`. Here the item is still alive, and the
+    // server resolves CurrentRouteStep from the DB — which the first submit
+    // already advanced — so the optimistic guard MATCHES and the route moves
+    // again.
+    //
+    // Per-event event_key dedup could not save it either: `seq` shifts when
+    // call site #15's synthetic test_started fires, and whether it fires depends
+    // on the item's CURRENT status. Every key differed, so nothing looked like a
+    // replay. Observed on the real system: one retry advanced the item two more
+    // steps and marked it done. Idempotency now keys on submit_id alone.
+    const itemId = 5051;
+    await H.seedItem({ itemId, itemTypeId: H.ITEM_TYPE_TWO_STEP });
+    await H.startTest({ itemId, stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
+
+    const body = {
+      ItemID: itemId,
+      StationID: H.STATION_INTAKE,
+      Result: 1,
+      SubmitID: randomUUID(),
+      // deliberately no CurrentRouteStep / RouteStepsLength
+    };
+    assert.equal((await H.submitResult(body)).status, 200);
+
+    const routeAfterFirst = await H.routeRow(itemId);
+    assert.equal(routeAfterFirst.current_route_step, 2, "the first submit advances one step");
+    assert.notEqual(routeAfterFirst.current_status, H.STATUS.done, "and the item is still live");
+
+    const evBefore = await H.events(itemId);
+    const isiBefore = await H.intervals(itemId);
+    const resultsBefore = await H.testResults(itemId);
+
+    const retry = await H.submitResult(body);
+    assert.equal(retry.status, 200, "a replay is not an error — the work IS done");
+    assert.equal(retry.body.replay, true, "and it says so");
+
+    assert.deepEqual(await H.routeRow(itemId), routeAfterFirst, "the route must not move again");
+    assert.deepEqual(await H.events(itemId), evBefore, "no new events");
+    assert.deepEqual(await H.intervals(itemId), isiBefore, "no new intervals");
+    assert.deepEqual(await H.testResults(itemId), resultsBefore, "no duplicate test_results row");
+
+    await assertNoDrift();
+  });
+
   it("a retried submit with the same SubmitID does not advance the route twice and adds nothing to the ledger", async () => {
     const itemId = 5050;
     await H.seedItem({ itemId, itemTypeId: H.ITEM_TYPE_ONE_STEP });
@@ -1117,10 +1170,14 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     const historyBefore = await H.q("SELECT count(*)::int AS n FROM item_route_history WHERE item_id = $1", [itemId]);
 
     const retry = await H.submitResult(body);
-    // The Phase-0 optimistic guard (finished_at IS NULL + current_route_step)
-    // matches 0 rows, the handler throws, and the WHOLE transaction — ledger
-    // events included — rolls back. That is the §4.8 guarantee read backwards.
-    assert.equal(retry.status, 404);
+    // Answered as a REPLAY now, not a 404. The submit_id check fires before the
+    // handler touches anything, so a client retrying work that already
+    // committed gets a truthful "this is done" instead of an error that invites
+    // it to retry again. The Phase-0 optimistic guard is still there and still
+    // the backstop for a submit with no SubmitID at all — it just no longer has
+    // to be the thing that catches a retry.
+    assert.equal(retry.status, 200);
+    assert.equal(retry.body.replay, true);
 
     assert.deepEqual(await H.events(itemId), evBefore);
     assert.deepEqual(await H.intervals(itemId), isiBefore);

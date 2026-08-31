@@ -167,6 +167,35 @@ export async function POST(req: Request) {
         throw new Error("ITEM_ROUTE_NOT_FOUND");
       }
 
+      // IDEMPOTENCY, decided by the submit_id alone — before anything is read
+      // or written. One submit_id is one human action on one item.
+      //
+      // Per-event event_key deduplication is NOT enough here, and relying on it
+      // was a real defect found end-to-end on the deployed image: a retry of an
+      // already-committed submit advanced the route TWO more steps and finished
+      // the item. The keys all differ on the second call because `seq` shifts
+      // when call site #15's synthetic test_started fires, and whether it fires
+      // depends on the item's CURRENT status — which the first call changed. So
+      // every key was new and nothing was recognised as a replay.
+      //
+      // Scoped to (submit_id, item_id) on purpose: the intake wizard sends ONE
+      // submit_id for the parent AND every accessory (§4.7, so `operations`
+      // counts the human action once), and each of those is a different item
+      // that must still be processed.
+      //
+      // Only a CLIENT-supplied id can be trusted for this. A server-minted
+      // fallback is unique per request and would never match.
+      if (clientSubmitId) {
+        const replayed = await tx.$queryRaw<{ event_id: bigint }[]>`
+          SELECT event_id FROM item_state_event
+           WHERE submit_id = ${clientSubmitId}::uuid AND item_id = ${itemIdBig}
+           LIMIT 1
+        `;
+        if (replayed.length > 0) {
+          return { replay: true as const };
+        }
+      }
+
       const routeNumber = routeInfoRows[0].route_number;
       const currentStatus = routeInfoRows[0].current_status;
       const isResearchStatus = currentStatus === 5;
@@ -843,6 +872,13 @@ export async function POST(req: Request) {
         nextStationRecommendation,
       };
     }, { maxWait: 5000, timeout: 15000 });
+
+    // A recognised replay: the original submit already committed, nothing was
+    // written this time. Answer 200 so a retrying client stops retrying — the
+    // work it asked for IS done — and mark it so a caller that cares can tell.
+    if ("replay" in txResult) {
+      return NextResponse.json({ ok: true, success: true, replay: true });
+    }
 
     const responseData: any = {
       ok: true,
