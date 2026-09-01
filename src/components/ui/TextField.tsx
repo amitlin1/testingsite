@@ -156,7 +156,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
 });
 
 /* --------------------------------------------------------- SearchInput --- */
-export interface SearchInputProps extends Omit<TextFieldProps, "InputProps"> {}
+export type SearchInputProps = Omit<TextFieldProps, "InputProps">;
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
   { className, ...props },

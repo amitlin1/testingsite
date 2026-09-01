@@ -32,6 +32,9 @@ type InsertPopupProps = {
     onCreate: (data: NewItem, success: boolean) => void
 }
 
+/** Stable empty array, so `filteredItemTypes` doesn't re-memo on every render. */
+const NO_SHIPMENT_ITEMS: ShipmentItem[] = [];
+
 /**
  * Container for the redesigned add-item popup. Renders the presentational
  * <AddItemDialog> (Shifthouse chrome) and owns all data flow: loading options,
@@ -45,8 +48,10 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
     const [itemTypes, setItemTypes] = useState<ItemTypeOption[]>([]);
     const [shipments, setShipments] = useState<Shipment[]>([]);
     const [testingRoutes, setTestingRoutes] = useState<TestingRoute[]>([]);
-    const [shipmentItems, setShipmentItems] = useState<ShipmentItem[]>([]);
-    const [loadingShipmentItems, setLoadingShipmentItems] = useState(false);
+    // What we have loaded, and which shipment it belongs to. `shipmentItems` and
+    // `loadingShipmentItems` are derived from it below, so switching shipments
+    // shows the spinner immediately instead of one render of the previous items.
+    const [loadedItems, setLoadedItems] = useState<{ shipmentId: number; rows: ShipmentItem[] } | null>(null);
 
     // latest form (lifted out of AddItemDialog via onFormChange)
     const [form, setForm] = useState<NewItemForm | null>(null);
@@ -106,31 +111,50 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
         return () => { cancelled = true; };
     }, []);
 
-    // reset transient state whenever the popup opens OR closes. Resetting on
+    // Reset transient state whenever the popup opens OR closes. Resetting on
     // close too clears `seedForm` before the next open, so a reopened dialog
     // never seeds stale data (the child's open-effect runs before this one).
-    useEffect(() => {
+    //
+    // This adjusts state during render instead of in an effect: React re-runs the
+    // component immediately, before committing, so there is no wasted render pass
+    // and no intermediate frame -- React's "Adjusting some state when a prop
+    // changes" pattern.
+    const [prevOpen, setPrevOpen] = useState(open);
+    if (prevOpen !== open) {
+        setPrevOpen(open);
         setForm(null);
         setSeedForm(undefined);
         setPendingBatchItems([]);
         setCurrentBatchIndex(0);
         setAddedCount(0);
-        prevShipmentRef.current = "";
-    }, [open]);
+    }
+
+    // A ref is not state, so clearing it in an effect triggers no extra render.
+    // Without this, reopening on the same shipment would skip the auto-fill.
+    useEffect(() => { prevShipmentRef.current = ""; }, [open]);
+
+    const shipmentItems = loadedItems?.shipmentId === selectedShipmentId ? loadedItems.rows : NO_SHIPMENT_ITEMS;
+    const loadingShipmentItems = selectedShipmentId != null && loadedItems?.shipmentId !== selectedShipmentId;
 
     // fetch the shipment's items whenever the selected shipment changes
     useEffect(() => {
-        if (selectedShipmentId) {
-            setLoadingShipmentItems(true);
-            apiFetch(`/api/shipments/${selectedShipmentId}/items`)
-                .then((res) => res.json())
-                .then((data) => setShipmentItems(Array.isArray(data) ? data : []))
-                .catch((err) => { console.error("Error fetching shipment items:", err); setShipmentItems([]); })
-                .finally(() => setLoadingShipmentItems(false));
-        } else {
-            setShipmentItems([]);
-        }
-    }, [selectedShipmentId]);
+        if (!selectedShipmentId) return;
+        if (loadedItems?.shipmentId === selectedShipmentId) return; // already have it
+
+        const shipmentId = selectedShipmentId;
+        let cancelled = false;
+        apiFetch(`/api/shipments/${shipmentId}/items`)
+            .then((res) => res.json())
+            .then((data) => {
+                if (!cancelled) setLoadedItems({ shipmentId, rows: Array.isArray(data) ? data : NO_SHIPMENT_ITEMS });
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                console.error("Error fetching shipment items:", err);
+                setLoadedItems({ shipmentId, rows: NO_SHIPMENT_ITEMS });
+            });
+        return () => { cancelled = true; };
+    }, [selectedShipmentId, loadedItems]);
 
     // ---- derived options for the dialog ----
     const selectedShipment = shipments.find((s) => s.id === selectedShipmentId);
@@ -158,12 +182,13 @@ export default function InsertPopup({ open, onClose, onCreate }: InsertPopupProp
     const itemTypeOptions: Option[] = filteredItemTypes.map((it) => ({ value: String(it.item_type_id), label: it.item_type_desc }));
 
     // routes filtered by the currently selected item-type (resolved from form)
+    const formItemType = form?.itemType ?? null;
     const routeOptions: Option[] = React.useMemo(() => {
-        const itId = form?.itemType ? Number(form.itemType) : null;
+        const itId = formItemType ? Number(formItemType) : null;
         return testingRoutes
             .filter((r) => r.item_type_id === itId)
             .map((r) => ({ value: String(r.route_number), label: `מסלול ${r.route_number}` }));
-    }, [testingRoutes, form?.itemType]);
+    }, [testingRoutes, formItemType]);
 
     // ---- form change: track it + shipment auto-fill (customer/makat) ----
     const handleFormChange = React.useCallback((f: NewItemForm) => {

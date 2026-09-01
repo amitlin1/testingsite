@@ -95,9 +95,7 @@ export async function listKeys(prefix: string, recursive = true, bucket: string 
   await ensureBucket(bucket);
   return new Promise<string[]>((resolve, reject) => {
     const keys: string[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stream = minioClient.listObjectsV2(bucket, prefix, recursive) as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     stream.on('data', (obj: any) => {
       if (obj.name) keys.push(obj.name as string);
     });
