@@ -35,13 +35,23 @@ export async function resyncItemDims(tx: TransactionClient, itemId: bigint): Pro
   return rows[0]?.n ?? 0;
 }
 
-/** Re-resolve the open run's frozen route plan (planned_steps, plan_digest,
- *  route_number) and re-point the queued interval at the step's station type.
- *  Only meaningful after item_routes.item_type_id or route_number changed.
+/** End the item's open run without counting it as finished: closes the open
+ *  interval and the run, and marks the run `is_trusted = false`.
  *
- *  Returns the number of queued intervals re-pointed. */
-export async function refreshRunPlan(tx: TransactionClient, itemId: bigint): Promise<number> {
-  const rows = await tx.$queryRaw<{ n: number }[]>`
-    SELECT metrics_refresh_run_plan(${itemId}::bigint) AS n`;
-  return rows[0]?.n ?? 0;
+ *  For a type change, which sends the item back to the start of a different
+ *  route. "Finished" is a run closure, so an ordinary close would report the
+ *  item as delivered; every completion query carries `rr.is_trusted`, so an
+ *  untrusted run stays in the audit trail and out of the numbers.
+ *
+ *  Record a fresh `queued` transition afterwards — with item_routes already
+ *  pointing at the new type — and metrics_record opens the next run against the
+ *  new route's plan.
+ *
+ *  Returns the abandoned route_run_id, or null when there was no open run. */
+export async function abandonRun(
+  tx: TransactionClient, itemId: bigint, reason: string
+): Promise<bigint | null> {
+  const rows = await tx.$queryRaw<{ run: bigint | null }[]>`
+    SELECT metrics_abandon_run(${itemId}::bigint, ${reason}) AS run`;
+  return rows[0]?.run ?? null;
 }

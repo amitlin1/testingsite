@@ -17,25 +17,24 @@ export type Option = { value: string | number; label: string };
 type ConnectedItem = { item_id: string; serial_no: string | null; model: string | null };
 
 type EditItemForm = {
-  customer: string; itemType: string; shipment: string;
+  customer: string; itemType: string;
   serialNumber: string; makat: string; model: string; manufacturer: string; manufacturerNo: string;
 };
 
-const REQUIRED: (keyof EditItemForm)[] = ["customer", "itemType", "shipment", "serialNumber", "makat", "model", "manufacturer", "manufacturerNo"];
-const empty: EditItemForm = { customer: "", itemType: "", shipment: "", serialNumber: "", makat: "", model: "", manufacturer: "", manufacturerNo: "" };
+const REQUIRED: (keyof EditItemForm)[] = ["customer", "itemType", "serialNumber", "makat", "model", "manufacturer", "manufacturerNo"];
+const empty: EditItemForm = { customer: "", itemType: "", serialNumber: "", makat: "", model: "", manufacturer: "", manufacturerNo: "" };
 
 type Props = {
   open: boolean;
   item: ItemRow | null;
   customerOptions: Option[];
   itemTypeOptions: Option[];
-  shipmentOptions: Option[];
   onClose: () => void;
   onSaved: (success: boolean, message?: string) => void;
   onDeleted: (success: boolean, message?: string) => void;
 };
 
-export default function EditItemDialog({ open, item, customerOptions, itemTypeOptions, shipmentOptions, onClose, onSaved, onDeleted }: Props) {
+export default function EditItemDialog({ open, item, customerOptions, itemTypeOptions, onClose, onSaved, onDeleted }: Props) {
   const [form, setForm] = React.useState<EditItemForm>(empty);
   const [saving, setSaving] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
@@ -47,7 +46,6 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
       setForm({
         customer: item.customer_id != null ? String(item.customer_id) : "",
         itemType: item.item_type_id != null ? String(item.item_type_id) : "",
-        shipment: item.shipment_id != null ? String(item.shipment_id) : "",
         serialNumber: item.serial_no ?? "",
         makat: item.makat ?? "",
         model: item.model ?? "",
@@ -74,6 +72,7 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
         ? `${item.current_route_step ?? 0}/${item.total_steps}`
         : "—";
   const hasProgress = !isSubItem && (item.current_status === 1 || item.current_status === 3 || !!item.is_finished || (item.current_route_step ?? 0) > 1);
+  const typeChanged = form.itemType !== "" && form.itemType !== String(item.item_type_id ?? "");
 
   const handleSave = async () => {
     if (!valid) return;
@@ -90,7 +89,6 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
           model: form.model,
           manufacturer: form.manufacturer,
           manufacturerNo: form.manufacturerNo,
-          shipment: Number(form.shipment),
         }),
       });
       if (!res.ok) {
@@ -157,13 +155,30 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <Field label="לקוח"><Select value={form.customer} onChange={(v) => set("customer", v)} placeholder="בחר לקוח" options={customerOptions} /></Field>
             <Field label="סוג פריט"><Select value={form.itemType} onChange={(v) => set("itemType", v)} placeholder="בחר סוג" options={itemTypeOptions} /></Field>
-            <Field label="משלוח"><Select value={form.shipment} onChange={(v) => set("shipment", v)} placeholder="בחר משלוח" options={shipmentOptions} /></Field>
             <Field label="מס׳ סיריאלי"><input className="shx-input" value={form.serialNumber} onChange={(e) => set("serialNumber", e.target.value)} style={{ fontVariantNumeric: "tabular-nums" }} /></Field>
             <Field label="מק״ט"><input className="shx-input" value={form.makat} onChange={(e) => set("makat", e.target.value)} style={{ fontVariantNumeric: "tabular-nums" }} /></Field>
             <Field label="דגם"><input className="shx-input" value={form.model} onChange={(e) => set("model", e.target.value)} /></Field>
             <Field label="יצרן"><input className="shx-input" value={form.manufacturer} onChange={(e) => set("manufacturer", e.target.value)} /></Field>
             <Field label="מס׳ יצרן"><input className="shx-input" value={form.manufacturerNo} onChange={(e) => set("manufacturerNo", e.target.value)} /></Field>
           </div>
+
+          {/* A type change is a re-route, not a field edit: another type can have
+              a different set of stations, so the item goes back to step 1. Say so
+              before the save, not after — this is not undoable from the UI. */}
+          {typeChanged && (
+            <div
+              role="status"
+              style={{
+                marginTop: 20, padding: "12px 16px", borderRadius: 8,
+                background: "#fff8e6", border: "1px solid #e6c65c",
+                fontSize: 14, lineHeight: 1.6, color: "#5c4a00",
+              }}
+            >
+              שינוי סוג הפריט יחזיר אותו לתחילת המסלול של הסוג החדש
+              {hasProgress ? ", וההתקדמות הנוכחית שלו תתאפס" : ""}. תוצאות הבדיקה
+              שכבר נרשמו נשמרות בהיסטוריה, אך המסלול הנוכחי לא ייספר כמסלול שהושלם.
+            </div>
+          )}
         </div>
 
         {/* ---- footer ---- */}

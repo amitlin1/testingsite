@@ -1064,29 +1064,30 @@ COMMENT ON COLUMN "test_stations_type"."stale_after_minutes" IS
   'Minutes an item may sit in status 1/5 on a station of this type with no result before /api/cron/release-stale-tests reverts it and frees the station. 0 = never auto-release this type.';
 
 -- ===========================================================================
---  חלק 5 מתוך 5 — מחיקה ועריכה של פריט
---  שתי פונקציות. בלעדיהן פריט שנמחק ממשיך להיספר בדשבורד לנצח.
+--  חלק 5 מתוך 5 — מחיקה, עריכה ושינוי סוג של פריט
+--  שלוש פונקציות. בלעדיהן פריט שנמחק ממשיך להיספר בדשבורד לנצח.
 -- ===========================================================================
 
 -- ===========================================================================
---  מחזור החיים של פריט מול הלדג'ר — מחיקה ועריכה
+--  מחזור החיים של פריט מול הלדג'ר — מחיקה, עריכה ושינוי סוג
 -- ===========================================================================
 --
---  Two write paths reach `items` without going through metrics_record():
---  editing an item and deleting one. Both were written before the ledger
---  existed, and neither can be expressed as an event — an event says "the item
---  moved", and here the item's *identity* changed or the item stopped existing.
+--  Three write paths reach `items` without going through metrics_record():
+--  deleting an item, correcting its master data, and changing its type. None of
+--  them is a state transition — an event says "the item moved", and here the
+--  item stopped existing, or its identity changed, or its whole route was
+--  replaced.
 --
 --  The ledger deliberately keeps no FK to `items` (§3.6: no read query joins
 --  items, so the dimensions are frozen onto every row). That is what makes the
---  reads fast, and it is exactly why nothing raised when those two paths
---  skipped it: a deleted item simply kept being counted, forever, from rows
---  nothing pointed at any more.
+--  reads fast, and it is exactly why nothing raised when those paths skipped
+--  it: a deleted item simply kept being counted, forever, from rows nothing
+--  pointed at any more.
 --
 --  §1  deny_mutation gains one sanctioned escape hatch
---  §2  metrics_forget_item     — the item is being hard-deleted
+--  §2  metrics_forget_item      — the item is being hard-deleted
 --  §3  metrics_resync_item_dims — the item's frozen dimensions were corrected
---  §4  metrics_refresh_run_plan  — the item's type changed, so its route plan did
+--  §4  metrics_abandon_run      — the item's type changed; the run is void
 -- ===========================================================================
 
 -- §1 חריג יחיד ל-append-only --------------------------------------------------
@@ -1185,21 +1186,18 @@ END $$;
 -- Push the item's current dimensions back onto its frozen copies. Called from
 -- PUT /api/items/[id] after the `items` update, in the same transaction.
 --
--- It takes no dimension parameters on purpose: it re-reads items and
--- item_routes with the *same expressions* metrics_open_run uses to freeze them
--- in the first place, so the two can never drift apart. Add a dimension to
--- route_run and there is exactly one other place to change.
+-- It takes no dimension parameters on purpose: it re-reads items with the
+-- *same expressions* metrics_open_run uses to freeze them in the first place,
+-- so the two can never drift apart. Add a dimension to route_run and there is
+-- exactly one other place to change.
 --
--- item_type_id is read from item_routes, not from items — that is where
--- metrics_open_run reads it, because the run's planned_steps were resolved for
--- the route's type. Callers that let a user change an item's type must update
--- item_routes as well, or the ledger will keep reporting the route's type.
---
--- Every run and interval of the item is updated, closed history included. The
--- edit dialog corrects master data that was mistyped at intake ("this was
--- always customer 12"), so the honest reading is that the old attribution was
--- never true. A genuine transfer, where history should stay with the previous
--- owner, would need a different call — and an event, not this.
+-- item_type_id is deliberately NOT synced here. Every other dimension is a
+-- correction of master data mistyped at intake ("this was always customer 12"),
+-- so the honest reading is that the old value was never true. The type is
+-- different: it decides which route the item walks, so changing it ends the
+-- current run and starts a new one (§4). The abandoned run really did happen
+-- under the old type, and relabelling it would move measured work onto a route
+-- that never ran it.
 CREATE OR REPLACE FUNCTION metrics_resync_item_dims(p_item_id bigint)
 RETURNS int
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
@@ -1210,93 +1208,119 @@ BEGIN
   UPDATE route_run rr
      SET customer_id    = it.customer_id,
          shipment_id    = it.shipment_id,
-         item_type_id   = ir.item_type_id,
          parent_item_id = it.parent_item_id,
          unit_id        = COALESCE(it.parent_item_id, it.item_id),
          is_accessory   = it.parent_item_id IS NOT NULL,
          serial_no      = COALESCE(TRIM(it.serial_no), '')
     FROM items it
-    JOIN item_routes ir ON ir.item_id = it.item_id
    WHERE it.item_id = p_item_id
      AND rr.item_id = p_item_id
-     AND (rr.customer_id, rr.shipment_id, rr.item_type_id, rr.parent_item_id,
+     AND (rr.customer_id, rr.shipment_id, rr.parent_item_id,
           rr.unit_id, rr.is_accessory, rr.serial_no)
          IS DISTINCT FROM
-         (it.customer_id, it.shipment_id, ir.item_type_id, it.parent_item_id,
+         (it.customer_id, it.shipment_id, it.parent_item_id,
           COALESCE(it.parent_item_id, it.item_id), it.parent_item_id IS NOT NULL,
           COALESCE(TRIM(it.serial_no), ''));
   GET DIAGNOSTICS n_runs = ROW_COUNT;
 
   -- Intervals copy their dimensions from the run at fold time (isi_apply_one),
-  -- so they follow the run rather than re-reading items.
+  -- so they follow the run rather than re-reading items. item_type_id is left
+  -- alone here for the same reason it is above.
   UPDATE item_state_interval i
      SET customer_id  = rr.customer_id,
          shipment_id  = rr.shipment_id,
-         item_type_id = rr.item_type_id,
          unit_id      = rr.unit_id,
          is_accessory = rr.is_accessory,
          serial_no    = rr.serial_no
     FROM route_run rr
    WHERE rr.route_run_id = i.route_run_id
      AND i.item_id = p_item_id
-     AND (i.customer_id, i.shipment_id, i.item_type_id, i.unit_id, i.is_accessory, i.serial_no)
+     AND (i.customer_id, i.shipment_id, i.unit_id, i.is_accessory, i.serial_no)
          IS DISTINCT FROM
-         (rr.customer_id, rr.shipment_id, rr.item_type_id, rr.unit_id, rr.is_accessory, rr.serial_no);
+         (rr.customer_id, rr.shipment_id, rr.unit_id, rr.is_accessory, rr.serial_no);
 
   RETURN n_runs;
 END $$;
 
--- §4 metrics_refresh_run_plan -------------------------------------------------
+-- §4 metrics_abandon_run ------------------------------------------------------
 --
--- route_run freezes the route plan it opened under: planned_steps, plan_digest,
--- route_number. Changing an item's *type* changes which testing_routes row
--- applies, so the open run's frozen plan — and the station_type_id the queued
--- interval is waiting for, which is read out of planned_steps — stop matching
--- the route the item is actually on.
+-- Changing an item's type sends it back to the start of a different route:
+-- another type can have entirely different stations, so the steps already
+-- walked mean nothing on the new route. In ledger terms the current run is
+-- over — but it did NOT finish, and that distinction is the whole point of
+-- this function.
 --
--- Only ever called for an item that has not started yet (PUT refuses a type
--- change once the item has moved past its first queued step, because a run
--- that already recorded steps under one plan cannot honestly be relabelled
--- with another). For such an item the open run holds exactly one interval, the
--- initial `queued`, so refreshing the plan is a rewrite of a plan nothing has
--- been measured against.
+-- "Finished" has exactly one definition in the read path (§5.3ב): a run whose
+-- closed_at is set. Closing an abandoned run the ordinary way would therefore
+-- add it to the completion count, the completion percentage and both turnaround
+-- averages — an item counted as delivered because someone corrected its type.
+-- `is_trusted = false` is the sanctioned way out: every query that counts
+-- closures carries `rr.is_trusted` for exactly this purpose, so an untrusted run
+-- stays in the audit trail and out of the numbers.
 --
--- Returns the number of queued intervals re-pointed.
-CREATE OR REPLACE FUNCTION metrics_refresh_run_plan(p_item_id bigint)
-RETURNS int
+-- The intervals keep their own is_trusted. That time really was spent, at real
+-- stations, by real people, so station load and queue durations should still
+-- see it. Only the route *completion* is void.
+--
+-- Afterwards the caller records a fresh `queued` transition. metrics_record
+-- finds no open run and calls metrics_open_run, which reads item_routes — by
+-- then already pointing at the new type — and freezes the new route's plan onto
+-- run_no + 1.
+--
+-- Returns the abandoned route_run_id, or NULL when the item had no open run.
+CREATE OR REPLACE FUNCTION metrics_abandon_run(p_item_id bigint, p_reason text)
+RETURNS bigint
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
-DECLARE n int := 0; v_steps int[]; v_route int; v_run bigint;
+DECLARE v_run bigint; v_at timestamptz; v_ver int;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('isi:'||p_item_id::text, 0));
 
-  -- Same join metrics_open_run uses to resolve the plan in the first place.
-  SELECT COALESCE(tr.route_steps, '{}'), ir.route_number, rr.route_run_id
-    INTO v_steps, v_route, v_run
-    FROM route_run rr
-    JOIN item_routes ir ON ir.item_id = rr.item_id
-    LEFT JOIN testing_routes tr
-           ON tr.item_type_id = ir.item_type_id AND tr.route_number = ir.route_number
-   WHERE rr.item_id = p_item_id AND rr.closed_at IS NULL;
+  SELECT route_run_id INTO v_run FROM route_run
+   WHERE item_id = p_item_id AND closed_at IS NULL;
+  IF v_run IS NULL THEN
+    RETURN NULL;
+  END IF;
 
-  IF v_run IS NULL THEN RETURN 0; END IF;
+  -- metrics_record clamps occurred_at forward past the item's last event, so an
+  -- open interval can legitimately start slightly in the future. Closing at a
+  -- plain clock_timestamp() would then build an empty or inverted range and trip
+  -- isi_shape. Stay one microsecond past the newest open interval.
+  SELECT GREATEST(clock_timestamp(),
+                  COALESCE(max(lower(i.valid_range)), clock_timestamp())
+                    + interval '1 microsecond')
+    INTO v_at
+    FROM item_state_interval i
+   WHERE i.item_id = p_item_id AND upper_inf(i.valid_range);
+
+  v_ver := current_calendar_version();
+
+  -- Closed exactly the way isi_apply_one closes an interval on a transition:
+  -- both clocks filled, business date stamped, calendar version pinned.
+  UPDATE item_state_interval SET
+    valid_range         = tstzrange(lower(valid_range), v_at, '[)'),
+    closed_at           = v_at,
+    close_business_date = business_date(v_at),
+    exit_reason         = p_reason,
+    wall_seconds        = EXTRACT(EPOCH FROM (v_at - lower(valid_range))),
+    work_seconds        = work_seconds_between(lower(valid_range), v_at, v_ver),
+    calendar_version    = v_ver
+   WHERE item_id = p_item_id AND upper_inf(valid_range) AND NOT is_terminal;
+
+  -- A terminal interval carries no durations (§3.6), so it closes without them.
+  UPDATE item_state_interval SET
+    valid_range         = tstzrange(lower(valid_range), v_at, '[)'),
+    closed_at           = v_at,
+    close_business_date = business_date(v_at),
+    exit_reason         = p_reason
+   WHERE item_id = p_item_id AND upper_inf(valid_range) AND is_terminal;
 
   UPDATE route_run
-     SET planned_steps = v_steps,
-         plan_digest   = md5(v_steps::text),
-         route_number  = v_route
+     SET closed_at    = v_at,
+         close_reason = p_reason,
+         is_trusted   = false
    WHERE route_run_id = v_run;
 
-  -- A queued interval waits for planned_steps[step_no] (§3.7, isi_apply_one).
-  -- 0 means "no station type for this step" and is stored as NULL.
-  UPDATE item_state_interval
-     SET station_type_id = NULLIF(v_steps[step_no], 0)
-   WHERE route_run_id = v_run
-     AND upper_inf(valid_range)
-     AND state_key = 'queued'
-     AND station_type_id IS DISTINCT FROM NULLIF(v_steps[step_no], 0);
-  GET DIAGNOSTICS n = ROW_COUNT;
-
-  RETURN n;
+  RETURN v_run;
 END $$;
 
 -- ===========================================================================
@@ -1316,7 +1340,7 @@ SELECT gen_random_uuid()::text, '35b07e3b670c1b4c550b72b7fdf3df70e738ccd108e3719
  WHERE NOT EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '20260828090000_station_type_stale_timeout');
 
 INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '9069b14b6f7e2cde369ca3de1791fc5f692885be4905ebfff5dfbfe6c58a84d0', now(), '20260902000000_metrics_item_lifecycle', NULL, NULL, now(), 1
+SELECT gen_random_uuid()::text, '3845fc3db7d6fbc9669a7d6b65636be43c2718d9238d77890ee6e61f585df05e', now(), '20260902000000_metrics_item_lifecycle', NULL, NULL, now(), 1
  WHERE NOT EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '20260902000000_metrics_item_lifecycle');
 
 COMMIT;

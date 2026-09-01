@@ -4,8 +4,11 @@ import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { parseBarcode } from "@/app/lib/barcode-parser";
 import { getWorkersDirectory } from "@/lib/keycloak-admin";
+import { randomUUID } from "crypto";
 import { findStationForRouteStep } from "@/app/lib/station-assignment";
-import { forgetItem, resyncItemDims, refreshRunPlan } from "@/app/lib/metrics/item-lifecycle";
+import { getCurrentUtcIso } from "@/app/lib/datetime";
+import { recordTransition } from "@/app/lib/metrics/record";
+import { forgetItem, resyncItemDims, abandonRun } from "@/app/lib/metrics/item-lifecycle";
 
 export const runtime = "nodejs";
 
@@ -165,22 +168,25 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 }
 
-// PUT: update the editable base fields of an item. The barcode (item_id) and
-// the status/progress fields (owned by item_routes, driven by the testing
-// workflow) are intentionally not accepted here.
+// PUT: update the editable base fields of an item. The barcode (item_id), the
+// shipment, and the status/progress fields (owned by item_routes, driven by the
+// testing workflow) are intentionally not accepted here.
 //
-// Two things have to move with the edit, or the item's own row stops agreeing
-// with everything derived from it:
+// Changing the TYPE is not an edit of a field — it re-routes the item. A
+// different type can have an entirely different set of stations, so the steps
+// already walked mean nothing on the new route and the item starts over at step
+// 1. That is three writes, in one transaction:
 //
-//   item_routes.item_type_id is the type the item is actually being ROUTED by
-//   (create-item.ts writes both from the same value), and the ledger reads the
-//   type from there. Editing only `items` leaves the two disagreeing, and the
-//   dashboard keeps reporting the old type forever.
+//   item_routes  goes back to the start: the new type, step 1, queued, and the
+//                station that serves step 1 OF THE NEW ROUTE.
+//   the ledger   abandons the open run (closed, but is_trusted = false, so it
+//                is not counted as a completion) and opens a fresh one against
+//                the new plan when the `queued` transition below is recorded.
+//   items        carries the new type like any other field.
 //
-//   The ledger freezes customer / shipment / type / serial onto every run and
-//   interval so no read query has to join items (§3.6 of the ledger
-//   migration). Those copies have to be refreshed, which is what
-//   metrics_resync_item_dims does.
+// For every other field it is an ordinary correction: the ledger freezes
+// customer / shipment / serial onto each run and interval so no read query has
+// to join items (§3.6), and metrics_resync_item_dims re-freezes them.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -188,9 +194,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const itemIdBig = BigInt(itemId);
 
     const body = await req.json();
-    const { customer, itemType, serialNumber, makat, model, manufacturer, manufacturerNo, shipment } = body;
+    const { customer, itemType, serialNumber, makat, model, manufacturer, manufacturerNo } = body;
 
-    if (!customer || !itemType || !serialNumber || !makat || !model || !manufacturer || !shipment) {
+    if (!customer || !itemType || !serialNumber || !makat || !model || !manufacturer) {
       return NextResponse.json({ error: "יש למלא את כל השדות" }, { status: 400 });
     }
 
@@ -199,30 +205,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const result = await prisma.$transaction(async (tx) => {
       const route = await tx.item_routes.findUnique({
         where: { item_id: itemIdBig },
-        select: {
-          item_type_id: true,
-          route_number: true,
-          current_status: true,
-          current_route_step: true,
-          is_finished: true,
-        },
+        select: { item_type_id: true },
       });
 
       const typeChanged = route != null && route.item_type_id !== nextTypeId;
-
-      // A type change re-resolves which testing_routes row applies, so the
-      // planned steps change under the item. That is only honest while nothing
-      // has been measured yet: once the item has left its first queued step,
-      // its recorded history belongs to the old plan and cannot be relabelled
-      // with a new one. status 2 = queued (metric_state.legacy_status_id).
-      if (typeChanged) {
-        const started =
-          route.is_finished ||
-          route.current_status !== 2 ||
-          route.current_route_step !== 1 ||
-          (await tx.test_results.count({ where: { item_id: itemIdBig } })) > 0;
-        if (started) return { conflict: true as const };
-      }
 
       const updated = await tx.items.update({
         where: { item_id: itemIdBig },
@@ -234,34 +220,62 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           model: String(model),
           manufacturer_name: String(manufacturer),
           manufacturer_no: manufacturerNo != null ? String(manufacturerNo) : "",
-          shipment_id: Number(shipment),
         },
       });
 
       if (typeChanged) {
-        // The step-1 station belongs to the new type's route.
-        const stationId = await findStationForRouteStep(tx, nextTypeId, route.route_number, 1);
+        // Route 1 of the new type: a route_number is only meaningful within a
+        // type, so the old one cannot be carried across. Same default
+        // create-item.ts uses at intake.
+        const routeNum = 1;
+        const stationId = await findStationForRouteStep(tx, nextTypeId, routeNum, 1);
+        const now = new Date(getCurrentUtcIso());
+
         await tx.item_routes.update({
           where: { item_id: itemIdBig },
-          data: { item_type_id: nextTypeId, test_station_id: stationId },
+          data: {
+            item_type_id: nextTypeId,
+            route_number: routeNum,
+            current_route_step: 1,
+            current_status: 2, // queued (metric_state.legacy_status_id)
+            test_station_id: stationId,
+            is_finished: false,
+            finished_at: null,
+            queue_start_time: now,
+            processing_start_time: null,
+          },
         });
-        await refreshRunPlan(tx, itemIdBig);
+
+        // Close the old run first: metrics_record reuses an OPEN run, and
+        // route_run_one_open forbids a second one, so without this the new
+        // transition would land back on the run built for the old type.
+        await abandonRun(tx, itemIdBig, "retyped");
+
+        // Reopens the run against the new plan (metrics_open_run reads the
+        // item_routes row updated just above). station_type_id is the type the
+        // fresh queued interval waits for — step 1 of the new route.
+        const routeRow = await tx.testing_routes.findFirst({
+          where: { item_type_id: nextTypeId, route_number: routeNum },
+          select: { route_steps: true },
+        });
+
+        await recordTransition(tx, {
+          eventKey: `retype:${itemId}:${randomUUID()}`,
+          itemId: itemIdBig,
+          toState: "queued",
+          stepNo: 1,
+          stationTypeId: routeRow?.route_steps?.[0] ?? null,
+          reason: "manual_override",
+        });
       }
 
       // Ledger: same transaction as the writes above, per §4.8.
       await resyncItemDims(tx, itemIdBig);
 
-      return { conflict: false as const, item_id: updated.item_id.toString() };
+      return { item_id: updated.item_id.toString(), retyped: typeChanged };
     });
 
-    if (result.conflict) {
-      return NextResponse.json(
-        { error: "לא ניתן לשנות את סוג הפריט אחרי שהבדיקה שלו התחילה" },
-        { status: 409 }
-      );
-    }
-
-    return NextResponse.json({ ok: true, item_id: result.item_id });
+    return NextResponse.json({ ok: true, item_id: result.item_id, retyped: result.retyped });
   } catch (error: any) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return NextResponse.json({ error: "הפריט לא נמצא" }, { status: 404 });

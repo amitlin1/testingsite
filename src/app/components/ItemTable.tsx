@@ -110,8 +110,10 @@ export default function ItemTable() {
   );
 
   // option lists for the edit-item dialog (full, unfiltered — the item's
-  // current customer/type/shipment must always be selectable even if a
-  // shipment has since been sent)
+  // current customer and type must always be selectable). The shipment is not
+  // editable from here: it is set at intake and the ledger freezes it onto
+  // every run, so moving an item between shipments is a transfer, not a typo
+  // fix, and needs its own path.
   const editCustomerOptions = React.useMemo(
     () => customers.map((c) => ({ value: String(c.id), label: c.customer_code ? `${c.name} (${c.customer_code})` : c.name })),
     [customers]
@@ -120,11 +122,6 @@ export default function ItemTable() {
     () => itemTypes.map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })),
     [itemTypes]
   );
-  const editShipmentOptions = React.useMemo(
-    () => shipments.map((s) => ({ value: String(s.id), label: `${s.shipment_code} | ${new Date(s.shipment_date).toLocaleDateString("he-IL")} | ${s.customer_code}` })),
-    [shipments]
-  );
-
   const filteredRows = React.useMemo(() => {
     if (!Array.isArray(rows)) return [];
     const q = search.trim().toLowerCase();
@@ -306,7 +303,6 @@ export default function ItemTable() {
         item={editingItem}
         customerOptions={editCustomerOptions}
         itemTypeOptions={editItemTypeOptions}
-        shipmentOptions={editShipmentOptions}
         onClose={() => setEditingItem(null)}
         onSaved={onEditResult}
         onDeleted={onDeleteResult}
