@@ -1,23 +1,94 @@
--- STEP 2 of 5  —  MIGRATION A: the new metrics schema.  ADDITIVE ONLY.
+-- ===========================================================================
+--  שדרוג מערכת המטריקות — קובץ אחד להרצה ב-DBeaver
+-- ===========================================================================
 --
--- Creates the event ledger and everything around it. Touches NO existing table
--- except: one new column on test_results, one NOT VALID foreign key on
--- item_routes, and one unique index on testing_routes.
+--  מה הוא עושה:
+--    1. מתקן עמודה שגולשת ומפילה שמירת מחקר
+--    2. יוצר את סכימת הלדג'ר החדשה
+--    3. ממלא אותה מהמצב הקיים
+--    4. מוסיף סף שחרור אוטומטי לכל סוג תחנה
 --
--- Nothing is dropped here and nothing existing changes behaviour, so this step
--- is reversible in practice: the old dashboard keeps working while this sits
--- unused.
+--  מה הוא *לא* עושה: הוא לא מוחק כלום. אף טבלה קיימת לא נמחקת ואף נתון לא
+--  הולך לאיבוד. הדשבורד הישן ימשיך לעבוד בדיוק כמו קודם.
+--  המחיקה היא קובץ נפרד — 05_DESTRUCTIVE_drop_legacy.sql — שרץ רק שבוע אחרי,
+--  אחרי שהבדיקה היומית הוכיחה שהמערכת החדשה נכונה.
 --
--- BEFORE YOU RUN IT, check for duplicates that the new unique index cannot
--- accept — the script raises a clear error listing them, but it is nicer to
--- know first:
+-- ---------------------------------------------------------------------------
+--  איך מריצים
+-- ---------------------------------------------------------------------------
+--   1. גיבוי טרי של בסיס הנתונים. ולוודא שהוא נטען.
+--   2. להתחבר ב-DBeaver *באותו משתמש שאיתו הותקן הקונטיינר*
+--      (POSTGRES_USER מקובץ ה-.env של שרת ה-DB). נדרשות הרשאות superuser
+--      כדי ליצור extension.
+--   3. Alt+X  ("Execute script") — לא Ctrl+Enter. זה סקריפט שלם, לא שאילתה.
 --
---   SELECT item_type_id, route_number, count(*)
---     FROM testing_routes GROUP BY 1,2 HAVING count(*) > 1;
+--  הכול רץ בטרנזקציה אחת: או שהכול נכנס, או ששום דבר לא נכנס. אם משהו נכשל,
+--  בסיס הנתונים חוזר בדיוק למצב שלפני ההרצה ותופיע שגיאה שמסבירה מה לתקן.
+--  אחרי התיקון אפשר להריץ את הקובץ שוב — הוא בטוח להרצה חוזרת.
 --
--- Requires the btree_gist extension, which ships inside postgres:16-alpine.
--- CREATE EXTENSION needs superuser — connect to DBeaver as the same user the
--- container was initialised with (POSTGRES_USER in the DB server .env).
+--  בסוף מוצגות שלוש טבלאות בדיקה. מה צריך לראות בהן כתוב שם.
+--
+--  אחרי הסקריפט: להעלות את ה-image החדש של האפליקציה, ואז להריץ
+--  8-register-tasks.ps1 בהרשאות מנהל (שלוש המשימות המתוזמנות).
+-- ===========================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------------
+--  בדיקות מקדימות — נכשלות ברעש לפני שנוגעים במשהו
+-- ---------------------------------------------------------------------------
+DO $preflight$
+DECLARE v_dupes text; v_missing text;
+BEGIN
+  -- הטבלאות שהסקריפט נשען עליהן. אם אחת חסרה, זה בסיס הנתונים הלא נכון.
+  SELECT string_agg(t, ', ') INTO v_missing
+    FROM unnest(ARRAY['items','item_routes','testing_routes','test_stations',
+                      'test_stations_type','shipments','customers','research_history']) AS t
+   WHERE to_regclass('public.' || t) IS NULL;
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION E'\n\n  זה לא בסיס הנתונים של המערכת — חסרות הטבלאות: %\n', v_missing;
+  END IF;
+
+  -- כפילויות שהאינדקס הייחודי החדש לא יוכל לקבל. עדיף לדעת עכשיו, בשם.
+  SELECT string_agg(format('(item_type_id=%s, route_number=%s)', item_type_id, route_number), ', ')
+    INTO v_dupes
+    FROM (SELECT item_type_id, route_number FROM testing_routes
+           GROUP BY 1,2 HAVING count(*) > 1) d;
+  IF v_dupes IS NOT NULL THEN
+    RAISE EXCEPTION E'\n\n  יש מסלולי בדיקה כפולים. צריך למחוק את העודפים לפני השדרוג:\n  %\n', v_dupes;
+  END IF;
+
+  RAISE NOTICE 'בדיקות מקדימות עברו.';
+END $preflight$;
+
+-- טבלת הרישום של prisma. בהתקנה ותיקה היא לפעמים חסרה, והרישום בסוף הקובץ
+-- נשען עליה.
+CREATE TABLE IF NOT EXISTS _prisma_migrations (
+  id                  varchar(36)  PRIMARY KEY,
+  checksum            varchar(64)  NOT NULL,
+  finished_at         timestamptz,
+  migration_name      varchar(255) NOT NULL,
+  logs                text,
+  rolled_back_at      timestamptz,
+  started_at          timestamptz  NOT NULL DEFAULT now(),
+  applied_steps_count integer      NOT NULL DEFAULT 0
+);
+
+-- ===========================================================================
+--  חלק 1 מתוך 4 — תיקון עמודה שגולשת
+--  item_id של מחקר היה קטן מדי, ושמירת מחקר על פריט עם מזהה ארוך נכשלה.
+-- ===========================================================================
+
+-- research_history.item_id was int4 while items.item_id / item_routes.item_id are
+-- bigint. Item ids are built by string-concatenation (customer/date/counter), so
+-- the 10th item of a day for a three-digit customer already exceeds 2^31-1 and
+-- the INSERT in /api/testing/results aborts with 22003 (numeric_value_out_of_range).
+ALTER TABLE "research_history" ALTER COLUMN "item_id" TYPE BIGINT;
+
+-- ===========================================================================
+--  חלק 2 מתוך 4 — סכימת הלדג'ר
+--  יוצר את הטבלאות החדשות. לא נוגע בטבלה קיימת מלבד הוספות.
+-- ===========================================================================
 
 -- ============================================================================
 -- Migration A — metrics ledger, ADDITIVE ONLY (spec: docs/dashboard-migration-plan-v2.md §3.0–§3.11, §8 שלב 2)
@@ -799,10 +870,246 @@ BEGIN
   END IF;
 END $$;
 
--- ---------------------------------------------------------------------------
--- Bookkeeping: record the migration as applied, so a later `prisma migrate
--- deploy` does not try to run it again. Same shape prisma itself writes.
--- ---------------------------------------------------------------------------
+-- ===========================================================================
+--  חלק 3 מתוך 4 — מילוי ראשוני
+--  רושם את המצב הנוכחי של כל פריט. לא ממציא היסטוריה — היא תצטבר מכאן.
+-- ===========================================================================
+
+-- ============================================================================
+-- Tier-1 backfill — seeds the metrics ledger from the live operational state
+-- (spec: docs/dashboard-migration-plan-v2.md §8 שלב 4, trust policy §4.3).
+--
+-- Runs INSIDE 8-apply-metrics-ledger.ps1, immediately after Migration A
+-- (prisma/migrations/20260825000000_metrics_ledger_additive/migration.sql),
+-- with psql -v ON_ERROR_STOP=1. It is re-run at the stage-3 cutover (after
+-- stopping the old app, before 3-start.ps1) to cover items created in the
+-- window — the whole file is idempotent:
+--   * route_run via ON CONFLICT (item_id, run_no) DO NOTHING
+--   * seed events via ON CONFLICT (event_key) DO NOTHING (key: legacy:seed:{item_id})
+--   * ENABLE TRIGGER is naturally idempotent
+--
+-- What it does:
+--   (א) one route_run per item_routes row that has an items row — INCLUDING
+--       finished ones (seeding only in-flight items would zero every live
+--       shipment's completion percentage on deploy morning).
+--   (ב) one synthetic legacy_import event per run; trg_isi_apply folds it
+--       into the interval. Finished runs are seeded as 'done': a terminal
+--       interval stays open forever, so wall/work_seconds remain NULL —
+--       counts are restored, durations are never invented. That NULL, not
+--       the trust flag, is the exclusion mechanism: all Tier-1 rows are
+--       is_trusted = true (the facts come from the live operational row,
+--       not from a reader's clock — §4.3).
+--   (ג) ENABLE TRIGGER trg_metrics_drift — the LAST backfill step, only once
+--       the ledger is aligned with item_routes (§8).
+--
+-- GREATEST clamps: legacy rows written without validation can carry
+-- finished_at < created_at; unclamped they would trip route_run_time CHECK
+-- and kill the whole backfill under ON_ERROR_STOP.
+--
+-- Rows that cannot be fully seeded: current_status IN (1,5) AND
+-- test_station_id IS NULL — printed by the pre-flight report; the relaxed
+-- isi_station_shape admits them with an empty station_id and
+-- metrics_selfcheck reports them.
+-- ============================================================================
+
+-- (א) route_run לכל שורות item_routes שיש להן שורת items (יתומים דווחו ב-pre-flight)
+INSERT INTO route_run (item_id, run_no, route_number, item_type_id, planned_steps, plan_digest,
+                       opened_at, closed_at, close_reason,
+                       customer_id, shipment_id, parent_item_id, unit_id,
+                       is_accessory, serial_no, is_trusted)
+SELECT ir.item_id, 1, ir.route_number, ir.item_type_id,
+       COALESCE(tr.route_steps,'{}'), md5(COALESCE(tr.route_steps,'{}')::text),
+       ir.created_at AT TIME ZONE 'UTC',
+       CASE WHEN ir.finished_at IS NOT NULL OR ir.current_status = 3 OR ir.is_finished
+            -- GREATEST: שורת legacy עם finished_at < created_at (נכתבה בלי ולידציה)
+            -- הייתה מפילה את route_run_time CHECK ואת כל ה-backfill תחת ON_ERROR_STOP.
+            THEN GREATEST(COALESCE(ir.finished_at AT TIME ZONE 'UTC', ir.created_at AT TIME ZONE 'UTC'),
+                          ir.created_at AT TIME ZONE 'UTC') END,
+       CASE WHEN ir.finished_at IS NOT NULL OR ir.current_status = 3 OR ir.is_finished
+            THEN 'legacy_import' END,
+       it.customer_id, it.shipment_id, it.parent_item_id,
+       COALESCE(it.parent_item_id, it.item_id), it.parent_item_id IS NOT NULL,
+       COALESCE(TRIM(it.serial_no),''), true
+FROM item_routes ir
+JOIN items it ON it.item_id = ir.item_id
+LEFT JOIN testing_routes tr ON tr.item_type_id = ir.item_type_id AND tr.route_number = ir.route_number
+ON CONFLICT (item_id, run_no) DO NOTHING;
+
+-- (ב) אירוע seed אחד לכל run. הטריגר מייצר את ה-interval. אותו clamp GREATEST על הרגע.
+INSERT INTO item_state_event (event_key, route_run_id, item_id, occurred_at, seq, kind, to_state,
+                              step_no, station_id, station_type_id, reason, is_trusted)
+SELECT 'legacy:seed:'||ir.item_id, r.route_run_id, ir.item_id,
+       GREATEST(COALESCE(
+         CASE WHEN ir.finished_at IS NOT NULL THEN ir.finished_at END,
+         CASE WHEN ir.current_status IN (1,5) THEN ir.processing_start_time END,
+         ir.queue_start_time, ir.created_at) AT TIME ZONE 'UTC',
+         ir.created_at AT TIME ZONE 'UTC'),
+       0, 'transition',
+       CASE WHEN ir.finished_at IS NOT NULL OR ir.current_status = 3 OR ir.is_finished
+            THEN 'done' ELSE state_of(ir.current_status) END,
+       ir.current_route_step,
+       CASE WHEN ir.current_status IN (1,5) AND ir.finished_at IS NULL THEN ir.test_station_id END,
+       (SELECT test_station_type_id FROM test_stations WHERE test_station_id = ir.test_station_id),
+       'legacy_import', true
+FROM item_routes ir JOIN route_run r ON r.item_id = ir.item_id AND r.run_no = 1
+ON CONFLICT (event_key) DO NOTHING;
+
+-- (ג) הפעלת גלאי ה-drift — רק עכשיו, כשה-ledger מיושר עם item_routes.
+-- זהו הצעד האחרון של ה-backfill (§8): הפעלה מוקדמת יותר הייתה רושמת drift על
+-- כל כתיבה של האפליקציה הישנה מול ledger ריק, ותוקעת את drift_open מעל 0 לנצח.
+ALTER TABLE item_routes ENABLE TRIGGER trg_metrics_drift;
+
+-- ============================================================================
+-- אימות (שלב 4) — השאילתות שהמפעיל מריץ ומדפיס אחרי ה-backfill.
+-- מושארות כהערות; 8-apply-metrics-ledger.ps1 מריץ אותן ומדפיס את התוצאות.
+-- ============================================================================
+
+-- 1. שוויון ספירות מול item_routes — עם ה-JOIN בכוונה: יתומים (שורות item_routes
+--    בלי שורת items) דווחו בנפרד ב-pre-flight ומוחרגים מהשוויון. שני המספרים
+--    חייבים להיות זהים:
+--
+--    SELECT
+--      (SELECT count(*) FROM item_routes ir JOIN items it USING (item_id)) AS item_routes_with_items,
+--      (SELECT count(*) FROM route_run WHERE run_no = 1)                   AS route_runs_seeded;
+
+-- 2. interval פתוח אחד לכל run (כולל runs גמורים — interval סופי נשאר פתוח):
+--
+--    SELECT
+--      (SELECT count(*) FROM item_state_interval WHERE upper_inf(valid_range)) AS open_intervals,
+--      (SELECT count(*) FROM route_run)                                        AS runs;
+
+-- 3. Q1 ברגע now() מול ספירות item_routes לפי state_of(current_status) —
+--    התאמה מדויקת (diff ריק):
+--
+--    WITH ledger AS (
+--      SELECT i.state_key, count(*) AS n
+--      FROM item_state_interval i
+--      WHERE i.valid_range @> now() AND NOT i.is_terminal AND i.is_trusted
+--      GROUP BY i.state_key
+--    ), legacy AS (
+--      SELECT state_of(ir.current_status) AS state_key, count(*) AS n
+--      FROM item_routes ir
+--      JOIN items it ON it.item_id = ir.item_id
+--      WHERE ir.finished_at IS NULL AND ir.current_status <> 3 AND NOT ir.is_finished
+--      GROUP BY 1
+--    )
+--    SELECT COALESCE(l.state_key, g.state_key) AS state_key,
+--           l.n AS ledger_n, g.n AS legacy_n
+--    FROM ledger l FULL JOIN legacy g USING (state_key)
+--    WHERE l.n IS DISTINCT FROM g.n;
+
+-- 4. Q3 מול station_live_counters (עדיין חיה עד שלב 7) — התאמה מדויקת.
+--    האימות החזק ביותר בתוכנית:
+--
+--    SELECT slc.station_id, slc.items_in_test, q3.in_test
+--    FROM station_live_counters slc
+--    FULL JOIN (
+--      SELECT i.station_id, count(*) FILTER (WHERE i.state_key = 'testing') AS in_test
+--      FROM item_state_interval i
+--      WHERE i.valid_range @> now() AND NOT i.is_terminal AND i.station_id IS NOT NULL
+--      GROUP BY i.station_id
+--    ) q3 ON q3.station_id = slc.station_id
+--    WHERE COALESCE(slc.items_in_test, 0) IS DISTINCT FROM COALESCE(q3.in_test, 0);
+
+-- 5. selfcheck — מצופה drift_open = 0 ו-intervals_missing_work_seconds = 0:
+--
+--    SELECT * FROM metrics_selfcheck();
+
+-- ===========================================================================
+--  חלק 4 מתוך 4 — סף שחרור לכל סוג תחנה
+--  עמודה אחת. 30 דקות כברירת מחדל; 0 = לעולם לא לשחרר אוטומטית.
+-- ===========================================================================
+
+-- ============================================================================
+-- Per-station-type stale timeout for /api/cron/release-stale-tests.
+--
+-- WHY: the reaper used to apply one hardcoded 30-minute threshold to every
+-- station and to both status 1 (in test) and status 5 (in research). Its job is
+-- to catch an ABANDONED dialog (closed laptop, crash, lost tab) — not to cap
+-- how long a test may take. A test that legitimately runs for hours is an item
+-- physically occupying the bench, and keeping that bench locked is CORRECT.
+-- What decides how long a test legitimately runs is the STATION TYPE, so the
+-- threshold lives here, next to parents_only.
+--
+-- SEMANTICS: minutes an item may sit in status 1/5 with no result before the
+-- reaper reverts it. 0 = NEVER reap this type (burn-in chambers, research
+-- benches that hold a unit for days).
+--
+-- NOT NULL DEFAULT 30 is the fail-safe: a type created without thinking about
+-- this behaves exactly as the whole system did before, and "never release"
+-- has to be typed in deliberately.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- existing volume.
+-- ============================================================================
+
+ALTER TABLE "test_stations_type"
+  ADD COLUMN IF NOT EXISTS "stale_after_minutes" int NOT NULL DEFAULT 30;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'test_stations_type'::regclass
+       AND conname  = 'test_stations_type_stale_after_minutes_check'
+  ) THEN
+    ALTER TABLE "test_stations_type"
+      ADD CONSTRAINT "test_stations_type_stale_after_minutes_check"
+      CHECK ("stale_after_minutes" >= 0);
+  END IF;
+END $$;
+
+COMMENT ON COLUMN "test_stations_type"."stale_after_minutes" IS
+  'Minutes an item may sit in status 1/5 on a station of this type with no result before /api/cron/release-stale-tests reverts it and frees the station. 0 = never auto-release this type.';
+
+-- ===========================================================================
+--  רישום המיגרציות
+--  בלי השורות האלה, פריסה עתידית תחשוב שהשדרוג לא רץ ותנסה להריץ אותו שוב.
+-- ===========================================================================
+INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, 'c85848d5798bed950db32c64d623530f2468d200dd233f83951be948d6ce5e80', now(), '20260824090000_research_history_item_id_bigint', NULL, NULL, now(), 1
+ WHERE NOT EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '20260824090000_research_history_item_id_bigint');
+
 INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
 SELECT gen_random_uuid()::text, 'e126c49e4724f56c3a4fa1779802fa952e3b824e6f838c5af1273625c01545ad', now(), '20260825000000_metrics_ledger_additive', NULL, NULL, now(), 1
  WHERE NOT EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '20260825000000_metrics_ledger_additive');
+
+INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '35b07e3b670c1b4c550b72b7fdf3df70e738ccd108e3719626f2558dfe08f3fe', now(), '20260828090000_station_type_stale_timeout', NULL, NULL, now(), 1
+ WHERE NOT EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '20260828090000_station_type_stale_timeout');
+
+COMMIT;
+
+-- ===========================================================================
+--  בדיקה 1 — האם הלדג'ר התמלא?
+--  items_with_state צריך להיות שווה ל-item_routes_total (פחות שורות יתומות,
+--  אם יש כאלה). אם הוא 0 — שום דבר לא נכנס. לעצור ולברר לפני שמעלים את
+--  האפליקציה.
+-- ===========================================================================
+SELECT (SELECT count(*) FROM item_routes)                        AS item_routes_total,
+       (SELECT count(*) FROM route_run)                          AS runs_created,
+       (SELECT count(DISTINCT item_id) FROM item_state_interval) AS items_with_state,
+       (SELECT count(*) FROM item_state_event)                   AS events;
+
+-- ===========================================================================
+--  בדיקה 2 — האם הלדג'ר מסכים עם המצב התפעולי?
+--  חייב להחזיר 0. כל מספר אחר אומר שפריט נרשם במצב שונה ממה שהמערכת הישנה
+--  חושבת — לברר לפני שממשיכים.
+-- ===========================================================================
+SELECT count(*) AS items_where_ledger_disagrees
+  FROM item_routes ir
+  LEFT JOIN item_state_interval i
+         ON i.item_id = ir.item_id AND upper_inf(i.valid_range)
+ WHERE EXISTS (SELECT 1 FROM item_state_interval x WHERE x.item_id = ir.item_id)
+   AND i.state_key IS DISTINCT FROM state_of(ir.current_status);
+
+-- ===========================================================================
+--  בדיקה 3 — תקינות כללית
+--  כל value חייב להיות 0, חוץ מ:
+--    open_intervals               — כמה פריטים חיים יש. מספר גדול זה תקין.
+--    calendar_horizon_days        — ריק בשלב הזה. לוח שעות העבודה נבנה אחרי
+--                                   שהאפליקציה עולה והמשימה הלילית רצה.
+--    calendar_sanity_net_minutes  — אותו דבר.
+--    ledger_bytes                 — גודל בדיסק.
+-- ===========================================================================
+SELECT * FROM metrics_selfcheck();
