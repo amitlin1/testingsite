@@ -1,3 +1,8 @@
 # Ensure shell scripts always use Unix line endings
 *.sh text eol=lf
 Dockerfile eol=lf
+
+# SQL runs against Linux containers (psql init scripts, prisma migrate
+# deploy), and the migration checksums in _prisma_migrations are computed
+# from the file content. Keep it LF everywhere so those agree.
+*.sql text eol=lf

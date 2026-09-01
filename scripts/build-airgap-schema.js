@@ -24,6 +24,9 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+const CRLF = String.fromCharCode(13, 10);
+const LF = String.fromCharCode(10);
+
 const repoRoot = path.join(__dirname, "..");
 const migrationsDir = path.join(repoRoot, "prisma", "migrations");
 const outPath = path.join(
@@ -105,9 +108,14 @@ CREATE TABLE IF NOT EXISTS public._prisma_migrations (
 for (const name of migrations) {
   const sqlPath = path.join(migrationsDir, name, "migration.sql");
   if (!fs.existsSync(sqlPath)) continue;
+  // sha256 of the LF form, not of the bytes on disk. core.autocrlf checks
+  // these out with CRLF on Windows, while prisma computes the checksum from
+  // the LF file inside the Linux container. Hashing the raw bytes here writes
+  // a checksum that can never match there, and the next `prisma migrate
+  // deploy` refuses to run -- "migration modified after being applied".
   const checksum = crypto
     .createHash("sha256")
-    .update(fs.readFileSync(sqlPath))
+    .update(fs.readFileSync(sqlPath, "utf8").split(CRLF).join(LF), "utf8")
     .digest("hex");
   parts.push(`
 INSERT INTO public._prisma_migrations

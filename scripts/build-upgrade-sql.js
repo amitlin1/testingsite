@@ -33,9 +33,19 @@ const SRC = {
   stale: "prisma/migrations/20260828090000_station_type_stale_timeout/migration.sql",
 };
 
-const read = (rel) => fs.readFileSync(path.join(repo, rel), "utf8");
-const sha = (rel) =>
-  crypto.createHash("sha256").update(fs.readFileSync(path.join(repo, rel))).digest("hex");
+const CRLF = String.fromCharCode(13, 10);
+const LF = String.fromCharCode(10);
+// Always read through LF, never the raw bytes on disk. core.autocrlf checks
+// these files out with CRLF on Windows, and hashing that gives a checksum
+// that does not match the one prisma computes inside the Linux container,
+// where the same file is LF. The mismatch is invisible here and fatal there:
+// the next `prisma migrate deploy` reads the LF file, computes a checksum
+// different from the one this script wrote into _prisma_migrations, and
+// refuses to deploy -- "migration modified after being applied". Normalising
+// also makes the generated script byte-identical whoever regenerates it.
+const read = (rel) =>
+  fs.readFileSync(path.join(repo, rel), "utf8").split(CRLF).join(LF);
+const sha = (rel) => crypto.createHash("sha256").update(read(rel), "utf8").digest("hex");
 
 const MIGRATION_NAMES = {
   bigint: "20260824090000_research_history_item_id_bigint",
