@@ -202,7 +202,7 @@ export default function ShipmentInsertPopup({
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [setValue]);
 
     useEffect(() => {
         if (open) {

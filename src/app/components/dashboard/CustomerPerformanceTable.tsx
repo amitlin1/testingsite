@@ -13,6 +13,13 @@ interface CustomerPerformanceTableProps {
   loading: boolean;
 }
 
+/** A percentage whose denominator was 0 arrives as null — a customer with no
+ *  items has no completion rate. Rendered as "-", the same way a missing
+ *  duration is: the template literal used to print the string "null%". */
+function formatPct(pct: number | null): string {
+  return pct === null || pct === undefined ? "-" : `${pct}%`;
+}
+
 /** Count cell — bold ink when non-zero, muted when zero (Shifthouse: no colour coding). */
 function Count({ n }: { n: number }) {
   return <span style={{ fontWeight: n > 0 ? 600 : 400, color: n > 0 ? "#1d1d1f" : "#9a9aa0", fontVariantNumeric: "tabular-nums" }}>{n}</span>;
@@ -46,8 +53,8 @@ export default function CustomerPerformanceTable({ data, loading }: CustomerPerf
     { key: "waitRes", header: "ממתין למחקר", nums: true, cell: (r) => <Count n={r.itemsWaitingForResearch} /> },
     { key: "research", header: "במחקר", nums: true, cell: (r) => <Count n={r.itemsInResearch} /> },
     { key: "finished", header: "הושלמו", nums: true, cell: (r) => <Count n={r.finishedItems} /> },
-    { key: "success", header: "אחוז הצלחה", width: 160, cell: (r) => <ProgressCell pct={r.successPercentage} text={`${r.successPercentage}%`} /> },
-    { key: "routes", header: "פריטים במסלול", width: 180, cell: (r) => <ProgressCell pct={r.itemsInRoutesPercentage} text={`${r.itemsInRoutesPercentage}% (${r.itemsInRoutes})`} /> },
+    { key: "success", header: "אחוז הצלחה", width: 160, cell: (r) => <ProgressCell pct={r.successPercentage} text={formatPct(r.successPercentage)} /> },
+    { key: "routes", header: "פריטים במסלול", width: 180, cell: (r) => <ProgressCell pct={r.itemsInRoutesPercentage} text={`${formatPct(r.itemsInRoutesPercentage)} (${r.itemsInRoutes})`} /> },
     { key: "avg", header: "זמן ממוצע", nowrap: true, muted: true, cell: (r) => formatMinutes(r.averageTimeMinutes) },
   ];
 

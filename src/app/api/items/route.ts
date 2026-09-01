@@ -2,6 +2,7 @@ import { prisma } from "@/app/lib/prisma";
 import { NextResponse } from "next/server";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { createItem } from "@/app/lib/create-item";
+import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 
 export const runtime = "nodejs";
 
@@ -69,14 +70,24 @@ ORDER BY i.item_id DESC
 
 
 export async function POST(req: Request) {
+  // Write-path schema gate (§8 stage 3): createItem emits item_created into
+  // the metrics ledger, so refuse loudly when the DB is behind this image.
+  const schemaDenied = await metricsSchemaGate();
+  if (schemaDenied) return schemaDenied;
+
   try {
     const body = await req.json();
     console.log(body)
-    const { customer, itemType, serialNumber, makat, model, manufacturer, shipment, subItems } = body;
+    const { customer, itemType, serialNumber, makat, model, manufacturer, manufacturerNo, shipment, subItems } = body;
     console.log("shipment", shipment)
 
-    // Validate required fields for main item
-    if (!customer || !itemType || serialNumber === null || serialNumber === undefined || !makat || !model || !manufacturer || !shipment) {
+    // Validate required fields for main item.
+    // manufacturerNo is listed here because items.manufacturer_no is NOT NULL:
+    // omitting it used to reach the INSERT and surface as a raw 500 (`23502`)
+    // instead of telling the caller which field was missing. Accessories are a
+    // separate case — their own endpoint allows omitting it (see
+    // api/testing/accessory/route.ts), and createItem stores "" for them.
+    if (!customer || !itemType || serialNumber === null || serialNumber === undefined || !makat || !model || !manufacturer || !manufacturerNo || !shipment) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }

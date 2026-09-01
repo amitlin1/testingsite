@@ -126,6 +126,10 @@ export type TestResultData = {
   ReturnAt?: string;
   Passed?: boolean; // overall pass/fail (station-type dialogs like the intake wizard)
   Details?: unknown; // station-type-specific structured payload → test_results.details
+  // Client action UUID (§4.4). Dialogs that keep an error-retry path set it
+  // themselves (same id on retry ⇒ ledger replay, not a duplicate event);
+  // the page fills one in per call when a dialog doesn't.
+  SubmitID?: string;
 };
 
 export interface StationTestDialogProps {

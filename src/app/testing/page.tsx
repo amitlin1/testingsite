@@ -24,6 +24,7 @@ import {
 } from "@/components/ui";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
 import { apiFetch } from "@/lib/api/client";
+import { newActionId } from "@/app/lib/metrics/action-id";
 import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
 // Icons
 import { Search as SearchIcon } from "@/components/ui/icons";
@@ -763,7 +764,7 @@ function TestingPageView() {
     const pendingItem = pendingLinkItemRef.current;
     pendingLinkItemRef.current = "";
     setFilterMakat(
-      pendingItem && selectedStation.test_station_id === linkStationId ? pendingItem : "",
+      pendingItem && selectedStation.test_station_id === pendingLinkStationRef.current ? pendingItem : "",
     );
     let cancelled = false;
     (async () => {
@@ -861,7 +862,9 @@ function TestingPageView() {
       const response = await apiFetch("/api/testing/start-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, stationId: selectedStation.test_station_id }),
+        // actionUuid identifies this click in the metrics ledger
+        // (event_key test_started:{action_uuid}, §4.4) — one per invocation.
+        body: JSON.stringify({ itemId, stationId: selectedStation.test_station_id, actionUuid: newActionId(), workerId: activeWorkerId ?? undefined, workerName: activeWorkerName || undefined }),
       });
       if (!response.ok) {
         const error = await response.json();
@@ -883,7 +886,8 @@ function TestingPageView() {
       await apiFetch("/api/testing/release-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, stationId }),
+        // actionUuid → event_key released_by_user:{action_uuid} (§4.4)
+        body: JSON.stringify({ itemId, stationId, actionUuid: newActionId(), workerId: activeWorkerId ?? undefined, workerName: activeWorkerName || undefined }),
       });
     } catch (error) {
       console.error("Error releasing test:", error);
@@ -922,10 +926,23 @@ function TestingPageView() {
         StationID: selectedStation.test_station_id,
         CurrentRouteStep: selectedItem.current_route_step,
         RouteStepsLength: routeStepsLength,
+        // Dual-run only: these feed the legacy item_route_history write. The
+        // metrics ledger never reads client timestamps — the DB assigns
+        // occurred_at for every event (§4.2).
         QueueStartTime: selectedItem.created_at,
         ProcessingStartTime: selectedItem.processing_start_time,
         ItemTypeId: selectedItem.item_type_id,
         CreatedAt: selectedItem.created_at,
+        // Fallback action UUID (§4.4) for dialogs that don't set one; dialogs
+        // with an error-retry path pass their own stable SubmitID in testData
+        // (spread below wins) so a retry replays instead of duplicating.
+        SubmitID: newActionId(),
+        // Snapshot of the acting worker's display name for the ledger. The
+        // worker directory lives in Keycloak and users get deleted, so a bare
+        // worker_id becomes unresolvable for historical events — §3.3 stores
+        // the name AT event time for exactly that reason. Placed before the
+        // spread so a dialog may still override it.
+        WorkerName: activeWorkerName || undefined,
         ...testData,
       }),
     });

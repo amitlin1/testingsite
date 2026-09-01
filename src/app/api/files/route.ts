@@ -27,9 +27,7 @@ export async function GET(request: Request) {
     const items: FileItem[] = [];
 
     await new Promise<void>((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const stream = minioClient.listObjectsV2(BUCKET, prefix, false) as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       stream.on('data', (obj: any) => {
         if (obj.prefix) {
           const rawName = (obj.prefix as string).slice(prefix.length);

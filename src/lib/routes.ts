@@ -55,6 +55,11 @@ export const ROLE_PROTECTED: ReadonlyArray<{
   // User-management API — manager only (defense-in-depth; the handlers also
   // self-gate with withAuth). Listed first so it matches before anything else.
   { prefix: "/api/users", any: ["manager"] },
+  // Dashboard/analytics API — manager only, mirroring the /dashboard page rule
+  // below. Until 2026-08 these 21 endpoints were reachable by ANY authenticated
+  // session (the gate was on /dashboard only), exposing all customer analytics
+  // to tester/storekeeper roles. Handlers also self-gate with withAuth.
+  { prefix: "/api/dashboard", any: ["manager"] },
   // Work-hours API — admin + timekeeper (משאן). Handlers also self-gate with withAuth.
   { prefix: "/api/settings/work-hours", any: ["manager", "mashan"] },
   // Settings — specific pages are manager-only, the rest are open to all roles.

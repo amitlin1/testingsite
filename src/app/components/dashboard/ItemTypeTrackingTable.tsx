@@ -76,6 +76,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+/** A percentage whose denominator was 0 arrives as null — an entity with no
+ *  items has no completion rate. Rendered as "-", and the bar left empty: the
+ *  JSX used to print the string "null%" and hand LinearProgress a null value. */
+function formatPct(pct: number | null): string {
+  return pct === null || pct === undefined ? "-" : `${pct}%`;
+}
+
 export default function ItemTypeTrackingTable({ data, loading }: ItemTypeTrackingTableProps) {
   const theme = useTheme();
   const [viewMode, setViewMode] = React.useState<"table" | "chart">("table");
@@ -293,18 +300,18 @@ export default function ItemTypeTrackingTable({ data, loading }: ItemTypeTrackin
                     <TableCell sx={{ textAlign: "right", direction: "rtl", minWidth: 120 }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexDirection: "row-reverse" }}>
                         <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 40, textAlign: "left" }}>
-                          {row.completionPercentage}%
+                          {formatPct(row.completionPercentage)}
                         </Typography>
                         <LinearProgress
                           variant="determinate"
-                          value={row.completionPercentage}
+                          value={row.completionPercentage ?? 0}
                           sx={{
                             flex: 1,
                             height: 8,
                             borderRadius: 1,
                             bgcolor: alpha("#e0e0e0", 0.3),
                             "& .MuiLinearProgress-bar": {
-                              bgcolor: row.completionPercentage === 100 ? "#2e7d32" : row.completionPercentage >= 50 ? "#1976d2" : "#ff9800",
+                              bgcolor: row.completionPercentage === 100 ? "#2e7d32" : (row.completionPercentage ?? 0) >= 50 ? "#1976d2" : "#ff9800",
                             },
                           }}
                         />
@@ -313,11 +320,11 @@ export default function ItemTypeTrackingTable({ data, loading }: ItemTypeTrackin
                     <TableCell sx={{ textAlign: "right", direction: "rtl", minWidth: 140 }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexDirection: "row-reverse" }}>
                         <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 50, textAlign: "left" }}>
-                          {row.itemsInRoutesPercentage}% ({row.itemsInRoutes})
+                          {formatPct(row.itemsInRoutesPercentage)} ({row.itemsInRoutes})
                         </Typography>
                         <LinearProgress
                           variant="determinate"
-                          value={row.itemsInRoutesPercentage}
+                          value={row.itemsInRoutesPercentage ?? 0}
                           sx={{
                             flex: 1,
                             height: 8,

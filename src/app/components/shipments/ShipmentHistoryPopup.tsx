@@ -59,13 +59,20 @@ type GroupedHistory = {
     signature_path?: string | null;
 };
 
+/** Stable empty array, so the memos below don't see a new reference each render. */
+const NO_HISTORY: HistoryLog[] = [];
+
 export default function ShipmentHistoryPopup({
     open,
     onClose,
     shipment,
 }: ShipmentHistoryPopupProps) {
-    const [history, setHistory] = useState<HistoryLog[]>([]);
-    const [loading, setLoading] = useState(false);
+    // One piece of state describing what we hold and who it belongs to. `loading`
+    // and `history` are derived from it, so they are correct on the first render
+    // instead of one render behind.
+    const [loaded, setLoaded] = useState<{ shipmentId: number; rows: HistoryLog[] } | null>(null);
+    const loading = open && shipment != null && loaded?.shipmentId !== shipment.id;
+    const history = loaded && shipment && loaded.shipmentId === shipment.id ? loaded.rows : NO_HISTORY;
 
     // PDF printing
     const pdfRef = React.useRef<HTMLDivElement>(null);
@@ -81,22 +88,27 @@ export default function ShipmentHistoryPopup({
     };
 
     useEffect(() => {
-        if (open && shipment) {
-            setLoading(true);
-            apiFetch(`/api/shipment-history/${shipment.id}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (Array.isArray(data)) {
-                        setHistory(data);
-                    } else {
-                        console.error("Failed to load history", data);
-                        setHistory([]);
-                    }
-                })
-                .catch(err => console.error(err))
-                .finally(() => setLoading(false));
-        }
-    }, [open, shipment]);
+        if (!open || !shipment) return;
+        if (loaded?.shipmentId === shipment.id) return; // already have this one
+
+        const shipmentId = shipment.id;
+        let cancelled = false;
+        apiFetch(`/api/shipment-history/${shipmentId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (cancelled) return;
+                if (!Array.isArray(data)) console.error("Failed to load history", data);
+                setLoaded({ shipmentId, rows: Array.isArray(data) ? data : NO_HISTORY });
+            })
+            .catch(err => {
+                if (cancelled) return;
+                console.error(err);
+                setLoaded({ shipmentId, rows: NO_HISTORY });
+            });
+        // Discard a response that arrives after the popup moved to another
+        // shipment, which previously could render 42's history under 43's title.
+        return () => { cancelled = true; };
+    }, [open, shipment, loaded]);
 
     // Grouping Logic
     const groupedHistory = useMemo(() => {

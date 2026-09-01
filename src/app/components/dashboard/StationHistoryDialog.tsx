@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch } from "@/lib/api/client";
+import { aggregateStationHistoryWeekly } from "@/app/lib/metrics/history-fold";
 import PeriodCombobox from "../common/PeriodCombobox";
 import {
   Dialog,
@@ -42,6 +43,30 @@ interface StationHistoryDialogProps {
   station: StationLoadRow | null;
 }
 
+/** The weekly fold, one definition for all four dialogs:
+ *  src/app/lib/metrics/history-fold.ts. The station variant folds three kinds of
+ *  column three ways — the point-in-time counts are averaged, `totalProcessed`
+ *  is summed, and the four §2.8 duration columns are sample-weighted averages
+ *  over the days that HAVE a measurement, staying null for a week in which
+ *  nothing closed (§5.0(7)). Module scope keeps the reference stable so memoised
+ *  callbacks can depend on it safely. */
+const aggregateToWeekly = (dailyData: any[]) => aggregateStationHistoryWeekly(dailyData);
+
+/** §5.4: "the queue belongs to the TYPE, not the station". A waiting item
+ *  carries no station_id at all (§3.6 enforces it), so a line called "this
+ *  station's queue" could only ever have been zero. The items counted here are
+ *  waiting for this station's TYPE and are shared with every station of it —
+ *  the name has to say so. */
+const QUEUE_LABEL = "בתור לסוג התחנה";
+
+/** Minutes get a unit and one decimal; counts stay whole. A duration with no
+ *  measurement renders as "אין מדידה", never as 0. */
+const formatMetric = (value: any, name: any): [string, string] => {
+  const isDuration = typeof name === "string" && name.startsWith("זמן");
+  if (value === null || value === undefined) return [isDuration ? "אין מדידה" : "-", name];
+  return [isDuration ? `${Number(value).toFixed(1)} דק'` : String(value), name];
+};
+
 export default function StationHistoryDialog({
   open,
   onClose,
@@ -53,13 +78,7 @@ export default function StationHistoryDialog({
   const [data, setData] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
 
-  React.useEffect(() => {
-    if (open && station) {
-      fetchHistory();
-    }
-  }, [open, station, period]);
-
-  const fetchHistory = async () => {
+  const fetchHistory = React.useCallback(async () => {
     if (!station) return;
     setLoading(true);
     try {
@@ -67,13 +86,12 @@ export default function StationHistoryDialog({
       if (res.ok) {
         const result = await res.json();
         
-        // Filter out data points where all values are zero
-        const filteredResult = result.filter((item: any) => 
-          item.isToday || // Always keep "Today"
-          (item.itemsInQueue || 0) > 0 || 
-          (item.itemsInTest || 0) > 0 || 
-          (item.totalProcessed || 0) > 0
-        );
+        // NO ZERO-DAY FILTER. It used to drop every day on which the station
+        // stood idle, and recharts then drew a straight segment from the day
+        // before to the day after — a quiet carry-forward across a stretch of
+        // real, measured zeros (§5.0(7)). An idle day is information about a
+        // station, and it is drawn as one.
+        const filteredResult: any[] = result;
         
         let processedData = filteredResult;
         if (filteredResult.length > 30) {
@@ -106,37 +124,13 @@ export default function StationHistoryDialog({
     } finally {
       setLoading(false);
     }
-  };
+  }, [station, period]);
 
-  const aggregateToWeekly = (dailyData: any[]) => {
-    const weeklyMap = new Map<string, any[]>();
-    
-    dailyData.forEach((item) => {
-      const date = new Date(item.date);
-      const weekStart = new Date(date);
-      weekStart.setDate(date.getDate() - date.getDay());
-      const weekKey = weekStart.toISOString().split('T')[0];
-      
-      if (!weeklyMap.has(weekKey)) {
-        weeklyMap.set(weekKey, []);
-      }
-      weeklyMap.get(weekKey)!.push(item);
-    });
-    
-    return Array.from(weeklyMap.entries()).map(([weekKey, items]) => {
-      const avg = (key: string) => Math.round(
-        items.reduce((sum, item) => sum + (parseFloat(item[key]) || 0), 0) / items.length
-      );
-      
-      return {
-        date: weekKey,
-        itemsInQueue: avg('itemsInQueue'),
-        itemsInTest: avg('itemsInTest'),
-        averageQueueTime: avg('averageQueueTime'),
-        totalProcessed: avg('totalProcessed'),
-      };
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  };
+  React.useEffect(() => {
+    if (open && station) {
+      fetchHistory();
+    }
+  }, [open, station, fetchHistory]);
 
   const handleChartTypeChange = (
     event: React.MouseEvent<HTMLElement>,
@@ -180,7 +174,7 @@ export default function StationHistoryDialog({
             options={[
               { id: "alldays", name: "כל הימים" },
               { id: "12months", name: "12 חודשים אחרונים" },
-              { id: "3years", name: "3 שנים (רבעוני)" },
+              { id: "3years", name: "3 שנים (מוגבל ל-13 חודשים)" },
             ]}
           />
           <ToggleButtonGroup
@@ -218,23 +212,48 @@ export default function StationHistoryDialog({
                 <LineChart data={data} margin={{ top: 20, right: 30, left: 70, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="displayDate" padding={{ left: 10, right: 10 }} />
-                  <YAxis tick={{ fontSize: 14, fontWeight: 'bold', fill: '#333' }} />
-                  <Tooltip />
+                  {/* Counts left, minutes right. One axis for both would make a
+                      36-minute average dwarf every count on the chart. */}
+                  <YAxis yAxisId="count" tick={{ fontSize: 14, fontWeight: 'bold', fill: '#333' }} />
+                  <YAxis yAxisId="minutes" orientation="right" unit=" ד'" tick={{ fontSize: 12, fill: '#666' }} />
+                  <Tooltip formatter={formatMetric} />
                   <Legend />
-                  <Line type="monotone" dataKey="itemsInQueue" name="בתור" stroke="#ff9800" strokeWidth={2} />
-                  <Line type="monotone" dataKey="itemsInTest" name="בבדיקה" stroke="#1976d2" strokeWidth={2} />
-                  <Line type="monotone" dataKey="totalProcessed" name="טופלו" stroke="#2e7d32" strokeWidth={2} />
+                  <Line yAxisId="count" type="monotone" dataKey="_new_sharedTypeQueue" name={QUEUE_LABEL} stroke="#ff9800" strokeWidth={2} />
+                  <Line yAxisId="count" type="monotone" dataKey="itemsInTest" name="בבדיקה" stroke="#1976d2" strokeWidth={2} />
+                  <Line yAxisId="count" type="monotone" dataKey="_new_inResearch" name="במחקר" stroke="#673ab7" strokeWidth={2} />
+                  <Line yAxisId="count" type="monotone" dataKey="totalProcessed" name="טופלו" stroke="#2e7d32" strokeWidth={2} />
+                  {/* §3.1 — a status with no metric_state row. Its own slice. */}
+                  <Line yAxisId="count" type="monotone" dataKey="_new_unmapped" name="סטטוס לא ידוע" stroke="#607d8b" strokeWidth={2} strokeDasharray="4 2" />
+                  {/* §2.8 — TWO CLOCKS, never one. `wall` is what happened to the
+                      customer; `work` is the part the lab controls, counted only
+                      inside the hours on the work-calendar screen. They diverge by
+                      ~4x here and that divergence is the signal. connectNulls is
+                      deliberately OFF: a day on which nothing closed carries null,
+                      and it must read as a gap, not as a line drawn through it. */}
+                  <Line yAxisId="minutes" type="monotone" dataKey="_new_waitWallMin" name="זמן המתנה" stroke="#e65100" strokeWidth={2} dot={false} connectNulls={false} />
+                  <Line yAxisId="minutes" type="monotone" dataKey="_new_waitWorkMin" name="זמן המתנה בפועל" stroke="#e65100" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
+                  <Line yAxisId="minutes" type="monotone" dataKey="_new_handleWallMin" name="זמן טיפול" stroke="#00695c" strokeWidth={2} dot={false} connectNulls={false} />
+                  <Line yAxisId="minutes" type="monotone" dataKey="_new_handleWorkMin" name="זמן טיפול בפועל" stroke="#00695c" strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
                 </LineChart>
               ) : (
                 <BarChart data={data} margin={{ top: 20, right: 30, left: 70, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="displayDate" padding={{ left: 10, right: 10 }} />
-                  <YAxis tick={{ fontSize: 14, fontWeight: 'bold', fill: '#333' }} />
-                  <Tooltip />
+                  <YAxis yAxisId="count" tick={{ fontSize: 14, fontWeight: 'bold', fill: '#333' }} />
+                  <YAxis yAxisId="minutes" orientation="right" unit=" ד'" tick={{ fontSize: 12, fill: '#666' }} />
+                  <Tooltip formatter={formatMetric} />
                   <Legend />
-                  <Bar dataKey="itemsInQueue" name="בתור" fill="#ff9800" />
-                  <Bar dataKey="itemsInTest" name="בבדיקה" fill="#1976d2" />
-                  <Bar dataKey="totalProcessed" name="טופלו" fill="#2e7d32" />
+                  <Bar yAxisId="count" dataKey="_new_sharedTypeQueue" name={QUEUE_LABEL} fill="#ff9800" />
+                  <Bar yAxisId="count" dataKey="itemsInTest" name="בבדיקה" fill="#1976d2" />
+                  <Bar yAxisId="count" dataKey="_new_inResearch" name="במחקר" fill="#673ab7" />
+                  <Bar yAxisId="count" dataKey="totalProcessed" name="טופלו" fill="#2e7d32" />
+                  <Bar yAxisId="count" dataKey="_new_unmapped" name="סטטוס לא ידוע" fill="#607d8b" />
+                  {/* Both clocks again — §2.8 admits no chart type where only one
+                      of the pair is shown. */}
+                  <Bar yAxisId="minutes" dataKey="_new_waitWallMin" name="זמן המתנה" fill="#e65100" />
+                  <Bar yAxisId="minutes" dataKey="_new_waitWorkMin" name="זמן המתנה בפועל" fill="#ffb74d" />
+                  <Bar yAxisId="minutes" dataKey="_new_handleWallMin" name="זמן טיפול" fill="#00695c" />
+                  <Bar yAxisId="minutes" dataKey="_new_handleWorkMin" name="זמן טיפול בפועל" fill="#80cbc4" />
                 </BarChart>
               )}
             </ResponsiveContainer>

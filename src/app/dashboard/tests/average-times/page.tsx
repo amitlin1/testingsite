@@ -35,7 +35,7 @@ export default function AverageTimesPage() {
     testStationTypeId: null,
     workerId: null,
     status: "all",
-    showSent: false,
+    showAllHistory: false,
   });
 
   const [averageTimesPeriod, setAverageTimesPeriod] = React.useState<AverageTimesPeriod>("daily");
@@ -51,10 +51,10 @@ export default function AverageTimesPage() {
 
   const filteredShipments = React.useMemo(() => {
     if (!shipments) return [];
-    return filters.showSent 
+    return filters.showAllHistory 
       ? shipments 
       : shipments.filter(s => !s.is_sent);
-  }, [shipments, filters.showSent]);
+  }, [shipments, filters.showAllHistory]);
 
   React.useEffect(() => {
     setFilters(prev => ({ ...prev, customerId: selectedCustomer?.id || null }));
@@ -77,7 +77,6 @@ export default function AverageTimesPage() {
     }
 
     const params = buildDashboardQueryParams(avgStart.toISOString(), avgEnd.toISOString(), filters);
-    if (filters.showSent) params.set("showAllHistory", "true");
     // Average times specific
     params.set("period", averageTimesPeriod);
 
@@ -107,8 +106,8 @@ export default function AverageTimesPage() {
              <Box sx={{ mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                  <Typography variant="h5" fontWeight="bold">זמנים ממוצעים</Typography>
                  <CompletedShipmentsToggle 
-                    showSent={filters.showSent || false}
-                    onChange={(val) => handleFilterChange({ showSent: val })}
+                    showSent={filters.showAllHistory || false}
+                    onChange={(val) => handleFilterChange({ showAllHistory: val })}
                  />
              </Box>
             <FilterContainer>

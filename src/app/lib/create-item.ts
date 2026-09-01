@@ -1,5 +1,6 @@
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { findStationForRouteStep } from "@/app/lib/station-assignment";
+import { recordTransition } from "@/app/lib/metrics/record";
 import { TransactionClient } from "@/app/lib/prisma";
 
 /**
@@ -60,9 +61,18 @@ export async function createItem(
   const newItemIdBig = BigInt(newItemId);
 
   // 5. Insert the item.
+  //
+  // manufacturerNo falls back to "" and never to NULL: items.manufacturer_no is
+  // NOT NULL with no default, so `manufacturerNo || null` turned a merely
+  // missing field into a raw 500 (`23502`) from deep inside the transaction —
+  // for the main intake route, which never even validated the field, and for
+  // accessories, whose own endpoint deliberately passes it as optional. The
+  // caller that REQUIRES the value validates it and answers 400 (see
+  // api/items/route.ts); this write point only guarantees the column's
+  // contract can't be violated by any caller.
   await tx.$executeRaw`
     INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model, manufacturer_name, manufacturer_no, shipment_id, parent_item_id)
-    VALUES (${newItemIdBig}, ${customer}, ${itemType}, ${serialNumber}, ${makat}, ${model}, ${manufacturer}, ${manufacturerNo || null}, ${shipment}, ${parentId ? BigInt(parentId) : null})
+    VALUES (${newItemIdBig}, ${customer}, ${itemType}, ${serialNumber}, ${makat}, ${model}, ${manufacturer}, ${manufacturerNo || ""}, ${shipment}, ${parentId ? BigInt(parentId) : null})
   `;
 
   // 6. Route row — assign the first step's station.
@@ -74,6 +84,26 @@ export async function createItem(
     INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step, test_station_id, created_at, is_finished, queue_start_time, route_number)
     VALUES (${newItemIdBig}, ${itemType}, 2, 1, ${assignedStationId}, ${currentUtcDate}::timestamp, FALSE, ${currentUtcDate}::timestamp, ${routeNum})
   `;
+
+  // 7. Metrics ledger, call site #1 (§4.5): item_created → queued, in the SAME
+  // transaction as the item_routes INSERT — the core §4.8 guarantee. The DB
+  // assigns occurred_at; metrics_record opens the route_run with a snapshot of
+  // route_steps. station_type_id is the type the queued interval is waiting
+  // for (feeds Q3's shared-type queue); station_id stays NULL while queued.
+  const routeRow = await tx.testing_routes.findFirst({
+    where: { item_type_id: itemType, route_number: routeNum },
+    select: { route_steps: true },
+  });
+  const firstStepStationTypeId = routeRow?.route_steps?.[0] ?? null;
+
+  await recordTransition(tx, {
+    eventKey: `item_created:${newItemId}`,
+    itemId: newItemIdBig,
+    toState: "queued",
+    stepNo: 1,
+    stationTypeId: firstStepStationTypeId,
+    reason: "item_created",
+  });
 
   return newItemId;
 }

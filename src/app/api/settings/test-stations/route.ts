@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
-import { MetricsService } from "@/app/lib/dashboard/metrics-service";
+import { getStationLiveCounters } from "@/lib/station-counters";
 
 export const runtime = "nodejs";
 
@@ -21,9 +21,11 @@ export async function GET(req: Request) {
       orderBy: { test_station_desc: "asc" },
     });
 
-    // Attach live queue/test counts from station_live_counters
-    // so Settings page shows the SAME numbers as Dashboard
-    const liveCounters = await MetricsService.getStationLiveCounters(prisma);
+    // Attach live queue/test counts from the metrics ledger (Q3) so the Settings
+    // page shows the SAME numbers as the dashboard's station board. The wire
+    // field names are unchanged, but items_in_queue is now the station TYPE's
+    // queue and repeats across the stations of a type — see station-counters.ts.
+    const liveCounters = await getStationLiveCounters();
     const countersMap = new Map(
       liveCounters.map((c) => [c.stationId, c])
     );
@@ -37,8 +39,8 @@ export async function GET(req: Request) {
         status: r.status,
         is_research: r.is_research,
         test_type_desc: r.test_stations_type.test_type_desc.trim(),
-        items_in_queue: live?.itemsInQueue ?? 0,
-        items_in_test: live?.itemsInTest ?? 0,
+        items_in_queue: live?.sharedTypeQueue ?? 0,
+        items_in_test: live?.itemsInActiveWork ?? 0,
       };
     });
 

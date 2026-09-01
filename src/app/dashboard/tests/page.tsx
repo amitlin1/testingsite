@@ -14,6 +14,7 @@ import {
   Category,
   ArrowBack // Changed to ArrowBack for RTL or keep ArrowForward if direction is RTL
 } from "@/components/ui/icons";
+import JobHealthTile from "@/app/components/dashboard/JobHealthTile";
 
 const dashboards = [
   {
@@ -149,6 +150,15 @@ export default function DashboardOverviewPage() {
           </Grid>
         ))}
       </Grid>
+
+      {/* §10.2: the isolated LAN has no alerting channel, so a manager opening
+          the control centre IS the alerting path. The tile sits under the boards
+          rather than on one of them because it grades the metrics layer as a
+          whole — every board above reads numbers this tile says are trustworthy
+          or not. */}
+      <Box sx={{ mt: 6, maxWidth: 720 }}>
+        <JobHealthTile />
+      </Box>
     </Box>
   );
 }

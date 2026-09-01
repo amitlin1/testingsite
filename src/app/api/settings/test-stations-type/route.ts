@@ -4,6 +4,25 @@ import { fixSequence } from "@/app/lib/fix-sequence";
 
 export const runtime = "nodejs";
 
+/** Column default, mirrored here so a body that omits the field is explicit. */
+const DEFAULT_STALE_AFTER_MINUTES = 30;
+
+/**
+ * stale_after_minutes = minutes an item may sit in test / in research on a
+ * station of this type with no result before /api/cron/release-stale-tests
+ * reverts it. 0 = never auto-release. Absent in the body means "leave the
+ * column's default" on create; a present value must be a whole number >= 0.
+ * Returns { value } or { error } — the caller turns the error into a 400.
+ */
+function parseStaleAfterMinutes(raw: unknown, fallback: number): { value: number } | { error: string } {
+  if (raw === undefined || raw === null || `${raw}`.trim() === "") return { value: fallback };
+  const n = typeof raw === "number" ? raw : Number(`${raw}`.trim());
+  if (!Number.isInteger(n) || n < 0) {
+    return { error: "זמן שחרור אוטומטי חייב להיות מספר שלם של דקות, 0 או יותר" };
+  }
+  return { value: n };
+}
+
 export async function GET() {
   try {
     const rows = await prisma.test_stations_type.findMany({
@@ -15,6 +34,7 @@ export async function GET() {
       test_station_type_id: r.test_station_type_id,
       test_type_desc: r.test_type_desc.trim(),
       parents_only: r.parents_only,
+      stale_after_minutes: r.stale_after_minutes,
       station_count: r._count.test_stations,
     }));
 
@@ -38,6 +58,12 @@ export async function POST(req: Request) {
     );
   }
 
+  const stale = parseStaleAfterMinutes(body.stale_after_minutes, DEFAULT_STALE_AFTER_MINUTES);
+  if ("error" in stale) {
+    return NextResponse.json({ error: stale.error }, { status: 400 });
+  }
+  const staleAfterMinutes = stale.value;
+
   const trimmedDesc = test_type_desc.trim();
 
   const existing = await prisma.test_stations_type.findFirst({
@@ -52,13 +78,14 @@ export async function POST(req: Request) {
 
   try {
     const created = await prisma.test_stations_type.create({
-      data: { test_type_desc: trimmedDesc, parents_only: parentsOnly },
+      data: { test_type_desc: trimmedDesc, parents_only: parentsOnly, stale_after_minutes: staleAfterMinutes },
     });
 
     return NextResponse.json({
       test_station_type_id: created.test_station_type_id,
       test_type_desc: created.test_type_desc.trim(),
       parents_only: created.parents_only,
+      stale_after_minutes: created.stale_after_minutes,
     });
   } catch (error: any) {
     const msg = String(error?.message ?? "");
@@ -77,12 +104,13 @@ export async function POST(req: Request) {
         console.log("Duplicate key detected, fixing sequence and retrying...");
         await fixSequence(prisma, "test_stations_type", "test_station_type_id", "test_stations_type_test_station_type_id_seq");
         const retryCreated = await prisma.test_stations_type.create({
-          data: { test_type_desc: trimmedDesc, parents_only: parentsOnly },
+          data: { test_type_desc: trimmedDesc, parents_only: parentsOnly, stale_after_minutes: staleAfterMinutes },
         });
         return NextResponse.json({
           test_station_type_id: retryCreated.test_station_type_id,
           test_type_desc: retryCreated.test_type_desc.trim(),
           parents_only: retryCreated.parents_only,
+          stale_after_minutes: retryCreated.stale_after_minutes,
         });
       } catch (retryError: any) {
         console.error("Retry after sequence fix failed:", retryError);

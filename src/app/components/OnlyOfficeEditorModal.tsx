@@ -87,7 +87,7 @@ function loadDocsApi(docServerUrl: string): Promise<void> {
       settled = true;
       clearInterval(poll);
       clearTimeout(timeout);
-      err ? reject(err) : resolve();
+      if (err) reject(err); else resolve();
     };
 
     // Race 1: polling — covers both "load already fired" and "script still

@@ -66,7 +66,7 @@ export default function APIsPage() {
     testStationTypeId: null,
     workerId: null,
     status: "all",
-    showSent: false
+    showAllHistory: false
   });
 
   const [data, setData] = React.useState<DashboardKpis | null>(null);
@@ -98,10 +98,10 @@ export default function APIsPage() {
 
   const filteredShipments = React.useMemo(() => {
     if (!shipments) return [];
-    return filters.showSent
+    return filters.showAllHistory
       ? shipments
       : shipments.filter(s => !s.is_sent);
-  }, [shipments, filters.showSent]);
+  }, [shipments, filters.showAllHistory]);
 
   const fetchData = React.useCallback(async () => {
     if (!startDate || !endDate) return;
@@ -140,8 +140,8 @@ export default function APIsPage() {
           actions={
             <Box sx={{ display: "flex", gap: 1 }}>
               <CompletedShipmentsToggle
-                showSent={filters.showSent || false}
-                onChange={(val) => handleFilterChange({ showSent: val })}
+                showSent={filters.showAllHistory || false}
+                onChange={(val) => handleFilterChange({ showAllHistory: val })}
               />
             </Box>
           }

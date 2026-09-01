@@ -31,10 +31,17 @@ export interface WithAuthOptions {
   role?: AppRole | AppRole[];
 }
 
-type Handler = (req: NextRequest, ctx: WithAuthCtx) => Promise<Response>;
+// Third parameter: Next's own route context ({ params: Promise<...> }), passed
+// through untouched so dynamic routes ([id]/...) can be wrapped too. Handlers
+// that don't need it just declare two parameters.
+type Handler = (
+  req: NextRequest,
+  ctx: WithAuthCtx,
+  routeCtx?: unknown,
+) => Promise<Response>;
 
 export function withAuth(handler: Handler, options: WithAuthOptions = {}) {
-  return async (req: NextRequest): Promise<Response> => {
+  return async (req: NextRequest, routeCtx?: unknown): Promise<Response> => {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,6 +55,6 @@ export function withAuth(handler: Handler, options: WithAuthOptions = {}) {
         return NextResponse.json({ error: "Forbidden", required }, { status: 403 });
       }
     }
-    return handler(req, { session });
+    return handler(req, { session }, routeCtx);
   };
 }

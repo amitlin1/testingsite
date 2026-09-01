@@ -6,6 +6,7 @@ import { toOverride, stringToDbDate } from "@/lib/workHours/serialize";
 import { getIsraeliHolidayForDate } from "@/lib/workHours/israeliHolidays";
 import { validateOverride } from "@/lib/workHours/validate";
 import { isValidDate, weekdayOf, monthStartISO, monthEndISO } from "@/lib/workHours/time";
+import { rebuildWorkCalendar } from "@/lib/work-calendar";
 import type { OverrideKind, WorkdayOverrideInput } from "@/lib/workHours/types";
 
 export const runtime = "nodejs";
@@ -72,6 +73,9 @@ export const POST = withAuth(async (req: NextRequest, ctx: WithAuthCtx) => {
       update: { ...data, updated_at: new Date() },
       create: { work_date: stringToDbDate(input.date), ...data, created_by: actorOf(ctx) },
     });
+    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
+    // forget — the user's save never waits on, or fails with, the rebuild.
+    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
     return NextResponse.json(toOverride(saved));
   } catch (e) {
     console.error("work-hours overrides POST", e);

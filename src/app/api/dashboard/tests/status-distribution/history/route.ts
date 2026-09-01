@@ -1,143 +1,183 @@
+// Q2 — §5.3. The point-in-time series (Q2א) plus the cumulative finished
+// series (Q2ב), replacing the status_distribution_snapshots{,_monthly} read.
+//
+// WHAT THE OLD ROUTE DID. It read a snapshot table chosen by date range, then
+// OVERWROTE today's point with a live COUNT over item_routes.current_status —
+// two different definitions of the same line on one chart, with today's point
+// computed a third way. The snapshots themselves are garbage by construction
+// (§8) and are deleted in stage 7.
+//
+// WHAT THIS DOES.
+//  - Q2א samples the ledger at 12:00 Asia/Jerusalem on every civil day of the
+//    window. The §5.1 filter block lives inside the LEFT JOIN's ON, not the
+//    WHERE, so a day with no matching rows survives as a zero instead of
+//    vanishing from the series, and no value is ever carried forward (§5.0(7)).
+//  - Q2ב is the ONE definition of "finished" (§5.3ב): a running sum of
+//    route_run closures, counted once on the day they happened. It is
+//    entry-anchored, so it does not depend on a sampling instant, and it is
+//    what makes the "הושלם" line meaningful again — Q2א is the ACTIVE
+//    population and deliberately carries no terminal state (§5.2).
+//
+// THE TWO SERIES ARE NAMED, NOT MIXED. The cumulative entry carries
+// `_new_series: "cumulative"`; every other entry is `"point_in_time"`. Its
+// `percentage` is null on purpose: a running total has no share of a snapshot.
+//
+// §5.0(1): this is a HISTORICAL endpoint, so its scope is the constant `all`.
+// Filtering thirteen months of history by "shipments not sent yet" would let
+// the past rewrite itself every time a shipment ships.
+//
+// §6.3: the chart's "3 years" preset is capped at 13 months, and the cap is
+// reported in the X-Metrics-Period-* headers rather than applied in silence.
+// The grid stays daily at every preset — the component already aggregates to
+// weekly above 30 points, and inventing a coarser bucket server-side would be a
+// second definition of the same series.
+
+import { withAuth } from "@/lib/auth/withAuth";
 import { NextResponse } from "next/server";
+
 import { prisma } from "@/app/lib/prisma";
-import { getSnapshotTableName, SNAPSHOT_TABLES } from "@/app/lib/snapshot-tables";
+import { filtersFromSearchParams } from "@/app/lib/metrics/filters";
+import { finishedCumulative, pitSeries } from "@/app/lib/metrics/queries";
+import {
+  BadRequest,
+  labelOf,
+  legacyStatusOf,
+  metricStates,
+  metricsJson,
+  qualify,
+  requirePeriod,
+} from "@/app/lib/metrics/dashboard-request";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+interface StatusPoint {
+  status: string;
+  statusName: string;
+  count: number;
+  percentage: number | null;
+  _new_stateKey: string;
+  _new_series: "point_in_time" | "cumulative";
+}
+
+interface HistoryPoint {
+  date: string;
+  statuses: StatusPoint[];
+  isToday: boolean;
+  /** §5.3ב — route_run closures to date, the same number as the `done` entry. */
+  finishedCumulative: number;
+  /** Closures on this day alone. Additive; the cumulative series is not. */
+  _new_finishedToday: number;
+  /** Sum of the active states at this point — the percentage denominator. */
+  _new_activeTotal: number;
+}
+
+export const GET = withAuth(async (req: Request) => {
+  const { searchParams } = new URL(req.url);
   try {
-    const { searchParams } = new URL(req.url);
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
+    const period = requirePeriod(searchParams);
+    const filters = { ...filtersFromSearchParams(searchParams), scope: "all" as const };
 
-    if (!startDate || !endDate) {
-      return NextResponse.json(
-        { error: "startDate and endDate are required" },
-        { status: 400 }
-      );
-    }
+    const [series, finished, states] = await Promise.all([
+      pitSeries(prisma, period.from, period.to, filters),
+      finishedCumulative(prisma, period.from, period.to, filters),
+      metricStates(prisma),
+    ]);
 
-    // Read filter parameters
-    const customerId = searchParams.get("customerId");
-    const shipmentId = searchParams.get("shipmentId");
-    const itemTypeId = searchParams.get("itemTypeId");
-    const testStationId = searchParams.get("testStationId");
-
-    // Determine which table to use based on date range
-    const tableName = getSnapshotTableName(
-      SNAPSHOT_TABLES.statusDistribution,
-      startDate,
-      endDate
-    );
-
-    // Determine if we're using monthly or quarterly
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const useMonthly = daysDiff > 90;
-    const isQuarterlyRequest = daysDiff > 1500; // Flag for filtering later
-
-    // Query to get historical status distribution from snapshots
-    // For monthly/quarterly, we need to match by truncated dates
-    // NOTE: We use 'month' truncation for both monthly and quarterly, 
-    // then filter for quarterly in JS because we lack quarterly tables.
-    const query = `
-      SELECT
-        snapshot_date,
-        status_id,
-        status_name,
-        count,
-        percentage
-      FROM ${tableName}
-      WHERE snapshot_date >= ${useMonthly ? "date_trunc('month', $1::date)" : "$1::date"}
-        AND snapshot_date <= ${useMonthly ? "date_trunc('month', $2::date)" : "$2::date"}
-      ORDER BY snapshot_date, status_id
-    `;
-
-    let rows = await prisma.$queryRawUnsafe<any[]>(query, startDate, endDate);
-
-    // Filter for Quarterly view (Jan, Apr, Jul, Oct) if requested
-    if (isQuarterlyRequest) {
-      rows = rows.filter((row: any) => {
-        const d = new Date(row.snapshot_date);
-        return [0, 3, 6, 9].includes(d.getMonth());
-      });
-    }
-
-    // Group by date and transform to chart format
-    const groupedByDate: { [date: string]: any[] } = {};
-
-    rows.forEach((row: any) => {
-      const date = row.snapshot_date.toISOString().split('T')[0];
-      if (!groupedByDate[date]) {
-        groupedByDate[date] = [];
+    const byDay = new Map<string, HistoryPoint>();
+    const dayOf = (d: string): HistoryPoint => {
+      let p = byDay.get(d);
+      if (!p) {
+        byDay.set(
+          d,
+          (p = {
+            date: d,
+            statuses: [],
+            isToday: d === period.today,
+            finishedCumulative: 0,
+            _new_finishedToday: 0,
+            _new_activeTotal: 0,
+          })
+        );
       }
-      groupedByDate[date].push({
-        status: String(row.status_id),
-        statusName: row.status_name || `סטטוס ${row.status_id}`,
-        count: Number(row.count) || 0,
-        percentage: Number(row.percentage) || 0,
+      return p;
+    };
+
+    // A state that is zero on EVERY point of the window is dropped from the
+    // series entirely. This is not gap-filling and not carry-forward (§5.0(7)):
+    // a state that occurred even once keeps its zero days, which is the case the
+    // rule is about. It is `unmapped` this removes — metric_state carries it as
+    // a non-terminal state, so Q2א's CROSS JOIN emits a zero row for it on every
+    // grid day, and the chart would draw a permanent flat line for a status that
+    // has never existed.
+    const everSeen = new Set(series.filter((r) => r.items > 0).map((r) => r.state_key));
+
+    // Q2א — the active population, in metric_state.sort_order (the query
+    // already returns it that way, so the chart's series order is stable).
+    for (const r of series) {
+      const p = dayOf(r.business_day);
+      if (!everSeen.has(r.state_key)) continue;
+      p.statuses.push({
+        status: legacyStatusOf(states, r.state_key),
+        statusName: r.label_he,
+        count: r.items,
+        percentage: null, // filled once the day's total is known
+        _new_stateKey: r.state_key,
+        _new_series: "point_in_time",
       });
-    });
-
-    // --- ALWAYS APPEND LIVE DATA FOR TODAY ---
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-
-    // Build filter conditions for live query
-    const liveParams: any[] = [];
-    let liveIdx = 1;
-    const liveConds: string[] = [];
-
-    if (customerId) { liveConds.push(`AND i.customer_id = $${liveIdx}::int`); liveParams.push(customerId); liveIdx++; }
-    if (shipmentId) { liveConds.push(`AND i.shipment_id = $${liveIdx}::int`); liveParams.push(shipmentId); liveIdx++; }
-    if (itemTypeId) { liveConds.push(`AND i.item_type_id = $${liveIdx}::int`); liveParams.push(itemTypeId); liveIdx++; }
-    if (testStationId) { liveConds.push(`AND ir.test_station_id = $${liveIdx}::int`); liveParams.push(testStationId); liveIdx++; }
-
-    // Always fetch live data from item_routes for "Today"
-    const liveQuery = `
-      SELECT
-        ir.current_status as status_id,
-        s.item_status_desc as status_name,
-        COUNT(DISTINCT ir.item_id) as count
-      FROM item_routes ir
-      LEFT JOIN item_status s ON s.item_status_id = ir.current_status
-      JOIN items i ON i.item_id = ir.item_id
-      WHERE 1=1
-      ${liveConds.join(" ")}
-      GROUP BY ir.current_status, s.item_status_desc
-    `;
-
-    const liveRows = await prisma.$queryRawUnsafe<any[]>(liveQuery, ...liveParams);
-    const liveTotal = liveRows.reduce((sum: number, r: any) => sum + Number(r.count), 0);
-
-    const liveStatuses = liveRows.map((row: any) => ({
-         status: String(row.status_id),
-         statusName: row.status_name || `סטטוס ${row.status_id}`,
-         count: Number(row.count) || 0,
-         percentage: liveTotal > 0 ? Math.round((Number(row.count) / liveTotal) * 100 * 10) / 10 : 0,
-    }));
-
-    // Always add today's live data (replacing any existing snapshot for today)
-    if (liveStatuses.length > 0) {
-        groupedByDate[todayStr] = liveStatuses;
+      p._new_activeTotal += r.items;
     }
 
-    // Transform to time series format
-    const timeSeriesData = Object.keys(groupedByDate)
-      .sort()
-      .map((date) => ({
-        date,
-        statuses: groupedByDate[date],
-        isToday: date === todayStr,
-      }));
+    // Q2ב — the cumulative closures.
+    for (const r of finished.rows) {
+      const p = dayOf(r.business_day);
+      p.finishedCumulative = r.finished_cumulative;
+      p._new_finishedToday = r.finished_today;
+    }
 
-    return NextResponse.json(timeSeriesData);
+    // A `status` filter that excludes `done` must exclude the finished line too,
+    // otherwise the legend would contradict the filter.
+    const showFinished = !filters.states || filters.states.includes("done");
+
+    const data: HistoryPoint[] = [...byDay.values()]
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+      .map((p) => {
+        for (const s of p.statuses) {
+          s.percentage =
+            p._new_activeTotal > 0
+              ? Math.round((s.count / p._new_activeTotal) * 1000) / 10
+              : 0;
+        }
+        if (showFinished) {
+          p.statuses.push({
+            status: legacyStatusOf(states, "done"),
+            statusName: labelOf(states, "done"),
+            count: p.finishedCumulative,
+            percentage: null,
+            _new_stateKey: "done",
+            _new_series: "cumulative",
+          });
+        }
+        return p;
+      });
+
+    // Q2א honours the whole filter block; Q2ב cannot express station, station
+    // type, worker or state. With a station filter the point-in-time lines are
+    // narrowed and the cumulative "finished" line is not — the header says so
+    // per-metric rather than leaving a reader to guess (§5.0(1)).
+    return metricsJson(
+      data,
+      period,
+      filters,
+      qualify("finishedCumulative", finished.ignoredFilters)
+    );
   } catch (error) {
+    if (error instanceof BadRequest) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Error fetching status distribution history:", error);
     return NextResponse.json(
       { error: "Failed to fetch status distribution history" },
       { status: 500 }
     );
   }
-}
+}, { role: "manager" });

@@ -36,89 +36,6 @@ model file_objects {
   @@index([created_at], map: "idx_file_objects_created_at")
 }
 
-model customer_snapshots {
-  snapshot_date              DateTime @db.Date
-  customer_id                Int
-  customer_code              String?  @db.VarChar(255)
-  customer_name              String?  @db.VarChar(255)
-  total_items                Int      @default(0)
-  items_in_queue             Int      @default(0)
-  items_in_test              Int      @default(0)
-  items_waiting_for_research Int      @default(0)
-  items_in_research          Int      @default(0)
-  finished_items             Int      @default(0)
-  items_in_routes            Int      @default(0)
-  success_percentage         Decimal  @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
-  average_time_minutes       Decimal? @db.Decimal(10, 2)
-  created_at                 DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, customer_id])
-  @@index([customer_id], map: "idx_customer_snapshot_customer")
-  @@index([snapshot_date], map: "idx_customer_snapshot_date")
-}
-
-model customer_snapshots_daily {
-  snapshot_id                Int       @id @default(autoincrement())
-  customer_id                Int
-  snapshot_date              DateTime  @db.Date
-  total_items                Int?      @default(0)
-  items_in_queue             Int?      @default(0)
-  items_in_test              Int?      @default(0)
-  items_finished             Int?      @default(0)
-  items_waiting_for_research Int?      @default(0)
-  items_in_research          Int?      @default(0)
-  items_in_routes            Int?      @default(0)
-  total_processed_in_period  Int?      @default(0)
-  created_at                 DateTime? @default(now()) @db.Timestamp(6)
-
-  @@unique([snapshot_date, customer_id])
-}
-
-model customer_snapshots_monthly {
-  snapshot_date              DateTime @db.Date
-  customer_id                Int
-  customer_code              String?  @db.VarChar(255)
-  customer_name              String?  @db.VarChar(255)
-  total_items                Int      @default(0)
-  items_in_queue             Int      @default(0)
-  items_in_test              Int      @default(0)
-  items_waiting_for_research Int      @default(0)
-  items_in_research          Int      @default(0)
-  finished_items             Int      @default(0)
-  items_in_routes            Int      @default(0)
-  success_percentage         Decimal  @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
-  average_time_minutes       Decimal? @db.Decimal(10, 2)
-  created_at                 DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, customer_id])
-  @@index([customer_id], map: "idx_customer_snapshot_monthly_customer")
-  @@index([snapshot_date], map: "idx_customer_snapshot_monthly_date")
-}
-
-model customer_snapshots_quarterly {
-  snapshot_date              DateTime @db.Date
-  customer_id                Int
-  customer_code              String?  @db.VarChar(255)
-  customer_name              String?  @db.VarChar(255)
-  total_items                Int      @default(0)
-  items_in_queue             Int      @default(0)
-  items_in_test              Int      @default(0)
-  items_waiting_for_research Int      @default(0)
-  items_in_research          Int      @default(0)
-  finished_items             Int      @default(0)
-  items_in_routes            Int      @default(0)
-  success_percentage         Decimal  @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
-  average_time_minutes       Decimal? @db.Decimal(10, 2)
-  created_at                 DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, customer_id])
-  @@index([customer_id], map: "idx_customer_snapshot_quarterly_customer")
-  @@index([snapshot_date], map: "idx_customer_snapshot_quarterly_date")
-}
-
 model customers {
   id            Int    @id @default(autoincrement())
   name          String @db.Char(50)
@@ -128,19 +45,6 @@ model customers {
 model daily_counters {
   date_key DateTime @id @db.Date
   counter  Int?     @default(0)
-}
-
-model finished_item {
-  item_id               Int       @id @default(autoincrement())
-  item_type_id          Int
-  current_status        Int
-  current_route_step    Int
-  test_station_id       Int?
-  created_at            DateTime  @db.Timestamp(6)
-  finished_at           DateTime? @db.Timestamp(6)
-  is_finished           Boolean   @default(false)
-  processing_start_time DateTime? @db.Timestamp(6)
-  q_start_time          DateTime? @db.Timestamp(6)
 }
 
 model item_route_history {
@@ -184,66 +88,6 @@ model item_routes {
 model item_status {
   item_status_id   Int    @id @default(autoincrement())
   item_status_desc String @unique @db.Char(50)
-}
-
-model item_type_snapshots {
-  snapshot_date              DateTime @db.Date
-  item_type_id               Int
-  item_type_desc             String?  @db.VarChar(255)
-  total_items                Int      @default(0)
-  items_in_queue             Int      @default(0)
-  items_in_test              Int      @default(0)
-  items_waiting_for_research Int      @default(0)
-  items_in_research          Int      @default(0)
-  items_finished             Int      @default(0)
-  items_in_routes            Int      @default(0)
-  completion_percentage      Decimal  @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
-  created_at                 DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, item_type_id])
-  @@index([snapshot_date], map: "idx_item_type_snapshot_date")
-  @@index([item_type_id], map: "idx_item_type_snapshot_type")
-}
-
-model item_type_snapshots_monthly {
-  snapshot_date              DateTime @db.Date
-  item_type_id               Int
-  item_type_desc             String?  @db.VarChar(255)
-  total_items                Int      @default(0)
-  items_in_queue             Int      @default(0)
-  items_in_test              Int      @default(0)
-  items_waiting_for_research Int      @default(0)
-  items_in_research          Int      @default(0)
-  items_finished             Int      @default(0)
-  items_in_routes            Int      @default(0)
-  completion_percentage      Decimal  @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
-  created_at                 DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, item_type_id])
-  @@index([snapshot_date], map: "idx_item_type_snapshot_monthly_date")
-  @@index([item_type_id], map: "idx_item_type_snapshot_monthly_type")
-}
-
-model item_type_snapshots_quarterly {
-  snapshot_date              DateTime @db.Date
-  item_type_id               Int
-  item_type_desc             String?  @db.VarChar(255)
-  total_items                Int      @default(0)
-  items_in_queue             Int      @default(0)
-  items_in_test              Int      @default(0)
-  items_waiting_for_research Int      @default(0)
-  items_in_research          Int      @default(0)
-  items_finished             Int      @default(0)
-  items_in_routes            Int      @default(0)
-  completion_percentage      Decimal  @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal  @default(0) @db.Decimal(5, 2)
-  created_at                 DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, item_type_id])
-  @@index([snapshot_date], map: "idx_item_type_snapshot_quarterly_date")
-  @@index([item_type_id], map: "idx_item_type_snapshot_quarterly_type")
 }
 
 model item_types {
@@ -330,54 +174,9 @@ model items {
   other_items       items[] @relation("itemsToitems")
 }
 
-model kpi_snapshots {
-  snapshot_date                   DateTime @id @db.Date
-  average_queue_time_minutes      Decimal? @db.Decimal(10, 2)
-  average_processing_time_minutes Decimal? @db.Decimal(10, 2)
-  total_items_processed           Int      @default(0)
-  items_currently_in_queue        Int      @default(0)
-  items_currently_in_test         Int      @default(0)
-  busiest_station_id              Int?
-  busiest_station_name            String?  @db.VarChar(255)
-  busiest_station_count           Int      @default(0)
-  created_at                      DateTime @default(now()) @db.Timestamp(6)
-
-  @@index([snapshot_date], map: "idx_kpi_snapshot_date")
-}
-
-model kpi_snapshots_monthly {
-  snapshot_date                   DateTime @id @db.Date
-  average_queue_time_minutes      Decimal? @db.Decimal(10, 2)
-  average_processing_time_minutes Decimal? @db.Decimal(10, 2)
-  total_items_processed           Int      @default(0)
-  items_currently_in_queue        Int      @default(0)
-  items_currently_in_test         Int      @default(0)
-  busiest_station_id              Int?
-  busiest_station_name            String?  @db.VarChar(255)
-  busiest_station_count           Int      @default(0)
-  created_at                      DateTime @default(now()) @db.Timestamp(6)
-
-  @@index([snapshot_date], map: "idx_kpi_snapshot_monthly_date")
-}
-
-model kpi_snapshots_quarterly {
-  snapshot_date                   DateTime @id @db.Date
-  average_queue_time_minutes      Decimal? @db.Decimal(10, 2)
-  average_processing_time_minutes Decimal? @db.Decimal(10, 2)
-  total_items_processed           Int      @default(0)
-  items_currently_in_queue        Int      @default(0)
-  items_currently_in_test         Int      @default(0)
-  busiest_station_id              Int?
-  busiest_station_name            String?  @db.VarChar(255)
-  busiest_station_count           Int      @default(0)
-  created_at                      DateTime @default(now()) @db.Timestamp(6)
-
-  @@index([snapshot_date], map: "idx_kpi_snapshot_quarterly_date")
-}
-
 model research_history {
   research_id Int       @id @default(autoincrement())
-  item_id     Int
+  item_id     BigInt
   station_id  Int
   sent_at     DateTime? @db.Timestamp(6)
   return_at   DateTime? @db.Timestamp(6)
@@ -406,6 +205,10 @@ model test_results {
   comments             String?  @db.Text
   details              Json?
   created_at           DateTime @default(now()) @db.Timestamptz(6)
+  // Anchor to the ledger event of the submission that wrote this row (call
+  // site #14, migration 20260825000000_metrics_ledger_additive). Plain bigint
+  // on purpose — the migration adds no FK.
+  state_event_id       BigInt?
 
   @@index([item_id], map: "idx_test_results_item")
   @@index([test_station_id], map: "idx_test_results_station")
@@ -446,79 +249,6 @@ model shipment_items {
   shipments    shipments?  @relation(fields: [shipment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
-model shipment_snapshots {
-  snapshot_date              DateTime  @db.Date
-  shipment_id                Int
-  shipment_code              String?   @db.VarChar(255)
-  shipment_date              DateTime? @db.Date
-  customer_id                Int?
-  customer_code              String?   @db.VarChar(255)
-  customer_name              String?   @db.VarChar(255)
-  total_items                Int       @default(0)
-  items_in_queue             Int       @default(0)
-  items_in_test              Int       @default(0)
-  items_waiting_for_research Int       @default(0)
-  items_in_research          Int       @default(0)
-  items_finished             Int       @default(0)
-  items_in_routes            Int       @default(0)
-  completion_percentage      Decimal   @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal   @default(0) @db.Decimal(5, 2)
-  created_at                 DateTime  @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, shipment_id])
-  @@index([customer_id], map: "idx_shipment_snapshot_customer")
-  @@index([snapshot_date], map: "idx_shipment_snapshot_date")
-  @@index([shipment_id], map: "idx_shipment_snapshot_shipment")
-}
-
-model shipment_snapshots_monthly {
-  snapshot_date              DateTime  @db.Date
-  shipment_id                Int
-  shipment_code              String?   @db.VarChar(255)
-  shipment_date              DateTime? @db.Date
-  customer_id                Int?
-  customer_code              String?   @db.VarChar(255)
-  customer_name              String?   @db.VarChar(255)
-  total_items                Int       @default(0)
-  items_in_queue             Int       @default(0)
-  items_in_test              Int       @default(0)
-  items_waiting_for_research Int       @default(0)
-  items_in_research          Int       @default(0)
-  items_finished             Int       @default(0)
-  items_in_routes            Int       @default(0)
-  completion_percentage      Decimal   @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal   @default(0) @db.Decimal(5, 2)
-  created_at                 DateTime  @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, shipment_id])
-  @@index([snapshot_date], map: "idx_shipment_snapshot_monthly_date")
-  @@index([shipment_id], map: "idx_shipment_snapshot_monthly_shipment")
-}
-
-model shipment_snapshots_quarterly {
-  snapshot_date              DateTime  @db.Date
-  shipment_id                Int
-  shipment_code              String?   @db.VarChar(255)
-  shipment_date              DateTime? @db.Date
-  customer_id                Int?
-  customer_code              String?   @db.VarChar(255)
-  customer_name              String?   @db.VarChar(255)
-  total_items                Int       @default(0)
-  items_in_queue             Int       @default(0)
-  items_in_test              Int       @default(0)
-  items_waiting_for_research Int       @default(0)
-  items_in_research          Int       @default(0)
-  items_finished             Int       @default(0)
-  items_in_routes            Int       @default(0)
-  completion_percentage      Decimal   @default(0) @db.Decimal(5, 2)
-  items_in_routes_percentage Decimal   @default(0) @db.Decimal(5, 2)
-  created_at                 DateTime  @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, shipment_id])
-  @@index([snapshot_date], map: "idx_shipment_snapshot_quarterly_date")
-  @@index([shipment_id], map: "idx_shipment_snapshot_quarterly_shipment")
-}
-
 model shipments {
   id                                             Int                @id @default(autoincrement())
   shipment_code                                  String             @db.VarChar(20)
@@ -547,152 +277,6 @@ model sources {
   @@index([source_desc], map: "idx_sources_desc")
 }
 
-model station_snapshots {
-  snapshot_date                      DateTime @db.Date
-  station_id                         Int
-  station_name                       String?  @db.VarChar(255)
-  station_type_name                  String?  @db.VarChar(255)
-  items_in_queue                     Int      @default(0)
-  items_in_test                      Int      @default(0)
-  average_current_queue_time_minutes Decimal? @db.Decimal(10, 2)
-  total_processed_in_period          Int      @default(0)
-  created_at                         DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, station_id])
-  @@index([snapshot_date], map: "idx_station_snapshot_date")
-  @@index([station_id], map: "idx_station_snapshot_station")
-}
-
-model station_snapshots_monthly {
-  snapshot_date                      DateTime @db.Date
-  station_id                         Int
-  station_name                       String?  @db.VarChar(255)
-  station_type_name                  String?  @db.VarChar(255)
-  items_in_queue                     Int      @default(0)
-  items_in_test                      Int      @default(0)
-  average_current_queue_time_minutes Decimal? @db.Decimal(10, 2)
-  total_processed_in_period          Int      @default(0)
-  created_at                         DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, station_id])
-  @@index([snapshot_date], map: "idx_station_snapshot_monthly_date")
-  @@index([station_id], map: "idx_station_snapshot_monthly_station")
-}
-
-model station_snapshots_quarterly {
-  snapshot_date                      DateTime @db.Date
-  station_id                         Int
-  station_name                       String?  @db.VarChar(255)
-  station_type_name                  String?  @db.VarChar(255)
-  items_in_queue                     Int      @default(0)
-  items_in_test                      Int      @default(0)
-  average_current_queue_time_minutes Decimal? @db.Decimal(10, 2)
-  total_processed_in_period          Int      @default(0)
-  created_at                         DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, station_id])
-  @@index([snapshot_date], map: "idx_station_snapshot_quarterly_date")
-  @@index([station_id], map: "idx_station_snapshot_quarterly_station")
-}
-
-model status_distribution_snapshots {
-  snapshot_date DateTime @db.Date
-  status_id     Int
-  status_name   String?  @db.VarChar(255)
-  count         Int      @default(0)
-  percentage    Decimal  @default(0) @db.Decimal(5, 2)
-  created_at    DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, status_id])
-  @@index([snapshot_date], map: "idx_status_dist_snapshot_date")
-  @@index([status_id], map: "idx_status_dist_snapshot_status")
-}
-
-model status_distribution_snapshots_monthly {
-  snapshot_date DateTime @db.Date
-  status_id     Int
-  status_name   String?  @db.VarChar(255)
-  count         Int      @default(0)
-  percentage    Decimal  @default(0) @db.Decimal(5, 2)
-  created_at    DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, status_id])
-  @@index([snapshot_date], map: "idx_status_dist_snapshot_monthly_date")
-  @@index([status_id], map: "idx_status_dist_snapshot_monthly_status")
-}
-
-model status_distribution_snapshots_quarterly {
-  snapshot_date DateTime @db.Date
-  status_id     Int
-  status_name   String?  @db.VarChar(255)
-  count         Int      @default(0)
-  percentage    Decimal  @default(0) @db.Decimal(5, 2)
-  created_at    DateTime @default(now()) @db.Timestamp(6)
-
-  @@id([snapshot_date, status_id])
-  @@index([snapshot_date], map: "idx_status_dist_snapshot_quarterly_date")
-  @@index([status_id], map: "idx_status_dist_snapshot_quarterly_status")
-}
-
-model system_snapshots_daily {
-  snapshot_id                Int       @id @default(autoincrement())
-  snapshot_date              DateTime  @unique @db.Date
-  total_items                Int?      @default(0)
-  items_in_queue             Int?      @default(0)
-  items_in_test              Int?      @default(0)
-  items_finished             Int?      @default(0)
-  items_waiting_for_research Int?      @default(0)
-  items_in_research          Int?      @default(0)
-  items_in_routes            Int?      @default(0)
-  created_at                 DateTime? @default(now()) @db.Timestamp(6)
-}
-
-model system_snapshots_monthly {
-  snapshot_id                Int       @id @default(autoincrement())
-  snapshot_date              DateTime  @unique @db.Date
-  total_items                Int?      @default(0)
-  items_in_queue             Int?      @default(0)
-  items_in_test              Int?      @default(0)
-  items_finished             Int?      @default(0)
-  items_waiting_for_research Int?      @default(0)
-  items_in_research          Int?      @default(0)
-  items_in_routes            Int?      @default(0)
-  created_at                 DateTime? @default(now()) @db.Timestamp(6)
-}
-
-model system_snapshots {
-  snapshot_date              DateTime @id @db.Date
-  total_items                Int      @default(0)
-  items_in_queue             Int      @default(0)
-  items_in_test              Int      @default(0)
-  items_finished             Int      @default(0)
-  items_waiting_for_research Int      @default(0)
-  items_in_research          Int      @default(0)
-  items_in_routes            Int      @default(0)
-  created_at                 DateTime @default(now()) @db.Timestamp(6)
-
-  @@index([snapshot_date], map: "idx_system_snapshot_date")
-}
-
-model station_hourly_snapshots {
-  id              Int      @id @default(autoincrement())
-  snapshot_hour   DateTime @db.Timestamp(6)
-  station_id      Int
-  items_processed Int      @default(0)
-  avg_queue_time  Float?
-  avg_test_time   Float?
-  created_at      DateTime @default(now()) @db.Timestamp(6)
-
-  @@unique([snapshot_hour, station_id])
-  @@index([snapshot_hour], map: "idx_station_hourly_snapshot_hour")
-}
-
-model station_live_counters {
-  station_id     Int @id
-  items_in_queue Int @default(0)
-  items_in_test  Int @default(0)
-}
-
 model test_station_status {
   test_station_status_id   Int    @id @default(autoincrement())
   test_station_status_desc String @unique @db.Char(50)
@@ -714,6 +298,12 @@ model test_stations_type {
   // Stations of this type test a parent item together with its accessories,
   // so the queue lists parents only and hides the accessory items.
   parents_only         Boolean          @default(false)
+  // Minutes an item may sit in status 1/5 on a station of this type with no
+  // result before /api/cron/release-stale-tests reverts it and frees the
+  // station. 0 = never auto-release this type (burn-in chambers, research
+  // benches that legitimately hold a unit for days). NOT NULL DEFAULT 30 keeps
+  // a newly created type fail-safe; "never" has to be typed in deliberately.
+  stale_after_minutes  Int              @default(30)
   test_stations        test_stations[]
   testing_routes       testing_routes[]
 }
@@ -795,3 +385,187 @@ model department_holidays {
 
   @@index([start_date, end_date], map: "idx_department_holidays_range")
 }
+
+// ============================================================================
+// CIL — the metrics ledger (docs/dashboard-migration-plan-v2.md §3, migration
+// 20260825000000_metrics_ledger_additive). Declared here so `prisma migrate
+// dev` treats the tables as OWNED (never drop candidates). The DDL itself is
+// hand-written SQL: the functions, triggers, EXCLUDE/CHECK constraints and
+// partial indexes are NOT modeled — see docs/PRISMA_UNMANAGED_OBJECTS.md.
+// Range columns use Unsupported("tstzrange"); all reads/writes of these tables
+// go through raw SQL, never through generated CRUD.
+// ============================================================================
+
+/// Status vocabulary (§3.1) — live definitions instead of hardcoded 1..5.
+model metric_state {
+  state_key        String  @id
+  legacy_status_id Int?    @unique @db.SmallInt
+  label_he         String
+  is_terminal      Boolean @default(false)
+  is_waiting       Boolean @default(false)
+  is_active_work   Boolean @default(false)
+  is_research      Boolean @default(false)
+  at_station       Boolean @default(false)
+  sort_order       Int     @db.SmallInt
+
+  events    item_state_event[]
+  intervals item_state_interval[]
+}
+
+/// One pass of one item through one route (§3.2). unit_id = COALESCE(parent_item_id, item_id).
+model route_run {
+  route_run_id   BigInt    @id @default(autoincrement())
+  item_id        BigInt
+  run_no         Int       @default(1)
+  route_number   Int
+  item_type_id   Int
+  planned_steps  Int[]     @default([])
+  plan_digest    String    @default("")
+  opened_at      DateTime  @db.Timestamptz(6)
+  closed_at      DateTime? @db.Timestamptz(6)
+  close_reason   String?
+  customer_id    Int
+  shipment_id    Int
+  parent_item_id BigInt?
+  unit_id        BigInt
+  is_accessory   Boolean
+  serial_no      String    @default("")
+  is_trusted     Boolean   @default(true)
+
+  events    item_state_event[]
+  intervals item_state_interval[]
+
+  @@unique([item_id, run_no], map: "route_run_uq")
+}
+
+/// The append-only spine (§3.3) — immutable (deny_mutation trigger), idempotent
+/// via event_key. Canonical order key: (occurred_at, seq, event_id).
+model item_state_event {
+  event_id        BigInt   @id @default(autoincrement())
+  event_key       String   @unique(map: "ise_key_uq")
+  route_run_id    BigInt
+  item_id         BigInt
+  occurred_at     DateTime @db.Timestamptz(6)
+  recorded_at     DateTime @default(now()) @db.Timestamptz(6)
+  seq             Int      @default(0) @db.SmallInt
+  kind            String
+  to_state        String?
+  step_no         Int
+  station_id      Int?
+  station_type_id Int?
+  worker_id       Int?
+  worker_name     String?
+  reason          String
+  submit_id       String?  @db.Uuid
+  supersedes      BigInt?
+  is_trusted      Boolean  @default(true)
+  payload         Json     @default("{}")
+
+  run              route_run             @relation(fields: [route_run_id], references: [route_run_id], onDelete: NoAction, onUpdate: NoAction)
+  state            metric_state?         @relation(fields: [to_state], references: [state_key], onDelete: NoAction, onUpdate: NoAction)
+  superseded_event item_state_event?     @relation("event_supersedes", fields: [supersedes], references: [event_id], onDelete: NoAction, onUpdate: NoAction)
+  superseded_by    item_state_event[]    @relation("event_supersedes")
+  entry_intervals  item_state_interval[] @relation("interval_entry_event")
+  exit_intervals   item_state_interval[] @relation("interval_exit_event")
+
+  @@index([route_run_id, occurred_at, seq, event_id], map: "ise_run")
+  @@index([item_id, occurred_at], map: "ise_item")
+}
+
+/// The ledger (§3.6) — one interval per state occupancy of each routed item.
+/// The EXCLUDE constraint (isi_no_overlap), the partial indexes and the
+/// GENERATED offhours_seconds expression live only in the SQL migration.
+model item_state_interval {
+  interval_id            BigInt                   @id @default(autoincrement())
+  route_run_id           BigInt
+  item_id                BigInt
+  state_key              String
+  is_terminal            Boolean                  @default(false)
+  step_no                Int
+  attempt_no             Int                      @default(1)
+  station_id             Int?
+  station_type_id        Int?
+  entered_by_worker_id   Int?
+  entered_by_worker_name String?
+  exited_by_worker_id    Int?
+  exited_by_worker_name  String?
+  entry_reason           String
+  exit_reason            String?
+  entry_event_id         BigInt
+  exit_event_id          BigInt?
+  valid_range            Unsupported("tstzrange")
+  closed_at              DateTime?                @db.Timestamptz(6)
+  start_business_date    DateTime                 @db.Date
+  close_business_date    DateTime?                @db.Date
+  customer_id            Int
+  shipment_id            Int
+  item_type_id           Int
+  unit_id                BigInt
+  is_accessory           Boolean
+  serial_no              String                   @default("")
+  wall_seconds           Decimal?                 @db.Decimal(14, 3)
+  work_seconds           Decimal?                 @db.Decimal(14, 3)
+  offhours_seconds       Decimal?                 @default(dbgenerated("(wall_seconds - work_seconds)")) @db.Decimal(14, 3)
+  calendar_version       Int?
+  is_trusted             Boolean                  @default(true)
+  sys_from               DateTime                 @default(now()) @db.Timestamptz(6)
+
+  run         route_run         @relation(fields: [route_run_id], references: [route_run_id], onDelete: Cascade, onUpdate: NoAction)
+  state       metric_state      @relation(fields: [state_key], references: [state_key], onDelete: NoAction, onUpdate: NoAction)
+  entry_event item_state_event  @relation("interval_entry_event", fields: [entry_event_id], references: [event_id], onDelete: NoAction, onUpdate: NoAction)
+  exit_event  item_state_event? @relation("interval_exit_event", fields: [exit_event_id], references: [event_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([route_run_id, step_no, attempt_no], map: "isi_run")
+}
+
+/// Versioned work calendar (§3.5) — one row per generated horizon; the partial
+/// unique index wcv_one_current enforces a single is_current row.
+model work_calendar_version {
+  calendar_version Int      @id @default(autoincrement())
+  generated_at     DateTime @default(now()) @db.Timestamptz(6)
+  horizon_from     DateTime @db.Date
+  horizon_to       DateTime @db.Date
+  source_digest    String
+  is_current       Boolean  @default(false)
+
+  spans work_span[]
+}
+
+/// One continuous working window (§3.5) — a break splits a day in two. The
+/// prefix-sum ladder that work_seconds_between() walks with two index probes.
+model work_span {
+  calendar_version   Int
+  span_id            BigInt                   @default(autoincrement())
+  work_date          DateTime                 @db.Date
+  span               Unsupported("tstzrange")
+  span_seconds       Int
+  cum_seconds_before BigInt
+
+  version work_calendar_version @relation(fields: [calendar_version], references: [calendar_version], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([calendar_version, span_id])
+}
+
+/// Scheduled-job audit surface (§3.9/§10.1) — written by the runJob wrapper.
+model job_run {
+  job_run_id    BigInt    @id @default(autoincrement())
+  job_name      String
+  started_at    DateTime  @default(now()) @db.Timestamptz(6)
+  finished_at   DateTime? @db.Timestamptz(6)
+  status        String    @default("running")
+  rows_affected BigInt?
+  detail        Json?
+  error_text    String?
+  host          String?
+
+  @@index([job_name, started_at(sort: Desc)], map: "job_run_recent")
+}
+
+/// Single-row schema gate (§3.9) — read by GET /api/health/schema and by the
+/// write path's version gate.
+model metrics_schema_version {
+  id         Int      @id @default(1)
+  version    Int
+  applied_at DateTime @default(now()) @db.Timestamptz(6)
+}
+

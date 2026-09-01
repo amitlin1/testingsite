@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { createItem } from "@/app/lib/create-item";
+import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,11 @@ export const runtime = "nodejs";
  * shared `createItem` helper generates its id, items row, and item_routes row.
  */
 export async function POST(req: Request) {
+  // Write-path schema gate (§8 stage 3): createItem emits item_created into
+  // the metrics ledger, so refuse loudly when the DB is behind this image.
+  const schemaDenied = await metricsSchemaGate();
+  if (schemaDenied) return schemaDenied;
+
   try {
     const body = await req.json();
     const { parentItemId, itemType, serialNumber, makat, model, manufacturer, manufacturerNo } = body;

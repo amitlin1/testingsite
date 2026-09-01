@@ -40,7 +40,7 @@ export default function StationLoadPage() {
     testStationTypeId: null,
     workerId: null,
     status: "all",
-    showSent: false
+    showAllHistory: false
   });
 
   const [data, setData] = React.useState<StationLoadRow[]>([]);
@@ -76,10 +76,10 @@ export default function StationLoadPage() {
 
   const filteredShipments = React.useMemo(() => {
     if (!shipments) return [];
-    return filters.showSent
+    return filters.showAllHistory
       ? shipments
       : shipments.filter(s => !s.is_sent);
-  }, [shipments, filters.showSent]);
+  }, [shipments, filters.showAllHistory]);
 
   const fetchData = React.useCallback(async () => {
     if (!startDate || !endDate) return;
@@ -128,8 +128,8 @@ export default function StationLoadPage() {
                 </ToggleButton>
               </ToggleButtonGroup>
               <CompletedShipmentsToggle
-                showSent={filters.showSent || false}
-                onChange={(val) => handleFilterChange({ showSent: val })}
+                showSent={filters.showAllHistory || false}
+                onChange={(val) => handleFilterChange({ showAllHistory: val })}
               />
             </Box>
           }

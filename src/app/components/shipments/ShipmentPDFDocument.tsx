@@ -1,4 +1,7 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- this tree is rendered into the
+   react-to-print / PDF pipeline, where next/image's lazy loading and srcset
+   never resolve. Plain <img> is required here. */
 import React from 'react';
 import { Shipment } from '@/types';
 

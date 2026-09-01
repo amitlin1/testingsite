@@ -5,12 +5,36 @@ import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 
+/**
+ * stale_after_minutes = minutes an item may sit in test / in research on a
+ * station of this type with no result before /api/cron/release-stale-tests
+ * reverts it. 0 = never auto-release. Absent in the body means "leave the value
+ * alone"; a present value must be a whole number >= 0. Deliberately duplicated
+ * from ../route.ts: a Next route file may only export its handlers, so there is
+ * nowhere to share it from without inventing a module.
+ */
+function parseStaleAfterMinutes(raw: unknown): { value?: number } | { error: string } {
+  if (raw === undefined || raw === null || `${raw}`.trim() === "") return {};
+  const n = typeof raw === "number" ? raw : Number(`${raw}`.trim());
+  if (!Number.isInteger(n) || n < 0) {
+    return { error: "זמן שחרור אוטומטי חייב להיות מספר שלם של דקות, 0 או יותר" };
+  }
+  return { value: n };
+}
+
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const body = await req.json();
     const { test_type_desc, test_station_type_id: newIdRaw } = body;
     const parentsOnly = Boolean(body.parents_only);
+
+    const stale = parseStaleAfterMinutes(body.stale_after_minutes);
+    if ("error" in stale) {
+      return NextResponse.json({ error: stale.error }, { status: 400 });
+    }
+    // Omitted -> the column keeps whatever it holds; Prisma skips undefined.
+    const staleAfterMinutes = stale.value;
 
     if (!test_type_desc || typeof test_type_desc !== "string" || !test_type_desc.trim()) {
       return NextResponse.json(
@@ -38,13 +62,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (newId === oldId) {
       const updated = await prisma.test_stations_type.update({
         where: { test_station_type_id: oldId },
-        data: { test_type_desc: trimmedDesc, parents_only: parentsOnly },
+        data: { test_type_desc: trimmedDesc, parents_only: parentsOnly, stale_after_minutes: staleAfterMinutes },
       });
 
       return NextResponse.json({
         test_station_type_id: updated.test_station_type_id,
         test_type_desc: updated.test_type_desc.trim(),
         parents_only: updated.parents_only,
+        stale_after_minutes: updated.stale_after_minutes,
       });
     }
 
@@ -59,12 +84,22 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       );
     }
 
+    // The id change recreates the row, so the column needs a concrete value
+    // even when the body omitted it: carry the current one over.
+    const current = await prisma.test_stations_type.findUnique({
+      where: { test_station_type_id: oldId },
+      select: { stale_after_minutes: true },
+    });
+
     // Cascade the id change across the referencing tables inside one transaction.
     // (FKs are declared onUpdate: NoAction, so we repoint children manually:
     //  insert the new parent, move children to it, then delete the old parent.)
     await prisma.$transaction(async (tx) => {
       await tx.test_stations_type.create({
-        data: { test_station_type_id: newId, test_type_desc: trimmedDesc, parents_only: parentsOnly },
+        data: {
+          test_station_type_id: newId, test_type_desc: trimmedDesc, parents_only: parentsOnly,
+          stale_after_minutes: staleAfterMinutes ?? current?.stale_after_minutes ?? 30,
+        },
       });
       await tx.test_stations.updateMany({
         where: { test_station_type_id: oldId },
@@ -86,6 +121,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       test_station_type_id: newId,
       test_type_desc: trimmedDesc,
       parents_only: parentsOnly,
+      stale_after_minutes: staleAfterMinutes ?? current?.stale_after_minutes ?? 30,
     });
   } catch (error: any) {
     if (

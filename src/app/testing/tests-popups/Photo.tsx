@@ -17,6 +17,7 @@ import { Person as PersonIcon } from "@/components/ui/icons";
 import { Print as PrintIcon } from "@/components/ui/icons";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
 import { apiFetch } from "@/lib/api/client";
+import { newActionId } from "@/app/lib/metrics/action-id";
 
 // ---- Design tokens (Shifthouse handoff — "3A" design language) ----
 const BLUE = "#0066cc";
@@ -310,6 +311,19 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  // One action UUID for the WHOLE wizard finish — parent + every accessory
+  // (§4.7: all events of one wizard submission share a submit_id, so the
+  // dashboard can count the human operation once). Minted on the first finish
+  // attempt and reused on retry, so accessories already saved before a failure
+  // replay on the ledger instead of double-counting.
+  const submitIdRef = React.useRef<string | null>(null);
+  // Accessories whose POST already committed, so a retry after a mid-loop
+  // failure skips them. Without it the retry re-POSTs them: the ledger events
+  // replay harmlessly (same submit_id), but item_routes advances a SECOND step
+  // — the row and the ledger then disagree, and the drift detector cannot see
+  // it because the ledger was never asked to move. A ref, not state: the loop
+  // needs the value updated synchronously between iterations.
+  const committedAccRef = React.useRef<Set<number>>(new Set());
 
   const [skuScan, setSkuScan] = React.useState("");
   const [parentHasRU, setParentHasRU] = React.useState<boolean | null>(null);
@@ -510,14 +524,15 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     if (workerId == null) { setError("יש לבחור עובד בכותרת מסך הבדיקות"); return; }
     if (!allComplete) { setError("לא ניתן לסיים — יש להשלים את כל שלבי הבדיקה"); return; }
     setSubmitting(true); setError(null);
+    const submitId = (submitIdRef.current ??= newActionId());
     try {
       for (const a of accessories) {
-        if (a.itemId == null) continue;
+        if (a.itemId == null || committedAccRef.current.has(a.itemId)) continue;
         const w = weightResult(a.refWeight, a.measWeight);
-        await apiFetch("/api/testing/results", {
+        const accRes = await apiFetch("/api/testing/results", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ItemID: a.itemId, StationID: station.test_station_id, WorkerID: workerId,
+            ItemID: a.itemId, StationID: station.test_station_id, WorkerID: workerId, SubmitID: submitId,
             Result: accPass(a) ? 1 : 0, Passed: accPass(a), Comments: a.product.note || undefined,
             Details: {
               sku: a.sku, hasRU: a.hasRU,
@@ -526,9 +541,21 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
             },
           }),
         });
+        // apiFetch resolves on 4xx/5xx — it does NOT throw. Without this check
+        // a failed accessory was skipped in silence: the wizard went on to the
+        // parent, reported success, and left that accessory queued forever with
+        // no events at all (its #15 synthetic pair never fired). Nothing in the
+        // system could report it, because its item_routes row was never touched.
+        if (!accRes.ok) {
+          throw new Error(
+            `שמירת האביזר ${a.serialNo ?? a.itemId} נכשלה (${accRes.status})`
+          );
+        }
+        committedAccRef.current.add(a.itemId);
       }
       const parentData: TestResultData = {
         Result: parentPass ? 1 : 0, Passed: parentPass, Comments: pkg.note || parentProduct.note || undefined, WorkerID: workerId ?? undefined,
+        SubmitID: submitId,
         Details: {
           sku: skuScan, hasRU: parentHasRU,
           pkg: { ok: pkg.ok, note: pkg.note, photos: keysOf(pkg) },
@@ -540,7 +567,13 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
       };
       await onSubmit(parentData);
       onClose();
-    } catch { setError("שגיאה בשמירת הקליטה"); } finally { setSubmitting(false); }
+    } catch (e) {
+      // Surface the real reason — a swallowed message here is what let a failed
+      // accessory look like a generic hiccup. The dialog stays open, so the
+      // worker retries with the SAME submitId and the committed accessories are
+      // skipped rather than re-advanced.
+      setError(e instanceof Error && e.message ? e.message : "שגיאה בשמירת הקליטה");
+    } finally { setSubmitting(false); }
   };
 
   const stepIndex = PHASES.indexOf(phase);

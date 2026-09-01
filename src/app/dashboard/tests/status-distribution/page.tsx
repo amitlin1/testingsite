@@ -35,7 +35,7 @@ export default function StatusDistributionPage() {
     testStationTypeId: null,
     workerId: null,
     status: "all",
-    showSent: false,
+    showAllHistory: false,
   });
 
   const [data, setData] = React.useState<StatusDistribution[]>([]);
@@ -50,10 +50,10 @@ export default function StatusDistributionPage() {
 
   const filteredShipments = React.useMemo(() => {
     if (!shipments) return [];
-    return filters.showSent
+    return filters.showAllHistory
       ? shipments
       : shipments.filter(s => !s.is_sent);
-  }, [shipments, filters.showSent]);
+  }, [shipments, filters.showAllHistory]);
 
   const prevDatePresetRef = React.useRef<DateRangePreset>(datePreset);
   React.useEffect(() => {
@@ -71,7 +71,6 @@ export default function StatusDistributionPage() {
     setError(null);
 
     const params = buildDashboardQueryParams(startDate, endDate, filters);
-    if (filters.showSent) params.set("showAllHistory", "true");
 
     try {
       const res = await apiFetch(`/api/dashboard/tests/status-distribution?${params.toString()}`);
@@ -98,8 +97,8 @@ export default function StatusDistributionPage() {
         <Box sx={{ mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Typography variant="h5" fontWeight="bold">התפלגות סטטוסים</Typography>
           <CompletedShipmentsToggle
-            showSent={filters.showSent || false}
-            onChange={(val) => setFilters(prev => ({ ...prev, showSent: val }))}
+            showSent={filters.showAllHistory || false}
+            onChange={(val) => setFilters(prev => ({ ...prev, showAllHistory: val }))}
           />
         </Box>
         <FilterContainer>

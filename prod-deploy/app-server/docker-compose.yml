@@ -59,12 +59,21 @@ services:
   next-app:
     image: testingsite-next-app:latest
     container_name: next-app
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
+      # Explicit timezone: dev runs on a Windows host already in Israel time,
+      # the container defaults to UTC. Every local `new Date()` bucketing in
+      # app code silently disagrees between the two without this.
+      - TZ=Asia/Jerusalem
 
       # ---- PUBLIC (browser-facing) ----
       - APP_PUBLIC_URL=${APP_PUBLIC_URL}
@@ -120,6 +129,11 @@ services:
   keycloak:
     image: keycloak-optimized:26.7.0
     container_name: keycloak
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     command: ["start", "--optimized"]
     env_file:
@@ -183,6 +197,11 @@ services:
   onlyoffice:
     image: onlyoffice/documentserver:latest
     container_name: onlyoffice
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     environment:
       - JWT_ENABLED=true
@@ -210,6 +229,11 @@ services:
   nginx:
     image: testingsite-nginx:latest
     container_name: nginx
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     env_file:
       - .env

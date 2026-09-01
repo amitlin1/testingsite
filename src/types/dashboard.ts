@@ -19,12 +19,6 @@ export interface DashboardKpis {
   treatedCount?: number;
 }
 
-export interface TimeSeriesPoint {
-  timestamp: string; // UTC ISO string
-  queueTimeMinutes: number | null;
-  processingTimeMinutes: number | null;
-}
-
 export interface StationLoadRow {
   stationId: number;
   stationName: string;
@@ -61,8 +55,12 @@ export interface ShipmentTrackingRow {
   itemsInResearch: number; // status = 5
   itemsFinished: number; // status = 3
   itemsInRoutes: number; // כל הפריטים שיש להם רשומה ב-item_routes
-  completionPercentage: number;
-  itemsInRoutesPercentage: number; // itemsInRoutes / totalItems
+  // `| null` is the wire contract, not a convenience: Q7 answers NULL when the
+  // denominator is 0 (nothing routed / nothing declared), and the routes stopped
+  // coercing that to a real 0. Typed honestly here so a renderer has to decide
+  // what "no answer" looks like instead of printing the string "null%".
+  completionPercentage: number | null;
+  itemsInRoutesPercentage: number | null; // itemsInRoutes / totalItems
 }
 
 export interface ItemTypeTrackingRow {
@@ -75,8 +73,8 @@ export interface ItemTypeTrackingRow {
   itemsInResearch: number; // status = 5
   itemsFinished: number; // status = 3
   itemsInRoutes: number; // כל הפריטים שיש להם רשומה ב-item_routes
-  completionPercentage: number;
-  itemsInRoutesPercentage: number; // itemsInRoutes / totalItems
+  completionPercentage: number | null;
+  itemsInRoutesPercentage: number | null; // itemsInRoutes / totalItems
 }
 
 export interface StatusDistribution {
@@ -97,20 +95,9 @@ export interface CustomerPerformanceRow {
   itemsInResearch: number; // status = 5
   finishedItems: number; // status = 3
   itemsInRoutes: number; // כל הפריטים שיש להם רשומה ב-item_routes
-  successPercentage: number; // finishedItems / itemsInRoutes
-  itemsInRoutesPercentage: number; // itemsInRoutes / totalItems
+  successPercentage: number | null; // finishedItems / itemsInRoutes
+  itemsInRoutesPercentage: number | null; // itemsInRoutes / totalItems
   averageTimeMinutes: number | null;
-}
-
-export interface DailyTrendPoint {
-  date: string; // YYYY-MM-DD
-  itemsStarted: number;
-  itemsFinished: number;
-  itemsInQueue: number;
-  itemsInTest: number;
-  itemsWaitingForResearch: number;
-  itemsInResearch: number;
-  isToday?: boolean;
 }
 
 export interface AverageTimesPoint {
@@ -139,12 +126,6 @@ export interface CustomerOption {
 
 export type DateRangePreset = "today" | "last7days" | "last30days" | "custom";
 
-export interface DateRange {
-  startDate: string; // UTC ISO string
-  endDate: string; // UTC ISO string
-  preset?: DateRangePreset;
-}
-
 export type StatusFilter = "all" | "queue" | "processing" | "finished";
 
 export interface DashboardFilters {
@@ -157,6 +138,6 @@ export interface DashboardFilters {
   testStationTypeId: number | null;
   workerId: string | null; // numeric input but handled as text
   status: StatusFilter;
+  /** "Show completed shipments" — sent on the wire as scope=all|open_shipments. */
   showAllHistory?: boolean;
-  showSent?: boolean; // For "Show Completed Shipments" toggle
 }
