@@ -7,6 +7,7 @@
 //   2. the metrics ledger migration (additive only)
 //   3. the Tier-1 backfill
 //   4. test_stations_type.stale_after_minutes
+//   5. the item delete / edit hooks into the ledger
 //
 // plus pre-flight guards, the _prisma_migrations bookkeeping rows (with real
 // checksums, so a later `prisma migrate deploy` does not re-run any of them),
@@ -31,6 +32,7 @@ const SRC = {
   ledger: "prisma/migrations/20260825000000_metrics_ledger_additive/migration.sql",
   backfill: "prisma/backfill/tier1_backfill.sql",
   stale: "prisma/migrations/20260828090000_station_type_stale_timeout/migration.sql",
+  lifecycle: "prisma/migrations/20260902000000_metrics_item_lifecycle/migration.sql",
 };
 
 const CRLF = String.fromCharCode(13, 10);
@@ -51,6 +53,7 @@ const MIGRATION_NAMES = {
   bigint: "20260824090000_research_history_item_id_bigint",
   ledger: "20260825000000_metrics_ledger_additive",
   stale: "20260828090000_station_type_stale_timeout",
+  lifecycle: "20260902000000_metrics_item_lifecycle",
 };
 
 function bookkeeping(key) {
@@ -62,7 +65,7 @@ SELECT gen_random_uuid()::text, '${sha(SRC[key])}', now(), '${MIGRATION_NAMES[ke
 function section(n, title, why, key) {
   return `
 -- ===========================================================================
---  חלק ${n} מתוך 4 — ${title}
+--  חלק ${n} מתוך 5 — ${title}
 --  ${why}
 -- ===========================================================================
 
@@ -78,6 +81,7 @@ const header = `-- =============================================================
 --    2. יוצר את סכימת הלדג'ר החדשה
 --    3. ממלא אותה מהמצב הקיים
 --    4. מוסיף סף שחרור אוטומטי לכל סוג תחנה
+--    5. מלמד את הלדג'ר מה לעשות כשפריט נמחק או נערך
 --
 --  מה הוא *לא* עושה: הוא לא מוחק כלום. אף טבלה קיימת לא נמחקת ואף נתון לא
 --  הולך לאיבוד. הדשבורד הישן ימשיך לעבוד בדיוק כמו קודם.
@@ -157,6 +161,8 @@ ${bookkeeping("ledger")}
 
 ${bookkeeping("stale")}
 
+${bookkeeping("lifecycle")}
+
 COMMIT;
 
 -- ===========================================================================
@@ -204,6 +210,8 @@ const sql =
     "רושם את המצב הנוכחי של כל פריט. לא ממציא היסטוריה — היא תצטבר מכאן.", "backfill") +
   section(4, "סף שחרור לכל סוג תחנה",
     "עמודה אחת. 30 דקות כברירת מחדל; 0 = לעולם לא לשחרר אוטומטית.", "stale") +
+  section(5, "מחיקה ועריכה של פריט",
+    "שתי פונקציות. בלעדיהן פריט שנמחק ממשיך להיספר בדשבורד לנצח.", "lifecycle") +
   footer;
 
 fs.mkdirSync(path.dirname(out), { recursive: true });

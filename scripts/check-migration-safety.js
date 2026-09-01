@@ -90,6 +90,9 @@ const GUARDED_NAMES = [
   "metrics_detect_drift",
   "metrics_selfcheck",
   "metrics_record",
+  "metrics_forget_item",
+  "metrics_resync_item_dims",
+  "metrics_refresh_run_plan",
 ];
 
 // The extended destructive regex from the migration plan (section 8, stage 2).

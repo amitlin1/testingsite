@@ -41,7 +41,7 @@ not `DROP TABLE`, because the tables themselves *are* declared.
 | Ops | `metrics_drift_open`, `job_run_recent` |
 | Guards added to legacy tables | `testing_routes_type_number_uq` (unique index on `testing_routes`), `ir_item_fk` (FK `item_routes → items`, added `NOT VALID`) |
 | Triggers | `trg_ise_immutable` (event immutability), `trg_isi_apply` (the fold), `trg_metrics_drift` (dual-run drift detector on `item_routes`) |
-| Functions | `state_of`, `deny_mutation`, `work_calendar_build`, `business_date`, `current_calendar_version`, `work_seconds_elapsed`, `work_seconds_between`, `metrics_open_run`, `isi_apply_one`, `isi_apply_event`, `isi_rebuild_run`, `metrics_detect_drift`, `metrics_selfcheck`, `metrics_record` |
+| Functions | `state_of`, `deny_mutation`, `work_calendar_build`, `business_date`, `current_calendar_version`, `work_seconds_elapsed`, `work_seconds_between`, `metrics_open_run`, `isi_apply_one`, `isi_apply_event`, `isi_rebuild_run`, `metrics_detect_drift`, `metrics_selfcheck`, `metrics_record`, `metrics_forget_item`, `metrics_resync_item_dims`, `metrics_refresh_run_plan` |
 | Generated column | `item_state_interval.offhours_seconds` (`GENERATED` — Prisma emits `DROP EXPRESSION` for it) |
 | Extension | `btree_gist` |
 

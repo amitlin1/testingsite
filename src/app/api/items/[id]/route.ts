@@ -4,6 +4,8 @@ import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { parseBarcode } from "@/app/lib/barcode-parser";
 import { getWorkersDirectory } from "@/lib/keycloak-admin";
+import { findStationForRouteStep } from "@/app/lib/station-assignment";
+import { forgetItem, resyncItemDims, refreshRunPlan } from "@/app/lib/metrics/item-lifecycle";
 
 export const runtime = "nodejs";
 
@@ -166,6 +168,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // PUT: update the editable base fields of an item. The barcode (item_id) and
 // the status/progress fields (owned by item_routes, driven by the testing
 // workflow) are intentionally not accepted here.
+//
+// Two things have to move with the edit, or the item's own row stops agreeing
+// with everything derived from it:
+//
+//   item_routes.item_type_id is the type the item is actually being ROUTED by
+//   (create-item.ts writes both from the same value), and the ledger reads the
+//   type from there. Editing only `items` leaves the two disagreeing, and the
+//   dashboard keeps reporting the old type forever.
+//
+//   The ledger freezes customer / shipment / type / serial onto every run and
+//   interval so no read query has to join items (§3.6 of the ledger
+//   migration). Those copies have to be refreshed, which is what
+//   metrics_resync_item_dims does.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -179,21 +194,74 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: "יש למלא את כל השדות" }, { status: 400 });
     }
 
-    const updated = await prisma.items.update({
-      where: { item_id: itemIdBig },
-      data: {
-        customer_id: Number(customer),
-        item_type_id: Number(itemType),
-        serial_no: String(serialNumber),
-        makat: String(makat),
-        model: String(model),
-        manufacturer_name: String(manufacturer),
-        manufacturer_no: manufacturerNo != null ? String(manufacturerNo) : "",
-        shipment_id: Number(shipment),
-      },
+    const nextTypeId = Number(itemType);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const route = await tx.item_routes.findUnique({
+        where: { item_id: itemIdBig },
+        select: {
+          item_type_id: true,
+          route_number: true,
+          current_status: true,
+          current_route_step: true,
+          is_finished: true,
+        },
+      });
+
+      const typeChanged = route != null && route.item_type_id !== nextTypeId;
+
+      // A type change re-resolves which testing_routes row applies, so the
+      // planned steps change under the item. That is only honest while nothing
+      // has been measured yet: once the item has left its first queued step,
+      // its recorded history belongs to the old plan and cannot be relabelled
+      // with a new one. status 2 = queued (metric_state.legacy_status_id).
+      if (typeChanged) {
+        const started =
+          route.is_finished ||
+          route.current_status !== 2 ||
+          route.current_route_step !== 1 ||
+          (await tx.test_results.count({ where: { item_id: itemIdBig } })) > 0;
+        if (started) return { conflict: true as const };
+      }
+
+      const updated = await tx.items.update({
+        where: { item_id: itemIdBig },
+        data: {
+          customer_id: Number(customer),
+          item_type_id: nextTypeId,
+          serial_no: String(serialNumber),
+          makat: String(makat),
+          model: String(model),
+          manufacturer_name: String(manufacturer),
+          manufacturer_no: manufacturerNo != null ? String(manufacturerNo) : "",
+          shipment_id: Number(shipment),
+        },
+      });
+
+      if (typeChanged) {
+        // The step-1 station belongs to the new type's route.
+        const stationId = await findStationForRouteStep(tx, nextTypeId, route.route_number, 1);
+        await tx.item_routes.update({
+          where: { item_id: itemIdBig },
+          data: { item_type_id: nextTypeId, test_station_id: stationId },
+        });
+        await refreshRunPlan(tx, itemIdBig);
+      }
+
+      // Ledger: same transaction as the writes above, per §4.8.
+      await resyncItemDims(tx, itemIdBig);
+
+      return { conflict: false as const, item_id: updated.item_id.toString() };
     });
 
-    return NextResponse.json({ ok: true, item_id: updated.item_id.toString() });
+    if (result.conflict) {
+      return NextResponse.json(
+        { error: "לא ניתן לשנות את סוג הפריט אחרי שהבדיקה שלו התחילה" },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, item_id: result.item_id });
   } catch (error: any) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return NextResponse.json({ error: "הפריט לא נמצא" }, { status: 404 });
@@ -248,6 +316,17 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const idsToDelete = [itemIdBig, ...children.map((c) => c.item_id)];
 
     await prisma.$transaction(async (tx) => {
+      // Ledger first. The metrics tables hold no FK to `items` -- deliberately,
+      // so that no read query has to join it -- which means deleting the item
+      // raises nothing and simply strands its runs, events and intervals. The
+      // stranded interval stays open, and every dashboard number goes on
+      // counting an item that no longer exists. metrics_forget_item works off
+      // item_id alone, so it is safe here, before the rows it accompanies are
+      // gone, and it commits with them.
+      for (const id of idsToDelete) {
+        await forgetItem(tx, id);
+      }
+
       await tx.test_results.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_route_history.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_routes.deleteMany({ where: { item_id: { in: idsToDelete } } });
