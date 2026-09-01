@@ -22,6 +22,7 @@ export async function GET() {
     ir.created_at,
     ir.finished_at,
     ir.is_finished,
+    i.customer_id,
     RTRIM(c.customer_code) AS customer_code,
     i.makat,
     RTRIM(i.manufacturer_name) AS manufacturer_name,

@@ -16,6 +16,7 @@ export type ItemRow = {
   created_at: string | null;
   finished_at: string | null;
   is_finished: boolean | null;
+  customer_id: number | null;
   customer_code: string | null;
   makat: string | null;
   manufacturer_name: string | null;

@@ -2,12 +2,13 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import { Snackbar, Alert } from "@/components/ui";
-import { QrCode, Package, FlaskConical, List, Check } from "lucide-react";
+import { QrCode, Package, FlaskConical, List, Check, Pencil } from "lucide-react";
 import ItemsToolbar from "@/components/ItemsToolbar";
-import DataTable, { StatusPill, ProgressCell, type Column } from "@/components/DataTable";
+import DataTable, { StatusPill, ProgressCell, RowActions, IconAction, type Column } from "@/components/DataTable";
 import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import ItemDialog from "./ItemDialog";
 import InsertPopup from "./insertPopup";
+import EditItemDialog from "@/components/EditItemDialog";
 import BarcodeDialog from "./BarcodeDialog";
 import { ItemRow, StatusOption, NewItem, ItemTypeOption, Customers, Shipment } from "@/types";
 import { apiFetch } from "@/lib/api/client";
@@ -29,6 +30,7 @@ export default function ItemTable() {
 
   const [loading, setLoading] = React.useState(true);
   const [selected, setSelected] = React.useState<ItemRow | null>(null);
+  const [editingItem, setEditingItem] = React.useState<ItemRow | null>(null);
   // ?new=1 — the palette's "פריט חדש" quick action opens the intake popup directly.
   const [insertOpen, setInsertOpen] = React.useState(searchParams.get("new") === "1");
 
@@ -107,6 +109,22 @@ export default function ItemTable() {
     [shipments]
   );
 
+  // option lists for the edit-item dialog (full, unfiltered — the item's
+  // current customer/type/shipment must always be selectable even if a
+  // shipment has since been sent)
+  const editCustomerOptions = React.useMemo(
+    () => customers.map((c) => ({ value: String(c.id), label: c.customer_code ? `${c.name} (${c.customer_code})` : c.name })),
+    [customers]
+  );
+  const editItemTypeOptions = React.useMemo(
+    () => itemTypes.map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })),
+    [itemTypes]
+  );
+  const editShipmentOptions = React.useMemo(
+    () => shipments.map((s) => ({ value: String(s.id), label: `${s.shipment_code} | ${new Date(s.shipment_date).toLocaleDateString("he-IL")} | ${s.customer_code}` })),
+    [shipments]
+  );
+
   const filteredRows = React.useMemo(() => {
     if (!Array.isArray(rows)) return [];
     const q = search.trim().toLowerCase();
@@ -151,6 +169,20 @@ export default function ItemTable() {
     loadItems();
   };
 
+  const onEditResult = (success: boolean, message?: string) => {
+    setSnackbarMessage(success ? "הפריט עודכן בהצלחה" : (message || "עדכון הפריט נכשל"));
+    setSnackbarSeverity(success ? "success" : "error");
+    setSnackbarOpen(true);
+    if (success) loadItems();
+  };
+
+  const onDeleteResult = (success: boolean, message?: string) => {
+    setSnackbarMessage(success ? "הפריט נמחק בהצלחה" : (message || "מחיקת הפריט נכשלה"));
+    setSnackbarSeverity(success ? "success" : "error");
+    setSnackbarOpen(true);
+    if (success) loadItems();
+  };
+
   const progressOf = (row: ItemRow): { pct: number; text: string; sub: boolean } => {
     if (row.parent_item_id !== null && row.parent_item_id !== undefined) return { pct: 0, text: "—", sub: true };
     const currentStep = row.current_route_step || 0;
@@ -193,6 +225,16 @@ export default function ItemTable() {
     {
       key: "date", header: "תאריך קליטה", width: 140, muted: true, nums: true, nowrap: true,
       cell: (r) => (r.created_at ? new Date(r.created_at).toLocaleDateString("he-IL") : "—"),
+    },
+    {
+      key: "actions", header: "פעולות", align: "center", width: 70,
+      cell: (r) => (
+        <RowActions>
+          <IconAction title="ערוך פריט" onClick={() => setEditingItem(r)}>
+            <Pencil size={16} strokeWidth={1.75} />
+          </IconAction>
+        </RowActions>
+      ),
     },
   ];
 
@@ -258,6 +300,17 @@ export default function ItemTable() {
       )}
 
       <InsertPopup open={insertOpen} onClose={closeInsertPopup} onCreate={onCreateResult} />
+
+      <EditItemDialog
+        open={!!editingItem}
+        item={editingItem}
+        customerOptions={editCustomerOptions}
+        itemTypeOptions={editItemTypeOptions}
+        shipmentOptions={editShipmentOptions}
+        onClose={() => setEditingItem(null)}
+        onSaved={onEditResult}
+        onDeleted={onDeleteResult}
+      />
 
       <Snackbar
         open={snackbarOpen}

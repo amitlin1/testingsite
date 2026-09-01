@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { parseBarcode } from "@/app/lib/barcode-parser";
@@ -159,5 +160,110 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       item: null,
       history: [],
     });
+  }
+}
+
+// PUT: update the editable base fields of an item. The barcode (item_id) and
+// the status/progress fields (owned by item_routes, driven by the testing
+// workflow) are intentionally not accepted here.
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const { itemId } = parseBarcode(id);
+    const itemIdBig = BigInt(itemId);
+
+    const body = await req.json();
+    const { customer, itemType, serialNumber, makat, model, manufacturer, manufacturerNo, shipment } = body;
+
+    if (!customer || !itemType || !serialNumber || !makat || !model || !manufacturer || !shipment) {
+      return NextResponse.json({ error: "יש למלא את כל השדות" }, { status: 400 });
+    }
+
+    const updated = await prisma.items.update({
+      where: { item_id: itemIdBig },
+      data: {
+        customer_id: Number(customer),
+        item_type_id: Number(itemType),
+        serial_no: String(serialNumber),
+        makat: String(makat),
+        model: String(model),
+        manufacturer_name: String(manufacturer),
+        manufacturer_no: manufacturerNo != null ? String(manufacturerNo) : "",
+        shipment_id: Number(shipment),
+      },
+    });
+
+    return NextResponse.json({ ok: true, item_id: updated.item_id.toString() });
+  } catch (error: any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return NextResponse.json({ error: "הפריט לא נמצא" }, { status: 404 });
+    }
+    console.error("Error updating item:", error);
+    return NextResponse.json({ error: error.message || "עדכון הפריט נכשל" }, { status: 500 });
+  }
+}
+
+// DELETE: remove an item and everything owned solely by it (route state,
+// station history, test results — these have no DB-level FK to `items`, so
+// they'd otherwise be left orphaned).
+//
+// If the item has connected accessory items (items.parent_item_id → this
+// item — a real FK), deleting it outright would fail. Instead: without
+// `cascade: true` in the body, report the connected items back as a 409 so
+// the UI can warn the user by name; with `cascade: true`, delete the item
+// and its connected items together in one transaction.
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const { itemId } = parseBarcode(id);
+    const itemIdBig = BigInt(itemId);
+
+    let cascade = false;
+    try {
+      const body = await req.json();
+      cascade = !!body?.cascade;
+    } catch {
+      // no JSON body sent — plain delete, cascade stays false
+    }
+
+    const children = await prisma.items.findMany({
+      where: { parent_item_id: itemIdBig },
+      select: { item_id: true, serial_no: true, model: true },
+    });
+
+    if (children.length > 0 && !cascade) {
+      return NextResponse.json(
+        {
+          error: "לפריט זה יש פריטים מחוברים",
+          connectedItems: children.map((c) => ({
+            item_id: c.item_id.toString(),
+            serial_no: c.serial_no,
+            model: c.model,
+          })),
+        },
+        { status: 409 }
+      );
+    }
+
+    const idsToDelete = [itemIdBig, ...children.map((c) => c.item_id)];
+
+    await prisma.$transaction(async (tx) => {
+      await tx.test_results.deleteMany({ where: { item_id: { in: idsToDelete } } });
+      await tx.item_route_history.deleteMany({ where: { item_id: { in: idsToDelete } } });
+      await tx.item_routes.deleteMany({ where: { item_id: { in: idsToDelete } } });
+      // Connected items first — they hold the FK (parent_item_id) to the main item.
+      if (children.length > 0) {
+        await tx.items.deleteMany({ where: { item_id: { in: children.map((c) => c.item_id) } } });
+      }
+      await tx.items.delete({ where: { item_id: itemIdBig } });
+    });
+
+    return NextResponse.json({ ok: true, deletedConnectedCount: children.length });
+  } catch (error: any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return NextResponse.json({ error: "הפריט לא נמצא" }, { status: 404 });
+    }
+    console.error("Error deleting item:", error);
+    return NextResponse.json({ error: "מחיקת הפריט נכשלה" }, { status: 500 });
   }
 }
