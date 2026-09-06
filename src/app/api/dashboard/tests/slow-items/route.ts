@@ -51,6 +51,11 @@ interface SlowItemResponseRow
   _new_attemptNo: number;
   _new_entryReason: string;
   _new_workerName: string | null;
+  /** The owner AT THE TIME OF THE STEP, off the interval's frozen dimension —
+   *  never items.customer_id, which is the item's CURRENT owner and would let a
+   *  row contradict the very customer filter that selected it. */
+  _new_customerId: number | null;
+  _new_customerName: string | null;
   _new_queueWorkMinutes: number | null;
   _new_processingWorkMinutes: number | null;
   _new_totalWorkMinutes: number | null;
@@ -86,6 +91,8 @@ export const GET = withAuth(async (req: Request) => {
       _new_attemptNo: r.attempt_no,
       _new_entryReason: r.entry_reason,
       _new_workerName: r.worker_name,
+      _new_customerId: r.customer_id,
+      _new_customerName: r.customer_name,
       _new_queueWorkMinutes: r.queue_work_min,
       _new_processingWorkMinutes: r.test_work_min,
       _new_totalWorkMinutes: r.total_work_min,

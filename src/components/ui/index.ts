@@ -24,6 +24,8 @@ export { ToggleButton, ToggleButtonGroup } from "./Segmented";
 export { Chip, Badge, StatusPill } from "./Chips";
 export { Paper, Card, CardContent, CardActions, CardHeader } from "./Surfaces";
 export { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, DialogClose } from "./Dialog";
+export { ConfirmDialog } from "./ConfirmDialog";
+export type { ConfirmDialogProps } from "./ConfirmDialog";
 export { Tabs, Tab } from "./Tabs";
 export { Alert, AlertTitle, Snackbar } from "./Feedback";
 export { LinearProgress, CircularProgress } from "./Progress";

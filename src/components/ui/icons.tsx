@@ -19,7 +19,7 @@ import {
   TriangleAlert as _TriangleAlert, Image as _Image, FileArchive as _FileArchive, FileVideo as _FileVideo,
   Folder as _Folder, File as _File, FileAudio as _FileAudio, Code as _Code, SlidersHorizontal as _SlidersHorizontal,
   Lock as _Lock, Users as _Users, Database as _Database, CalendarDays as _CalendarDays, Route as _Route,
-  Images as _Images,
+  Images as _Images, ChevronRight as _ChevronRight, ChevronLeft as _ChevronLeft,
 } from "lucide-react";
 import { sxToStyle, type SxInput } from "./sx";
 
@@ -181,3 +181,7 @@ export const AssignmentTurnedIn = wrap(_ClipboardCheck);
 export const EventNote = wrap(_CalendarDays);
 export const AltRoute = wrap(_Route);
 export const PhotoLibrary = wrap(_Images);
+// Rail collapse / expand affordances. Named for the glyph, not for a side: in an
+// RTL layout the *collapse* direction is the one the caller picks.
+export const ChevronRight = wrap(_ChevronRight);
+export const ChevronLeft = wrap(_ChevronLeft);

@@ -1,22 +1,18 @@
+// §1 — TestsSidebar is gone: the dashboard's own rail owns section navigation
+// now, and two rails of tabs on one screen is the duplication §14.3 forbids.
+//
+// What is left is a plain full-height wrapper. The height matters: AppShell's
+// content area is `calc(100vh - 56px)` with its own `overflowY: auto`, and the
+// dashboard root under here is `height: 100%` — never `100vh`, which would add
+// a second scrollbar (§14.2).
+
 import type { Metadata } from "next";
-import TestsSidebar from "@/app/components/dashboard/TestsSidebar";
 
 export const metadata: Metadata = {
-  title: "Tests Dashboard",
-  description: "Advanced analytics and tracking for current tests",
+  title: "לוח ניהול",
+  description: "לוח בקרה לבדיקות — עומס, זמנים, משלוחים ולקוחות",
 };
 
-export default function TestsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: "flex", width: "100%", minHeight: "100%", backgroundColor: "#f4f6f8" }}>
-      <TestsSidebar />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", overflowX: "hidden" }}>
-        {children}
-      </div>
-    </div>
-  );
+export default function TestsLayout({ children }: { children: React.ReactNode }) {
+  return <div style={{ height: "100%", minWidth: 0 }}>{children}</div>;
 }

@@ -9,6 +9,8 @@ import { ArrowForward as ArrowForwardIcon } from "@/components/ui/icons";
 import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";
 import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
 import { AddAPhoto as AddAPhotoIcon } from "@/components/ui/icons";
+import { PhotoLibrary as PhotoLibraryIcon } from "@/components/ui/icons";
+import { Warning as WarningIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import type { ItemRow } from "../../../types";
@@ -35,9 +37,17 @@ export const CHIP_BG = "#f0f0f2";
 export const PRODUCT_SHADOW = "rgba(0,0,0,0.22) 3px 5px 30px";
 
 export type RefImg = { id: number; url: string };
-export type Shot = { previewUrl: string; objectKey?: string; uploading?: boolean };
+export type Shot = { previewUrl: string; objectKey?: string; uploading?: boolean; failed?: boolean };
 export type Photos = { photos: Shot[]; ok: "" | "pass" | "fail"; note: string };
 export const emptyPhotos = (): Photos => ({ photos: [], ok: "", note: "" });
+
+// Upload cap enforced in the browser, mirroring MAX_FILE_SIZE_MB on
+// /api/items/[id]/files (default 100). A plain constant on purpose: a
+// NEXT_PUBLIC_ env var is inlined at build time, so a runtime .env change would
+// silently not apply here. If an operator lowers the server cap below this the
+// server still rejects the file and the shot is marked failed - the guards stack.
+const MAX_PHOTO_MB = 100;
+const MAX_PHOTO_BYTES = MAX_PHOTO_MB * 1024 * 1024;
 
 // The manufacturer-SKU scan screen is identical across every station.
 export const SKU_TITLE = "סריקת מק״ט יצרן";
@@ -135,7 +145,14 @@ export function SkuScreen({ value, onChange }: { value: string; onChange: (v: st
 export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
   photos: Shot[]; refImages: RefImg[]; onPick: (file: File) => void; onRemove: (idx: number) => void;
 }) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  // Two pickers, because one input cannot do both: where the browser honours
+  // `capture` it ignores `multiple`. Camera = one shot at a time; the gallery
+  // picker takes several images in one go, like the reference-items screen.
+  const cameraRef = React.useRef<HTMLInputElement>(null);
+  const galleryRef = React.useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = React.useState(false);
+  // Files the last pick refused, listed until the next pick replaces them.
+  const [rejected, setRejected] = React.useState<string[]>([]);
   const total = refImages.length;
   const captured = photos.length;
   const hasSlots = total > 0;
@@ -146,15 +163,46 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
     setActiveIdx(target < 0 ? 0 : target);
   }, [captured, total, hasSlots]);
 
-  const openPicker = () => inputRef.current?.click();
+  const openCamera = () => cameraRef.current?.click();
+  const openGallery = () => galleryRef.current?.click();
+
+  // Every image in the selection becomes its own shot (one upload each, so a
+  // single failure never takes the rest down). Non-images and oversized files are
+  // refused here, before any bytes leave the browser, instead of coming back as a
+  // 400 that nothing on screen explains.
+  const takeFiles = (list: FileList | null) => {
+    const picked = [...(list ?? [])];
+    const bad = picked.filter((f) => !f.type.startsWith("image/") || f.size > MAX_PHOTO_BYTES);
+    setRejected(bad.map((f) => f.name));
+    picked.filter((f) => !bad.includes(f)).forEach(onPick);
+  };
 
   const activeShot: Shot | undefined = photos[activeIdx];
   const activeRef: RefImg | undefined = refImages[activeIdx];
   const activeIsCaptured = !!activeShot;
   const bigSrc = activeShot?.previewUrl ?? activeRef?.url;
 
-  const pillText = activeIsCaptured ? "צולם" : "תמונת ייחוס";
-  const counterText = hasSlots ? `${Math.min(captured, total)} / ${total} צולמו` : `${captured} צילומים`;
+  const failedCount = photos.filter((s) => s.failed).length;
+  const pillText = activeShot?.failed ? "ההעלאה נכשלה" : activeIsCaptured ? "צולם" : "תמונת ייחוס";
+  // One line covering both ways a photo can fail to reach storage: refused here
+  // before upload, or refused by the server mid-upload.
+  const rejectedMsg = rejected.length === 1
+    ? `הקובץ ${rejected[0]} לא הועלה — חריגה מ-${MAX_PHOTO_MB}MB או קובץ שאינו תמונה`
+    : rejected.length > 1
+      ? `${rejected.length} קבצים לא הועלו — חריגה מ-${MAX_PHOTO_MB}MB או קבצים שאינם תמונה`
+      : "";
+  const failedMsg = failedCount === 1
+    ? "העלאת תמונה אחת נכשלה (מסומנת באדום) — יש להסיר ולצלם שוב"
+    : failedCount > 1
+      ? `העלאת ${failedCount} תמונות נכשלה (מסומנות באדום) — יש להסיר ולצלם שוב`
+      : "";
+  const alertMsg = [rejectedMsg, failedMsg].filter(Boolean).join(" · ");
+  // Extra photos beyond the reference slots are legitimate now that a pick can
+  // bring in several at once, so they get their own tail on the counter.
+  const extra = hasSlots ? Math.max(0, captured - total) : 0;
+  const counterText = hasSlots
+    ? `${Math.min(captured, total)} / ${total} צולמו${extra ? ` (+${extra})` : ""}`
+    : `${captured} צילומים`;
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -163,7 +211,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         {hasSlots && (
           <Box sx={{ flex: 1, display: "flex", gap: "6px" }}>
             {refImages.map((_, i) => (
-              <Box key={i} sx={{ flex: 1, height: 4, borderRadius: "9999px", bgcolor: i < captured ? OK : i === activeIdx ? BLUE : HAIR }} />
+              <Box key={i} sx={{ flex: 1, height: 4, borderRadius: "9999px", bgcolor: photos[i]?.failed ? BAD : i < captured ? OK : i === activeIdx ? BLUE : HAIR }} />
             ))}
           </Box>
         )}
@@ -174,17 +222,22 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
       </Box>
 
       {/* Large focused frame */}
-      <Box sx={{ position: "relative", height: 420, borderRadius: "18px", overflow: "hidden", border: `1px solid ${HAIR}`, bgcolor: "#f0f0f2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Box
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); takeFiles(e.dataTransfer.files); }}
+        sx={{ position: "relative", height: 420, borderRadius: "18px", overflow: "hidden", border: dragging ? `2px dashed ${BLUE}` : `1px solid ${HAIR}`, bgcolor: dragging ? "rgba(0,102,204,0.06)" : "#f0f0f2", display: "flex", alignItems: "center", justifyContent: "center" }}>
         {bigSrc ? (
           <Box component="img" src={bigSrc} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5, color: MUTED_LT }}>
             <AddAPhotoIcon sx={{ fontSize: 52 }} />
             <Typography sx={{ fontSize: 14 }}>תמונת ייחוס · צלם את הפריט</Typography>
+            <Typography sx={{ fontSize: 12.5 }}>או גרור תמונות לכאן · ניתן לבחור כמה</Typography>
           </Box>
         )}
         {bigSrc && (
-          <Box sx={{ position: "absolute", top: 11, insetInlineEnd: 11, fontSize: 11, fontWeight: 600, color: activeIsCaptured ? OK : "#8a7c68", bgcolor: "rgba(255,255,255,0.82)", borderRadius: "9999px", px: 1.25, py: 0.5 }}>
+          <Box sx={{ position: "absolute", top: 11, insetInlineEnd: 11, fontSize: 11, fontWeight: 600, color: activeShot?.failed ? BAD : activeIsCaptured ? OK : "#8a7c68", bgcolor: "rgba(255,255,255,0.82)", borderRadius: "9999px", px: 1.25, py: 0.5 }}>
             {pillText}
           </Box>
         )}
@@ -197,15 +250,28 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         {activeShot?.uploading && <CircularProgress size={26} sx={{ position: "absolute", color: BLUE }} />}
       </Box>
 
-      {/* Big capture button */}
-      <Button onClick={openPicker} variant="contained" disableElevation startIcon={<AddAPhotoIcon />}
-        sx={{ width: "100%", height: 58, borderRadius: "14px", fontSize: 17, fontWeight: 600, textTransform: "none", boxShadow: "none", bgcolor: BLUE, "&:hover": { bgcolor: "#0058b3", boxShadow: "none" }, "&:active": { transform: "scale(0.98)" } }}>
-        {hasSlots && captured >= total ? "צלם מחדש / הוסף" : "צלם / העלה"}
-      </Button>
+      {/* Camera (one shot) + gallery picker (several images at once) */}
+      <Box sx={{ display: "flex", gap: 1.25 }}>
+        <Button onClick={openCamera} variant="contained" disableElevation startIcon={<AddAPhotoIcon />}
+          sx={{ flex: 2, height: 58, borderRadius: "14px", fontSize: 17, fontWeight: 600, textTransform: "none", boxShadow: "none", bgcolor: BLUE, "&:hover": { bgcolor: "#0058b3", boxShadow: "none" }, "&:active": { transform: "scale(0.98)" } }}>
+          {hasSlots && captured >= total ? "צלם מחדש" : "צלם"}
+        </Button>
+        <Button onClick={openGallery} variant="outlined" disableElevation startIcon={<PhotoLibraryIcon />}
+          sx={{ flex: 1, height: 58, borderRadius: "14px", fontSize: 15.5, fontWeight: 600, textTransform: "none", color: BLUE, borderColor: HAIR, "&:hover": { borderColor: BLUE, bgcolor: "rgba(0,102,204,0.04)" }, "&:active": { transform: "scale(0.98)" } }}>
+          העלה תמונות
+        </Button>
+      </Box>
+
+      {alertMsg && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, borderRadius: "12px", border: `1px solid ${BAD}`, bgcolor: "rgba(191,53,53,0.06)", px: 1.5, py: 1 }}>
+          <WarningIcon sx={{ fontSize: 16, color: BAD, flexShrink: 0 }} />
+          <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: BAD }}>{alertMsg}</Typography>
+        </Box>
+      )}
 
       {/* Filmstrip — flex-wrap row with even gaps */}
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: "14px", pb: 0.5 }}>
-        {(hasSlots ? refImages : photos).map((_, i) => {
+        {Array.from({ length: Math.max(total, captured) }).map((_, i) => {
           const shot = photos[i];
           const ref = refImages[i];
           const isCap = !!shot;
@@ -214,12 +280,12 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
           return (
             <Box key={i} onClick={() => setActiveIdx(i)}
               sx={{ position: "relative", flex: "1 1 150px", minWidth: 130, maxWidth: 280, aspectRatio: "4 / 3", cursor: "pointer", borderRadius: "13px", overflow: "hidden",
-                border: isActive ? `2.5px solid ${BLUE}` : isCap ? `1.5px solid ${OK}` : `1.5px solid ${HAIR}`, bgcolor: "#f0f0f2" }}>
+                border: shot?.failed ? `2.5px solid ${BAD}` : isActive ? `2.5px solid ${BLUE}` : isCap ? `1.5px solid ${OK}` : `1.5px solid ${HAIR}`, bgcolor: "#f0f0f2" }}>
               {src && <Box component="img" src={src} sx={{ width: "100%", height: "100%", objectFit: "cover", opacity: shot?.uploading ? 0.5 : 1 }} />}
               {!isCap && <Box sx={{ position: "absolute", bottom: 5, insetInlineStart: 5, fontSize: 10, fontWeight: 600, color: "#fff", bgcolor: "rgba(0,0,0,0.45)", borderRadius: "6px", px: 0.75, py: "1px" }}>ייחוס</Box>}
               {isCap && !shot?.uploading && (
-                <Box sx={{ position: "absolute", top: 4, insetInlineStart: 4, width: 20, height: 20, borderRadius: "9999px", bgcolor: OK, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <CheckIcon sx={{ fontSize: 13 }} />
+                <Box sx={{ position: "absolute", top: 4, insetInlineStart: 4, width: 20, height: 20, borderRadius: "9999px", bgcolor: shot?.failed ? BAD : OK, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {shot?.failed ? <WarningIcon sx={{ fontSize: 12 }} /> : <CheckIcon sx={{ fontSize: 13 }} />}
                 </Box>
               )}
               {shot?.uploading && <CircularProgress size={18} sx={{ position: "absolute", top: "50%", left: "50%", mt: "-9px", ml: "-9px", color: BLUE }} />}
@@ -228,8 +294,10 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         })}
       </Box>
 
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" hidden
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ""; }} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden
+        onChange={(e) => { takeFiles(e.target.files); e.target.value = ""; }} />
+      <input ref={galleryRef} type="file" accept="image/*" multiple hidden
+        onChange={(e) => { takeFiles(e.target.files); e.target.value = ""; }} />
     </Box>
   );
 }

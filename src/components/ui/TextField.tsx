@@ -22,6 +22,8 @@ export interface TextFieldProps
   rows?: number;
   minRows?: number;
   maxRows?: number;
+  /** multiline only: stretch the field to fill its parent's height. */
+  fullHeight?: boolean;
   hiddenLabel?: boolean;
   size?: "small" | "medium";
   variant?: string;
@@ -49,9 +51,10 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     helperText,
     fullWidth,
     multiline,
-    rows = 3,
+    rows,
     minRows,
     maxRows: _mr,
+    fullHeight,
     hiddenLabel: _hl,
     size,
     variant: _v,
@@ -76,6 +79,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   },
   ref,
 ) {
+  const fill = Boolean(multiline && fullHeight);
   const start = InputProps?.startAdornment;
   const end = InputProps?.endAdornment;
   const wrapStyle = { ...sxToStyle(InputProps?.sx), ...sxToStyle(sx), ...style };
@@ -98,6 +102,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         error && "sh-input--error",
         disabled && "sh-input--disabled",
         multiline && "sh-input--multiline",
+        fill && "sh-input--fill",
         wrapClassName,
       )}
       style={wrapStyle}
@@ -109,7 +114,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           id={id}
           required={required}
           disabled={disabled}
-          rows={rows ?? minRows}
+          rows={rows ?? minRows ?? 3}
           className={className}
           {...(rest as unknown as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
           {...(inputProps as unknown as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
@@ -139,7 +144,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   return (
     <div
       className={containerClassName}
-      style={{ width: fullWidth ? "100%" : undefined, display: fullWidth ? "block" : "inline-block" }}
+      style={{
+        width: fullWidth ? "100%" : undefined,
+        display: fill ? "flex" : fullWidth ? "block" : "inline-block",
+        ...(fill ? { flexDirection: "column", flex: "1 1 auto", height: "100%", minHeight: 0 } : null),
+      }}
     >
       {label != null && label !== "" && (
         <label htmlFor={id} className={cn("sh-field-label", error && "sh-field-label--error")}>

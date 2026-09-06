@@ -40,6 +40,12 @@
 //    research stations"). Both halves ship: `_new_researchPoolQueue` and
 //    `_new_itemsInResearch`. Until stage 6 adopts them the two legacy columns
 //    under-report the research lab, which is why they are named here.
+//  - the queue's AGE now ships as a distribution, not as one number: the mean
+//    (`averageCurrentQueueTimeMinutes`, unchanged) plus `_new_oldestQueueAge*`
+//    and `_new_p95QueueAgeWallMinutes`. The mean answers "is this queue busy";
+//    the max answers "is something rotting in it", which is what the board is
+//    actually opened for, and a mean over twenty items that arrived in the last
+//    ten minutes hides a single item that has been waiting since Thursday.
 //  - averageCurrentQueueTimeMinutes is `standing_queue_age_wall_min`, measured
 //    over the items WAITING for this station type. The old number averaged the
 //    running tests instead, so a station with 22 items waiting 47 minutes and
@@ -72,6 +78,14 @@ interface StationLoadResponseRow extends StationLoadRow {
   _new_itemsInResearch: number;
   _new_researchPoolQueue: number;
   _new_standingQueueAgeWorkMinutes: number | null;
+  /** The OLDEST item still waiting for this station's TYPE, in both clocks, plus
+   *  the p95 shoulder. `averageCurrentQueueTimeMinutes` stays the mean and keeps
+   *  the wire contract; the board reads the max, because a mean of ages is
+   *  diluted by whoever just joined the queue and hides the one item that has
+   *  been rotting there since Thursday. p95 says which of the two it is. */
+  _new_oldestQueueAgeWallMinutes: number | null;
+  _new_oldestQueueAgeWorkMinutes: number | null;
+  _new_p95QueueAgeWallMinutes: number | null;
   _new_activeTestAgeWallMinutes: number | null;
   _new_activeTestAgeWorkMinutes: number | null;
   // Q4 additions — the window's flow, and its durations in both clocks.
@@ -163,6 +177,9 @@ export const GET = withAuth(async (req: Request) => {
         _new_itemsInResearch: showTest ? b.in_research : 0,
         _new_researchPoolQueue: b.research_pool_queue,
         _new_standingQueueAgeWorkMinutes: b.standing_queue_age_work_min,
+        _new_oldestQueueAgeWallMinutes: b.oldest_queue_age_wall_min,
+        _new_oldestQueueAgeWorkMinutes: b.oldest_queue_age_work_min,
+        _new_p95QueueAgeWallMinutes: b.p95_queue_age_wall_min,
         _new_activeTestAgeWallMinutes: b.active_test_age_wall_min,
         _new_activeTestAgeWorkMinutes: b.active_test_age_work_min,
 

@@ -15,6 +15,7 @@ import {
   Chip,
   Checkbox,
   FormControlLabel,
+  ConfirmDialog,
   alpha,
   useTheme,
 } from "@/components/ui";
@@ -140,6 +141,7 @@ export default function ItemFilesPanel({
   // Editor modal state
   const [textEditorFile, setTextEditorFile] = React.useState<ItemFile | null>(null);
   const [officeEditorFile, setOfficeEditorFile] = React.useState<ItemFile | null>(null);
+  const [pendingDelete, setPendingDelete] = React.useState<ItemFile | null>(null);
 
   const listUrl = `/api/items/${encodeURIComponent(String(itemId))}/files`;
 
@@ -200,7 +202,7 @@ export default function ItemFilesPanel({
   };
 
   const handleDelete = async (file: ItemFile) => {
-    if (!confirm(`למחוק את "${file.fileName}"?`)) return;
+    setPendingDelete(null);
     setError(null);
     try {
       const r = await apiFetch(
@@ -460,7 +462,7 @@ export default function ItemFilesPanel({
                     </span>
                   </Tooltip>
                   <Tooltip title="מחק">
-                    <IconButton size="small" color="error" onClick={() => handleDelete(file)}>
+                    <IconButton size="small" color="error" onClick={() => setPendingDelete(file)}>
                       <DeleteOutlineIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -493,6 +495,15 @@ export default function ItemFilesPanel({
           onSaved={refresh}
         />
       )}
+      <ConfirmDialog
+        open={pendingDelete != null}
+        title="מחיקת קובץ"
+        message={pendingDelete ? `הקובץ "${pendingDelete.fileName}" יימחק לצמיתות. להמשיך?` : undefined}
+        confirmText="מחק"
+        destructive
+        onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete); }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </Box>
   );
 }

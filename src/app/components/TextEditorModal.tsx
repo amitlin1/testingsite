@@ -13,6 +13,7 @@ import {
   CircularProgress,
   Typography,
   Box,
+  ConfirmDialog,
 } from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { Save as SaveIcon } from "@/components/ui/icons";
@@ -49,6 +50,7 @@ export default function TextEditorModal({
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = React.useState(false);
 
   const dirty = content !== original;
 
@@ -116,72 +118,97 @@ export default function TextEditorModal({
   };
 
   const handleClose = () => {
-    if (dirty && !confirm("יש שינויים שלא נשמרו. האם לסגור בכל זאת?")) return;
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    onClose();
+  };
+
+  const discardAndClose = () => {
+    setConfirmDiscard(false);
     onClose();
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md" PaperProps={{ sx: { borderRadius: 3 } }}>
-      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pr: 6 }}>
-        <DescriptionIcon color="primary" />
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h6" component="span" sx={{ fontWeight: 700 }} noWrap>
-            עריכת קובץ
-          </Typography>
-          <Typography variant="body2" color="text.secondary" noWrap>
-            {fileName}
-          </Typography>
-        </Box>
-        <IconButton onClick={handleClose} sx={{ position: "absolute", left: 12, top: 12 }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2}>
-          {error && (
-            <Alert severity="error" onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <TextField
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              multiline
-              minRows={16}
-              maxRows={32}
-              fullWidth
-              spellCheck={false}
-              dir="ltr"
-              InputProps={{
-                sx: {
-                  fontFamily:
-                    'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-                  fontSize: 14,
-                  lineHeight: 1.55,
-                },
-              }}
-            />
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions sx={{ p: 2, gap: 1 }}>
-        <Button onClick={handleClose} disabled={saving}>
-          ביטול
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={saving || loading || !dirty}
-          variant="contained"
-          startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
-        >
-          {saving ? "שומר..." : "שמור"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        fullWidth
+        maxWidth="md"
+        PaperProps={{ sx: { borderRadius: 3, height: "calc(100vh - 48px)" } }}
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pr: 6 }}>
+          <DescriptionIcon color="primary" />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="h6" component="span" sx={{ fontWeight: 700 }} noWrap>
+              עריכת קובץ
+            </Typography>
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {fileName}
+            </Typography>
+          </Box>
+          <IconButton onClick={handleClose} sx={{ position: "absolute", left: 12, top: 12 }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden", py: 2 }}>
+          <Stack spacing={2} sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+            {error && (
+              <Alert severity="error" onClose={() => setError(null)}>
+                {error}
+              </Alert>
+            )}
+            {loading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TextField
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                multiline
+                fullHeight
+                fullWidth
+                spellCheck={false}
+                dir="ltr"
+                InputProps={{
+                  sx: {
+                    fontFamily:
+                      'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+                    fontSize: 14,
+                    lineHeight: 1.55,
+                  },
+                }}
+              />
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={handleClose} disabled={saving}>
+            ביטול
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || loading || !dirty}
+            variant="contained"
+            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+          >
+            {saving ? "שומר..." : "שמור"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <ConfirmDialog
+        open={confirmDiscard}
+        title="יש שינויים שלא נשמרו"
+        message="סגירת העורך תבטל את השינויים שביצעת בקובץ. האם לסגור בכל זאת?"
+        confirmText="סגור בלי לשמור"
+        cancelText="חזרה לעריכה"
+        destructive
+        onConfirm={discardAndClose}
+        onCancel={() => setConfirmDiscard(false)}
+      />
+    </>
   );
 }

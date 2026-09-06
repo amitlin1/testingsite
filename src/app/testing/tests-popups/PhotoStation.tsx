@@ -60,7 +60,9 @@ export default function PhotoStation({
 
   // ---- real photo upload (reuses the item-files pipeline) ----
   // Every capture is tagged with the station's photo-type code so each screen /
-  // station lists only its own group (GET /files?photoType=...).
+  // station lists only its own group (GET /files?photoType=...). A null return
+  // means the photo never reached storage; the shot is then flagged failed so it
+  // reads red instead of looking saved.
   const uploadToItem = React.useCallback(async (itemId: number, file: File): Promise<string | null> => {
     try {
       const fd = new FormData();
@@ -79,7 +81,7 @@ export default function PhotoStation({
     const previewUrl = URL.createObjectURL(file);
     setPhoto((pk) => ({ ...pk, photos: [...pk.photos, { previewUrl, uploading: true }] }));
     uploadToItem(item.item_id, file).then((key) =>
-      setPhoto((pk) => ({ ...pk, photos: pk.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false } : s)) })));
+      setPhoto((pk) => ({ ...pk, photos: pk.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false, failed: key == null } : s)) })));
   };
   const removePhoto = (idx: number) =>
     setPhoto((pk) => ({ ...pk, photos: pk.photos.filter((_, i) => i !== idx) }));

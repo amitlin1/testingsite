@@ -12,6 +12,11 @@
 //    window. The §5.1 filter block lives inside the LEFT JOIN's ON, not the
 //    WHERE, so a day with no matching rows survives as a zero instead of
 //    vanishing from the series, and no value is ever carried forward (§5.0(7)).
+//  - Q2ג adds the daily throughput pair — `_new_workStartedToday` (the day a
+//    run's FIRST active-work interval opened) and `_new_workFinishedToday` (the
+//    day it closed). Accessories are out of both, because an accessory's
+//    `testing` interval is a synthetic ~0-length pair and it is never worked on
+//    (111 of 630 runs here — 18%, enough to move the line).
 //  - Q2ב is the ONE definition of "finished" (§5.3ב): a running sum of
 //    route_run closures, counted once on the day they happened. It is
 //    entry-anchored, so it does not depend on a sampling instant, and it is
@@ -37,7 +42,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/app/lib/prisma";
 import { filtersFromSearchParams } from "@/app/lib/metrics/filters";
-import { finishedCumulative, pitSeries } from "@/app/lib/metrics/queries";
+import { finishedCumulative, pitSeries, workThroughput } from "@/app/lib/metrics/queries";
 import {
   BadRequest,
   labelOf,
@@ -65,8 +70,18 @@ interface HistoryPoint {
   isToday: boolean;
   /** §5.3ב — route_run closures to date, the same number as the `done` entry. */
   finishedCumulative: number;
-  /** Closures on this day alone. Additive; the cumulative series is not. */
+  /** Closures on this day alone. Additive; the cumulative series is not.
+   *  Counts EVERY run, accessories included — the same population as the KPI
+   *  card's `מסלולים שנסגרו`. */
   _new_finishedToday: number;
+  /** Q2ג — the daily throughput PAIR: work begun against work completed, over
+   *  ONE population with accessories excluded from both sides. `workStarted` is
+   *  the day a run's first `testing` interval opened (its first station);
+   *  `workFinished` is the day the run closed (its last station). They are
+   *  comparable to each other and deliberately not to `_new_finishedToday`,
+   *  which keeps accessories — roughly three of every four runs here. */
+  _new_workStartedToday: number;
+  _new_workFinishedToday: number;
   /** Sum of the active states at this point — the percentage denominator. */
   _new_activeTotal: number;
 }
@@ -77,9 +92,10 @@ export const GET = withAuth(async (req: Request) => {
     const period = requirePeriod(searchParams);
     const filters = { ...filtersFromSearchParams(searchParams), scope: "all" as const };
 
-    const [series, finished, states] = await Promise.all([
+    const [series, finished, throughput, states] = await Promise.all([
       pitSeries(prisma, period.from, period.to, filters),
       finishedCumulative(prisma, period.from, period.to, filters),
+      workThroughput(prisma, period.from, period.to, filters),
       metricStates(prisma),
     ]);
 
@@ -95,6 +111,8 @@ export const GET = withAuth(async (req: Request) => {
             isToday: d === period.today,
             finishedCumulative: 0,
             _new_finishedToday: 0,
+            _new_workStartedToday: 0,
+            _new_workFinishedToday: 0,
             _new_activeTotal: 0,
           })
         );
@@ -134,6 +152,14 @@ export const GET = withAuth(async (req: Request) => {
       p._new_finishedToday = r.finished_today;
     }
 
+    // Q2ג — work begun against work completed, one population, both bucketed on
+    // the Asia/Jerusalem business day.
+    for (const r of throughput.rows) {
+      const p = dayOf(r.business_day);
+      p._new_workStartedToday = r.started;
+      p._new_workFinishedToday = r.finished;
+    }
+
     // A `status` filter that excludes `done` must exclude the finished line too,
     // otherwise the legend would contradict the filter.
     const showFinished = !filters.states || filters.states.includes("done");
@@ -168,7 +194,10 @@ export const GET = withAuth(async (req: Request) => {
       data,
       period,
       filters,
-      qualify("finishedCumulative", finished.ignoredFilters)
+      [
+        ...qualify("finishedCumulative", finished.ignoredFilters),
+        ...qualify("workThroughput", throughput.ignoredFilters),
+      ]
     );
   } catch (error) {
     if (error instanceof BadRequest) {

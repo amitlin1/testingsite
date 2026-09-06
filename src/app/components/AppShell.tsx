@@ -86,16 +86,42 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setNavOpen(false);
   }, [pathname]);
 
+  // §14.1 — the ONE change the dashboard needs from the shell.
+  //
+  // Two expanded rails side by side (240 + 248 = 488px of chrome) leaves too
+  // little for a dense dashboard, so on /dashboard the app rail renders in its
+  // 56px icon state and the chrome cost drops to ~304px.
+  //
+  // It is a ROUTE-DRIVEN OVERRIDE, not a user preference: the collapse lives on
+  // the derived value and never calls setCollapsed, so nothing is written to
+  // localStorage and leaving /dashboard restores whatever the user had chosen.
+  // Expanding the rail by hand while on the dashboard wins for the rest of the
+  // visit — `userExpandedOnDashboard` is that escape hatch, and it resets on the
+  // way out.
+  const isDashboard = pathname?.startsWith("/dashboard") ?? false;
+  const [userExpandedOnDashboard, setUserExpandedOnDashboard] = React.useState(false);
+  React.useEffect(() => {
+    if (!isDashboard) setUserExpandedOnDashboard(false);
+  }, [isDashboard]);
+
   // The icon-only variant only applies on desktop; the mobile drawer is always
   // full-width.
-  const desktopCollapsed = !isMobile && collapsed;
+  const desktopCollapsed =
+    !isMobile && (collapsed || (isDashboard && !userExpandedOnDashboard));
   const railWidth = desktopCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
   const railOffset = isMobile ? 0 : railWidth;
 
   // The single toggle: opens/closes the drawer on mobile, collapses/expands the
-  // rail on desktop.
-  const handleToggle = () =>
-    isMobile ? setNavOpen((o) => !o) : setCollapsed((c) => !c);
+  // rail on desktop. On /dashboard an explicit expand also lifts the route
+  // override — otherwise the button would appear to do nothing.
+  const handleToggle = () => {
+    if (isMobile) {
+      setNavOpen((o) => !o);
+      return;
+    }
+    if (isDashboard) setUserExpandedOnDashboard(desktopCollapsed);
+    setCollapsed(() => !desktopCollapsed);
+  };
 
   return (
     <>
@@ -104,7 +130,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         open={navOpen}
         collapsed={desktopCollapsed}
         onClose={() => setNavOpen(false)}
-        onExpand={() => setCollapsed(false)}
+        onExpand={() => {
+          if (isDashboard) setUserExpandedOnDashboard(true);
+          setCollapsed(false);
+        }}
         onToggle={handleToggle}
       />
 

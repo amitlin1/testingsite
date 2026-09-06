@@ -110,7 +110,9 @@ export default function CompletionHistoryChart() {
     const codes = new Set<string>();
     data.forEach(item => {
         Object.keys(item).forEach(key => {
-            if (key !== 'date' && key !== 'formattedDate') codes.add(key);
+            // `_new_`-prefixed keys are metadata, not shipment codes — reading
+            // one as a code would draw a phantom shipment line.
+            if (key !== 'date' && key !== 'formattedDate' && !key.startsWith('_new_')) codes.add(key);
         });
     });
     return Array.from(codes).sort();

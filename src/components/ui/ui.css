@@ -193,6 +193,10 @@
   padding: 10px 0;
 }
 .sh-input-wrap > textarea { line-height: 1.47; resize: vertical; }
+/* fullHeight multiline: the field owns the space its parent gives it, and the
+   textarea scrolls inside instead of growing a resize handle. */
+.sh-input-wrap.sh-input--fill { flex: 1; min-height: 0; }
+.sh-input-wrap.sh-input--fill > textarea { box-sizing: border-box; height: 100%; resize: none; overflow: auto; }
 .sh-input-wrap > input::placeholder,
 .sh-input-wrap > textarea::placeholder { color: var(--color-ink-muted-48); }
 .sh-input-wrap > input:disabled,

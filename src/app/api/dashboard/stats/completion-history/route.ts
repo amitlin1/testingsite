@@ -36,13 +36,21 @@
 // So: up to 45 days -> daily, beyond that -> monthly. Whatever the grain, the
 // cumulative sums are computed over EVERY day and only the REPORTING is sparse.
 //
-// RESPONSE SHAPE is unchanged and is load-bearing in an unusual way: the chart
-// derives its series from the object keys, treating every key that is not
-// `date`/`formattedDate` as a shipment code. A metadata field added to these
-// rows would render as a phantom shipment line — so the period notice, the
-// grain and the filters route_run cannot express are returned as headers, not
-// as body fields. (There is no two-clock pair here either: §2.8 pairs
-// DURATIONS, and this endpoint reports a ratio.)
+// RESPONSE SHAPE is load-bearing in an unusual way: the chart derives its series
+// from the object KEYS, treating every key that is not `date`/`formattedDate` as
+// a shipment code. So the period notice, the grain and the filters route_run
+// cannot express are returned as headers rather than as body fields — a bare
+// metadata field would render as a phantom shipment line.
+//
+// `_new_counts` is the ONE body addition, and it is shaped so it cannot be
+// mistaken for a code: a single `_new_`-prefixed key holding a nested object,
+// `{ [code]: { routed, finished } }`. It exists because the ratio ALONE is
+// unreadable when it falls — completion drops whenever a new run is routed, and
+// without the denominator beside it a reader sees a regression where there was
+// an arrival. Consumers skip keys starting with `_new_`.
+//
+// (There is no two-clock pair here either: §2.8 pairs DURATIONS, and this
+// endpoint reports a ratio.)
 
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth/withAuth";
@@ -99,12 +107,13 @@ export const GET = withAuth(async (request: NextRequest) => {
     const days = sampleDays(period.from, period.to, granularity);
     const rows = await completionSeries(prisma, period.from, period.to, days, filters);
 
-    // One object per sampled day: { date, [shipmentCode]: "12.3" }. The value is
-    // a one-decimal string, as the chart has always received it. A shipment with
-    // nothing routed yet on that day contributes NO key — the line simply has
-    // not started (connectNulls), rather than claiming 0%.
-    const byDate = new Map<string, Record<string, string>>();
-    for (const d of days) byDate.set(d, { date: d });
+    // One object per sampled day: { date, [shipmentCode]: "12.3", _new_counts }.
+    // The ratio stays a one-decimal string, as the chart has always received it.
+    // A shipment with nothing routed yet on that day contributes NO key — the
+    // line simply has not started (connectNulls), rather than claiming 0%.
+    type Row = Record<string, string | Record<string, { routed: number; finished: number }>>;
+    const byDate = new Map<string, Row>();
+    for (const d of days) byDate.set(d, { date: d, _new_counts: {} });
     for (const r of rows) {
       if (r.completion_pct === null) continue;
       const bucket = byDate.get(r.business_day);
@@ -114,14 +123,19 @@ export const GET = withAuth(async (request: NextRequest) => {
       const key = r.shipment_code || `#${r.shipment_id}`;
       const label = bucket[key] === undefined ? key : `${key} (#${r.shipment_id})`;
       bucket[label] = r.completion_pct.toFixed(1);
+      (bucket._new_counts as Record<string, { routed: number; finished: number }>)[label] = {
+        routed: r.routed_runs,
+        finished: r.finished_runs,
+      };
     }
 
     // Days with no shipment at all are dropped rather than emitted as an empty
     // point: the chart would render a gap either way, and an empty object is not
     // information (§5.0(7)).
+    // `date` and `_new_counts` are always present, so a day is empty at two keys.
     const grouped = days
       .map((d) => byDate.get(d)!)
-      .filter((o) => Object.keys(o).length > 1);
+      .filter((o) => Object.keys(o).length > 2);
 
     return metricsJson(grouped, period, filters, ignored);
   } catch (error: unknown) {

@@ -1,8 +1,6 @@
 <#import "template.ftl" as layout>
 <@layout.registrationLayout displayMessage=true; section>
   <#if section = "form">
-    <h1 class="sh-title">${msg("loginTitle")}</h1>
-    <p class="sh-sub">${msg("loginSubtitle")}</p>
     <form id="kc-form-login" action="${url.loginAction}" method="post" style="display:flex;flex-direction:column;gap:16px">
       <div>
         <label class="sh-label" for="username">${msg("usernameOrEmail")}</label>

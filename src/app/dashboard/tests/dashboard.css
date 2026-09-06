@@ -1,0 +1,252 @@
+/* =========================================================================
+   Dashboard — the layout rules inline styles cannot express (§15).
+
+   Breakpoints are CSS, not `useMediaQuery`: the layout has to be right on the
+   FIRST paint, before hydration. `useMediaQuery` is used only where the
+   behaviour genuinely needs JS — turning the filter rail into a drawer.
+
+   Widths are viewport widths, and that is deliberate: on /dashboard the app
+   rail is pinned to its 56px icon state (§14.1), so viewport minus 56 is the
+   content area the §15 table describes. The design reference was measured with
+   the same 56px rail in place and these are its numbers.
+
+   Any property one of these rules overrides must NOT be set inline on the same
+   element, or must be overridden with !important here.
+   ========================================================================= */
+
+.dash-root {
+  /* Dashboard-local palette. Every value is from §9 / the build guide's table;
+     nothing here invents a colour, it only gives the ramp and the two amber
+     roles a name so no component carries a raw hex. */
+  --dash-ramp-1: #0066cc;
+  --dash-ramp-2: #4d94dd;
+  --dash-ramp-3: #86b7e8;
+  --dash-ramp-4: #b8d4f0;
+  --dash-ramp-5: #dcdce2;
+  --dash-tint: #e6efff;
+  --dash-amber-ink: #a86a1a;
+  --dash-amber-on-dark: #f0b366;
+  --dash-amber-tint: #fdf3e6;
+  --dash-amber-hairline: #f0e2cc;
+  --dash-green-on-dark: #7fd1a8;
+  --dash-strip-divider: rgba(255, 255, 255, 0.1);
+  --dash-row-hover: rgba(0, 0, 0, 0.02);
+  --dash-nav-hover: rgba(0, 0, 0, 0.035);
+  --dash-scrim: rgba(0, 0, 0, 0.28);
+
+  /* §14.2 — height:100% and NOT 100vh. AppShell's content area is already
+     calc(100vh - 56px) with overflowY:auto; 100vh here would add a second
+     scrollbar the moment the shell's own bar appears. */
+  height: 100%;
+  display: flex;
+  background: var(--color-canvas-parchment);
+  font-family: var(--font-text);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- shared chrome -------------------------------------------------- */
+
+.dash-card {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: 14px;
+  /* §9: no shadow anywhere. Elevation is a surface change or a hairline. */
+  box-shadow: none;
+}
+
+.dash-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dash-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dash-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.dash-scroll::-webkit-scrollbar-thumb {
+  background: #d4d4dc;
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dash-table thead tr {
+  background: var(--color-canvas-parchment);
+}
+
+.dash-table th {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted-48);
+  padding: 9px 10px;
+  text-align: right;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-canvas-parchment);
+}
+
+.dash-table th:first-child,
+.dash-table td:first-child {
+  padding-inline-start: 16px;
+}
+.dash-table th:last-child,
+.dash-table td:last-child {
+  padding-inline-end: 16px;
+}
+
+.dash-table td {
+  font-size: 13px;
+  padding: 9px 10px;
+}
+
+.dash-table tbody tr {
+  border-top: 1px solid var(--color-divider-soft);
+}
+
+.dash-table tbody tr.dash-row-click {
+  cursor: pointer;
+}
+
+.dash-table tbody tr:hover {
+  background: var(--dash-row-hover);
+}
+
+.dash-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Press affordance — the only button motion in the system (§9). */
+.dash-press:active {
+  transform: scale(0.97);
+}
+
+.dash-nav-item:hover {
+  background: var(--dash-nav-hover);
+}
+
+.dash-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* The 2px indeterminate bar under the header during a refresh (§4, §11). */
+.dash-refresh-bar {
+  height: 2px;
+  overflow: hidden;
+  background: var(--color-divider-soft);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.dash-refresh-bar > span {
+  display: block;
+  width: 30%;
+  height: 100%;
+  background: var(--color-primary);
+  animation: sh-indeterminate 1.1s infinite linear;
+}
+
+/* Charts are LTR islands so the time axis runs left to right (§10). */
+.dash-chart {
+  direction: ltr;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- responsive steps (§15) ----------------------------------------- */
+
+@media (max-width: 1300px) {
+  .dash-rail {
+    width: 208px !important;
+  }
+  /* Secondary columns drop as a CLASS on both th and td — never a JS-filtered
+     column array, which would shift the sort indices underneath the header. */
+  .col-2nd {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .dash-rail {
+    display: none !important;
+  }
+  .dash-mobile-nav {
+    display: flex !important;
+  }
+  .dash-main {
+    padding: 12px !important;
+  }
+}
+
+/* Below the desktop contract (1180x800) the page is allowed to scroll, and the
+   cards keep a floor instead of collapsing to nothing. A 13" laptop at
+   1440x720 is a real case, so height is a trigger as well as width. */
+@media (max-width: 1100px), (max-height: 720px) {
+  .dash-root {
+    height: auto !important;
+    min-height: 100%;
+    overflow: visible;
+  }
+  .dash-main {
+    height: auto;
+  }
+  .dash-panel {
+    min-height: 400px !important;
+  }
+  .dash-chart-card {
+    min-height: 320px !important;
+  }
+  .dash-chart {
+    min-height: 240px !important;
+  }
+  .dash-table {
+    min-width: 720px;
+  }
+}
+
+@media (max-width: 900px) {
+  .dash-strip {
+    flex-wrap: wrap;
+  }
+  .dash-strip > div {
+    flex: 1 1 40% !important;
+    border-bottom: 1px solid var(--dash-strip-divider);
+  }
+  .dash-bottom {
+    flex-wrap: wrap;
+    height: auto !important;
+  }
+  .dash-bottom > div {
+    flex: 1 1 100% !important;
+    width: auto !important;
+    height: 240px;
+  }
+  /* Nothing below a 44px tap target once the layout is in drawer mode. */
+  .dash-tap {
+    min-height: 44px;
+  }
+}

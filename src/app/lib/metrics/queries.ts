@@ -454,6 +454,105 @@ export async function finishedCumulative(
   };
 }
 
+export interface WorkThroughputRow {
+  business_day: string;
+  /** Runs whose FIRST active-work interval opened on this day. */
+  started: number;
+  /** Runs that closed on this day. */
+  finished: number;
+}
+
+/**
+ * Q2ג — THE DAILY THROUGHPUT PAIR: work begun against work completed.
+ *
+ * "Started" is the first time anybody actually worked on a run — the opening of
+ * its earliest `testing` interval, found by an anti-join rather than by
+ * `step_no = 1`. Two reasons the anti-join is the honest form:
+ *
+ *   - a route need not begin at step 1 (a plan can skip), so the lowest step
+ *     number of a run is not a constant;
+ *   - a retest or a restart after abandonment must NOT count as a second start.
+ *     Because an earlier `testing` interval exists for that run, it cannot.
+ *
+ * "Finished" is `route_run.closed_at` — the one definition of finished (§5.3ב),
+ * counted once on the day it happened.
+ *
+ * ACCESSORIES ARE EXCLUDED FROM BOTH SIDES, and that is the difference between
+ * this pair and `finishedCumulative`. An accessory's `testing` interval is a
+ * synthetic ~0-length pair (§4.7): it is auto-passed and never worked on, so
+ * "somebody started work on it at its first station" is not a true sentence
+ * about it at any volume. Measured on this database they are 111 of 630 route
+ * runs (18%) — enough to move the line, not enough to hide it, which is exactly
+ * the size of error that gets argued about later instead of noticed now.
+ * The two series therefore share one population and are directly comparable to
+ * each other, which is the point of putting them on one axis; they are
+ * deliberately NOT comparable to the KPI card's `מסלולים שנסגרו`, which counts
+ * every run.
+ *
+ * Every grid day exists, so a day on which nothing started is a measured zero
+ * rather than a hole (§5.0(7)).
+ */
+export function buildWorkThroughput(
+  from: BusinessDay,
+  to: BusinessDay,
+  filters: MetricFilters = {}
+): Built {
+  // Both halves are anchored on route_run, so both carry the SAME filter block
+  // and the same bind values — the second copy starts after the first's six.
+  const second = 3 + RUN_FILTER_PARAM_COUNT;
+  const sql = `
+WITH grid AS (
+  SELECT d::date AS business_day
+  FROM generate_series($1::date, $2::date, interval '1 day') d
+), started AS (
+  SELECT i.start_business_date AS bd, count(*) AS n
+  FROM item_state_interval i
+  JOIN route_run rr ON rr.route_run_id = i.route_run_id
+  WHERE i.state_key = 'testing' AND i.is_trusted AND NOT i.is_accessory
+    AND i.start_business_date BETWEEN $1::date AND $2::date
+    AND rr.is_trusted AND rr.is_accessory = false${runFilterSql("rr", 3)}
+    AND NOT EXISTS (
+      SELECT 1 FROM item_state_interval p
+      WHERE p.route_run_id = i.route_run_id
+        AND p.state_key = 'testing' AND p.is_trusted
+        AND lower(p.valid_range) < lower(i.valid_range))
+  GROUP BY 1
+), finished AS (
+  SELECT business_date(rr.closed_at) AS bd, count(*) AS n
+  FROM route_run rr
+  WHERE rr.closed_at IS NOT NULL AND rr.is_trusted AND rr.is_accessory = false
+    AND business_date(rr.closed_at) BETWEEN $1::date AND $2::date${runFilterSql("rr", second)}
+  GROUP BY 1
+)
+SELECT to_char(g.business_day, 'YYYY-MM-DD') AS business_day,
+       COALESCE(s.n, 0) AS started,
+       COALESCE(f.n, 0) AS finished
+FROM grid g
+LEFT JOIN started  s ON s.bd = g.business_day
+LEFT JOIN finished f ON f.bd = g.business_day
+ORDER BY g.business_day`;
+  const runParams = runFilterParams(filters);
+  return { sql, params: [from, to, ...runParams, ...runParams] };
+}
+
+export async function workThroughput(
+  client: MetricsClient,
+  from: BusinessDay,
+  to: BusinessDay,
+  filters: MetricFilters = {}
+): Promise<{ rows: WorkThroughputRow[]; ignoredFilters: string[] }> {
+  const b = buildWorkThroughput(from, to, filters);
+  const rows = await run<Raw>(client, "Q2c workThroughput", b.sql, b.params);
+  return {
+    rows: rows.map((r) => ({
+      business_day: String(r.business_day),
+      started: cnt(r.started),
+      finished: cnt(r.finished),
+    })),
+    ignoredFilters: runFilterIgnored(filters),
+  };
+}
+
 /** §5.10 `kpi_treated_count` / `live_items_finished` in-window — the same anchor
  *  as Q2ב, counted over a window instead of accumulated. */
 export async function finishedInWindow(
@@ -486,6 +585,13 @@ export interface StationBoardRow {
   shared_type_queue: number;
   standing_queue_age_wall_min: number | null;
   standing_queue_age_work_min: number | null;
+  /** The OLDEST item still waiting for this type, both clocks. A mean of ages
+   *  is diluted by whoever just arrived, so it answers "is the queue busy" and
+   *  not "is something rotting" — which is the question this board is read for. */
+  oldest_queue_age_wall_min: number | null;
+  oldest_queue_age_work_min: number | null;
+  /** The robust shoulder: says whether the max is one stale row or a backlog. */
+  p95_queue_age_wall_min: number | null;
   research_pool_queue: number;
   active_test_age_wall_min: number | null;
   active_test_age_work_min: number | null;
@@ -515,7 +621,14 @@ WITH type_queue AS (
   SELECT q.station_type_id,
          count(*)                                                   AS n,
          avg(EXTRACT(EPOCH FROM (now() - lower(q.valid_range))))/60 AS age_wall_min,
-         avg(work_seconds_between(lower(q.valid_range), now()))/60   AS age_work_min
+         avg(work_seconds_between(lower(q.valid_range), now()))/60   AS age_work_min,
+         -- The oldest item still standing in this type's queue. Same scan, same
+         -- rows: three more aggregates over the CTE cost nothing next to the
+         -- correlated-subquery form this CTE already exists to avoid.
+         max(EXTRACT(EPOCH FROM (now() - lower(q.valid_range))))/60 AS oldest_wall_min,
+         max(work_seconds_between(lower(q.valid_range), now()))/60   AS oldest_work_min,
+         percentile_cont(0.95) WITHIN GROUP (
+           ORDER BY EXTRACT(EPOCH FROM (now() - lower(q.valid_range))))/60 AS p95_wall_min
   FROM item_state_interval q
   WHERE q.valid_range @> now() AND NOT q.is_terminal AND q.state_key = 'queued'
   GROUP BY q.station_type_id
@@ -538,6 +651,9 @@ SELECT st.test_station_id,
        COALESCE(tq.n, 0)                                            AS shared_type_queue,
        tq.age_wall_min                                              AS standing_queue_age_wall_min,
        tq.age_work_min                                              AS standing_queue_age_work_min,
+       tq.oldest_wall_min                                           AS oldest_queue_age_wall_min,
+       tq.oldest_work_min                                           AS oldest_queue_age_work_min,
+       tq.p95_wall_min                                              AS p95_queue_age_wall_min,
        rp.n                                                         AS research_pool_queue,
        avg(EXTRACT(EPOCH FROM (now() - lower(i.valid_range))))
          FILTER (WHERE NOT i.is_accessory)/60                        AS active_test_age_wall_min,
@@ -551,7 +667,8 @@ LEFT JOIN item_state_interval i
        ON i.station_id = st.test_station_id
       AND i.valid_range @> now() AND NOT i.is_terminal
 GROUP BY st.test_station_id, st.test_station_desc, sty.test_type_desc, st.test_station_type_id,
-         tq.n, tq.age_wall_min, tq.age_work_min, rp.n
+         tq.n, tq.age_wall_min, tq.age_work_min,
+         tq.oldest_wall_min, tq.oldest_work_min, tq.p95_wall_min, rp.n
 ORDER BY st.test_station_id`;
   return { sql, params: [] };
 }
@@ -569,6 +686,9 @@ export async function stationBoard(client: MetricsClient): Promise<StationBoardR
     shared_type_queue: cnt(r.shared_type_queue),
     standing_queue_age_wall_min: num(r.standing_queue_age_wall_min),
     standing_queue_age_work_min: num(r.standing_queue_age_work_min),
+    oldest_queue_age_wall_min: num(r.oldest_queue_age_wall_min),
+    oldest_queue_age_work_min: num(r.oldest_queue_age_work_min),
+    p95_queue_age_wall_min: num(r.p95_queue_age_wall_min),
     research_pool_queue: cnt(r.research_pool_queue),
     active_test_age_wall_min: num(r.active_test_age_wall_min),
     active_test_age_work_min: num(r.active_test_age_work_min),
@@ -1021,6 +1141,11 @@ export interface SlowStepRow {
   serial_no: string | null;
   makat: string | null;
   model: string | null;
+  /** The owner AT THE TIME OF THE STEP, denormalized onto the interval — not
+   *  items.customer_id, which is the item's CURRENT owner and can disagree with
+   *  the customer filter this very query was narrowed by. */
+  customer_id: number | null;
+  customer_name: string | null;
   step_no: number;
   attempt_no: number;
   entry_reason: string;
@@ -1059,6 +1184,7 @@ WITH cand AS (
   LIMIT 500
 )
 SELECT c.item_id, c.serial_no, it.makat, TRIM(it.model) AS model,
+       c.customer_id, TRIM(cu.name) AS customer_name,
        c.step_no, c.attempt_no, c.entry_reason,
        TRIM(st.test_station_desc) AS station_name,
        -- worker_id as well as worker_name: §5.10 lists slow_item_worker_id as a
@@ -1071,6 +1197,7 @@ SELECT c.item_id, c.serial_no, it.makat, TRIM(it.model) AS model,
        (COALESCE(q.work_seconds,0) + c.work_seconds)/60 AS total_work_min
 FROM cand c
 JOIN items it ON it.item_id = c.item_id
+LEFT JOIN customers cu ON cu.id = c.customer_id
 LEFT JOIN test_stations st ON st.test_station_id = c.station_id
 LEFT JOIN LATERAL (
   SELECT p.wall_seconds, p.work_seconds FROM item_state_interval p
@@ -1097,6 +1224,8 @@ export async function slowSteps(
     serial_no: str(r.serial_no),
     makat: str(r.makat),
     model: str(r.model),
+    customer_id: num(r.customer_id),
+    customer_name: str(r.customer_name),
     step_no: cnt(r.step_no),
     attempt_no: cnt(r.attempt_no),
     entry_reason: String(r.entry_reason),
