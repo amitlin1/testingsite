@@ -92,14 +92,14 @@ export async function GET(req: Request) {
       -- Which station's queue would actually list this item? Mirrors the WHERE
       -- in /api/testing/items: status 1/5 sit AT a station, status 2 waits for
       -- any station of the current route step's type, status 4 waits for any
-      -- research station, and a parents_only type never lists an accessory.
+      -- research station, and a package_level type never lists an accessory.
       LEFT JOIN LATERAL (
         SELECT s.test_station_id, s.test_station_type_id, s.test_station_desc
         FROM test_stations s
         LEFT JOIN test_stations_type stt ON stt.test_station_type_id = s.test_station_type_id
         WHERE COALESCE(ir.is_finished, false) = false
           AND ir.finished_at IS NULL
-          AND (COALESCE(stt.parents_only, false) = false OR i.parent_item_id IS NULL)
+          AND (COALESCE(stt.package_level, false) = false OR i.package_id IS NULL)
           AND (
                (ir.current_status = 1 AND s.test_station_id = ir.test_station_id)
             OR (ir.current_status = 5 AND s.test_station_id = ir.test_station_id AND s.is_research)

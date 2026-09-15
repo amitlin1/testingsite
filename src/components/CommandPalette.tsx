@@ -301,7 +301,7 @@ function buildGroups(
     .map(({ t }) => ({
       key: `stype-${t.id}`,
       label: t.desc,
-      sub: t.parentsOnly ? "סוג עמדה · פריטי אב בלבד" : "סוג עמדה",
+      sub: t.packageLevel ? "סוג עמדה · ברמת מארז" : "סוג עמדה",
       icon: LayoutGrid,
       tag: `${t.stationCount} עמדות`,
       href: stationTypeHref(t),

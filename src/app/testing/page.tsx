@@ -125,7 +125,7 @@ function ItemCard({
   const elapsedTime = useElapsedTime(baseTimeString);
   const isInTest = item.current_status === 1 || item.current_status === 5;
   const isWaiting = item.current_status === 2 || item.current_status === 4;
-  const isAccessory = item.parent_item_id != null;
+  const isAccessory = item.package_id != null;
 
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -272,8 +272,8 @@ function ItemCard({
         {(isAccessory || item.has_children) ? (
             <IconButton
                 onClick={handleMenuClick}
-                aria-label={isAccessory ? `פריט אב: #${item.parent_item_id}` : "פריטים מחוברים"}
-                title={isAccessory ? `פריט אב: #${item.parent_item_id}` : "פריטים מחוברים"}
+                aria-label={isAccessory ? `פריט אב: #${item.package_id}` : "פריטים מחוברים"}
+                title={isAccessory ? `פריט אב: #${item.package_id}` : "פריטים מחוברים"}
                 sx={{
                     width: 40,
                     height: 40,
@@ -313,7 +313,7 @@ function ItemCard({
                      <AccountTreeIcon fontSize="small" color="action" />
                      <Box>
                          <Typography variant="caption" color="text.secondary">פריט אב</Typography>
-                         <Typography variant="subtitle2">#{item.parent_item_id}</Typography>
+                         <Typography variant="subtitle2">#{item.package_id}</Typography>
                          <Typography variant="caption" color="text.secondary">S/N: {item.parent_serial_no || '-'}</Typography>
                      </Box>
                   </Stack>

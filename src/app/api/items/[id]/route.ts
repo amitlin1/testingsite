@@ -35,7 +35,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           i.item_id,
           i.makat,
           i.serial_no,
-          i.parent_item_id,
+          i.package_id,
           it.item_type_desc,
           ir.current_status,
           ir.current_status AS item_status_id,
@@ -82,7 +82,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           ir.current_status,
           s.item_status_desc,
           CASE
-              WHEN i.item_id = (SELECT COALESCE(parent_item_id, item_id) FROM items WHERE item_id = ${itemIdBig}) THEN 'Parent'
+              WHEN i.item_id = (SELECT COALESCE(package_id, item_id) FROM items WHERE item_id = ${itemIdBig}) THEN 'Parent'
               ELSE 'Child'
           END as relation_type
         FROM items i
@@ -91,9 +91,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         LEFT JOIN item_status s ON ir.current_status = s.item_status_id
         WHERE
           (
-              i.parent_item_id = (SELECT CASE WHEN parent_item_id IS NOT NULL THEN parent_item_id ELSE item_id END FROM items WHERE item_id = ${itemIdBig})
+              i.package_id = (SELECT CASE WHEN package_id IS NOT NULL THEN package_id ELSE item_id END FROM items WHERE item_id = ${itemIdBig})
               OR
-              i.item_id = (SELECT CASE WHEN parent_item_id IS NOT NULL THEN parent_item_id ELSE item_id END FROM items WHERE item_id = ${itemIdBig})
+              i.item_id = (SELECT CASE WHEN package_id IS NOT NULL THEN package_id ELSE item_id END FROM items WHERE item_id = ${itemIdBig})
           )
           AND i.item_id != ${itemIdBig}
       `,
@@ -289,7 +289,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // station history, test results — these have no DB-level FK to `items`, so
 // they'd otherwise be left orphaned).
 //
-// If the item has connected accessory items (items.parent_item_id → this
+// If the item has connected accessory items (items.package_id → this
 // item — a real FK), deleting it outright would fail. Instead: without
 // `cascade: true` in the body, report the connected items back as a 409 so
 // the UI can warn the user by name; with `cascade: true`, delete the item
@@ -309,7 +309,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     }
 
     const children = await prisma.items.findMany({
-      where: { parent_item_id: itemIdBig },
+      where: { package_id: itemIdBig },
       select: { item_id: true, serial_no: true, model: true },
     });
 
@@ -344,7 +344,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       await tx.test_results.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_route_history.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_routes.deleteMany({ where: { item_id: { in: idsToDelete } } });
-      // Connected items first — they hold the FK (parent_item_id) to the main item.
+      // Connected items first — they hold the FK (package_id) to the main item.
       if (children.length > 0) {
         await tx.items.deleteMany({ where: { item_id: { in: children.map((c) => c.item_id) } } });
       }

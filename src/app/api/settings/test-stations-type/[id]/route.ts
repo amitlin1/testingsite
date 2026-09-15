@@ -27,7 +27,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const { id } = await params;
     const body = await req.json();
     const { test_type_desc, test_station_type_id: newIdRaw } = body;
-    const parentsOnly = Boolean(body.parents_only);
+    const parentsOnly = Boolean(body.package_level);
 
     const stale = parseStaleAfterMinutes(body.stale_after_minutes);
     if ("error" in stale) {
@@ -62,13 +62,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (newId === oldId) {
       const updated = await prisma.test_stations_type.update({
         where: { test_station_type_id: oldId },
-        data: { test_type_desc: trimmedDesc, parents_only: parentsOnly, stale_after_minutes: staleAfterMinutes },
+        data: { test_type_desc: trimmedDesc, package_level: parentsOnly, stale_after_minutes: staleAfterMinutes },
       });
 
       return NextResponse.json({
         test_station_type_id: updated.test_station_type_id,
         test_type_desc: updated.test_type_desc.trim(),
-        parents_only: updated.parents_only,
+        package_level: updated.package_level,
         stale_after_minutes: updated.stale_after_minutes,
       });
     }
@@ -97,7 +97,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     await prisma.$transaction(async (tx) => {
       await tx.test_stations_type.create({
         data: {
-          test_station_type_id: newId, test_type_desc: trimmedDesc, parents_only: parentsOnly,
+          test_station_type_id: newId, test_type_desc: trimmedDesc, package_level: parentsOnly,
           stale_after_minutes: staleAfterMinutes ?? current?.stale_after_minutes ?? 30,
         },
       });
@@ -120,7 +120,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({
       test_station_type_id: newId,
       test_type_desc: trimmedDesc,
-      parents_only: parentsOnly,
+      package_level: parentsOnly,
       stale_after_minutes: staleAfterMinutes ?? current?.stale_after_minutes ?? 30,
     });
   } catch (error: any) {

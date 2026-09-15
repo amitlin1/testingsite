@@ -16,13 +16,15 @@ import { prisma } from "@/app/lib/prisma";
  * the version, never lower it), so serving from a 30s-stale "ok" is safe.
  * Failures are NOT cached — a broken deploy keeps re-checking and stays loud.
  */
-// 2 since migration B (20260901000000_metrics_drop_snapshots). The bump is the
+// 3 since the package-model migration (20260915120000_package_model), which
+// renamed route_run/item_state_interval columns and replaced the fold. Before
+// that: 2 since migration B (20260901000000_metrics_drop_snapshots). The bump is the
 // point of the handshake, not bookkeeping: the two servers are deployed
 // separately, so an image carrying this code MUST refuse to write against a
 // database that still has the pre-drop schema — otherwise it would call a
 // metrics_selfcheck that still reports drift_open, or read tables mid-drop. A
 // loud 503 at the first write beats a silent half-migrated system.
-export const REQUIRED_METRICS_SCHEMA_VERSION = 2;
+export const REQUIRED_METRICS_SCHEMA_VERSION = 3;
 
 const CACHE_TTL_MS = 30_000;
 

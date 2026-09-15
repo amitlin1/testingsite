@@ -22,7 +22,7 @@ model file_objects {
   /// Owner id (shipment id, log id, item id, ...) as a string for flexibility
   entity_id       String?   @db.VarChar(64)
   metadata        Json?
-  /// 'active' | 'deleted' (soft delete; bytes may still exist as a MinIO version)
+  /// 'pending' (direct-upload ticket issued, not yet confirmed — hidden from listings) | 'active' | 'deleted' (soft delete; bytes may still exist as a MinIO version)
   status          String    @default("active") @db.VarChar(20)
   created_by      String?   @db.VarChar(255)
   /// Who last modified the row (upload/replace/edit). Mirrors created_by for the first write.
@@ -93,11 +93,42 @@ model item_status {
 model item_types {
   item_type_id     Int                @id @default(autoincrement())
   item_type_desc   String             @unique @db.Char(50)
+  /// A package type: the box a customer ships. A package is an items row of
+  /// this type with its own route; the physical items inside point at it via
+  /// items.package_id. Package types cannot appear inside package_contents.
+  is_package       Boolean            @default(false)
   item_routes      item_routes[]
   reference_items  reference_items[]
   shipment_history shipment_history[]
   shipment_items   shipment_items[]
   testing_routes   testing_routes[]
+  package_contents package_contents[] @relation("package_contents_package")
+  contained_in     package_contents[] @relation("package_contents_item")
+}
+
+/// What a package type contains (docs/packages/PLAN.md §3): one line per item
+/// type, with the quantity and the defaults the intake form pre-fills. A
+/// template, not a constraint — the package's real content is its items rows,
+/// and the lines are snapshotted onto items.template_snapshot at creation.
+model package_contents {
+  id                Int        @id @default(autoincrement())
+  package_type_id   Int
+  item_type_id      Int
+  quantity          Int
+  makat             String?
+  model             String?
+  manufacturer_name String?
+  manufacturer_no   String?
+  /// Manufacturer SKU used by the intake wizard to find the reference item.
+  manufacturer_sku  String?
+  /// Default route of the item type when created from this template.
+  route_number      Int        @default(1)
+  sort_order        Int        @default(0)
+  package_type      item_types @relation("package_contents_package", fields: [package_type_id], references: [item_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_package_contents_package_type")
+  item_type         item_types @relation("package_contents_item", fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_package_contents_item_type")
+
+  @@unique([package_type_id, item_type_id], map: "package_contents_type_uq")
+  @@index([package_type_id], map: "idx_package_contents_package_type")
 }
 
 /// Reference ("golden") items — a prototype per item type + manufacturer SKU,
@@ -159,19 +190,36 @@ model photo_types {
   images          reference_item_images[]
 }
 
+/// A physical thing with a barcode: either a PACKAGE (the box; item type has
+/// is_package, package_id IS NULL) or a PACKAGE ITEM (inside a box; package_id
+/// points at the package). Both are routed through item_routes on their own
+/// route. See docs/packages/PLAN.md.
 model items {
   item_id           BigInt  @id
   customer_id       Int
   item_type_id      Int
-  serial_no         String
+  /// NULL on a package row — the box has no serial of its own.
+  serial_no         String?
   makat             String
   model             String  @db.Char(50)
   manufacturer_name String  @db.Char(50)
   manufacturer_no   String
   shipment_id       Int
-  parent_item_id    BigInt?
-  items             items?  @relation("itemsToitems", fields: [parent_item_id], references: [item_id], onDelete: NoAction, onUpdate: NoAction)
-  other_items       items[] @relation("itemsToitems")
+  /// The package this item is inside. NULL on a package row.
+  package_id        BigInt?
+  /// 1..99 position inside the package (the last two digits of a new-format
+  /// item_id). NULL on a package row. Never reused after a delete.
+  package_seq       Int?    @db.SmallInt
+  /// On a package row: the next package_seq to hand out.
+  package_next_seq  Int     @default(1) @db.SmallInt
+  /// On a package row: the package_contents lines at creation time, so a
+  /// later template edit never rewrites what this box was expected to hold.
+  template_snapshot Json?
+  package           items?  @relation("packageItems", fields: [package_id], references: [item_id], onDelete: NoAction, onUpdate: NoAction, map: "items_package_id_fkey")
+  package_items     items[] @relation("packageItems")
+
+  @@unique([package_id, package_seq], map: "items_package_seq_uq")
+  @@index([package_id], map: "idx_items_package_id")
 }
 
 model research_history {
@@ -295,9 +343,10 @@ model test_stations {
 model test_stations_type {
   test_station_type_id Int              @id @default(autoincrement())
   test_type_desc       String           @unique @db.Char(50)
-  // Stations of this type test a parent item together with its accessories,
-  // so the queue lists parents only and hides the accessory items.
-  parents_only         Boolean          @default(false)
+  // Package-level station type (package opening / package closing): the queue
+  // lists packages only and hides the items inside them; starting a package
+  // starts its items, and the wizard submits one result per item.
+  package_level        Boolean          @default(false)
   // Minutes an item may sit in status 1/5 on a station of this type with no
   // result before /api/cron/release-stale-tests reverts it and frees the
   // station. 0 = never auto-release this type (burn-in chambers, research
@@ -412,7 +461,8 @@ model metric_state {
   intervals item_state_interval[]
 }
 
-/// One pass of one item through one route (§3.2). unit_id = COALESCE(parent_item_id, item_id).
+/// One pass of one item through one route (§3.2). unit_id = COALESCE(package_id, item_id):
+/// the package for an item inside a box, the package itself for a package row.
 model route_run {
   route_run_id   BigInt    @id @default(autoincrement())
   item_id        BigInt
@@ -426,9 +476,9 @@ model route_run {
   close_reason   String?
   customer_id    Int
   shipment_id    Int
-  parent_item_id BigInt?
+  package_id     BigInt?
   unit_id        BigInt
-  is_accessory   Boolean
+  is_package_item Boolean
   serial_no      String    @default("")
   is_trusted     Boolean   @default(true)
 
@@ -501,7 +551,7 @@ model item_state_interval {
   shipment_id            Int
   item_type_id           Int
   unit_id                BigInt
-  is_accessory           Boolean
+  is_package_item        Boolean
   serial_no              String                   @default("")
   wall_seconds           Decimal?                 @db.Decimal(14, 3)
   work_seconds           Decimal?                 @db.Decimal(14, 3)

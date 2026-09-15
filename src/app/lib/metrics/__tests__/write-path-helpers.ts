@@ -48,6 +48,9 @@ export const STATION_RESEARCH = 901; // TYPE_RESEARCH, is_research = true
 export const ITEM_TYPE_ONE_STEP = 1; // route_steps = {10}
 export const ITEM_TYPE_TWO_STEP = 2; // route_steps = {10, 20}
 export const ITEM_TYPE_ORPHAN_STEP = 3; // route_steps = {10, 99}
+/** A PACKAGE type (is_package): route_steps = {10} — opening and closing are
+ *  both TYPE_INTAKE here, so ITEM_TYPE_ONE_STEP items fit inside it. */
+export const ITEM_TYPE_PACKAGE = 4;
 
 export const WORKER_ID = 42;
 export const WORKER_NAME = "בודק אינטגרציה";
@@ -84,7 +87,8 @@ type Handlers = {
   startTest: RouteHandler;
   releaseTest: RouteHandler;
   releaseStale: RouteHandler;
-  createItem: typeof import("../../create-item").createItem;
+  createPackage: typeof import("../../packages/create-package").createPackage;
+  addPackageItem: typeof import("../../packages/create-package").addPackageItem;
   prisma: { $disconnect: () => Promise<void>; $transaction: (fn: (tx: any) => Promise<any>) => Promise<any> };
 };
 
@@ -153,7 +157,7 @@ export async function setup(): Promise<void> {
   const startTestMod = await import("../../../api/testing/start-test/route");
   const releaseTestMod = await import("../../../api/testing/release-test/route");
   const releaseStaleMod = await import("../../../api/cron/release-stale-tests/route");
-  const createItemMod = await import("../../create-item");
+  const createPackageMod = await import("../../packages/create-package");
   const prismaMod = await import("../../prisma");
 
   handlers = {
@@ -161,7 +165,8 @@ export async function setup(): Promise<void> {
     startTest: startTestMod.POST as RouteHandler,
     releaseTest: releaseTestMod.POST as RouteHandler,
     releaseStale: releaseStaleMod.POST as RouteHandler,
-    createItem: createItemMod.createItem,
+    createPackage: createPackageMod.createPackage,
+    addPackageItem: createPackageMod.addPackageItem,
     prisma: prismaMod.prisma as unknown as Handlers["prisma"],
   };
 
@@ -244,6 +249,7 @@ const TRUNCATE_TABLES = [
   "research_history",
   "item_routes",
   "items",
+  "package_contents",
   "testing_routes",
   "test_stations",
   "test_stations_type",
@@ -276,12 +282,12 @@ export async function resetDb(): Promise<void> {
   );
 
   await q(
-    `INSERT INTO item_types (item_type_id, item_type_desc) VALUES
-       ($1, 'ONE_STEP'), ($2, 'TWO_STEP'), ($3, 'ORPHAN_STEP')`,
-    [ITEM_TYPE_ONE_STEP, ITEM_TYPE_TWO_STEP, ITEM_TYPE_ORPHAN_STEP],
+    `INSERT INTO item_types (item_type_id, item_type_desc, is_package) VALUES
+       ($1, 'ONE_STEP', false), ($2, 'TWO_STEP', false), ($3, 'ORPHAN_STEP', false), ($4, 'PACKAGE', true)`,
+    [ITEM_TYPE_ONE_STEP, ITEM_TYPE_TWO_STEP, ITEM_TYPE_ORPHAN_STEP, ITEM_TYPE_PACKAGE],
   );
   await q(
-    `INSERT INTO test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES
+    `INSERT INTO test_stations_type (test_station_type_id, test_type_desc, package_level) VALUES
        ($1, 'INTAKE', true), ($2, 'FUNC', false), ($3, 'RESEARCH', false), ($4, 'ORPHAN', false)`,
     [TYPE_INTAKE, TYPE_FUNC, TYPE_RESEARCH, TYPE_ORPHAN],
   );
@@ -306,7 +312,8 @@ export async function resetDb(): Promise<void> {
     `INSERT INTO testing_routes (item_type_id, test_station_type_id, route_steps, route_number) VALUES
        ($1, $4, ARRAY[$4::int],          1),
        ($2, $4, ARRAY[$4::int, $5::int], 1),
-       ($3, $4, ARRAY[$4::int, $6::int], 1)`,
+       ($3, $4, ARRAY[$4::int, $6::int], 1),
+       ($7, $4, ARRAY[$4::int],          1)`,
     [
       ITEM_TYPE_ONE_STEP,
       ITEM_TYPE_TWO_STEP,
@@ -314,6 +321,7 @@ export async function resetDb(): Promise<void> {
       TYPE_INTAKE,
       TYPE_FUNC,
       TYPE_ORPHAN,
+      ITEM_TYPE_PACKAGE,
     ],
   );
 }
@@ -323,7 +331,10 @@ export type SeedItemOptions = {
   itemTypeId?: number;
   routeNumber?: number;
   stationId?: number | null;
-  parentItemId?: number | null;
+  packageId?: number | null;
+  /** Position inside packageId; items_package_seq_shape requires one whenever
+   *  packageId is set. Defaults to 1. */
+  packageSeq?: number;
 };
 
 /**
@@ -338,16 +349,17 @@ export async function seedItem(o: SeedItemOptions): Promise<number> {
     itemTypeId = ITEM_TYPE_ONE_STEP,
     routeNumber = 1,
     stationId = STATION_INTAKE,
-    parentItemId = null,
+    packageId = null,
+    packageSeq = 1,
   } = o;
   const client = await pool!.connect();
   try {
     await client.query("BEGIN");
     await client.query(
       `INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model,
-                          manufacturer_name, manufacturer_no, shipment_id, parent_item_id)
-       VALUES ($1, $2, $3, $4, 'MK-1', 'MODEL', 'MFR', 'MFR-NO', $5, $6)`,
-      [itemId, CUSTOMER_ID, itemTypeId, `SN-${itemId}`, SHIPMENT_ID, parentItemId],
+                          manufacturer_name, manufacturer_no, shipment_id, package_id, package_seq)
+       VALUES ($1, $2, $3, $4, 'MK-1', 'MODEL', 'MFR', 'MFR-NO', $5, $6, $7)`,
+      [itemId, CUSTOMER_ID, itemTypeId, `SN-${itemId}`, SHIPMENT_ID, packageId, packageId == null ? null : packageSeq],
     );
     await client.query(
       `INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step,
@@ -405,7 +417,7 @@ export async function seedLegacyItem(o: SeedItemOptions): Promise<number> {
     } = o;
     await q(
       `INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model,
-                          manufacturer_name, manufacturer_no, shipment_id, parent_item_id)
+                          manufacturer_name, manufacturer_no, shipment_id, package_id)
        VALUES ($1, $2, $3, $4, 'MK-1', 'MODEL', 'MFR', 'MFR-NO', $5, NULL)`,
       [itemId, CUSTOMER_ID, itemTypeId, `SN-${itemId}`, SHIPMENT_ID],
     );
@@ -537,7 +549,7 @@ export type IntervalRow = {
   work_seconds: number | null;
   calendar_version: number | null;
   unit_id: number;
-  is_accessory: boolean;
+  is_package_item: boolean;
   entered_by_worker_id: number | null;
   exited_by_worker_id: number | null;
 };
@@ -549,7 +561,7 @@ export function intervals(itemId: number): Promise<IntervalRow[]> {
             station_id, station_type_id, entry_reason, exit_reason,
             entry_event_id, exit_event_id, upper_inf(valid_range) AS is_open,
             lower(valid_range) AS opened_at, closed_at, wall_seconds, work_seconds,
-            calendar_version, unit_id, is_accessory,
+            calendar_version, unit_id, is_package_item,
             entered_by_worker_id, exited_by_worker_id
        FROM item_state_interval WHERE item_id = $1
       ORDER BY lower(valid_range), interval_id`,
@@ -566,7 +578,9 @@ export type RunRow = {
   closed_at: Date | null;
   close_reason: string | null;
   unit_id: number;
-  is_accessory: boolean;
+  /** bigint arrives as a string over pg — compare with Number(). */
+  package_id: string | number | null;
+  is_package_item: boolean;
   customer_id: number;
   shipment_id: number;
   is_trusted: boolean;

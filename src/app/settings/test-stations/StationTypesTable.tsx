@@ -11,7 +11,7 @@ interface StationType {
   test_station_type_id: number;
   test_type_desc: string;
   /** Queue lists parent items only — accessories are tested alongside the parent. */
-  parents_only?: boolean;
+  package_level?: boolean;
   /** Minutes in test/research with no result before the item is auto-released. 0 = never. */
   stale_after_minutes?: number;
   station_count?: number;
@@ -191,9 +191,9 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                   <span style={{ fontSize: 14, fontWeight: selected ? 600 : 400, color: "#1d1d1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.test_type_desc}
                   </span>
-                  {r.parents_only && (
-                    <span title="בעמדות מסוג זה נשלפים רק פריטי אב" style={{ fontSize: 11, color: "#0066cc", background: "#f3f8ff", border: "1px solid #cfe3fb", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}>
-                      פריטי אב בלבד
+                  {r.package_level && (
+                    <span title="עמדה ברמת מארז: בתור מופיעים מארזים בלבד, והפריטים שבתוכם נבדקים יחד איתם" style={{ fontSize: 11, color: "#0066cc", background: "#f3f8ff", border: "1px solid #cfe3fb", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}>
+                      עמדה ברמת מארז
                     </span>
                   )}
                   {r.stale_after_minutes != null && (
@@ -252,11 +252,11 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
           <FormControlLabel
             control={
               <Checkbox
-                checked={Boolean(formData.parents_only)}
-                onChange={(_e, checked) => setFormData({ ...formData, parents_only: checked })}
+                checked={Boolean(formData.package_level)}
+                onChange={(_e, checked) => setFormData({ ...formData, package_level: checked })}
               />
             }
-            label="שלוף רק פריטי אב (הפריטים הנלווים נבדקים יחד עם פריט האב)"
+            label="עמדה ברמת מארז (פתיחת מארז / סגירת מארז): בתור מופיעים מארזים בלבד"
           />
           <TextField
             margin="dense"

@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     SELECT
         st.test_station_type_id,
         st.is_research,
-        COALESCE(stt.parents_only, false) AS parents_only
+        COALESCE(stt.package_level, false) AS package_level
     FROM test_stations st
     LEFT JOIN test_stations_type stt
         ON stt.test_station_type_id = st.test_station_type_id
@@ -50,9 +50,9 @@ SELECT
     i.manufacturer_no,
     TRIM(it.item_type_desc) AS "item_type_desc",
     t1.route_number,
-    i.parent_item_id,
-    (SELECT parent.serial_no FROM items parent WHERE parent.item_id = i.parent_item_id) AS "parent_serial_no",
-    (EXISTS (SELECT 1 FROM items child WHERE child.parent_item_id = i.item_id)) AS "has_children",
+    i.package_id,
+    (SELECT parent.serial_no FROM items parent WHERE parent.item_id = i.package_id) AS "parent_serial_no",
+    (EXISTS (SELECT 1 FROM items child WHERE child.package_id = i.item_id)) AS "has_children",
     (
         SELECT json_agg(json_build_object(
             'item_id', connected.item_id,
@@ -61,9 +61,9 @@ SELECT
         FROM items connected
         WHERE
             (
-                (i.parent_item_id IS NOT NULL AND (connected.parent_item_id = i.parent_item_id OR connected.item_id = i.parent_item_id))
+                (i.package_id IS NOT NULL AND (connected.package_id = i.package_id OR connected.item_id = i.package_id))
                 OR
-                (i.parent_item_id IS NULL AND connected.parent_item_id = i.item_id)
+                (i.package_id IS NULL AND connected.package_id = i.item_id)
             )
             AND connected.item_id != i.item_id
     ) AS "connected_items"
@@ -81,9 +81,9 @@ LEFT JOIN item_types it
     ON it.item_type_id = i.item_type_id
 CROSS JOIN selected_station ss
 WHERE
-    -- Station types flagged parents_only test a parent together with its
+    -- Station types flagged package_level test a parent together with its
     -- accessories, so the accessories never appear in the queue themselves.
-    (ss.parents_only = false OR i.parent_item_id IS NULL)
+    (ss.package_level = false OR i.package_id IS NULL)
     AND (
         (
             t1.current_status = 1
@@ -124,7 +124,7 @@ ORDER BY
             ...row,
             item_id: row.item_id != null ? Number(row.item_id) : null,
             test_station_id: row.test_station_id != null ? Number(row.test_station_id) : null,
-            parent_item_id: row.parent_item_id != null ? Number(row.parent_item_id) : null,
+            package_id: row.package_id != null ? Number(row.package_id) : null,
             created_at: normalizeToUtcIso(row.created_at),
             processing_start_time: normalizeToUtcIso(row.processing_start_time),
             queue_start_time: normalizeToUtcIso(row.queue_start_time),

@@ -35,7 +35,7 @@ export default function Packaging({
   // `connected_items` carries only item_id + serial_no from the items query, so
   // accessories fall back to a generic label (same as the intake wizard).
   const rows: PackRow[] = React.useMemo(() => {
-    const parentId = item.parent_item_id ?? item.item_id;
+    const parentId = item.package_id ?? item.item_id;
     const self: PackRow = {
       itemId: item.item_id,
       label: item.model?.trim() || item.item_type_desc?.trim() || "פריט",

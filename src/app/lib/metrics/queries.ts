@@ -508,9 +508,9 @@ WITH grid AS (
   SELECT i.start_business_date AS bd, count(*) AS n
   FROM item_state_interval i
   JOIN route_run rr ON rr.route_run_id = i.route_run_id
-  WHERE i.state_key = 'testing' AND i.is_trusted AND NOT i.is_accessory
+  WHERE i.state_key = 'testing' AND i.is_trusted AND NOT i.is_package_item
     AND i.start_business_date BETWEEN $1::date AND $2::date
-    AND rr.is_trusted AND rr.is_accessory = false${runFilterSql("rr", 3)}
+    AND rr.is_trusted AND rr.is_package_item = false${runFilterSql("rr", 3)}
     AND NOT EXISTS (
       SELECT 1 FROM item_state_interval p
       WHERE p.route_run_id = i.route_run_id
@@ -520,7 +520,7 @@ WITH grid AS (
 ), finished AS (
   SELECT business_date(rr.closed_at) AS bd, count(*) AS n
   FROM route_run rr
-  WHERE rr.closed_at IS NOT NULL AND rr.is_trusted AND rr.is_accessory = false
+  WHERE rr.closed_at IS NOT NULL AND rr.is_trusted AND rr.is_package_item = false
     AND business_date(rr.closed_at) BETWEEN $1::date AND $2::date${runFilterSql("rr", second)}
   GROUP BY 1
 )
@@ -656,9 +656,9 @@ SELECT st.test_station_id,
        tq.p95_wall_min                                              AS p95_queue_age_wall_min,
        rp.n                                                         AS research_pool_queue,
        avg(EXTRACT(EPOCH FROM (now() - lower(i.valid_range))))
-         FILTER (WHERE NOT i.is_accessory)/60                        AS active_test_age_wall_min,
+         FILTER (WHERE NOT i.is_package_item)/60                        AS active_test_age_wall_min,
        avg(work_seconds_between(lower(i.valid_range), now()))
-         FILTER (WHERE NOT i.is_accessory)/60                        AS active_test_age_work_min
+         FILTER (WHERE NOT i.is_package_item)/60                        AS active_test_age_work_min
 FROM test_stations st
 JOIN test_stations_type sty ON sty.test_station_type_id = st.test_station_type_id
 LEFT JOIN type_queue tq ON tq.station_type_id = st.test_station_type_id
@@ -853,7 +853,7 @@ export function buildFlow(
   const byDay = opts.byDay !== false;
   const flag = family === "waiting" ? "ms.is_waiting" : "ms.is_active_work";
   // The accessory exclusion applies to durations only, and only to active work.
-  const F = family === "active_work" ? " FILTER (WHERE NOT i.is_accessory)" : "";
+  const F = family === "active_work" ? " FILTER (WHERE NOT i.is_package_item)" : "";
   const unit = truncUnit(opts.granularity ?? "daily");
   const dayExpr =
     unit === "day"
@@ -1046,16 +1046,16 @@ SELECT${col ? `\n  ${col} AS dimension_id,` : ""}
   avg(wall_s) FILTER (WHERE is_waiting) / 60     AS avg_wait_wall_min,
   avg(work_s) FILTER (WHERE is_waiting) / 60     AS avg_wait_work_min,
   count(*)    FILTER (WHERE is_waiting)          AS wait_n,
-  avg(wall_s) FILTER (WHERE is_active_work AND NOT is_accessory) / 60 AS avg_busy_wall_min,
-  avg(work_s) FILTER (WHERE is_active_work AND NOT is_accessory) / 60 AS avg_busy_work_min,
-  count(*)    FILTER (WHERE is_active_work AND NOT is_accessory)      AS busy_n,
+  avg(wall_s) FILTER (WHERE is_active_work AND NOT is_package_item) / 60 AS avg_busy_wall_min,
+  avg(work_s) FILTER (WHERE is_active_work AND NOT is_package_item) / 60 AS avg_busy_work_min,
+  count(*)    FILTER (WHERE is_active_work AND NOT is_package_item)      AS busy_n,
   avg(wall_s) FILTER (WHERE is_research AND is_waiting) / 60          AS avg_research_wait_wall_min,
   avg(work_s) FILTER (WHERE is_research AND is_waiting) / 60          AS avg_research_wait_work_min,
   avg(wall_s) FILTER (WHERE is_research AND is_active_work) / 60      AS avg_research_wall_min,
   avg(work_s) FILTER (WHERE is_research AND is_active_work) / 60      AS avg_research_work_min,
   sum(wall_s - COALESCE(work_s, 0))/60                                AS offhours_min,
   count(DISTINCT unit_id)                                             AS units_touched,
-  sum(work_s) FILTER (WHERE is_active_work AND NOT is_accessory)      AS busy_work_seconds,
+  sum(work_s) FILTER (WHERE is_active_work AND NOT is_package_item)      AS busy_work_seconds,
   (SELECT work_seconds_between($1::timestamptz, $2::timestamptz))     AS window_work_seconds
 FROM spans${col ? `\nGROUP BY ${col}\nORDER BY ${col}` : ""}`;
   return {
@@ -1179,7 +1179,7 @@ WITH cand AS (
   JOIN metric_state ms ON ms.state_key = i.state_key AND ms.is_active_work
   WHERE i.close_business_date BETWEEN $1::date AND $2::date
     AND i.closed_at IS NOT NULL AND i.is_trusted
-    AND NOT i.is_accessory${intervalFilterSql("i", 3)}
+    AND NOT i.is_package_item${intervalFilterSql("i", 3)}
   ORDER BY i.work_seconds DESC NULLS LAST
   LIMIT 500
 )
@@ -1354,7 +1354,7 @@ export function buildEntityProgress(
       AND ($2::int IS NULL OR rr.customer_id  = $2)
       AND ($3::int IS NULL OR rr.shipment_id  = $3)
       AND ($4::int IS NULL OR rr.item_type_id = $4)
-      AND (NOT $5::boolean OR rr.is_accessory = false)
+      AND (NOT $5::boolean OR rr.is_package_item = false)
       AND ($1::text = 'all'
            OR EXISTS (SELECT 1 FROM shipments s_flt
                        WHERE s_flt.id = rr.shipment_id AND s_flt.is_sent IS NOT TRUE))`;
@@ -1460,7 +1460,7 @@ ORDER BY s.id`;
     // customer numbers is count(DISTINCT rr.unit_id) (§5.10
     // customer_total_items), and a unit is a PARENT item: an accessory carries
     // its own items row but rides on its parent's unit_id (§4.7, verified on
-    // this database: route_run.unit_id = COALESCE(parent_item_id, item_id) for
+    // this database: route_run.unit_id = COALESCE(package_id, item_id) for
     // all 630 runs). Counting every items row here divided units by items and
     // reported ~82% coverage for a customer whose every unit is routed —
     // measured before that fix: customer 5 read 77.1% (128 units / 166 item
@@ -1468,7 +1468,7 @@ ORDER BY s.id`;
     // therefore not part of this predicate: restricting to parents IS the
     // definition of a unit, not an option.
     sql = `
-${declaredCte("customer_id", "it.parent_item_id IS NULL")}SELECT c.id AS entity_id, TRIM(c.customer_code) AS entity_code, TRIM(c.name) AS entity_name,
+${declaredCte("customer_id", "it.package_id IS NULL")}SELECT c.id AS entity_id, TRIM(c.customer_code) AS entity_code, TRIM(c.name) AS entity_name,
        c.id AS customer_id, TRIM(c.name) AS customer_name,
        COALESCE(d.n, 0) AS declared_amount,${shared},
        round(100.0 * count(DISTINCT rr.unit_id) / NULLIF(d.n, 0), 1)           AS coverage_pct
@@ -1479,7 +1479,7 @@ GROUP BY c.id, c.customer_code, c.name, d.n
 ORDER BY c.id`;
   } else {
     sql = `
-${declaredCte("item_type_id", "(NOT $5::boolean OR it.parent_item_id IS NULL)")}SELECT ity.item_type_id AS entity_id, NULL::text AS entity_code,
+${declaredCte("item_type_id", "(NOT $5::boolean OR it.package_id IS NULL)")}SELECT ity.item_type_id AS entity_id, NULL::text AS entity_code,
        TRIM(ity.item_type_desc) AS entity_name,
        COALESCE(d.n, 0) AS declared_amount,${shared},
        round(100.0 * count(DISTINCT rr.route_run_id) / NULLIF(d.n, 0), 1)      AS coverage_pct

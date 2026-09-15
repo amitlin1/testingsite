@@ -40,7 +40,7 @@ type ItemData = {
   created_at: string | null;
   finished_at: string | null;
   is_finished: boolean | null;
-  parent_item_id: number | null;
+  package_id: number | null;
   connected_items?: ConnectedItem[];
 };
 
@@ -412,17 +412,17 @@ export default function ItemHistoryPage() {
    * An accessory's siblings are noise on this screen: what matters is the parent
    * it belongs to. So an accessory shows only its parent item, and the full
    * "פריטים מחוברים" card appears only for a parent item (listing its accessories). */
-  const isAccessory = item?.parent_item_id != null;
+  const isAccessory = item?.package_id != null;
   const connectedAll = React.useMemo(() => item?.connected_items ?? [], [item]);
   const parentItem = React.useMemo(
     () =>
       connectedAll.find(
-        (c) => c.relation_type === "Parent" || c.item_id === item?.parent_item_id,
+        (c) => c.relation_type === "Parent" || c.item_id === item?.package_id,
       ) ?? null,
     [connectedAll, item],
   );
   const accessories = React.useMemo(
-    () => connectedAll.filter((c) => c.item_id !== item?.parent_item_id),
+    () => connectedAll.filter((c) => c.item_id !== item?.package_id),
     [connectedAll, item],
   );
 
@@ -702,7 +702,7 @@ export default function ItemHistoryPage() {
                 { k: "עמדה נוכחית", v: trim(item.test_station_desc) || EM_DASH },
                 { k: "תאריך קליטה", v: fmtDT(item.created_at) },
                 ...(item.finished_at ? [{ k: "תאריך סיום", v: fmtDT(item.finished_at) }] : []),
-                { k: "פריט אב", v: item.parent_item_id ? `#${item.parent_item_id}` : EM_DASH },
+                { k: "פריט אב", v: item.package_id ? `#${item.package_id}` : EM_DASH },
               ].map((r) => (
                 <div key={r.k} style={rowBase}>
                   <span style={{ fontSize: 12.5, color: MUTED, flexShrink: 0 }}>{r.k}</span>
@@ -723,7 +723,7 @@ export default function ItemHistoryPage() {
                 </BorderedList>
               ) : (
                 <div style={{ fontSize: 13, color: FAINT }}>
-                  {item.parent_item_id ? `פריט אב #${item.parent_item_id}` : "לא נמצא פריט אב."}
+                  {item.package_id ? `פריט אב #${item.package_id}` : "לא נמצא פריט אב."}
                 </div>
               )}
             </SectionCard>

@@ -3,15 +3,22 @@ import { prisma } from "@/app/lib/prisma";
 
 export const runtime = "nodejs";
 
+/**
+ * Item types, including PACKAGE types (is_package) — the box a customer
+ * ships, whose contents are edited through /api/settings/item-types/[id]/contents.
+ */
 export async function GET() {
   try {
     const rows = await prisma.item_types.findMany({
       orderBy: { item_type_id: "asc" },
+      include: { _count: { select: { package_contents: true } } },
     });
 
     const trimmed = rows.map((r) => ({
       item_type_id: r.item_type_id,
       item_type_desc: r.item_type_desc.trim(),
+      is_package: r.is_package,
+      contents_count: r._count.package_contents,
     }));
 
     return NextResponse.json(trimmed);
@@ -25,6 +32,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const body = await req.json();
   const { item_type_desc } = body;
+  const isPackage = Boolean(body.is_package);
 
   if (!item_type_desc || typeof item_type_desc !== "string" || !item_type_desc.trim()) {
     return NextResponse.json({ error: "Description is required" }, { status: 400 });
@@ -49,12 +57,14 @@ export async function POST(req: Request) {
     }
 
     const created = await prisma.item_types.create({
-      data: { item_type_desc: trimmedDesc },
+      data: { item_type_desc: trimmedDesc, is_package: isPackage },
     });
 
     return NextResponse.json({
       item_type_id: created.item_type_id,
       item_type_desc: created.item_type_desc.trim(),
+      is_package: created.is_package,
+      contents_count: 0,
     });
   } catch (error: any) {
     const msg = String(error?.message ?? "");

@@ -1,8 +1,6 @@
 import { prisma } from "@/app/lib/prisma";
 import { NextResponse } from "next/server";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
-import { createItem } from "@/app/lib/create-item";
-import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 
 export const runtime = "nodejs";
 
@@ -70,55 +68,13 @@ ORDER BY i.item_id DESC
 }
 
 
-export async function POST(req: Request) {
-  // Write-path schema gate (§8 stage 3): createItem emits item_created into
-  // the metrics ledger, so refuse loudly when the DB is behind this image.
-  const schemaDenied = await metricsSchemaGate();
-  if (schemaDenied) return schemaDenied;
-
-  try {
-    const body = await req.json();
-    console.log(body)
-    const { customer, itemType, serialNumber, makat, model, manufacturer, manufacturerNo, shipment, subItems } = body;
-    console.log("shipment", shipment)
-
-    // Validate required fields for main item.
-    // manufacturerNo is listed here because items.manufacturer_no is NOT NULL:
-    // omitting it used to reach the INSERT and surface as a raw 500 (`23502`)
-    // instead of telling the caller which field was missing. Accessories are a
-    // separate case — their own endpoint allows omitting it (see
-    // api/testing/accessory/route.ts), and createItem stores "" for them.
-    if (!customer || !itemType || serialNumber === null || serialNumber === undefined || !makat || !model || !manufacturer || !manufacturerNo || !shipment) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    // Item + accessory creation lives in the shared createItem helper (also used
-    // by the intake wizard's "add accessory" endpoint).
-    let mainItemId: number;
-
-    mainItemId = await prisma.$transaction(async (tx) => {
-      // Create Main Item
-      const mainId = await createItem(tx, body, null);
-
-      // Create Sub Items
-      if (Array.isArray(subItems) && subItems.length > 0) {
-        for (const sub of subItems) {
-          await createItem(tx, sub, mainId);
-        }
-      }
-
-      return mainId;
-    });
-
-    return NextResponse.json({ ok: true, itemId: mainItemId }, { status: 201 });
-  } catch (error: any) {
-    console.error("Error creating item:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to create item" },
-      { status: 500 }
-    );
-  }
+// Items are no longer created one at a time: every item lives inside a
+// package, and the box and its contents are created together by
+// POST /api/packages (docs/packages/PLAN.md §6). Answer 410 so an old client
+// gets a message instead of a silently different model.
+export async function POST() {
+  return NextResponse.json(
+    { error: "פריטים נקלטים כחלק ממארז — יש להשתמש ב-POST /api/packages" },
+    { status: 410 },
+  );
 }

@@ -63,7 +63,7 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
   const valid = REQUIRED.every((k) => form[k].trim() !== "");
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
-  const isSubItem = item.parent_item_id != null;
+  const isSubItem = item.package_id != null;
   const progressText = isSubItem
     ? "—"
     : item.current_status === 3 || item.is_finished

@@ -32,7 +32,7 @@ export interface SearchStation {
 export interface SearchStationType {
   id: number;
   desc: string;
-  parentsOnly: boolean;
+  packageLevel: boolean;
   stationCount: number;
 }
 
@@ -84,7 +84,7 @@ export async function GET() {
       stationTypes: types.map((t) => ({
         id: t.test_station_type_id,
         desc: (t.test_type_desc ?? "").trim(),
-        parentsOnly: t.parents_only,
+        packageLevel: t.package_level,
         stationCount: t._count.test_stations,
       })),
       itemTypes: itemTypes.map((t) => ({

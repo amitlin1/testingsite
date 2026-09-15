@@ -213,7 +213,7 @@ export async function POST(req: Request) {
       // Call site #15 (§4.5/§4.7): an item submitted while still queued
       // (status 2 before the UPDATE) never went through start-test — the
       // intake wizard tests accessories under the parent, and accessories are
-      // parents_only-hidden from station queues so start-test is never called
+      // package_level-hidden from station queues so start-test is never called
       // for them. Without a synthetic test_started the item would have no
       // `testing` interval, ever. Every later event in this tx shifts +1.
       const needsSyntheticStart = currentStatus === 2;

@@ -72,7 +72,7 @@ export interface MetricFilters {
    *  zeros with HTTP 200 (§9.4). */
   workerId?: number | null;
   itemSerial?: string | null;
-  /** §4.7 / §5.0(8): exclude accessory rows entirely (`parents_only`). */
+  /** §4.7 / §5.0(8): exclude accessory rows entirely (`package_level`). */
   parentsOnly?: boolean;
   /** Status set, as metric_state keys. null/undefined = every state. */
   states?: readonly string[] | null;
@@ -143,7 +143,7 @@ export function intervalFilterSql(alias = "i", startIndex = 1): string {
   AND (${$(4)}::int    IS NULL OR ${a}.station_type_id     = ${$(4)})
   AND (${$(5)}::int    IS NULL OR ${a}.exited_by_worker_id = ${$(5)})
   AND (${$(6)}::text   IS NULL OR ${a}.serial_no           = ${$(6)})
-  AND (NOT ${$(7)}::boolean OR ${a}.is_accessory = false)
+  AND (NOT ${$(7)}::boolean OR ${a}.is_package_item = false)
   AND (${$(8)}::text = 'all'
        OR EXISTS (SELECT 1 FROM shipments s_flt
                    WHERE s_flt.id = ${a}.shipment_id AND s_flt.is_sent IS NOT TRUE))
@@ -200,7 +200,7 @@ export function runFilterSql(alias = "rr", startIndex = 1): string {
   AND (${$(1)}::int  IS NULL OR ${a}.shipment_id  = ${$(1)})
   AND (${$(2)}::int  IS NULL OR ${a}.item_type_id = ${$(2)})
   AND (${$(3)}::text IS NULL OR ${a}.serial_no    = ${$(3)})
-  AND (NOT ${$(4)}::boolean OR ${a}.is_accessory = false)
+  AND (NOT ${$(4)}::boolean OR ${a}.is_package_item = false)
   AND (${$(5)}::text = 'all'
        OR EXISTS (SELECT 1 FROM shipments s_flt
                    WHERE s_flt.id = ${a}.shipment_id AND s_flt.is_sent IS NOT TRUE))`;

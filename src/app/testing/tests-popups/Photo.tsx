@@ -19,6 +19,7 @@ import { Person as PersonIcon } from "@/components/ui/icons";
 import { Print as PrintIcon } from "@/components/ui/icons";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
 import { apiFetch } from "@/lib/api/client";
+import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { newActionId } from "@/app/lib/metrics/action-id";
 
 // ---- Design tokens (Shifthouse handoff — "3A" design language) ----
@@ -46,7 +47,7 @@ type Photos = { photos: Shot[]; ok: "" | "pass" | "fail"; note: string };
 const emptyPhotos = (): Photos => ({ photos: [], ok: "", note: "" });
 
 // Upload cap enforced in the browser, mirroring MAX_FILE_SIZE_MB on
-// /api/items/[id]/files (default 100). A plain constant on purpose: a
+// /api/items/[id]/files/presign (default 100). A plain constant on purpose: a
 // NEXT_PUBLIC_ env var is inlined at build time, so a runtime .env change would
 // silently not apply here. If an operator lowers the server cap below this the
 // server still rejects the file and the shot is marked failed - the guards stack.
@@ -434,21 +435,20 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     setAccessories((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
 
   // ---- real photo upload (reuses the item-files pipeline) ----
-  // Every capture is tagged with its photo-type code so other screens/stations
-  // list only their own group (GET /files?photoType=...). A null return means the
-  // photo never reached storage; callers flag the shot as failed so it reads red
-  // instead of looking saved.
+  // The photo goes straight from the browser to MinIO (presign → POST → confirm);
+  // the app never sees the bytes. Every capture is tagged with its photo-type
+  // code so other screens/stations list only their own group
+  // (GET /files?photoType=...). A null return means the photo never reached
+  // storage; callers flag the shot as failed so it reads red instead of looking
+  // saved.
   const uploadToItem = React.useCallback(async (itemId: number, file: File, photoType: string): Promise<string | null> => {
     try {
-      const fd = new FormData();
-      fd.append("files", file);
-      if (workerId != null) fd.append("worker_id", String(workerId));
-      fd.append("station_type_id", String(station.test_station_type_id));
-      fd.append("photo_type", photoType);
-      const res = await apiFetch(`/api/items/${itemId}/files`, { method: "POST", body: fd });
-      if (!res.ok) return null;
-      const d = await res.json();
-      return d.uploaded?.[0]?.objectKey ?? null;
+      const [result] = await uploadItemFiles(itemId, [file], {
+        workerId,
+        stationTypeId: station.test_station_type_id,
+        photoType,
+      });
+      return result?.objectKey ?? null;
     } catch { return null; }
   }, [workerId, station.test_station_type_id]);
 
@@ -549,15 +549,17 @@ export default function Photo({ open, onClose, item, station, workerId, workerNa
     }
     setBusy(true);
     try {
-      const res = await apiFetch("/api/testing/accessory", {
+      // The scanned item is the package (this wizard runs on package-level
+      // stations); the new item takes the next position inside it.
+      const res = await apiFetch(`/api/packages/${item.item_id}/items`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          parentItemId: item.item_id, itemType: Number(draft.itemTypeId), serialNumber: draft.serialNumber,
+          itemType: Number(draft.itemTypeId), serialNumber: draft.serialNumber,
           makat: draft.makat, model: draft.model, manufacturer: draft.manufacturer, manufacturerNo: draft.manufacturerNo || null,
         }),
       });
       const d = await res.json();
-      if (!res.ok) { setError(d?.error || "יצירת האבזר נכשלה"); return; }
+      if (!res.ok) { setError(d?.error || "הוספת הפריט למארז נכשלה"); return; }
       const typeDesc = itemTypes.find((t) => t.item_type_id === Number(draft.itemTypeId))?.item_type_desc?.trim() ?? "";
       setAccessories((prev) => [...prev, {
         itemId: d.itemId, serialNo: draft.serialNumber, itemTypeId: Number(draft.itemTypeId), itemTypeDesc: typeDesc,

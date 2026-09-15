@@ -681,7 +681,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
         [IT_STD, IT_RES],
       );
       await client.query(
-        `INSERT INTO test_stations_type (test_station_type_id, test_type_desc, parents_only) VALUES
+        `INSERT INTO test_stations_type (test_station_type_id, test_type_desc, package_level) VALUES
            ($1, 'קליטה', false), ($2, 'תפקודית', false), ($3, 'מחקר', false)`,
         [TY_A, TY_B, TY_R],
       );
@@ -736,7 +736,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
         const first = plan.events[0];
         await client.query(
           `INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model,
-                              manufacturer_name, manufacturer_no, shipment_id, parent_item_id)
+                              manufacturer_name, manufacturer_no, shipment_id, package_id)
            VALUES ($1, $2, $3, $4, $5, 'MODEL-READ', 'MFR', 'MFR-NO', $6, NULL)`,
           [plan.id, CUSTOMER, plan.itemType, `SN-${plan.id}`, `MK-${plan.id}`, SHIPMENT],
         );

@@ -181,7 +181,7 @@ export default function ItemTable() {
   };
 
   const progressOf = (row: ItemRow): { pct: number; text: string; sub: boolean } => {
-    if (row.parent_item_id !== null && row.parent_item_id !== undefined) return { pct: 0, text: "—", sub: true };
+    if (row.package_id !== null && row.package_id !== undefined) return { pct: 0, text: "—", sub: true };
     const currentStep = row.current_route_step || 0;
     const totalSteps = row.total_steps || 0;
     if (row.current_status === 3 || row.is_finished) {

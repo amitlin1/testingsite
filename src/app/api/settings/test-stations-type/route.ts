@@ -33,7 +33,7 @@ export async function GET() {
     const result = rows.map((r) => ({
       test_station_type_id: r.test_station_type_id,
       test_type_desc: r.test_type_desc.trim(),
-      parents_only: r.parents_only,
+      package_level: r.package_level,
       stale_after_minutes: r.stale_after_minutes,
       station_count: r._count.test_stations,
     }));
@@ -49,7 +49,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const body = await req.json();
   const { test_type_desc } = body;
-  const parentsOnly = Boolean(body.parents_only);
+  const parentsOnly = Boolean(body.package_level);
 
   if (!test_type_desc || typeof test_type_desc !== "string" || !test_type_desc.trim()) {
     return NextResponse.json(
@@ -78,13 +78,13 @@ export async function POST(req: Request) {
 
   try {
     const created = await prisma.test_stations_type.create({
-      data: { test_type_desc: trimmedDesc, parents_only: parentsOnly, stale_after_minutes: staleAfterMinutes },
+      data: { test_type_desc: trimmedDesc, package_level: parentsOnly, stale_after_minutes: staleAfterMinutes },
     });
 
     return NextResponse.json({
       test_station_type_id: created.test_station_type_id,
       test_type_desc: created.test_type_desc.trim(),
-      parents_only: created.parents_only,
+      package_level: created.package_level,
       stale_after_minutes: created.stale_after_minutes,
     });
   } catch (error: any) {
@@ -104,12 +104,12 @@ export async function POST(req: Request) {
         console.log("Duplicate key detected, fixing sequence and retrying...");
         await fixSequence(prisma, "test_stations_type", "test_station_type_id", "test_stations_type_test_station_type_id_seq");
         const retryCreated = await prisma.test_stations_type.create({
-          data: { test_type_desc: trimmedDesc, parents_only: parentsOnly, stale_after_minutes: staleAfterMinutes },
+          data: { test_type_desc: trimmedDesc, package_level: parentsOnly, stale_after_minutes: staleAfterMinutes },
         });
         return NextResponse.json({
           test_station_type_id: retryCreated.test_station_type_id,
           test_type_desc: retryCreated.test_type_desc.trim(),
-          parents_only: retryCreated.parents_only,
+          package_level: retryCreated.package_level,
           stale_after_minutes: retryCreated.stale_after_minutes,
         });
       } catch (retryError: any) {

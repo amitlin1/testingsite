@@ -55,62 +55,137 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
   });
 
   // -------------------------------------------------------------------------
-  // #1 — create-item
+  // #1 — create-package (docs/packages/PLAN.md §2, §6)
   // -------------------------------------------------------------------------
 
-  it("#1 create-item emits item_created, opening the run and the queued interval in the same tx", async () => {
-    const itemId: number = await H.h().prisma.$transaction((tx: any) =>
-      H.h().createItem(tx, {
+  it("#1 create-package emits item_created for the box and each item, opening their runs and queued intervals in the same tx", async () => {
+    const created = await H.h().prisma.$transaction((tx: any) =>
+      H.h().createPackage(tx, {
         customer: H.CUSTOMER_ID,
-        itemType: H.ITEM_TYPE_TWO_STEP,
-        serialNumber: "SN-CREATE",
-        makat: "MK-1",
-        model: "MODEL",
-        manufacturer: "MFR",
-        manufacturerNo: "MFR-NO",
         shipment: H.SHIPMENT_ID,
+        packageType: H.ITEM_TYPE_PACKAGE,
         routeNumber: 1,
+        items: [
+          { itemType: H.ITEM_TYPE_ONE_STEP, serialNumber: "SN-A", makat: "MK-1", model: "MODEL", manufacturer: "MFR", manufacturerNo: "MFR-NO" },
+          { itemType: H.ITEM_TYPE_ONE_STEP, serialNumber: "SN-B", makat: "MK-1", model: "MODEL", manufacturer: "MFR" },
+        ],
       }),
     );
 
-    const ev = await H.events(itemId);
-    assert.equal(ev.length, 1);
-    assert.equal(ev[0].event_key, `item_created:${itemId}`);
-    assert.equal(ev[0].reason, "item_created");
-    assert.equal(ev[0].to_state, "queued");
-    assert.equal(ev[0].kind, "transition");
-    assert.equal(ev[0].seq, 0);
-    assert.equal(ev[0].step_no, 1);
-    // A queued item has no station by construction; it carries the station TYPE
-    // it is waiting for (§3.6), which feeds Q3's shared-type queue.
-    assert.equal(ev[0].station_id, null);
-    assert.equal(ev[0].station_type_id, H.TYPE_INTAKE);
-    // The auto-open marker is suppressed for item_created — this is the run's
-    // legitimate birth, not a surprise (§4.2).
-    assert.equal(ev[0].payload.auto_opened_run, undefined);
+    // Id shape (§2): 16 digits, leading 1, package ends in 00, items in 01/02
+    // and share the package's prefix.
+    const packageId = created.packageId;
+    assert.equal(String(packageId).length, 16);
+    assert.ok(String(packageId).startsWith("1"));
+    assert.ok(String(packageId).endsWith("00"));
+    assert.deepEqual(created.itemIds, [packageId + 1, packageId + 2]);
 
-    const [run] = await H.runs(itemId);
-    assert.equal(run.run_no, 1);
-    assert.equal(run.closed_at, null);
-    assert.deepEqual(run.planned_steps, [H.TYPE_INTAKE, H.TYPE_FUNC]);
-    assert.equal(run.unit_id, itemId);
-    assert.equal(run.is_accessory, false);
-    assert.equal(run.customer_id, H.CUSTOMER_ID);
-    assert.equal(run.shipment_id, H.SHIPMENT_ID);
+    const pkgRow = await H.one(
+      `SELECT package_id, package_seq, package_next_seq, serial_no, template_snapshot FROM items WHERE item_id = $1`,
+      [packageId],
+    );
+    assert.equal(pkgRow.package_id, null);
+    assert.equal(pkgRow.package_seq, null);
+    assert.equal(pkgRow.package_next_seq, 3);
+    assert.equal(pkgRow.serial_no, null);
+    assert.deepEqual(pkgRow.template_snapshot, []); // no package_contents seeded
 
-    const isi = await H.intervals(itemId);
-    assert.equal(isi.length, 1);
-    assert.equal(isi[0].state_key, "queued");
-    assert.equal(isi[0].is_open, true);
-    assert.equal(isi[0].attempt_no, 1);
-    assert.equal(isi[0].step_no, 1);
-    assert.equal(isi[0].station_id, null);
-    assert.equal(isi[0].station_type_id, H.TYPE_INTAKE);
-    assert.equal(isi[0].entry_reason, "item_created");
+    for (const [i, itemId] of created.itemIds.entries()) {
+      const row = await H.one(`SELECT package_id, package_seq FROM items WHERE item_id = $1`, [itemId]);
+      assert.equal(Number(row.package_id), packageId);
+      assert.equal(row.package_seq, i + 1);
+    }
 
-    const route = await H.routeRow(itemId);
-    assert.equal(route.current_status, H.STATUS.queued);
-    assert.equal(route.current_route_step, 1);
+    // Every routed row — the box and both items — gets exactly one
+    // item_created → queued, step 1, carrying the opening station TYPE.
+    for (const id of [packageId, ...created.itemIds]) {
+      const ev = await H.events(id);
+      assert.equal(ev.length, 1, `events of ${id}`);
+      assert.equal(ev[0].event_key, `item_created:${id}`);
+      assert.equal(ev[0].reason, "item_created");
+      assert.equal(ev[0].to_state, "queued");
+      assert.equal(ev[0].kind, "transition");
+      assert.equal(ev[0].seq, 0);
+      assert.equal(ev[0].step_no, 1);
+      assert.equal(ev[0].station_id, null);
+      assert.equal(ev[0].station_type_id, H.TYPE_INTAKE);
+      assert.equal(ev[0].payload.auto_opened_run, undefined);
+
+      const isi = await H.intervals(id);
+      assert.equal(isi.length, 1);
+      assert.equal(isi[0].state_key, "queued");
+      assert.equal(isi[0].is_open, true);
+      assert.equal(isi[0].attempt_no, 1);
+      assert.equal(isi[0].step_no, 1);
+      assert.equal(isi[0].station_type_id, H.TYPE_INTAKE);
+      assert.equal(isi[0].entry_reason, "item_created");
+
+      const route = await H.routeRow(id);
+      assert.equal(route.current_status, H.STATUS.queued);
+      assert.equal(route.current_route_step, 1);
+    }
+
+    // unit_id = COALESCE(package_id, item_id): the box is its own unit, the
+    // items ride on it (§3 of the plan; §4.7 of the metrics plan).
+    const [pkgRun] = await H.runs(packageId);
+    assert.equal(pkgRun.run_no, 1);
+    assert.equal(pkgRun.closed_at, null);
+    assert.deepEqual(pkgRun.planned_steps, [H.TYPE_INTAKE]);
+    assert.equal(Number(pkgRun.unit_id), packageId);
+    assert.equal(pkgRun.is_package_item, false);
+    assert.equal(pkgRun.customer_id, H.CUSTOMER_ID);
+    assert.equal(pkgRun.shipment_id, H.SHIPMENT_ID);
+
+    for (const itemId of created.itemIds) {
+      const [run] = await H.runs(itemId);
+      assert.equal(Number(run.unit_id), packageId);
+      assert.equal(run.is_package_item, true);
+      assert.equal(Number(run.package_id), packageId);
+    }
+
+    // The daily counter counts PACKAGES: one box, one increment.
+    const counter = await H.one(`SELECT counter FROM daily_counters`);
+    assert.equal(Number(counter.counter), 1);
+
+    await assertNoDrift();
+  });
+
+  it("#1b add-package-item takes the next position and refuses once the box is past its opening step", async () => {
+    const created = await H.h().prisma.$transaction((tx: any) =>
+      H.h().createPackage(tx, {
+        customer: H.CUSTOMER_ID,
+        shipment: H.SHIPMENT_ID,
+        packageType: H.ITEM_TYPE_PACKAGE,
+        items: [{ itemType: H.ITEM_TYPE_ONE_STEP, serialNumber: "SN-A", makat: "MK-1", model: "MODEL", manufacturer: "MFR" }],
+      }),
+    );
+
+    const added = await H.h().prisma.$transaction((tx: any) =>
+      H.h().addPackageItem(tx, BigInt(created.packageId), {
+        itemType: H.ITEM_TYPE_ONE_STEP, serialNumber: "SN-LATE", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
+      }),
+    );
+    assert.equal(added.packageSeq, 2);
+    assert.equal(added.itemId, created.packageId + 2);
+
+    const pkgRow = await H.one(`SELECT package_next_seq FROM items WHERE item_id = $1`, [created.packageId]);
+    assert.equal(pkgRow.package_next_seq, 3);
+
+    // Finish the box's (one-step) route; adding is then refused.
+    await H.startTest({ itemId: created.packageId, stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
+    const res = await H.submitResult({
+      ItemID: created.packageId, StationID: H.STATION_INTAKE, SubmitID: randomUUID(), Passed: true,
+    });
+    assert.equal(res.status, 200);
+
+    await assert.rejects(
+      H.h().prisma.$transaction((tx: any) =>
+        H.h().addPackageItem(tx, BigInt(created.packageId), {
+          itemType: H.ITEM_TYPE_ONE_STEP, serialNumber: "SN-TOO-LATE", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
+        }),
+      ),
+      (e: any) => e?.code === "PACKAGE_NOT_OPENING",
+    );
 
     await assertNoDrift();
   });
@@ -784,7 +859,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     await H.seedItem({
       itemId: accessoryId,
       itemTypeId: H.ITEM_TYPE_ONE_STEP,
-      parentItemId: parentId,
+      packageId: parentId,
     });
 
     // The intake wizard submits accessories in a loop while they are still
@@ -825,11 +900,11 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     assert.equal(testing.exit_reason, "result_submitted");
     assert.equal(testing.station_id, H.STATION_INTAKE);
     assert.notEqual(testing.wall_seconds, null);
-    assert.equal(testing.is_accessory, true);
+    assert.equal(testing.is_package_item, true);
     assert.equal(testing.unit_id, parentId, "the accessory's intervals belong to the parent's unit");
 
     const [run] = await H.runs(accessoryId);
-    assert.equal(run.is_accessory, true);
+    assert.equal(run.is_package_item, true);
     assert.equal(run.unit_id, parentId);
     assert.notEqual(run.closed_at, null);
 

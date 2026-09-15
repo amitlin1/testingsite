@@ -12,6 +12,7 @@ export async function GET() {
     const itemTypes = rows.map((row) => ({
       id: row.item_type_id,
       name: (row.item_type_desc ?? "").trim(),
+      is_package: row.is_package,
     }));
 
     return NextResponse.json(itemTypes);
