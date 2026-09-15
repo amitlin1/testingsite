@@ -143,3 +143,6 @@ nul
 /שיפור פרויקט עם design system.zip
 /שיפור פרויקט עם design system (1)/
 /שיפור פרויקט עם design system (1)/
+
+# Audit output of scripts/convert-legacy-to-packages.mjs (old -> new id mapping per run)
+scripts/convert-legacy-*.json
