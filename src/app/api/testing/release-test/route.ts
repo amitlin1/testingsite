@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { recordTransition } from "@/app/lib/metrics/record";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
+import { isPackageLevelStationType, loadPackageContext } from "@/app/lib/packages/context";
 
 export const runtime = "nodejs";
 
@@ -86,6 +87,44 @@ export async function POST(req: Request) {
           workerName,
           reason: "released_by_user",
         });
+
+        // Group release (docs/packages/PLAN.md §4): the mirror of start-test's
+        // group start. Releasing a PACKAGE at a package-level station puts
+        // every item of it that this click started back to waiting, each
+        // with its own event.
+        const pkgCtx = await loadPackageContext(tx, BigInt(itemId));
+        if (
+          pkgCtx?.isPackage &&
+          !isResearch &&
+          (await isPackageLevelStationType(tx, stationInfo.test_station_type_id))
+        ) {
+          const members = await tx.$queryRaw<{ item_id: bigint; current_route_step: number }[]>`
+            UPDATE item_routes ir
+               SET current_status = 2,
+                   processing_start_time = NULL,
+                   queue_start_time = NOW()
+              FROM items i
+             WHERE i.item_id = ir.item_id
+               AND i.package_id = ${BigInt(itemId)}
+               AND ir.current_status = 1
+               AND ir.test_station_id = ${stationId}
+               AND ir.finished_at IS NULL
+            RETURNING ir.item_id, ir.current_route_step
+          `;
+          for (const m of members) {
+            await recordTransition(tx, {
+              eventKey: `released_by_user:${actionUuid}:${m.item_id}`,
+              itemId: m.item_id,
+              toState: "queued",
+              stepNo: m.current_route_step,
+              stationTypeId: stationInfo.test_station_type_id,
+              workerId,
+              workerName,
+              reason: "released_by_user",
+              payload: { package_id: String(itemId), group_release: true },
+            });
+          }
+        }
       }
     });
 

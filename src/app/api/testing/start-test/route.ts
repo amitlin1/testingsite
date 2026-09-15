@@ -4,6 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { recordTransition } from "@/app/lib/metrics/record";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
+import { isPackageLevelStationType, loadPackageContext } from "@/app/lib/packages/context";
 
 export const runtime = "nodejs";
 
@@ -116,7 +117,51 @@ export async function POST(req: Request) {
         reason: "test_started",
       });
 
-      return updateResult[0];
+      // 4. Group start (docs/packages/PLAN.md §4): starting a PACKAGE at a
+      // package-level station starts every item inside it that is waiting
+      // for this station type — the wizard tests them in the same session,
+      // and package-level queues never list them, so nothing else would. Each
+      // gets its own test_started, keyed by the same click + its own id, so
+      // the ledger holds a real testing interval per item (no synthetic pair).
+      let startedPackageItems: string[] = [];
+      const pkgCtx = await loadPackageContext(tx, BigInt(itemId));
+      if (
+        pkgCtx?.isPackage &&
+        !isResearchStation &&
+        (await isPackageLevelStationType(tx, stationInfo.test_station_type_id))
+      ) {
+        const members = await tx.$queryRaw<{ item_id: bigint; current_route_step: number }[]>`
+          UPDATE item_routes ir
+             SET current_status = 1,
+                 processing_start_time = ${currentUtcDate}::timestamp,
+                 test_station_id = ${stationId}
+            FROM items i, testing_routes tr
+           WHERE i.item_id = ir.item_id
+             AND i.package_id = ${BigInt(itemId)}
+             AND tr.item_type_id = ir.item_type_id AND tr.route_number = ir.route_number
+             AND ir.current_status = 2
+             AND ir.finished_at IS NULL
+             AND tr.route_steps[ir.current_route_step] = ${stationInfo.test_station_type_id}
+          RETURNING ir.item_id, ir.current_route_step
+        `;
+        for (const m of members) {
+          await recordTransition(tx, {
+            eventKey: `test_started:${actionUuid}:${m.item_id}`,
+            itemId: m.item_id,
+            toState: "testing",
+            stepNo: m.current_route_step,
+            stationId,
+            stationTypeId: stationInfo.test_station_type_id,
+            workerId,
+            workerName,
+            reason: "test_started",
+            payload: { package_id: String(itemId), group_start: true },
+          });
+        }
+        startedPackageItems = members.map((m) => m.item_id.toString());
+      }
+
+      return { ...updateResult[0], startedPackageItems };
     });
 
     // Normalize processing_start_time to UTC ISO string

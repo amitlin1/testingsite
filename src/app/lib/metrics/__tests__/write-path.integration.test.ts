@@ -191,6 +191,245 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
   });
 
   // -------------------------------------------------------------------------
+  // Package routing (docs/packages/PLAN.md §4): group start / release, the
+  // meeting point at the closing station, retype after opening.
+  // -------------------------------------------------------------------------
+
+  async function createBox(items: number[]): Promise<{ packageId: number; itemIds: number[] }> {
+    return H.h().prisma.$transaction((tx: any) =>
+      H.h().createPackage(tx, {
+        customer: H.CUSTOMER_ID,
+        shipment: H.SHIPMENT_ID,
+        packageType: H.ITEM_TYPE_PACKAGE_CLOSE,
+        items: items.map((t, i) => ({
+          itemType: t, serialNumber: `SN-BOX-${i + 1}`, makat: "MK-1", model: "MODEL", manufacturer: "MFR",
+        })),
+      }),
+    );
+  }
+
+  it("#16 starting a package at a package-level station starts its items; releasing it releases them", async () => {
+    const box = await createBox([H.ITEM_TYPE_IN_BOX, H.ITEM_TYPE_IN_BOX]);
+    const [a, b] = box.itemIds;
+
+    const startUuid = randomUUID();
+    const started = await H.startTest({ itemId: box.packageId, stationId: H.STATION_INTAKE, actionUuid: startUuid });
+    assert.equal(started.status, 200);
+    assert.deepEqual(started.body.item.startedPackageItems, [String(a), String(b)]);
+
+    for (const id of [box.packageId, a, b]) {
+      const route = await H.routeRow(id);
+      assert.equal(route.current_status, H.STATUS.testing, `status of ${id}`);
+      assert.equal(route.test_station_id, H.STATION_INTAKE);
+      const ev = await H.events(id);
+      assert.equal(ev[ev.length - 1].reason, "test_started");
+      assert.equal(ev[ev.length - 1].station_id, H.STATION_INTAKE);
+    }
+    // One click, three keys: the box's plain key and one per item.
+    const evA = await H.events(a);
+    assert.equal(evA[evA.length - 1].event_key, `test_started:${startUuid}:${a}`);
+    await assertNoDrift();
+
+    const released = await H.releaseTest({ itemId: box.packageId, stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
+    assert.equal(released.status, 200);
+    for (const id of [box.packageId, a, b]) {
+      const route = await H.routeRow(id);
+      assert.equal(route.current_status, H.STATUS.queued, `status of ${id}`);
+      const isi = await H.intervals(id);
+      assert.equal(isi[isi.length - 1].state_key, "queued");
+      assert.equal(isi[isi.length - 1].attempt_no, 2);
+    }
+    await assertNoDrift();
+  });
+
+  it("#17 the meeting point: a box reaching its closing step waits for its items (6) and queues when the last one arrives", async () => {
+    const box = await createBox([H.ITEM_TYPE_IN_BOX, H.ITEM_TYPE_IN_BOX]);
+    const [a, b] = box.itemIds;
+
+    // Opening: group start, then the wizard submits each item and the box.
+    await H.startTest({ itemId: box.packageId, stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
+    const submitId = randomUUID();
+    for (const id of [a, b]) {
+      const r = await H.submitResult({ ItemID: id, StationID: H.STATION_INTAKE, SubmitID: submitId, Passed: true });
+      assert.equal(r.status, 200);
+    }
+    const boxOpened = await H.submitResult({ ItemID: box.packageId, StationID: H.STATION_INTAKE, SubmitID: submitId, Passed: true });
+    assert.equal(boxOpened.status, 200);
+
+    // Items are at FUNC (step 2); the box advanced to CLOSE (step 2 of ITS
+    // route) and must wait for them.
+    assert.equal(boxOpened.body.packageGate.status, 6);
+    assert.deepEqual(boxOpened.body.packageGate.blockingItemIds.sort(), [String(a), String(b)].sort());
+    const boxRoute = await H.routeRow(box.packageId);
+    assert.equal(boxRoute.current_status, 6);
+    assert.equal(boxRoute.current_route_step, 2);
+    const boxIsi = await H.intervals(box.packageId);
+    assert.equal(boxIsi[boxIsi.length - 1].state_key, "waiting_for_package_items");
+    assert.equal(boxIsi[boxIsi.length - 1].station_type_id, H.TYPE_CLOSE);
+    await assertNoDrift();
+
+    // First item through FUNC: still one out, the box keeps waiting.
+    await H.startTest({ itemId: a, stationId: H.STATION_FUNC_A, actionUuid: randomUUID() });
+    const aDone = await H.submitResult({ ItemID: a, StationID: H.STATION_FUNC_A, SubmitID: randomUUID(), Passed: true });
+    assert.equal(aDone.status, 200);
+    assert.equal(aDone.body.packageGate.status, 6);
+    assert.deepEqual(aDone.body.packageGate.blockingItemIds, [String(b)]);
+    assert.equal((await H.routeRow(a)).current_route_step, 3);
+
+    // Second item through FUNC: everyone is at CLOSE, the box queues NOW.
+    await H.startTest({ itemId: b, stationId: H.STATION_FUNC_B, actionUuid: randomUUID() });
+    const bDone = await H.submitResult({ ItemID: b, StationID: H.STATION_FUNC_B, SubmitID: randomUUID(), Passed: true });
+    assert.equal(bDone.status, 200);
+    assert.equal(bDone.body.packageGate.status, H.STATUS.queued);
+    assert.deepEqual(bDone.body.packageGate.blockingItemIds, []);
+
+    const boxRoute2 = await H.routeRow(box.packageId);
+    assert.equal(boxRoute2.current_status, H.STATUS.queued);
+    assert.equal(boxRoute2.test_station_id, H.STATION_CLOSE);
+    // Transitions only — the step assignment also hangs station_reassigned
+    // NOTES off the run, and those are not part of the state story.
+    const boxEv = (await H.events(box.packageId)).filter((e) => e.kind === "transition");
+    assert.deepEqual(
+      boxEv.map((e) => e.reason),
+      ["item_created", "test_started", "result_submitted", "package_items_pending", "package_items_ready"],
+    );
+    const boxIsi2 = await H.intervals(box.packageId);
+    const waiting = boxIsi2.find((i) => i.state_key === "waiting_for_package_items");
+    assert.ok(waiting && !waiting.is_open, "the waiting-for-items interval closed when the last item arrived");
+    assert.equal(boxIsi2[boxIsi2.length - 1].state_key, "queued");
+    assert.equal(boxIsi2[boxIsi2.length - 1].station_type_id, H.TYPE_CLOSE);
+    await assertNoDrift();
+
+    // Closing: group start again, one result per item and the box; all done.
+    const closeStart = await H.startTest({ itemId: box.packageId, stationId: H.STATION_CLOSE, actionUuid: randomUUID() });
+    assert.deepEqual(closeStart.body.item.startedPackageItems.sort(), [String(a), String(b)].sort());
+    const closeSubmit = randomUUID();
+    for (const id of [a, b, box.packageId]) {
+      const r = await H.submitResult({ ItemID: id, StationID: H.STATION_CLOSE, SubmitID: closeSubmit, Passed: true });
+      assert.equal(r.status, 200, `closing ${id}`);
+    }
+    for (const id of [a, b, box.packageId]) {
+      const route = await H.routeRow(id);
+      assert.equal(route.current_status, H.STATUS.done, `final status of ${id}`);
+      assert.equal(route.is_finished, true);
+      const [run] = await H.runs(id);
+      assert.ok(run.closed_at, `run of ${id} closed`);
+      assert.equal(run.is_trusted, true);
+    }
+    await assertNoDrift();
+  });
+
+  it("#18 retyping an item after its box was opened needs confirmation, then resets the whole box to the opening step", async () => {
+    const box = await createBox([H.ITEM_TYPE_IN_BOX, H.ITEM_TYPE_IN_BOX]);
+    const [a, b] = box.itemIds;
+
+    // Before opening: an item can be retyped on its own (ONE_STEP does not fit
+    // a PACKAGE_CLOSE box, so it is refused; IN_BOX → IN_BOX is no change).
+    const refused = await H.updateItem(a, {
+      customer: H.CUSTOMER_ID, itemType: H.ITEM_TYPE_ONE_STEP, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
+    });
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.code, "ITEM_ROUTE_SHAPE");
+
+    // Open the box.
+    await H.startTest({ itemId: box.packageId, stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
+    const submitId = randomUUID();
+    for (const id of [a, b, box.packageId]) {
+      await H.submitResult({ ItemID: id, StationID: H.STATION_INTAKE, SubmitID: submitId, Passed: true });
+    }
+    assert.equal((await H.routeRow(box.packageId)).current_route_step, 2);
+
+    // The box cannot change type at all.
+    const boxRetype = await H.updateItem(box.packageId, {
+      customer: H.CUSTOMER_ID, itemType: H.ITEM_TYPE_PACKAGE, makat: "MK-1",
+    });
+    assert.equal(boxRetype.status, 409);
+    assert.equal(boxRetype.body.code, "PACKAGE_TYPE_LOCKED");
+
+    // Retyping an item now needs the explicit confirmation ...
+    const needsConfirm = await H.updateItem(a, {
+      customer: H.CUSTOMER_ID, itemType: H.ITEM_TYPE_TWO_STEP, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
+    });
+    assert.equal(needsConfirm.status, 409);
+    assert.equal(needsConfirm.body.code, "PACKAGE_RESET_REQUIRED");
+    assert.equal((await H.routeRow(a)).current_route_step, 2, "nothing moved");
+
+    // ... and TWO_STEP ends at FUNC, not CLOSE, so even confirmed it is refused.
+    const badShape = await H.updateItem(a, {
+      customer: H.CUSTOMER_ID, itemType: H.ITEM_TYPE_TWO_STEP, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
+      confirmPackageReset: true,
+    });
+    assert.equal(badShape.status, 409);
+    assert.equal(badShape.body.code, "ITEM_ROUTE_SHAPE");
+
+    // A retype that fits, confirmed: the whole box goes back to the opening.
+    const reset = await H.updateItem(a, {
+      customer: H.CUSTOMER_ID, itemType: H.ITEM_TYPE_IN_BOX_ALT, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
+      confirmPackageReset: true, workerId: H.WORKER_ID, workerName: H.WORKER_NAME,
+    });
+    assert.equal(reset.status, 200);
+    assert.equal(reset.body.retyped, true);
+    assert.deepEqual(reset.body.packageReset.map(Number).sort(), [box.packageId, a, b].sort());
+    const retyped = await H.one(`SELECT item_type_id FROM items WHERE item_id = $1`, [a]);
+    assert.equal(retyped.item_type_id, H.ITEM_TYPE_IN_BOX_ALT);
+    assert.equal((await H.runs(a))[1].item_type_id, H.ITEM_TYPE_IN_BOX_ALT, "the new run is planned against the new type");
+    for (const id of [box.packageId, a, b]) {
+      const route = await H.routeRow(id);
+      assert.equal(route.current_status, H.STATUS.queued, `status of ${id}`);
+      assert.equal(route.current_route_step, 1, `step of ${id}`);
+      assert.equal(route.is_finished, false);
+      const runs = await H.runs(id);
+      assert.equal(runs.length, 2, `runs of ${id}`);
+      assert.equal(runs[0].is_trusted, false, "the opened run is abandoned, not completed");
+      assert.equal(runs[0].close_reason, "retyped");
+      assert.equal(runs[1].closed_at, null);
+      const isi = await H.intervals(id);
+      assert.equal(isi[isi.length - 1].state_key, "queued");
+      assert.equal(isi[isi.length - 1].entry_reason, "package_reset");
+      assert.equal(isi[isi.length - 1].station_type_id, H.TYPE_INTAKE);
+    }
+    await assertNoDrift();
+  });
+
+  it("#19 the last item in a box cannot be deleted; deleting another item re-evaluates the box's gate", async () => {
+    const box = await createBox([H.ITEM_TYPE_IN_BOX, H.ITEM_TYPE_IN_BOX]);
+    const [a, b] = box.itemIds;
+
+    // Open, then move the box to CLOSE while both items sit at FUNC.
+    await H.startTest({ itemId: box.packageId, stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
+    const submitId = randomUUID();
+    for (const id of [a, b, box.packageId]) {
+      await H.submitResult({ ItemID: id, StationID: H.STATION_INTAKE, SubmitID: submitId, Passed: true });
+    }
+    assert.equal((await H.routeRow(box.packageId)).current_status, 6);
+
+    // b reaches CLOSE; a is still the blocker.
+    await H.startTest({ itemId: b, stationId: H.STATION_FUNC_A, actionUuid: randomUUID() });
+    await H.submitResult({ ItemID: b, StationID: H.STATION_FUNC_A, SubmitID: randomUUID(), Passed: true });
+    assert.equal((await H.routeRow(box.packageId)).current_status, 6);
+
+    // Deleting the blocker makes the box ready.
+    const del = await H.deleteItem(a);
+    assert.equal(del.status, 200);
+    assert.equal((await H.routeRow(box.packageId)).current_status, H.STATUS.queued);
+    assert.equal((await H.events(a)).length, 0, "the deleted item's ledger rows are gone");
+
+    // b is now the last item: refused.
+    const last = await H.deleteItem(b);
+    assert.equal(last.status, 409);
+    assert.equal(last.body.code, "LAST_PACKAGE_ITEM");
+
+    // The box itself: 409 with the list, then cascade.
+    const listed = await H.deleteItem(box.packageId);
+    assert.equal(listed.status, 409);
+    assert.equal(listed.body.code, "PACKAGE_HAS_ITEMS");
+    const gone = await H.deleteItem(box.packageId, { cascade: true });
+    assert.equal(gone.status, 200);
+    assert.equal(gone.body.deletedConnectedCount, 1);
+    await assertNoDrift();
+  });
+
+  // -------------------------------------------------------------------------
   // #2 / #9 / #10 — the normal finishing path
   // -------------------------------------------------------------------------
 

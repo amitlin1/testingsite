@@ -28,6 +28,7 @@ export type StateKey =
   | "queued"
   | "done"
   | "queued_research"
+  | "waiting_for_package_items"
   | "in_research"
   | "unmapped";
 
@@ -36,6 +37,7 @@ export const ALL_STATE_KEYS: readonly StateKey[] = [
   "queued",
   "done",
   "queued_research",
+  "waiting_for_package_items",
   "in_research",
   "unmapped",
 ];
@@ -48,7 +50,7 @@ export const ALL_STATE_KEYS: readonly StateKey[] = [
  */
 const LEGACY_STATUS_SETS: Record<LegacyStatusFilter, StateKey[] | null> = {
   all: null,
-  queue: ["queued", "queued_research"], // ms.is_waiting
+  queue: ["queued", "queued_research", "waiting_for_package_items"], // ms.is_waiting
   processing: ["testing", "in_research"], // ms.is_active_work
   finished: ["done"], // ms.is_terminal
 };

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { parseBarcode } from "@/app/lib/barcode-parser";
+import { computePackageGate } from "@/app/lib/packages/readiness";
 
 export const runtime = "nodejs";
 
@@ -77,6 +78,23 @@ export async function GET(req: Request) {
                 serialNo: row.serialNo,
                 makat: row.makat ?? null,
                 model: row.model,
+            });
+        }
+
+        if (currentStatus === 6) {
+            // A package waiting for its items before the closing station
+            // (docs/packages/PLAN.md §4). Not an error: tell the client which
+            // items are still out so it can say so instead of "no station".
+            const gate = await computePackageGate(prisma, itemIdBig);
+            return NextResponse.json({
+                waitingForPackageItems: true,
+                itemId: Number(row.itemId),
+                currentStatus,
+                serialNo: row.serialNo,
+                makat: row.makat ?? null,
+                model: row.model,
+                stationTypeId: gate.stepTypeId,
+                blockingItemIds: gate.blockingItemIds.map((b) => Number(b)),
             });
         }
 

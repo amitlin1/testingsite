@@ -20,12 +20,15 @@ export type MetricsReason =
   | "station_reassigned"
   | "manual_override"
   | "legacy_import"
+  | "package_items_pending"
+  | "package_items_ready"
+  | "package_reset"
   | "correction";
 
 export type MetricsTransition = {
   eventKey: string;
   itemId: bigint;
-  toState: "queued" | "testing" | "done" | "queued_research" | "in_research" | "unmapped" | null;
+  toState: "queued" | "testing" | "done" | "queued_research" | "in_research" | "waiting_for_package_items" | "unmapped" | null;
   stepNo: number;
   stationId?: number | null;
   stationTypeId?: number | null;

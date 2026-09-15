@@ -9,6 +9,11 @@ import { findStationForRouteStep } from "@/app/lib/station-assignment";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { recordTransition } from "@/app/lib/metrics/record";
 import { forgetItem, resyncItemDims, abandonRun } from "@/app/lib/metrics/item-lifecycle";
+import { PackageError } from "@/app/lib/packages/errors";
+import { loadPackageContext } from "@/app/lib/packages/context";
+import { checkItemRouteAgainstPackage, loadPackageLevelTypeIds, loadRouteShape } from "@/app/lib/packages/route-rules";
+import { recheckPackageReadiness } from "@/app/lib/packages/readiness";
+import { resetPackageToOpening } from "@/app/lib/packages/reset";
 
 export const runtime = "nodejs";
 
@@ -187,6 +192,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // For every other field it is an ordinary correction: the ledger freezes
 // customer / shipment / serial onto each run and interval so no read query has
 // to join items (§3.6), and metrics_resync_item_dims re-freezes them.
+//
+// Package model (docs/packages/PLAN.md §4, "שינוי סוג"):
+//   - a PACKAGE never changes type (delete and re-create instead);
+//   - an item inside a box may not become a package type;
+//   - retyping an item while its box is still at the opening step restarts
+//     just that item, as before — its new route must still fit the box;
+//   - retyping an item after the box was opened resets the WHOLE box to the
+//     opening station, and only with `confirmPackageReset: true` in the body
+//     (the UI shows the warning first; without it the answer is 409
+//     PACKAGE_RESET_REQUIRED).
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -195,14 +210,27 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
     const body = await req.json();
     const { customer, itemType, serialNumber, makat, model, manufacturer, manufacturerNo } = body;
+    const confirmPackageReset = body.confirmPackageReset === true;
+    const workerId: number | null = typeof body.workerId === "number" ? body.workerId : null;
+    const workerName: string | null =
+      typeof body.workerName === "string" && body.workerName ? body.workerName : null;
 
-    if (!customer || !itemType || !serialNumber || !makat || !model || !manufacturer) {
-      return NextResponse.json({ error: "יש למלא את כל השדות" }, { status: 400 });
+    if (!customer || !itemType || !makat) {
+      return NextResponse.json({ error: "יש למלא לקוח, סוג ומק\"ט" }, { status: 400 });
     }
 
     const nextTypeId = Number(itemType);
 
     const result = await prisma.$transaction(async (tx) => {
+      const ctx = await loadPackageContext(tx, itemIdBig);
+      if (!ctx) throw new PackageError("ITEM_NOT_FOUND", "הפריט לא נמצא", 404);
+
+      // A package has no serial and may leave model / manufacturer empty; an
+      // item inside a box must carry all of them, as before.
+      if (!ctx.isPackage && (!serialNumber || !model || !manufacturer)) {
+        throw new PackageError("MISSING_FIELDS", "יש למלא את כל השדות");
+      }
+
       const route = await tx.item_routes.findUnique({
         where: { item_id: itemIdBig },
         select: { item_type_id: true },
@@ -210,73 +238,142 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
       const typeChanged = route != null && route.item_type_id !== nextTypeId;
 
+      let nextTypeDesc = "";
+      if (typeChanged) {
+        const nextType = await tx.item_types.findUnique({
+          where: { item_type_id: nextTypeId },
+          select: { is_package: true, item_type_desc: true },
+        });
+        if (!nextType) throw new PackageError("ITEM_TYPE_NOT_FOUND", "סוג הפריט לא נמצא", 404);
+        nextTypeDesc = nextType.item_type_desc.trim();
+        if (ctx.isPackage) {
+          throw new PackageError("PACKAGE_TYPE_LOCKED", "לא ניתן לשנות סוג של מארז — יש למחוק וליצור מחדש", 409);
+        }
+        if (nextType.is_package) {
+          throw new PackageError("NESTED_PACKAGE", `${nextTypeDesc} הוא סוג מארז ולא יכול להיות פריט בתוך מארז`);
+        }
+      }
+
       const updated = await tx.items.update({
         where: { item_id: itemIdBig },
         data: {
           customer_id: Number(customer),
           item_type_id: nextTypeId,
-          serial_no: String(serialNumber),
+          serial_no: ctx.isPackage ? (serialNumber ? String(serialNumber) : null) : String(serialNumber),
           makat: String(makat),
-          model: String(model),
-          manufacturer_name: String(manufacturer),
+          model: String(model ?? ""),
+          manufacturer_name: String(manufacturer ?? ""),
           manufacturer_no: manufacturerNo != null ? String(manufacturerNo) : "",
         },
       });
 
+      let packageReset: string[] | null = null;
+
       if (typeChanged) {
         // Route 1 of the new type: a route_number is only meaningful within a
-        // type, so the old one cannot be carried across. Same default
-        // create-item.ts uses at intake.
+        // type, so the old one cannot be carried across. Same default the
+        // intake form uses.
         const routeNum = 1;
-        const stationId = await findStationForRouteStep(tx, nextTypeId, routeNum, 1);
-        const now = new Date(getCurrentUtcIso());
 
-        await tx.item_routes.update({
-          where: { item_id: itemIdBig },
-          data: {
-            item_type_id: nextTypeId,
-            route_number: routeNum,
-            current_route_step: 1,
-            current_status: 2, // queued (metric_state.legacy_status_id)
-            test_station_id: stationId,
-            is_finished: false,
-            finished_at: null,
-            queue_start_time: now,
-            processing_start_time: null,
-          },
-        });
+        // Inside a box: the new route must start and end where the box's
+        // route does (PLAN.md §4), or the item would leak out of the group.
+        let packagePastOpening = false;
+        if (ctx.packageId != null) {
+          const pkgRoute = await tx.item_routes.findUnique({
+            where: { item_id: ctx.packageId },
+            select: { item_type_id: true, route_number: true, current_route_step: true, is_finished: true },
+          });
+          if (pkgRoute) {
+            const packageLevel = await loadPackageLevelTypeIds(tx);
+            const pkgShape = await loadRouteShape(tx, pkgRoute.item_type_id, pkgRoute.route_number);
+            if (pkgShape) {
+              const itemShape = await loadRouteShape(tx, nextTypeId, routeNum);
+              const problem = checkItemRouteAgainstPackage(itemShape, pkgShape, packageLevel, routeNum);
+              if (problem) throw new PackageError("ITEM_ROUTE_SHAPE", `${nextTypeDesc}: ${problem}`, 409);
+            }
+            packagePastOpening = pkgRoute.current_route_step > 1 || pkgRoute.is_finished;
+          }
+        }
 
-        // Close the old run first: metrics_record reuses an OPEN run, and
-        // route_run_one_open forbids a second one, so without this the new
-        // transition would land back on the run built for the old type.
-        await abandonRun(tx, itemIdBig, "retyped");
+        if (packagePastOpening && !confirmPackageReset) {
+          throw new PackageError(
+            "PACKAGE_RESET_REQUIRED",
+            "שינוי הסוג יאפס את כל המארז ויחזיר אותו לעמדת הפתיחה — נדרש אישור",
+            409,
+          );
+        }
 
-        // Reopens the run against the new plan (metrics_open_run reads the
-        // item_routes row updated just above). station_type_id is the type the
-        // fresh queued interval waits for — step 1 of the new route.
-        const routeRow = await tx.testing_routes.findFirst({
-          where: { item_type_id: nextTypeId, route_number: routeNum },
-          select: { route_steps: true },
-        });
+        if (packagePastOpening && ctx.packageId != null) {
+          // The whole box starts over. Write the new type onto the item's
+          // route row first; the reset reads each row's current type.
+          await tx.item_routes.update({
+            where: { item_id: itemIdBig },
+            data: { item_type_id: nextTypeId, route_number: routeNum },
+          });
+          const outcome = await resetPackageToOpening(tx, ctx.packageId, { reason: "retyped", workerId, workerName });
+          packageReset = outcome.resetItemIds.map((x) => x.toString());
+        } else {
+          const stationId = await findStationForRouteStep(tx, nextTypeId, routeNum, 1);
+          const now = new Date(getCurrentUtcIso());
 
-        await recordTransition(tx, {
-          eventKey: `retype:${itemId}:${randomUUID()}`,
-          itemId: itemIdBig,
-          toState: "queued",
-          stepNo: 1,
-          stationTypeId: routeRow?.route_steps?.[0] ?? null,
-          reason: "manual_override",
-        });
+          await tx.item_routes.update({
+            where: { item_id: itemIdBig },
+            data: {
+              item_type_id: nextTypeId,
+              route_number: routeNum,
+              current_route_step: 1,
+              current_status: 2, // queued (metric_state.legacy_status_id)
+              test_station_id: stationId,
+              is_finished: false,
+              finished_at: null,
+              queue_start_time: now,
+              processing_start_time: null,
+            },
+          });
+
+          // Close the old run first: metrics_record reuses an OPEN run, and
+          // route_run_one_open forbids a second one, so without this the new
+          // transition would land back on the run built for the old type.
+          await abandonRun(tx, itemIdBig, "retyped");
+
+          // Reopens the run against the new plan (metrics_open_run reads the
+          // item_routes row updated just above). station_type_id is the type the
+          // fresh queued interval waits for — step 1 of the new route.
+          const routeRow = await tx.testing_routes.findFirst({
+            where: { item_type_id: nextTypeId, route_number: routeNum },
+            select: { route_steps: true },
+          });
+
+          await recordTransition(tx, {
+            eventKey: `retype:${itemId}:${randomUUID()}`,
+            itemId: itemIdBig,
+            toState: "queued",
+            stepNo: 1,
+            stationTypeId: routeRow?.route_steps?.[0] ?? null,
+            workerId,
+            workerName,
+            reason: "manual_override",
+          });
+
+          // An item that left the closing gate (its new route starts at the
+          // opening) may have been the last one the box was waiting for.
+          if (ctx.packageId != null) {
+            await recheckPackageReadiness(tx, ctx.packageId, { workerId, workerName });
+          }
+        }
       }
 
       // Ledger: same transaction as the writes above, per §4.8.
       await resyncItemDims(tx, itemIdBig);
 
-      return { item_id: updated.item_id.toString(), retyped: typeChanged };
+      return { item_id: updated.item_id.toString(), retyped: typeChanged, packageReset };
     });
 
-    return NextResponse.json({ ok: true, item_id: result.item_id, retyped: result.retyped });
+    return NextResponse.json({ ok: true, item_id: result.item_id, retyped: result.retyped, packageReset: result.packageReset });
   } catch (error: any) {
+    if (error instanceof PackageError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return NextResponse.json({ error: "הפריט לא נמצא" }, { status: 404 });
     }
@@ -289,11 +386,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // station history, test results — these have no DB-level FK to `items`, so
 // they'd otherwise be left orphaned).
 //
-// If the item has connected accessory items (items.package_id → this
-// item — a real FK), deleting it outright would fail. Instead: without
-// `cascade: true` in the body, report the connected items back as a 409 so
-// the UI can warn the user by name; with `cascade: true`, delete the item
-// and its connected items together in one transaction.
+// Package model (docs/packages/PLAN.md §4):
+//   - deleting a PACKAGE deletes every item inside it (items.package_id → the
+//     box is a real FK, so it could not be deleted alone anyway). Without
+//     `cascade: true` in the body the items are reported back as a 409 so the
+//     UI can list them; with it, the box and its items go in one transaction.
+//   - deleting the LAST item inside a box is refused: an empty package is not
+//     allowed — delete the package instead.
+//   - after an item leaves a box, the box's closing gate is re-evaluated.
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -308,6 +408,21 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       // no JSON body sent — plain delete, cascade stays false
     }
 
+    const ctx = await loadPackageContext(prisma, itemIdBig);
+    if (ctx?.packageId != null) {
+      const siblings = await prisma.items.count({ where: { package_id: ctx.packageId } });
+      if (siblings <= 1) {
+        return NextResponse.json(
+          {
+            error: "זה הפריט האחרון במארז — יש למחוק את המארז במקום",
+            code: "LAST_PACKAGE_ITEM",
+            packageId: ctx.packageId.toString(),
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const children = await prisma.items.findMany({
       where: { package_id: itemIdBig },
       select: { item_id: true, serial_no: true, model: true },
@@ -316,7 +431,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     if (children.length > 0 && !cascade) {
       return NextResponse.json(
         {
-          error: "לפריט זה יש פריטים מחוברים",
+          error: "למארז יש פריטים בתוכו — מחיקתו תמחק גם אותם",
+          code: "PACKAGE_HAS_ITEMS",
           connectedItems: children.map((c) => ({
             item_id: c.item_id.toString(),
             serial_no: c.serial_no,
@@ -344,11 +460,16 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       await tx.test_results.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_route_history.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_routes.deleteMany({ where: { item_id: { in: idsToDelete } } });
-      // Connected items first — they hold the FK (package_id) to the main item.
+      // Items inside the box first — they hold the FK (package_id) to it.
       if (children.length > 0) {
         await tx.items.deleteMany({ where: { item_id: { in: children.map((c) => c.item_id) } } });
       }
       await tx.items.delete({ where: { item_id: itemIdBig } });
+
+      // One item fewer to wait for: the box may be ready for closing now.
+      if (ctx?.packageId != null) {
+        await recheckPackageReadiness(tx, ctx.packageId, {});
+      }
     });
 
     return NextResponse.json({ ok: true, deletedConnectedCount: children.length });

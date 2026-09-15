@@ -5,6 +5,8 @@ import { normalizeToUtcIso, getCurrentUtcIso } from "@/app/lib/datetime";
 import { findStationForRouteStep, findBestResearchStation } from "@/app/lib/station-assignment";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { recordTransition, recordNote } from "@/app/lib/metrics/record";
+import { loadPackageContext } from "@/app/lib/packages/context";
+import { recheckPackageReadiness } from "@/app/lib/packages/readiness";
 
 
 export const runtime = "nodejs";
@@ -199,6 +201,16 @@ export async function POST(req: Request) {
       const routeNumber = routeInfoRows[0].route_number;
       const currentStatus = routeInfoRows[0].current_status;
       const isResearchStatus = currentStatus === 5;
+
+      // Package model (docs/packages/PLAN.md §4): is this row the box or an
+      // item inside one? Read once; used for the research rule here and for
+      // the meeting-point recheck at the end of the transaction.
+      const pkgCtx = await loadPackageContext(tx, itemIdBig);
+      if (pkgCtx?.isPackage && sendToResearch === true) {
+        // Research is for items. A box in research would strand its items at
+        // the opening station with no one to submit for them.
+        throw new Error("PACKAGE_CANNOT_GO_TO_RESEARCH");
+      }
 
       const shouldWriteToItemRouteHistory = !isResearchStatus || returnToRoute === true || finishRoute === true;
       const shouldWriteToResearchHistory = isResearchStatus || (currentStatus === 1 && sendToResearch === true);
@@ -860,6 +872,27 @@ export async function POST(req: Request) {
         nextStationRecommendation = { isLastStation: true };
       }
 
+      // 6. The meeting point (docs/packages/PLAN.md §4). Every write above is
+      // done, so the facts the gate depends on are final for this submit:
+      //   - an ITEM inside a box moved (advanced, finished, went to research):
+      //     its package may now be ready, or may have to keep waiting;
+      //   - the BOX itself advanced onto a package-level step and is queued
+      //     there: it must wait (status 6) until every item is present.
+      // Same transaction, so the package can never commit in a status that
+      // disagrees with where its items are.
+      let packageGate: { packageId: string; status: number | null; blockingItemIds: string[] } | null = null;
+      if (pkgCtx?.packageId != null) {
+        const g = await recheckPackageReadiness(tx, pkgCtx.packageId, {
+          submitId, workerId: WorkerID ?? null, workerName: WorkerName ?? null,
+        });
+        packageGate = { packageId: g.packageId.toString(), status: g.status, blockingItemIds: g.blockingItemIds.map(String) };
+      } else if (pkgCtx?.isPackage && updatedStatus === 2) {
+        const g = await recheckPackageReadiness(tx, itemIdBig, {
+          submitId, workerId: WorkerID ?? null, workerName: WorkerName ?? null,
+        });
+        packageGate = { packageId: g.packageId.toString(), status: g.status, blockingItemIds: g.blockingItemIds.map(String) };
+      }
+
       return {
         historyLogId,
         researchId,
@@ -870,6 +903,7 @@ export async function POST(req: Request) {
         isResearchStatus,
         recommendedResearchStation,
         nextStationRecommendation,
+        packageGate,
       };
     }, { maxWait: 5000, timeout: 15000 });
 
@@ -892,9 +926,18 @@ export async function POST(req: Request) {
     if (txResult.recommendedResearchStation) {
       responseData.recommendedResearchStation = txResult.recommendedResearchStation;
     }
+    if (txResult.packageGate) {
+      responseData.packageGate = txResult.packageGate;
+    }
 
     return NextResponse.json(responseData);
   } catch (error: any) {
+    if (error.message === "PACKAGE_CANNOT_GO_TO_RESEARCH") {
+      return NextResponse.json(
+        { error: "מארז לא נשלח למחקר — הפניה למחקר היא של פריטים בלבד", code: "PACKAGE_CANNOT_GO_TO_RESEARCH" },
+        { status: 409 }
+      );
+    }
     if (error.message === "ITEM_ROUTE_NOT_FOUND") {
       return NextResponse.json(
         { error: "Item route not found" },

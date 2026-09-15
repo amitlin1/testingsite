@@ -33,16 +33,19 @@ export function skipReason(): string | false {
 export const CUSTOMER_ID = 7;
 export const SHIPMENT_ID = 1;
 
-/** Station types. TYPE_ORPHAN exists but owns no station — call site #11(b). */
+/** Station types. TYPE_ORPHAN exists but owns no station — call site #11(b).
+ *  TYPE_INTAKE and TYPE_CLOSE are package-level (opening / closing). */
 export const TYPE_INTAKE = 10;
 export const TYPE_FUNC = 20;
 export const TYPE_RESEARCH = 30;
+export const TYPE_CLOSE = 40;
 export const TYPE_ORPHAN = 99;
 
 export const STATION_INTAKE = 101; // TYPE_INTAKE
 export const STATION_FUNC_A = 102; // TYPE_FUNC
 export const STATION_FUNC_B = 103; // TYPE_FUNC — second of its type, for #12
 export const STATION_RESEARCH = 901; // TYPE_RESEARCH, is_research = true
+export const STATION_CLOSE = 104; // TYPE_CLOSE
 
 /** Item types, each with exactly one testing_routes row (route_number 1). */
 export const ITEM_TYPE_ONE_STEP = 1; // route_steps = {10}
@@ -51,6 +54,12 @@ export const ITEM_TYPE_ORPHAN_STEP = 3; // route_steps = {10, 99}
 /** A PACKAGE type (is_package): route_steps = {10} — opening and closing are
  *  both TYPE_INTAKE here, so ITEM_TYPE_ONE_STEP items fit inside it. */
 export const ITEM_TYPE_PACKAGE = 4;
+/** A PACKAGE type with a real closing step: route_steps = {10, 40}. */
+export const ITEM_TYPE_PACKAGE_CLOSE = 5;
+/** An item that fits ITEM_TYPE_PACKAGE_CLOSE: route_steps = {10, 20, 40}. */
+export const ITEM_TYPE_IN_BOX = 6;
+/** Same route shape as IN_BOX under another id — a retype that still fits. */
+export const ITEM_TYPE_IN_BOX_ALT = 7;
 
 export const WORKER_ID = 42;
 export const WORKER_NAME = "בודק אינטגרציה";
@@ -81,12 +90,15 @@ const LEDGER_TRUNCATE_LOCK = 526050825;
 let lockClient: import("pg").PoolClient | null = null;
 
 type RouteHandler = (req: Request) => Promise<Response>;
+type ItemRouteHandler = (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
 
 type Handlers = {
   results: RouteHandler;
   startTest: RouteHandler;
   releaseTest: RouteHandler;
   releaseStale: RouteHandler;
+  updateItem: ItemRouteHandler;
+  deleteItem: ItemRouteHandler;
   createPackage: typeof import("../../packages/create-package").createPackage;
   addPackageItem: typeof import("../../packages/create-package").addPackageItem;
   prisma: { $disconnect: () => Promise<void>; $transaction: (fn: (tx: any) => Promise<any>) => Promise<any> };
@@ -158,6 +170,7 @@ export async function setup(): Promise<void> {
   const releaseTestMod = await import("../../../api/testing/release-test/route");
   const releaseStaleMod = await import("../../../api/cron/release-stale-tests/route");
   const createPackageMod = await import("../../packages/create-package");
+  const itemMod = await import("../../../api/items/[id]/route");
   const prismaMod = await import("../../prisma");
 
   handlers = {
@@ -165,6 +178,8 @@ export async function setup(): Promise<void> {
     startTest: startTestMod.POST as RouteHandler,
     releaseTest: releaseTestMod.POST as RouteHandler,
     releaseStale: releaseStaleMod.POST as RouteHandler,
+    updateItem: itemMod.PUT as ItemRouteHandler,
+    deleteItem: itemMod.DELETE as ItemRouteHandler,
     createPackage: createPackageMod.createPackage,
     addPackageItem: createPackageMod.addPackageItem,
     prisma: prismaMod.prisma as unknown as Handlers["prisma"],
@@ -283,37 +298,44 @@ export async function resetDb(): Promise<void> {
 
   await q(
     `INSERT INTO item_types (item_type_id, item_type_desc, is_package) VALUES
-       ($1, 'ONE_STEP', false), ($2, 'TWO_STEP', false), ($3, 'ORPHAN_STEP', false), ($4, 'PACKAGE', true)`,
-    [ITEM_TYPE_ONE_STEP, ITEM_TYPE_TWO_STEP, ITEM_TYPE_ORPHAN_STEP, ITEM_TYPE_PACKAGE],
+       ($1, 'ONE_STEP', false), ($2, 'TWO_STEP', false), ($3, 'ORPHAN_STEP', false),
+       ($4, 'PACKAGE', true), ($5, 'PACKAGE_CLOSE', true), ($6, 'IN_BOX', false), ($7, 'IN_BOX_ALT', false)`,
+    [ITEM_TYPE_ONE_STEP, ITEM_TYPE_TWO_STEP, ITEM_TYPE_ORPHAN_STEP, ITEM_TYPE_PACKAGE, ITEM_TYPE_PACKAGE_CLOSE, ITEM_TYPE_IN_BOX, ITEM_TYPE_IN_BOX_ALT],
   );
   await q(
     `INSERT INTO test_stations_type (test_station_type_id, test_type_desc, package_level) VALUES
-       ($1, 'INTAKE', true), ($2, 'FUNC', false), ($3, 'RESEARCH', false), ($4, 'ORPHAN', false)`,
-    [TYPE_INTAKE, TYPE_FUNC, TYPE_RESEARCH, TYPE_ORPHAN],
+       ($1, 'INTAKE', true), ($2, 'FUNC', false), ($3, 'RESEARCH', false), ($4, 'ORPHAN', false), ($5, 'CLOSE', true)`,
+    [TYPE_INTAKE, TYPE_FUNC, TYPE_RESEARCH, TYPE_ORPHAN, TYPE_CLOSE],
   );
   // status 2 = free. TYPE_ORPHAN deliberately gets no station (#11(b)).
   await q(
     `INSERT INTO test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES
-       ($1, $5, 'INTAKE-1',   2, false),
-       ($2, $6, 'FUNC-A',     2, false),
-       ($3, $6, 'FUNC-B',     2, false),
-       ($4, $7, 'RESEARCH-1', 2, true)`,
+       ($1, $6, 'INTAKE-1',   2, false),
+       ($2, $7, 'FUNC-A',     2, false),
+       ($3, $7, 'FUNC-B',     2, false),
+       ($4, $8, 'RESEARCH-1', 2, true),
+       ($5, $9, 'CLOSE-1',    2, false)`,
     [
       STATION_INTAKE,
       STATION_FUNC_A,
       STATION_FUNC_B,
       STATION_RESEARCH,
+      STATION_CLOSE,
       TYPE_INTAKE,
       TYPE_FUNC,
       TYPE_RESEARCH,
+      TYPE_CLOSE,
     ],
   );
   await q(
     `INSERT INTO testing_routes (item_type_id, test_station_type_id, route_steps, route_number) VALUES
-       ($1, $4, ARRAY[$4::int],          1),
-       ($2, $4, ARRAY[$4::int, $5::int], 1),
-       ($3, $4, ARRAY[$4::int, $6::int], 1),
-       ($7, $4, ARRAY[$4::int],          1)`,
+       ($1, $4, ARRAY[$4::int],                   1),
+       ($2, $4, ARRAY[$4::int, $5::int],          1),
+       ($3, $4, ARRAY[$4::int, $6::int],          1),
+       ($7, $4, ARRAY[$4::int],                   1),
+       ($8, $4, ARRAY[$4::int, $10::int],         1),
+       ($9, $4, ARRAY[$4::int, $5::int, $10::int], 1),
+       ($11, $4, ARRAY[$4::int, $5::int, $10::int], 1)`,
     [
       ITEM_TYPE_ONE_STEP,
       ITEM_TYPE_TWO_STEP,
@@ -322,6 +344,10 @@ export async function resetDb(): Promise<void> {
       TYPE_FUNC,
       TYPE_ORPHAN,
       ITEM_TYPE_PACKAGE,
+      ITEM_TYPE_PACKAGE_CLOSE,
+      ITEM_TYPE_IN_BOX,
+      TYPE_CLOSE,
+      ITEM_TYPE_IN_BOX_ALT,
     ],
   );
 }
@@ -482,6 +508,40 @@ export function releaseTest(body: Record<string, unknown>): Promise<HandlerResul
   return call(h().releaseTest, "/api/testing/release-test", body);
 }
 
+/** PUT /api/items/[id] — the edit / retype path (docs/packages/PLAN.md §4). */
+export async function updateItem(itemId: number, body: Record<string, unknown>): Promise<HandlerResult> {
+  const req = new Request(`http://localhost/api/items/${itemId}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const res = await h().updateItem(req, { params: Promise.resolve({ id: String(itemId) }) });
+  let parsed: any;
+  try {
+    parsed = await res.json();
+  } catch {
+    parsed = null;
+  }
+  return { status: res.status, body: parsed };
+}
+
+/** DELETE /api/items/[id]. */
+export async function deleteItem(itemId: number, body: Record<string, unknown> = {}): Promise<HandlerResult> {
+  const req = new Request(`http://localhost/api/items/${itemId}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const res = await h().deleteItem(req, { params: Promise.resolve({ id: String(itemId) }) });
+  let parsed: any;
+  try {
+    parsed = await res.json();
+  } catch {
+    parsed = null;
+  }
+  return { status: res.status, body: parsed };
+}
+
 /** POST /api/testing/results with the worker snapshot every real client sends. */
 export function submitResult(body: Record<string, unknown>): Promise<HandlerResult> {
   return call(h().results, "/api/testing/results", {
@@ -573,6 +633,7 @@ export type RunRow = {
   route_run_id: number;
   run_no: number;
   route_number: number;
+  item_type_id: number;
   planned_steps: number[];
   opened_at: Date;
   closed_at: Date | null;
