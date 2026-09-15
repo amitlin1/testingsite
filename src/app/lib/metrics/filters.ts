@@ -74,8 +74,8 @@ export interface MetricFilters {
    *  zeros with HTTP 200 (§9.4). */
   workerId?: number | null;
   itemSerial?: string | null;
-  /** §4.7 / §5.0(8): exclude accessory rows entirely (`package_level`). */
-  parentsOnly?: boolean;
+  /** Boxes only: exclude the items inside packages (docs/packages/PLAN.md §9, 13). */
+  packagesOnly?: boolean;
   /** Status set, as metric_state keys. null/undefined = every state. */
   states?: readonly string[] | null;
   /** §5.0(1). Defaults to `open_shipments`; historical endpoints pass `all`. */
@@ -164,7 +164,7 @@ export function intervalFilterParams(f: MetricFilters = {}): unknown[] {
     toIntOrNull(f.workerId),
     toTextOrNull(f.itemSerial),
     // never null: `NOT NULL::boolean` is NULL, and the AND would drop every row.
-    f.parentsOnly === true,
+    f.packagesOnly === true,
     f.scope === "all" ? "all" : "open_shipments",
     states,
   ];
@@ -215,7 +215,7 @@ export function runFilterParams(f: MetricFilters = {}): unknown[] {
     toIntOrNull(f.shipmentId),
     toIntOrNull(f.itemTypeId),
     toTextOrNull(f.itemSerial),
-    f.parentsOnly === true,
+    f.packagesOnly === true,
     f.scope === "all" ? "all" : "open_shipments",
   ];
 }
@@ -272,7 +272,7 @@ export function filtersFromSearchParams(
     stationTypeId: toIntOrNull(sp.get("testStationTypeId")),
     workerId: toIntOrNull(sp.get("workerId")),
     itemSerial: toTextOrNull(sp.get("itemSerial")),
-    parentsOnly: sp.get("parentsOnly") === "true" || defaults.parentsOnly === true,
+    packagesOnly: sp.get("packagesOnly") === "true" || defaults.packagesOnly === true,
     states: statesForLegacyStatus(sp.get("status")) ?? defaults.states ?? null,
     scope,
   };

@@ -45,7 +45,7 @@ import type { DashboardKpis } from "@/types/dashboard";
 export const runtime = "nodejs";
 
 /** metric_state keys behind the two live counters (ms.is_waiting / is_active_work). */
-const WAITING = ["queued", "queued_research"];
+const WAITING = ["queued", "queued_research", "waiting_for_package_items"];
 const ACTIVE = ["testing", "in_research"];
 
 // The two `avgXxxSeconds` fields are widened to `| null` rather than left

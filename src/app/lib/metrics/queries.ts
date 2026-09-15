@@ -16,6 +16,17 @@
 //           `guardAllBuilders()` at the bottom runs it over all 32 statements
 //           of the catalogue at module load, so a dropped predicate throws when
 //           the module is first imported — build/startup — not on the one
+
+// Package model (docs/packages/PLAN.md §9, decision 13): at a PACKAGE-LEVEL
+// station (opening / closing) the box and every item inside it carry the same
+// testing interval — one physical session — so durations there are counted
+// ONCE, on the box. At every other station an item's interval is its own
+// real work and counts. This predicate names the duplicate rows; every
+// active-work duration aggregate filters with NOT on it. Counts (steps, pass
+// / fail) never use it.
+function pkgDupActive(alias: string): string {
+  return `(${alias}.is_package_item AND ${alias}.station_type_id IN (SELECT test_station_type_id FROM test_stations_type WHERE package_level))`;
+}
 //           request that happens to hit it.
 //  §5.0(10) two clocks, always as a pair. Every duration column exists as
 //           `_wall_` AND `_work_`. A response that exposes only one is a defect.
@@ -656,9 +667,9 @@ SELECT st.test_station_id,
        tq.p95_wall_min                                              AS p95_queue_age_wall_min,
        rp.n                                                         AS research_pool_queue,
        avg(EXTRACT(EPOCH FROM (now() - lower(i.valid_range))))
-         FILTER (WHERE NOT i.is_package_item)/60                        AS active_test_age_wall_min,
+         FILTER (WHERE NOT ${pkgDupActive("i")})/60                     AS active_test_age_wall_min,
        avg(work_seconds_between(lower(i.valid_range), now()))
-         FILTER (WHERE NOT i.is_package_item)/60                        AS active_test_age_work_min
+         FILTER (WHERE NOT ${pkgDupActive("i")})/60                     AS active_test_age_work_min
 FROM test_stations st
 JOIN test_stations_type sty ON sty.test_station_type_id = st.test_station_type_id
 LEFT JOIN type_queue tq ON tq.station_type_id = st.test_station_type_id
@@ -852,8 +863,8 @@ export function buildFlow(
   const family = opts.family ?? "active_work";
   const byDay = opts.byDay !== false;
   const flag = family === "waiting" ? "ms.is_waiting" : "ms.is_active_work";
-  // The accessory exclusion applies to durations only, and only to active work.
-  const F = family === "active_work" ? " FILTER (WHERE NOT i.is_package_item)" : "";
+  // The package-duplicate exclusion applies to durations only, and only to active work.
+  const F = family === "active_work" ? ` FILTER (WHERE NOT ${pkgDupActive("i")})` : "";
   const unit = truncUnit(opts.granularity ?? "daily");
   const dayExpr =
     unit === "day"
@@ -1046,16 +1057,16 @@ SELECT${col ? `\n  ${col} AS dimension_id,` : ""}
   avg(wall_s) FILTER (WHERE is_waiting) / 60     AS avg_wait_wall_min,
   avg(work_s) FILTER (WHERE is_waiting) / 60     AS avg_wait_work_min,
   count(*)    FILTER (WHERE is_waiting)          AS wait_n,
-  avg(wall_s) FILTER (WHERE is_active_work AND NOT is_package_item) / 60 AS avg_busy_wall_min,
-  avg(work_s) FILTER (WHERE is_active_work AND NOT is_package_item) / 60 AS avg_busy_work_min,
-  count(*)    FILTER (WHERE is_active_work AND NOT is_package_item)      AS busy_n,
+  avg(wall_s) FILTER (WHERE is_active_work AND NOT (is_package_item AND station_type_id IN (SELECT test_station_type_id FROM test_stations_type WHERE package_level))) / 60 AS avg_busy_wall_min,
+  avg(work_s) FILTER (WHERE is_active_work AND NOT (is_package_item AND station_type_id IN (SELECT test_station_type_id FROM test_stations_type WHERE package_level))) / 60 AS avg_busy_work_min,
+  count(*)    FILTER (WHERE is_active_work AND NOT (is_package_item AND station_type_id IN (SELECT test_station_type_id FROM test_stations_type WHERE package_level)))      AS busy_n,
   avg(wall_s) FILTER (WHERE is_research AND is_waiting) / 60          AS avg_research_wait_wall_min,
   avg(work_s) FILTER (WHERE is_research AND is_waiting) / 60          AS avg_research_wait_work_min,
   avg(wall_s) FILTER (WHERE is_research AND is_active_work) / 60      AS avg_research_wall_min,
   avg(work_s) FILTER (WHERE is_research AND is_active_work) / 60      AS avg_research_work_min,
   sum(wall_s - COALESCE(work_s, 0))/60                                AS offhours_min,
   count(DISTINCT unit_id)                                             AS units_touched,
-  sum(work_s) FILTER (WHERE is_active_work AND NOT is_package_item)      AS busy_work_seconds,
+  sum(work_s) FILTER (WHERE is_active_work AND NOT (is_package_item AND station_type_id IN (SELECT test_station_type_id FROM test_stations_type WHERE package_level)))      AS busy_work_seconds,
   (SELECT work_seconds_between($1::timestamptz, $2::timestamptz))     AS window_work_seconds
 FROM spans${col ? `\nGROUP BY ${col}\nORDER BY ${col}` : ""}`;
   return {
@@ -1179,7 +1190,7 @@ WITH cand AS (
   JOIN metric_state ms ON ms.state_key = i.state_key AND ms.is_active_work
   WHERE i.close_business_date BETWEEN $1::date AND $2::date
     AND i.closed_at IS NOT NULL AND i.is_trusted
-    AND NOT i.is_package_item${intervalFilterSql("i", 3)}
+    AND NOT ${pkgDupActive("i")}${intervalFilterSql("i", 3)}
   ORDER BY i.work_seconds DESC NULLS LAST
   LIMIT 500
 )
@@ -1265,6 +1276,8 @@ export interface EntityProgressRow {
   in_test: number;
   waiting_research: number;
   in_research: number;
+  /** Packages waiting before their closing step for items still elsewhere (status 6). */
+  waiting_package_items: number;
   finished: number;
   completion_pct: number | null;
   coverage_pct: number | null;
@@ -1333,7 +1346,7 @@ export function buildEntityProgress(
     filters.customerId ?? null,
     filters.shipmentId ?? null,
     filters.itemTypeId ?? null,
-    filters.parentsOnly === true,
+    filters.packagesOnly === true,
   ];
 
   // Applied to route_run inside the LEFT JOIN's ON, so an entity with no open
@@ -1369,6 +1382,7 @@ export function buildEntityProgress(
        COALESCE(sum(i.in_test), 0)                             AS in_test,
        COALESCE(sum(i.waiting_research), 0)                    AS waiting_research,
        COALESCE(sum(i.in_research), 0)                         AS in_research,
+       COALESCE(sum(i.waiting_package_items), 0)               AS waiting_package_items,
        COALESCE(sum(i.finished), 0)                            AS finished,
        round(100.0 * count(DISTINCT rr.route_run_id) FILTER (WHERE rr.closed_at IS NOT NULL)
              / NULLIF(count(DISTINCT rr.route_run_id), 0), 1)                  AS completion_pct,
@@ -1389,6 +1403,7 @@ LEFT JOIN LATERAL (
          count(*) FILTER (WHERE ii.state_key = 'testing')         AS in_test,
          count(*) FILTER (WHERE ii.state_key = 'queued_research') AS waiting_research,
          count(*) FILTER (WHERE ii.state_key = 'in_research')     AS in_research,
+         count(*) FILTER (WHERE ii.state_key = 'waiting_for_package_items') AS waiting_package_items,
          count(*) FILTER (WHERE ii.state_key = 'done')            AS finished
   FROM item_state_interval ii
   WHERE ii.route_run_id = rr.route_run_id AND upper_inf(ii.valid_range)
@@ -1464,7 +1479,7 @@ ORDER BY s.id`;
     // all 630 runs). Counting every items row here divided units by items and
     // reported ~82% coverage for a customer whose every unit is routed —
     // measured before that fix: customer 5 read 77.1% (128 units / 166 item
-    // rows) where the honest answer is 128/128 = 100%. The parentsOnly flag is
+    // rows) where the honest answer is 128/128 = 100%. The packagesOnly flag is
     // therefore not part of this predicate: restricting to parents IS the
     // definition of a unit, not an option.
     sql = `
@@ -1532,6 +1547,7 @@ export async function entityProgress(
     in_test: cnt(r.in_test),
     waiting_research: cnt(r.waiting_research),
     in_research: cnt(r.in_research),
+    waiting_package_items: cnt(r.waiting_package_items),
     finished: cnt(r.finished),
     completion_pct: num(r.completion_pct),
     coverage_pct: num(r.coverage_pct),

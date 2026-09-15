@@ -44,6 +44,7 @@ const STATE_COLORS: Record<string, string> = {
   testing: "#1976d2",
   queued: "#ff9800",
   queued_research: "#9c27b0",
+  waiting_for_package_items: "#ffb74d",
   in_research: "#673ab7",
   done: "#2e7d32",
   unmapped: "#607d8b",

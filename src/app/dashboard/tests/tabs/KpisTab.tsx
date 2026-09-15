@@ -48,7 +48,7 @@ import {
 import { EmptyChart } from "./TimesTab";
 import type { TabProps } from "./tabTypes";
 
-const WAITING_STATES = ["queued", "queued_research"];
+const WAITING_STATES = ["queued", "queued_research", "waiting_for_package_items"];
 const ACTIVE_STATES = ["testing", "in_research"];
 
 function seriesFromHistory(rows: StatusHistoryWire[], stateKeys: string[]): Array<number | null> {

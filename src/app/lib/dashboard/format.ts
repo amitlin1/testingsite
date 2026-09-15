@@ -212,7 +212,7 @@ const FILTER_LABEL_HE: Record<string, string> = {
   stationTypeId: "סוג עמדה",
   workerId: "מס׳ עובד",
   itemSerial: "סריאלי",
-  parentsOnly: "פריטי אב בלבד",
+  packagesOnly: "מארזים בלבד",
   scope: "משלוחים פתוחים בלבד",
   dateRange: "טווח תאריכים",
   status: "סטטוס",

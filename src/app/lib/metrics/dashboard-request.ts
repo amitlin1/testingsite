@@ -175,7 +175,7 @@ export function liveBoardIgnoredFilters(f: MetricFilters): string[] {
   if (f.itemTypeId != null) out.push("itemTypeId");
   if (f.workerId != null) out.push("workerId");
   if (f.itemSerial != null) out.push("itemSerial");
-  if (f.parentsOnly === true) out.push("parentsOnly");
+  if (f.packagesOnly === true) out.push("packagesOnly");
   if (f.scope === "open_shipments") out.push("scope");
   return qualify("liveBoard", out);
 }

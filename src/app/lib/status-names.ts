@@ -7,6 +7,7 @@ export const STATUS_NAMES: Record<number, string> = {
   2: "ממתין",
   3: "הושלם",
   4: "ממתין למחקר",
+  6: "ממתין לפריטי המארז",
   5: "במחקר",
 };
 

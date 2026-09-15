@@ -24,6 +24,7 @@ export const STATE_COLOR: Record<string, string> = {
   queued: "var(--dash-ramp-2)",
   testing: "var(--dash-ramp-1)",
   queued_research: "var(--dash-ramp-3)",
+  waiting_for_package_items: "var(--dash-ramp-4)",
   in_research: "var(--dash-ramp-5)",
   unmapped: "var(--dash-amber-on-dark)",
 };

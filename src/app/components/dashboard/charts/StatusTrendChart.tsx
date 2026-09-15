@@ -20,6 +20,7 @@ const STACK: Array<{ key: string; label: string }> = [
   { key: "testing", label: "בבדיקה" },
   { key: "queued", label: "בתור" },
   { key: "queued_research", label: "ממתין למחקר" },
+  { key: "waiting_for_package_items", label: "ממתין לפריטי המארז" },
   { key: "in_research", label: "במחקר" },
   { key: "unmapped", label: "סטטוס לא ממופה" },
 ];
