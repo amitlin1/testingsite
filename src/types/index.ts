@@ -1,8 +1,19 @@
+import type { PackageView } from "@/app/lib/packages/read";
+
 export type ItemRow = {
   item_id: number;
   serial_no: string | null;
   item_type_id: number | null;
   item_type_desc: string | null;
+  /** Package model (docs/packages/PLAN.md): this row IS a box (its type is a
+   *  package type) — package-level queues list these. */
+  is_package?: boolean;
+  /** Position inside the box (01..99) when this row is an item in one. */
+  package_seq?: number | null;
+  customer_name?: string | null;
+  /** The box: its own view for a package row, the parent's view for an item
+   *  inside one (siblings, states, blockers). null for a legacy loose item. */
+  package?: PackageView | null;
   current_status: number | null;
   item_status_desc: string | null;
   current_route_step: number | null;
@@ -146,6 +157,8 @@ export interface StationTestDialogProps {
 export interface TestStationType {
   id: number;
   name: string;
+  /** Opening / closing station type: the queue holds packages, not items. */
+  packageLevel?: boolean;
 }
 
 /** Lightweight station used by the testing dock's all-stations picker (from /api/stations). */

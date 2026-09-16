@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
+import { loadPackages } from "@/app/lib/packages/read";
 
 export const runtime = "nodejs";
 
@@ -49,8 +50,11 @@ SELECT
     i.manufacturer_name,
     i.manufacturer_no,
     TRIM(it.item_type_desc) AS "item_type_desc",
+    it.is_package AS "is_package",
+    TRIM(c.name) AS "customer_name",
     t1.route_number,
     i.package_id,
+    i.package_seq,
     (SELECT parent.serial_no FROM items parent WHERE parent.item_id = i.package_id) AS "parent_serial_no",
     (EXISTS (SELECT 1 FROM items child WHERE child.package_id = i.item_id)) AS "has_children",
     (
@@ -135,6 +139,24 @@ ORDER BY
                 item_id: ci.item_id != null ? Number(ci.item_id) : null,
             })),
         }));
+
+        // Package model (docs/packages/PLAN.md): every row carries its box —
+        // a package row its own view (items, states, blockers), an item inside
+        // a box its parent's view (siblings). One read for the whole queue.
+        const packageIds = new Set<string>();
+        for (const row of normalizedRows) {
+            if (row.is_package && row.package_id == null) packageIds.add(String(row.item_id));
+            if (row.package_id != null) packageIds.add(String(row.package_id));
+        }
+        const views = packageIds.size > 0
+            ? await loadPackages({ ids: [...packageIds].map((id) => BigInt(id)) })
+            : [];
+        const viewById = new Map(views.map((v) => [v.item_id, v]));
+        for (const row of normalizedRows) {
+            const key = row.package_id != null ? String(row.package_id) : row.is_package ? String(row.item_id) : null;
+            row.package = key ? (viewById.get(key) ?? null) : null;
+            row.is_package = row.is_package === true && row.package_id == null;
+        }
 
         const json = JSON.stringify(normalizedRows, (key, value) =>
             typeof value === 'bigint' ? value.toString() : value

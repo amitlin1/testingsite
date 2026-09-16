@@ -9,6 +9,7 @@ export async function GET() {
       select: {
         test_station_type_id: true,
         test_type_desc: true,
+        package_level: true,
       },
       orderBy: { test_type_desc: "asc" },
     });
@@ -17,6 +18,9 @@ export async function GET() {
       rows.map((r) => ({
         id: r.test_station_type_id,
         name: r.test_type_desc.trim(),
+        // Package-level station types (opening / closing) queue PACKAGES, not
+        // items (docs/packages/PLAN.md §4).
+        packageLevel: r.package_level,
       }))
     );
   } catch (error) {

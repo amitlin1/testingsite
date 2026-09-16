@@ -74,6 +74,8 @@ export type PackageView = {
   route_number: number | null;
   current_status: number | null;
   current_route_step: number | null;
+  /** Station type of the box's current step (the queue it belongs to). */
+  current_step_type_id: number | null;
   route_length: number;
   is_finished: boolean;
   created_at: string | null;
@@ -114,6 +116,7 @@ type PkgRow = {
   route_number: number | null;
   current_status: number | null;
   current_route_step: number | null;
+  current_step_type_id: number | null;
   route_length: number | null;
   is_finished: boolean | null;
   created_at: Date | null;
@@ -193,6 +196,7 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
            i.shipment_id, sh.shipment_code,
            i.makat, TRIM(i.model) AS model, TRIM(i.manufacturer_name) AS manufacturer_name, i.manufacturer_no,
            ir.route_number, ir.current_status, ir.current_route_step,
+           tr.route_steps[ir.current_route_step] AS current_step_type_id,
            COALESCE(array_length(tr.route_steps, 1), 0) AS route_length,
            ir.is_finished, ir.created_at, ir.finished_at,
            (SELECT max(h.processing_end_time) FROM item_route_history h
@@ -310,6 +314,7 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       route_number: p.route_number,
       current_status: p.current_status,
       current_route_step: p.current_route_step,
+      current_step_type_id: p.current_step_type_id,
       route_length: Number(p.route_length ?? 0),
       is_finished: p.is_finished === true,
       created_at: iso(p.created_at),

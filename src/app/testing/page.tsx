@@ -34,8 +34,6 @@ import { CheckCircleOutline as CheckCircleOutlineIcon } from "@/components/ui/ic
 import { Inventory as InventoryIcon } from "@/components/ui/icons";
 import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";
 import { History as HistoryIcon } from "@/components/ui/icons";
-import { Link as LinkIcon } from "@/components/ui/icons";
-import { AccountTree as AccountTreeIcon } from "@/components/ui/icons";
 import { PlayArrowRounded as PlayArrowRoundedIcon } from "@/components/ui/icons";
 import { PrecisionManufacturing as PrecisionManufacturingIcon } from "@/components/ui/icons";
 import { QrCode as QrCodeIcon } from "@/components/ui/icons";
@@ -49,6 +47,22 @@ import { Queue as QueueIcon } from "@/components/ui/icons";
 import { getStartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
 import StationHistoryDialog from "../components/StationHistoryDialog";
 import TestingDock from "../components/testing/TestingDock";
+import type { PackageView } from "@/app/lib/packages/read";
+import PackageIdText from "../components/packages/PackageIdText";
+import PackageQueueCard from "../components/testing/PackageQueueCard";
+import PackageOpenWizard from "./tests-popups/PackageOpenWizard";
+import PackageCloseWizard from "./tests-popups/PackageCloseWizard";
+import { ITEM_STATES, seq2 } from "../components/packages/packageUi";
+
+/**
+ * Which package wizard a box needs at a package-level station
+ * (docs/packages/PLAN.md §4): the closing type is the LAST step of the
+ * package route; any other package-level step is the opening one.
+ */
+const packageKindOf = (it: ItemRow): "open" | "close" => {
+  const total = it.route_steps?.length ?? 0;
+  return total > 1 && (it.current_route_step ?? 1) >= total ? "close" : "open";
+};
 
 // Item / station types now live in src/types (ItemRow, TestStation, TestStationType, StationLite).
 
@@ -125,7 +139,10 @@ function ItemCard({
   const elapsedTime = useElapsedTime(baseTimeString);
   const isInTest = item.current_status === 1 || item.current_status === 5;
   const isWaiting = item.current_status === 2 || item.current_status === 4;
-  const isAccessory = item.package_id != null;
+  // Package model: an item inside a box carries the box's view (siblings and
+  // where each one is) — design/Testing Screen Packages.dc.html, item strip.
+  const pkg = item.package_id != null ? item.package ?? null : null;
+  const siblings = pkg ? pkg.items.filter((s) => String(s.item_id) !== String(item.item_id)) : [];
 
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -233,20 +250,29 @@ function ItemCard({
             {rank}
         </Box>
 
-        {/* ID + status, model line */}
+        {/* ID + status, type · model line, package strip */}
         <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                <Typography sx={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.4px", color: "#1d1d1f", fontVariantNumeric: "tabular-nums" }}>
-                    #{item.item_id}
-                </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: "9px", flexWrap: "wrap" }}>
+                <PackageIdText id={item.item_id} size={18} headColor="#1d1d1f" weight={800} letterSpacing="-0.2px" />
                 <Box sx={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: 12, fontWeight: 700, color: statusColor, whiteSpace: "nowrap" }}>
                     <Box sx={{ width: 6, height: 6, borderRadius: "9999px", bgcolor: statusColor }} />
                     {item.item_status_desc || "סטטוס לא ידוע"}
                 </Box>
             </Box>
             <Typography sx={{ fontSize: 13, color: "#7a7a7a", mt: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {item.model} · מק״ט {item.makat}
+                {[item.item_type_desc, item.model].filter(Boolean).join(" · ")} · מק״ט {item.makat}
             </Typography>
+            {pkg && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mt: "6px", fontSize: 12, color: "#7a7a7a", whiteSpace: "nowrap", overflow: "hidden" }}>
+                    <InventoryIcon sx={{ fontSize: 14, color: "#0066cc" }} />
+                    <span>פריט {seq2(item.package_seq)} מתוך {seq2(pkg.items.length)} · {pkg.item_type_desc}</span>
+                    <Box sx={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                        {pkg.items.map((s) => (
+                            <Box key={s.item_id} title={`${seq2(s.package_seq)} · ${s.item_type_desc} · ${s.state_label}`} sx={{ width: 16, height: 7, borderRadius: "3px", bgcolor: String(s.item_id) === String(item.item_id) ? "#0066cc" : ITEM_STATES[s.state].color }} />
+                        ))}
+                    </Box>
+                </Box>
+            )}
         </Box>
 
         {/* Step progress */}
@@ -266,31 +292,32 @@ function ItemCard({
             {elapsedTime || "—"}
         </Box>
 
-        {/* Connected items slot — fixed width so the columns stay aligned.
-            An accessory gets its own icon that points at its parent item only;
-            a parent keeps the link icon listing all of its accessories. */}
-        {(isAccessory || item.has_children) ? (
+        {/* Package slot — fixed width so the columns stay aligned. An item in a
+            box gets the box icon; the menu lists the other items in the same
+            package and where each one is (replaces the old parent/accessory
+            "connected items" menu — docs/packages/PLAN.md §9.14). */}
+        {pkg ? (
             <IconButton
                 onClick={handleMenuClick}
-                aria-label={isAccessory ? `פריט אב: #${item.package_id}` : "פריטים מחוברים"}
-                title={isAccessory ? `פריט אב: #${item.package_id}` : "פריטים מחוברים"}
+                aria-label="פריטים באותו מארז"
+                title="פריטים באותו מארז"
                 sx={{
                     width: 40,
                     height: 40,
                     flexShrink: 0,
                     borderRadius: "10px",
-                    border: isAccessory ? "1px solid #cfe3fb" : "1px solid #d4d4dc",
-                    bgcolor: isAccessory ? "#f3f8ff" : "transparent",
-                    color: isAccessory ? "#0066cc" : "#5a5a5f",
+                    border: "1px solid #cfe3fb",
+                    bgcolor: "#f3f8ff",
+                    color: "#0066cc",
                 }}
             >
-                {isAccessory ? <AccountTreeIcon sx={{ fontSize: 18 }} /> : <LinkIcon sx={{ fontSize: 18 }} />}
+                <InventoryIcon sx={{ fontSize: 18 }} />
             </IconButton>
         ) : (
             <Box sx={{ width: 40, flexShrink: 0 }} />
         )}
 
-        {/* Connected Items Menu */}
+        {/* Same-package items menu */}
         <Menu
              anchorEl={anchorEl}
              open={Boolean(anchorEl)}
@@ -303,35 +330,32 @@ function ItemCard({
                      mt: 1,
                      borderRadius: 3,
                      boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-                     minWidth: 180
+                     minWidth: 260
                  }
              }}
         >
-           {isAccessory ? (
-               <MenuItem onClick={handleMenuClose} dense>
-                  <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", gap: 1 }}>
-                     <AccountTreeIcon fontSize="small" color="action" />
-                     <Box>
-                         <Typography variant="caption" color="text.secondary">פריט אב</Typography>
-                         <Typography variant="subtitle2">#{item.package_id}</Typography>
-                         <Typography variant="caption" color="text.secondary">S/N: {item.parent_serial_no || '-'}</Typography>
-                     </Box>
-                  </Stack>
-               </MenuItem>
-           ) : item.connected_items && item.connected_items.length > 0 ? (
-               item.connected_items.map((conn) => (
-                 <MenuItem key={conn.item_id} onClick={handleMenuClose} dense>
-                    <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", gap: 1 }}>
-                       <QrCodeIcon fontSize="small" color="action" />
+           <MenuItem disabled dense sx={{ opacity: "1 !important" }}>
+              <Box>
+                  <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: "#7a7a7a" }}>פריטים באותו מארז</Typography>
+                  {pkg && <Box sx={{ mt: "2px" }}><PackageIdText id={pkg.item_id} size={13} headColor="#1d1d1f" /></Box>}
+              </Box>
+           </MenuItem>
+           {siblings.length === 0 ? (
+               <MenuItem disabled dense><Typography variant="caption">אין פריטים נוספים במארז</Typography></MenuItem>
+           ) : (
+               siblings.map((s) => (
+                 <MenuItem key={s.item_id} onClick={handleMenuClose} dense>
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ gap: 1 }}>
+                       <Box sx={{ width: 26, height: 26, borderRadius: "7px", bgcolor: "#f5f5f7", color: "#7a7a7a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{seq2(s.package_seq)}</Box>
                        <Box>
-                           <Typography variant="subtitle2">#{conn.item_id}</Typography>
-                           <Typography variant="caption" color="text.secondary">S/N: {conn.serial_no || '-'}</Typography>
+                           <Typography variant="subtitle2">{s.item_type_desc}</Typography>
+                           <Typography variant="caption" sx={{ color: ITEM_STATES[s.state].color, fontWeight: 600 }}>
+                               {s.state_label}{s.station_name ? ` · ${s.station_name}` : ""}
+                           </Typography>
                        </Box>
                     </Stack>
                  </MenuItem>
                ))
-           ) : (
-               <MenuItem disabled><Typography variant="caption">טוען...</Typography></MenuItem>
            )}
         </Menu>
 
@@ -403,6 +427,82 @@ function ItemCard({
             </Button>
         )}
       </Box>
+  );
+}
+
+// --- A box in a package-level queue (opening / closing station) ---
+// Owns the live timer the card shows and the same start-then-open-wizard
+// handshake ItemCard uses: start-test (group start, PLAN §4) must lock the
+// box and its items before the wizard opens.
+function PackageQueueEntry({
+  item,
+  kind,
+  onAddTestResult,
+  onStartTest,
+  onRefresh,
+}: {
+  item: ItemRow;
+  kind: "open" | "close";
+  onAddTestResult: (item: ItemRow) => void;
+  onStartTest: (itemId: number) => Promise<void>;
+  onRefresh: () => void;
+}) {
+  const isInTest = item.current_status === 1;
+  const elapsed = useElapsedTime(isInTest ? item.processing_start_time : item.queue_start_time);
+  const [starting, setStarting] = React.useState(false);
+  if (!item.package) return null;
+  return (
+    <PackageQueueCard
+      pkg={item.package}
+      kind={kind}
+      wait={elapsed}
+      inTest={isInTest}
+      disabled={starting}
+      onStart={async () => {
+        if (isInTest) { onAddTestResult(item); return; }
+        setStarting(true);
+        try {
+          await onStartTest(item.item_id);
+        } catch (err) {
+          onRefresh();
+          alert(err instanceof Error ? err.message : "לא ניתן להתחיל את המארז — ייתכן שהוא כבר נתפס על ידי עובד אחר.");
+          return;
+        } finally {
+          setStarting(false);
+        }
+        onAddTestResult(item);
+      }}
+    />
+  );
+}
+
+// --- "ממתין לפריטי המארז" banner above a closing station's queue ---
+function BlockedPackagesBanner({ packages }: { packages: PackageView[] }) {
+  return (
+    <Box sx={{ mb: "18px", border: "1px solid #f0e2cc", bgcolor: "#fdf3e6", borderRadius: "14px", padding: "14px 18px" }}>
+      <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: "#a86a1a" }}>
+        {packages.length === 1 ? "מארז אחד ממתין לפריטים לפני הסגירה" : `${packages.length} מארזים ממתינים לפריטים לפני הסגירה`}
+      </Typography>
+      <Typography sx={{ fontSize: 12.5, color: "#a86a1a", mt: "2px" }}>
+        המארז ייכנס לתור כשכל הפריטים שלו יסיימו את המסלול. הפריטים החסרים ומיקומם:
+      </Typography>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: "8px", mt: "12px" }}>
+        {packages.map((p) => (
+          <Box key={p.item_id} sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", bgcolor: "#fff", border: "1px solid #f0e2cc", borderRadius: "10px", padding: "9px 12px" }}>
+            <PackageIdText id={p.item_id} size={13.5} headColor="#1d1d1f" />
+            <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#1d1d1f" }}>{p.item_type_desc}</Typography>
+            <Typography sx={{ fontSize: 12.5, color: "#7a7a7a" }}>{p.customer_name ?? p.customer_code ?? ""}</Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginInlineStart: "auto" }}>
+              {p.blocked_by.map((b) => (
+                <Box key={b.item_id} sx={{ fontSize: 12, color: "#a86a1a", bgcolor: "#fdf3e6", border: "1px solid #f0e2cc", borderRadius: "9999px", padding: "3px 10px", whiteSpace: "nowrap" }}>
+                  {seq2(b.package_seq)} · {b.item_type_desc} · {b.station_name ?? "במסלול"}
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    </Box>
   );
 }
 
@@ -505,6 +605,27 @@ function TestingPageView() {
 
   const [filterMakat, setFilterMakat] = React.useState("");
 
+  // Package model (docs/packages/PLAN.md §4): opening / closing station types
+  // queue boxes, not items — the grid, the wizards and the empty texts switch
+  // on this flag (design/Testing Screen Packages.dc.html).
+  const packageLevel = !!selectedStationType?.packageLevel;
+  // Boxes held before this closing station because items are still out.
+  const [blockedPackages, setBlockedPackages] = React.useState<PackageView[]>([]);
+  const fetchBlockedPackages = React.useCallback(async (stationId: number, isPackageLevel: boolean) => {
+    if (!isPackageLevel) { setBlockedPackages([]); return; }
+    try {
+      const res = await apiFetch(`/api/testing/blocked-packages?stationId=${stationId}`);
+      const data = res.ok ? await res.json() : [];
+      setBlockedPackages(Array.isArray(data) ? data : []);
+    } catch {
+      setBlockedPackages([]);
+    }
+  }, []);
+  React.useEffect(() => {
+    if (!selectedStation) { setBlockedPackages([]); return; }
+    fetchBlockedPackages(selectedStation.test_station_id, packageLevel);
+  }, [selectedStation, packageLevel, fetchBlockedPackages]);
+
   // Flat list of every station (across all types) for the dock's all-stations
   // search — picking one sets type + station in a single step.
   const [allStations, setAllStations] = React.useState<StationLite[]>([]);
@@ -602,7 +723,8 @@ function TestingPageView() {
       ? items.filter((item) =>
           item.makat?.toString().includes(filterMakat) ||
           item.serial_no?.toString().includes(filterMakat) ||
-          item.item_id?.toString().includes(filterMakat)
+          item.item_id?.toString().includes(filterMakat) ||
+          (item.customer_name ?? "").includes(filterMakat)
         )
       : items;
 
@@ -816,6 +938,18 @@ function TestingPageView() {
         return;
       }
 
+      // A box held before its closing station until every item is back
+      // (status 6, PLAN §4) — say so and which items are still out.
+      if (data.waitingForPackageItems) {
+        const blocking = Array.isArray(data.blockingItemIds) ? data.blockingItemIds.length : 0;
+        setScanError(
+          blocking === 1
+            ? `המארז ${data.itemId} ממתין לפריט אחד שטרם סיים את המסלול. הוא ייכנס לתור הסגירה כשהפריט יגיע.`
+            : `המארז ${data.itemId} ממתין ל-${blocking} פריטים שטרם סיימו את המסלול. הוא ייכנס לתור הסגירה כשכולם יגיעו.`,
+        );
+        return;
+      }
+
       const typeOption = stationTypes.find((t) => t.id === data.stationTypeId);
       if (!typeOption) {
         setScanError("סוג העמדה של הפריט לא נמצא");
@@ -900,6 +1034,7 @@ function TestingPageView() {
     if (!selectedStation) return;
     setItemsLoading(true);
     fetchCompletedToday(selectedStation.test_station_id);
+    fetchBlockedPackages(selectedStation.test_station_id, packageLevel);
     try {
       const res = await apiFetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -959,6 +1094,11 @@ function TestingPageView() {
 
     // Refresh items list
     handleRefreshItems();
+
+    // A package wizard has its own "done" step (opened → items continue on
+    // their routes / closed → package done), so the next-station dialog would
+    // only say something misleading about the box.
+    if (selectedItem.is_package) return;
 
     // Handle research response
     if (testData.sendToResearch && result.recommendedResearchStation) {
@@ -1020,6 +1160,7 @@ function TestingPageView() {
           stationName={selectedStation?.test_station_desc ?? null}
           stationTypeName={selectedStationType?.name ?? null}
           itemCount={filteredItems.length}
+          countNoun={packageLevel ? "מארזים" : "פריטים"}
           allStations={allStations}
           typeNameById={typeNameById}
           selectedStationId={selectedStation?.test_station_id ?? null}
@@ -1073,7 +1214,7 @@ function TestingPageView() {
                         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", mb: "18px" }}>
                             <Box sx={{ display: "flex", alignItems: "center", gap: "12px" }}>
                                 <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px", color: "#1d1d1f" }}>
-                                    התור לבדיקה
+                                    {packageLevel ? "מארזים בתור" : "התור לבדיקה"}
                                 </Typography>
                                 <Typography sx={{ fontSize: 12.5, color: "#7a7a7a" }}>
                                     ממוינים לפי זמן המתנה — הממתין ביותר קודם
@@ -1081,7 +1222,7 @@ function TestingPageView() {
                             </Box>
                             <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
                                 <TextField
-                                    placeholder="סינון לפי מק״ט, סריאלי או מזהה"
+                                    placeholder={packageLevel ? "סינון לפי מק״ט, מזהה או לקוח" : "סינון לפי מק״ט, סריאלי או מזהה"}
                                     size="small"
                                     value={filterMakat}
                                     onChange={(e) => setFilterMakat(e.target.value)}
@@ -1121,6 +1262,53 @@ function TestingPageView() {
                                 {[1, 2, 3, 4].map((i) => (
                                     <Skeleton key={i} variant="rectangular" height={70} sx={{ borderRadius: "14px" }} />
                                 ))}
+                            </Box>
+                        ) : packageLevel ? (
+                            <Box sx={{ pb: 4 }}>
+                                {blockedPackages.length > 0 && <BlockedPackagesBanner packages={blockedPackages} />}
+                                {orderedItems.some((it) => it.is_package && it.package) ? (
+                                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
+                                        {orderedItems.filter((it) => it.is_package && it.package).map((item) => (
+                                            <PackageQueueEntry
+                                                key={item.item_id}
+                                                item={item}
+                                                kind={packageKindOf(item)}
+                                                onAddTestResult={handleAddTestResult}
+                                                onStartTest={handleStartTest}
+                                                onRefresh={handleRefreshItems}
+                                            />
+                                        ))}
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ textAlign: "center", py: "64px", color: "#7a7a7a" }}>
+                                        <Box sx={{ width: 64, height: 64, borderRadius: "9999px", bgcolor: "#fff", border: "1px solid #e0e0e0", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#0066cc", mb: "14px" }}>
+                                            <InventoryIcon sx={{ fontSize: 30 }} />
+                                        </Box>
+                                        <Typography sx={{ fontSize: 17, color: "#1d1d1f", fontWeight: 600, mb: "6px" }}>
+                                            אין מארזים בתור לעמדה זו.
+                                        </Typography>
+                                        <Typography sx={{ fontSize: 14 }}>
+                                            סרוק מדבקת קופסה לאיתור מארז.
+                                        </Typography>
+                                    </Box>
+                                )}
+                                {/* Loose (pre-package) items that still route through this
+                                    station type keep the row layout underneath the boxes. */}
+                                {orderedItems.some((it) => !it.is_package) && (
+                                    <Box sx={{ display: "flex", flexDirection: "column", gap: "10px", mt: "18px" }}>
+                                        {orderedItems.filter((it) => !it.is_package).map((item, index) => (
+                                            <ItemCard
+                                                key={`${item.item_id}-${index}`}
+                                                item={item}
+                                                rank={index + 1}
+                                                onAddTestResult={handleAddTestResult}
+                                                onStartTest={handleStartTest}
+                                                onRefresh={handleRefreshItems}
+                                                highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
+                                            />
+                                        ))}
+                                    </Box>
+                                )}
                             </Box>
                         ) : orderedItems.length > 0 ? (
                             <Box sx={{ pb: 4 }}>
@@ -1181,7 +1369,11 @@ function TestingPageView() {
         {/* Dialogs — the per-type finish/report dialog, resolved from the registry. */}
         {(() => {
   if (!dialogOpen || !selectedItem || !selectedStation || !selectedStationType) return null;
-  const StartDialog = getStartTestDialog(selectedStationType.id);   // ← השליפה מה-REGISTRY
+  // A box at a package-level station gets the opening / closing wizard by the
+  // station type's flag (PLAN §4); everything else resolves from the registry.
+  const StartDialog = packageLevel && selectedItem.is_package && selectedItem.package
+    ? (packageKindOf(selectedItem) === "open" ? PackageOpenWizard : PackageCloseWizard)
+    : getStartTestDialog(selectedStationType.id);
   return (
     <StartDialog
       open={dialogOpen}

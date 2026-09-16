@@ -17,6 +17,8 @@ type TestingDockProps = {
   stationName: string | null;
   stationTypeName: string | null;
   itemCount: number;
+  /** What the count counts — "פריטים" (default) or "מארזים" at a package-level station. */
+  countNoun?: string;
   allStations: StationLite[];
   typeNameById: (typeId: number) => string;
   selectedStationId: number | null;
@@ -44,6 +46,7 @@ export default function TestingDock({
   stationName,
   stationTypeName,
   itemCount,
+  countNoun = "פריטים",
   allStations,
   typeNameById,
   selectedStationId,
@@ -113,7 +116,7 @@ export default function TestingDock({
               {hasStation ? stationName : "בחר עמדה לבדיקה"}
             </Typography>
             <Typography sx={{ fontSize: 12, color: "#7a7a7a", whiteSpace: "nowrap", display: { xs: "none", sm: "inline" } }}>
-              {hasStation ? `${stationTypeName ?? ""} · ${itemCount} פריטים` : "רחף כאן לבחירת עמדה ועובד"}
+              {hasStation ? `${stationTypeName ?? ""} · ${itemCount} ${countNoun}` : "רחף כאן לבחירת עמדה ועובד"}
             </Typography>
           </Box>
           <Box
