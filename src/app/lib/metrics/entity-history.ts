@@ -80,7 +80,6 @@ const STATE_TO_KEY: Record<string, keyof EntityHistoryPoint & string> = {
   testing: "itemsInTest",
   queued_research: "itemsWaitingForResearch",
   in_research: "itemsInResearch",
-  waiting_for_package_items: "_new_itemsWaitingForPackageItems",
   unmapped: "_new_unmapped",
 };
 

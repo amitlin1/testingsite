@@ -104,6 +104,18 @@ ALTER TABLE "route_run"           RENAME COLUMN "parent_item_id" TO "package_id"
 ALTER TABLE "route_run"           RENAME COLUMN "is_accessory"   TO "is_package_item";
 ALTER TABLE "item_state_interval" RENAME COLUMN "is_accessory"   TO "is_package_item";
 
+-- Three new reasons (§3.4 taxonomy): the box starts waiting for its items,
+-- the last item arrives, and a whole box is sent back to its opening step.
+-- The reason vocabulary is a CHECK constraint, so it is replaced wholesale
+-- (a CHECK cannot be altered in place). The drop is deliberate:
+-- metrics-guard: intentional-drop ise_reason_chk
+ALTER TABLE item_state_event DROP CONSTRAINT IF EXISTS ise_reason_chk;
+ALTER TABLE item_state_event ADD CONSTRAINT ise_reason_chk CHECK (reason IN (
+  'item_created','test_started','result_submitted','sent_to_research','returned_to_route',
+  'research_note','released_by_user','released_stale','no_station_for_type',
+  'station_reassigned','manual_override','legacy_import','correction',
+  'package_items_pending','package_items_ready','package_reset'));
+
 -- Waiting state with no station: the package sits before the closing step
 -- until its last item arrives. is_waiting so waiting-time queries see it,
 -- NOT at_station so it never counts as station work. Sorted between queued

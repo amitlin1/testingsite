@@ -742,7 +742,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
         assert.equal(typeof p[field], "number", `${p.date}.${field} (state ${state_key}) is not a number`);
       }
     }
-    assert.equal(states.length, 6); // the five shipped + the one this suite added
+    assert.equal(states.length, 7); // the six shipped (incl. waiting_for_package_items) + the one this suite added
 
     // D3 is the day every slice is occupied at once, so the mapping is checked
     // as a whole rather than one state at a time.

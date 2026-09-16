@@ -885,15 +885,16 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
       Object.fromEntries(rows.filter((r) => r.business_day === day).map((r) => [r.state_key, r.items]));
 
     // Today: the same live population Q1 reports.
-    assert.deepEqual(on(T()), { testing: 2, queued: 3, queued_research: 1, in_research: 1, unmapped: 0 });
+    assert.deepEqual(on(T()), { testing: 2, queued: 3, waiting_for_package_items: 0, queued_research: 1, in_research: 1, unmapped: 0 });
     // D17 sits between 7301's closure (D19) and 7302's first event (D15): the
     // lab is empty, and §5.0(7) says that is a row of zeros, not a gap and not
     // yesterday's numbers repeated.
-    assert.deepEqual(on(D(17)), { testing: 0, queued: 0, queued_research: 0, in_research: 0, unmapped: 0 });
+    assert.deepEqual(on(D(17)), { testing: 0, queued: 0, waiting_for_package_items: 0, queued_research: 0, in_research: 0, unmapped: 0 });
     // D20 at 12:00 — 7301 has just moved from testing to its step-2 queue.
-    assert.deepEqual(on(D(20)), { testing: 0, queued: 1, queued_research: 0, in_research: 0, unmapped: 0 });
+    assert.deepEqual(on(D(20)), { testing: 0, queued: 1, waiting_for_package_items: 0, queued_research: 0, in_research: 0, unmapped: 0 });
     // Every grid day is present for every non-terminal state, `done` for none.
-    assert.equal(rows.length, 21 * 5);
+    // Six non-terminal states since the package model added waiting_for_package_items.
+    assert.equal(rows.length, 21 * 6);
     assert.equal(rows.filter((r) => r.state_key === "done").length, 0);
   });
 

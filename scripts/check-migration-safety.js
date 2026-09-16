@@ -180,6 +180,15 @@ for (const name of newMigrations) {
 
     // A declared retirement passes; anything else in the same file still blocks.
     if (guarded && intentional.has(guarded)) continue;
+    // The same declaration also covers an object that is NOT in GUARDED_NAMES
+    // but lives on a metrics table — e.g. a CHECK constraint being replaced
+    // (a CHECK cannot be altered in place, so growing its vocabulary is a
+    // DROP + ADD). The name must still be spelled out in the marker, in the
+    // file that drops it.
+    const declared = [...intentional].find((n) =>
+      new RegExp(`(^|[^a-z0-9_])${n}([^a-z0-9_]|$)`).test(stmt.toLowerCase()),
+    );
+    if (declared) continue;
 
     if (guarded || metricsAlter || extensionDrop) {
       findings.push({

@@ -346,15 +346,17 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     assert.equal(boxRetype.status, 409);
     assert.equal(boxRetype.body.code, "PACKAGE_TYPE_LOCKED");
 
-    // Retyping an item now needs the explicit confirmation ...
+    // Retyping an item to a type that FITS the box now needs the explicit
+    // confirmation ...
     const needsConfirm = await H.updateItem(a, {
-      customer: H.CUSTOMER_ID, itemType: H.ITEM_TYPE_TWO_STEP, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
+      customer: H.CUSTOMER_ID, itemType: H.ITEM_TYPE_IN_BOX_ALT, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
     });
     assert.equal(needsConfirm.status, 409);
     assert.equal(needsConfirm.body.code, "PACKAGE_RESET_REQUIRED");
     assert.equal((await H.routeRow(a)).current_route_step, 2, "nothing moved");
 
-    // ... and TWO_STEP ends at FUNC, not CLOSE, so even confirmed it is refused.
+    // ... while a type that does not fit is refused on shape BEFORE any talk
+    // of a reset: TWO_STEP ends at FUNC, not CLOSE, so even confirmed it is refused.
     const badShape = await H.updateItem(a, {
       customer: H.CUSTOMER_ID, itemType: H.ITEM_TYPE_TWO_STEP, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
       confirmPackageReset: true,

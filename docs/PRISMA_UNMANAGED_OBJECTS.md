@@ -148,3 +148,21 @@ destructive statement classes from the migration plan
 and any `ALTER TABLE <metrics table> ... DROP`) **when they touch a guarded
 name**. Adding a new hand-built object to the ledger means adding its name
 to `GUARDED_NAMES` in that script in the same PR.
+
+### Replacing a CHECK constraint on a metrics table
+
+A CHECK constraint cannot be altered in place, so growing a vocabulary it
+guards (for example `ise_reason_chk`, the `item_state_event.reason` list) is a
+`DROP CONSTRAINT` + `ADD CONSTRAINT` pair. `check-migration-safety` blocks any
+`ALTER TABLE <metrics table> ... DROP`, guarded name or not. Declare the
+replacement in the migration that performs it, naming the constraint:
+
+```sql
+-- metrics-guard: intentional-drop ise_reason_chk
+ALTER TABLE item_state_event DROP CONSTRAINT IF EXISTS ise_reason_chk;
+ALTER TABLE item_state_event ADD CONSTRAINT ise_reason_chk CHECK (...full list...);
+```
+
+The declaration covers that file only, and only statements that spell out the
+declared name. First used by `20260915120000_package_model` (the package
+reasons `package_items_pending`, `package_items_ready`, `package_reset`).
