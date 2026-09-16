@@ -10,6 +10,7 @@ import {
   PhotoLibrary as PhotoLibraryIcon,
   Lock as LockIcon,
   AccessTime as AccessTimeIcon,
+  Inventory as InventoryIcon,
 } from "@/components/ui/icons";
 
 /**
@@ -30,6 +31,7 @@ export const settingsLinks: SettingsLink[] = [
   { path: "/settings/users", label: "משתמשים והרשאות", icon: LockIcon },
   { path: "/settings/customers", label: "לקוחות", icon: PeopleIcon },
   { path: "/settings/item-types", label: "סוגי פריטים", icon: CategoryIcon },
+  { path: "/settings/packages", label: "מארזים", icon: InventoryIcon },
   { path: "/settings/sources", label: "ניהול מקורות", icon: SourceIcon },
   { path: "/settings/item-status", label: "סטטוסי פריט", icon: AssignmentTurnedInIcon },
   { path: "/settings/test-station-status", label: "סטטוסי עמדת בדיקה", icon: EventNoteIcon },

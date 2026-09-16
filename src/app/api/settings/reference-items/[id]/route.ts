@@ -1,20 +1,37 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { readJson } from '@/lib/directUpload/server';
 import {
   serializeReferenceItem,
   referenceItemInclude,
-  uploadReferenceImages,
+  parseReferenceImageUploads,
+  verifyReferenceImageUploads,
+  attachReferenceImages,
   deleteReferenceImages,
-  pairFilesWithTypes,
 } from '@/lib/reference-items';
 
 export const runtime = 'nodejs';
 
-// PUT /api/settings/reference-items/[id]  (multipart/form-data)
-// Fields: item_type_id, manufacturer_sku, manufacturer, name?, notes?,
-//         keepImageIds (JSON array of existing image ids to keep),
-//         images[] (new files), primaryKey ("<existingImageId>" | "new:<index>").
+// PUT /api/settings/reference-items/[id]  (JSON)
+// Fields: item_type_id, manufacturer_sku, manufacturer, name?, reference_weight?,
+//         notes?, keepImageIds (existing image ids to keep), images (NEW images
+//         already uploaded through images/presign: [{ objectKey, fileName,
+//         photoType }]), primaryKey ("<existingImageId>" | "new:<index>").
+type UpdateBody = {
+  item_type_id?: unknown;
+  manufacturer_sku?: unknown;
+  manufacturer?: unknown;
+  name?: unknown;
+  reference_weight?: unknown;
+  notes?: unknown;
+  keepImageIds?: unknown;
+  images?: unknown;
+  primaryKey?: unknown;
+};
+
+const str = (v: unknown): string => (v == null ? '' : String(v)).trim();
+
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -31,23 +48,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'פריט הייחוס לא נמצא' }, { status: 404 });
     }
 
-    const form = await request.formData();
-    const itemTypeId = Number(form.get('item_type_id'));
-    const manufacturerSku = String(form.get('manufacturer_sku') ?? '').trim();
-    const referenceWeight = String(form.get('reference_weight') ?? '').trim();
-    const manufacturer = String(form.get('manufacturer') ?? '').trim();
-    const name = String(form.get('name') ?? '').trim();
-    const notes = String(form.get('notes') ?? '').trim();
-    const primaryKey = String(form.get('primaryKey') ?? '').trim();
-    const files = form.getAll('images').filter((f): f is File => f instanceof File);
-
-    let keepImageIds: number[] = [];
-    try {
-      const parsed = JSON.parse(String(form.get('keepImageIds') ?? '[]'));
-      if (Array.isArray(parsed)) keepImageIds = parsed.map(Number).filter(Number.isFinite);
-    } catch {
-      keepImageIds = existing.images.map((i) => i.reference_item_image_id);
+    const body = await readJson<UpdateBody>(request);
+    if (!body) {
+      return NextResponse.json({ error: 'גוף הבקשה אינו JSON תקין' }, { status: 400 });
     }
+
+    const itemTypeId = Number(body.item_type_id);
+    const manufacturerSku = str(body.manufacturer_sku);
+    const referenceWeight = str(body.reference_weight);
+    const manufacturer = str(body.manufacturer);
+    const name = str(body.name);
+    const notes = str(body.notes);
+    const primaryKey = str(body.primaryKey);
+
+    // Missing/invalid keepImageIds → keep everything (same fallback as before).
+    const keepImageIds: number[] = Array.isArray(body.keepImageIds)
+      ? body.keepImageIds.map(Number).filter(Number.isFinite)
+      : existing.images.map((i) => i.reference_item_image_id);
 
     if (!itemTypeId || !Number.isFinite(itemTypeId)) {
       return NextResponse.json({ error: 'יש לבחור סוג פריט.' }, { status: 400 });
@@ -64,14 +81,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'סוג הפריט לא נמצא.' }, { status: 400 });
     }
 
-    // Pair new files with photo types BEFORE mutating anything, so a bad type
+    // Verify the new uploads BEFORE mutating anything, so a bad upload or type
     // can't half-apply the update (deletions run only after this passes).
-    let uploads: Awaited<ReturnType<typeof pairFilesWithTypes>>;
+    let verified: Awaited<ReturnType<typeof verifyReferenceImageUploads>>;
     try {
-      uploads = await pairFilesWithTypes(form, files);
+      verified = await verifyReferenceImageUploads(parseReferenceImageUploads(body.images));
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : 'סוג תמונה לא תקין' },
+        { error: e instanceof Error ? e.message : 'תמונה לא תקינה' },
         { status: 400 },
       );
     }
@@ -82,9 +99,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     );
     await deleteReferenceImages(toDelete);
 
-    // Upload any new files, appended after the highest existing sort order.
+    // Attach the new images, appended after the highest existing sort order.
     const maxSort = existing.images.reduce((m, i) => Math.max(m, i.sort_order), -1);
-    const newImageRows = await uploadReferenceImages(refId, uploads, maxSort + 1);
+    const newImageRows = await attachReferenceImages(refId, verified, maxSort + 1);
 
     // Resolve the cover from primaryKey: an existing image id, or "new:<index>".
     let primaryImageId: number | null = null;

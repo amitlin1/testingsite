@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
+import { readJson } from '@/lib/directUpload/server';
 import {
   serializeReferenceItem,
   referenceItemInclude,
-  uploadReferenceImages,
-  pairFilesWithTypes,
+  parseReferenceImageUploads,
+  verifyReferenceImageUploads,
+  attachReferenceImages,
 } from '@/lib/reference-items';
 
 export const runtime = 'nodejs';
@@ -32,23 +34,38 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/settings/reference-items  (multipart/form-data)
-// Fields: item_type_id, manufacturer_sku, manufacturer, name?, notes?,
-//         images[] (files), image_types (JSON array of photo-type codes aligned
-//         with images order) or photo_type (one code for the whole batch),
-//         primaryIndex? (index into images for the cover).
+// POST /api/settings/reference-items  (JSON)
+// Fields: item_type_id, manufacturer_sku, manufacturer, name?, reference_weight?,
+//         notes?, images ([{ objectKey, fileName, photoType }] — already uploaded
+//         to MinIO through images/presign), primaryIndex? (index into images for
+//         the cover).
+type CreateBody = {
+  item_type_id?: unknown;
+  manufacturer_sku?: unknown;
+  manufacturer?: unknown;
+  name?: unknown;
+  reference_weight?: unknown;
+  notes?: unknown;
+  images?: unknown;
+  primaryIndex?: unknown;
+};
+
+const str = (v: unknown): string => (v == null ? '' : String(v)).trim();
+
 export async function POST(request: Request) {
   try {
-    const form = await request.formData();
+    const body = await readJson<CreateBody>(request);
+    if (!body) {
+      return NextResponse.json({ error: 'גוף הבקשה אינו JSON תקין' }, { status: 400 });
+    }
 
-    const itemTypeId = Number(form.get('item_type_id'));
-    const manufacturerSku = String(form.get('manufacturer_sku') ?? '').trim();
-    const manufacturer = String(form.get('manufacturer') ?? '').trim();
-    const name = String(form.get('name') ?? '').trim();
-    const referenceWeight = String(form.get('reference_weight') ?? '').trim();
-    const notes = String(form.get('notes') ?? '').trim();
-    const primaryIndex = Number(form.get('primaryIndex') ?? 0);
-    const files = form.getAll('images').filter((f): f is File => f instanceof File);
+    const itemTypeId = Number(body.item_type_id);
+    const manufacturerSku = str(body.manufacturer_sku);
+    const manufacturer = str(body.manufacturer);
+    const name = str(body.name);
+    const referenceWeight = str(body.reference_weight);
+    const notes = str(body.notes);
+    const primaryIndex = Number(body.primaryIndex ?? 0);
 
     if (!itemTypeId || !Number.isFinite(itemTypeId)) {
       return NextResponse.json({ error: 'יש לבחור סוג פריט.' }, { status: 400 });
@@ -65,14 +82,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'סוג הפריט לא נמצא.' }, { status: 400 });
     }
 
-    // Pair files with photo types BEFORE creating the row, so a bad/missing
-    // type can't leave an orphan reference item behind.
-    let uploads: Awaited<ReturnType<typeof pairFilesWithTypes>>;
+    // Verify every uploaded image (exists in MinIO, is an image, has a valid
+    // photo type) BEFORE creating the row, so a bad upload can't leave an
+    // orphan reference item behind.
+    let verified: Awaited<ReturnType<typeof verifyReferenceImageUploads>>;
     try {
-      uploads = await pairFilesWithTypes(form, files);
+      verified = await verifyReferenceImageUploads(parseReferenceImageUploads(body.images));
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : 'סוג תמונה לא תקין' },
+        { error: e instanceof Error ? e.message : 'תמונה לא תקינה' },
         { status: 400 },
       );
     }
@@ -89,7 +107,7 @@ export async function POST(request: Request) {
       select: { reference_item_id: true },
     });
 
-    const imageRows = await uploadReferenceImages(created.reference_item_id, uploads);
+    const imageRows = await attachReferenceImages(created.reference_item_id, verified);
 
     // Resolve the cover: the chosen upload index (falls back to the first image).
     if (imageRows.length > 0) {

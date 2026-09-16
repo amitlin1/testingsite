@@ -20,6 +20,7 @@ import { Inventory2Outlined as Inventory2OutlinedIcon } from "@/components/ui/ic
 import { ErrorOutline as ErrorOutlineIcon } from "@/components/ui/icons";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { apiFetch } from "@/lib/api/client";
+import { uploadReferenceImages } from "@/lib/api/direct-upload";
 
 // ---- Types -----------------------------------------------------------------
 interface ItemType {
@@ -269,51 +270,61 @@ export default function ReferenceItemsPage() {
     if (!formreference_weight.trim()) return setFormError("יש להזין משקל.");
     if (!formName.trim()) return setFormError("יש להזין שם.");
 
-    const fd = new FormData();
-    fd.append("item_type_id", String(formType.item_type_id));
-    fd.append("manufacturer_sku", formSku.trim());
-    fd.append("manufacturer", formManu.trim());
-    fd.append("name", formName.trim());
-    fd.append("reference_weight", formreference_weight.trim());
-    fd.append("notes", formNotes.trim());
-
     // New files, in display order — the server appends them in this same order.
     const newImages = formImages.filter((i) => i.kind === "new") as Extract<
       FormImage,
       { kind: "new" }
     >[];
-    newImages.forEach((img) => fd.append("images", img.file, img.fileName));
-    // Photo-type codes aligned with the images order (parallel-array contract).
-    fd.append("image_types", JSON.stringify(newImages.map((img) => img.photoType)));
+
+    // Everything except the image bytes. `images` is filled in after the direct
+    // upload below, with the keys MinIO now holds.
+    const payload: Record<string, unknown> = {
+      item_type_id: formType.item_type_id,
+      manufacturer_sku: formSku.trim(),
+      manufacturer: formManu.trim(),
+      name: formName.trim(),
+      reference_weight: formreference_weight.trim(),
+      notes: formNotes.trim(),
+    };
 
     if (editingId == null) {
-      const primaryIndex = Math.max(
+      payload.primaryIndex = Math.max(
         0,
         newImages.findIndex((i) => i.key === primaryKey),
       );
-      fd.append("primaryIndex", String(primaryIndex));
     } else {
-      const keepIds = formImages
+      payload.keepImageIds = formImages
         .filter((i) => i.kind === "existing")
         .map((i) => (i as Extract<FormImage, { kind: "existing" }>).id);
-      fd.append("keepImageIds", JSON.stringify(keepIds));
 
       const primary = formImages.find((i) => i.key === primaryKey);
       if (primary?.kind === "existing") {
-        fd.append("primaryKey", String(primary.id));
+        payload.primaryKey = String(primary.id);
       } else if (primary?.kind === "new") {
-        fd.append("primaryKey", `new:${newImages.findIndex((i) => i.key === primary.key)}`);
+        payload.primaryKey = `new:${newImages.findIndex((i) => i.key === primary.key)}`;
       }
     }
 
     setSaving(true);
     setFormError("");
     try {
+      // 1) New images go from the browser straight to MinIO. Nothing is saved on
+      //    the item yet, so a failed upload leaves no half-written item behind.
+      payload.images = await uploadReferenceImages(
+        newImages.map((img) => ({ file: img.file, fileName: img.fileName, photoType: img.photoType })),
+        editingId,
+      );
+      // 2) The form itself is plain JSON — the server verifies every key before
+      //    it touches the item.
       const url =
         editingId == null
           ? "/api/settings/reference-items"
           : `/api/settings/reference-items/${editingId}`;
-      const res = await apiFetch(url, { method: editingId == null ? "POST" : "PUT", body: fd });
+      const res = await apiFetch(url, {
+        method: editingId == null ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "שגיאה בשמירה");

@@ -97,6 +97,9 @@ model item_types {
   /// this type with its own route; the physical items inside point at it via
   /// items.package_id. Package types cannot appear inside package_contents.
   is_package       Boolean            @default(false)
+  /// Package types only: the route the intake form pre-selects. NULL = 1.
+  /// The route itself is drawn in the testing-routes screen.
+  default_route_number Int?
   item_routes      item_routes[]
   reference_items  reference_items[]
   shipment_history shipment_history[]

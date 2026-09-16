@@ -24,6 +24,8 @@
 -- §1 סוגי מארז ותכולה ---------------------------------------------------------
 
 ALTER TABLE "item_types" ADD COLUMN "is_package" BOOLEAN NOT NULL DEFAULT false;
+-- Package types only: the route the intake form pre-selects (NULL = 1).
+ALTER TABLE "item_types" ADD COLUMN "default_route_number" INTEGER;
 
 CREATE TABLE "package_contents" (
     "id"                SERIAL NOT NULL,

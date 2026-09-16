@@ -34,7 +34,7 @@ type LineIn = {
 async function loadPackageType(id: number) {
   return prisma.item_types.findUnique({
     where: { item_type_id: id },
-    select: { item_type_id: true, item_type_desc: true, is_package: true },
+    select: { item_type_id: true, item_type_desc: true, is_package: true, default_route_number: true },
   });
 }
 
@@ -89,8 +89,11 @@ async function describe(packageTypeId: number) {
     });
   }
 
+  const type = await loadPackageType(packageTypeId);
   return {
     package_type_id: packageTypeId,
+    item_type_desc: type?.item_type_desc.trim() ?? "",
+    default_route_number: type?.default_route_number ?? null,
     total_items: out.reduce((n, l) => n + l.quantity, 0),
     package_route_warnings: packageRouteWarnings,
     lines: out,
@@ -176,7 +179,25 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       }
     }
 
+    // The package's own default route travels with its contents (one save
+    // button on the screen). Absent in the body → left untouched.
+    let defaultRoute: number | null | undefined = undefined;
+    if (body.default_route_number !== undefined) {
+      const raw = body.default_route_number;
+      if (raw === null || `${raw}`.trim() === "") defaultRoute = null;
+      else {
+        const n = Number(`${raw}`.trim());
+        if (!Number.isInteger(n) || n < 1) {
+          return NextResponse.json({ error: "מסלול ברירת מחדל למארז חייב להיות מספר שלם, 1 או יותר" }, { status: 400 });
+        }
+        defaultRoute = n;
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
+      if (defaultRoute !== undefined) {
+        await tx.item_types.update({ where: { item_type_id: typeId }, data: { default_route_number: defaultRoute } });
+      }
       await tx.package_contents.deleteMany({ where: { package_type_id: typeId } });
       if (lines.length > 0) {
         await tx.package_contents.createMany({

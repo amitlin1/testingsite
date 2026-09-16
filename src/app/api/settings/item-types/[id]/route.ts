@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { parseDefaultRoute } from "@/app/lib/packages/settings";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     // is_package is optional in the body (an old client sends only the name).
     // Turning a package type back into a plain type is refused while it still
     // has contents or packages: both would silently become nonsense.
-    const data: { item_type_desc: string; is_package?: boolean } = { item_type_desc: trimmedDesc };
+    const data: { item_type_desc: string; is_package?: boolean; default_route_number?: number | null } = { item_type_desc: trimmedDesc };
+    if (body.default_route_number !== undefined) {
+      const route = parseDefaultRoute(body.default_route_number);
+      if ("error" in route) return NextResponse.json({ error: route.error }, { status: 400 });
+      data.default_route_number = route.value;
+    }
     if (body.is_package !== undefined) {
       const nextIsPackage = Boolean(body.is_package);
       const current = await prisma.item_types.findUnique({
@@ -70,6 +76,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       item_type_id: updated.item_type_id,
       item_type_desc: updated.item_type_desc.trim(),
       is_package: updated.is_package,
+      default_route_number: updated.default_route_number,
       contents_count: updated._count.package_contents,
     });
 

@@ -13,6 +13,12 @@ export interface Column {
   field: string;
   headerName: string;
   width?: string | number;
+  /** Custom cell (a pill, a link…). Display only — the edit dialog still
+   *  binds the field as text, so pair it with `readOnly` for derived fields. */
+  renderCell?: (row: any) => React.ReactNode;
+  /** Shown in the table, left out of the add/edit form and the required check. */
+  readOnly?: boolean;
+  align?: "start" | "center" | "end";
 }
 
 interface CrudTableProps {
@@ -69,7 +75,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
 
   const handleSave = async () => {
     for (const col of columns) {
-      if (col.field === idField) continue;
+      if (col.field === idField || col.readOnly) continue;
       if (!formData[col.field] || !String(formData[col.field]).trim()) {
         showSnackbar(`${col.headerName} שדה חובה`, "error");
         return;
@@ -129,8 +135,9 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
     ...columns.map((col) => ({
       key: col.field,
       header: col.headerName,
-      cell: (row: any) => (row[col.field] ?? "—") as React.ReactNode,
+      cell: (row: any) => (col.renderCell ? col.renderCell(row) : (row[col.field] ?? "—")) as React.ReactNode,
       width: typeof col.width === "number" ? col.width : undefined,
+      align: col.align,
       nowrap: true,
       bold: col.field === nameField,
     })),
@@ -181,7 +188,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
         <DialogContent dir="rtl">
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
             {columns.map((col) => {
-              if (col.field === idField) return null;
+              if (col.field === idField || col.readOnly) return null;
               return (
                 <TextField
                   key={col.field}

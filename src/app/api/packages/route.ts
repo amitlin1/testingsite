@@ -3,8 +3,40 @@ import { prisma } from "@/app/lib/prisma";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { createPackage, PackageInput, PackageItemInput } from "@/app/lib/packages/create-package";
 import { packageErrorResponse } from "@/app/lib/packages/errors";
+import { loadPackages, PackageStatusKey } from "@/app/lib/packages/read";
 
 export const runtime = "nodejs";
+
+const STATUS_KEYS: PackageStatusKey[] = ["queue", "test", "waitItems", "readyClose", "done"];
+
+/**
+ * GET /api/packages?shipment&customer&type&status&q — the packages list
+ * (design/Packages.dc.html): every box with its items' states, its own
+ * status and, when it waits before closing, the items still out.
+ */
+export async function GET(req: Request) {
+  try {
+    const sp = new URL(req.url).searchParams;
+    const int = (k: string) => {
+      const v = sp.get(k);
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const status = sp.get("status");
+    const rows = await loadPackages({
+      shipmentId: int("shipment"),
+      customerId: int("customer"),
+      packageTypeId: int("type"),
+      status: status && (STATUS_KEYS as string[]).includes(status) ? (status as PackageStatusKey) : null,
+      q: sp.get("q"),
+    });
+    return NextResponse.json(rows);
+  } catch (error) {
+    console.error("Error listing packages:", error);
+    return NextResponse.json({ error: "טעינת המארזים נכשלה" }, { status: 500 });
+  }
+}
 
 const num = (v: unknown): number | null => {
   if (v === null || v === undefined || v === "") return null;

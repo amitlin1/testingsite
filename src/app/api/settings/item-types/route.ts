@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { parseDefaultRoute } from "@/app/lib/packages/settings";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,7 @@ export async function GET() {
       item_type_id: r.item_type_id,
       item_type_desc: r.item_type_desc.trim(),
       is_package: r.is_package,
+      default_route_number: r.default_route_number,
       contents_count: r._count.package_contents,
     }));
 
@@ -37,6 +39,8 @@ export async function POST(req: Request) {
   if (!item_type_desc || typeof item_type_desc !== "string" || !item_type_desc.trim()) {
     return NextResponse.json({ error: "Description is required" }, { status: 400 });
   }
+  const route = parseDefaultRoute(body.default_route_number);
+  if ("error" in route) return NextResponse.json({ error: route.error }, { status: 400 });
 
   const trimmedDesc = item_type_desc.trim();
 
@@ -57,13 +61,14 @@ export async function POST(req: Request) {
     }
 
     const created = await prisma.item_types.create({
-      data: { item_type_desc: trimmedDesc, is_package: isPackage },
+      data: { item_type_desc: trimmedDesc, is_package: isPackage, default_route_number: isPackage ? route.value : null },
     });
 
     return NextResponse.json({
       item_type_id: created.item_type_id,
       item_type_desc: created.item_type_desc.trim(),
       is_package: created.is_package,
+      default_route_number: created.default_route_number,
       contents_count: 0,
     });
   } catch (error: any) {

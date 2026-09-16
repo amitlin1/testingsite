@@ -9,6 +9,8 @@ import { apiFetch } from "@/lib/api/client";
 interface Option {
   id: number;
   label: string;
+  /** Station types only: a package-level (opening / closing) station type. */
+  packageLevel?: boolean;
 }
 
 interface RouteData {
@@ -55,7 +57,7 @@ export default function TestingRoutesPage() {
       })
     ]).then(([items, stations]) => {
       setItemTypes(Array.isArray(items) ? (items as any[]).map((i) => ({ id: i.item_type_id, label: i.item_type_desc })) : []);
-      setStationTypes(Array.isArray(stations) ? (stations as any[]).map((s) => ({ id: s.test_station_type_id, label: s.test_type_desc })) : []);
+      setStationTypes(Array.isArray(stations) ? (stations as any[]).map((s) => ({ id: s.test_station_type_id, label: s.test_type_desc, packageLevel: s.package_level === true })) : []);
     }).catch(err => {
       console.error("Failed to load options", err);
       setItemTypes([]);
@@ -270,8 +272,14 @@ export default function TestingRoutesPage() {
                         <Box sx={{ width: 26, height: 26, borderRadius: "9999px", background: "#0066cc", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                           {index + 1}
                         </Box>
-                        <Box sx={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#1d1d1f", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <Box sx={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#1d1d1f", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 1 }}>
                           {getStationName(stepId)}
+                          {stationTypes.find((t) => t.id === stepId)?.packageLevel && (
+                            // design/Settings.dc.html — a package-level step (opening / closing) is marked on the route.
+                            <Box component="span" sx={{ fontSize: 10.5, fontWeight: 600, color: "#0066cc", background: "#e6efff", borderRadius: "9999px", px: 1, py: "2px", whiteSpace: "nowrap" }}>
+                              עמדה ברמת מארז
+                            </Box>
+                          )}
                         </Box>
                         <StepBtn title="הקדם" disabled={index === 0} onClick={() => handleMoveStep(index, "up")}>
                           <ArrowUp size={15} strokeWidth={1.9} />

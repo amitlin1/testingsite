@@ -22,6 +22,7 @@ import { canSeeInNav } from "@/lib/routes";
 // Icons
 import { Settings as SettingsIcon } from "@/components/ui/icons";
 import { Dashboard as DashboardIcon } from "@/components/ui/icons";
+import { Inventory as InventoryIcon } from "@/components/ui/icons";
 import { Science as ScienceIcon } from "@/components/ui/icons";
 import { Analytics as AnalyticsIcon } from "@/components/ui/icons";
 import { LocalShipping as LocalShippingIcon } from "@/components/ui/icons";
@@ -141,6 +142,7 @@ export default function NavBar({
 
   const mainLinks = [
     { href: "/", label: "דוחות/ניהול פריטים", icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
+    { href: "/packages", label: "מארזים", icon: <InventoryIcon sx={{ fontSize: 20 }} /> },
     { href: "/testing", label: "מסך בדיקה", icon: <ScienceIcon sx={{ fontSize: 20 }} /> },
     { href: "/dashboard/tests", label: "לוח ניהול", icon: <AnalyticsIcon sx={{ fontSize: 20 }} /> },
     { href: "/shipments", label: "משלוחים נכנסים", icon: <LocalShippingIcon sx={{ fontSize: 20 }} /> },
