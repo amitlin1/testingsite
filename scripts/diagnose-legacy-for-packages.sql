@@ -17,6 +17,7 @@
 -- (קובץ → Download as CSV).
 -- =============================================================================
 
+DROP TABLE IF EXISTS diag;
 CREATE TEMP TABLE diag (ord serial, section text, k text, v text);
 
 DO $diag$
@@ -49,10 +50,10 @@ BEGIN
   SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='_prisma_migrations') INTO has_migrations;
   SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='file_objects') INTO has_file_objects;
   SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='route_run') INTO has_ledger;
-
+  --
   pcol    := CASE WHEN has_package_col THEN 'package_id' WHEN has_parent_col THEN 'parent_item_id' ELSE NULL END;
   flagcol := CASE WHEN has_flag_new THEN 'package_level' WHEN has_flag_old THEN 'parents_only' ELSE NULL END;
-
+  --
   INSERT INTO diag(section,k,v) VALUES
     ('0 סביבה', 'database', current_database()),
     ('0 סביבה', 'user', current_user),
@@ -69,7 +70,7 @@ BEGIN
     ('0 סכימה', 'metrics ledger (route_run)', has_ledger::text),
     ('0 סכימה', 'עמודת הורה בשימוש', COALESCE(pcol, '(אין!)')),
     ('0 סכימה', 'דגל עמדה ברמת מארז בשימוש', COALESCE(flagcol, '(אין!)'));
-
+  --
   IF has_migrations THEN
     FOR r IN EXECUTE $q$
       SELECT migration_name, to_char(finished_at, 'YYYY-MM-DD HH24:MI') AS fin, rolled_back_at IS NOT NULL AS rb
@@ -78,12 +79,12 @@ BEGIN
       INSERT INTO diag(section,k,v) VALUES ('0 מיגרציות (10 אחרונות)', r.migration_name, COALESCE(r.fin, 'לא הסתיימה') || CASE WHEN r.rb THEN ' · ROLLED BACK' ELSE '' END);
     END LOOP;
   END IF;
-
+  --
   IF pcol IS NULL THEN
     INSERT INTO diag(section,k,v) VALUES ('!! שגיאה', 'items', 'אין עמודת parent_item_id ולא package_id — הסכימה לא מוכרת, השאר לא ירוץ');
     RETURN;
   END IF;
-
+  --
   -- ---------------------------------------------------------------- 1. נפחים
   SELECT count(*) INTO n FROM shipments;                                       INSERT INTO diag VALUES (DEFAULT, '1 נפחים', 'משלוחים', n::text);
   SELECT count(*) INTO n FROM shipments WHERE is_sent;                         INSERT INTO diag VALUES (DEFAULT, '1 נפחים', 'משלוחים שסומנו נשלחו', n::text);
@@ -119,7 +120,7 @@ BEGIN
   SELECT count(*) || ' לקוחות · id מקסימלי ' || max(id) || CASE WHEN max(id) > 999 THEN '  !! לא נכנס ל-3 ספרות במזהה החדש' ELSE '' END INTO t FROM customers;
                                                                                INSERT INTO diag VALUES (DEFAULT, '1 נפחים', 'לקוחות', t);
   SELECT count(*) INTO n FROM sources;                                         INSERT INTO diag VALUES (DEFAULT, '1 נפחים', 'מקורות (sources)', n::text);
-
+  --
   -- ------------------------------------------------------------- 2. מזהים
   FOR r IN SELECT length(item_id::text) AS len, count(*) AS c, min(item_id) AS mn, max(item_id) AS mx FROM items GROUP BY 1 ORDER BY 1 LOOP
     INSERT INTO diag(section,k,v) VALUES ('2 פורמט מזהים', r.len || ' ספרות', r.c || ' פריטים · ' || r.mn || ' .. ' || r.mx);
@@ -133,7 +134,7 @@ BEGIN
   END LOOP;
   EXECUTE format('SELECT COALESCE(max(c),0) FROM (SELECT count(*) c FROM items WHERE %I IS NOT NULL GROUP BY %I) s', pcol, pcol) INTO n;
   INSERT INTO diag(section,k,v) VALUES ('2 ילדים לאב (מקס׳ 99)', 'המספר הגדול ביותר של ילדים תחת אב אחד', n::text || CASE WHEN n > 99 THEN '  !! חורג' ELSE '' END);
-
+  --
   -- ------------------------------------------------ 3. מצב המסלולים (מה נגעו)
   FOR r IN EXECUTE format($q$
       SELECT CASE WHEN i.%I IS NULL THEN 'רמה עליונה' ELSE 'ילד' END AS lvl,
@@ -143,7 +144,7 @@ BEGIN
   LOOP
     INSERT INTO diag(section,k,v) VALUES ('3 מצב מסלול', r.lvl || ' · סטטוס ' || r.current_status || ' · שלב ' || r.current_route_step || CASE WHEN r.is_finished THEN ' · הסתיים' ELSE '' END, r.c::text);
   END LOOP;
-
+  --
   -- "לא נגעו": שלב 1, ממתין (2), לא הסתיים, בלי תוצאות, בלי היסטוריה, בלי קבצים —
   -- וגם כל הילדים של אותו אב עומדים בזה. זה התנאי של סקריפט ההסבה.
   EXECUTE format($q$
@@ -169,7 +170,7 @@ BEGIN
     WHERE p.%I IS NULL $q$,
     CASE WHEN has_file_objects THEN 'EXISTS (SELECT 1 FROM file_objects f WHERE f.entity_type = ''item_attachment'' AND f.status <> ''deleted'' AND f.entity_id = i.item_id::text)' ELSE 'false' END,
     pcol, pcol, pcol);
-
+  --
   SELECT count(*) INTO n FROM diag_groups;                       INSERT INTO diag VALUES (DEFAULT, '3 קבוצות להסבה (אב+ילדיו / בודד)', 'סה"כ קבוצות', n::text);
   SELECT count(*) INTO n FROM diag_groups WHERE NOT blocked;     INSERT INTO diag VALUES (DEFAULT, '3 קבוצות להסבה (אב+ילדיו / בודד)', 'ניתנות להסבה אוטומטית (איש לא נגע)', n::text);
   SELECT count(*) INTO n FROM diag_groups WHERE blocked;         INSERT INTO diag VALUES (DEFAULT, '3 קבוצות להסבה (אב+ילדיו / בודד)', 'חסומות (נגעו בהן)', n::text);
@@ -183,7 +184,7 @@ BEGIN
   SELECT count(*) INTO n FROM diag_groups WHERE finished;        INSERT INTO diag VALUES (DEFAULT, '3 סיבות חסימה (ברמה העליונה)', 'סיימו את המסלול', n::text);
   SELECT count(*) INTO n FROM diag_groups WHERE blocked AND NOT (moved OR has_results OR has_history OR has_files OR no_route);
                                                                  INSERT INTO diag VALUES (DEFAULT, '3 סיבות חסימה (ברמה העליונה)', 'האב נקי אבל ילד שלו נגוע', n::text);
-
+  --
   -- ------------------------------------------------- 4. לפי סוג פריט (עליון)
   FOR r IN EXECUTE format($q$
       SELECT it.item_type_id, TRIM(it.item_type_desc) AS d,
@@ -200,7 +201,7 @@ BEGIN
     INSERT INTO diag(section,k,v) VALUES ('4 סוגי פריט ברמה עליונה', '#' || r.item_type_id || ' ' || r.d,
       'קבוצות ' || r.groups || ' · להסבה ' || r.ok || ' · חסומות ' || r.blocked || ' · ילדים ' || r.children || ' · סוגי ילדים: ' || r.child_types || ' · ' || r.routes);
   END LOOP;
-
+  --
   -- ------------------------------------------------------- 5. סוגי ילדים
   FOR r IN EXECUTE format($q$
       SELECT ct.item_type_id, TRIM(ct.item_type_desc) AS d, count(*) AS c,
@@ -216,7 +217,7 @@ BEGIN
   FOR r IN SELECT children, count(*) AS c FROM diag_groups GROUP BY 1 ORDER BY 1 LOOP
     INSERT INTO diag(section,k,v) VALUES ('5 התפלגות ילדים לאב', r.children || ' ילדים', r.c || ' אבות');
   END LOOP;
-
+  --
   -- ------------------------------------------------ 6. סוגי עמדות ומסלולים
   FOR r IN EXECUTE format($q$
       SELECT t.test_station_type_id AS id, TRIM(t.test_type_desc) AS d, t.%I AS flag,
@@ -235,7 +236,7 @@ BEGIN
   LOOP
     INSERT INTO diag(section,k,v) VALUES ('6 מסלולים', '#' || r.item_type_id || ' ' || r.d || ' · מסלול ' || r.route_number, array_to_string(r.route_steps, '→') || ' = ' || COALESCE(r.names, '?'));
   END LOOP;
-
+  --
   -- ------------------------------------------------------- 7. לפי משלוח
   FOR r IN EXECUTE $q$
       SELECT s.id, s.shipment_code, TRIM(c.customer_code) AS cust, to_char(s.shipment_date, 'YYYY-MM-DD') AS d, s.is_sent, s.amount,
@@ -252,7 +253,7 @@ BEGIN
     INSERT INTO diag(section,k,v) VALUES ('7 משלוחים', r.shipment_code || ' · ' || r.cust || ' · ' || r.d || CASE WHEN r.is_sent THEN ' · נשלח' ELSE '' END,
       'הוצהר ' || r.amount || ' [' || r.declared || '] · קבוצות ' || r.groups || ' (להסבה ' || r.ok || ', חסומות ' || r.blocked || ') · ילדים ' || r.children || ' · סיימו ' || r.finished || ' · הוחזרו ' || r.sent);
   END LOOP;
-
+  --
   -- ------------------------------------------- 8. משלוחים בלי פריטים / להפך
   SELECT count(*) INTO n FROM shipments s WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.shipment_id = s.id);
   INSERT INTO diag VALUES (DEFAULT, '8 עקביות', 'משלוחים בלי אף פריט שנקלט', n::text);
@@ -270,7 +271,7 @@ BEGIN
   INSERT INTO diag VALUES (DEFAULT, '8 עקביות', 'סריאלים כפולים (ערכים)', n::text);
   EXECUTE format('SELECT count(*) FROM items i WHERE i.%I IS NULL AND NOT EXISTS (SELECT 1 FROM testing_routes tr WHERE tr.item_type_id = i.item_type_id)', pcol) INTO n;
   INSERT INTO diag VALUES (DEFAULT, '8 עקביות', 'פריטים ברמה עליונה שלסוגם אין מסלול', n::text);
-
+  --
   DROP TABLE diag_groups;
 END
 $diag$;
