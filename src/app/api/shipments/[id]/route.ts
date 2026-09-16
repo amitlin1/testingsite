@@ -3,6 +3,7 @@ import { prisma } from "@/app/lib/prisma";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
 import { hasRole } from "@/lib/auth/roles";
+import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 
 /** withAuth passes only (req, ctx); recover the [id] from the path. */
 function idFromReq(req: NextRequest): number {
@@ -44,6 +45,16 @@ export const PUT = withAuth(async (request: NextRequest, { session }: WithAuthCt
             finalRecievingWorkerId = empNo;
             finalRecievingWorkerName =
                 session.user.displayName ?? session.user.name ?? session.user.preferredUsername;
+        }
+
+        // Package model (docs/packages/PLAN.md §9.10): declared lines are
+        // package types only — same rule as POST /api/shipments.
+        const nonPackage = await nonPackageTypeIds(shipment_items);
+        if (nonPackage.length > 0) {
+            return NextResponse.json(
+                { error: "משלוח מצהיר על סוגי מארזים בלבד", code: "SHIPMENT_TYPES_MUST_BE_PACKAGES", item_type_ids: nonPackage },
+                { status: 400 },
+            );
         }
 
         const currentUtcIso = getCurrentUtcIso();

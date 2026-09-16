@@ -29,6 +29,11 @@ export interface SearchItem {
   statusDesc: string | null;
   stationDesc: string | null;
   isFinished: boolean;
+  /** Package model (docs/packages/PLAN.md): this row is a box. */
+  isPackage: boolean;
+  /** The box this item sits in (null for a box or a legacy loose item). */
+  packageId: string | null;
+  packageSeq: number | null;
   /**
    * The station whose testing-screen queue this item actually shows up in, or
    * null when it shows up in none (finished, or no matching station). Resolved
@@ -73,6 +78,9 @@ export async function GET(req: Request) {
         ist.item_status_desc,
         ts.test_station_desc,
         COALESCE(ir.is_finished, false) AS is_finished,
+        COALESCE(i.is_package, false)   AS is_package,
+        i.package_id,
+        i.package_seq,
         qs.test_station_id      AS queue_station_id,
         qs.test_station_type_id AS queue_station_type_id,
         RTRIM(qs.test_station_desc) AS queue_station_desc,
@@ -119,6 +127,7 @@ export async function GET(req: Request) {
            i.serial_no          ILIKE ${pattern}
         OR i.makat::text        ILIKE ${pattern}
         OR i.item_id::text      ILIKE ${pattern}
+        OR i.package_id::text   ILIKE ${pattern}
         OR i.model              ILIKE ${pattern}
         OR i.manufacturer_name  ILIKE ${pattern}
         OR i.manufacturer_no    ILIKE ${pattern}
@@ -142,6 +151,9 @@ export async function GET(req: Request) {
       statusDesc: (r.item_status_desc as string | null)?.trim() ?? null,
       stationDesc: (r.test_station_desc as string | null)?.trim() ?? null,
       isFinished: Boolean(r.is_finished),
+      isPackage: Boolean(r.is_package),
+      packageId: r.package_id == null ? null : String(r.package_id),
+      packageSeq: r.package_seq == null ? null : Number(r.package_seq),
       queueStationId: r.queue_station_id == null ? null : Number(r.queue_station_id),
       queueStationTypeId: r.queue_station_type_id == null ? null : Number(r.queue_station_type_id),
       queueStationDesc: (r.queue_station_desc as string | null)?.trim() ?? null,

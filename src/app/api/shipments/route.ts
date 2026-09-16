@@ -4,30 +4,43 @@ import { saveSignature } from "../../../lib/file-utils";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { withAuth } from "@/lib/auth/withAuth";
 import { hasRole } from "@/lib/auth/roles";
+import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 
 // GET: Fetch all shipments
 export async function GET() {
   try {
     console.log("Fetching shipments...");
-    // Optimized: single CTE computes all item counts per shipment instead of 6 correlated subqueries
+    // Package model (docs/packages/PLAN.md §9.10, §9.13): a shipment declares
+    // package types and counts, so every counter here counts BOXES
+    // (items.is_package, never the items inside them):
+    //   sampled  = boxes taken in for this shipment
+    //   started  = boxes that left the untouched state (opened / in test /
+    //              waiting for items / finished)
+    //   finished = boxes that closed (route finished)
+    //   sent     = boxes returned to the customer (shipment_history)
     const rows = await prisma.$queryRawUnsafe<any[]>(`
       WITH shipment_counts AS (
         SELECT
           i.shipment_id,
-          COUNT(*) FILTER (WHERE i.package_id IS NULL)::int AS total_items,
-          COUNT(*) FILTER (WHERE ir.item_id IS NOT NULL AND i.package_id IS NULL)::int AS sampled_amount,
-          COUNT(*) FILTER (WHERE ir.current_status = 1 AND i.package_id IS NULL)::int AS in_work_items,
-          COUNT(*) FILTER (WHERE ir.current_status = 3 AND i.package_id IS NULL)::int AS valid_items,
-          COUNT(*) FILTER (WHERE ir.is_finished = true AND i.package_id IS NULL)::int AS valid_amount,
-          COUNT(*) FILTER (WHERE (ir.current_status = 3 OR ir.is_finished = true) AND i.package_id IS NULL)::int AS finished_sampled_amount,
+          COUNT(*)::int AS total_items,
+          COUNT(*) FILTER (WHERE ir.item_id IS NOT NULL)::int AS sampled_amount,
+          COUNT(*) FILTER (WHERE ir.current_status IN (1, 5))::int AS in_work_items,
+          COUNT(*) FILTER (WHERE ir.current_status = 3 OR ir.is_finished = true)::int AS valid_items,
+          COUNT(*) FILTER (WHERE ir.is_finished = true)::int AS valid_amount,
+          COUNT(*) FILTER (WHERE ir.current_status = 3 OR ir.is_finished = true)::int AS finished_sampled_amount,
           COUNT(*) FILTER (
-            WHERE ir.item_id IS NOT NULL AND i.package_id IS NULL
+            WHERE ir.item_id IS NOT NULL
               AND (ir.current_status <> 2 OR ir.current_route_step > 1 OR ir.is_finished = true)
-          )::int AS started_sampled_amount,
-          COUNT(*) FILTER (WHERE ir.item_id IS NOT NULL AND i.package_id IS NOT NULL)::int AS sub_items_sampled_amount
+          )::int AS started_sampled_amount
         FROM items i
         LEFT JOIN item_routes ir ON ir.item_id = i.item_id
+        WHERE i.is_package = true AND i.package_id IS NULL
         GROUP BY i.shipment_id
+      ),
+      sent_counts AS (
+        SELECT shipment_id, COALESCE(SUM(amount), 0)::int AS sent_amount
+        FROM shipment_history
+        GROUP BY shipment_id
       )
       SELECT
         s.id,
@@ -55,10 +68,10 @@ export async function GET() {
         COALESCE(sc.in_work_items, 0) as in_work_items,
         COALESCE(sc.valid_items, 0) as valid_items,
         COALESCE(sc.sampled_amount, 0) as sampled_amount,
-        COALESCE(sc.sub_items_sampled_amount, 0) as sub_items_sampled_amount,
         COALESCE(sc.valid_amount, 0) as valid_amount,
         COALESCE(sc.finished_sampled_amount, 0) as finished_sampled_amount,
         COALESCE(sc.started_sampled_amount, 0) as started_sampled_amount,
+        COALESCE(snt.sent_amount, 0) as sent_amount,
         (
             SELECT json_agg(json_build_object(
                 'id', si.id,
@@ -75,6 +88,7 @@ export async function GET() {
       JOIN customers c ON s.customer_id = c.id
       LEFT JOIN sources src ON s.source_id = src.source_id
       LEFT JOIN shipment_counts sc ON sc.shipment_id = s.id
+      LEFT JOIN sent_counts snt ON snt.shipment_id = s.id
       ORDER BY s.shipment_date DESC
     `);
     console.log(`Found ${rows.length} shipments`);
@@ -139,6 +153,16 @@ export const POST = withAuth(async (request, { session }) => {
     if (/[֐-׿]/.test(poc_details || "")) {
       return NextResponse.json(
         { error: "POC details must be in English only" },
+        { status: 400 },
+      );
+    }
+
+    // Package model (docs/packages/PLAN.md §9.10): a shipment declares package
+    // TYPES only — the items inside a box are never declared per shipment.
+    const nonPackage = await nonPackageTypeIds(shipment_items);
+    if (nonPackage.length > 0) {
+      return NextResponse.json(
+        { error: "משלוח מצהיר על סוגי מארזים בלבד", code: "SHIPMENT_TYPES_MUST_BE_PACKAGES", item_type_ids: nonPackage },
         { status: 400 },
       );
     }

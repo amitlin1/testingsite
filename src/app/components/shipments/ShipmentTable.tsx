@@ -256,19 +256,20 @@ export default function ShipmentTable() {
         },
         { key: "date", header: "תאריך קבלה", nums: true, nowrap: true, cell: (r) => <span style={{ color: "#444" }}>{new Date(r.shipment_date).toLocaleDateString("he-IL")}</span> },
         { key: "worker", header: "עובד מקבל", cell: (r) => <span style={{ color: "#444" }}>{r.recieving_worker_name || "—"}</span> },
-        { key: "amount", header: "כמות כוללת", align: "center", nums: true, cell: (r) => <span style={{ fontWeight: 700 }}>{r.amount}</span> },
-        { key: "sampled", header: "כמות מדגם", align: "center", nums: true, cell: (r) => r.sampled_amount || 0 },
-        { key: "subItems", header: "תת פריטים", align: "center", nums: true, cell: (r) => r.sub_items_sampled_amount || 0 },
-        { key: "valid", header: "כמות תקינה", align: "center", nums: true, cell: (r) => <span style={{ fontWeight: 600 }}>{r.valid_amount || 0}</span> },
+        // Package model (docs/packages/PLAN.md §9.10): every count is boxes.
+        { key: "amount", header: "מארזים שהוצהרו", align: "center", nums: true, cell: (r) => <span style={{ fontWeight: 700 }}>{r.amount}</span> },
+        { key: "sampled", header: "נקלטו", align: "center", nums: true, cell: (r) => r.sampled_amount || 0 },
+        { key: "started", header: "התחילו", align: "center", nums: true, cell: (r) => r.started_sampled_amount || 0 },
+        { key: "finished", header: "סיימו", align: "center", nums: true, cell: (r) => <span style={{ fontWeight: 600 }}>{r.finished_sampled_amount || 0}</span> },
         {
-            key: "invalid", header: "כמות לא תקינה", align: "center", nums: true,
+            key: "sent", header: "נשלחו", align: "center", nums: true,
             cell: (r) => {
-                const invalid = Math.max(0, (r.sampled_amount || 0) - (r.valid_amount || 0));
-                return <span style={{ fontWeight: 600, color: invalid > 0 ? "#bf3535" : "#1d1d1f" }}>{invalid}</span>;
+                const sent = r.sent_amount || 0;
+                return <span style={{ fontWeight: 600, color: sent > 0 ? "#1f8a5b" : "#1d1d1f" }}>{sent}</span>;
             },
         },
         {
-            key: "routeDone", header: "סיימו את המסלול", width: 170,
+            key: "routeDone", header: "התקדמות המארזים", width: 170,
             cell: (r) => {
                 const sampled = r.sampled_amount || 0;
                 const pct = sampled > 0 ? Math.round(((r.finished_sampled_amount || 0) / sampled) * 100) : 0;
@@ -301,7 +302,7 @@ export default function ShipmentTable() {
                         </span>
                     </div>
                     <p style={{ margin: "8px 0 0", fontSize: 16, color: "#444", lineHeight: 1.5 }}>
-                        משלוחי פריטים שהתקבלו לבדיקה, כמויות מדגם וסטטוס טיפול.
+                        משלוחי מארזים שהתקבלו לבדיקה, מה הוצהר על כל משלוח וסטטוס הטיפול.
                     </p>
                 </div>
                 <button className="shx-btn shx-btn-primary" onClick={() => setInsertOpen(true)}>
@@ -328,8 +329,8 @@ export default function ShipmentTable() {
                         onClick={() => toggleKpi("readyToSend")} active={kpiFilter === "readyToSend"} />
                     <SummaryTile icon={<Send size={22} strokeWidth={1.85} />} tone="green" value={kpis.sent} label={KPI_LABELS.sent}
                         onClick={() => toggleKpi("sent")} active={kpiFilter === "sent"} />
-                    <SummaryTile icon={<Layers size={22} strokeWidth={1.85} />} tone="blue" value={kpis.sampledTotal} label="כמות מדגם כוללת" />
-                    <SummaryTile icon={<Percent size={22} strokeWidth={1.85} />} tone="green" value={`${kpis.donePct}%`} label="פריטים שהושלמו מתוך המדגם" />
+                    <SummaryTile icon={<Layers size={22} strokeWidth={1.85} />} tone="blue" value={kpis.sampledTotal} label="מארזים שנקלטו" />
+                    <SummaryTile icon={<Percent size={22} strokeWidth={1.85} />} tone="green" value={`${kpis.donePct}%`} label="מארזים שסיימו מתוך שנקלטו" />
                 </SummaryStrip>
             )}
 

@@ -10,6 +10,8 @@ import {
 import { STATUS_NAMES } from "@/app/lib/status-names";
 import { formatFileSize } from "@/lib/minioFileUtils";
 import { apiFetch } from "@/lib/api/client";
+import MyPackageCard from "@/app/components/packages/MyPackageCard";
+import type { PackageView } from "@/app/lib/packages/read";
 
 /*
  * היסטוריית פריט — the full-page reconstruction of a single item's path through
@@ -221,6 +223,8 @@ export default function ItemHistoryPage() {
 
   const [item, setItem] = React.useState<ItemData | null>(null);
   const [history, setHistory] = React.useState<HistoryRow[]>([]);
+  // The item's box (docs/packages/PLAN.md); null for a legacy loose item.
+  const [pkg, setPkg] = React.useState<PackageView | null>(null);
   const [files, setFiles] = React.useState<ItemFile[]>([]);
   const [workers, setWorkers] = React.useState<Worker[]>([]);
   const [stationTypes, setStationTypes] = React.useState<StationType[]>([]);
@@ -262,6 +266,7 @@ export default function ItemHistoryPage() {
 
         setItem(itemJson.item as ItemData);
         setHistory(Array.isArray(itemJson.history) ? itemJson.history : []);
+        setPkg((itemJson.package as PackageView | null) ?? null);
         setNowRef(new Date().toISOString());
 
         // Supporting lookups are best-effort: a failure here degrades a label,
@@ -409,18 +414,10 @@ export default function ItemHistoryPage() {
   }, [item, nowRef, chron, nets, totalSteps]);
 
   /* ----- connected items -----
-   * An accessory's siblings are noise on this screen: what matters is the parent
-   * it belongs to. So an accessory shows only its parent item, and the full
-   * "פריטים מחוברים" card appears only for a parent item (listing its accessories). */
-  const isAccessory = item?.package_id != null;
+   * Package model: an item in a box gets the "המארז שלי" card (siblings and
+   * where each one is). The connected-items list below only serves a legacy
+   * loose item that still has children pointing at it. */
   const connectedAll = React.useMemo(() => item?.connected_items ?? [], [item]);
-  const parentItem = React.useMemo(
-    () =>
-      connectedAll.find(
-        (c) => c.relation_type === "Parent" || c.item_id === item?.package_id,
-      ) ?? null,
-    [connectedAll, item],
-  );
   const accessories = React.useMemo(
     () => connectedAll.filter((c) => c.item_id !== item?.package_id),
     [connectedAll, item],
@@ -702,7 +699,7 @@ export default function ItemHistoryPage() {
                 { k: "עמדה נוכחית", v: trim(item.test_station_desc) || EM_DASH },
                 { k: "תאריך קליטה", v: fmtDT(item.created_at) },
                 ...(item.finished_at ? [{ k: "תאריך סיום", v: fmtDT(item.finished_at) }] : []),
-                { k: "פריט אב", v: item.package_id ? `#${item.package_id}` : EM_DASH },
+                { k: "מארז", v: pkg ? `${pkg.item_type_desc} · ${pkg.item_id}` : EM_DASH },
               ].map((r) => (
                 <div key={r.k} style={rowBase}>
                   <span style={{ fontSize: 12.5, color: MUTED, flexShrink: 0 }}>{r.k}</span>
@@ -714,18 +711,11 @@ export default function ItemHistoryPage() {
             </BorderedList>
           </SectionCard>
 
-          {/* Accessory → just its parent. Parent item → the accessories hanging off it. */}
-          {isAccessory ? (
-            <SectionCard title="פריט אב">
-              {parentItem ? (
-                <BorderedList>
-                  <ConnectedRow c={parentItem} relationLabel="אב" />
-                </BorderedList>
-              ) : (
-                <div style={{ fontSize: 13, color: FAINT }}>
-                  {item.package_id ? `פריט אב #${item.package_id}` : "לא נמצא פריט אב."}
-                </div>
-              )}
+          {/* Package model: the box this item is in (or is). A loose legacy
+              item keeps the connected-items list. */}
+          {pkg ? (
+            <SectionCard title="המארז שלי">
+              <MyPackageCard pkg={pkg} currentItemId={item.item_id} />
             </SectionCard>
           ) : (
             <SectionCard title="פריטים מחוברים">

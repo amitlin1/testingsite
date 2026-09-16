@@ -130,7 +130,7 @@ export default function ShipmentSendPopup({
             // Filter valid items
             const validItems = data.items.filter(i => i.item_type_id && Number(i.amount) > 0);
             if (validItems.length === 0) {
-                alert("Please add at least one item to send.");
+                alert("יש להוסיף לפחות סוג מארז אחד לשליחה.");
                 return;
             }
 
@@ -186,12 +186,12 @@ export default function ShipmentSendPopup({
                 borderBottom: `1px solid ${theme.palette.divider}`,
                 pb: 2
             }}>
-                שליחת פריטים (Shipment Send)
+                החזרת משלוח
             </DialogTitle>
             <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <DialogContent>
-                    <Alert severity="warning" sx={{ mb: 2 }}>
-                        שים לב: ייתכן וישנם פריטים מחוברים (Sub-items)
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                        הכמויות הן מספר מארזים. לכל סוג מארז אפשר לשלוח עד הכמות שהוצהרה פחות מה שכבר נשלח.
                     </Alert>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
                         <Box sx={{ width: "100%" }}>
@@ -264,7 +264,7 @@ export default function ShipmentSendPopup({
                     {/* Dynamic Items Selection */}
                     <Box sx={{ mt: 3, borderTop: `1px solid ${theme.palette.divider}`, pt: 2 }}>
                         <Button variant="outlined" onClick={() => append({ item_type_id: null, makat: null, amount: '' })} sx={{ mb: 2 }}>
-                            הוסף פריט לשליחה
+                            הוסף סוג מארז לשליחה
                         </Button>
                         {fields.map((item, index) => (
                             <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
@@ -272,14 +272,14 @@ export default function ShipmentSendPopup({
                                     name={`items.${index}` as const}
                                     control={control}
                                     rules={{
-                                        validate: (val) => val.item_type_id ? true : "בחר פריט"
+                                        validate: (val) => val.item_type_id ? true : "בחר סוג מארז"
                                     }}
                                     render={({ field: { onChange, value } }) => (
                                         <Box sx={{ width: 400 }}>
                                             <SearchableCombobox<(typeof availableItems)[number]>
                                                 options={availableItems}
                                                 getOptionLabel={(option) =>
-                                                    `${option.item_type_desc || 'Unknown'} - Makat: ${option.makat || 'N/A'} (Qty: ${option.quantity})`
+                                                    `${option.item_type_desc || '—'} · מק״ט ${option.makat || '—'} · ${option.quantity} מארזים`
                                                 }
                                                 // Find the matching option based on item_type_id and makat
                                                 value={availableItems.find(opt =>
@@ -296,7 +296,7 @@ export default function ShipmentSendPopup({
                                                         onChange({ item_type_id: null, makat: null, amount: '' });
                                                     }
                                                 }}
-                                                placeholder="בחירת פריט"
+                                                placeholder="סוג מארז"
                                                 error={!!errors.items?.[index]}
                                             />
                                         </Box>
@@ -326,7 +326,7 @@ export default function ShipmentSendPopup({
                                             const maxAllowed = Math.max(0, totalReceived - previouslySent);
 
                                             if (Number(value) > maxAllowed) {
-                                                return `Max allowed is ${maxAllowed}`;
+                                                return `המקסימום לשליחה הוא ${maxAllowed}`;
                                             }
                                             return true;
                                         }
@@ -348,7 +348,7 @@ export default function ShipmentSendPopup({
                                         return (
                                             <TextField
                                                 {...field}
-                                                label={`כמות (Max: ${maxAllowed})`}
+                                                label={`מארזים (מקס׳ ${maxAllowed})`}
                                                 type="number"
                                                 required
                                                 size="small"

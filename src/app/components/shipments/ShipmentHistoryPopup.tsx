@@ -207,7 +207,7 @@ export default function ShipmentHistoryPopup({
                                         <TableCell>תאריך</TableCell>
                                         <TableCell>מס׳ משלוח</TableCell>
                                         <TableCell>עובד שולח</TableCell>
-                                        <TableCell>תיאור פריט</TableCell>
+                                        <TableCell>סוג מארז</TableCell>
                                         <TableCell>כמות נשלחה</TableCell>
                                         <TableCell>PDF</TableCell>
                                     </TableRow>
@@ -228,7 +228,7 @@ export default function ShipmentHistoryPopup({
                                                 <TableCell>
                                                     {group.items.map((item, idx) => (
                                                         <div key={idx}>
-                                                            {item.item_type_desc} (Makat: {item.makat || '-'}) - <b>{item.amount}</b>
+                                                            {item.item_type_desc} (מק״ט {item.makat || '-'}) - <b>{item.amount}</b> מארזים
                                                         </div>
                                                     ))}
                                                 </TableCell>

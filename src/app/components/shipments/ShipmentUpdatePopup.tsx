@@ -38,7 +38,8 @@ export default function ShipmentUpdatePopup({
     const theme = useTheme();
     const [customers, setCustomers] = useState<Customers[]>([]);
     const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; roles: string[] }[]>([]);
-    const [itemTypes, setItemTypes] = useState<{ id: number; name: string }[]>([]);
+    // Package types only (docs/packages/PLAN.md §9.10) — a shipment declares boxes.
+    const [itemTypes, setItemTypes] = useState<{ id: number; name: string; is_package?: boolean }[]>([]);
     const [sources, setSources] = useState<{ id: number; desc: string }[]>([]);
 
     // "עובד מקבל" — same rule as ShipmentInsertPopup: a storekeeper is always
@@ -93,7 +94,7 @@ export default function ShipmentUpdatePopup({
                 if (!cancelled) {
                     setCustomers(Array.isArray(custData) ? custData : []);
                     setWorkers(Array.isArray(workersData) ? workersData : []);
-                    setItemTypes(Array.isArray(typesData) ? typesData : []);
+                    setItemTypes((Array.isArray(typesData) ? typesData : []).filter((t: { is_package?: boolean }) => t.is_package === true));
                     setSources(Array.isArray(sourcesData) ? sourcesData : []);
                 }
             } catch (error) {
@@ -318,8 +319,9 @@ export default function ShipmentUpdatePopup({
 
                     {/* Dynamic Items Section */}
                     <Box sx={{ mt: 3, borderTop: `1px solid ${theme.palette.divider}`, pt: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>מארזים במשלוח</Typography>
                         <Button variant="outlined" onClick={() => append({ item_type_id: 0, quantity: 0 })} sx={{ mb: 2 }}>
-                            הוסף סוג פריט
+                            הוסף סוג מארז
                         </Button>
                         {fields.map((item, index) => (
                             <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
@@ -335,7 +337,7 @@ export default function ShipmentUpdatePopup({
                                             isOptionEqualToValue={(o, v) => o.id === v.id}
                                             value={itemTypes.find((t) => t.id === value) || null}
                                             onChange={(newValue) => onChange(newValue?.id ?? null)}
-                                            placeholder="סוג פריט"
+                                            placeholder="סוג מארז"
                                             error={!!errors.shipment_items?.[index]?.item_type_id}
                                         />
                                     )}
@@ -389,7 +391,7 @@ export default function ShipmentUpdatePopup({
                     {/* Auto-calculated total = Σ quantities */}
                     <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            סה״כ כמות: <Box component="span" sx={{ color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>{watch("amount") || 0}</Box>
+                            סה״כ מארזים (מחושב): <Box component="span" sx={{ color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>{watch("amount") || 0}</Box>
                         </Typography>
                     </Box>
                 </DialogContent>

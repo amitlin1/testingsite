@@ -28,6 +28,7 @@ import type {
 } from "@/app/api/search/index/route";
 import type { SearchItem } from "@/app/api/search/items/route";
 import { apiFetch } from "@/lib/api/client";
+import PackageIdText from "@/app/components/packages/PackageIdText";
 
 /* =========================================================================
    Command palette (Ctrl+K) — one search box for עמדות, פריטים, סוגי עמדות
@@ -138,6 +139,10 @@ interface PaletteItem {
   icon: LucideIcon;
   /** Trailing pill (e.g. "4 עמדות", "הושלם"). */
   tag?: string;
+  /** A 16-digit package / item id shown before the label with its bold
+   *  position suffix (design/TopNav.dc.html) — boxes and items differ by the
+   *  "מארז" tag and that suffix. */
+  labelId?: string;
   /** Trailing affordance icon — recents use it for "fill the input". */
   trailIcon?: LucideIcon;
   /** When set, selecting fills the input instead of navigating. */
@@ -150,6 +155,7 @@ interface PaletteItem {
 
 /** Static navigation targets, always searchable by name. */
 const NAV_DEFS: { id: string; label: string; sub: string; icon: LucideIcon; href: string }[] = [
+  { id: "packages", label: "מארזים", sub: "רשימת המארזים וקליטת מארז", icon: Package, href: "/packages" },
   { id: "items", label: "ניהול פריטים", sub: "דוחות ורשימת פריטים", icon: LayoutDashboard, href: "/" },
   { id: "testing", label: "מסך בדיקה", sub: "תור העמדה ובדיקות פעילות", icon: FlaskConical, href: "/testing" },
   { id: "dashboard", label: "לוח ניהול", sub: "מדדים וניתוחים", icon: LayoutDashboard, href: "/dashboard" },
@@ -158,6 +164,7 @@ const NAV_DEFS: { id: string; label: string; sub: string; icon: LucideIcon; href
   { id: "stations", label: "עמדות בדיקה", sub: "הגדרות · סוגי עמדות ועמדות", icon: Monitor, href: "/settings/test-stations" },
   { id: "routes", label: "מסלולי בדיקה", sub: "הגדרות", icon: Settings, href: "/settings/testing-routes" },
   { id: "itemtypes", label: "סוגי פריטים", sub: "הגדרות", icon: Tag, href: "/settings/item-types" },
+  { id: "pkgtypes", label: "סוגי מארזים", sub: "הגדרות · תכולת מארז ומסלול", icon: Package, href: "/settings/packages" },
   { id: "reference", label: "פריטי ייחוס", sub: "הגדרות", icon: Package, href: "/settings/reference-items" },
 ];
 
@@ -241,7 +248,7 @@ function buildGroups(
     groups.push({
       label: "מעברים מהירים",
       items: [
-        { key: "act-new-item", label: "פריט חדש", sub: "קליטת פריט למערכת", icon: Plus, href: "/?new=1" },
+        { key: "act-new-package", label: "מארז חדש", sub: "קליטת מארז והפריטים שבו", icon: Plus, href: "/packages?new=1" },
         ...NAV_DEFS.slice(0, 6).map((n) => ({
           key: `nav-${n.id}`,
           label: n.label,
@@ -337,14 +344,37 @@ function buildGroups(
   if (items.length) {
     const rows: PaletteItem[] = [];
     for (const it of items.slice(0, ITEM_ROWS_MAX)) {
-      const name = it.serialNo || `פריט ${it.itemId}`;
+      // Package model (docs/packages/PLAN.md): a box and an item inside one
+      // carry a 16-digit id whose two-digit suffix is the position — shown as
+      // labelId with the suffix in bold; the box additionally gets the "מארז"
+      // tag. A legacy loose item keeps the plain "#id" identity.
+      const inPackageModel = it.isPackage || it.packageId != null;
+      const idText = inPackageModel ? it.itemId : undefined;
+      const name = it.isPackage
+        ? (it.itemTypeDesc ?? "מארז")
+        : it.serialNo || (inPackageModel ? "פריט" : `פריט ${it.itemId}`);
       // Serial numbers are not unique in practice, so every sub-line leads with
       // the item id — otherwise two items sharing a serial render three
       // identical-looking rows each.
-      const identity = [`#${it.itemId}`, it.model, it.makat ? `מק״ט ${it.makat}` : null, it.itemTypeDesc]
+      const identity = (it.isPackage
+        ? ["מארז", it.customerCode, it.shipmentCode ? `משלוח ${it.shipmentCode}` : null]
+        : [inPackageModel ? null : `#${it.itemId}`, it.model, it.makat ? `מק״ט ${it.makat}` : null, it.itemTypeDesc, it.packageId ? `במארז ${it.packageId}` : null])
         .filter(Boolean)
         .join(" · ");
       const stateTag = it.isFinished ? "הושלם" : it.statusDesc ?? undefined;
+
+      // 0 — עמוד המארז, the primary destination for a box.
+      if (it.isPackage) {
+        rows.push({
+          key: `package-${it.itemId}`,
+          label: `עמוד המארז · ${name}`,
+          labelId: idText,
+          sub: identity,
+          icon: Package,
+          tag: "מארז",
+          href: `/packages/${encodeURIComponent(it.itemId)}`,
+        });
+      }
 
       // 1 — עמדת הפריט. Absent for a finished item, or when no station's queue
       // would list it; we say why rather than offering a dead link.
@@ -352,7 +382,8 @@ function buildGroups(
       if (stationHref) {
         rows.push({
           key: `item-station-${it.itemId}`,
-          label: `עמדת הפריט · ${it.queueStationDesc}`,
+          labelId: idText,
+          label: `${it.isPackage ? "עמדת המארז" : "עמדת הפריט"} · ${it.queueStationDesc}`,
           sub: `${identity} · פתיחת תור העמדה מסונן לפריט`,
           icon: FlaskConical,
           tag: stateTag,
@@ -363,7 +394,8 @@ function buildGroups(
       // 2 — היסטוריית הפריט.
       rows.push({
         key: `item-history-${it.itemId}`,
-        label: `היסטוריית פריט · ${name}`,
+        labelId: idText,
+        label: `${it.isPackage ? "היסטוריית מארז" : "היסטוריית פריט"} · ${name}`,
         sub: it.isFinished
           ? `${identity} · הפריט הושלם`
           : stationHref
@@ -374,14 +406,17 @@ function buildGroups(
         href: itemHistoryHref(it),
       });
 
-      // 3 — דף הפריטים.
-      rows.push({
-        key: `item-${it.itemId}`,
-        label: name,
-        sub: [identity, it.stationDesc, "רשימת הפריטים"].filter(Boolean).join(" · "),
-        icon: Package,
-        href: itemHref(it),
-      });
+      // 3 — דף הפריטים (a box has its package page instead, row 0).
+      if (!it.isPackage) {
+        rows.push({
+          key: `item-${it.itemId}`,
+          labelId: idText,
+          label: name,
+          sub: [identity, it.stationDesc, "רשימת הפריטים"].filter(Boolean).join(" · "),
+          icon: Package,
+          href: itemHref(it),
+        });
+      }
     }
     groups.push({ label: "פריטים", items: rows });
   }
@@ -557,7 +592,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           <input
             ref={inputRef}
             className="cp-input"
-            placeholder="חיפוש עמדות, פריטים, סוגי עמדות, מסכים…"
+            placeholder="חיפוש מארז, פריט, משלוח או עמדה"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -603,6 +638,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       </span>
                       <span className="cp-item-main">
                         <span className="cp-item-label">
+                          {it.labelId && <PackageIdText id={it.labelId} size={13} headColor="inherit" weight={600} style={{ marginInlineEnd: 8 }} />}
                           <Highlight text={it.label} q={q} />
                         </span>
                         {it.sub && (

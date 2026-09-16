@@ -15,7 +15,7 @@ export const ShipmentPDFDocument = React.forwardRef<HTMLDivElement, ShipmentPDFP
     ({ shipment, type, historyGroup }, ref) => {
         const isReceived = type === 'received';
 
-        const title = isReceived ? 'קבלת משלוח' : 'תעודת משלוח';
+        const title = isReceived ? 'תעודת קבלת משלוח' : 'תעודת משלוח';
         const shipmentCode = isReceived ? shipment.shipment_code : historyGroup?.sent_shipment_code;
         const date = isReceived
             ? new Date(shipment.shipment_date).toLocaleDateString('he-IL')
@@ -47,7 +47,7 @@ export const ShipmentPDFDocument = React.forwardRef<HTMLDivElement, ShipmentPDFP
                         <strong>תאריך משלוח:</strong> {date}
                     </p>
                     <p style={{ margin: '5px 0' }}>
-                        <strong>עובד:</strong> {workerName || 'לא צוין'}
+                        <strong>עובד:</strong> {workerName || 'לא צוין'}</p><p style={{ margin: '5px 0' }}><strong>סה״כ מארזים:</strong> {items.reduce((n: number, it: any) => n + Number(it.quantity ?? it.amount ?? 0), 0)}
                     </p>
                     {isReceived && shipment.customer_code && (
                         <p style={{ margin: '5px 0' }}>
@@ -66,7 +66,7 @@ export const ShipmentPDFDocument = React.forwardRef<HTMLDivElement, ShipmentPDFP
                     <thead>
                         <tr style={{ backgroundColor: '#4286f4', color: 'white' }}>
                             <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'right' }}>
-                                תיאור פריט
+                                סוג מארז
                             </th>
                             <th style={{ border: '1px solid #ddd', padding: '12px', textAlign: 'right' }}>
                                 מקט

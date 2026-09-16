@@ -14,6 +14,7 @@ import { loadPackageContext } from "@/app/lib/packages/context";
 import { checkItemRouteAgainstPackage, loadPackageLevelTypeIds, loadRouteShape } from "@/app/lib/packages/route-rules";
 import { recheckPackageReadiness } from "@/app/lib/packages/readiness";
 import { resetPackageToOpening } from "@/app/lib/packages/reset";
+import { loadPackage } from "@/app/lib/packages/read";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           i.makat,
           i.serial_no,
           i.package_id,
+          i.package_seq,
+          COALESCE(i.is_package, false) AS is_package,
           it.item_type_desc,
           ir.current_status,
           ir.current_status AS item_status_id,
@@ -145,6 +148,22 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       finished_at: normalizeToUtcIso(itemResult[0].finished_at),
     } : null;
 
+    // Package model (docs/packages/PLAN.md): the item's box — its own view
+    // for a package row, the parent's for an item inside one, null for a
+    // legacy loose item. Feeds the "המארז שלי" card on the item screens.
+    let packageView = null;
+    if (normalizedItem) {
+      try {
+        packageView = normalizedItem.package_id != null
+          ? await loadPackage(BigInt(normalizedItem.package_id))
+          : normalizedItem.is_package
+            ? await loadPackage(itemIdBig)
+            : null;
+      } catch (e) {
+        console.error("Error loading the item's package:", e);
+      }
+    }
+
     const workerNameById = new Map(workersDirectory.map((w) => [w.worker_id, w.worker_name]));
     const normalizedHistory = historyResult.map((row: any) => ({
       ...row,
@@ -163,6 +182,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return NextResponse.json(serializeBigInts({
       item: normalizedItem,
       history: normalizedHistory,
+      package: packageView,
     }));
   } catch (error) {
     console.error("Error loading item:", error);

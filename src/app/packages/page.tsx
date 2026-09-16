@@ -62,7 +62,8 @@ function PackagesPageInner() {
   const [type, setType] = React.useState("");
   const [status, setStatus] = React.useState(sp.get("status") ?? "");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [intakeOpen, setIntakeOpen] = React.useState(false);
+  // ?new=1 (command palette "מארז חדש", items page) opens the intake directly.
+  const [intakeOpen, setIntakeOpen] = React.useState(sp.get("new") === "1");
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [labelsOpen, setLabelsOpen] = React.useState(false);

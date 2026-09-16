@@ -58,7 +58,7 @@ export default function CommandPaletteTrigger() {
         aria-label="פתיחת חיפוש כללי"
       >
         <Search size={16} strokeWidth={1.9} />
-        <span className="cp-trigger-text">חיפוש עמדות, פריטים…</span>
+        <span className="cp-trigger-text">חיפוש מארז, פריט, משלוח או עמדה</span>
         <kbd className="cp-trigger-kbd">{isMac ? "⌘ K" : "Ctrl K"}</kbd>
       </button>
       <CommandPalette open={open} onClose={() => setOpen(false)} />

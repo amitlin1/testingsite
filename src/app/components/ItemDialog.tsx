@@ -11,6 +11,8 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from "@/components/ui";
 import ItemFilesPanel from "./ItemFilesPanel";
+import MyPackageCard from "./packages/MyPackageCard";
+import type { PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
 
 type ItemData = {
@@ -65,6 +67,8 @@ export default function ItemDialog({
 }) {
   const [item, setItem] = React.useState<ItemData | null>(null);
   const [history, setHistory] = React.useState<HistoryRow[]>([]);
+  // The item's box (design/Items.dc.html "המארז שלי"); null for a loose item.
+  const [pkg, setPkg] = React.useState<PackageView | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -78,12 +82,14 @@ export default function ItemDialog({
         if (!cancelled) {
           setItem(j.item);
           setHistory(Array.isArray(j.history) ? j.history : []);
+          setPkg(j.package ?? null);
         }
       } catch (error) {
         console.error("Error loading item:", error);
         if (!cancelled) {
           setItem(null);
           setHistory([]);
+          setPkg(null);
         }
       }
     })();
@@ -119,8 +125,15 @@ export default function ItemDialog({
               )}
             </Stack>
 
-            {/* Connected Items Section */}
-            {item.connected_items && item.connected_items.length > 0 && (
+            {/* Package model: the box this item belongs to, first thing in the
+                body (design/Items.dc.html). A loose legacy item falls back to
+                the old connected-items table below. */}
+            {pkg && (
+              <Box sx={{ mb: 2 }}>
+                <MyPackageCard pkg={pkg} currentItemId={itemId} />
+              </Box>
+            )}
+            {!pkg && item.connected_items && item.connected_items.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
                   פריטים מחוברים:

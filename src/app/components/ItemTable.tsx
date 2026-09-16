@@ -7,10 +7,10 @@ import ItemsToolbar from "@/components/ItemsToolbar";
 import DataTable, { StatusPill, ProgressCell, RowActions, IconAction, type Column } from "@/components/DataTable";
 import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import ItemDialog from "./ItemDialog";
-import InsertPopup from "./insertPopup";
+import PackageIntakeDialog from "./packages/PackageIntakeDialog";
 import EditItemDialog from "@/components/EditItemDialog";
 import BarcodeDialog from "./BarcodeDialog";
-import { ItemRow, StatusOption, NewItem, ItemTypeOption, Customers, Shipment } from "@/types";
+import { ItemRow, StatusOption, ItemTypeOption, Customers, Shipment } from "@/types";
 import { apiFetch } from "@/lib/api/client";
 
 export default function ItemTable() {
@@ -31,7 +31,9 @@ export default function ItemTable() {
   const [loading, setLoading] = React.useState(true);
   const [selected, setSelected] = React.useState<ItemRow | null>(null);
   const [editingItem, setEditingItem] = React.useState<ItemRow | null>(null);
-  // ?new=1 — the palette's "פריט חדש" quick action opens the intake popup directly.
+  // ?new=1 opens the package intake directly. Items are only ever created
+  // inside a box (docs/packages/PLAN.md §9), so the old add-item form is gone
+  // and "הוסף" here means "קליטת מארז".
   const [insertOpen, setInsertOpen] = React.useState(searchParams.get("new") === "1");
 
   // snackbar
@@ -155,14 +157,10 @@ export default function ItemTable() {
     return { total: rows.length, inTest, inQueue, done };
   }, [rows]);
 
-  const onCreateResult = (_data: NewItem, success: boolean) => {
-    setSnackbarMessage(success ? "הפריט נוצר בהצלחה" : "יצירת הפריט נכשלה");
-    setSnackbarSeverity(success ? "success" : "error");
+  const onPackageCreated = () => {
+    setSnackbarMessage("המארז נקלט בהצלחה");
+    setSnackbarSeverity("success");
     setSnackbarOpen(true);
-  };
-
-  const closeInsertPopup = () => {
-    setInsertOpen(false);
     loadItems();
   };
 
@@ -253,6 +251,7 @@ export default function ItemTable() {
         search={search}
         onSearch={setSearch}
         onAdd={() => setInsertOpen(true)}
+        addLabel="קליטת מארז"
         filters={[
           { key: "status", placeholder: "סטטוס", value: statusFilter, options: statusOpts, onChange: setStatusFilter },
           { key: "type", placeholder: "סוג פריט", value: typeFilter, options: typeOpts, onChange: setTypeFilter, width: 190 },
@@ -296,7 +295,7 @@ export default function ItemTable() {
         />
       )}
 
-      <InsertPopup open={insertOpen} onClose={closeInsertPopup} onCreate={onCreateResult} />
+      <PackageIntakeDialog open={insertOpen} onClose={() => setInsertOpen(false)} onCreated={onPackageCreated} />
 
       <EditItemDialog
         open={!!editingItem}
