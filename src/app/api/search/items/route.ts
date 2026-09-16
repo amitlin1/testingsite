@@ -78,7 +78,7 @@ export async function GET(req: Request) {
         ist.item_status_desc,
         ts.test_station_desc,
         COALESCE(ir.is_finished, false) AS is_finished,
-        COALESCE(i.is_package, false)   AS is_package,
+        COALESCE(it.is_package, false)  AS is_package,
         i.package_id,
         i.package_seq,
         qs.test_station_id      AS queue_station_id,

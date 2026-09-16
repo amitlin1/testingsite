@@ -43,7 +43,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           i.serial_no,
           i.package_id,
           i.package_seq,
-          COALESCE(i.is_package, false) AS is_package,
+          COALESCE(it.is_package, false) AS is_package,
           it.item_type_desc,
           ir.current_status,
           ir.current_status AS item_status_id,

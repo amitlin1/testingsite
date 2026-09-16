@@ -33,8 +33,9 @@ export async function GET() {
               AND (ir.current_status <> 2 OR ir.current_route_step > 1 OR ir.is_finished = true)
           )::int AS started_sampled_amount
         FROM items i
+        JOIN item_types it ON it.item_type_id = i.item_type_id
         LEFT JOIN item_routes ir ON ir.item_id = i.item_id
-        WHERE i.is_package = true AND i.package_id IS NULL
+        WHERE COALESCE(it.is_package, false) = true AND i.package_id IS NULL
         GROUP BY i.shipment_id
       ),
       sent_counts AS (
