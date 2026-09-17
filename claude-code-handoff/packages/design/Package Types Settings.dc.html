@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f5f5f7; }
+  a { color: #0066cc; text-decoration: none; }
+  a:hover { color: #0058b3; text-decoration: underline; }
+  input, select, textarea, button { font-family: inherit; }
+  ::placeholder { color: #9a9aa0; }
+  .ic { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .rowh:hover { background: #fafafc; }
+  .prs:active { transform: scale(0.96); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d4d4dc; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+</style>
+</helmet>
+
+<div dir="rtl" style="min-height:100vh;background:#f5f5f7;font-family:'Heebo','Inter',system-ui,-apple-system,sans-serif;color:#1d1d1f;-webkit-font-smoothing:antialiased;text-align:right;padding-inline-start:240px;padding-top:56px">
+
+  <dc-import name="TopNav" active="settings" hint-size="240px,56px"></dc-import>
+
+  <div style="position:sticky;top:56px;z-index:30;height:56px;background:rgba(245,245,247,0.85);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid rgba(0,0,0,0.08);display:flex;align-items:center;gap:14px;padding:0 24px;overflow-x:auto">
+    <span style="font-size:17px;font-weight:600;letter-spacing:-0.2px;white-space:nowrap">הגדרות מערכת</span>
+    <div style="width:1px;height:22px;background:#e0e0e0;flex-shrink:0"></div>
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="8">
+      <span style="font-size:14px;color:{{ t.color }};font-weight:{{ t.weight }};background:{{ t.bg }};padding:7px 13px;border-radius:9999px;white-space:nowrap;cursor:pointer">{{ t.label }}</span>
+    </sc-for>
+    <a href="Reference%20Item%20Settings.dc.html" style="font-size:14px;color:#0066cc;font-weight:600;padding:7px 13px;border-radius:9999px;white-space:nowrap;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px">פריטי ייחוס<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a>
+  </div>
+
+  <div data-screen-label="הגדרות מארזים" style="max-width:1180px;margin:0 auto;padding:32px 24px 64px">
+
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap">
+      <div>
+        <h1 style="margin:0;font-size:30px;font-weight:700;letter-spacing:-0.5px;line-height:1.1">מארזים</h1>
+        <p style="margin:8px 0 0;font-size:15px;color:#7a7a7a;line-height:1.5">סוגי המארז והתכולה שנפרשת מהם בקליטה. מספר מסלול ברירת המחדל נקבע כאן; המסלולים עצמם מוגדרים במסך מסלולי הבדיקה.</p>
+      </div>
+      <button onClick="{{ openNew }}" class="prs" style="display:inline-flex;align-items:center;gap:7px;background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 20px;font-size:15px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:#0058b3">
+        <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>סוג מארז חדש
+      </button>
+    </div>
+
+    <div style="margin-top:22px;background:#fff;border:1px solid #e0e0e0;border-radius:16px;overflow:hidden">
+      <div style="overflow-x:auto">
+        <table style="width:100%;min-width:760px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f5f5f7">
+              <th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:13px 18px;border-bottom:1px solid #e0e0e0">סוג מארז</th>
+              <th style="text-align:center;font-size:12px;font-weight:600;color:#7a7a7a;padding:13px 14px;border-bottom:1px solid #e0e0e0">סוגי פריטים בתכולה</th>
+              <th style="text-align:center;font-size:12px;font-weight:600;color:#7a7a7a;padding:13px 14px;border-bottom:1px solid #e0e0e0">סה״כ פריטים</th>
+              <th style="text-align:center;font-size:12px;font-weight:600;color:#7a7a7a;padding:13px 14px;border-bottom:1px solid #e0e0e0">מסלול ברירת מחדל</th>
+              <th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:13px 14px;border-bottom:1px solid #e0e0e0">תקינות התכולה</th>
+              <th style="text-align:center;font-size:12px;font-weight:600;color:#7a7a7a;padding:13px 18px;border-bottom:1px solid #e0e0e0;width:120px">פעולות</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ types }}" as="pt" hint-placeholder-count="4">
+              <tr class="rowh" onClick="{{ pt.onSelect }}" style="border-top:1px solid #f0f0f0;cursor:pointer;background:{{ pt.bg }}">
+                <td style="padding:13px 18px">
+                  <div style="display:flex;align-items:center;gap:9px">
+                    <span style="font-size:15px;font-weight:600">{{ pt.name }}</span>
+                    <span style="font-size:10.5px;font-weight:600;color:#0066cc;background:#e6efff;border-radius:9999px;padding:2px 8px">מארז</span>
+                  </div>
+                  <div style="font-size:12.5px;color:#7a7a7a;margin-top:3px">{{ pt.sub }}</div>
+                </td>
+                <td style="padding:13px 14px;text-align:center;font-size:14px;font-variant-numeric:tabular-nums">{{ pt.kinds }}</td>
+                <td style="padding:13px 14px;text-align:center;font-size:14px;font-variant-numeric:tabular-nums">{{ pt.total }}</td>
+                <td style="padding:13px 14px;text-align:center;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">{{ pt.route }}</td>
+                <td style="padding:13px 14px">
+                  <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:{{ pt.healthTone }};background:{{ pt.healthBg }};border:1px solid {{ pt.healthBorder }};border-radius:9999px;padding:4px 11px;white-space:nowrap">
+                    <sc-if value="{{ pt.healthOk }}" hint-placeholder-val="{{ true }}">
+                      <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>
+                    </sc-if>
+                    <sc-if value="{{ pt.healthWarn }}" hint-placeholder-val="{{ false }}">
+                      <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></span>
+                    </sc-if>
+                    <sc-if value="{{ pt.healthNone }}" hint-placeholder-val="{{ false }}">
+                      <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg></span>
+                    </sc-if>
+                    {{ pt.healthLabel }}
+                  </span>
+                </td>
+                <td style="padding:13px 18px">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:6px">
+                    <div onClick="{{ pt.onSelect }}" class="ic prs" title="עריכת תכולה" style="width:30px;height:30px;border-radius:8px;background:#f5f5f7;color:#1d1d1f;cursor:pointer" style-hover="background:#e6efff;color:#0066cc"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+                    <div class="ic prs" title="מחיקה" style="width:30px;height:30px;border-radius:8px;background:#f5f5f7;color:#1d1d1f;cursor:pointer" style-hover="background:rgba(191,53,53,.08);color:#bf3535"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></div>
+                  </div>
+                </td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:26px;background:#fff;border:1px solid #e0e0e0;border-radius:16px;overflow:hidden">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:18px 20px;border-bottom:1px solid #e0e0e0;flex-wrap:wrap">
+        <div style="min-width:0">
+          <div style="font-size:11px;font-weight:600;color:#7a7a7a;letter-spacing:.6px;text-transform:uppercase">תכולת מארז</div>
+          <div style="font-size:19px;font-weight:700;letter-spacing:-0.3px;margin-top:5px">{{ sel.name }}</div>
+          <div style="font-size:13px;color:#7a7a7a;margin-top:4px">{{ sel.sub }} · השורות האלה נפרשות אוטומטית בטופס הקליטה</div>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:12px;color:#7a7a7a;margin-bottom:6px">מסלול ברירת מחדל למארז</div>
+            <input value="{{ sel.route }}" onChange="{{ sel.onRoute }}" placeholder="1" inputmode="numeric" style="width:110px;height:40px;border:1px solid #e0e0e0;border-radius:10px;padding:0 12px;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;text-align:center;background:#fff;outline:none" style-focus="border-color:#0071e3">
+          </div>
+          <div style="font-size:12px;color:#9a9aa0;max-width:210px;line-height:1.45;padding-bottom:10px">ריק פירושו מסלול 1. המסלול עצמו נקבע במסך מסלולי הבדיקה.</div>
+        </div>
+      </div>
+
+      <sc-if value="{{ sel.hasWarning }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:11px;align-items:flex-start;background:#fdf3e6;border-bottom:1px solid #f0e2cc;padding:12px 20px">
+          <span class="ic" style="color:#a86a1a;margin-top:1px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></span>
+          <div style="font-size:13px;color:#444;line-height:1.5">
+            <span style="font-weight:600;color:#a86a1a">{{ sel.warningTitle }}</span> · <a href="Settings.dc.html">פתח את מסלולי הבדיקה</a>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="overflow-x:auto">
+        <table style="width:100%;min-width:1020px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f5f5f7">
+              <th style="text-align:center;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0;width:64px">סדר</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0">סוג פריט</th>
+              <th style="text-align:center;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0;width:84px">כמות</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0">מק״ט</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0">דגם</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0">יצרן</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0">מספר יצרן</th>
+              <th style="text-align:right;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0">מק״ט יצרן <span style="font-weight:400;color:#9a9aa0">(פריט ייחוס)</span></th>
+              <th style="text-align:center;font-size:11.5px;font-weight:600;color:#7a7a7a;padding:11px 12px;border-bottom:1px solid #e0e0e0;width:120px">מסלול ברירת מחדל</th>
+              <th style="padding:11px 16px;border-bottom:1px solid #e0e0e0;width:56px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ sel.rows }}" as="r" hint-placeholder-count="3">
+              <tr style="border-top:1px solid #f0f0f0;background:{{ r.bg }}">
+                <td style="padding:9px 12px">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:2px">
+                    <div onClick="{{ r.onUp }}" class="ic prs" title="העלה" style="width:24px;height:24px;border-radius:7px;color:{{ r.upTone }};cursor:pointer" style-hover="background:#f5f5f7"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></div>
+                    <span style="font-size:12.5px;color:#7a7a7a;font-variant-numeric:tabular-nums;min-width:12px;text-align:center">{{ r.order }}</span>
+                    <div onClick="{{ r.onDown }}" class="ic prs" title="הורד" style="width:24px;height:24px;border-radius:7px;color:{{ r.downTone }};cursor:pointer" style-hover="background:#f5f5f7"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+                  </div>
+                </td>
+                <td style="padding:9px 12px">
+                  <div style="height:38px;border:1px solid #e0e0e0;border-radius:9px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 11px;font-size:14px;cursor:pointer;min-width:150px">
+                    {{ r.type }}
+                    <span class="ic" style="color:#7a7a7a"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+                  </div>
+                  <sc-if value="{{ r.warn }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11.5px;color:#a86a1a">
+                      <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></span>
+                      {{ r.warnText }}
+                    </div>
+                  </sc-if>
+                </td>
+                <td style="padding:9px 12px">
+                  <input value="{{ r.qty }}" onChange="{{ r.onQty }}" inputmode="numeric" style="width:100%;min-width:56px;height:38px;border:1px solid #e0e0e0;border-radius:9px;padding:0 10px;font-size:14px;text-align:center;font-variant-numeric:tabular-nums;outline:none;background:#fff" style-focus="border-color:#0071e3">
+                </td>
+                <td style="padding:9px 12px"><input value="{{ r.sku }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:9px;padding:0 10px;font-size:13.5px;font-variant-numeric:tabular-nums;outline:none;background:#fff" style-focus="border-color:#0071e3"></td>
+                <td style="padding:9px 12px"><input value="{{ r.model }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:9px;padding:0 10px;font-size:13.5px;outline:none;background:#fff" style-focus="border-color:#0071e3"></td>
+                <td style="padding:9px 12px"><input value="{{ r.manufacturer }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:9px;padding:0 10px;font-size:13.5px;outline:none;background:#fff" style-focus="border-color:#0071e3"></td>
+                <td style="padding:9px 12px"><input value="{{ r.manNo }}" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:9px;padding:0 10px;font-size:13.5px;font-variant-numeric:tabular-nums;outline:none;background:#fff" style-focus="border-color:#0071e3"></td>
+                <td style="padding:9px 12px"><input value="{{ r.refSku }}" placeholder="אופציונלי" style="width:100%;height:38px;border:1px solid #e0e0e0;border-radius:9px;padding:0 10px;font-size:13.5px;font-variant-numeric:tabular-nums;outline:none;background:#fff" style-focus="border-color:#0071e3"></td>
+                <td style="padding:9px 12px">
+                  <input value="{{ r.route }}" onChange="{{ r.onRoute }}" placeholder="1" inputmode="numeric" style="width:100%;min-width:76px;height:38px;border:1px solid {{ r.routeBorder }};border-radius:9px;padding:0 10px;font-size:14px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;outline:none;background:#fff;color:{{ r.routeTone }}" style-focus="border-color:#0071e3">
+                  <div style="font-size:11px;color:#9a9aa0;margin-top:5px;text-align:center">{{ r.routeNote }}</div>
+                </td>
+                <td style="padding:9px 16px;text-align:center">
+                  <div onClick="{{ r.onRemove }}" class="ic prs" title="מחיקת שורה" style="width:30px;height:30px;border-radius:8px;background:#f5f5f7;color:#7a7a7a;cursor:pointer" style-hover="background:rgba(191,53,53,.08);color:#bf3535"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></div>
+                </td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+
+      <sc-if value="{{ sel.isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:center;padding:48px 24px">
+          <div style="font-size:15px;font-weight:600">לסוג המארז הזה אין תכולה מוגדרת.</div>
+          <div style="font-size:13.5px;color:#7a7a7a;margin-top:4px">בלי תכולה, טופס הקליטה יפתח מארז ריק והעובד יזין כל פריט ידנית.</div>
+        </div>
+      </sc-if>
+
+      <div style="display:flex;align-items:center;gap:16px;padding:13px 20px;border-top:1px solid #f0f0f0;flex-wrap:wrap">
+        <div onClick="{{ sel.onAddRow }}" style="display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:600;color:#0066cc;cursor:pointer">
+          <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>הוסף סוג פריט לתכולה
+        </div>
+        <div style="font-size:12.5px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ sel.summary }}</div>
+        <div style="margin-inline-start:auto;display:flex;align-items:center;gap:10px">
+          <button class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer">בטל שינויים</button>
+          <button class="prs" style="background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:10px 22px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#0058b3">שמור תכולה</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ newOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeNew }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(520px,94vw);background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="padding:22px 24px 0">
+          <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">סוג מארז חדש</div>
+          <div style="font-size:13.5px;color:#7a7a7a;margin-top:6px;line-height:1.5">נוצר סוג פריט חדש המסומן כמארז. אחרי היצירה אפשר להגדיר לו תכולה.</div>
+        </div>
+        <div style="padding:18px 24px 0;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:6px">שם סוג המארז</div>
+            <input placeholder="לדוגמה: מארז מחשב HP" style="width:100%;height:44px;border:1px solid #e0e0e0;border-radius:10px;padding:0 13px;font-size:14.5px;outline:none" style-focus="border-color:#0071e3">
+          </div>
+          <div style="display:flex;gap:14px">
+            <div style="width:130px">
+              <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:6px">מסלול ברירת מחדל</div>
+              <input placeholder="1" inputmode="numeric" style="width:100%;height:44px;border:1px solid #e0e0e0;border-radius:10px;padding:0 13px;font-size:14.5px;text-align:center;font-variant-numeric:tabular-nums;outline:none" style-focus="border-color:#0071e3">
+            </div>
+            <div style="flex:1;font-size:12px;color:#9a9aa0;line-height:1.45;align-self:flex-end;padding-bottom:12px">אם לא תוזן מספר, המארז ישויך למסלול 1.</div>
+          </div>
+        </div>
+        <div style="padding:20px 24px 22px;display:flex;align-items:center;gap:10px;justify-content:flex-end">
+          <button onClick="{{ closeNew }}" class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer">ביטול</button>
+          <button onClick="{{ closeNew }}" class="prs" style="background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:10px 22px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#0058b3">צור סוג מארז</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+const TABS = ["לקוחות", "סוגי פריטים", "מארזים", "מקורות", "סטטוסי פריט", "סטטוסי עמדה", "עמדות בדיקה", "עובדים"];
+
+const ITEM_TYPES = ["מחשב נייד", "מקלדת", "מטען", "טלפון", "בקר ראשי", "מחבר", "כבל", "ספק כוח", "חיישן"];
+
+const TYPES = [
+  {
+    id: 12, name: "מארז מחשב HP", route: "2",
+    rows: [
+      { type: "מחשב נייד", qty: "1", sku: "HP-840-G9", model: "EliteBook 840", manufacturer: "HP", manNo: "HP-840G9-IL", refSku: "HP-840-REF", route: "3" },
+      { type: "מקלדת", qty: "1", sku: "KB-2200", model: "K2200", manufacturer: "HP", manNo: "HP-K2200", refSku: "", route: "" },
+      { type: "מטען", qty: "1", sku: "PS-65W", model: "65W USB-C", manufacturer: "HP", manNo: "HP-65W", refSku: "", route: "" },
+    ],
+    badRow: 0,
+  },
+  {
+    id: 14, name: "מארז טלפון", route: "",
+    rows: [
+      { type: "טלפון", qty: "1", sku: "PH-12", model: "P12", manufacturer: "Samsung", manNo: "SM-P12", refSku: "PH-12-REF", route: "" },
+      { type: "מטען", qty: "1", sku: "PS-20W", model: "20W", manufacturer: "Samsung", manNo: "SM-20W", refSku: "", route: "" },
+    ],
+    badRow: -1,
+  },
+  {
+    id: 17, name: "מארז בקר", route: "1",
+    rows: [
+      { type: "בקר ראשי", qty: "1", sku: "PCB-4400-A", model: "בקר ראשי", manufacturer: "Elbit Systems", manNo: "EL-4400", refSku: "EL-4400-REF", route: "" },
+      { type: "מחבר", qty: "2", sku: "745781-4", model: "D-Sub 9", manufacturer: "TE Connectivity", manNo: "TE-9", refSku: "", route: "" },
+      { type: "כבל", qty: "1", sku: "CB-1200", model: "צרור חוטים", manufacturer: "Lapp", manNo: "LP-1200", refSku: "", route: "" },
+      { type: "ספק כוח", qty: "1", sku: "PS-24-5A", model: "24V 5A", manufacturer: "Mean Well", manNo: "MW-245", refSku: "", route: "" },
+    ],
+    badRow: -1,
+  },
+  { id: 21, name: "מארז חיישנים", route: "", rows: [], badRow: -1 },
+];
+
+class Component extends DCLogic {
+  state = { types: TYPES.map(t => ({ ...t, rows: t.rows.map(r => ({ ...r })) })), selected: 0, newOpen: false };
+
+  patchType(patch) {
+    this.setState(s => ({ types: s.types.map((t, i) => (i === s.selected ? { ...t, ...patch } : t)) }));
+  }
+
+  patchRow(idx, patch) {
+    this.setState(s => ({
+      types: s.types.map((t, i) => (i === s.selected ? { ...t, rows: t.rows.map((r, j) => (j === idx ? { ...r, ...patch } : r)) } : t)),
+    }));
+  }
+
+  moveRow(idx, dir) {
+    this.setState(s => ({
+      types: s.types.map((t, i) => {
+        if (i !== s.selected) return t;
+        const rows = t.rows.slice();
+        const to = idx + dir;
+        if (to < 0 || to >= rows.length) return t;
+        const [row] = rows.splice(idx, 1);
+        rows.splice(to, 0, row);
+        return { ...t, rows };
+      }),
+    }));
+  }
+
+  typeView(t, i) {
+    const total = t.rows.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+    const bad = t.badRow >= 0;
+    const empty = t.rows.length === 0;
+    return {
+      name: t.name,
+      sub: `מזהה סוג ${t.id}`,
+      kinds: String(t.rows.length),
+      total: String(total),
+      route: t.route === "" ? "1" : t.route,
+      healthLabel: empty ? "אין תכולה" : bad ? "מסלול לא תקין" : "תקין",
+      healthOk: !empty && !bad,
+      healthWarn: !empty && bad,
+      healthNone: empty,
+      healthTone: empty ? "#7a7a7a" : bad ? "#a86a1a" : "#1f8a5b",
+      healthBg: empty ? "#f5f5f7" : bad ? "#fdf3e6" : "rgba(31,138,91,0.07)",
+      healthBorder: empty ? "#e0e0e0" : bad ? "#f0e2cc" : "rgba(31,138,91,0.22)",
+      bg: i === this.state.selected ? "#f7fbff" : "#fff",
+      onSelect: () => this.setState({ selected: i }),
+    };
+  }
+
+  renderVals() {
+    const t = this.state.types[this.state.selected];
+    const total = t.rows.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+    const bad = t.badRow;
+    return {
+      tabs: TABS.map(label => ({
+        label,
+        color: label === "מארזים" ? "#1d1d1f" : "#333",
+        weight: label === "מארזים" ? "600" : "400",
+        bg: label === "מארזים" ? "#fff" : "transparent",
+      })),
+      types: this.state.types.map((x, i) => this.typeView(x, i)),
+      sel: {
+        name: t.name,
+        sub: `${t.rows.length} סוגי פריטים · ${total} פריטים בקופסה`,
+        route: t.route,
+        onRoute: e => this.patchType({ route: e.target.value.replace(/[^0-9]/g, "") }),
+        hasWarning: bad >= 0,
+        warningTitle: bad >= 0 ? `המסלול של ${t.rows[bad].type} אינו מתחיל בעמדת פתיחת המארז ואינו מסתיים בעמדת הסגירה` : false,
+        isEmpty: t.rows.length === 0,
+        summary: `${t.rows.length} שורות · ${total} פריטים במארז`,
+        onAddRow: () => this.setState(s => ({
+          types: s.types.map((x, i) => (i === s.selected
+            ? { ...x, rows: x.rows.concat([{ type: ITEM_TYPES[0], qty: "1", sku: "", model: "", manufacturer: "", manNo: "", refSku: "", route: "" }]) }
+            : x)),
+        })),
+        rows: t.rows.map((r, i) => ({
+          order: String(i + 1),
+          type: r.type, qty: r.qty, sku: r.sku, model: r.model,
+          manufacturer: r.manufacturer, manNo: r.manNo, refSku: r.refSku,
+          route: r.route,
+          routeNote: r.route === "" ? "ברירת מחדל 1" : "מסלול " + r.route,
+          routeBorder: r.route === "" ? "#e0e0e0" : "#0071e3",
+          routeTone: r.route === "" ? "#9a9aa0" : "#0066cc",
+          warn: i === bad,
+          warnText: i === bad ? "המסלול לא עומד בכללי המארז" : false,
+          bg: i === bad ? "#fffdf9" : "#fff",
+          upTone: i === 0 ? "#d4d4dc" : "#7a7a7a",
+          downTone: i === t.rows.length - 1 ? "#d4d4dc" : "#7a7a7a",
+          onUp: () => this.moveRow(i, -1),
+          onDown: () => this.moveRow(i, 1),
+          onQty: e => this.patchRow(i, { qty: e.target.value.replace(/[^0-9]/g, "") }),
+          onRoute: e => this.patchRow(i, { route: e.target.value.replace(/[^0-9]/g, "") }),
+          onRemove: () => this.setState(s => ({
+            types: s.types.map((x, j) => (j === s.selected ? { ...x, rows: x.rows.filter((_, k) => k !== i) } : x)),
+          })),
+        })),
+      },
+      newOpen: this.state.newOpen,
+      openNew: () => this.setState({ newOpen: true }),
+      closeNew: () => this.setState({ newOpen: false }),
+      stop: e => e.stopPropagation(),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

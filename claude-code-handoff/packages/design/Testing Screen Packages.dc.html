@@ -1,0 +1,2266 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  @media (max-width: 980px) { .app-main { padding-inline-start: 0 !important; } }
+  @media (max-width: 640px) { .app-main { padding-top: 52px !important; } .fgrid { grid-template-columns: 1fr !important; } }
+  input, select, textarea, button { font-family: inherit; }
+  ::placeholder { color: #9a9aa0; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d4d4dc; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+  .ic { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .prs:active { transform: scale(0.97); }
+  @media (max-width: 760px) {
+    .wiz-shell { width: 100% !important; height: 100% !important; border-radius: 0 !important; flex-direction: column !important; }
+    .wiz-rail { width: auto !important; border-inline-end: none !important; border-bottom: 1px solid #e0e0e0; padding: 12px 16px !important; }
+    .wiz-rail-steps { flex-direction: row !important; overflow-x: auto; gap: 6px !important; }
+    .wiz-rail-step { flex-shrink: 0; }
+    .wiz-rail-sub { display: none !important; }
+    .wiz-scrim { padding: 0 !important; }
+    .wiz-body { padding: 18px 16px !important; }
+    .wiz-foot { padding: 12px 16px !important; flex-wrap: wrap; }
+  }
+</style>
+</helmet>
+
+<div class="app-main" dir="rtl" style="min-height:100vh;background:#f5f5f7;font-family:'Heebo','Inter',system-ui,-apple-system,sans-serif;color:#1d1d1f;-webkit-font-smoothing:antialiased;text-align:right;padding-inline-start:240px;padding-top:56px">
+
+  <dc-import name="TopNav" active="testing" hint-size="240px,56px"></dc-import>
+
+  <!-- ===== Sticky station bar (frosted) ===== -->
+  <div onMouseEnter="{{ dockEnter }}" onMouseLeave="{{ dockLeave }}" style="position:sticky;top:56px;z-index:30">
+    <div style="background:rgba(245,245,247,0.9);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid rgba(0,0,0,0.08)">
+      <div style="max-width:1280px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:8px 24px">
+        <div style="width:30px;height:30px;border-radius:8px;background:#1d1d1f;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v8.5a2.5 2.5 0 0 1-.4 1.4L3 22"/><path d="M14 2v8.5a2.5 2.5 0 0 0 .4 1.4L21 22"/><path d="M5.5 16h13"/><path d="M9 2h6"/></svg></div>
+        <div style="min-width:0;display:flex;align-items:baseline;gap:8px">
+          <span style="font-size:15px;font-weight:700;letter-spacing:-0.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ peekTitle }}</span>
+          <span style="font-size:12px;color:#7a7a7a;white-space:nowrap">{{ peekSub }}</span>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:{{ workerChipBg }};border:1px solid {{ workerChipBorder }};border-radius:9999px;padding:4px 11px;font-size:12px;font-weight:600;color:{{ workerChipColor }};white-space:nowrap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>{{ compactWorkerLabel }}</span>
+        <div style="flex:1"></div>
+        <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#9a9aa0;white-space:nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>שינוי עמדה ועובד</span>
+      </div>
+    </div>
+    <div style="position:absolute;inset-inline-start:0;inset-inline-end:0;top:100%;opacity:{{ panelOpacity }};transform:{{ panelTransform }};pointer-events:{{ panelPe }};background:rgba(245,245,247,0.97);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid rgba(0,0,0,0.1);box-shadow:rgba(0,0,0,0.12) 0 16px 30px -12px">
+      <div style="max-width:1280px;margin:0 auto;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:14px 24px">
+        <div style="position:relative;flex:1;min-width:240px;max-width:360px">
+          <label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:5px">עמדה</label>
+          <div style="position:relative">
+            <input value="{{ allStationText }}" onChange="{{ setAllStationText }}" onFocus="{{ allStationFocus }}" onBlur="{{ allStationBlur }}" placeholder="חפש עמדה לשינוי…" style="width:100%;height:44px;border:1px solid #d4d4dc;border-radius:10px;padding-inline-start:14px;padding-inline-end:40px;font-size:15px;background:#fff;color:#1d1d1f;outline:none" style-focus="border-color:#0071e3">
+            <span style="position:absolute;inset-inline-end:13px;top:50%;transform:translateY(-50%);color:#7a7a7a;pointer-events:none;display:flex"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+          </div>
+          <sc-if value="{{ allStationOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;z-index:25;top:calc(100% + 6px);inset-inline-start:0;inset-inline-end:0;background:#fff;border:1px solid #e0e0e0;border-radius:12px;box-shadow:rgba(0,0,0,0.14) 0 12px 34px 0;overflow:hidden;max-height:300px;overflow-y:auto">
+              <sc-for list="{{ allStationOptions }}" as="opt" hint-placeholder-count="5"><div onMouseDown="{{ opt.onPick }}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-top:1px solid #f0f0f0;background:{{ opt.bg }}" style-hover="background:#f5f5f7"><span style="width:14px;display:flex;color:#0066cc;flex-shrink:0">{{ opt.tick }}</span><div style="min-width:0"><div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ opt.label }}</div><div style="font-size:12px;color:#9a9aa0">{{ opt.sub }}</div></div></div></sc-for>
+              <sc-if value="{{ allStationNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 14px;font-size:14px;color:#9a9aa0">אין עמדה תואמת</div></sc-if>
+            </div>
+          </sc-if>
+        </div>
+        <div style="position:relative;flex:1;min-width:200px;max-width:300px">
+          <label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:5px">עובד פעיל</label>
+          <div style="position:relative">
+            <input value="{{ workerText }}" onChange="{{ setWorkerText }}" onFocus="{{ workerFocus }}" onBlur="{{ workerBlur }}" placeholder="חפש עובד…" style="width:100%;height:44px;border:1px solid #d4d4dc;border-radius:10px;padding-inline-start:14px;padding-inline-end:40px;font-size:15px;background:#fff;color:#1d1d1f;outline:none" style-focus="border-color:#0071e3">
+            <span style="position:absolute;inset-inline-end:13px;top:50%;transform:translateY(-50%);pointer-events:none;color:#7a7a7a;display:flex"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+          </div>
+          <sc-if value="{{ workerOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;z-index:25;top:calc(100% + 6px);inset-inline-start:0;inset-inline-end:0;background:#fff;border:1px solid #e0e0e0;border-radius:12px;box-shadow:rgba(0,0,0,0.14) 0 12px 34px 0;overflow:hidden;max-height:260px;overflow-y:auto">
+              <sc-for list="{{ workerOptions }}" as="opt" hint-placeholder-count="4"><div onMouseDown="{{ opt.onPick }}" style="display:flex;align-items:center;gap:9px;padding:11px 14px;font-size:14px;cursor:pointer;border-top:1px solid #f0f0f0;background:{{ opt.bg }}" style-hover="background:#f5f5f7"><span style="width:14px;display:flex;color:#0066cc">{{ opt.tick }}</span>{{ opt.label }}</div></sc-for>
+              <sc-if value="{{ workerNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 14px;font-size:14px;color:#9a9aa0">אין עובד תואם</div></sc-if>
+            </div>
+          </sc-if>
+        </div>
+        <button onClick="{{ openScan }}" style="display:inline-flex;align-items:center;gap:9px;background:#1d1d1f;color:#fff;border:0;border-radius:10px;padding:0 20px;height:44px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="background:#000" style-active="transform:scale(0.97)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>סרוק ברקוד</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Main ===== -->
+  <div style="max-width:1280px;margin:0 auto;padding:24px 24px 72px">
+
+    <sc-if value="{{ hasStation }}" hint-placeholder-val="{{ false }}">
+      <!-- control bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:14px 18px;margin-bottom:22px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="display:flex;color:#0066cc">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h.01"/><path d="M7 12h.01"/><path d="M7 17h.01"/><path d="M11 7h6"/><path d="M11 12h6"/><path d="M11 17h6"/></svg>
+          </span>
+          <span style="font-size:18px;font-weight:700;letter-spacing:-0.3px">{{ stationName }}</span>
+          <span style="font-size:13px;color:#0066cc;background:rgba(0,102,204,0.08);border-radius:9999px;padding:4px 12px;font-weight:600;font-variant-numeric:tabular-nums">{{ countLabel }}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="position:relative">
+            <span style="position:absolute;inset-inline-start:13px;top:50%;transform:translateY(-50%);color:#7a7a7a;pointer-events:none;display:flex">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </span>
+            <input value="{{ filter }}" onChange="{{ setFilter }}" placeholder="סינון לפי מק״ט, סריאלי או מזהה" style="width:320px;max-width:60vw;height:42px;border:1px solid #e0e0e0;border-radius:10px;padding-inline-start:40px;padding-inline-end:14px;font-size:14px;background:#fafafc;color:#1d1d1f;outline:none" style-focus="border-color:#0071e3">
+          </div>
+          <button onClick="{{ openTestHistory }}" style="display:inline-flex;align-items:center;gap:7px;height:42px;background:#fff;color:#1d1d1f;border:1px solid #d4d4dc;border-radius:10px;padding:0 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#f5f5f7">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+            היסטוריה
+          </button>
+        </div>
+      </div>
+
+      <!-- item grid -->
+      <sc-if value="{{ isItemStation }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px">
+        <sc-for list="{{ visibleItems }}" as="it" hint-placeholder-count="4">
+          <div style="background:#fff;border:1px solid {{ it.cardBorder }};border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:11px;position:relative">
+            <sc-if value="{{ it.scanned }}" hint-placeholder-val="{{ false }}">
+              <span style="position:absolute;top:-10px;inset-inline-end:18px;display:inline-flex;align-items:center;gap:5px;background:#0066cc;color:#fff;font-size:11px;font-weight:600;border-radius:9999px;padding:4px 10px">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+                נסרק
+              </span>
+            </sc-if>
+
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+              <div style="min-width:0">
+                <sc-if value="{{ it.hasPkg }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;align-items:baseline;gap:3px;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;justify-content:flex-start;line-height:1.05">
+                    <span style="font-size:15px;color:#7a7a7a;letter-spacing:.2px">{{ it.itemIdHead }}</span>
+                    <span style="font-size:19px;font-weight:700;letter-spacing:-0.4px;color:#0066cc">{{ it.itemIdSuffix }}</span>
+                  </div>
+                  <div style="font-size:14px;font-weight:600;margin-top:4px">{{ it.pkgItemType }}</div>
+                  <div style="font-size:12.5px;color:#7a7a7a;margin-top:1px">{{ it.model }}</div>
+                </sc-if>
+                <sc-if value="{{ it.noPkg }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:19px;font-weight:700;letter-spacing:-0.4px;font-variant-numeric:tabular-nums;line-height:1.05">#{{ it.id }}</div>
+                  <div style="font-size:13px;color:#7a7a7a;margin-top:2px">{{ it.model }}</div>
+                </sc-if>
+              </div>
+              <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#1d1d1f;background:#f5f5f7;border:1px solid #e0e0e0;border-radius:9999px;padding:5px 12px;white-space:nowrap">
+                <span style="width:7px;height:7px;border-radius:50%;background:{{ it.statusDot }}"></span>
+                {{ it.statusLabel }}
+              </span>
+            </div>
+
+            <div style="height:1px;background:#f0f0f0"></div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 12px">
+              <div>
+                <div style="font-size:12px;color:#9a9aa0;margin-bottom:3px">סריאלי</div>
+                <div style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">{{ it.serial }}</div>
+              </div>
+              <div>
+                <div style="font-size:12px;color:#9a9aa0;margin-bottom:3px">מק״ט יצרן</div>
+                <div style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">{{ it.sku }}</div>
+              </div>
+              <div>
+                <div style="font-size:12px;color:#9a9aa0;margin-bottom:3px">לקוח</div>
+                <div style="font-size:14px;font-weight:600">{{ it.customer }}</div>
+              </div>
+              <div>
+                <div style="font-size:12px;color:#9a9aa0;margin-bottom:3px">שלב נוכחי</div>
+                <div style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">{{ it.step }}</div>
+              </div>
+            </div>
+
+            <sc-if value="{{ it.hasPkg }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#f5f5f7;border-radius:10px;padding:9px 11px">
+                <span style="font-size:11px;font-weight:600;color:#0066cc;background:#e6efff;border-radius:9999px;padding:3px 9px">מארז</span>
+                <span style="font-size:12.5px;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate">{{ it.pkgShort }}</span>
+                <span style="font-size:12.5px;color:#7a7a7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.pkgType }}</span>
+                <div onClick="{{ it.onTogglePkg }}" style="margin-inline-start:auto;font-size:12px;font-weight:600;color:#0066cc;cursor:pointer;white-space:nowrap">{{ it.pkgSiblingLabel }}</div>
+              </div>
+              <sc-if value="{{ it.pkgOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px solid #e0e0e0;border-radius:11px;overflow:hidden">
+                  <sc-for list="{{ it.pkgSiblings }}" as="sb" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;border-bottom:1px solid #f0f0f0;background:{{ sb.bg }}">
+                      <span style="width:24px;height:24px;border-radius:7px;background:{{ sb.chipBg }};color:{{ sb.chipTone }};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0">{{ sb.suffix }}</span>
+                      <div style="min-width:0;flex:1">
+                        <div style="font-size:12.5px;font-weight:600">{{ sb.type }}</div>
+                        <div style="font-size:11px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ sb.line }}</div>
+                      </div>
+                      <span style="width:7px;height:7px;border-radius:50%;background:{{ sb.color }};flex-shrink:0" title="{{ sb.stateLabel }}"></span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </sc-if>
+
+            <sc-if value="{{ it.active }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:10px;background:{{ it.timerBg }}">
+                <span style="display:flex;color:{{ it.statusDot }}">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </span>
+                <span style="font-size:14px;font-weight:700;color:{{ it.statusDot }};font-variant-numeric:tabular-nums">{{ it.timerLabel }} {{ it.elapsed }}</span>
+              </div>
+            </sc-if>
+
+            <div style="flex:1"></div>
+
+            <sc-if value="{{ it.isQueue }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ it.onStart }}" style="width:100%;height:44px;display:inline-flex;align-items:center;justify-content:center;gap:9px;background:#0066cc;color:#fff;border:0;border-radius:11px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.97)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 13 8-13 8z"/></svg>
+                התחל בדיקה
+              </button>
+            </sc-if>
+            <sc-if value="{{ it.isTest }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ it.onReport }}" style="width:100%;height:44px;display:inline-flex;align-items:center;justify-content:center;gap:9px;background:#0066cc;color:#fff;border:0;border-radius:11px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.97)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg>
+                סיום ודיווח
+              </button>
+            </sc-if>
+            <sc-if value="{{ it.isDone }}" hint-placeholder-val="{{ false }}">
+              <div style="width:100%;height:44px;display:inline-flex;align-items:center;justify-content:center;gap:9px;background:#f5f5f7;color:#1f8a5b;border-radius:12px;font-size:15px;font-weight:600">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg>
+                הבדיקה הושלמה
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+
+        <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+          <div style="grid-column:1/-1;text-align:center;padding:64px 0;color:#7a7a7a">
+            <div style="font-size:17px;color:#1d1d1f;font-weight:600;margin-bottom:6px">אין פריטים תואמים בעמדה זו.</div>
+            <div style="font-size:14px">נסה לנקות את הסינון, או סרוק ברקוד לאיתור פריט.</div>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isPkgStation }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ pkgWaitingShown }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:12px;align-items:flex-start;background:#fdf3e6;border:1px solid #f0e2cc;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+            <span style="display:flex;color:#a86a1a;flex-shrink:0;margin-top:1px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></span>
+            <div style="min-width:0">
+              <div style="font-size:14.5px;font-weight:600;color:#a86a1a">{{ pkgWaitingTitle }}</div>
+              <div style="font-size:13.5px;color:#444;margin-top:4px;line-height:1.5">המארז ייכנס לתור רק כשכל פריטיו יגיעו. עדיין לא הגיעו:</div>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
+                <sc-for list="{{ pkgWaitingItems }}" as="b" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:9px;font-size:13.5px">
+                    <span style="font-size:12px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ b.suffix }}</span>
+                    <span style="font-weight:600">{{ b.type }}</span>
+                    <span style="color:#9a9aa0">·</span>
+                    <span style="color:#444">{{ b.station }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">
+          <sc-for list="{{ pkgCards }}" as="p" hint-placeholder-count="3">
+            <div style="background:#fff;border:1px solid #e0e0e0;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:13px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px">
+                <div style="min-width:0">
+                  <div style="font-size:12px;font-weight:600;color:#7a7a7a">{{ p.type }}</div>
+                  <div style="display:flex;align-items:baseline;gap:4px;margin-top:4px;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;justify-content:flex-start">
+                    <span style="font-size:19px;letter-spacing:.3px">{{ p.idHead }}</span>
+                    <span style="font-size:19px;font-weight:700;color:#0066cc">{{ p.idSuffix }}</span>
+                  </div>
+                  <div style="font-size:13px;color:#444;margin-top:6px">{{ p.meta }}</div>
+                </div>
+                <div style="text-align:center;flex-shrink:0">
+                  <div style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1">{{ p.wait }}</div>
+                  <div style="font-size:11px;color:#7a7a7a;margin-top:4px">בתור</div>
+                </div>
+              </div>
+
+              <div style="height:1px;background:#f0f0f0"></div>
+
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:4px">
+                  <sc-for list="{{ p.mini }}" as="m" hint-placeholder-count="3">
+                    <span title="{{ m.title }}" style="width:22px;height:9px;border-radius:3px;background:{{ m.color }}"></span>
+                  </sc-for>
+                </div>
+                <div style="font-size:12.5px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ p.itemNote }}</div>
+                <div onClick="{{ p.onToggle }}" style="margin-inline-start:auto;font-size:12.5px;font-weight:600;color:#0066cc;cursor:pointer;white-space:nowrap">{{ p.siblingLabel }}</div>
+              </div>
+
+              <sc-if value="{{ p.open }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
+                  <sc-for list="{{ p.items }}" as="it" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #f0f0f0">
+                      <span style="width:26px;height:26px;border-radius:7px;background:#f5f5f7;color:#7a7a7a;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0">{{ it.suffix }}</span>
+                      <div style="min-width:0;flex:1">
+                        <div style="font-size:13px;font-weight:600">{{ it.type }}</div>
+                        <div style="font-size:11.5px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ it.line }}</div>
+                      </div>
+                      <span style="font-size:11.5px;color:#7a7a7a;white-space:nowrap">{{ it.stateLabel }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <div style="flex:1"></div>
+
+              <button onClick="{{ p.onStart }}" style="width:100%;height:44px;display:inline-flex;align-items:center;justify-content:center;gap:9px;background:#0066cc;color:#fff;border:0;border-radius:11px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.97)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 13 8-13 8z"/></svg>
+                {{ p.cta }}
+              </button>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{ pkgEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="grid-column:1/-1;text-align:center;padding:64px 0;color:#7a7a7a">
+              <div style="font-size:17px;color:#1d1d1f;font-weight:600;margin-bottom:6px">אין מארזים בתור לעמדה זו.</div>
+              <div style="font-size:14px">סרוק מדבקת קופסה לאיתור מארז.</div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+    </sc-if>
+
+    <!-- no station -->
+    <sc-if value="{{ noStation }}" hint-placeholder-val="{{ true }}">
+      <div style="text-align:center;padding:72px 0 20px;color:#7a7a7a">
+        <div style="width:64px;height:64px;border-radius:9999px;background:#fff;border:1px solid #e0e0e0;display:inline-flex;align-items:center;justify-content:center;color:#0066cc">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v8.5a2.5 2.5 0 0 1-.4 1.4L3 22"/><path d="M14 2v8.5a2.5 2.5 0 0 0 .4 1.4L21 22"/><path d="M5.5 16h13"/><path d="M9 2h6"/></svg>
+        </div>
+        <div style="font-size:18px;color:#1d1d1f;font-weight:600;margin-top:14px">בחר עמדה כדי להתחיל</div>
+        <div style="font-size:14px;margin-top:6px">בחר סוג עמדה ואז עמדה פעילה למעלה, או סרוק ברקוד של פריט.</div>
+      </div>
+    </sc-if>
+
+  </div>
+
+  <!-- ===== Report modal ===== -->
+  <sc-if value="{{ reportOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeReport }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(560px,94vw);background:#fff;border-radius:18px;overflow:hidden;display:flex;flex-direction:column;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid #e0e0e0">
+          <div>
+            <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">דיווח בדיקה</div>
+            <div style="font-size:13px;color:#7a7a7a;margin-top:3px">{{ reportSubtitle }}</div>
+          </div>
+          <button onClick="{{ closeReport }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" style-hover="background:#ececf0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div style="padding:24px;display:flex;flex-direction:column;gap:20px">
+          <div>
+            <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:10px">תוצאת הבדיקה</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <button onClick="{{ pickPass }}" style="height:56px;border-radius:12px;border:1.5px solid {{ passBorder }};background:{{ passBg }};color:{{ passColor }};font-size:16px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:9px">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg>
+                תקין
+              </button>
+              <button onClick="{{ pickFail }}" style="height:56px;border-radius:12px;border:1.5px solid {{ failBorder }};background:{{ failBg }};color:{{ failColor }};font-size:16px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:9px">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+                לא תקין
+              </button>
+            </div>
+          </div>
+          <div>
+            <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">הערה <span style="color:#9a9aa0;font-weight:400">· לא חובה</span></label>
+            <textarea value="{{ reportNote }}" onChange="{{ setReportNote }}" rows="3" placeholder="ממצאים, מדידות, או הערה לבודק הבא…" style="width:100%;min-height:84px;border:1px solid #e0e0e0;border-radius:8px;padding:10px 12px;font-size:15px;background:#fff;color:#1d1d1f;outline:none;resize:vertical;line-height:1.5" style-focus="border-color:#0071e3"></textarea>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-top:1px solid #e0e0e0;background:#fafafc">
+          <div style="flex:1"></div>
+          <button onClick="{{ closeReport }}" style="background:transparent;color:#1d1d1f;border:1px solid #d4d4dc;border-radius:9999px;padding:10px 20px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:rgba(0,0,0,0.03)">ביטול</button>
+          <button onClick="{{ submitReport }}" style="background:{{ submitBg }};color:#fff;border:0;border-radius:9999px;padding:11px 26px;font-size:15px;font-weight:600;cursor:{{ submitCursor }};opacity:{{ submitOpacity }}" style-hover="background:#0058b3" style-active="transform:scale(0.97)">שמירת דיווח</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Station history modal ===== -->
+  <sc-if value="{{ testHistoryOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeTestHistory }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(960px,96vw);max-height:88vh;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid #e0e0e0">
+          <div style="display:flex;align-items:center;gap:10px"><span style="display:flex;color:#0066cc"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></span><div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">היסטוריית בדיקות · {{ testHistName }}</div></div>
+          <button onClick="{{ closeTestHistory }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div style="overflow:auto;max-height:72vh">
+          <table style="width:100%;min-width:760px;border-collapse:collapse;white-space:nowrap">
+            <thead>
+              <tr style="background:#f5f5f7">
+                <th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 16px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7">פריט</th>
+                <th style="text-align:center;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7">שלב</th>
+                <th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7">התחלת תור</th>
+                <th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7">התחלת עיבוד</th>
+                <th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7">סיום עיבוד</th>
+                <th style="text-align:center;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 14px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7">משך זמן</th>
+                <th style="text-align:right;font-size:12px;font-weight:600;color:#7a7a7a;padding:11px 16px;border-bottom:1px solid #e0e0e0;position:sticky;top:0;background:#f5f5f7">עובד</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ testHistRows }}" as="h" hint-placeholder-count="3">
+                <tr style="border-top:1px solid #f0f0f0">
+                  <td style="padding:11px 16px;vertical-align:top">
+                    <div style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;margin-bottom:5px">#{{ h.itemId }}</div>
+                    <div style="display:flex;gap:5px;flex-wrap:wrap"><span style="font-size:11px;background:#f5f5f7;border:1px solid #e0e0e0;border-radius:6px;padding:2px 7px;color:#5a5a5f;font-variant-numeric:tabular-nums">ס״נ {{ h.serial }}</span><span style="font-size:11px;background:#f5f5f7;border:1px solid #e0e0e0;border-radius:6px;padding:2px 7px;color:#5a5a5f;font-variant-numeric:tabular-nums">מק״ט {{ h.makat }}</span><span style="font-size:11px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:2px 7px;color:#5a5a5f">{{ h.type }}</span></div>
+                  </td>
+                  <td style="padding:11px 14px;text-align:center"><span style="font-size:12px;font-weight:600;color:#0066cc;background:rgba(0,102,204,0.08);border-radius:7px;padding:3px 10px;font-variant-numeric:tabular-nums">שלב {{ h.step }}</span></td>
+                  <td style="padding:11px 14px;font-size:13px;color:#444;font-variant-numeric:tabular-nums">{{ h.queue }}</td>
+                  <td style="padding:11px 14px;font-size:13px;color:#444;font-variant-numeric:tabular-nums">{{ h.procStart }}</td>
+                  <td style="padding:11px 14px;font-size:13px;color:#444;font-variant-numeric:tabular-nums">{{ h.procEnd }}</td>
+                  <td style="padding:11px 14px;text-align:center"><span style="font-family:'Inter',monospace;font-size:12.5px;font-weight:600;color:#1d1d1f;background:#f5f5f7;border-radius:7px;padding:3px 9px">{{ h.dur }}</span></td>
+                  <td style="padding:11px 16px;font-size:13px;font-weight:600">{{ h.worker }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          <sc-if value="{{ testHistEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;padding:56px 0;color:#7a7a7a"><div style="width:56px;height:56px;border-radius:9999px;background:#f5f5f7;display:inline-flex;align-items:center;justify-content:center;color:#c4c4cc;margin-bottom:12px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></div><div style="font-size:16px;color:#1d1d1f;font-weight:600">לא נמצאו בדיקות קודמות לעמדה זו.</div></div>
+          </sc-if>
+        </div>
+        <div style="display:flex;padding:14px 24px;border-top:1px solid #e0e0e0;background:#fafafc"><div style="flex:1"></div><button onClick="{{ closeTestHistory }}" style="background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:10px 26px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3">סגור</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Scan modal ===== -->
+  <sc-if value="{{ scanOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeScan }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:60;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(480px,94vw);background:#fff;border-radius:18px;overflow:hidden;display:flex;flex-direction:column;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid #e0e0e0">
+          <div>
+            <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">סריקת ברקוד</div>
+            <div style="font-size:13px;color:#7a7a7a;margin-top:3px">סרוק או הקלד מספר פריט או סריאלי.</div>
+          </div>
+          <button onClick="{{ closeScan }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" style-hover="background:#ececf0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div style="padding:24px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;justify-content:center;height:96px;border-radius:12px;background:#fafafc;border:1.5px dashed #c7c7cf;color:#0066cc">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+          </div>
+          <input value="{{ scanText }}" onChange="{{ setScanText }}" placeholder="מספר פריט / סריאלי" style="width:100%;height:48px;border:1px solid #d4d4dc;border-radius:10px;padding:0 14px;font-size:16px;background:#fff;color:#1d1d1f;outline:none;font-variant-numeric:tabular-nums;text-align:center" style-focus="border-color:#0071e3">
+          <sc-if value="{{ scanHasError }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;color:#bf3535;text-align:center">{{ scanError }}</div>
+          </sc-if>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-top:1px solid #e0e0e0;background:#fafafc">
+          <div style="flex:1"></div>
+          <button onClick="{{ closeScan }}" style="background:transparent;color:#1d1d1f;border:1px solid #d4d4dc;border-radius:9999px;padding:10px 20px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:rgba(0,0,0,0.03)">ביטול</button>
+          <button onClick="{{ locateScan }}" style="background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 26px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.97)">אתר פריט</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== קליטה וצילום guided wizard ===== -->
+  <sc-if value="{{ wizOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeWizard }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:70;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(720px,96vw);max-height:92vh;background:#fff;border-radius:18px;overflow:hidden;display:flex;flex-direction:column;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0">
+
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 24px 16px;border-bottom:1px solid #e0e0e0">
+          <div style="display:flex;align-items:center;gap:12px;min-width:0">
+            <div style="width:38px;height:38px;border-radius:9px;background:#1d1d1f;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></div>
+            <div style="min-width:0">
+              <div style="font-size:18px;font-weight:700;letter-spacing:-0.3px">עמדת קליטה וצילום</div>
+              <div style="font-size:13px;color:#7a7a7a;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ wizItemTitle }} · {{ wizItemSub }}</div>
+            </div>
+          </div>
+          <button onClick="{{ closeWizard }}" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" style-hover="background:#ececf0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+
+        <div style="padding:12px 24px;border-bottom:1px solid #f0f0f0;background:#fafafc">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px">
+            <span style="font-size:13.5px;font-weight:700;letter-spacing:-0.2px">{{ wizPhaseName }}</span>
+            <span style="font-size:12px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ wizStepLabel }}</span>
+          </div>
+          <div style="height:4px;background:#e0e0e0;border-radius:9999px;overflow:hidden"><div style="height:100%;width:{{ wizProgressPct }};background:#0066cc;border-radius:9999px;transition:width .25s ease"></div></div>
+        </div>
+
+        <div style="padding:22px 24px;overflow-y:auto;display:flex;flex-direction:column;gap:18px">
+
+          <sc-if value="{{ wizIsSku }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">נא לסרוק מק״ט יצרן מהאריזה.</div></div>
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">מק״ט יצרן</label>
+              <div style="position:relative"><span style="position:absolute;inset-inline-end:14px;top:50%;transform:translateY(-50%);color:#0066cc;pointer-events:none;display:flex"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg></span><input value="{{ wizSkuScan }}" onChange="{{ onWizSku }}" placeholder="סרוק או הקלד מק״ט יצרן" style="width:100%;height:52px;border:1px solid #d4d4dc;border-radius:11px;padding-inline-start:16px;padding-inline-end:46px;font-size:16px;background:#fff;color:#1d1d1f;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"></div>
+            </div>
+            <div style="font-size:13px;color:#7a7a7a;line-height:1.5">פריטי הסריקה נשמרים במערכת ובדו״ח הנוצר בתוך המערכת.</div>
+          </sc-if>
+
+          <sc-if value="{{ wizIsRu }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;color:#7a7a7a">בדיקה פנימית של המערכת: האם קיים למוצר RU (עפ״י מק״ט יצרן)?</div>
+            <sc-if value="{{ wizHasRU }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:12px;align-items:center;background:rgba(31,138,91,0.07);border:1px solid rgba(31,138,91,0.22);border-radius:12px;padding:16px">
+                <span style="display:flex;color:#1f8a5b;flex-shrink:0"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg></span>
+                <div><div style="font-size:15px;font-weight:700;color:#1f8a5b">נמצא RU במערכת</div><div style="font-size:13px;color:#5a5a5f;margin-top:2px">אפשר להמשיך במקרה הרגיל.</div></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ wizNoRU }}" hint-placeholder-val="{{ false }}">
+              <div style="background:rgba(217,118,6,0.08);border:1px solid rgba(217,118,6,0.3);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;gap:12px;align-items:flex-start">
+                  <span style="display:flex;color:#d97706;flex-shrink:0;margin-top:1px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+                  <div><div style="font-size:12px;font-weight:600;color:#9a5b06;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5;color:#1d1d1f">למוצר אין RU. נא להודיע לגורם אחראי ולאחר מכן להמשיך בבדיקות.</div></div>
+                </div>
+                <sc-if value="{{ wizRuAck }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#1f8a5b"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>דווח לגורם אחראי</div>
+                </sc-if>
+                <sc-if value="{{ wizNoRU }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ onWizRuAck }}" style="align-self:flex-start;background:#fff;color:#9a5b06;border:1px solid rgba(217,118,6,0.5);border-radius:9999px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:rgba(217,118,6,0.06)">סמן כדווח לגורם אחראי</button>
+                </sc-if>
+              </div>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ wizIsPkg }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">נא לצלם את האריזה בדיוק לפי תמונות הייחוס.</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="flex:1;display:flex;gap:7px">
+                <sc-for list="{{ wizPkgDots }}" as="d" hint-placeholder-count="3"><div style="flex:1;height:4px;border-radius:9999px;background:{{ d.bg }}"></div></sc-for>
+              </div>
+              <span style="font-size:12.5px;font-weight:600;color:#0066cc;background:rgba(0,102,204,0.08);border-radius:9999px;padding:4px 12px;font-variant-numeric:tabular-nums;white-space:nowrap">{{ wizPkgCount }} / 3 צולמו</span>
+            </div>
+            <div style="position:relative;flex-shrink:0;height:230px;border-radius:14px;border:1px solid #e0e0e0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#efe9e0,#e4ddd2)">
+              <div style="position:absolute;inset:0;opacity:0.5;background-image:radial-gradient(rgba(120,100,80,0.12) 1px,transparent 1px);background-size:6px 6px"></div>
+              <div style="position:absolute;top:11px;inset-inline-end:11px;font-size:11px;font-weight:600;color:#8a7c68;background:rgba(255,255,255,0.72);border-radius:9999px;padding:4px 11px">{{ wizPkgRefLabel }}</div>
+              <sc-if value="{{ wizPkgCurCaptured }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:linear-gradient(135deg,#dfe8f0,#cfe0ee);display:flex;align-items:center;justify-content:center"><span style="width:46px;height:46px;border-radius:9999px;background:#1f8a5b;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></div></sc-if>
+              <sc-if value="{{ wizPkgCurNotCaptured }}" hint-placeholder-val="{{ true }}"><span style="position:relative;color:#a89a86"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></span></sc-if>
+            </div>
+            <button onClick="{{ wizPkgOnCapture }}" style="width:100%;height:52px;border:0;border-radius:12px;background:{{ wizPkgBtnBg }};color:#fff;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px" style-active="transform:scale(0.98)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>{{ wizPkgBtnLabel }}</button>
+            <div style="display:flex;gap:10px">
+              <sc-for list="{{ wizPkgFilm }}" as="f" hint-placeholder-count="3">
+                <div onClick="{{ f.onPick }}" style="flex:1;cursor:pointer;display:flex;flex-direction:column;gap:6px">
+                  <div style="position:relative;flex-shrink:0;height:82px;border-radius:11px;overflow:hidden;background:{{ f.thumbBg }};border:{{ f.ringW }} solid {{ f.ring }}">
+                    <div style="position:absolute;inset:0;opacity:0.5;background-image:radial-gradient(rgba(120,100,80,0.12) 1px,transparent 1px);background-size:6px 6px"></div>
+                    <span style="position:absolute;top:6px;inset-inline-start:6px;width:20px;height:20px;border-radius:9999px;background:{{ f.numBg }};color:#fff;display:flex;align-items:center;justify-content:center"><sc-if value="{{ f.captured }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if></span>
+                  </div>
+                  <span style="font-size:11.5px;font-weight:600;text-align:center;color:#5a5a5f">{{ f.name }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">בדיקה תקינה?</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <button onClick="{{ onWizPkgPass }}" style="height:48px;border-radius:11px;border:1.5px solid {{ wizPkgPassSeg.border }};background:{{ wizPkgPassSeg.bg }};color:{{ wizPkgPassSeg.color }};font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>כן</button>
+                <button onClick="{{ onWizPkgFail }}" style="height:48px;border-radius:11px;border:1.5px solid {{ wizPkgFailSeg.border }};background:{{ wizPkgFailSeg.bg }};color:{{ wizPkgFailSeg.color }};font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>לא</button>
+              </div>
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">הערות <span style="color:#9a9aa0;font-weight:400">· במידת הצורך</span></label>
+              <textarea value="{{ wizPkgNote }}" onChange="{{ onWizPkgNote }}" rows="2" placeholder="ציין הערות…" style="width:100%;min-height:64px;border:1px solid #e0e0e0;border-radius:8px;padding:10px 12px;font-size:15px;background:#fff;color:#1d1d1f;outline:none;resize:vertical;line-height:1.5" style-focus="border-color:#0071e3"></textarea>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ wizIsCount }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">הטכנאי פותח את המארז. כמה פריטים בתוך המארז?</div></div>
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">כמות פריטים במארז</label>
+              <input value="{{ wizItemCount }}" onChange="{{ onWizCount }}" type="number" min="0" placeholder="0" style="width:160px;height:48px;border:1px solid #d4d4dc;border-radius:11px;padding:0 14px;font-size:16px;background:#fff;color:#1d1d1f;outline:none;font-variant-numeric:tabular-nums;text-align:center" style-focus="border-color:#0071e3">
+            </div>
+            <div style="height:1px;background:#f0f0f0"></div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">האם יש צורך בהדפסת מדבקות ברקוד נוספות?</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:340px">
+                <button onClick="{{ onWizLabelsYes }}" style="height:46px;border-radius:11px;border:1.5px solid {{ wizLabelsYesSeg.border }};background:{{ wizLabelsYesSeg.bg }};color:{{ wizLabelsYesSeg.color }};font-size:15px;font-weight:600;cursor:pointer">כן</button>
+                <button onClick="{{ onWizLabelsNo }}" style="height:46px;border-radius:11px;border:1.5px solid {{ wizLabelsNoSeg.border }};background:{{ wizLabelsNoSeg.bg }};color:{{ wizLabelsNoSeg.color }};font-size:15px;font-weight:600;cursor:pointer">לא</button>
+              </div>
+            </div>
+            <sc-if value="{{ wizNeedLabelsYes }}" hint-placeholder-val="{{ false }}">
+              <div>
+                <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">כמות מדבקות להדפסה</label>
+                <input value="{{ wizLabelQty }}" onChange="{{ onWizLabelQty }}" type="number" min="0" placeholder="0" style="width:160px;height:46px;border:1px solid #d4d4dc;border-radius:11px;padding:0 14px;font-size:16px;background:#fff;color:#1d1d1f;outline:none;font-variant-numeric:tabular-nums;text-align:center" style-focus="border-color:#0071e3">
+              </div>
+            </sc-if>
+            <div style="font-size:13px;color:#7a7a7a;line-height:1.5">מדבקות ID זהות למארז.</div>
+          </sc-if>
+
+          <sc-if value="{{ wizIsAccessories }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">נא לסרוק מק״ט יצרן עבור הפריטים הנלווים.</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ wizAccRows }}" as="a" hint-placeholder-count="1">
+                <div style="border:1px solid #e0e0e0;border-radius:12px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;align-items:center;gap:9px">
+                    <span style="width:14px;display:flex;color:#1f8a5b;flex-shrink:0">{{ a.tick }}</span>
+                    <span style="font-size:14px;font-weight:700">פריט מס׳ {{ a.num }}</span>
+                    <div style="flex:1"></div>
+                    <sc-if value="{{ a.canRemove }}" hint-placeholder-val="{{ false }}"><button onClick="{{ a.onRemove }}" style="width:28px;height:28px;border:0;border-radius:8px;background:#f5f5f7;color:#7a7a7a;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></sc-if>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:12px">
+                    <div>
+                      <label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:6px">סוג פריט</label>
+                      <select value="{{ a.typeVal }}" onChange="{{ a.onType }}" style="width:100%;height:44px;border:1px solid #d4d4dc;border-radius:10px;padding:0 12px;font-size:15px;background:#fff;color:#1d1d1f;outline:none" style-focus="border-color:#0071e3">
+                        <option value="">בחר סוג…</option>
+                        <sc-for list="{{ wizAccCatalog }}" as="c" hint-placeholder-count="4"><option value="{{ c }}">{{ c }}</option></sc-for>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:6px">סריקת מק״ט</label>
+                      <input value="{{ a.skuVal }}" onChange="{{ a.onSku }}" placeholder="סרוק מק״ט יצרן" style="width:100%;height:44px;border:1px solid #d4d4dc;border-radius:10px;padding:0 12px;font-size:15px;background:#fff;color:#1d1d1f;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3">
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+              <button onClick="{{ wizAccAdd }}" style="align-self:flex-start;display:inline-flex;align-items:center;gap:8px;background:#fff;color:#0066cc;border:1px solid #d4d4dc;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#f5f5f7"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>הוסף פריט</button>
+              <div style="font-size:13px;color:#7a7a7a;line-height:1.5">לאחר השלמת פריט יופיע סימון ✓ לצידו ברשימה.</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ wizIsRuAccess }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;color:#7a7a7a">בדיקת מערכת פנימית: קיום RU עבור הפריטים הנלווים (עפ״י מק״ט יצרן).</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{ wizRuAccessRows }}" as="r" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:12px;border:1px solid #e0e0e0;border-radius:12px;padding:12px 14px;background:#fff">
+                  <span style="display:flex;color:#1f8a5b;flex-shrink:0">{{ r.tick }}</span>
+                  <div style="min-width:0"><div style="font-size:14px;font-weight:600">{{ r.type }}</div><div style="font-size:12px;color:#9a9aa0;font-variant-numeric:tabular-nums">מק״ט {{ r.sku }}</div></div>
+                  <div style="flex:1"></div>
+                  <span style="font-size:12px;font-weight:600;color:#1f8a5b;background:rgba(31,138,91,0.08);border-radius:9999px;padding:4px 12px">נבדק</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ wizIsSelectList }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="m19 15-3 3-2-2"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">נא לבחור פריט לבדיקה.</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{ wizSelRows }}" as="r" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:12px;border:1px solid #e0e0e0;border-radius:12px;padding:12px 14px;background:{{ r.rowBg }}">
+                  <span style="width:16px;display:flex;color:#1f8a5b;flex-shrink:0">{{ r.tick }}</span>
+                  <div style="min-width:0"><div style="font-size:14px;font-weight:600">{{ r.type }}</div><div style="font-size:12px;color:#9a9aa0;font-variant-numeric:tabular-nums">מק״ט {{ r.sku }}</div></div>
+                  <div style="flex:1"></div>
+                  <span style="font-size:12px;font-weight:600;color:{{ r.statusColor }}">{{ r.statusLabel }}</span>
+                  <button onClick="{{ r.onStart }}" style="display:inline-flex;align-items:center;gap:7px;background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.96)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 13 8-13 8z"/></svg>בדיקה</button>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ wizAllTested }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:10px;align-items:center;background:rgba(31,138,91,0.07);border:1px solid rgba(31,138,91,0.22);border-radius:12px;padding:14px 16px;color:#1f8a5b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg><span style="font-size:14px;font-weight:600">כל הפריטים נבדקו. אפשר להמשיך.</span></div>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ wizInItemPkg }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;font-weight:600;color:#0066cc">{{ wizCurTitle }}</div>
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">נא לצלם את אריזת המוצר בדיוק לפי תמונת הייחוס.</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="flex:1;display:flex;gap:7px">
+                <sc-for list="{{ wizCurPkgPhotoDots }}" as="d" hint-placeholder-count="3"><div style="flex:1;height:4px;border-radius:9999px;background:{{ d.bg }}"></div></sc-for>
+              </div>
+              <span style="font-size:12.5px;font-weight:600;color:#0066cc;background:rgba(0,102,204,0.08);border-radius:9999px;padding:4px 12px;font-variant-numeric:tabular-nums;white-space:nowrap">{{ wizCurPkgPhotoCount }} / 3 צולמו</span>
+            </div>
+            <div style="position:relative;flex-shrink:0;height:230px;border-radius:14px;border:1px solid #e0e0e0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#efe9e0,#e4ddd2)">
+              <div style="position:absolute;inset:0;opacity:0.5;background-image:radial-gradient(rgba(120,100,80,0.12) 1px,transparent 1px);background-size:6px 6px"></div>
+              <div style="position:absolute;top:11px;inset-inline-end:11px;font-size:11px;font-weight:600;color:#8a7c68;background:rgba(255,255,255,0.72);border-radius:9999px;padding:4px 11px">{{ wizCurPkgPhotoRefLabel }}</div>
+              <sc-if value="{{ wizCurPkgPhotoCurCaptured }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:linear-gradient(135deg,#dfe8f0,#cfe0ee);display:flex;align-items:center;justify-content:center"><span style="width:46px;height:46px;border-radius:9999px;background:#1f8a5b;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></div></sc-if>
+              <sc-if value="{{ wizCurPkgPhotoCurNotCaptured }}" hint-placeholder-val="{{ true }}"><span style="position:relative;color:#a89a86"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></span></sc-if>
+            </div>
+            <button onClick="{{ wizCurPkgPhotoOnCapture }}" style="width:100%;height:52px;border:0;border-radius:12px;background:{{ wizCurPkgPhotoBtnBg }};color:#fff;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px" style-active="transform:scale(0.98)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>{{ wizCurPkgPhotoBtnLabel }}</button>
+            <div style="display:flex;gap:10px">
+              <sc-for list="{{ wizCurPkgPhotoFilm }}" as="f" hint-placeholder-count="3">
+                <div onClick="{{ f.onPick }}" style="flex:1;cursor:pointer;display:flex;flex-direction:column;gap:6px">
+                  <div style="position:relative;flex-shrink:0;height:82px;border-radius:11px;overflow:hidden;background:{{ f.thumbBg }};border:{{ f.ringW }} solid {{ f.ring }}">
+                    <div style="position:absolute;inset:0;opacity:0.5;background-image:radial-gradient(rgba(120,100,80,0.12) 1px,transparent 1px);background-size:6px 6px"></div>
+                    <span style="position:absolute;top:6px;inset-inline-start:6px;width:20px;height:20px;border-radius:9999px;background:{{ f.numBg }};color:#fff;display:flex;align-items:center;justify-content:center"><sc-if value="{{ f.captured }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if></span>
+                  </div>
+                  <span style="font-size:11.5px;font-weight:600;text-align:center;color:#5a5a5f">{{ f.name }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">בדיקה תקינה?</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <button onClick="{{ onCurPkgPass }}" style="height:48px;border-radius:11px;border:1.5px solid {{ wizCurPkgPassSeg.border }};background:{{ wizCurPkgPassSeg.bg }};color:{{ wizCurPkgPassSeg.color }};font-size:15px;font-weight:600;cursor:pointer">כן</button>
+                <button onClick="{{ onCurPkgFail }}" style="height:48px;border-radius:11px;border:1.5px solid {{ wizCurPkgFailSeg.border }};background:{{ wizCurPkgFailSeg.bg }};color:{{ wizCurPkgFailSeg.color }};font-size:15px;font-weight:600;cursor:pointer">לא</button>
+              </div>
+            </div>
+            <textarea value="{{ wizCurPkgNote }}" onChange="{{ onCurPkgNote }}" rows="2" placeholder="ציין הערות במידת הצורך…" style="width:100%;min-height:60px;border:1px solid #e0e0e0;border-radius:8px;padding:10px 12px;font-size:15px;background:#fff;color:#1d1d1f;outline:none;resize:vertical;line-height:1.5" style-focus="border-color:#0071e3"></textarea>
+          </sc-if>
+
+          <sc-if value="{{ wizInItemWeigh }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;font-weight:600;color:#0066cc">{{ wizCurTitle }}</div>
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">נא לשקול את הפריט ולהזין את המשקל שנמדד.</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:6px">משקל פריט ייחוס</label>
+                <div style="height:48px;border:1px solid #e0e0e0;border-radius:11px;background:#f5f5f7;display:flex;align-items:center;padding:0 14px;font-size:16px;font-weight:600;color:#1d1d1f;font-variant-numeric:tabular-nums">{{ wizRefWeight }}</div>
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:6px">משקל פריט נבדק</label>
+                <div style="position:relative"><input value="{{ wizMeasWeight }}" onChange="{{ onCurMeasWeight }}" type="number" min="0" placeholder="0" style="width:100%;height:48px;border:1px solid #d4d4dc;border-radius:11px;padding-inline-start:14px;padding-inline-end:44px;font-size:16px;background:#fff;color:#1d1d1f;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:#0071e3"><span style="position:absolute;inset-inline-end:14px;top:50%;transform:translateY(-50%);color:#9a9aa0;font-size:13px;pointer-events:none">גר׳</span></div>
+              </div>
+            </div>
+            <sc-if value="{{ wizWeightShowResult }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:12px;align-items:flex-start;background:{{ wizWeightResultBg }};border-radius:12px;padding:14px 16px">
+                <span style="display:flex;color:{{ wizWeightResultColor }};flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></span>
+                <div><div style="font-size:15px;font-weight:700;color:{{ wizWeightResultColor }}">{{ wizWeightResultLabel }}</div><div style="font-size:13px;color:#5a5a5f;margin-top:2px">{{ wizWeightDetail }}</div></div>
+              </div>
+            </sc-if>
+            <button onClick="{{ onCurWeightConfirm }}" style="align-self:flex-start;display:inline-flex;align-items:center;gap:8px;background:#fff;color:#0066cc;border:1px solid #d4d4dc;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#f5f5f7"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M9 12h6"/></svg>חשב סטייה תקנית</button>
+          </sc-if>
+
+          <sc-if value="{{ wizInItemProduct }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;font-weight:600;color:#0066cc">{{ wizCurTitle }}</div>
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">נא לצלם את המוצר בדיוק לפי תמונות הייחוס.</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="flex:1;display:flex;gap:7px">
+                <sc-for list="{{ wizCurProdPhotoDots }}" as="d" hint-placeholder-count="3"><div style="flex:1;height:4px;border-radius:9999px;background:{{ d.bg }}"></div></sc-for>
+              </div>
+              <span style="font-size:12.5px;font-weight:600;color:#0066cc;background:rgba(0,102,204,0.08);border-radius:9999px;padding:4px 12px;font-variant-numeric:tabular-nums;white-space:nowrap">{{ wizCurProdPhotoCount }} / 3 צולמו</span>
+            </div>
+            <div style="position:relative;flex-shrink:0;height:230px;border-radius:14px;border:1px solid #e0e0e0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#efe9e0,#e4ddd2)">
+              <div style="position:absolute;inset:0;opacity:0.5;background-image:radial-gradient(rgba(120,100,80,0.12) 1px,transparent 1px);background-size:6px 6px"></div>
+              <div style="position:absolute;top:11px;inset-inline-end:11px;font-size:11px;font-weight:600;color:#8a7c68;background:rgba(255,255,255,0.72);border-radius:9999px;padding:4px 11px">{{ wizCurProdPhotoRefLabel }}</div>
+              <sc-if value="{{ wizCurProdPhotoCurCaptured }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:linear-gradient(135deg,#dfe8f0,#cfe0ee);display:flex;align-items:center;justify-content:center"><span style="width:46px;height:46px;border-radius:9999px;background:#1f8a5b;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></div></sc-if>
+              <sc-if value="{{ wizCurProdPhotoCurNotCaptured }}" hint-placeholder-val="{{ true }}"><span style="position:relative;color:#a89a86"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></span></sc-if>
+            </div>
+            <button onClick="{{ wizCurProdPhotoOnCapture }}" style="width:100%;height:52px;border:0;border-radius:12px;background:{{ wizCurProdPhotoBtnBg }};color:#fff;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px" style-active="transform:scale(0.98)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>{{ wizCurProdPhotoBtnLabel }}</button>
+            <div style="display:flex;gap:10px">
+              <sc-for list="{{ wizCurProdPhotoFilm }}" as="f" hint-placeholder-count="3">
+                <div onClick="{{ f.onPick }}" style="flex:1;cursor:pointer;display:flex;flex-direction:column;gap:6px">
+                  <div style="position:relative;flex-shrink:0;height:82px;border-radius:11px;overflow:hidden;background:{{ f.thumbBg }};border:{{ f.ringW }} solid {{ f.ring }}">
+                    <div style="position:absolute;inset:0;opacity:0.5;background-image:radial-gradient(rgba(120,100,80,0.12) 1px,transparent 1px);background-size:6px 6px"></div>
+                    <span style="position:absolute;top:6px;inset-inline-start:6px;width:20px;height:20px;border-radius:9999px;background:{{ f.numBg }};color:#fff;display:flex;align-items:center;justify-content:center"><sc-if value="{{ f.captured }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if></span>
+                  </div>
+                  <span style="font-size:11.5px;font-weight:600;text-align:center;color:#5a5a5f">{{ f.name }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:8px">בדיקה תקינה?</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <button onClick="{{ onCurProdPass }}" style="height:48px;border-radius:11px;border:1.5px solid {{ wizCurProdPassSeg.border }};background:{{ wizCurProdPassSeg.bg }};color:{{ wizCurProdPassSeg.color }};font-size:15px;font-weight:600;cursor:pointer">כן</button>
+                <button onClick="{{ onCurProdFail }}" style="height:48px;border-radius:11px;border:1.5px solid {{ wizCurProdFailSeg.border }};background:{{ wizCurProdFailSeg.bg }};color:{{ wizCurProdFailSeg.color }};font-size:15px;font-weight:600;cursor:pointer">לא</button>
+              </div>
+            </div>
+            <textarea value="{{ wizCurProdNote }}" onChange="{{ onCurProdNote }}" rows="2" placeholder="ציין הערות במידת הצורך…" style="width:100%;min-height:60px;border:1px solid #e0e0e0;border-radius:8px;padding:10px 12px;font-size:15px;background:#fff;color:#1d1d1f;outline:none;resize:vertical;line-height:1.5" style-focus="border-color:#0071e3"></textarea>
+          </sc-if>
+
+          <sc-if value="{{ wizIsTransfer }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;padding:12px 0 4px">
+              <div style="width:64px;height:64px;border-radius:9999px;background:rgba(31,138,91,0.1);color:#1f8a5b;display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg></div>
+              <div style="font-size:18px;font-weight:700;letter-spacing:-0.3px;margin-bottom:6px">קליטה וצילום הושלמו</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px">
+              <span style="display:flex;color:#0066cc;flex-shrink:0;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+              <div><div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div><div style="font-size:15px;line-height:1.5">נא להעביר את המוצר לעמדת פירוק והרכבה.</div></div>
+            </div>
+          </sc-if>
+
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;padding:16px 24px 18px;border-top:1px solid #ececf0;background:#fff">
+          <sc-if value="{{ wizCanBack }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ wizBackHandler }}" style="display:inline-flex;align-items:center;gap:6px;background:transparent;color:#7a7a7a;border:0;border-radius:9px;padding:10px 12px;font-size:15px;font-weight:600;cursor:pointer" style-hover="color:#1d1d1f;background:#f5f5f7"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>חזרה</button>
+          </sc-if>
+          <div style="flex:1"></div>
+          <sc-if value="{{ wizIsSku }}" hint-placeholder-val="{{ true }}"><button onClick="{{ wizSkuBtn.onClick }}" style="background:{{ wizSkuBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizSkuBtn.cursor }};opacity:{{ wizSkuBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizIsRu }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizRuBtn.onClick }}" style="background:{{ wizRuBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizRuBtn.cursor }};opacity:{{ wizRuBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizIsPkg }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizPkgBtn.onClick }}" style="background:{{ wizPkgBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizPkgBtn.cursor }};opacity:{{ wizPkgBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizIsCount }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizCountBtn.onClick }}" style="background:{{ wizCountBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizCountBtn.cursor }};opacity:{{ wizCountBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizIsAccessories }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizAccBtn.onClick }}" style="background:{{ wizAccBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizAccBtn.cursor }};opacity:{{ wizAccBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizIsRuAccess }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizRuAccessBtn.onClick }}" style="background:{{ wizRuAccessBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizRuAccessBtn.cursor }};opacity:{{ wizRuAccessBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizIsSelectList }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizSelBtn.onClick }}" style="background:{{ wizSelBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizSelBtn.cursor }};opacity:{{ wizSelBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizInItemPkg }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizCurPkgBtn.onClick }}" style="background:{{ wizCurPkgBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizCurPkgBtn.cursor }};opacity:{{ wizCurPkgBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizInItemWeigh }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizWeighBtn.onClick }}" style="background:{{ wizWeighBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizWeighBtn.cursor }};opacity:{{ wizWeighBtn.opacity }}" style-active="transform:scale(0.97)">המשך</button></sc-if>
+          <sc-if value="{{ wizInItemProduct }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizCurProdBtn.onClick }}" style="background:{{ wizCurProdBtn.bg }};color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:{{ wizCurProdBtn.cursor }};opacity:{{ wizCurProdBtn.opacity }}" style-active="transform:scale(0.97)">סיום פריט</button></sc-if>
+          <sc-if value="{{ wizIsTransfer }}" hint-placeholder-val="{{ false }}"><button onClick="{{ wizFinish }}" style="display:inline-flex;align-items:center;gap:8px;background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 28px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3" style-active="transform:scale(0.97)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg>סיום קליטה</button></sc-if>
+        </div>
+
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ pkgWizOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="wiz-scrim" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:70;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div class="wiz-shell" dir="rtl" style="width:min(1040px,96vw);height:min(720px,92vh);background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;display:flex;overflow:hidden">
+
+        <div class="wiz-rail" style="width:268px;flex-shrink:0;background:#f5f5f7;border-inline-end:1px solid #e0e0e0;display:flex;flex-direction:column;padding:20px 18px;overflow-y:auto">
+          <div style="font-size:12px;font-weight:600;color:#7a7a7a">{{ pw.stationName }}</div>
+          <div style="font-size:18px;font-weight:700;letter-spacing:-0.3px;margin-top:3px">{{ pw.title }}</div>
+
+          <div class="wiz-rail-sub" style="background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:12px 13px;margin-top:14px">
+            <div style="font-size:11.5px;font-weight:600;color:#7a7a7a">{{ pw.pkgType }}</div>
+            <div style="display:flex;align-items:baseline;gap:4px;margin-top:4px;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;justify-content:flex-start">
+              <span style="font-size:15px;letter-spacing:.3px">{{ pw.idHead }}</span>
+              <span style="font-size:15px;font-weight:700;color:#0066cc">{{ pw.idSuffix }}</span>
+            </div>
+            <div style="font-size:12px;color:#7a7a7a;margin-top:5px">{{ pw.pkgMeta }}</div>
+          </div>
+
+          <sc-if value="{{ pw.inItemFlow }}" hint-placeholder-val="{{ false }}">
+            <div class="wiz-rail-sub" style="margin-top:16px;background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:12px 13px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <div style="font-size:11px;font-weight:600;color:#7a7a7a;letter-spacing:.5px;text-transform:uppercase">פריטי המארז</div>
+                <div style="font-size:11.5px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ pw.itemProgress }}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:2px;margin-top:10px">
+                <sc-for list="{{ pw.itemStepper }}" as="it" hint-placeholder-count="3">
+                  <div onClick="{{ it.onClick }}" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:9px;background:{{ it.bg }};cursor:pointer">
+                    <span class="ic" style="width:20px;height:20px;border-radius:50%;background:{{ it.dotBg }};color:{{ it.dotTone }};border:1px solid {{ it.dotBorder }};font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums">{{ it.badge }}</span>
+                    <div style="min-width:0;flex:1">
+                      <div style="font-size:12.5px;font-weight:600;color:{{ it.tone }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.type }}</div>
+                    </div>
+                    <span style="font-size:11px;color:#7a7a7a;white-space:nowrap">{{ it.stateLabel }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <div class="wiz-rail-steps" style="display:flex;flex-direction:column;gap:2px;margin-top:16px">
+            <sc-for list="{{ pw.steps }}" as="s" hint-placeholder-count="6">
+              <div onClick="{{ s.onClick }}" class="wiz-rail-step" style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;border-radius:10px;background:{{ s.bg }};cursor:pointer">
+                <span class="ic" style="width:23px;height:23px;border-radius:50%;background:{{ s.dotBg }};color:{{ s.dotTone }};border:1px solid {{ s.dotBorder }};font-size:11.5px;font-weight:700">{{ s.badge }}</span>
+                <div style="min-width:0">
+                  <div style="font-size:13.5px;font-weight:600;color:{{ s.tone }};white-space:nowrap">{{ s.label }}</div>
+                  <div class="wiz-rail-sub" style="font-size:11.5px;color:#7a7a7a;margin-top:2px">{{ s.note }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+
+          <div class="wiz-rail-sub" style="margin-top:auto;padding-top:14px;font-size:11.5px;color:#7a7a7a">עובד: יוסי כהן · עמדה {{ pw.stationCode }}</div>
+        </div>
+
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+          <div class="wiz-body" style="flex:1;min-height:0;overflow-y:auto;padding:24px 28px">
+
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+              <div style="min-width:0">
+                <div style="font-size:21px;font-weight:700;letter-spacing:-0.3px">{{ pw.stepTitle }}</div>
+                <div style="font-size:13.5px;color:#7a7a7a;margin-top:5px;line-height:1.5">{{ pw.stepSubtitle }}</div>
+              </div>
+              <div style="font-size:12.5px;color:#9a9aa0;white-space:nowrap;flex-shrink:0">{{ pw.stepCounter }}</div>
+            </div>
+
+            <sc-if value="{{ pw.hasSystemMsg }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:12px;align-items:flex-start;background:rgba(0,102,204,0.05);border:1px solid rgba(0,102,204,0.15);border-radius:12px;padding:14px 16px;margin-top:18px">
+                <span class="ic" style="color:#0066cc;margin-top:1px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+                <div>
+                  <div style="font-size:12px;font-weight:600;color:#0066cc;margin-bottom:2px">הודעת מערכת</div>
+                  <div style="font-size:15px;line-height:1.5">{{ pw.systemMsg }}</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pw.isScan }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:420px;margin-top:20px">
+                <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:7px">מק״ט המארז</div>
+                <input value="{{ pw.scanValue }}" onChange="{{ pw.onScan }}" autofocus placeholder="סרוק את מדבקת הקופסה" style="width:100%;height:52px;border:1px solid {{ pw.scanBorder }};border-radius:11px;padding:0 14px;font-size:17px;font-variant-numeric:tabular-nums;letter-spacing:1px;outline:none" style-focus="border-color:#0071e3">
+                <sc-if value="{{ pw.scanMatched }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:9px;background:rgba(31,138,91,0.07);border:1px solid rgba(31,138,91,0.22);border-radius:11px;padding:12px 14px;margin-top:12px">
+                    <span class="ic" style="color:#1f8a5b"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                    <div style="font-size:14px;font-weight:600;color:#1f8a5b">{{ pw.scanMatchText }}</div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pw.isPhoto }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:20px">
+                <sc-for list="{{ pw.photos }}" as="p" hint-placeholder-count="3">
+                  <div style="width:220px">
+                    <div style="font-size:12px;font-weight:600;color:#7a7a7a;margin-bottom:7px">{{ p.label }}</div>
+                    <div style="display:flex;gap:8px">
+                      <div style="flex:1;aspect-ratio:4/3;border:1px solid #e0e0e0;border-radius:11px;background:#f5f5f7;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#9a9aa0;text-align:center;padding:8px">תמונת ייחוס</div>
+                      <div onClick="{{ p.onShoot }}" class="prs" style="flex:1;aspect-ratio:4/3;border:1px solid {{ p.border }};border-radius:11px;background:{{ p.bg }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;color:{{ p.tone }}">
+                        <sc-if value="{{ p.shot }}" hint-placeholder-val="{{ false }}">
+                          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                        </sc-if>
+                        <sc-if value="{{ p.notShot }}" hint-placeholder-val="{{ true }}">
+                          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
+                        </sc-if>
+                        <span style="font-size:11.5px;font-weight:600">{{ p.state }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:20px">
+                <div style="font-size:14.5px;font-weight:600">האריזה תקינה?</div>
+                <div style="display:flex;gap:10px;margin-top:10px">
+                  <sc-for list="{{ pw.okChoices }}" as="c" hint-placeholder-count="2">
+                    <div onClick="{{ c.onPick }}" class="prs" style="min-height:44px;display:flex;align-items:center;gap:8px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.tone }};border-radius:11px;padding:11px 20px;font-size:14.5px;font-weight:600;cursor:pointer">{{ c.label }}</div>
+                  </sc-for>
+                </div>
+                <div style="font-size:12.5px;color:#7a7a7a;margin:16px 0 7px">הערות</div>
+                <textarea placeholder="אופציונלי" style="width:100%;max-width:560px;min-height:76px;border:1px solid #e0e0e0;border-radius:11px;padding:11px 13px;font-size:14px;resize:vertical;outline:none" style-focus="border-color:#0071e3"></textarea>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pw.isItems }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px">
+                <sc-for list="{{ pw.items }}" as="it" hint-placeholder-count="3">
+                  <div style="border:1px solid {{ it.border }};border-radius:14px;padding:14px 16px;background:{{ it.bg }};display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                    <span class="ic" style="width:34px;height:34px;border-radius:9px;background:{{ it.chipBg }};color:{{ it.chipTone }};font-size:13px;font-weight:700;font-variant-numeric:tabular-nums">{{ it.suffix }}</span>
+                    <div style="min-width:0;flex:1">
+                      <div style="font-size:15px;font-weight:600">{{ it.type }}</div>
+                      <div style="font-size:12.5px;color:#7a7a7a;margin-top:2px;font-variant-numeric:tabular-nums">{{ it.line }}</div>
+                    </div>
+                    <div style="font-size:12.5px;color:{{ it.stateTone }};font-weight:600;white-space:nowrap">{{ it.stateLabel }}</div>
+                    <button onClick="{{ it.onStart }}" class="prs" style="min-height:44px;background:{{ it.btnBg }};color:{{ it.btnTone }};border:{{ it.btnBorder }};border-radius:9999px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap">{{ it.btnLabel }}</button>
+                  </div>
+                </sc-for>
+              </div>
+              <div onClick="{{ pw.onAddMissing }}" style="display:inline-flex;align-items:center;gap:7px;margin-top:16px;font-size:14px;font-weight:600;color:#0066cc;cursor:pointer">
+                <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>הוסף פריט שלא נרשם בקליטה
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pw.isWeigh }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:16px;flex-wrap:wrap;max-width:620px;margin-top:20px">
+                <div style="flex:1;min-width:180px">
+                  <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:7px">משקל פריט ייחוס</div>
+                  <div style="height:52px;border:1px solid #e0e0e0;border-radius:11px;background:#f5f5f7;display:flex;align-items:center;padding:0 14px;font-size:17px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ pw.refWeight }}</div>
+                </div>
+                <div style="flex:1;min-width:180px">
+                  <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:7px">משקל פריט נבדק</div>
+                  <input value="{{ pw.measWeight }}" onChange="{{ pw.onWeigh }}" placeholder="גר׳" style="width:100%;height:52px;border:1px solid {{ pw.weighBorder }};border-radius:11px;padding:0 14px;font-size:17px;font-variant-numeric:tabular-nums;outline:none" style-focus="border-color:#0071e3">
+                </div>
+              </div>
+              <sc-if value="{{ pw.hasWeighResult }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:flex-start;gap:11px;background:{{ pw.weighBg }};border:1px solid {{ pw.weighResBorder }};border-radius:11px;padding:13px 15px;margin-top:16px;max-width:620px">
+                  <span class="ic" style="color:{{ pw.weighTone }};margin-top:1px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                  <div>
+                    <div style="font-size:14.5px;font-weight:600;color:{{ pw.weighTone }}">{{ pw.weighTitle }}</div>
+                    <div style="font-size:13px;color:#444;margin-top:3px;font-variant-numeric:tabular-nums">{{ pw.weighDetail }}</div>
+                  </div>
+                </div>
+              </sc-if>
+            </sc-if>
+
+            <sc-if value="{{ pw.isCount }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:620px;margin-top:20px">
+                <sc-for list="{{ pw.counts }}" as="c" hint-placeholder-count="3">
+                  <div style="border:1px solid {{ c.border }};border-radius:14px;padding:16px 18px;background:{{ c.bg }}">
+                    <div style="font-size:30px;font-weight:700;letter-spacing:-0.6px;line-height:1;color:{{ c.tone }};font-variant-numeric:tabular-nums">{{ c.value }}</div>
+                    <div style="font-size:12.5px;color:#7a7a7a;margin-top:7px">{{ c.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ pw.countMismatch }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:11px;align-items:flex-start;background:#fdf3e6;border:1px solid #f0e2cc;border-radius:12px;padding:13px 15px;margin-top:16px;max-width:620px">
+                  <span class="ic" style="color:#a86a1a;margin-top:1px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></span>
+                  <div>
+                    <div style="font-size:14px;font-weight:600;color:#a86a1a">{{ pw.countMismatchTitle }}</div>
+                    <div style="font-size:13px;color:#444;margin-top:3px;line-height:1.5">{{ pw.countMismatchNote }}</div>
+                  </div>
+                </div>
+              </sc-if>
+            </sc-if>
+
+            <sc-if value="{{ pw.isArrival }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px solid #e0e0e0;border-radius:14px;overflow:hidden;margin-top:20px">
+                <sc-for list="{{ pw.arrivals }}" as="a" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid #f0f0f0;background:{{ a.bg }};flex-wrap:wrap">
+                    <span class="ic" style="width:34px;height:34px;border-radius:9px;background:{{ a.chipBg }};color:{{ a.chipTone }};font-size:13px;font-weight:700;font-variant-numeric:tabular-nums">{{ a.suffix }}</span>
+                    <div style="min-width:0;flex:1">
+                      <div style="font-size:15px;font-weight:600">{{ a.type }}</div>
+                      <div style="font-size:12.5px;color:{{ a.arrivalTone }};margin-top:2px">{{ a.arrivalText }}</div>
+                    </div>
+                    <sc-if value="{{ a.arrived }}" hint-placeholder-val="{{ true }}">
+                      <div onClick="{{ a.onPacked }}" class="prs" style="display:flex;align-items:center;gap:9px;min-height:44px;padding:8px 14px;border:1px solid {{ a.boxBorder }};background:{{ a.boxBg }};border-radius:11px;cursor:pointer">
+                        <span class="ic" style="width:20px;height:20px;border-radius:6px;border:1px solid {{ a.tickBorder }};background:{{ a.tickBg }};color:#fff">{{ a.tick }}</span>
+                        <span style="font-size:14px;font-weight:600;color:{{ a.boxTone }}">נארז</span>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ a.notArrived }}" hint-placeholder-val="{{ false }}">
+                      <button onClick="{{ a.onDecide }}" class="prs" style="min-height:44px;background:{{ a.decideBg }};color:{{ a.decideTone }};border:1px solid {{ a.decideBorder }};border-radius:9999px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap">{{ a.decideLabel }}</button>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ pw.arrivalBlocked }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:13px;color:#a86a1a;background:#fdf3e6;border:1px solid #f0e2cc;border-radius:11px;padding:11px 14px;margin-top:14px">{{ pw.arrivalBlockedNote }}</div>
+              </sc-if>
+            </sc-if>
+
+            <sc-if value="{{ pw.isPackOk }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:620px;margin-top:20px">
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <sc-for list="{{ pw.checks }}" as="c" hint-placeholder-count="3">
+                    <div onClick="{{ c.onToggle }}" class="prs" style="display:flex;align-items:center;gap:12px;min-height:52px;border:1px solid {{ c.border }};background:{{ c.bg }};border-radius:12px;padding:13px 15px;cursor:pointer">
+                      <span class="ic" style="width:22px;height:22px;border-radius:7px;border:1px solid {{ c.tickBorder }};background:{{ c.tickBg }};color:#fff;font-size:12px">{{ c.tick }}</span>
+                      <span style="font-size:14.5px;font-weight:600;color:{{ c.tone }}">{{ c.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:12.5px;color:#7a7a7a;margin:18px 0 7px">הערות אריזה</div>
+                <textarea placeholder="אופציונלי" style="width:100%;min-height:76px;border:1px solid #e0e0e0;border-radius:11px;padding:11px 13px;font-size:14px;resize:vertical;outline:none" style-focus="border-color:#0071e3"></textarea>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pw.isLabels }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:20px">
+                <sc-for list="{{ pw.labelCards }}" as="l" hint-placeholder-count="4">
+                  <div onClick="{{ l.onToggle }}" class="prs" style="width:214px;border:1px solid {{ l.border }};background:{{ l.bg }};border-radius:14px;padding:15px 16px;cursor:pointer">
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                      <div style="font-size:11.5px;font-weight:600;color:#7a7a7a">{{ l.kind }}</div>
+                      <span class="ic" style="width:20px;height:20px;border-radius:6px;border:1px solid {{ l.tickBorder }};background:{{ l.tickBg }};color:#fff;font-size:11px">{{ l.tick }}</span>
+                    </div>
+                    <div style="display:flex;align-items:flex-end;gap:1px;height:44px;margin-top:12px">
+                      <sc-for list="{{ l.bars }}" as="b" hint-placeholder-count="22">
+                        <div style="width:{{ b.w }}px;height:100%;background:#1d1d1f"></div>
+                      </sc-for>
+                    </div>
+                    <div style="font-family:'Inter',monospace;font-size:12.5px;letter-spacing:1.5px;margin-top:9px;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;text-align:right">{{ l.code }}</div>
+                    <div style="font-size:13px;font-weight:600;margin-top:7px">{{ l.title }}</div>
+                    <div style="font-size:12px;color:#7a7a7a;margin-top:2px">{{ l.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pw.isDone }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:36px 0 8px">
+                <span class="ic" style="width:64px;height:64px;border-radius:50%;background:rgba(31,138,91,0.09);color:#1f8a5b"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                <div style="font-size:22px;font-weight:700;letter-spacing:-0.3px;margin-top:16px">{{ pw.doneTitle }}</div>
+                <div style="font-size:14.5px;color:#444;margin-top:7px;max-width:440px;line-height:1.55">{{ pw.doneText }}</div>
+                <div style="display:flex;align-items:center;gap:4px;margin-top:20px">
+                  <sc-for list="{{ pw.doneMini }}" as="m" hint-placeholder-count="3">
+                    <span title="{{ m.title }}" style="width:30px;height:10px;border-radius:3px;background:{{ m.color }}"></span>
+                  </sc-for>
+                </div>
+                <div style="font-size:12.5px;color:#7a7a7a;margin-top:9px;font-variant-numeric:tabular-nums">{{ pw.doneNote }}</div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div class="wiz-foot" style="flex-shrink:0;border-top:1px solid #e0e0e0;padding:14px 28px;display:flex;align-items:center;gap:10px">
+            <div style="font-size:12.5px;color:#7a7a7a">{{ pw.footNote }}</div>
+            <div style="margin-inline-start:auto;display:flex;align-items:center;gap:10px">
+              <button onClick="{{ closePkgWiz }}" class="prs" style="min-height:44px;background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer">יציאה</button>
+              <button onClick="{{ pw.onBack }}" class="prs" style="min-height:44px;background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 18px;font-size:14px;font-weight:600;color:{{ pw.backTone }};cursor:pointer">הקודם</button>
+              <button onClick="{{ pw.onNext }}" class="prs" style="min-height:44px;background:{{ pw.nextBg }};color:{{ pw.nextTone }};border:0;border-radius:9999px;padding:11px 26px;font-size:15px;font-weight:600;cursor:{{ pw.nextCursor }};opacity:{{ pw.nextOpacity }}">{{ pw.nextLabel }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ pkgDecideOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePkgDecide }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:90;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(520px,94vw);background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;overflow:hidden">
+        <div style="padding:22px 24px 0">
+          <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">פריט שלא הגיע לסגירה</div>
+          <div style="font-size:14px;color:#444;margin-top:8px;line-height:1.55">{{ pkgDecide.text }}</div>
+        </div>
+        <div style="padding:18px 24px 0;display:flex;flex-direction:column;gap:9px">
+          <sc-for list="{{ pkgDecide.choices }}" as="c" hint-placeholder-count="2">
+            <div onClick="{{ c.onPick }}" class="prs" style="display:flex;align-items:flex-start;gap:11px;border:1px solid {{ c.border }};background:{{ c.bg }};border-radius:12px;padding:13px 15px;cursor:pointer">
+              <span class="ic" style="width:18px;height:18px;border-radius:50%;border:1px solid {{ c.dotBorder }};background:{{ c.dotBg }};margin-top:2px"></span>
+              <div>
+                <div style="font-size:14.5px;font-weight:600;color:{{ c.tone }}">{{ c.label }}</div>
+                <div style="font-size:12.5px;color:#7a7a7a;margin-top:2px;line-height:1.45">{{ c.note }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding:16px 24px 0">
+          <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:6px">הערה · חובה</div>
+          <textarea placeholder="מה נעשה עם הפריט" style="width:100%;min-height:70px;border:1px solid #e0e0e0;border-radius:11px;padding:11px 13px;font-size:14px;resize:vertical;outline:none" style-focus="border-color:#0071e3"></textarea>
+        </div>
+        <div style="padding:16px 24px 22px;display:flex;align-items:center;gap:10px;justify-content:flex-end">
+          <button onClick="{{ closePkgDecide }}" class="prs" style="min-height:44px;background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer">ביטול</button>
+          <button onClick="{{ pkgDecide.onSave }}" class="prs" style="min-height:44px;background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#0058b3">שמור החלטה</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900},&quot;popupPreview&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ללא&quot;,&quot;תור עמדת פתיחה&quot;,&quot;תור עמדה רגילה&quot;,&quot;אשף פתיחת מארז&quot;,&quot;אשף סגירת מארז&quot;,&quot;החלטה על פריט שלא הגיע&quot;],&quot;default&quot;:&quot;אשף פתיחת מארז&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;תצוגת חלונות&quot;}}">
+const BLUE = "#0066cc", AMBER = "#d97706", AMBER_INK = "#a86a1a", GREEN = "#1f8a5b", RED = "#bf3535", GREY = "#d4d4dc";
+
+const STATES = {
+  new: { label: "טרם נפתח", color: GREY },
+  queue: { label: "ממתין", color: AMBER },
+  test: { label: "בבדיקה", color: BLUE },
+  done: { label: "הושלם", color: GREEN },
+  missing: { label: "חסר במארז", color: RED },
+};
+
+const STATIONS = {
+  open: { name: "פתיחת מארז", code: "ST-04", level: "package", subtitle: "המארזים נכנסים לתור כיחידה אחת. הפריטים נוצרים כבר בקליטה.", searchPh: "סרוק מדבקת קופסה או הקלד מזהה" },
+  regular: { name: "חשמל A", code: "ST-11", level: "item", subtitle: "כל פריט מתקדם במסלול של הסוג שלו, עם תג המארז שממנו הגיע.", searchPh: "סרוק מדבקת פריט או הקלד סריאלי" },
+  close: { name: "סגירת מארז", code: "ST-09", level: "package", subtitle: "מארז נכנס לתור רק כשכל פריטיו הגיעו לעמדה.", searchPh: "סרוק מדבקת קופסה או הקלד מזהה" },
+};
+
+const PKG_A = {
+  id: "1005150926000300", type: "מארז מחשב HP", customer: "רפאל", shipment: "SH-2041", wait: "12 דק׳",
+  items: [
+    { suffix: "01", type: "מחשב נייד", serial: "88312", sku: "HP-840-G9", ref: 1820, state: "new", station: "פתיחת מארז" },
+    { suffix: "02", type: "מקלדת", serial: "90011", sku: "KB-2200", ref: 780, state: "new", station: "פתיחת מארז" },
+    { suffix: "03", type: "מטען", serial: "77210", sku: "PS-65W", ref: 340, state: "new", station: "פתיחת מארז" },
+  ],
+};
+
+const OPEN_QUEUE = [
+  PKG_A,
+  { id: "1005150926000500", type: "מארז טלפון", customer: "אלביט", shipment: "SH-2038", wait: "41 דק׳",
+    items: [
+      { suffix: "01", type: "טלפון", serial: "—", sku: "PH-12", ref: 190, state: "new", station: "פתיחת מארז" },
+      { suffix: "02", type: "מטען", serial: "—", sku: "PS-20W", ref: 120, state: "new", station: "פתיחת מארז" },
+    ] },
+  { id: "1005150926000800", type: "מארז בקר", customer: "התעשייה האווירית", shipment: "SH-2036", wait: "1:24 שע׳",
+    items: [
+      { suffix: "01", type: "בקר ראשי", serial: "65540", sku: "PCB-4400-A", ref: 460, state: "new", station: "פתיחת מארז" },
+      { suffix: "02", type: "מחבר", serial: "65541", sku: "745781-4", ref: 40, state: "new", station: "פתיחת מארז" },
+      { suffix: "03", type: "כבל", serial: "65542", sku: "CB-1200", ref: 210, state: "new", station: "פתיחת מארז" },
+      { suffix: "04", type: "ספק כוח", serial: "65543", sku: "PS-24-5A", ref: 980, state: "new", station: "פתיחת מארז" },
+    ] },
+];
+
+const ITEM_QUEUE = [
+  { pkg: "1005150926000300", pkgType: "מארז מחשב HP", suffix: "02", type: "מקלדת", serial: "90011", sku: "KB-2200", customer: "רפאל", wait: "8 דק׳", step: "2/3" },
+  { pkg: "1005150926000300", pkgType: "מארז מחשב HP", suffix: "03", type: "מטען", serial: "77210", sku: "PS-65W", customer: "רפאל", wait: "23 דק׳", step: "1/3" },
+  { pkg: "1005150926000400", pkgType: "מארז מחשב HP", suffix: "02", type: "מקלדת", serial: "90102", sku: "KB-2200", customer: "רפאל", wait: "52 דק׳", step: "2/3" },
+  { pkg: "1005150926000700", pkgType: "מארז טלפון", suffix: "01", type: "טלפון", serial: "77901", sku: "PH-12", customer: "אלביט", wait: "2:05 שע׳", step: "2/3" },
+];
+
+const CLOSE_QUEUE = [
+  { id: "1005150926000600", type: "מארז בקר", customer: "התעשייה האווירית", shipment: "SH-2036", wait: "17 דק׳",
+    items: [
+      { suffix: "01", type: "בקר ראשי", serial: "65540", sku: "PCB-4400-A", state: "done", arrived: true, station: "סגירת מארז" },
+      { suffix: "02", type: "מחבר", serial: "65541", sku: "745781-4", state: "done", arrived: true, station: "סגירת מארז" },
+      { suffix: "03", type: "כבל", serial: "65542", sku: "CB-1200", state: "done", arrived: true, station: "סגירת מארז" },
+      { suffix: "04", type: "ספק כוח", serial: "65543", sku: "PS-24-5A", state: "done", arrived: false, station: "מחקר" },
+    ] },
+  { id: "1005150926000900", type: "מארז טלפון", customer: "אלביט", shipment: "SH-2038", wait: "34 דק׳",
+    items: [
+      { suffix: "01", type: "טלפון", serial: "77950", sku: "PH-12", state: "done", arrived: true, station: "סגירת מארז" },
+      { suffix: "02", type: "מטען", serial: "77951", sku: "PS-20W", state: "done", arrived: true, station: "סגירת מארז" },
+    ] },
+];
+
+const BLOCKED_PKG = {
+  id: "1005150926000400", type: "מארז מחשב HP",
+  items: [
+    { suffix: "02", type: "מקלדת", station: "חשמל A · שלב 2 מתוך 3" },
+    { suffix: "03", type: "מטען", station: "מחקר · נכנס ב-11:42" },
+  ],
+};
+
+const OPEN_STEPS = [
+  { key: "scan", label: "סריקת מק״ט המארז", note: "מדבקת הקופסה" },
+  { key: "boxPhoto", label: "צילום הקופסה", note: "3 זוויות + תקינות" },
+  { key: "items", label: "פריטים במארז", note: "צילום ושקילה לכל פריט" },
+  { key: "count", label: "ספירה", note: "הוזן מול רשום" },
+  { key: "labels", label: "מדבקות", note: "קופסה + פריטים" },
+  { key: "done", label: "סיום", note: "" },
+];
+
+const CLOSE_STEPS = [
+  { key: "scan", label: "סריקת מק״ט המארז", note: "מדבקת הקופסה" },
+  { key: "arrival", label: "פריטים ואריזה", note: "מצב הגעה + נארז" },
+  { key: "packOk", label: "תקינות האריזה", note: "אישור סופי" },
+  { key: "done", label: "סיום", note: "" },
+];
+
+const ITEM_PHASES = ["photo", "weigh"];
+const PKGS = [
+  { id: "1005150926000300", type: "מארז בקר", customer: "רפאל", shipment: "SH-2041", stationId: 0, wait: "12 דק׳",
+    items: [
+      { suffix: "01", type: "בקר ראשי", serial: "88312", sku: "PCB-4400-A", ref: 460, state: "test", station: "עמדה חשמלית A", arrived: true, itemId: 10421 },
+      { suffix: "02", type: "מחבר", serial: "90011", sku: "745781-4", ref: 40, state: "queue", station: "עמדה חשמלית A", arrived: true, itemId: 10422 },
+      { suffix: "03", type: "ספק כוח", serial: "77210", sku: "PS-24-5A", ref: 980, state: "queue", station: "עמדה חשמלית A", arrived: true, itemId: 10423 },
+    ] },
+  { id: "1005150926000500", type: "מארז מחשב משוריין", customer: "רפאל", shipment: "SH-2044", stationId: 51, wait: "9 דק׳",
+    items: [
+      { suffix: "01", type: "מחשב תעשייתי", serial: "IPC-77120", sku: "RGD-PC-4U", ref: 6400, state: "new", station: "פתיחת מארז", arrived: true, itemId: 10500 },
+      { suffix: "02", type: "יחידת תקשורת", serial: "COM-33410", sku: "FLD-COM-2", ref: 820, state: "new", station: "פתיחת מארז", arrived: true, itemId: 10501 },
+    ] },
+  { id: "1005150926000800", type: "מארז טלפון", customer: "אלביט", shipment: "SH-2038", stationId: 51, wait: "41 דק׳",
+    items: [
+      { suffix: "01", type: "טלפון", serial: "—", sku: "PH-12", ref: 190, state: "new", station: "פתיחת מארז", arrived: true },
+      { suffix: "02", type: "מטען", serial: "—", sku: "PS-20W", ref: 120, state: "new", station: "פתיחת מארז", arrived: true },
+      { suffix: "03", type: "כבל נתונים", serial: "—", sku: "CB-USBC", ref: 60, state: "new", station: "פתיחת מארז", arrived: true },
+    ] },
+  { id: "1005150926000600", type: "מארז בקר", customer: "התעשייה האווירית", shipment: "SH-2036", stationId: 61, wait: "17 דק׳",
+    items: [
+      { suffix: "01", type: "בקר ראשי", serial: "65540", sku: "PCB-4400-A", ref: 460, state: "done", station: "סגירת מארז", arrived: true },
+      { suffix: "02", type: "מחבר", serial: "65541", sku: "745781-4", ref: 40, state: "done", station: "סגירת מארז", arrived: true },
+      { suffix: "03", type: "כבל", serial: "65542", sku: "CB-1200", ref: 210, state: "done", station: "סגירת מארז", arrived: true },
+      { suffix: "04", type: "ספק כוח", serial: "65543", sku: "PS-24-5A", ref: 980, state: "done", station: "מעבדת מחקר", arrived: false },
+    ] },
+  { id: "1005150926000900", type: "מארז טלפון", customer: "אלביט", shipment: "SH-2038", stationId: 61, wait: "34 דק׳",
+    items: [
+      { suffix: "01", type: "טלפון", serial: "77950", sku: "PH-12", ref: 190, state: "done", station: "סגירת מארז", arrived: true },
+      { suffix: "02", type: "מטען", serial: "77951", sku: "PS-20W", ref: 120, state: "done", station: "סגירת מארז", arrived: true },
+    ] },
+  { id: "1005150926001000", type: "מארז חיישנים", customer: "התעשייה האווירית", shipment: "SH-2039", stationId: 0, wait: "—",
+    items: [
+      { suffix: "01", type: "חיישן קרבה", serial: "65540", sku: "SN-PRX-08", ref: 120, state: "test", station: "עמדה חשמלית A", arrived: true, itemId: 10418 },
+      { suffix: "02", type: "כרטיס ספק משני", serial: "55012", sku: "PCB-2210-C", ref: 380, state: "done", station: "עמדה חשמלית A", arrived: true, itemId: 10410 },
+    ] },
+  { id: "1005150926001100", type: "מארז מבנה", customer: "אלביט", shipment: "SH-2040", stationId: 0, wait: "—",
+    items: [
+      { suffix: "01", type: "כבל הזנה", serial: "44120", sku: "CBL-220-X", ref: 640, state: "queue", station: "עמדה חשמלית B", arrived: true, itemId: 10391 },
+      { suffix: "02", type: "מארז אלומיניום", serial: "33019", sku: "HSG-1100", ref: 2400, state: "test", station: "עמדה ויזואלית 1", arrived: true, itemId: 10377 },
+    ] },
+];
+
+const WAITING_PKG = {
+  id: "1005150926000400", type: "מארז מחשב HP",
+  items: [
+    { suffix: "02", type: "מקלדת", station: "עמדה חשמלית A · שלב 2 מתוך 3" },
+    { suffix: "03", type: "מטען", station: "מעבדת מחקר · נכנס ב-11:42" },
+  ],
+};
+
+class Component extends DCLogic {
+  mountTs = Date.now();
+
+  stationTypes = [
+    { id: 1, name: "בדיקה חשמלית" },
+    { id: 2, name: "בדיקה ויזואלית" },
+    { id: 3, name: "בדיקת מתח גבוה" },
+    { id: 4, name: "מחקר ופיתוח" },
+    { id: 5, name: "פתיחת מארז" },
+    { id: 6, name: "סגירת מארז" },
+  ];
+
+  // reference catalog for accompanying items (weights in grams, per manufacturer spec)
+  accessoryCatalog = [
+    { type: "מקלדת", refWeight: 780 },
+    { type: "עכבר", refWeight: 95 },
+    { type: "כבל חשמל", refWeight: 210 },
+    { type: "מטען", refWeight: 340 },
+    { type: "אנטנה", refWeight: 60 },
+    { type: "אחר", refWeight: null },
+  ];
+  weightTolerancePct = 5; // standard deviation ±5%
+  photoShots = ["מבט קדמי", "מדבקת מק״ט", "מבט אחורי"];
+
+  stationsAll = [
+    { id: 11, typeId: 1, name: "עמדה חשמלית A" },
+    { id: 12, typeId: 1, name: "עמדה חשמלית B" },
+    { id: 21, typeId: 2, name: "עמדה ויזואלית 1" },
+    { id: 51, typeId: 5, name: "עמדת פתיחת מארז 1" },
+    { id: 61, typeId: 6, name: "עמדת סגירת מארז 1" },
+    { id: 31, typeId: 3, name: "מתח גבוה — תא 1" },
+    { id: 41, typeId: 4, name: "מעבדת מחקר" },
+  ];
+
+  workers = [
+    { id: 1, name: "דנה כהן" },
+    { id: 2, name: "יוסי לוי" },
+    { id: 3, name: "מרים אבני" },
+    { id: 4, name: "אחמד נסר" },
+  ];
+
+  // past test logs per station (would come from /api/testing/station-history)
+  stationHist = {
+    11: [
+      { logId: 1, itemId: 10410, step: 4, serial: "55012", makat: "PCB-2210-C", type: "מעגל מודפס (PCB)", queue: "26/05 13:40", procStart: "26/05 13:55", procEnd: "26/05 14:22", worker: "דנה כהן", dur: "00:27:00" },
+      { logId: 2, itemId: 10421, step: 2, serial: "88312", makat: "PCB-4400-A", type: "מעגל מודפס (PCB)", queue: "26/05 14:05", procStart: "26/05 14:12", procEnd: "26/05 14:30", worker: "יוסי לוי", dur: "00:18:00" },
+      { logId: 3, itemId: 10418, step: 2, serial: "65540", makat: "SN-PRX-08", type: "חיישן", queue: "25/05 09:02", procStart: "25/05 09:18", procEnd: "25/05 09:41", worker: "מרים אבני", dur: "00:23:00" },
+      { logId: 4, itemId: 10423, step: 3, serial: "77210", makat: "PS-24-5A", type: "ספק כוח", queue: "25/05 08:30", procStart: "25/05 08:44", procEnd: "25/05 09:05", worker: "דנה כהן", dur: "00:21:00" },
+    ],
+    12: [
+      { logId: 5, itemId: 10391, step: 1, serial: "44120", makat: "CBL-220-X", type: "כבל", queue: "24/05 10:10", procStart: "24/05 10:20", procEnd: "24/05 10:38", worker: "אחמד נסר", dur: "00:18:00" },
+    ],
+    21: [
+      { logId: 6, itemId: 10377, step: 1, serial: "33019", makat: "HSG-1100", type: "מארז", queue: "23/05 15:00", procStart: "23/05 15:12", procEnd: "23/05 15:39", worker: "יוסי לוי", dur: "00:27:00" },
+    ],
+  };
+
+  state = {
+    selType: null,
+    typeText: "",
+    selStation: null,
+    stationText: "",
+    openCombo: null,
+    worker: "",
+    workerText: "",
+    allStationText: "",
+    dockHover: false,
+    barCompact: false,
+    filter: "",
+    highlightedId: null,
+    now: this.mountTs,
+    scanOpen: false,
+    scanText: "",
+    scanError: "",
+    testHistoryOpen: false,
+    reportOpen: false,
+    reportItemId: null,
+    reportResult: "",
+    reportNote: "",
+    wizard: null,
+    pkgWiz: null,
+    pkgDecide: null,
+    pkgExpanded: null,
+    items: [
+      { id: 10421, stationId: 11, model: "כרטיס בקר ראשי", serial: "88312", sku: "PCB-4400-A", manufacturer: "Elbit Systems", customer: "רפאל", step: 2, status: "test", startedAt: this.mountTs - 734 * 1000 },
+      { id: 10422, stationId: 11, model: "מחבר D-Sub 9 פינים", serial: "90011", sku: "745781-4", manufacturer: "TE Connectivity", customer: "רפאל", step: 1, status: "queue", startedAt: this.mountTs - 1820 * 1000 },
+      { id: 10423, stationId: 11, model: "ספק כוח 24V 5A", serial: "77210", sku: "PS-24-5A", manufacturer: "Mean Well", customer: "אלביט", step: 3, status: "queue", startedAt: this.mountTs - 240 * 1000 },
+      { id: 10418, stationId: 11, model: "חיישן קרבה אינדוקטיבי", serial: "65540", sku: "SN-PRX-08", manufacturer: "Omron", customer: "התעשייה האווירית", step: 2, status: "test", startedAt: this.mountTs - 120 * 1000 },
+      { id: 10410, stationId: 11, model: "כרטיס ספק משני", serial: "55012", sku: "PCB-2210-C", manufacturer: "Elbit Systems", customer: "רפאל", step: 4, status: "done", startedAt: this.mountTs },
+      { id: 10391, stationId: 12, model: "כבל הזנה ראשי", serial: "44120", sku: "CBL-220-X", manufacturer: "Lapp", customer: "אלביט", step: 1, status: "queue", startedAt: this.mountTs - 600 * 1000 },
+      { id: 10377, stationId: 21, model: "מארז אלומיניום", serial: "33019", sku: "HSG-1100", manufacturer: "Hammond", customer: "רפאל", step: 1, status: "test", startedAt: this.mountTs - 320 * 1000 },
+      { id: 10500, stationId: 51, model: "מחשב תעשייתי משוריין", serial: "IPC-77120", sku: "RGD-PC-4U", manufacturer: "Getac", customer: "רפאל", step: 1, status: "queue", hasRU: true, startedAt: this.mountTs - 90 * 1000 },
+      { id: 10501, stationId: 51, model: "יחידת תקשורת שדה", serial: "COM-33410", sku: "FLD-COM-2", manufacturer: "Elbit Systems", customer: "אלביט", step: 1, status: "queue", hasRU: false, startedAt: this.mountTs - 30 * 1000 },
+    ],
+  };
+
+  componentDidMount() {
+    this.timer = setInterval(() => this.setState({ now: Date.now() }), 1000);
+    this.applyPopupPreview();
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.popupPreview !== this.props.popupPreview) this.applyPopupPreview();
+  }
+
+  // Lets the popups be opened straight from the Tweaks panel, without driving
+  // the station combobox by hand.
+  applyPopupPreview() {
+    const pv = this.props.popupPreview || "אשף פתיחת מארז";
+    if (pv === "ללא") return this.setState({ pkgWiz: null, pkgDecide: null });
+    const openPkg = PKGS.find(p => p.stationId === 51);
+    const closePkg = PKGS.find(p => p.stationId === 61);
+    const base = { worker: "1", workerText: "דנה כהן", pkgDecide: null };
+    if (pv === "אשף פתיחת מארז") {
+      this.setState({ ...base, selType: 5, selStation: 51, typeText: "פתיחת מארז", stationText: "עמדת פתיחת מארז 1", allStationText: "עמדת פתיחת מארז 1" });
+      this.openWiz("open", openPkg)();
+    } else if (pv === "אשף סגירת מארז") {
+      this.setState({ ...base, selType: 6, selStation: 61, typeText: "סגירת מארז", stationText: "עמדת סגירת מארז 1", allStationText: "עמדת סגירת מארז 1" });
+      this.openWiz("close", closePkg)();
+      setTimeout(() => this.patchWiz({ step: "arrival" }), 0);
+    } else if (pv === "החלטה על פריט שלא הגיע") {
+      this.setState({ ...base, selType: 6, selStation: 61, typeText: "סגירת מארז", stationText: "עמדת סגירת מארז 1", allStationText: "עמדת סגירת מארז 1" });
+      this.openWiz("close", closePkg)();
+      const idx = closePkg.items.findIndex(i => !i.arrived);
+      setTimeout(() => {
+        this.patchWiz({ step: "arrival" });
+        this.setState({ pkgDecide: { index: idx, item: closePkg.items[idx] } });
+      }, 0);
+    } else if (pv === "תור עמדת פתיחה") {
+      this.setState({ ...base, selType: 5, selStation: 51, typeText: "פתיחת מארז", stationText: "עמדת פתיחת מארז 1", allStationText: "עמדת פתיחת מארז 1", pkgWiz: null });
+    } else if (pv === "תור עמדה רגילה") {
+      this.setState({ ...base, selType: 1, selStation: 11, typeText: "בדיקה חשמלית", stationText: "עמדה חשמלית A", allStationText: "עמדה חשמלית A", pkgWiz: null });
+    }
+  }
+  componentWillUnmount() {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  fmt(sec) {
+    if (sec < 0) sec = 0;
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    const p = (n) => String(n).padStart(2, "0");
+    return p(h) + ":" + p(m) + ":" + p(s);
+  }
+
+  typeName(id) { const t = this.stationTypes.find((x) => x.id === id); return t ? t.name : ""; }
+  stationName(id) { const s = this.stationsAll.find((x) => x.id === id); return s ? s.name : ""; }
+
+  // type combobox
+  pickType = (id) => this.setState({ selType: id, typeText: this.typeName(id), openCombo: null, selStation: null, stationText: "", highlightedId: null, barCompact: false });
+  setTypeText = (e) => this.setState({ typeText: e.target.value, openCombo: "type" });
+  typeFocus = () => this.setState({ openCombo: "type" });
+  blurClose = (key) => setTimeout(() => this.setState((s) => ({ openCombo: s.openCombo === key ? null : s.openCombo })), 160);
+  typeBlur = () => this.blurClose("type");
+
+  // station combobox
+  pickStation = (id) => this.setState({ selStation: id, stationText: this.stationName(id), openCombo: null, filter: "", barCompact: true });
+  expandBar = () => this.setState({ barCompact: false });
+  collapseBar = () => this.setState({ barCompact: true });
+  dockEnter = () => this.setState({ dockHover: true });
+  dockLeave = () => this.setState({ dockHover: false });
+  pickAllStation = (id) => { const st = this.stationsAll.find((x) => x.id === id); if (!st) return; this.setState({ selType: st.typeId, selStation: id, typeText: this.typeName(st.typeId), stationText: st.name, allStationText: st.name, openCombo: null, filter: "", dockHover: false }); };
+  setAllStationText = (e) => this.setState({ allStationText: e.target.value, openCombo: "allstation" });
+  allStationFocus = () => this.setState({ openCombo: "allstation" });
+  allStationBlur = () => this.blurClose("allstation");
+  setStationText = (e) => this.setState({ stationText: e.target.value, openCombo: "station" });
+  stationFocus = () => { if (this.state.selType) this.setState({ openCombo: "station" }); };
+  stationBlur = () => this.blurClose("station");
+
+  // worker combobox
+  workerName(id) { const w = this.workers.find((x) => String(x.id) === String(id)); return w ? w.name : ""; }
+  pickWorker = (id) => this.setState({ worker: String(id), workerText: this.workerName(id), openCombo: null });
+  setWorkerText = (e) => { const v = e.target.value; this.setState({ workerText: v, openCombo: "worker", ...(v.trim() === "" ? { worker: "" } : {}) }); };
+  workerFocus = () => this.setState({ openCombo: "worker" });
+  workerBlur = () => this.blurClose("worker");
+  tick() { return React.createElement("svg", { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" }, React.createElement("path", { d: "M20 6 9 17l-5-5" })); }
+  setFilter = (e) => this.setState({ filter: e.target.value });
+  stop = (e) => e.stopPropagation();
+
+  startTest = (id) => {
+    const it = this.state.items.find((x) => x.id === id);
+    const st = it && this.stationsAll.find((x) => x.id === it.stationId);
+    if (st && st.typeId === 5) return this.openWizard(id);
+    this.setState((s) => ({ items: s.items.map((it) => (it.id === id ? { ...it, status: "test", startedAt: Date.now() } : it)) }));
+  };
+
+  // ===== קליטה וצילום guided wizard =====
+  // phases: id → sku → ru → pkgPhoto → count → accessories → ruAccess → selectItem → (per-item: pkg → weigh → product) → transfer → done
+  wizPhases = ["sku", "ru", "pkgPhoto", "count", "accessories", "ruAccess", "selectItem", "transfer", "done"];
+
+  freshAccessory = () => ({ type: "", sku: "", pkgPhotos: [false, false, false], pkgIdx: 0, pkgOk: "", pkgNote: "", measWeight: "", weightAck: false, prodPhotos: [false, false, false], prodIdx: 0, prodOk: "", prodNote: "", done: false });
+
+  openWizard = (id) => {
+    const it = this.state.items.find((x) => x.id === id);
+    this.setState({ wizard: {
+      itemId: id,
+      phase: "sku",
+      idScan: "",
+      skuScan: "",
+      hasRU: !!(it && it.hasRU),
+      ruAck: false,
+      pkgPhotos: [false, false, false],
+      pkgIdx: 0,
+      pkgOk: "",
+      pkgNote: "",
+      itemCount: "",
+      needLabels: "",
+      labelQty: "",
+      accessories: [this.freshAccessory()],
+      itemIdx: null,
+      itemPhase: "",
+    } });
+  };
+  closeWizard = () => this.setState({ wizard: null });
+  setWiz = (patch) => this.setState((s) => ({ wizard: { ...s.wizard, ...patch } }));
+  wizInput = (key) => (e) => this.setWiz({ [key]: e.target.value });
+  wizPhaseIdx = () => this.wizPhases.indexOf(this.state.wizard.phase);
+  wizGoto = (phase) => this.setWiz({ phase });
+  wizNext = () => { const w = this.state.wizard; const i = this.wizPhases.indexOf(w.phase); if (i < this.wizPhases.length - 1) this.setWiz({ phase: this.wizPhases[i + 1] }); };
+  wizBack = () => { const w = this.state.wizard; if (w.itemIdx != null) return this.setWiz({ itemIdx: null, itemPhase: "" }); const i = this.wizPhases.indexOf(w.phase); if (i > 0) this.setWiz({ phase: this.wizPhases[i - 1] }); };
+
+  // package / product photo capture (focused single-shot + filmstrip)
+  wizPkgPick = (i) => this.setWiz({ pkgIdx: i });
+  wizPkgCapture = () => this.setState((s) => { const w = s.wizard; const arr = w.pkgPhotos.slice(); arr[w.pkgIdx] = true; return { wizard: { ...w, pkgPhotos: arr } }; });
+  accPick = (idxKey, i) => this.accSet(this.state.wizard.itemIdx, { [idxKey]: i });
+  accPhotoCapture = (key, idxKey) => this.setState((s) => { const ii = s.wizard.itemIdx; const acc = s.wizard.accessories.map((a, i) => { if (i !== ii) return a; const arr = a[key].slice(); arr[a[idxKey]] = true; return { ...a, [key]: arr }; }); return { wizard: { ...s.wizard, accessories: acc } }; });
+
+  // accessories editing
+  accSet = (idx, patch) => this.setState((s) => { const acc = s.wizard.accessories.map((a, i) => (i === idx ? { ...a, ...patch } : a)); return { wizard: { ...s.wizard, accessories: acc } }; });
+  accAdd = () => this.setState((s) => ({ wizard: { ...s.wizard, accessories: [...s.wizard.accessories, this.freshAccessory()] } }));
+  accRemove = (idx) => this.setState((s) => ({ wizard: { ...s.wizard, accessories: s.wizard.accessories.filter((_, i) => i !== idx) } }));
+  accCapture = (idx, key, pi) => this.setState((s) => { const acc = s.wizard.accessories.map((a, i) => { if (i !== idx) return a; const arr = a[key].slice(); arr[pi] = !arr[pi]; return { ...a, [key]: arr }; }); return { wizard: { ...s.wizard, accessories: acc } }; });
+
+  // per-item test loop
+  accStartTest = (idx) => this.setWiz({ itemIdx: idx, itemPhase: "pkg" });
+  accItemNext = () => { const w = this.state.wizard; const order = ["pkg", "weigh", "product"]; const i = order.indexOf(w.itemPhase); if (i < order.length - 1) return this.setWiz({ itemPhase: order[i + 1] }); this.accSet(w.itemIdx, { done: true }); this.setWiz({ itemIdx: null, itemPhase: "" }); };
+  accItemBack = () => { const w = this.state.wizard; const order = ["pkg", "weigh", "product"]; const i = order.indexOf(w.itemPhase); if (i > 0) return this.setWiz({ itemPhase: order[i - 1] }); this.setWiz({ itemIdx: null, itemPhase: "" }); };
+
+  wizFinish = () => {
+    const id = this.state.wizard.itemId;
+    this.setState((s) => ({ items: s.items.map((it) => (it.id === id ? { ...it, status: "done" } : it)), wizard: null }));
+  };
+
+  openReport = (id) => this.setState({ reportOpen: true, reportItemId: id, reportResult: "", reportNote: "" });
+  closeReport = () => this.setState({ reportOpen: false });
+  pickPass = () => this.setState({ reportResult: "pass" });
+  pickFail = () => this.setState({ reportResult: "fail" });
+  setReportNote = (e) => this.setState({ reportNote: e.target.value });
+  submitReport = () => {
+    if (!this.state.reportResult) return;
+    this.setState((s) => ({ items: s.items.map((it) => (it.id === s.reportItemId ? { ...it, status: "done" } : it)), reportOpen: false }));
+  };
+
+  openTestHistory = () => this.setState({ testHistoryOpen: true });
+  closeTestHistory = () => this.setState({ testHistoryOpen: false });
+  openScan = () => this.setState({ scanOpen: true, scanText: "", scanError: "" });
+  closeScan = () => this.setState({ scanOpen: false });
+  setScanText = (e) => this.setState({ scanText: e.target.value, scanError: "" });
+  locateScan = () => {
+    const q = this.state.scanText.trim();
+    if (!q) return this.setState({ scanError: "הקלד מספר פריט או סריאלי." });
+    const sid = this.state.selStation;
+    const pool = this.state.items.filter((it) => it.stationId === sid);
+    const match = pool.find((it) => String(it.id).includes(q) || String(it.serial).includes(q));
+    if (!match) {
+      // maybe item is in another station — switch to it
+      const anywhere = this.state.items.find((it) => String(it.id).includes(q) || String(it.serial).includes(q));
+      if (anywhere) {
+        return this.setState({ selType: this.stationsAll.find((s) => s.id === anywhere.stationId).typeId, typeText: this.typeName(this.stationsAll.find((s) => s.id === anywhere.stationId).typeId), selStation: anywhere.stationId, stationText: this.stationName(anywhere.stationId), highlightedId: anywhere.id, scanOpen: false, filter: "", barCompact: true });
+      }
+      return this.setState({ scanError: "לא נמצא פריט תואם." });
+    }
+    this.setState({ highlightedId: match.id, scanOpen: false, filter: "", barCompact: true });
+  };
+
+  fmtId(id) {
+    return { head: id.slice(0, 14).replace(/(\d{4})(?=\d)/g, "$1 "), suffix: id.slice(14) };
+  }
+
+  shortId(id) {
+    return "…" + id.slice(10, 14) + " " + id.slice(14);
+  }
+
+  openWiz(kind, pkg) {
+    const steps = kind === "open" ? OPEN_STEPS : CLOSE_STEPS;
+    return () => this.setState({
+      pkgWiz: {
+        kind, pkg, step: steps[0].key, scan: "",
+        photos: [false, false, false], pkgOk: "",
+        itemIdx: null, itemPhase: "photo",
+        itemState: pkg.items.map(() => ({ photos: [false, false, false], ok: "", weight: "", done: false })),
+        packed: pkg.items.map(() => false),
+        decisions: pkg.items.map(() => null),
+        checks: [false, false, false],
+        labels: [true, true, true, true],
+      },
+    });
+  }
+
+  patchWiz(patch) {
+    this.setState(s => ({ pkgWiz: { ...s.pkgWiz, ...patch } }));
+  }
+
+  patchItem(idx, patch) {
+    this.setState(s => ({
+      pkgWiz: { ...s.pkgWiz, itemState: s.pkgWiz.itemState.map((x, i) => (i === idx ? { ...x, ...patch } : x)) },
+    }));
+  }
+
+  photoCards(shot, onShoot, labels) {
+    return labels.map((label, i) => ({
+      label,
+      state: shot[i] ? "צולם" : "צלם",
+      shot: shot[i],
+      notShot: !shot[i],
+      border: shot[i] ? "rgba(31,138,91,0.3)" : "#e0e0e0",
+      bg: shot[i] ? "rgba(31,138,91,0.07)" : "#fff",
+      tone: shot[i] ? GREEN : BLUE,
+      onShoot: () => onShoot(i),
+    }));
+  }
+
+  choicePair(value, onPick) {
+    return [
+      { key: "pass", label: "תקין" },
+      { key: "fail", label: "לא תקין" },
+    ].map(c => {
+      const on = value === c.key;
+      const tone = c.key === "pass" ? GREEN : RED;
+      return {
+        label: c.label,
+        border: on ? tone : "#e0e0e0",
+        bg: on ? (c.key === "pass" ? "rgba(31,138,91,0.07)" : "rgba(191,53,53,0.06)") : "#fff",
+        tone: on ? tone : "#1d1d1f",
+        onPick: () => onPick(c.key),
+      };
+    });
+  }
+
+  bars(n, seed) {
+    return Array.from({ length: n }, (_, i) => ({ w: ((i + seed) % 3) + 1 }));
+  }
+
+  pkgWizVals() {
+    const w = this.state.pkgWiz;
+    if (!w) return { pkgWizOpen: false, pw: {} };
+    const isOpen = w.kind === "open";
+    const steps = isOpen ? OPEN_STEPS : CLOSE_STEPS;
+    const stepIdx = steps.findIndex(s => s.key === w.step);
+    const pkg = w.pkg;
+    const { head, suffix } = this.fmtId(pkg.id);
+    const inItemFlow = w.itemIdx !== null;
+    const item = inItemFlow ? pkg.items[w.itemIdx] : null;
+    const itemSt = inItemFlow ? w.itemState[w.itemIdx] : null;
+    const doneItems = w.itemState.filter(x => x.done).length;
+    const station = isOpen ? STATIONS.open : STATIONS.close;
+
+    let stepTitle = steps[stepIdx].label;
+    let stepSubtitle = "";
+    let systemMsg = "";
+    const flags = { isScan: false, isPhoto: false, isItems: false, isWeigh: false, isCount: false, isArrival: false, isPackOk: false, isLabels: false, isDone: false };
+
+    if (inItemFlow) {
+      if (w.itemPhase === "photo") {
+        flags.isPhoto = true;
+        stepTitle = `${item.type} · צילום`;
+        stepSubtitle = `פריט ${item.suffix} · ${item.sku}`;
+        systemMsg = "נא לצלם את הפריט בדיוק לפי תמונות הייחוס.";
+      } else {
+        flags.isWeigh = true;
+        stepTitle = `${item.type} · שקילה`;
+        stepSubtitle = `פריט ${item.suffix} · משקל ייחוס מהקטלוג`;
+        systemMsg = "נא לשקול את הפריט ולהזין את המשקל שנמדד.";
+      }
+    } else if (w.step === "scan") {
+      flags.isScan = true;
+      stepSubtitle = "סרוק את מדבקת הקופסה כדי לפתוח את המארז בעמדה.";
+      systemMsg = "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה.";
+    } else if (w.step === "boxPhoto") {
+      flags.isPhoto = true;
+      stepSubtitle = "שלוש זוויות של הקופסה, ואז קביעת תקינות.";
+      systemMsg = "נא לצלם את הקופסה בדיוק לפי תמונות הייחוס.";
+    } else if (w.step === "items") {
+      flags.isItems = true;
+      stepSubtitle = "כל פריט עובר צילום ושקילה. אפשר לעבוד בכל סדר.";
+    } else if (w.step === "count") {
+      flags.isCount = true;
+      stepSubtitle = "מה שנספר בעמדה מול מה שנרשם בקליטה ומול התבנית.";
+    } else if (w.step === "arrival") {
+      flags.isArrival = true;
+      stepSubtitle = "סמן כל פריט שנארז. פריט שלא הגיע דורש החלטה מפורשת.";
+    } else if (w.step === "packOk") {
+      flags.isPackOk = true;
+      stepSubtitle = "אישור סופי לפני סגירת המארז.";
+    } else if (w.step === "labels") {
+      flags.isLabels = true;
+      stepSubtitle = "בחר מה להדפיס. מדבקת הקופסה נדרשת תמיד.";
+    } else {
+      flags.isDone = true;
+    }
+
+    const measured = Number(itemSt ? itemSt.weight : 0);
+    const refW = item ? item.ref : 0;
+    const diff = measured - refW;
+    const diffPct = refW ? Math.abs(diff) / refW * 100 : 0;
+    const weighPass = diffPct <= 5;
+    const enteredCount = pkg.items.length;
+    const templateCount = isOpen && pkg.type === "מארז מחשב HP" ? 3 : pkg.items.length;
+    const countMismatch = enteredCount !== templateCount;
+    const packedAll = w.packed.every((p, i) => p || w.decisions[i] !== null);
+    const checksAll = w.checks.every(Boolean);
+
+    let nextLabel = "המשך";
+    let nextEnabled = true;
+    if (inItemFlow) {
+      nextLabel = w.itemPhase === "weigh" ? "סיום פריט" : "המשך";
+      nextEnabled = w.itemPhase === "photo" ? itemSt.ok !== "" : itemSt.weight !== "";
+    } else if (w.step === "scan") {
+      nextEnabled = w.scan.trim() !== "";
+    } else if (w.step === "boxPhoto") {
+      nextEnabled = w.pkgOk !== "";
+    } else if (w.step === "items") {
+      nextEnabled = doneItems === pkg.items.length;
+      nextLabel = nextEnabled ? "המשך לספירה" : `נותרו ${pkg.items.length - doneItems} פריטים`;
+    } else if (w.step === "arrival") {
+      nextEnabled = packedAll;
+      nextLabel = packedAll ? "המשך" : "נדרשת החלטה לכל פריט";
+    } else if (w.step === "packOk") {
+      nextEnabled = checksAll;
+      nextLabel = "סגור מארז";
+    } else if (w.step === "labels") {
+      nextLabel = "הדפס וסיים";
+    } else if (w.step === "done") {
+      nextLabel = isOpen ? "חזרה לתור" : "סיום וחזרה לתור";
+    }
+
+    return {
+      pkgWizOpen: true,
+      closePkgWiz: () => this.setState({ pkgWiz: null }),
+      pw: {
+        ...flags,
+        stationName: station.name,
+        stationCode: station.code,
+        title: isOpen ? "פתיחת מארז" : "סגירת מארז",
+        pkgType: pkg.type,
+        pkgMeta: `${pkg.customer} · משלוח ${pkg.shipment} · ${pkg.items.length} פריטים`,
+        idHead: head, idSuffix: suffix,
+        stepTitle, stepSubtitle,
+        stepCounter: inItemFlow ? `פריט ${w.itemIdx + 1} מתוך ${pkg.items.length}` : `שלב ${stepIdx + 1} מתוך ${steps.length}`,
+        hasSystemMsg: systemMsg !== "",
+        systemMsg,
+        steps: steps.map((s, i) => {
+          const active = s.key === w.step && !inItemFlow;
+          const past = i < stepIdx;
+          return {
+            label: s.label, note: s.note, badge: past ? "✓" : String(i + 1),
+            bg: active ? "#e6efff" : "transparent",
+            tone: active ? BLUE : "#1d1d1f",
+            dotBg: active ? BLUE : past ? "rgba(31,138,91,0.1)" : "#fff",
+            dotTone: active ? "#fff" : past ? GREEN : "#7a7a7a",
+            dotBorder: active ? BLUE : "#e0e0e0",
+            onClick: () => this.patchWiz({ step: s.key, itemIdx: null }),
+          };
+        }),
+        inItemFlow: w.step === "items" || inItemFlow,
+        itemProgress: `${doneItems}/${pkg.items.length}`,
+        itemStepper: pkg.items.map((it, i) => {
+          const st = w.itemState[i];
+          const active = w.itemIdx === i;
+          return {
+            type: it.type, badge: it.suffix,
+            stateLabel: st.done ? "הושלם" : active ? (w.itemPhase === "photo" ? "צילום" : "שקילה") : "ממתין",
+            bg: active ? "#e6efff" : "transparent",
+            tone: active ? BLUE : "#1d1d1f",
+            dotBg: st.done ? "rgba(31,138,91,0.1)" : active ? BLUE : "#fff",
+            dotTone: st.done ? GREEN : active ? "#fff" : "#7a7a7a",
+            dotBorder: active ? BLUE : "#e0e0e0",
+            onClick: () => this.patchWiz({ step: "items", itemIdx: i, itemPhase: "photo" }),
+          };
+        }),
+        scanValue: w.scan,
+        scanBorder: w.scan.trim() === "" ? "#e0e0e0" : "#0071e3",
+        scanMatched: w.scan.trim() !== "",
+        scanMatchText: `זוהה ${pkg.type} · ${pkg.items.length} פריטים · ${pkg.customer}`,
+        onScan: e => this.patchWiz({ scan: e.target.value }),
+        photos: inItemFlow
+          ? this.photoCards(itemSt.photos, i => this.patchItem(w.itemIdx, { photos: itemSt.photos.map((p, j) => (j === i ? !p : p)) }), ["איור 1", "איור 2", "איור 3"])
+          : this.photoCards(w.photos, i => this.patchWiz({ photos: w.photos.map((p, j) => (j === i ? !p : p)) }), ["קופסה · חזית", "קופסה · צד", "קופסה · פתוחה"]),
+        okChoices: inItemFlow
+          ? this.choicePair(itemSt.ok, v => this.patchItem(w.itemIdx, { ok: v }))
+          : this.choicePair(w.pkgOk, v => this.patchWiz({ pkgOk: v })),
+        items: pkg.items.map((it, i) => {
+          const st = w.itemState[i];
+          return {
+            suffix: it.suffix, type: it.type,
+            line: `${it.sku} · ${it.serial === "—" ? "ללא סריאלי" : it.serial} · ייחוס ${it.ref} גר׳`,
+            border: st.done ? "rgba(31,138,91,0.3)" : "#e0e0e0",
+            bg: st.done ? "rgba(31,138,91,0.04)" : "#fff",
+            chipBg: st.done ? "rgba(31,138,91,0.1)" : "#f5f5f7",
+            chipTone: st.done ? GREEN : "#7a7a7a",
+            stateLabel: st.done ? "צולם ונשקל" : "ממתין",
+            stateTone: st.done ? GREEN : "#7a7a7a",
+            btnLabel: st.done ? "פתח שוב" : "התחל",
+            btnBg: st.done ? "#fff" : BLUE,
+            btnTone: st.done ? "#1d1d1f" : "#fff",
+            btnBorder: st.done ? "1px solid #e0e0e0" : "0",
+            onStart: () => this.patchWiz({ itemIdx: i, itemPhase: "photo" }),
+          };
+        }),
+        onAddMissing: () => {},
+        refWeight: `${refW} גר׳`,
+        measWeight: itemSt ? itemSt.weight : "",
+        weighBorder: itemSt && itemSt.weight !== "" ? "#0071e3" : "#e0e0e0",
+        onWeigh: e => this.patchItem(w.itemIdx, { weight: e.target.value }),
+        hasWeighResult: !!(itemSt && itemSt.weight !== ""),
+        weighTitle: weighPass ? "משקל תקין" : "משקל לא תקין",
+        weighDetail: `סטייה ${diff >= 0 ? "+" : "−"}${Math.abs(diff)} גר׳ (${diffPct.toFixed(1)}% · סטייה תקנית ±5%)`,
+        weighTone: weighPass ? GREEN : RED,
+        weighBg: weighPass ? "rgba(31,138,91,0.07)" : "rgba(191,53,53,0.06)",
+        weighResBorder: weighPass ? "rgba(31,138,91,0.22)" : "rgba(191,53,53,0.25)",
+        counts: [
+          { value: String(enteredCount), label: "נספר בעמדה", tone: "#1d1d1f", border: "#e0e0e0", bg: "#fff" },
+          { value: String(pkg.items.length), label: "נרשם בקליטה", tone: "#1d1d1f", border: "#e0e0e0", bg: "#fff" },
+          { value: String(templateCount), label: "תכולת המארז (תבנית)", tone: countMismatch ? AMBER_INK : "#1d1d1f", border: countMismatch ? "#f0e2cc" : "#e0e0e0", bg: countMismatch ? "#fdf3e6" : "#fff" },
+        ],
+        countMismatch,
+        countMismatchTitle: `התבנית מצפה ל-${templateCount} פריטים, בעמדה נספרו ${enteredCount}`,
+        countMismatchNote: "הוסף את הפריט החסר, או המשך והפער יירשם על המארז ויופיע בעמוד המארז.",
+        arrivals: pkg.items.map((it, i) => {
+          const packed = w.packed[i];
+          const decision = w.decisions[i];
+          return {
+            suffix: it.suffix, type: it.type,
+            arrived: it.arrived, notArrived: !it.arrived,
+            arrivalText: it.arrived ? `הגיע לסגירה · ${it.serial}` : `לא הגיע · סיים את המסלול בעמדת ${it.station}`,
+            arrivalTone: it.arrived ? "#7a7a7a" : AMBER_INK,
+            bg: it.arrived ? "#fff" : "#fdf3e6",
+            chipBg: it.arrived ? "#f5f5f7" : "rgba(168,106,26,0.1)",
+            chipTone: it.arrived ? "#7a7a7a" : AMBER_INK,
+            tick: packed ? "✓" : "",
+            tickBg: packed ? BLUE : "#fff",
+            tickBorder: packed ? BLUE : "#d4d4dc",
+            boxBg: packed ? "#e6efff" : "#fff",
+            boxBorder: packed ? BLUE : "#e0e0e0",
+            boxTone: packed ? BLUE : "#1d1d1f",
+            onPacked: () => this.setState(s => ({ pkgWiz: { ...s.pkgWiz, packed: s.pkgWiz.packed.map((p, j) => (j === i ? !p : p)) } })),
+            decideLabel: decision === null ? "נדרשת החלטה" : decision === "packed" ? "נארז בכל זאת" : "חסר במארז",
+            decideBg: decision === null ? "#fff" : decision === "packed" ? "#e6efff" : "rgba(191,53,53,0.06)",
+            decideTone: decision === null ? AMBER_INK : decision === "packed" ? BLUE : RED,
+            decideBorder: decision === null ? "#f0e2cc" : decision === "packed" ? BLUE : "rgba(191,53,53,0.25)",
+            onDecide: () => this.setState({ pkgDecide: { index: i, item: it } }),
+          };
+        }),
+        arrivalBlocked: !packedAll,
+        arrivalBlockedNote: "אי אפשר לאשר תקינות אריזה לפני שכל פריט סומן כנארז או קיבל החלטה מפורשת.",
+        checks: [
+          "כל הפריטים שסומנו נמצאים בקופסה",
+          "האריזה סגורה ותקינה",
+          "מדבקת הקופסה קריאה",
+        ].map((label, i) => ({
+          label,
+          tick: w.checks[i] ? "✓" : "",
+          tickBg: w.checks[i] ? BLUE : "#fff",
+          tickBorder: w.checks[i] ? BLUE : "#d4d4dc",
+          border: w.checks[i] ? BLUE : "#e0e0e0",
+          bg: w.checks[i] ? "#f7fbff" : "#fff",
+          tone: w.checks[i] ? BLUE : "#1d1d1f",
+          onToggle: () => this.setState(s => ({ pkgWiz: { ...s.pkgWiz, checks: s.pkgWiz.checks.map((c, j) => (j === i ? !c : c)) } })),
+        })),
+        labelCards: [{ kind: "מדבקת קופסה", title: pkg.type, note: `${pkg.items.length} פריטים · ${pkg.customer}`, code: this.shortId(pkg.id) }]
+          .concat(pkg.items.slice(0, 3).map(it => ({
+            kind: "מדבקת פריט", title: it.type,
+            note: `פריט ${it.suffix} מתוך ${String(pkg.items.length).padStart(2, "0")}`,
+            code: this.shortId(pkg.id.slice(0, 14) + it.suffix),
+          })))
+          .map((l, i) => ({
+            ...l, bars: this.bars(22, i),
+            tick: w.labels[i] ? "✓" : "",
+            tickBg: w.labels[i] ? BLUE : "#fff",
+            tickBorder: w.labels[i] ? BLUE : "#d4d4dc",
+            border: w.labels[i] ? BLUE : "#e0e0e0",
+            bg: w.labels[i] ? "#f7fbff" : "#fff",
+            onToggle: () => this.setState(s => ({ pkgWiz: { ...s.pkgWiz, labels: s.pkgWiz.labels.map((x, j) => (j === i ? !x : x)) } })),
+          })),
+        doneTitle: isOpen ? "פתיחת המארז הושלמה" : "המארז נסגר",
+        doneText: isOpen
+          ? "כל פריט קיבל תוצאה וממשיך לעמדה הראשונה במסלול שלו. המארז ממתין לסגירה עד שכל פריטיו יחזרו."
+          : "המארז והפריטים שבו סומנו כנארזו. המארז עובר לסטטוס הושלם ומופיע במשלוח כמארז שסיים.",
+        doneMini: pkg.items.map(it => ({ color: isOpen ? BLUE : GREEN, title: `${it.suffix} · ${it.type}` })),
+        doneNote: isOpen ? `${pkg.items.length} פריטים נפתחו · ${pkg.type}` : `${pkg.items.length} פריטים נארזו · ${pkg.type}`,
+        footNote: inItemFlow ? "יציאה מהפריט שומרת את מה שהוזן" : "הכל נשמר בזמן אמת",
+        backTone: stepIdx === 0 && !inItemFlow ? "#9a9aa0" : "#1d1d1f",
+        nextLabel,
+        nextBg: nextEnabled ? BLUE : "#e0e0e0",
+        nextTone: nextEnabled ? "#fff" : "#9a9aa0",
+        nextCursor: nextEnabled ? "pointer" : "not-allowed",
+        nextOpacity: nextEnabled ? 1 : 1,
+        onBack: () => {
+          if (inItemFlow) {
+            if (w.itemPhase === "weigh") return this.patchWiz({ itemPhase: "photo" });
+            return this.patchWiz({ itemIdx: null });
+          }
+          if (stepIdx > 0) this.patchWiz({ step: steps[stepIdx - 1].key });
+        },
+        onNext: () => {
+          if (!nextEnabled) return;
+          if (inItemFlow) {
+            if (w.itemPhase === "photo") return this.patchWiz({ itemPhase: "weigh" });
+            this.patchItem(w.itemIdx, { done: true });
+            return this.patchWiz({ itemIdx: null });
+          }
+          if (w.step === "done") return this.setState({ pkgWiz: null });
+          this.patchWiz({ step: steps[stepIdx + 1].key });
+        },
+      },
+    };
+  }
+
+
+  pkgOf(itemId) {
+    return PKGS.find(p => p.items.some(i => i.itemId === itemId)) || null;
+  }
+
+  pkgTag(itemId) {
+    const p = this.pkgOf(itemId);
+    if (!p) return { hasPkg: false, noPkg: true, pkgOpen: false, pkgSiblings: [] };
+    const open = this.state.pkgExpanded === itemId;
+    const mine = p.items.find(i => i.itemId === itemId);
+    const fullId = this.fmtId(p.id.slice(0, 14) + mine.suffix);
+    return {
+      hasPkg: true,
+      noPkg: false,
+      itemIdHead: fullId.head,
+      itemIdSuffix: fullId.suffix,
+      pkgItemType: mine.type,
+      pkgShort: this.shortId(p.id),
+      pkgType: p.type,
+      pkgSiblingLabel: open ? "סגור" : "פריטים באותו מארז",
+      pkgOpen: open,
+      onTogglePkg: () => this.setState(st => ({ pkgExpanded: st.pkgExpanded === itemId ? null : itemId })),
+      pkgSiblings: p.items.map(i => ({
+        suffix: i.suffix,
+        type: i.type,
+        line: i.sku + " · " + (i.serial === "—" ? "ללא סריאלי" : i.serial),
+        stateLabel: i === mine ? "הפריט הזה" : STATES[i.state].label,
+        color: STATES[i.state].color,
+        bg: i === mine ? "#f7fbff" : "#fff",
+        chipBg: i === mine ? "#e6efff" : "#f5f5f7",
+        chipTone: i === mine ? "#0066cc" : "#7a7a7a",
+      })),
+    };
+  }
+
+  pkgStationVals() {
+    const s = this.state;
+    const st = this.stationsAll.find(x => x.id === s.selStation);
+    const typeId = st ? st.typeId : null;
+    const isPkg = typeId === 5 || typeId === 6;
+    const kind = typeId === 6 ? "close" : "open";
+    const list = isPkg ? PKGS.filter(p => p.stationId === s.selStation) : [];
+    const d = s.pkgDecide;
+    return {
+      isPkgStation: !!st && isPkg,
+      isItemStation: !!st && !isPkg,
+      pkgWaitingShown: !!st && typeId === 6,
+      pkgWaitingTitle: WAITING_PKG.type + " " + this.shortId(WAITING_PKG.id) + " · ממתין לפריטי המארז",
+      pkgWaitingItems: WAITING_PKG.items,
+      pkgEmpty: !!st && isPkg && list.length === 0,
+      pkgCards: list.map(p => {
+        const id = this.fmtId(p.id);
+        const expanded = s.pkgExpanded === p.id;
+        const arrived = p.items.filter(x => x.arrived).length;
+        return {
+          idHead: id.head, idSuffix: id.suffix,
+          type: p.type,
+          meta: p.customer + " · משלוח " + p.shipment,
+          wait: p.wait,
+          mini: p.items.map(it => ({
+            color: kind === "open" ? "#d4d4dc" : it.arrived ? "#1f8a5b" : "#d97706",
+            title: it.suffix + " · " + it.type + " · " + (kind === "open" ? "טרם נפתח" : it.arrived ? "הגיע לסגירה" : "לא הגיע · " + it.station),
+          })),
+          itemNote: kind === "open" ? p.items.length + " פריטים בתכולה" : arrived + "/" + p.items.length + " הגיעו לסגירה",
+          siblingLabel: expanded ? "סגור" : "פריטים במארז",
+          open: expanded,
+          items: p.items.map(it => ({
+            suffix: it.suffix, type: it.type,
+            line: it.sku + " · " + (it.serial === "—" ? "ללא סריאלי" : it.serial),
+            stateLabel: kind === "open" ? "טרם נפתח" : it.arrived ? "הגיע" : it.station,
+          })),
+          cta: kind === "open" ? "התחל פתיחת מארז" : "התחל סגירת מארז",
+          onToggle: () => this.setState(x => ({ pkgExpanded: x.pkgExpanded === p.id ? null : p.id })),
+          onStart: this.openWiz(kind, p),
+        };
+      }),
+      pkgDecideOpen: !!d,
+      closePkgDecide: () => this.setState({ pkgDecide: null }),
+      pkgDecide: d ? {
+        text: "פריט " + d.item.suffix + " · " + d.item.type + " סיים את המסלול בעמדת " + d.item.station + " ולא הגיע לעמדת הסגירה. בחר מה נעשה איתו.",
+        choices: [
+          { label: "נארז בכל זאת", note: "הפריט הובא לעמדה ידנית ונארז בקופסה." },
+          { label: "חסר במארז", note: "המארז נסגר בלי הפריט. החוסר יירשם על המארז ועל הפריט." },
+        ].map(c => ({ label: c.label, note: c.note, border: "#e0e0e0", bg: "#fff", tone: "#1d1d1f", dotBorder: "#d4d4dc", dotBg: "#fff", onPick: () => {} })),
+        onSave: () => this.setState(x => ({ pkgDecide: null, pkgWiz: { ...x.pkgWiz, decisions: x.pkgWiz.decisions.map((v, j) => (j === d.index ? "packed" : v)) } })),
+      } : {},
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const hasType = !!s.selType;
+    const hasStation = !!s.selStation;
+
+    // type options
+    const selTypeLabel = hasType ? this.typeName(s.selType) : "";
+    const tq = s.typeText.trim().toLowerCase() === selTypeLabel.toLowerCase() ? "" : s.typeText.trim().toLowerCase();
+    const typeOptions = this.stationTypes
+      .filter((t) => !tq || t.name.toLowerCase().includes(tq))
+      .map((t) => ({ label: t.name, onPick: () => this.pickType(t.id) }));
+
+    // station options
+    const stationPool = this.stationsAll.filter((st) => st.typeId === s.selType);
+    const selStationLabel = hasStation ? this.stationName(s.selStation) : "";
+    const sq = s.stationText.trim().toLowerCase() === selStationLabel.toLowerCase() ? "" : s.stationText.trim().toLowerCase();
+    const stationOptions = stationPool
+      .filter((st) => !sq || st.name.toLowerCase().includes(sq))
+      .map((st) => ({ label: st.name, onPick: () => this.pickStation(st.id) }));
+
+    // items for selected station
+    const f = s.filter.trim().toLowerCase();
+    let pool = s.items.filter((it) => it.stationId === s.selStation);
+    if (f) pool = pool.filter((it) => String(it.id).includes(f) || String(it.serial).includes(f) || String(it.sku).toLowerCase().includes(f));
+    // hoist scanned item
+    if (s.highlightedId != null) {
+      const idx = pool.findIndex((it) => it.id === s.highlightedId);
+      if (idx > 0) pool = [pool[idx], ...pool.slice(0, idx), ...pool.slice(idx + 1)];
+    }
+
+    const statusMeta = {
+      queue: { label: "ממתין", dot: "#d97706", timer: "ממתין", timerBg: "rgba(217,118,6,0.07)" },
+      test: { label: "בבדיקה", dot: "#0066cc", timer: "בבדיקה", timerBg: "rgba(0,102,204,0.06)" },
+      done: { label: "הושלם", dot: "#1f8a5b", timer: "", timerBg: "rgba(31,138,91,0.06)" },
+    };
+
+    const visibleItems = pool.map((it) => {
+      const m = statusMeta[it.status];
+      const active = it.status === "queue" || it.status === "test";
+      const elapsedSec = Math.floor((s.now - it.startedAt) / 1000);
+      const scanned = s.highlightedId === it.id;
+      return {
+        ...it,
+        ...this.pkgTag(it.id),
+        statusLabel: m.label,
+        statusDot: m.dot,
+        timerLabel: m.timer,
+        timerBg: m.timerBg,
+        active,
+        elapsed: active ? this.fmt(elapsedSec) : "",
+        isQueue: it.status === "queue",
+        isTest: it.status === "test",
+        isDone: it.status === "done",
+        scanned,
+        cardBorder: scanned ? "#0066cc" : "#e0e0e0",
+        onStart: () => this.startTest(it.id),
+        onReport: () => this.openReport(it.id),
+      };
+    });
+
+    // report modal derived
+    const reportItem = s.items.find((it) => it.id === s.reportItemId);
+    const pass = s.reportResult === "pass";
+    const fail = s.reportResult === "fail";
+    const canSubmit = !!s.reportResult;
+
+    // worker bar
+    const workerObj = this.workers.find((w) => String(w.id) === String(s.worker));
+    const hasWorker = !!workerObj;
+    const aq = s.allStationText.trim().toLowerCase() === (selStationLabel || "").toLowerCase() ? "" : s.allStationText.trim().toLowerCase();
+    const allStationOptions = this.stationsAll.filter((st) => !aq || st.name.toLowerCase().includes(aq)).map((st) => ({ label: st.name, sub: this.typeName(st.typeId), bg: st.id === s.selStation ? "#f3f8ff" : "#fff", tick: st.id === s.selStation ? this.tick() : "", onPick: () => this.pickAllStation(st.id) }));
+    const panelShow = s.dockHover || s.openCombo != null || !hasStation;
+    const selWorkerLabel = workerObj ? workerObj.name : "";
+    const wq = s.workerText.trim().toLowerCase() === selWorkerLabel.toLowerCase() ? "" : s.workerText.trim().toLowerCase();
+    const workerOptions = this.workers
+      .filter((w) => !wq || w.name.toLowerCase().includes(wq))
+      .map((w) => ({ label: w.name, bg: String(w.id) === String(s.worker) ? "#f3f8ff" : "#fff", tick: String(w.id) === String(s.worker) ? this.tick() : "", onPick: () => this.pickWorker(w.id) }));
+
+    // ===== קליטה וצילום wizard derived =====
+    const w = s.wizard;
+    let wiz = { wizOpen: false };
+    if (w) {
+      const wItem = s.items.find((it) => it.id === w.itemId) || {};
+      const phaseMeta = {
+        id: "סריקת מדבקת ID", sku: "סריקת מק״ט יצרן", ru: "בדיקת RU", pkgPhoto: "צילום האריזה", count: "פתיחת המארז", accessories: "פריטים נלווים", ruAccess: "בדיקת RU נלווים", selectItem: "בדיקת פריטים", transfer: "העברת המוצר", done: "סיום",
+      };
+      const mainPhases = this.wizPhases.filter((p) => p !== "done");
+      const stepNum = mainPhases.indexOf(w.phase) + 1;
+      const inItem = w.itemIdx != null;
+      const cur = inItem ? w.accessories[w.itemIdx] : null;
+      const curCat = cur ? this.accessoryCatalog.find((c) => c.type === cur.type) : null;
+      const refW = curCat ? curCat.refWeight : null;
+      const measW = cur ? parseFloat(cur.measWeight) : NaN;
+      const hasRefW = refW != null;
+      const diff = hasRefW && !isNaN(measW) ? measW - refW : null;
+      const diffPct = diff != null ? Math.abs(diff) / refW * 100 : null;
+      const wPass = diffPct != null ? diffPct <= this.weightTolerancePct : null;
+
+      const mkTiles = (arr, onTog) => arr.map((c, i) => ({ captured: c, notCaptured: !c, label: "איור מס׳ " + (i + 1), onToggle: () => onTog(i) }));
+      // focused single-shot + filmstrip photo block (style 2a)
+      const photoBlk = (arr, idx, onCapture, onPick) => {
+        const cur = arr[idx];
+        return {
+          count: arr.filter(Boolean).length,
+          stepNum: idx + 1,
+          name: this.photoShots[idx],
+          curCaptured: cur, curNotCaptured: !cur,
+          refLabel: cur ? "צולם" : "תמונת ייחוס",
+          btnBg: cur ? "#1f8a5b" : "#0066cc",
+          btnLabel: cur ? "צולם · צלם מחדש" : "צלם זווית זו",
+          onCapture,
+          dots: this.photoShots.map((_, i) => ({ bg: arr[i] ? "#1f8a5b" : (i === idx ? "#0066cc" : "#e0e0e0") })),
+          film: this.photoShots.map((nm, i) => ({
+            name: nm, captured: arr[i], isCurrent: i === idx,
+            thumbBg: arr[i] ? "linear-gradient(135deg,#dfe8f0,#cfe0ee)" : "linear-gradient(135deg,#efe9e0,#e4ddd2)",
+            ring: i === idx ? "#0066cc" : (arr[i] ? "#1f8a5b" : "#e0e0e0"),
+            ringW: i === idx ? "2.5px" : "1.5px",
+            numBg: arr[i] ? "#1f8a5b" : (i === idx ? "#0066cc" : "#c7c7cf"),
+            onPick: () => onPick(i),
+          })),
+        };
+      };
+      const prefix = (o, p) => { const r = {}; for (const k in o) r[p + k[0].toUpperCase() + k.slice(1)] = o[k]; return r; };
+      const segPass = (on) => ({ bg: on ? "rgba(0,102,204,0.08)" : "#fff", color: on ? "#0066cc" : "#1d1d1f", border: on ? "#0066cc" : "#e0e0e0" });
+      const segFail = (on) => ({ bg: on ? "rgba(191,53,53,0.08)" : "#fff", color: on ? "#bf3535" : "#1d1d1f", border: on ? "#bf3535" : "#e0e0e0" });
+
+      const accRows = w.accessories.map((a, i) => ({
+        idx: i, type: a.type, sku: a.sku, filled: !!a.type && !!a.sku.trim(), done: a.done,
+        tick: a.type && a.sku.trim() ? this.tick() : "",
+        typeVal: a.type, skuVal: a.sku,
+        onType: (e) => this.accSet(i, { type: e.target.value }),
+        onSku: (e) => this.accSet(i, { sku: e.target.value }),
+        onRemove: () => this.accRemove(i),
+        canRemove: w.accessories.length > 1,
+        num: i + 1,
+      }));
+      const accReady = w.accessories.every((a) => a.type && a.sku.trim());
+      const selRows = w.accessories.map((a, i) => ({
+        idx: i, type: a.type || ("פריט " + (i + 1)), sku: a.sku, done: a.done,
+        tick: a.done ? this.tick() : "",
+        rowBg: a.done ? "rgba(31,138,91,0.05)" : "#fff",
+        statusLabel: a.done ? "נבדק" : "ממתין",
+        statusColor: a.done ? "#1f8a5b" : "#9a5b06",
+        onStart: () => this.accStartTest(i),
+      }));
+      const allTested = w.accessories.every((a) => a.done);
+      const noop = (e) => { if (e && e.preventDefault) e.preventDefault(); };
+      const contBtn = (enabled, onClick) => ({ onClick: enabled ? onClick : noop, bg: enabled ? "#0066cc" : "#9bbfe6", cursor: enabled ? "pointer" : "not-allowed", opacity: enabled ? "1" : "0.65" });
+
+      wiz = {
+        wizOpen: true,
+        closeWizard: this.closeWizard, wizNext: this.wizNext, wizBack: this.wizBack,
+        wizItemTitle: "#" + w.itemId + " · " + (wItem.model || ""),
+        wizItemSub: "מק״ט " + (wItem.sku || "") + " · " + (wItem.customer || ""),
+        wizStepLabel: "שלב " + stepNum + " מתוך " + mainPhases.length,
+        wizPhaseName: inItem ? ("בדיקת פריט · " + (cur.type || "")) : phaseMeta[w.phase],
+        wizProgressPct: Math.round(stepNum / mainPhases.length * 100) + "%",
+        wizCanBack: stepNum > 1 || inItem,
+        wizBackHandler: inItem ? this.accItemBack : this.wizBack,
+
+        // phase visibility
+        wizIsId: w.phase === "id", wizIsSku: w.phase === "sku", wizIsRu: w.phase === "ru",
+        wizIsPkg: w.phase === "pkgPhoto", wizIsCount: w.phase === "count",
+        wizIsAccessories: w.phase === "accessories", wizIsRuAccess: w.phase === "ruAccess",
+        wizIsSelectList: w.phase === "selectItem" && !inItem,
+        wizIsTransfer: w.phase === "transfer",
+        wizInItemPkg: inItem && w.itemPhase === "pkg",
+        wizInItemWeigh: inItem && w.itemPhase === "weigh",
+        wizInItemProduct: inItem && w.itemPhase === "product",
+
+        // id / sku
+        wizIdScan: w.idScan, onWizId: this.wizInput("idScan"), wizIdReady: !!w.idScan.trim(),
+        wizSkuScan: w.skuScan, onWizSku: this.wizInput("skuScan"), wizSkuReady: !!w.skuScan.trim(),
+
+        // ru
+        wizHasRU: w.hasRU, wizNoRU: !w.hasRU, wizRuAck: w.ruAck,
+        onWizRuAck: () => this.setWiz({ ruAck: true }),
+        wizRuCanNext: w.hasRU || w.ruAck,
+
+        // package photo
+        ...prefix(photoBlk(w.pkgPhotos, w.pkgIdx, this.wizPkgCapture, this.wizPkgPick), "wizPkg"),
+        wizPkgOk: w.pkgOk, wizPkgPass: w.pkgOk === "pass", wizPkgFail: w.pkgOk === "fail",
+        onWizPkgPass: () => this.setWiz({ pkgOk: "pass" }), onWizPkgFail: () => this.setWiz({ pkgOk: "fail" }),
+        wizPkgNote: w.pkgNote, onWizPkgNote: this.wizInput("pkgNote"),
+        wizPkgCanNext: !!w.pkgOk,
+
+        // count / labels
+        wizItemCount: w.itemCount, onWizCount: this.wizInput("itemCount"),
+        wizLabelsYes: w.needLabels === "yes", wizLabelsNo: w.needLabels === "no",
+        onWizLabelsYes: () => this.setWiz({ needLabels: "yes" }), onWizLabelsNo: () => this.setWiz({ needLabels: "no", labelQty: "" }),
+        wizNeedLabelsYes: w.needLabels === "yes",
+        wizLabelQty: w.labelQty, onWizLabelQty: this.wizInput("labelQty"),
+        wizCountCanNext: !!String(w.itemCount).trim() && Number(w.itemCount) > 0 && !!w.needLabels && (w.needLabels === "no" || (!!String(w.labelQty).trim() && Number(w.labelQty) > 0)),
+
+        // accessories
+        wizAccRows: accRows, wizAccAdd: this.accAdd, wizAccCatalog: this.accessoryCatalog.map((c) => c.type),
+        wizAccCanNext: accReady,
+
+        // ruAccess
+        wizRuAccessRows: w.accessories.map((a, i) => ({ num: i + 1, type: a.type || ("פריט " + (i + 1)), sku: a.sku, tick: this.tick() })),
+
+        // select item
+        wizSelRows: selRows, wizAllTested: allTested,
+
+        // per-item current
+        wizCurTitle: cur ? (cur.type + " · מק״ט " + cur.sku) : "",
+        wizCurIdx: w.itemIdx, wizCurNum: inItem ? w.itemIdx + 1 : 0,
+        accItemNext: this.accItemNext, accItemBack: this.accItemBack,
+        // per-item package photo
+        ...prefix(cur ? photoBlk(cur.pkgPhotos, cur.pkgIdx, () => this.accPhotoCapture("pkgPhotos", "pkgIdx"), (i) => this.accPick("pkgIdx", i)) : photoBlk([false,false,false], 0, ()=>{}, ()=>{}), "wizCurPkgPhoto"),
+        wizCurPkgPass: cur && cur.pkgOk === "pass", wizCurPkgFail: cur && cur.pkgOk === "fail",
+        onCurPkgPass: () => this.accSet(w.itemIdx, { pkgOk: "pass" }), onCurPkgFail: () => this.accSet(w.itemIdx, { pkgOk: "fail" }),
+        wizCurPkgNote: cur ? cur.pkgNote : "", onCurPkgNote: (e) => this.accSet(w.itemIdx, { pkgNote: e.target.value }),
+        wizCurPkgCanNext: !!(cur && cur.pkgOk),
+        // per-item weigh
+        wizRefWeight: hasRefW ? (refW + " גר׳") : "לא מוגדר",
+        wizMeasWeight: cur ? cur.measWeight : "", onCurMeasWeight: (e) => this.accSet(w.itemIdx, { measWeight: e.target.value }),
+        wizWeightAck: cur ? cur.weightAck : false,
+        onCurWeightConfirm: () => this.accSet(w.itemIdx, { weightAck: true }),
+        wizWeightMeasFilled: cur ? !!String(cur.measWeight).trim() : false,
+        wizWeightShowResult: !!(cur && cur.weightAck && hasRefW && !isNaN(measW)),
+        wizWeightPass: wPass === true,
+        wizWeightResultLabel: wPass === true ? "משקל תקין" : "משקל לא תקין",
+        wizWeightResultBg: wPass === true ? "rgba(31,138,91,0.08)" : "rgba(191,53,53,0.08)",
+        wizWeightResultColor: wPass === true ? "#1f8a5b" : "#bf3535",
+        wizWeightDetail: diff != null ? ("סטייה " + (diff > 0 ? "+" : "") + diff + " גר׳ (" + diffPct.toFixed(1) + "% · סטייה תקנית ±" + this.weightTolerancePct + "%)") : "",
+        wizWeighCanNext: !!(cur && cur.weightAck),
+        // per-item product photo
+        ...prefix(cur ? photoBlk(cur.prodPhotos, cur.prodIdx, () => this.accPhotoCapture("prodPhotos", "prodIdx"), (i) => this.accPick("prodIdx", i)) : photoBlk([false,false,false], 0, ()=>{}, ()=>{}), "wizCurProdPhoto"),
+        wizCurProdPass: cur && cur.prodOk === "pass", wizCurProdFail: cur && cur.prodOk === "fail",
+        onCurProdPass: () => this.accSet(w.itemIdx, { prodOk: "pass" }), onCurProdFail: () => this.accSet(w.itemIdx, { prodOk: "fail" }),
+        wizCurProdNote: cur ? cur.prodNote : "", onCurProdNote: (e) => this.accSet(w.itemIdx, { prodNote: e.target.value }),
+        wizCurProdCanNext: !!(cur && cur.prodOk),
+
+        // transfer
+        wizFinish: this.wizFinish,
+        // continue buttons
+        wizIdBtn: contBtn(!!w.idScan.trim(), this.wizNext),
+        // segmented styles
+        wizPkgPassSeg: segPass(w.pkgOk === "pass"), wizPkgFailSeg: segFail(w.pkgOk === "fail"),
+        wizLabelsYesSeg: segPass(w.needLabels === "yes"), wizLabelsNoSeg: segPass(w.needLabels === "no"),
+        wizCurPkgPassSeg: segPass(!!(cur && cur.pkgOk === "pass")), wizCurPkgFailSeg: segFail(!!(cur && cur.pkgOk === "fail")),
+        wizCurProdPassSeg: segPass(!!(cur && cur.prodOk === "pass")), wizCurProdFailSeg: segFail(!!(cur && cur.prodOk === "fail")),
+        wizSkuBtn: contBtn(!!w.skuScan.trim(), this.wizNext),
+        wizRuBtn: contBtn(w.hasRU || w.ruAck, this.wizNext),
+        wizPkgBtn: contBtn(!!w.pkgOk, this.wizNext),
+        wizCountBtn: contBtn(!!String(w.itemCount).trim() && Number(w.itemCount) > 0 && !!w.needLabels && (w.needLabels === "no" || (!!String(w.labelQty).trim() && Number(w.labelQty) > 0)), this.wizNext),
+        wizAccBtn: contBtn(accReady, this.wizNext),
+        wizRuAccessBtn: contBtn(true, this.wizNext),
+        wizSelBtn: contBtn(allTested, this.wizNext),
+        wizCurPkgBtn: contBtn(!!(cur && cur.pkgOk), this.accItemNext),
+        wizWeighBtn: contBtn(!!(cur && cur.weightAck), this.accItemNext),
+        wizCurProdBtn: contBtn(!!(cur && cur.prodOk), this.accItemNext),
+      };
+    }
+
+    const selStObj = this.stationsAll.find((x) => x.id === s.selStation);
+    const isPkgSel = !!selStObj && (selStObj.typeId === 5 || selStObj.typeId === 6);
+    const pkgCount = isPkgSel ? PKGS.filter((p) => p.stationId === s.selStation).length : 0;
+    const unitLabel = isPkgSel ? pkgCount + " מארזים" : visibleItems.length + " פריטים";
+
+    return {
+      ...this.pkgWizVals(),
+      ...this.pkgStationVals(),
+      goSettings: () => { window.location.href = "Settings.dc.html"; },
+      // type combobox
+      typeText: s.typeText, setTypeText: this.setTypeText, typeFocus: this.typeFocus, typeBlur: this.typeBlur,
+      typeOpen: s.openCombo === "type", typeOptions,
+      // station combobox
+      stationText: s.stationText, setStationText: this.setStationText, stationFocus: this.stationFocus, stationBlur: this.stationBlur,
+      stationOpen: s.openCombo === "station", stationOptions, stationNoMatch: stationOptions.length === 0,
+      stationDisabled: !hasType, stationPlaceholder: hasType ? "בחר עמדה פעילה…" : "בחר סוג עמדה תחילה",
+      stationBg: hasType ? "#fff" : "#f0f0f2",
+
+      // worker
+      workerText: s.workerText, setWorkerText: this.setWorkerText, workerFocus: this.workerFocus, workerBlur: this.workerBlur,
+      workerOpen: s.openCombo === "worker", workerOptions, workerNoMatch: workerOptions.length === 0,
+      workerLabel: hasWorker ? "פעולות יתועדו על שם:" : "בחר עובד לפני תחילת עבודה:",
+      workerBarBg: hasWorker ? "rgba(0,102,204,0.04)" : "rgba(217,118,6,0.08)",
+      workerBarBorder: hasWorker ? "rgba(0,102,204,0.12)" : "rgba(217,118,6,0.28)",
+      workerTextColor: hasWorker ? "#1d1d1f" : "#9a5b06",
+      workerIconColor: hasWorker ? "#0066cc" : "#d97706",
+
+      hasStation, noStation: !hasStation,
+      stationName: selStationLabel,
+      peekTitle: hasStation ? selStationLabel : "בחר עמדה לבדיקה",
+      peekSub: hasStation ? (this.typeName(s.selType) + " · " + unitLabel) : "רחף כאן לבחירת עמדה ועובד",
+      dockEnter: this.dockEnter, dockLeave: this.dockLeave,
+      panelOpacity: panelShow ? "1" : "0", panelTransform: panelShow ? "translateY(0)" : "translateY(-8px)", panelPe: panelShow ? "auto" : "none",
+      allStationText: s.allStationText, setAllStationText: this.setAllStationText, allStationFocus: this.allStationFocus, allStationBlur: this.allStationBlur,
+      allStationOpen: s.openCombo === "allstation", allStationOptions, allStationNoMatch: allStationOptions.length === 0,
+      compactWorkerLabel: hasWorker ? workerObj.name : "בחר עובד",
+      workerChipBg: hasWorker ? "rgba(0,102,204,0.08)" : "rgba(217,118,6,0.10)",
+      workerChipBorder: hasWorker ? "rgba(0,102,204,0.22)" : "rgba(217,118,6,0.32)",
+      workerChipColor: hasWorker ? "#0066cc" : "#9a5b06",
+      openTestHistory: this.openTestHistory, closeTestHistory: this.closeTestHistory,
+      testHistoryOpen: s.testHistoryOpen, testHistName: selStationLabel,
+      testHistRows: (this.stationHist[s.selStation] || []), testHistEmpty: (this.stationHist[s.selStation] || []).length === 0,
+      countLabel: unitLabel,
+      visibleItems,
+      noResults: hasStation && visibleItems.length === 0,
+      filter: s.filter, setFilter: this.setFilter,
+
+      openScan: this.openScan,
+
+      // report modal
+      reportOpen: s.reportOpen, closeReport: this.closeReport, stop: this.stop,
+      reportSubtitle: reportItem ? "#" + reportItem.id + " · " + reportItem.model : "",
+      pickPass: this.pickPass, pickFail: this.pickFail,
+      passBorder: pass ? "#0066cc" : "#e0e0e0", passBg: pass ? "rgba(0,102,204,0.06)" : "#fff", passColor: pass ? "#0066cc" : "#1d1d1f",
+      failBorder: fail ? "#bf3535" : "#e0e0e0", failBg: fail ? "rgba(191,53,53,0.06)" : "#fff", failColor: fail ? "#bf3535" : "#1d1d1f",
+      reportNote: s.reportNote, setReportNote: this.setReportNote,
+      submitReport: this.submitReport,
+      submitBg: canSubmit ? "#0066cc" : "#9bbfe6", submitCursor: canSubmit ? "pointer" : "not-allowed", submitOpacity: canSubmit ? "1" : "0.7",
+
+      // scan modal
+      scanOpen: s.scanOpen, closeScan: this.closeScan,
+      scanText: s.scanText, setScanText: this.setScanText, locateScan: this.locateScan,
+      scanError: s.scanError, scanHasError: !!s.scanError,
+
+      ...wiz,
+    };
+  }
+}
+</script>
+</body>
+</html>

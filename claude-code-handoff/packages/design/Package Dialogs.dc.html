@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>(function(){setInterval(function(){if(window.lucide&&window.lucide.createIcons){window.lucide.createIcons();}},300);})();</script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f5f5f7; }
+  a { color: #0066cc; text-decoration: none; }
+  a:hover { color: #0058b3; text-decoration: underline; }
+  input, select, textarea, button { font-family: inherit; }
+  ::placeholder { color: #9a9aa0; }
+  .ic { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .prs:active { transform: scale(0.95); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d4d4dc; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+  @media print {
+    .no-print { display: none !important; }
+  }
+</style>
+</helmet>
+
+<div dir="rtl" style="min-height:100vh;background:#f5f5f7;font-family:'Heebo','Inter',system-ui,-apple-system,sans-serif;color:#1d1d1f;-webkit-font-smoothing:antialiased;text-align:right;padding:28px 24px 64px">
+
+  <div data-screen-label="דיאלוגים · מארזים" style="max-width:1080px;margin:0 auto">
+    <h1 style="margin:0;font-size:26px;font-weight:700;letter-spacing:-0.5px">דיאלוגים · מארזים</h1>
+    <p style="margin:7px 0 0;font-size:15px;color:#444;line-height:1.5">ארבעה חלונות שנפתחים ממסכי הפריטים, המארזים וההגדרות. לחץ על שם כדי לפתוח.</p>
+
+    <div style="display:flex;flex-wrap:wrap;gap:9px;margin-top:20px">
+      <sc-for list="{{ triggers }}" as="t" hint-placeholder-count="4">
+        <div onClick="{{ t.onOpen }}" class="prs" style="display:flex;align-items:center;gap:9px;background:{{ t.bg }};border:1px solid {{ t.border }};border-radius:9999px;padding:10px 18px;font-size:14px;font-weight:600;color:{{ t.tone }};cursor:pointer">
+          <span class="ic" style="color:{{ t.iconTone }}"><i data-lucide="{{ t.icon }}" width="16" height="16" stroke-width="1.75"></i></span>{{ t.label }}
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:22px">
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="4">
+        <div style="background:#fff;border:1px solid #e0e0e0;border-radius:18px;padding:20px">
+          <div style="font-size:15px;font-weight:600">{{ n.title }}</div>
+          <div style="font-size:13.5px;color:#444;margin-top:7px;line-height:1.5">{{ n.text }}</div>
+          <div style="font-size:12px;color:#7a7a7a;margin-top:11px">{{ n.from }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{ labelsOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ close }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:70;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(880px,96vw);max-height:92vh;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;display:flex;flex-direction:column;overflow:hidden">
+
+        <div class="no-print" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid #e0e0e0">
+          <div style="min-width:0">
+            <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">הדפסת מדבקות</div>
+            <div style="display:flex;align-items:baseline;gap:6px;font-size:13.5px;color:#7a7a7a;margin-top:4px">
+              <span>{{ lb.pkgType }}</span>
+              <span>·</span>
+              <span style="font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate">{{ lb.box.code }}</span>
+            </div>
+          </div>
+          <button onClick="{{ close }}" class="prs" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><i data-lucide="x" data-icon-export="Close" width="18" height="18" stroke-width="1.75"></i></button>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow-y:auto;padding:20px 24px">
+          <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ lb.presets }}" as="p" hint-placeholder-count="3">
+              <div onClick="{{ p.onPick }}" class="prs" style="border:1px solid {{ p.border }};background:{{ p.bg }};color:{{ p.tone }};border-radius:9999px;padding:7px 15px;font-size:13px;font-weight:600;cursor:pointer">{{ p.label }}</div>
+            </sc-for>
+            <div style="margin-inline-start:auto;font-size:12.5px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ lb.countNote }}</div>
+          </div>
+
+          <div style="display:flex;gap:16px;margin-top:18px;flex-wrap:wrap">
+            <div onClick="{{ lb.box.onToggle }}" style="width:268px;border:1px solid {{ lb.box.border }};background:{{ lb.box.bg }};border-radius:18px;padding:20px;cursor:pointer">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                <div style="font-size:11px;font-weight:600;color:#7a7a7a;letter-spacing:.6px;text-transform:uppercase">מדבקת קופסה</div>
+                <span class="ic" style="width:21px;height:21px;border-radius:6px;border:1px solid {{ lb.box.tickBorder }};background:{{ lb.box.tickBg }};color:#fff">
+                  <sc-if value="{{ lb.box.on }}" hint-placeholder-val="{{ true }}"><i data-lucide="check" data-icon-export="Check" width="13" height="13" stroke-width="2.5"></i></sc-if>
+                </span>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:1px;height:62px;margin-top:16px">
+                <sc-for list="{{ lb.box.bars }}" as="b" hint-placeholder-count="30">
+                  <div style="width:{{ b.w }}px;height:100%;background:#1d1d1f"></div>
+                </sc-for>
+              </div>
+              <div style="font-family:'Inter',monospace;font-size:14px;letter-spacing:2px;margin-top:11px;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;text-align:right">{{ lb.box.code }}</div>
+              <div style="font-size:14px;font-weight:600;margin-top:10px">{{ lb.pkgType }}</div>
+              <div style="font-size:13px;color:#444;margin-top:2px">{{ lb.customer }}</div>
+              <div style="font-size:13px;font-weight:600;margin-top:6px;font-variant-numeric:tabular-nums">{{ lb.box.itemsLine }}</div>
+            </div>
+
+            <div style="flex:1;min-width:300px;display:flex;flex-direction:column;gap:9px">
+              <div class="no-print" style="display:flex;align-items:baseline;justify-content:space-between">
+                <div style="font-size:11px;font-weight:600;color:#7a7a7a;letter-spacing:.6px;text-transform:uppercase">מדבקות פריט</div>
+                <div onClick="{{ lb.onToggleAllItems }}" style="font-size:12.5px;font-weight:600;color:#0066cc;cursor:pointer">{{ lb.allItemsLabel }}</div>
+              </div>
+              <sc-for list="{{ lb.items }}" as="it" hint-placeholder-count="3">
+                <div onClick="{{ it.onToggle }}" style="display:flex;align-items:center;gap:13px;border:1px solid {{ it.border }};background:{{ it.bg }};border-radius:14px;padding:12px 14px;cursor:pointer">
+                  <span class="ic" style="width:21px;height:21px;border-radius:6px;border:1px solid {{ it.tickBorder }};background:{{ it.tickBg }};color:#fff">
+                    <sc-if value="{{ it.on }}" hint-placeholder-val="{{ true }}"><i data-lucide="check" data-icon-export="Check" width="13" height="13" stroke-width="2.5"></i></sc-if>
+                  </span>
+                  <div style="display:flex;align-items:flex-end;gap:1px;height:30px;width:74px;flex-shrink:0">
+                    <sc-for list="{{ it.bars }}" as="b" hint-placeholder-count="18">
+                      <div style="width:{{ b.w }}px;height:100%;background:#1d1d1f"></div>
+                    </sc-for>
+                  </div>
+                  <div style="min-width:0;flex:1">
+                    <div style="font-size:13.5px;font-weight:600">{{ it.type }}</div>
+                    <div style="font-size:11.5px;color:#7a7a7a;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;text-align:right">{{ it.code }}</div>
+                  </div>
+                  <div style="font-size:12.5px;color:#7a7a7a;white-space:nowrap">{{ it.position }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div class="no-print" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:20px;max-width:640px">
+            <div>
+              <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:6px">מדפסת</div>
+              <div style="height:44px;border:1px solid #e0e0e0;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 13px;font-size:14px;font-weight:600;cursor:pointer">
+                Zebra ZD421 · קליטה
+                <span class="ic" style="color:#7a7a7a"><i data-lucide="chevron-down" data-icon-export="ExpandMore" width="15" height="15" stroke-width="1.75"></i></span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:6px">גודל מדבקה</div>
+              <div style="height:44px;border:1px solid #e0e0e0;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 13px;font-size:14px;font-weight:600;cursor:pointer">
+                57 × 32 מ״מ
+                <span class="ic" style="color:#7a7a7a"><i data-lucide="chevron-down" data-icon-export="ExpandMore" width="15" height="15" stroke-width="1.75"></i></span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:6px">עותקים מכל מדבקה</div>
+              <div style="height:44px;border:1px solid #e0e0e0;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 13px">
+                <span style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">{{ lb.copies }}</span>
+                <div style="display:flex;align-items:center;gap:4px">
+                  <div onClick="{{ lb.onLess }}" class="prs ic" style="width:32px;height:32px;border-radius:8px;background:#f5f5f7;color:#1d1d1f;cursor:pointer"><i data-lucide="minus" data-icon-export="Remove" width="15" height="15" stroke-width="2"></i></div>
+                  <div onClick="{{ lb.onMore }}" class="prs ic" style="width:32px;height:32px;border-radius:8px;background:#f5f5f7;color:#1d1d1f;cursor:pointer"><i data-lucide="plus" data-icon-export="Add" width="15" height="15" stroke-width="2"></i></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{ lb.nothing }}" hint-placeholder-val="{{ false }}">
+            <div class="no-print" style="font-size:13px;color:#a86a1a;background:#fdf3e6;border:1px solid #f0e2cc;border-radius:10px;padding:11px 14px;margin-top:18px">לא נבחרה אף מדבקה להדפסה.</div>
+          </sc-if>
+        </div>
+
+        <div class="no-print" style="flex-shrink:0;border-top:1px solid #e0e0e0;padding:14px 24px;display:flex;align-items:center;gap:10px">
+          <div style="font-size:12.5px;color:#7a7a7a">{{ lb.footNote }}</div>
+          <div style="margin-inline-start:auto;display:flex;align-items:center;gap:10px">
+            <button onClick="{{ close }}" class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer">ביטול</button>
+            <button class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer">תצוגה מקדימה</button>
+            <button class="prs" style="background:{{ lb.printBg }};color:{{ lb.printTone }};border:0;border-radius:9999px;padding:11px 24px;font-size:15px;font-weight:600;cursor:{{ lb.printCursor }}">{{ lb.printLabel }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ resetOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ close }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:70;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(560px,94vw);max-height:92vh;overflow-y:auto;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0">
+        <div style="padding:22px 24px 0">
+          <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">שינוי סוג הפריט יאפס את המארז</div>
+          <div style="font-size:14px;color:#444;margin-top:9px;line-height:1.55">הפריט <span style="font-weight:600">02 · מקלדת</span> נמצא בשלב 2 מתוך 3 בעמדה חשמלית A. שינוי סוג הפריט מחליף את המסלול שלו, ולכן כל המארז חוזר לעמדת הפתיחה.</div>
+        </div>
+
+        <div style="margin:18px 24px 0;border:1px solid #e0e0e0;border-radius:14px;overflow:hidden">
+          <div style="background:#f5f5f7;padding:10px 15px;font-size:11px;font-weight:600;color:#7a7a7a;letter-spacing:.6px;text-transform:uppercase">מה יתאפס</div>
+          <sc-for list="{{ resetList }}" as="r" hint-placeholder-count="4">
+            <div style="display:flex;align-items:flex-start;gap:11px;padding:12px 15px;border-top:1px solid #f0f0f0">
+              <span class="ic" style="color:#7a7a7a;margin-top:1px"><i data-lucide="{{ r.icon }}" width="16" height="16" stroke-width="1.75"></i></span>
+              <div style="min-width:0">
+                <div style="font-size:13.5px;font-weight:600">{{ r.title }}</div>
+                <div style="font-size:12.5px;color:#7a7a7a;margin-top:2px;line-height:1.45">{{ r.note }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="margin:16px 24px 0;font-size:13px;color:#444;background:#f5f5f7;border-radius:10px;padding:11px 14px;line-height:1.5">היסטוריית הבדיקות נשמרת ותמשיך להופיע בעמוד המארז ובעמוד הפריט.</div>
+
+        <div style="padding:18px 24px 22px;display:flex;align-items:center;gap:10px;justify-content:flex-end">
+          <button onClick="{{ close }}" class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer">ביטול</button>
+          <button class="prs" style="background:#bf3535;color:#fff;border:0;border-radius:9999px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#a82d2d">שנה סוג ואפס את המארז</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ editOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ close }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:70;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(680px,94vw);max-height:92vh;background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid #e0e0e0">
+          <div style="min-width:0">
+            <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">עריכת מארז</div>
+            <div style="display:flex;align-items:baseline;gap:4px;margin-top:5px;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;justify-content:flex-start">
+              <span style="font-size:14px;color:#7a7a7a;letter-spacing:.3px">1005 1509 2600 03</span>
+              <span style="font-size:14px;font-weight:700;color:#0066cc">00</span>
+            </div>
+          </div>
+          <button onClick="{{ close }}" class="prs" style="width:34px;height:34px;border:0;border-radius:9999px;background:#f5f5f7;color:#1d1d1f;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:#ececf0"><i data-lucide="x" data-icon-export="Close" width="18" height="18" stroke-width="1.75"></i></button>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow-y:auto;padding:22px 24px">
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+            <sc-for list="{{ editFields }}" as="f" hint-placeholder-count="6">
+              <div>
+                <div style="font-size:12.5px;color:#7a7a7a;margin-bottom:6px">{{ f.label }}</div>
+                <div style="height:44px;border:1px solid {{ f.border }};border-radius:10px;background:{{ f.bg }};display:flex;align-items:center;justify-content:space-between;padding:0 13px;font-size:14px;color:{{ f.tone }};font-weight:{{ f.weight }}">
+                  {{ f.value }}
+                  <sc-if value="{{ f.locked }}" hint-placeholder-val="{{ false }}">
+                    <span class="ic" style="color:#9a9aa0"><i data-lucide="lock" data-icon-export="Lock" width="14" height="14" stroke-width="1.75"></i></span>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ f.hint }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:11.5px;color:#7a7a7a;margin-top:5px;line-height:1.45">{{ f.hint }}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;background:#f5f5f7;border-radius:12px;padding:14px 16px;margin-top:20px">
+            <span class="ic" style="color:#7a7a7a;margin-top:1px"><i data-lucide="info" data-icon-export="Info" width="18" height="18" stroke-width="1.75"></i></span>
+            <div>
+              <div style="font-size:13.5px;font-weight:600">סוג המארז אינו ניתן לשינוי</div>
+              <div style="font-size:13px;color:#444;margin-top:3px;line-height:1.5">סוג המארז קובע את התכולה שנפרשה בקליטה ואת המסלול של כל פריט. כדי לשנות אותו מחק את המארז וקלוט אותו מחדש מהמשלוח.</div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px">
+            <div style="font-size:11px;font-weight:600;color:#7a7a7a;letter-spacing:.6px;text-transform:uppercase">תכולת המארז</div>
+            <div style="border:1px solid #e0e0e0;border-radius:14px;overflow:hidden;margin-top:11px">
+              <sc-for list="{{ editItems }}" as="it" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid #f0f0f0">
+                  <span class="ic" style="width:28px;height:28px;border-radius:8px;background:#f5f5f7;color:#7a7a7a;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">{{ it.suffix }}</span>
+                  <div style="min-width:0;flex:1">
+                    <div style="font-size:13.5px;font-weight:600">{{ it.type }}</div>
+                    <div style="font-size:11.5px;color:#7a7a7a;font-variant-numeric:tabular-nums">{{ it.line }}</div>
+                  </div>
+                  <div style="font-size:12.5px;color:#7a7a7a;white-space:nowrap">{{ it.state }}</div>
+                  <div onClick="{{ it.onRemove }}" class="prs ic" style="width:30px;height:30px;border-radius:8px;background:#f5f5f7;color:{{ it.removeTone }};cursor:pointer" title="{{ it.removeTitle }}">
+                    <i data-lucide="trash-2" data-icon-export="Delete" width="15" height="15" stroke-width="1.75"></i>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:12px;color:#7a7a7a;margin-top:9px">אפשר להוסיף ולהסיר פריטים. מארז חייב להכיל פריט אחד לפחות.</div>
+          </div>
+        </div>
+
+        <div style="flex-shrink:0;border-top:1px solid #e0e0e0;padding:14px 24px;display:flex;align-items:center;gap:10px">
+          <button class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 18px;font-size:14px;font-weight:600;color:#bf3535;cursor:pointer">מחיקת מארז</button>
+          <div style="margin-inline-start:auto;display:flex;align-items:center;gap:10px">
+            <button onClick="{{ close }}" class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer">ביטול</button>
+            <button class="prs" style="background:#0066cc;color:#fff;border:0;border-radius:9999px;padding:11px 24px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#0058b3">שמור שינויים</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ lastOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ close }}" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div onClick="{{ stop }}" dir="rtl" style="width:min(520px,94vw);background:#fff;border-radius:18px;box-shadow:rgba(0,0,0,0.22) 3px 5px 30px 0">
+        <div style="padding:22px 24px 0">
+          <div style="font-size:20px;font-weight:700;letter-spacing:-0.3px">אי אפשר להסיר את הפריט האחרון</div>
+          <div style="font-size:14px;color:#444;margin-top:9px;line-height:1.55"><span style="font-weight:600">01 · טלפון</span> הוא הפריט היחיד שנותר במארז. מארז חייב להכיל פריט אחד לפחות, ולכן ההסרה נדחתה.</div>
+        </div>
+
+        <div style="margin:18px 24px 0;border:1px solid #e0e0e0;border-radius:14px;padding:15px 16px">
+          <div style="font-size:13.5px;font-weight:600">מה אפשר לעשות במקום</div>
+          <div style="display:flex;flex-direction:column;gap:11px;margin-top:12px">
+            <sc-for list="{{ lastOptions }}" as="o" hint-placeholder-count="2">
+              <div style="display:flex;align-items:flex-start;gap:11px">
+                <span class="ic" style="color:#7a7a7a;margin-top:1px"><i data-lucide="{{ o.icon }}" width="16" height="16" stroke-width="1.75"></i></span>
+                <div style="min-width:0">
+                  <div style="font-size:13.5px;font-weight:600">{{ o.title }}</div>
+                  <div style="font-size:12.5px;color:#7a7a7a;margin-top:2px;line-height:1.45">{{ o.note }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="padding:18px 24px 22px;display:flex;align-items:center;gap:10px;justify-content:flex-end">
+          <button onClick="{{ close }}" class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer">הבנתי</button>
+          <button class="prs" style="background:#fff;border:1px solid #e0e0e0;border-radius:9999px;padding:11px 20px;font-size:14px;font-weight:600;color:#bf3535;cursor:pointer">מחק את המארז</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:880},&quot;dialog&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;labels&quot;,&quot;reset&quot;,&quot;edit&quot;,&quot;last&quot;],&quot;default&quot;:&quot;labels&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;תצוגת חלונות&quot;}}">
+const BLUE = "#0066cc";
+
+const PKG = {
+  id: "1005150926000300",
+  type: "מארז בקר",
+  customer: "רפאל · משלוח SH-2041",
+  items: [
+    { suffix: "01", type: "בקר ראשי", serial: "88312", sku: "PCB-4400-A", state: "בבדיקה" },
+    { suffix: "02", type: "מחבר", serial: "90011", sku: "745781-4", state: "ממתין" },
+    { suffix: "03", type: "ספק כוח", serial: "77210", sku: "PS-24-5A", state: "ממתין" },
+  ],
+};
+
+const DIALOGS = [
+  { key: "labels", label: "הדפסת מדבקות", icon: "printer" },
+  { key: "reset", label: "שינוי סוג פריט · איפוס מארז", icon: "rotate-ccw" },
+  { key: "edit", label: "עריכת מארז", icon: "pencil" },
+  { key: "last", label: "הסרת הפריט האחרון", icon: "ban" },
+];
+
+const NOTES = [
+  { title: "הדפסת מדבקות", text: "מדבקת קופסה אחת ומדבקה לכל פריט. בחירה מרובה, מדפסת, גודל ומספר עותקים.", from: "נפתח מעמוד המארז, מרשימת המארזים ומאשף הפתיחה" },
+  { title: "שינוי סוג פריט", text: "מחליף את המסלול ולכן מאפס את המארז לעמדת הפתיחה. אדום רק בכפתור האישור.", from: "נפתח מעריכת פריט בעמוד המארז" },
+  { title: "עריכת מארז", text: "סוג המארז נעול עם הסבר; שאר השדות פתוחים, והתכולה ניתנת לעריכה.", from: "נפתח מרשימת המארזים ומעמוד המארז" },
+  { title: "הפריט האחרון", text: "דחייה מפורשת עם שתי חלופות, לא שגיאה אדומה.", from: "נפתח בהסרת פריט בעריכת מארז" },
+];
+
+class Component extends DCLogic {
+  state = {
+    open: "labels",
+    boxOn: true,
+    itemsOn: PKG.items.map(() => true),
+    copies: 1,
+  };
+
+  componentDidMount() {
+    if (this.props.dialog) this.setState({ open: this.props.dialog });
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.dialog !== this.props.dialog && this.props.dialog) {
+      this.setState({ open: this.props.dialog });
+    }
+  }
+
+  fmtCode(id) {
+    return id.slice(0, 14).replace(/(\d{4})(?=\d)/g, "$1 ") + " " + id.slice(14);
+  }
+
+  bars(n, seed) {
+    return Array.from({ length: n }, (_, i) => ({ w: ((i + seed) % 3) + 1 }));
+  }
+
+  tickBox(on) {
+    return {
+      on,
+      tickBg: on ? BLUE : "#fff",
+      tickBorder: on ? BLUE : "#d4d4dc",
+      border: on ? BLUE : "#e0e0e0",
+      bg: on ? "#f7fbff" : "#fff",
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const open = s.open;
+    const itemsOnCount = s.itemsOn.filter(Boolean).length;
+    const total = (s.boxOn ? 1 : 0) + itemsOnCount;
+    const sheets = total * s.copies;
+    const allItems = itemsOnCount === PKG.items.length;
+
+    return {
+      triggers: DIALOGS.map(d => {
+        const on = d.key === open;
+        return {
+          label: d.label, icon: d.icon,
+          bg: on ? "#e6efff" : "#fff",
+          border: on ? BLUE : "#e0e0e0",
+          tone: on ? BLUE : "#1d1d1f",
+          iconTone: on ? BLUE : "#7a7a7a",
+          onOpen: () => this.setState({ open: d.key }),
+        };
+      }),
+      notes: NOTES,
+      labelsOpen: open === "labels",
+      resetOpen: open === "reset",
+      editOpen: open === "edit",
+      lastOpen: open === "last",
+      close: () => this.setState({ open: null }),
+      stop: e => e.stopPropagation(),
+
+      lb: {
+        pkgType: PKG.type,
+        customer: PKG.customer,
+        countNote: `${total} מדבקות · ${sheets} הדפסות`,
+        copies: String(s.copies),
+        presets: [
+          { key: "all", label: "הכול" },
+          { key: "box", label: "קופסה בלבד" },
+          { key: "items", label: "פריטים בלבד" },
+        ].map(p => {
+          const active =
+            (p.key === "all" && s.boxOn && allItems) ||
+            (p.key === "box" && s.boxOn && itemsOnCount === 0) ||
+            (p.key === "items" && !s.boxOn && allItems);
+          return {
+            label: p.label,
+            border: active ? BLUE : "#e0e0e0",
+            bg: active ? "#e6efff" : "#fff",
+            tone: active ? BLUE : "#1d1d1f",
+            onPick: () => this.setState({
+              boxOn: p.key !== "items",
+              itemsOn: PKG.items.map(() => p.key !== "box"),
+            }),
+          };
+        }),
+        box: {
+          ...this.tickBox(s.boxOn),
+          bars: this.bars(30, 0),
+          code: this.fmtCode(PKG.id),
+          itemsLine: `${PKG.items.length} פריטים`,
+          onToggle: () => this.setState(x => ({ boxOn: !x.boxOn })),
+        },
+        allItemsLabel: allItems ? "נקה הכול" : "בחר הכול",
+        onToggleAllItems: () => this.setState(x => ({
+          itemsOn: PKG.items.map(() => !allItems),
+        })),
+        items: PKG.items.map((it, i) => ({
+          ...this.tickBox(s.itemsOn[i]),
+          type: it.type,
+          code: this.fmtCode(PKG.id.slice(0, 14) + it.suffix),
+          position: `פריט ${it.suffix} מתוך ${String(PKG.items.length).padStart(2, "0")}`,
+          bars: this.bars(18, i + 1),
+          onToggle: () => this.setState(x => ({ itemsOn: x.itemsOn.map((v, j) => (j === i ? !v : v)) })),
+        })),
+        onLess: () => this.setState(x => ({ copies: Math.max(1, x.copies - 1) })),
+        onMore: () => this.setState(x => ({ copies: Math.min(9, x.copies + 1) })),
+        nothing: total === 0,
+        footNote: total === 0 ? "בחר מדבקה אחת לפחות" : `${sheets} מדבקות יישלחו למדפסת`,
+        printLabel: total === 0 ? "הדפס" : `הדפס ${sheets} מדבקות`,
+        printBg: total === 0 ? "#e0e0e0" : BLUE,
+        printTone: total === 0 ? "#9a9aa0" : "#fff",
+        printCursor: total === 0 ? "not-allowed" : "pointer",
+      },
+
+      resetList: [
+        { icon: "map-pin", title: "המארז חוזר לעמדת פתיחת מארז", note: "הסטטוס יהיה ״ממתין לפתיחה״ וזמן הפתיחה יימחק." },
+        { icon: "rotate-ccw", title: "כל שלושת הפריטים חוזרים לתחילת המסלול", note: "גם פריטים שכבר סיימו — בקר ראשי, מחבר, ספק כוח." },
+        { icon: "camera", title: "צילומים ושקילות יימחקו", note: "הצילומים והמשקלים שנרשמו בפתיחת המארז יוסרו." },
+        { icon: "tag", title: "מדבקת הפריט תוחלף", note: "המזהה נשמר; יש להדפיס מדבקה חדשה עם סוג הפריט המעודכן." },
+      ],
+
+      editFields: [
+        { label: "סוג מארז", value: PKG.type, border: "#e0e0e0", bg: "#f5f5f7", tone: "#7a7a7a", weight: 600, locked: true, hint: "נקבע בקליטה" },
+        { label: "מסלול המארז", value: "מסלול מארז בקר", border: "#e0e0e0", bg: "#fff", tone: "#1d1d1f", weight: 600, locked: false, hint: false },
+        { label: "לקוח", value: "רפאל", border: "#e0e0e0", bg: "#f5f5f7", tone: "#7a7a7a", weight: 600, locked: true, hint: "נקבע במשלוח" },
+        { label: "משלוח", value: "SH-2041", border: "#e0e0e0", bg: "#f5f5f7", tone: "#7a7a7a", weight: 600, locked: true, hint: false },
+        { label: "מק״ט", value: "PCB-BOX-4400", border: "#e0e0e0", bg: "#fff", tone: "#1d1d1f", weight: 400, locked: false, hint: false },
+        { label: "דגם", value: "", border: "#e0e0e0", bg: "#fff", tone: "#1d1d1f", weight: 400, locked: false, hint: "אופציונלי" },
+      ],
+
+      editItems: PKG.items.map((it, i) => ({
+        suffix: it.suffix,
+        type: it.type,
+        line: `${it.sku} · ${it.serial}`,
+        state: it.state,
+        removeTone: PKG.items.length === 1 ? "#c4c4cc" : "#7a7a7a",
+        removeTitle: PKG.items.length === 1 ? "לא ניתן להסיר את הפריט האחרון" : "הסר פריט",
+        onRemove: () => this.setState({ open: "last" }),
+      })),
+
+      lastOptions: [
+        { icon: "trash-2", title: "מחק את המארז כולו", note: "המארז וכל הפריטים שבו יימחקו, כולל היסטוריית הבדיקות." },
+        { icon: "replace", title: "החלף את הפריט", note: "הוסף קודם את הפריט החדש, ואז הסר את הפריט הזה." },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>
