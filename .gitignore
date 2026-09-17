@@ -146,3 +146,7 @@ nul
 
 # Audit output of scripts/convert-legacy-to-packages.mjs (old -> new id mapping per run)
 scripts/convert-legacy-*.json
+scripts/e2e-packages/.e2e-user.json
+scripts/e2e-packages/shots/
+scripts/e2e-packages/results.json
+scripts/e2e-packages/photo.png
