@@ -158,7 +158,7 @@ const NAV_DEFS: { id: string; label: string; sub: string; icon: LucideIcon; href
   { id: "packages", label: "מארזים", sub: "רשימת המארזים וקליטת מארז", icon: Package, href: "/packages" },
   { id: "items", label: "ניהול פריטים", sub: "דוחות ורשימת פריטים", icon: LayoutDashboard, href: "/" },
   { id: "testing", label: "מסך בדיקה", sub: "תור העמדה ובדיקות פעילות", icon: FlaskConical, href: "/testing" },
-  { id: "dashboard", label: "לוח ניהול", sub: "מדדים וניתוחים", icon: LayoutDashboard, href: "/dashboard" },
+  { id: "dashboard", label: "לוח ניהול", sub: "מדדים וניתוחים", icon: LayoutDashboard, href: "/dashboard/tests" },
   { id: "shipments", label: "משלוחים נכנסים", sub: "קליטת משלוחים", icon: Truck, href: "/shipments" },
   { id: "files", label: "ניהול קבצים", sub: "קבצים מצורפים", icon: Folder, href: "/files" },
   { id: "stations", label: "עמדות בדיקה", sub: "הגדרות · סוגי עמדות ועמדות", icon: Monitor, href: "/settings/test-stations" },
