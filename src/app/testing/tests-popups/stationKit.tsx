@@ -42,7 +42,7 @@ export type Photos = { photos: Shot[]; ok: "" | "pass" | "fail"; note: string };
 export const emptyPhotos = (): Photos => ({ photos: [], ok: "", note: "" });
 
 // Upload cap enforced in the browser, mirroring MAX_FILE_SIZE_MB on
-// /api/items/[id]/files (default 100). A plain constant on purpose: a
+// /api/items/[id]/files/presign (default 100). A plain constant on purpose: a
 // NEXT_PUBLIC_ env var is inlined at build time, so a runtime .env change would
 // silently not apply here. If an operator lowers the server cap below this the
 // server still rejects the file and the shot is marked failed - the guards stack.

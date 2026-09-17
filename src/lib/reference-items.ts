@@ -1,22 +1,43 @@
 import { prisma } from '@/app/lib/prisma';
-import { putObject, removeObjects, REFERENCE_BUCKET } from '@/lib/storage';
-import { registerFileObject, markFileObjectDeleted } from '@/lib/file-registry';
+import { REFERENCE_BUCKET, removeObjects } from '@/lib/storage';
+import {
+  registerFileObject,
+  registerPendingFileObject,
+  markFileObjectDeleted,
+} from '@/lib/file-registry';
+import {
+  REFERENCE_PREFIX,
+  buildReferenceObjectKey,
+  contentTypeOf,
+  isReferenceObjectKey,
+  parseUploadDescriptors,
+  type UploadDescriptor,
+  type UploadTicket,
+} from '@/lib/directUpload/shared';
+import { issueTicket, newUploadId, verifyUploaded } from '@/lib/directUpload/server';
 
 /**
  * Reference-items helpers.
  *
  * Reference-item images follow the SAME file procedure as everything else in
- * the system — `putObject` → `registerFileObject` (file_objects registry) →
- * served back through a streaming route — the only difference is the target
+ * the system — a direct browser → MinIO upload through a presigned ticket, a
+ * server-side verify, `registerFileObject` (file_objects registry), and a
+ * streaming route to serve them back — the only difference is the target
  * bucket: the dedicated `REFERENCE_BUCKET` ("RU") instead of the default one.
- * Keeping the flow identical is why this lives next to the storage layer.
+ *
+ * Flow:
+ *   1. POST images/presign            → presignReferenceImages(): tickets + pending rows
+ *   2. browser POSTs each file to MinIO
+ *   3. POST/PUT reference-items       → verifyReferenceImageUploads() checks every
+ *                                       key BEFORE anything is created or deleted,
+ *                                       attachReferenceImages() then makes the rows
  */
 
-/** Key prefix inside the reference bucket: `reference-items/{id}/...`. */
-export const REFERENCE_PREFIX = 'reference-items';
+export { REFERENCE_PREFIX };
 
 /** Max size per reference image (matches the dialog copy: "עד 50MB לתמונה"). */
-export const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
+export const MAX_IMAGE_SIZE_MB = 50;
+export const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
 /** Build the browser-facing URL that streams an object from the RU bucket. */
 export function imageUrl(objectKey: string): string {
@@ -24,12 +45,6 @@ export function imageUrl(objectKey: string): string {
     .split('/')
     .map(encodeURIComponent)
     .join('/')}`;
-}
-
-/** Filesystem-safe object-key segment derived from the uploaded file name. */
-function safeName(name: string): string {
-  const base = name.split(/[\\/]/).pop() || 'image';
-  return base.replace(/[^\w.-]+/g, '_').slice(0, 200) || 'image';
 }
 
 type ImageRow = {
@@ -43,7 +58,7 @@ type ImageRow = {
 
 type ReferenceItemRow = {
   reference_item_id: number;
-  item_type_id: number; 
+  item_type_id: number;
   reference_weight: string | null;
   manufacturer_sku: string;
   manufacturer: string;
@@ -105,40 +120,6 @@ export const referenceItemInclude = {
 } as const;
 
 /**
- * Pair uploaded files with their photo-type codes from a multipart form.
- * `image_types` is a JSON array of codes aligned with the `images` file order
- * (mirrors the primaryIndex "parallel field" pattern); a single `photo_type`
- * field is accepted as a shorthand that applies to every file in the batch.
- * Throws (Hebrew, user-facing) when a file arrives without a valid type.
- */
-export async function pairFilesWithTypes(
-  form: FormData,
-  files: File[],
-): Promise<Array<{ file: File; photoTypeId: number }>> {
-  if (files.length === 0) return [];
-
-  let codes: string[] = [];
-  const raw = String(form.get('image_types') ?? '').trim();
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) codes = parsed.map(String);
-    } catch {
-      throw new Error('image_types אינו JSON תקין');
-    }
-  } else {
-    const single = String(form.get('photo_type') ?? '').trim();
-    if (single) codes = files.map(() => single);
-  }
-  if (codes.length !== files.length) {
-    throw new Error('יש לציין סוג תמונה לכל תמונה שמועלית');
-  }
-
-  const idByCode = await resolvePhotoTypeIds(codes);
-  return files.map((file, i) => ({ file, photoTypeId: idByCode.get(codes[i])! }));
-}
-
-/**
  * Resolve photo-type codes (the stable strings screens speak, e.g. "package")
  * to their DB ids. Throws (Hebrew, user-facing) on an unknown/inactive code so
  * routes can surface it as a 400.
@@ -152,64 +133,194 @@ export async function resolvePhotoTypeIds(codes: string[]): Promise<Map<string, 
   });
   const map = new Map(rows.map((r) => [r.code, r.photo_type_id]));
   const missing = unique.filter((c) => !map.has(c));
-  if (missing.length > 0) throw new Error(`סוג תמונה לא מוכר: ${missing.join(", ")}`);
+  if (missing.length > 0) throw new Error(`סוג תמונה לא מוכר: ${missing.join(', ')}`);
   return map;
 }
 
+// ---- step 1: presign -------------------------------------------------------
+
+/** A file the browser wants to upload, plus the photo group it belongs to. */
+export interface ReferenceImageDescriptor extends UploadDescriptor {
+  photoType: string;
+}
+
 /**
- * Upload files to the RU bucket, insert `reference_item_images` rows, and
- * register each object in `file_objects`. Returns the created image rows.
- * Skips non-image files and rejects anything over MAX_IMAGE_SIZE.
- * Every upload carries its photo-type id (resolve codes via resolvePhotoTypeIds).
+ * Parse the `files` array of an images/presign request: the generic descriptor
+ * rules (name, size ≤ 50MB) plus "must look like an image" and "must carry a
+ * photo-type code". Same rule the old multipart route applied to types: a
+ * declared non-image type is refused, an unknown/empty type is let through.
  */
-export async function uploadReferenceImages(
+export function parseReferenceImageDescriptors(
+  raw: unknown,
+): { ok: true; files: ReferenceImageDescriptor[] } | { ok: false; error: string } {
+  const parsed = parseUploadDescriptors(raw, MAX_IMAGE_SIZE, MAX_IMAGE_SIZE_MB);
+  if (!parsed.ok) return parsed;
+
+  const entries = raw as Array<Record<string, unknown>>;
+  const files: ReferenceImageDescriptor[] = [];
+  for (let i = 0; i < parsed.files.length; i++) {
+    const desc = parsed.files[i];
+    if (desc.type && !desc.type.startsWith('image/')) {
+      return { ok: false, error: `הקובץ ${desc.name} אינו תמונה` };
+    }
+    const code = entries[i]?.photoType;
+    if (typeof code !== 'string' || code.trim() === '') {
+      return { ok: false, error: 'יש לציין סוג תמונה לכל תמונה שמועלית' };
+    }
+    files.push({ ...desc, photoType: code.trim() });
+  }
+  return { ok: true, files };
+}
+
+/**
+ * Mint one ticket per image into the RU bucket and reserve a pending registry
+ * row for each. Photo-type codes must already be validated by the caller
+ * (resolvePhotoTypeIds) so a bad code never reaches this point.
+ */
+export async function presignReferenceImages(
+  files: ReferenceImageDescriptor[],
+  referenceItemId: number | null,
+): Promise<UploadTicket[]> {
+  return Promise.all(
+    files.map(async (file) => {
+      const objectKey = buildReferenceObjectKey(referenceItemId, file.name, newUploadId());
+      const contentType = contentTypeOf(file);
+      await registerPendingFileObject({
+        objectKey,
+        fileName: file.name,
+        contentType,
+        sizeBytes: file.size,
+        entityType: 'reference_item_image',
+        entityId: referenceItemId,
+        metadata: { photoType: file.photoType },
+        bucket: REFERENCE_BUCKET,
+      });
+      return issueTicket({
+        key: objectKey,
+        fileName: file.name,
+        contentType,
+        maxBytes: MAX_IMAGE_SIZE,
+        bucket: REFERENCE_BUCKET,
+      });
+    }),
+  );
+}
+
+// ---- step 3: save ----------------------------------------------------------
+
+/** What the form sends back for each image it uploaded through a ticket. */
+export interface ReferenceImageUpload {
+  objectKey: string;
+  fileName: string;
+  photoType: string;
+}
+
+/** Parse the `images` array of a save body. Throws (Hebrew, user-facing). */
+export function parseReferenceImageUploads(raw: unknown): ReferenceImageUpload[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) throw new Error('רשימת התמונות אינה תקינה');
+  return raw.map((entry) => {
+    const { objectKey, fileName, photoType } = (entry ?? {}) as Record<string, unknown>;
+    if (typeof objectKey !== 'string' || !isReferenceObjectKey(objectKey)) {
+      throw new Error('מפתח תמונה לא תקין');
+    }
+    if (typeof photoType !== 'string' || photoType.trim() === '') {
+      throw new Error('יש לציין סוג תמונה לכל תמונה שמועלית');
+    }
+    return {
+      objectKey,
+      fileName:
+        typeof fileName === 'string' && fileName.trim() !== ''
+          ? fileName
+          : objectKey.split('/').pop() || 'image',
+      photoType: photoType.trim(),
+    };
+  });
+}
+
+export interface VerifiedReferenceImage extends ReferenceImageUpload {
+  photoTypeId: number;
+  size: number;
+  contentType: string;
+  etag: string | null;
+}
+
+/**
+ * Check that every uploaded image actually landed in the RU bucket, is an
+ * image within the cap, and resolve its photo-type id. Runs BEFORE any row is
+ * created or deleted, so a failed or forged upload cannot half-apply a save.
+ * Throws (Hebrew, user-facing).
+ */
+export async function verifyReferenceImageUploads(
+  uploads: ReferenceImageUpload[],
+): Promise<VerifiedReferenceImage[]> {
+  if (uploads.length === 0) return [];
+  const idByCode = await resolvePhotoTypeIds(uploads.map((u) => u.photoType));
+
+  const verified: VerifiedReferenceImage[] = [];
+  for (const upload of uploads) {
+    const check = await verifyUploaded(upload.objectKey, MAX_IMAGE_SIZE, REFERENCE_BUCKET);
+    if (!check.ok) {
+      throw new Error(
+        check.status === 404
+          ? `התמונה ${upload.fileName} לא נמצאה באחסון — יש להעלות אותה מחדש`
+          : `הקובץ ${upload.fileName} חורג מהגודל המרבי (${MAX_IMAGE_SIZE_MB}MB)`,
+      );
+    }
+    const contentType = check.info.contentType;
+    // octet-stream = the browser did not know the type; anything else must be an image.
+    if (contentType !== 'application/octet-stream' && !contentType.startsWith('image/')) {
+      throw new Error(`הקובץ ${upload.fileName} אינו תמונה`);
+    }
+    verified.push({
+      ...upload,
+      photoTypeId: idByCode.get(upload.photoType)!,
+      size: check.info.size,
+      contentType,
+      etag: check.info.etag,
+    });
+  }
+  return verified;
+}
+
+/**
+ * Insert `reference_item_images` rows for verified uploads (appended after
+ * `startSort`) and activate their registry rows. Returns the created image rows.
+ */
+export async function attachReferenceImages(
   referenceItemId: number,
-  uploads: Array<{ file: File; photoTypeId: number }>,
+  images: VerifiedReferenceImage[],
   startSort = 0,
 ): Promise<{ reference_item_image_id: number }[]> {
   const created: { reference_item_image_id: number }[] = [];
   let i = 0;
 
-  for (const { file, photoTypeId } of uploads) {
-    if (!file || typeof file.arrayBuffer !== 'function') continue;
-    if (file.type && !file.type.startsWith('image/')) {
-      throw new Error(`הקובץ ${file.name} אינו תמונה`);
-    }
-    if (file.size > MAX_IMAGE_SIZE) {
-      throw new Error(`הקובץ ${file.name} חורג מהגודל המרבי (50MB)`);
-    }
-
+  for (const img of images) {
     const sortOrder = startSort + i;
-    const objectKey = `${REFERENCE_PREFIX}/${referenceItemId}/${Date.now()}-${sortOrder}-${safeName(
-      file.name,
-    )}`;
-    const contentType = file.type || 'application/octet-stream';
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    const stored = await putObject(objectKey, buffer, contentType, {}, REFERENCE_BUCKET);
-
     const row = await prisma.reference_item_images.create({
       data: {
         reference_item_id: referenceItemId,
         bucket: REFERENCE_BUCKET,
-        object_key: objectKey,
-        file_name: file.name.slice(0, 255),
-        content_type: contentType,
-        size_bytes: BigInt(stored.size),
+        object_key: img.objectKey,
+        file_name: img.fileName.slice(0, 255),
+        content_type: img.contentType,
+        size_bytes: BigInt(img.size),
         sort_order: sortOrder,
-        photo_type_id: photoTypeId,
+        photo_type_id: img.photoTypeId,
       },
       select: { reference_item_image_id: true },
     });
 
     await registerFileObject({
-      objectKey,
-      fileName: file.name,
-      contentType,
-      sizeBytes: stored.size,
-      checksum: stored.checksum,
+      objectKey: img.objectKey,
+      fileName: img.fileName,
+      contentType: img.contentType,
+      sizeBytes: img.size,
+      // Direct upload: no server-side sha256; MinIO's ETag stands in.
+      checksum: null,
       entityType: 'reference_item_image',
       entityId: referenceItemId,
+      metadata: { photoType: img.photoType, etag: img.etag, uploadedVia: 'direct' },
       bucket: REFERENCE_BUCKET,
     });
 

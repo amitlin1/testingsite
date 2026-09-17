@@ -33,6 +33,7 @@ import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
 import TextEditorModal from "./TextEditorModal";
 import OnlyOfficeEditorModal from "./OnlyOfficeEditorModal";
 import { apiFetch } from "@/lib/api/client";
+import { uploadItemFiles, replaceItemFile } from "@/lib/api/direct-upload";
 
 type ItemFile = {
   objectKey: string;
@@ -118,6 +119,8 @@ export default function ItemFilesPanel({
   const [files, setFiles] = React.useState<ItemFile[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
+  // 0–100 across the whole batch while files stream to MinIO; null = no byte count yet.
+  const [uploadProgress, setUploadProgress] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [dragging, setDragging] = React.useState(false);
   // When on (station context only), new uploads are marked global (shown at all stations).
@@ -182,22 +185,36 @@ export default function ItemFilesPanel({
     if (arr.length === 0) return;
     setError(null);
     setUploading(true);
+    setUploadProgress(0);
+    // Files go straight from the browser to MinIO; the app only issues tickets
+    // and records the result, so this progress is the real transfer.
+    const totalBytes = arr.reduce((sum, f) => sum + f.size, 0);
+    const sent = new Array<number>(arr.length).fill(0);
     try {
-      const fd = new FormData();
-      for (const f of arr) fd.append("files", f);
-      fd.append("worker_id", String(effectiveWorkerId));
-      if (stationTypeId != null) fd.append("station_type_id", String(stationTypeId));
-      if (globalUpload) fd.append("is_global", "true");
-      const r = await apiFetch(listUrl, { method: "POST", body: fd });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || "שגיאה בהעלאה");
+      const results = await uploadItemFiles(itemId, arr, {
+        workerId: effectiveWorkerId,
+        stationTypeId,
+        isGlobal: globalUpload,
+        onProgress: (index, loaded) => {
+          sent[index] = loaded;
+          if (totalBytes > 0) {
+            const done = sent.reduce((sum, n) => sum + n, 0);
+            setUploadProgress(Math.min(100, Math.round((done / totalBytes) * 100)));
+          }
+        },
+      });
+      const failed = results.filter((r) => r.error);
+      if (failed.length === 1) {
+        setError(`${failed[0].fileName}: ${failed[0].error}`);
+      } else if (failed.length > 1) {
+        setError(`${failed.length} קבצים לא הועלו — ${failed[0].error}`);
       }
       await refresh();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -232,23 +249,18 @@ export default function ItemFilesPanel({
     if (!ensureWorker()) return;
     setError(null);
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("worker_id", String(effectiveWorkerId));
-      const r = await apiFetch(
-        `${listUrl}?key=${encodeURIComponent(target.objectKey)}`,
-        { method: "PATCH", body: fd },
+      // Same key, new bytes, uploaded straight to MinIO; versioning keeps the old ones.
+      await replaceItemFile(itemId, target.objectKey, file, effectiveWorkerId, (loaded, total) =>
+        setUploadProgress(total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : null),
       );
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || "שגיאה בהחלפת קובץ");
-      }
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError((e as Error).message || "שגיאה בהחלפת קובץ");
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -359,7 +371,12 @@ export default function ItemFilesPanel({
           overflow: "auto",
         }}
       >
-        {uploading && <LinearProgress />}
+        {uploading && (
+          <LinearProgress
+            variant={uploadProgress == null ? "indeterminate" : "determinate"}
+            value={uploadProgress ?? 0}
+          />
+        )}
 
         {loading && files.length === 0 ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>

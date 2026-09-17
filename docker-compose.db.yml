@@ -19,9 +19,11 @@
 # It persists across container restarts and image upgrades.
 # Only 'docker compose down -v' will delete it.
 #
-# Firewall: open port 5432 (Postgres) and 9000 (MinIO API)
-# to the PROD server's IP only. Port 9001 (MinIO console)
-# should only be accessible from trusted admin IPs.
+# Firewall: open port 5432 (Postgres) to the PROD server's IP
+# only. Open 9000 (MinIO API) to the PROD server AND to the
+# client network — browsers upload files straight to MinIO
+# with presigned tickets (docs/STORAGE.md). Port 9001 (MinIO
+# console) should only be accessible from trusted admin IPs.
 # ===========================================
 
 services:

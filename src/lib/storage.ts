@@ -1,6 +1,12 @@
 import { createHash } from 'crypto';
 import type { Readable } from 'stream';
-import minioClient, { BUCKET, REFERENCE_BUCKET, ensureBucket } from './minio';
+import minioClient, {
+  BUCKET,
+  REFERENCE_BUCKET,
+  MINIO_PUBLIC_ENDPOINT,
+  ensureBucket,
+  presignClient,
+} from './minio';
 
 /**
  * Storage service — the ONLY module that talks to MinIO directly.
@@ -9,9 +15,16 @@ import minioClient, { BUCKET, REFERENCE_BUCKET, ensureBucket } from './minio';
  * (signatures, file manager) go through these helpers so that swapping
  * the backend, adding caching, or changing the bucket layout is a
  * one-file change.
+ *
+ * Two ways bytes get in:
+ *   - putObject()   — server-side writes (signatures, OnlyOffice saves, inline
+ *                     text edits). The bytes pass through this process.
+ *   - presignPost() — browser uploads. The app only signs a POST policy; the
+ *                     browser sends the bytes straight to MinIO and the route
+ *                     then verifies the object with inspectUploadedObject().
  */
 
-export { BUCKET, REFERENCE_BUCKET, ensureBucket };
+export { BUCKET, REFERENCE_BUCKET, MINIO_PUBLIC_ENDPOINT, ensureBucket };
 
 export interface StoredObject {
   /** Full object key inside the bucket, e.g. "shipments/12/recv_169..._42.png" */
@@ -51,6 +64,66 @@ export async function putObject(
     contentType,
     etag: result.etag,
     checksum,
+  };
+}
+
+/** A signed browser→MinIO upload: POST `fields` + the file (last) to `url`. */
+export interface PresignedPost {
+  url: string;
+  fields: Record<string, string>;
+  /** ISO timestamp after which MinIO refuses the POST. */
+  expiresAt: string;
+}
+
+/**
+ * Sign a POST policy the browser can use to upload ONE object directly to
+ * MinIO, bypassing this server entirely. The policy pins the bucket, the exact
+ * key, the Content-Type and a size ceiling, so the ticket cannot be reused for
+ * anything else. Bucket existence is ensured here (app-side) because the
+ * browser's POST would otherwise fail with NoSuchBucket.
+ */
+export async function presignPost(opts: {
+  key: string;
+  contentType: string;
+  maxBytes: number;
+  expirySeconds: number;
+  bucket?: string;
+}): Promise<PresignedPost> {
+  const bucket = opts.bucket ?? BUCKET;
+  await ensureBucket(bucket);
+
+  const expiresAt = new Date(Date.now() + opts.expirySeconds * 1000);
+  const policy = presignClient.newPostPolicy();
+  policy.setBucket(bucket);
+  policy.setKey(opts.key);
+  policy.setContentType(opts.contentType);
+  policy.setContentLengthRange(0, opts.maxBytes);
+  policy.setExpires(expiresAt);
+
+  const { postURL, formData } = await presignClient.presignedPostPolicy(policy);
+  return { url: postURL, fields: formData, expiresAt: expiresAt.toISOString() };
+}
+
+/** What MinIO reports about an object the browser says it uploaded. */
+export interface UploadedObjectInfo {
+  size: number;
+  contentType: string;
+  etag: string | null;
+  lastModified: Date | null;
+}
+
+/** Stat an object after a direct upload. null = nothing landed under that key. */
+export async function inspectUploadedObject(
+  key: string,
+  bucket: string = BUCKET,
+): Promise<UploadedObjectInfo | null> {
+  const stat = await statObject(key, bucket);
+  if (!stat) return null;
+  return {
+    size: stat.size,
+    contentType: (stat.metaData?.['content-type'] as string) || 'application/octet-stream',
+    etag: stat.etag ?? null,
+    lastModified: stat.lastModified ?? null,
   };
 }
 

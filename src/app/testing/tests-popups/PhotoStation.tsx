@@ -2,7 +2,7 @@
 import * as React from "react";
 import { Stack, Chip } from "@/components/ui";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
-import { apiFetch } from "@/lib/api/client";
+import { uploadItemFiles } from "@/lib/api/direct-upload";
 import {
   type Photos, type RefImg, emptyPhotos, lookupRU,
   SkuScreen, PhotoSection, PhotoUploader, VerdictCard,
@@ -59,21 +59,20 @@ export default function PhotoStation({
   ];
 
   // ---- real photo upload (reuses the item-files pipeline) ----
-  // Every capture is tagged with the station's photo-type code so each screen /
-  // station lists only its own group (GET /files?photoType=...). A null return
-  // means the photo never reached storage; the shot is then flagged failed so it
-  // reads red instead of looking saved.
+  // The photo goes straight from the browser to MinIO (presign → POST → confirm);
+  // the app never sees the bytes. Every capture is tagged with the station's
+  // photo-type code so each screen / station lists only its own group
+  // (GET /files?photoType=...). A null return means the photo never reached
+  // storage; the shot is then flagged failed so it reads red instead of looking
+  // saved.
   const uploadToItem = React.useCallback(async (itemId: number, file: File): Promise<string | null> => {
     try {
-      const fd = new FormData();
-      fd.append("files", file);
-      if (workerId != null) fd.append("worker_id", String(workerId));
-      fd.append("station_type_id", String(station.test_station_type_id));
-      fd.append("photo_type", config.photoType);
-      const res = await apiFetch(`/api/items/${itemId}/files`, { method: "POST", body: fd });
-      if (!res.ok) return null;
-      const d = await res.json();
-      return d.uploaded?.[0]?.objectKey ?? null;
+      const [result] = await uploadItemFiles(itemId, [file], {
+        workerId,
+        stationTypeId: station.test_station_type_id,
+        photoType: config.photoType,
+      });
+      return result?.objectKey ?? null;
     } catch { return null; }
   }, [workerId, station.test_station_type_id, config.photoType]);
 

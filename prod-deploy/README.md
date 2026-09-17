@@ -67,7 +67,10 @@ of it), DB server ~170 MB.
 - No SQL client needed — every database step runs through `psql` inside the
   postgres container.
 - Two fixed IPs. Write them down — you will type each one exactly twice.
-- **Firewall, DB server:** allow `5432` and `9000` from the APP server's IP only.
+- **Firewall, DB server:** allow `5432` from the APP server's IP only, and
+  `9000` from the APP server **and from the client network** — browsers upload
+  files straight to MinIO with presigned tickets, so port 9000 must reach
+  end-user PCs. Keep `9001` (MinIO console) closed to clients.
 - **Firewall, app server:** allow `80` and `8082` from the client network.
   Port 8082 must reach **end-user browsers**, not just the servers — the
   OnlyOffice editor runs in the user's browser.

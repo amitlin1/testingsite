@@ -99,6 +99,10 @@ services:
       # ---- DB SERVER ----
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}
       - MINIO_ENDPOINT=http://${DB_HOST}:${MINIO_PORT:-9000}
+      # Where BROWSERS upload files straight to MinIO (presigned tickets). Empty
+      # = same as MINIO_ENDPOINT, which is right here: http://<DB-IP>:9000 is
+      # reachable from the app and from every client PC alike.
+      - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT:-}
     networks:
       - shifthouse-network
     expose:

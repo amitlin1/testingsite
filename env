@@ -76,6 +76,10 @@ MINIO_ROOT_USER=digitalfactory-admin
 MINIO_ROOT_PASSWORD=Strong_Pass_123
 # Point to the DB server IP/hostname, port 9000 must be open
 MINIO_ENDPOINT=http://host.docker.internal:9000
+# Address BROWSERS use to upload files straight to MinIO (presigned tickets).
+# Defaults to MINIO_ENDPOINT; host.docker.internal only resolves INSIDE the
+# container, so name the machine as clients reach it (LAN IP for other PCs).
+MINIO_PUBLIC_ENDPOINT=http://localhost:9000
 MINIO_BUCKET=digitalfactory-files
 
 # -----------------------------------------

@@ -53,6 +53,7 @@ import { Error as ErrorIcon } from "@/components/ui/icons";
 import { FileIcon } from "@/app/components/files/FileIcon";
 import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
 import { apiFetch } from "@/lib/api/client";
+import { uploadFileManagerFile, mapWithConcurrency } from "@/lib/api/direct-upload";
 
 interface FileItem {
   name: string;
@@ -148,62 +149,31 @@ export default function FilesPage() {
       setUploadFileStates(states);
       setUploadOpen(true);
 
-      selectedFiles.forEach((file, index) => {
-        const formData = new FormData();
-        formData.append("files", file);
-        formData.append("path", currentPath);
-
+      const patch = (index: number, changes: Partial<UploadFileState>) =>
         setUploadFileStates((prev) => {
           const next = [...prev];
-          next[index] = { ...next[index], status: "uploading" };
+          next[index] = { ...next[index], ...changes };
           return next;
         });
 
-        // NOTE: XHR is used here for upload progress events; it does NOT go
-        // through apiFetch, so it should handle its own 401 (token expiry).
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const pct = Math.round((e.loaded / e.total) * 100);
-            setUploadFileStates((prev) => {
-              const next = [...prev];
-              next[index] = { ...next[index], progress: pct };
-              return next;
-            });
-          }
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            setUploadFileStates((prev) => {
-              const next = [...prev];
-              next[index] = { ...next[index], progress: 100, status: "done" };
-              return next;
-            });
-          } else {
-            setUploadFileStates((prev) => {
-              const next = [...prev];
-              next[index] = {
-                ...next[index],
-                status: "error",
-                error: "שגיאה בהעלאה",
-              };
-              return next;
-            });
-          }
-        };
-        xhr.onerror = () => {
-          setUploadFileStates((prev) => {
-            const next = [...prev];
-            next[index] = {
-              ...next[index],
-              status: "error",
-              error: "שגיאת רשת",
-            };
-            return next;
+      // Each file goes straight from the browser to MinIO (presigned POST); the
+      // app only issues the ticket and records the result, so the bar tracks the
+      // real transfer. A few at a time so a big drop does not open dozens of
+      // connections at once. presign/confirm go through apiFetch, so an expired
+      // session is refreshed like everywhere else.
+      void mapWithConcurrency(selectedFiles, 3, async (file, index) => {
+        patch(index, { status: "uploading" });
+        try {
+          await uploadFileManagerFile(currentPath, file, (loaded, total) =>
+            patch(index, { progress: total > 0 ? Math.round((loaded / total) * 100) : 0 }),
+          );
+          patch(index, { progress: 100, status: "done" });
+        } catch (e) {
+          patch(index, {
+            status: "error",
+            error: e instanceof Error ? e.message : "שגיאה בהעלאה",
           });
-        };
-        xhr.open("POST", "/api/files/upload");
-        xhr.send(formData);
+        }
       });
     },
     [currentPath]

@@ -3,6 +3,10 @@
  *
  *   - Objects present in MinIO but missing from the registry  -> inserted.
  *   - Active registry rows whose object is gone from MinIO     -> soft-deleted.
+ *   - Pending rows (direct-upload ticket issued, never confirmed) older than a
+ *     day whose object never arrived                           -> soft-deleted.
+ *     A pending row whose object DID arrive is adopted as active by the first
+ *     step: the bytes are real, only the confirm call was lost.
  *
  * The registry is best-effort, so run this periodically (or after incidents)
  * to keep the index/audit log accurate. Read-only against MinIO; only the
@@ -89,9 +93,20 @@ async function main() {
     }
   }
 
+  // Sweep stale pending rows: a presigned ticket was issued but the browser
+  // never confirmed AND nothing landed under the key (live keys were already
+  // flipped to 'active' by the insert loop above). One day covers the 1h ticket
+  // window with room. Scoped to this bucket — reference images live elsewhere.
+  const swept = await pool.query(
+    `UPDATE file_objects SET status='deleted', deleted_at=now()
+     WHERE bucket=$1 AND status='pending' AND created_at < now() - interval '1 day'`,
+    [BUCKET],
+  );
+  const pendingSwept = swept.rowCount ?? 0;
+
   await pool.end();
   console.log(
-    `Reconcile done. objects=${objects.length} inserted=${inserted} soft-deleted=${softDeleted}`,
+    `Reconcile done. objects=${objects.length} inserted=${inserted} soft-deleted=${softDeleted} pending-swept=${pendingSwept}`,
   );
 }
 
