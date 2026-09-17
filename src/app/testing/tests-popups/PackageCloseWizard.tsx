@@ -224,7 +224,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
 
       <PackageDecisionDialog
         open={decideFor != null}
-        item={decideFor ? { package_seq: decideFor.package_seq, item_type_desc: decideFor.item_type_desc, station_name: decideFor.station_name } : null}
+        item={decideFor ? { item_id: decideFor.item_id, package_seq: decideFor.package_seq, item_type_desc: decideFor.item_type_desc, station_name: decideFor.station_name } : null}
         onClose={() => setDecideFor(null)}
         onSave={(decision, n) => { if (decideFor) setDecisions((d) => ({ ...d, [decideFor.item_id]: { decision, note: n } })); setDecideFor(null); }}
       />

@@ -13,13 +13,18 @@ export default function PackageDecisionDialog({
   open, item, onClose, onSave,
 }: {
   open: boolean;
-  item: { package_seq: number | null; item_type_desc: string; station_name: string | null } | null;
+  item: { item_id: string; package_seq: number | null; item_type_desc: string; station_name: string | null } | null;
   onClose: () => void;
   onSave: (decision: PackDecision, note: string) => void;
 }) {
   const [choice, setChoice] = React.useState<PackDecision | null>(null);
   const [note, setNote] = React.useState("");
-  React.useEffect(() => { if (open) { setChoice(null); setNote(""); } }, [open, item]);
+  // Reset only when the dialog opens for a DIFFERENT item. The testing page
+  // re-renders every second (its elapsed-time clocks), which hands this dialog
+  // a fresh `item` object each time — keying on the object wiped the worker's
+  // choice and note mid-typing.
+  const itemId = item?.item_id ?? null;
+  React.useEffect(() => { if (open) { setChoice(null); setNote(""); } }, [open, itemId]);
   if (!open || !item) return null;
 
   const choices: { key: PackDecision; label: string; note: string; tone: string }[] = [
