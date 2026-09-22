@@ -14,6 +14,7 @@
   --color-primary-hover:#0058b3;
   --color-primary-focus:#0071e3;      /* 2px focus ring */
   --color-primary-on-dark:#2997ff;    /* links on dark tiles ONLY */
+  --color-primary-tint:#f3f8ff;       /* selected row / soft primary wash on light */
   --color-on-primary:#ffffff;
   --color-destructive:#bf3535;
   --color-destructive-hover:#a82d2d;
@@ -33,6 +34,7 @@
   --color-body-muted:#cccccc;
   --color-ink-muted-80:#333333;
   --color-ink-muted-48:#7a7a7a;
+  --color-ink-muted-40:#9a9aa0;       /* secondary line under a label, empty states */
 
   /* Hairlines */
   --color-divider-soft:#f0f0f0;

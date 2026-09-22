@@ -38,6 +38,7 @@ not `DROP TABLE`, because the tables themselves *are* declared.
 | `item_state_event` indexes | `ise_super` (partial — declared indexes `ise_run`/`ise_item` and constraint `ise_key_uq` are Prisma-managed but guarded belt-and-braces) |
 | `route_run` indexes | `route_run_uq`, `route_run_one_open`, `route_run_closed` |
 | Calendar | `wcv_one_current`, `work_span_no_overlap` (EXCLUDE gist), `work_span_ladder` |
+| Package-model upgrade (production only) | `legacy_id_map` — the old→new id map written by `scripts/prod-package-model/2-upgrade-to-packages.sql`, not declared in the schema; read by `/api/testing/locate-by-barcode` (old labels) and `/api/packages/converted` (reprint). Prisma's diff sees it (and its index `legacy_id_map_legacy_idx`) as drift on an upgraded database; the guard refuses any generated `DROP` of either. |
 | Ops | `metrics_drift_open`, `job_run_recent` |
 | Guards added to legacy tables | `testing_routes_type_number_uq` (unique index on `testing_routes`), `ir_item_fk` (FK `item_routes → items`, added `NOT VALID`) |
 | Triggers | `trg_ise_immutable` (event immutability), `trg_isi_apply` (the fold), `trg_metrics_drift` (dual-run drift detector on `item_routes`) |

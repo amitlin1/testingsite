@@ -3,10 +3,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import { launch, login, api, goto, shot, bodyHas, check, summary, S } from "./lib.mjs";
+import { launch, login, api, goto, shot, bodyHas, check, summary, S, resolveConfig } from "./lib.mjs";
 
-const OPENING_TYPE = 5, CLOSING_TYPE = 8, PKG_TYPE_AMP = 15;
-const TYPES = { amp: 6, kit: 11 };
+// Ids are resolved by name from the running app after login (lib.mjs resolveConfig).
+let OPENING_TYPE, CLOSING_TYPE, PKG_TYPE_AMP, TYPES;
 const uuid = () => crypto.randomUUID();
 const tag = Date.now().toString().slice(-6);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -75,6 +75,7 @@ async function typeInto(page, placeholder, text) {
 const { browser, page, errors } = await launch();
 try {
   await login(page);
+  ({ OPENING_TYPE, CLOSING_TYPE, PKG_TYPE: PKG_TYPE_AMP, TYPES } = await resolveConfig(page));
   const stations = async (typeId) => (await api(page, `/api/testing/test-stations?typeId=${typeId}`)).json || [];
   const openSt = (await stations(OPENING_TYPE)).find((s) => !s.is_research);
   // release boxes a previous aborted run left "in test" at the opening station

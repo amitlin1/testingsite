@@ -55,6 +55,7 @@ export interface StationWire extends StationLoadRow {
   _new_oldestQueueAgeWallMinutes: number | null;
   _new_oldestQueueAgeWorkMinutes: number | null;
   _new_p95QueueAgeWallMinutes: number | null;
+  _new_p95QueueAgeWorkMinutes: number | null;
   _new_activeTestAgeWallMinutes: number | null;
   _new_activeTestAgeWorkMinutes: number | null;
   _new_operations: number;

@@ -601,8 +601,9 @@ export interface StationBoardRow {
    *  not "is something rotting" — which is the question this board is read for. */
   oldest_queue_age_wall_min: number | null;
   oldest_queue_age_work_min: number | null;
-  /** The robust shoulder: says whether the max is one stale row or a backlog. */
+  /** The robust shoulder: says whether the max is one stale row or a backlog. Both clocks (§2.8). */
   p95_queue_age_wall_min: number | null;
+  p95_queue_age_work_min: number | null;
   research_pool_queue: number;
   active_test_age_wall_min: number | null;
   active_test_age_work_min: number | null;
@@ -639,7 +640,9 @@ WITH type_queue AS (
          max(EXTRACT(EPOCH FROM (now() - lower(q.valid_range))))/60 AS oldest_wall_min,
          max(work_seconds_between(lower(q.valid_range), now()))/60   AS oldest_work_min,
          percentile_cont(0.95) WITHIN GROUP (
-           ORDER BY EXTRACT(EPOCH FROM (now() - lower(q.valid_range))))/60 AS p95_wall_min
+           ORDER BY EXTRACT(EPOCH FROM (now() - lower(q.valid_range))))/60 AS p95_wall_min,
+         percentile_cont(0.95) WITHIN GROUP (
+           ORDER BY work_seconds_between(lower(q.valid_range), now()))/60    AS p95_work_min
   FROM item_state_interval q
   WHERE q.valid_range @> now() AND NOT q.is_terminal AND q.state_key = 'queued'
   GROUP BY q.station_type_id
@@ -665,6 +668,7 @@ SELECT st.test_station_id,
        tq.oldest_wall_min                                           AS oldest_queue_age_wall_min,
        tq.oldest_work_min                                           AS oldest_queue_age_work_min,
        tq.p95_wall_min                                              AS p95_queue_age_wall_min,
+       tq.p95_work_min                                              AS p95_queue_age_work_min,
        rp.n                                                         AS research_pool_queue,
        avg(EXTRACT(EPOCH FROM (now() - lower(i.valid_range))))
          FILTER (WHERE NOT ${pkgDupActive("i")})/60                     AS active_test_age_wall_min,
@@ -679,7 +683,7 @@ LEFT JOIN item_state_interval i
       AND i.valid_range @> now() AND NOT i.is_terminal
 GROUP BY st.test_station_id, st.test_station_desc, sty.test_type_desc, st.test_station_type_id,
          tq.n, tq.age_wall_min, tq.age_work_min,
-         tq.oldest_wall_min, tq.oldest_work_min, tq.p95_wall_min, rp.n
+         tq.oldest_wall_min, tq.oldest_work_min, tq.p95_wall_min, tq.p95_work_min, rp.n
 ORDER BY st.test_station_id`;
   return { sql, params: [] };
 }
@@ -700,6 +704,7 @@ export async function stationBoard(client: MetricsClient): Promise<StationBoardR
     oldest_queue_age_wall_min: num(r.oldest_queue_age_wall_min),
     oldest_queue_age_work_min: num(r.oldest_queue_age_work_min),
     p95_queue_age_wall_min: num(r.p95_queue_age_wall_min),
+    p95_queue_age_work_min: num(r.p95_queue_age_work_min),
     research_pool_queue: cnt(r.research_pool_queue),
     active_test_age_wall_min: num(r.active_test_age_wall_min),
     active_test_age_work_min: num(r.active_test_age_work_min),

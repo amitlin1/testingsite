@@ -113,7 +113,10 @@ export default function PhotoStation({
   // ---- finish: one result for the item ----
   const keysOf = (ph: Photos) => ph.photos.map((s) => s.objectKey).filter(Boolean);
   const pass = photo.ok === "pass";
-  const canFinish = skuScan.trim().length > 0 && photo.ok !== "";
+  // A shot still uploading, or one whose upload failed, blocks finishing: a
+  // failed upload leaves nothing in storage, so finishing would silently lose
+  // the photo. The worker removes the red shot and takes it again.
+  const canFinish = skuScan.trim().length > 0 && photo.ok !== "" && !photo.photos.some((s) => s.uploading || s.failed);
 
   const onFinish = async () => {
     if (workerId == null) { setError("יש לבחור עובד בכותרת מסך הבדיקות"); return; }

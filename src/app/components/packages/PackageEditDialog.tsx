@@ -1,11 +1,12 @@
 "use client";
 import React from "react";
-import { X, Lock, Info, Trash2, Plus } from "lucide-react";
+import { X, Info, Trash2, Plus } from "lucide-react";
 import type { PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import PackageIdText from "./PackageIdText";
 import LastItemDialog from "./LastItemDialog";
-import { BLUE, HAIR, HAIR_2, INK, INK_2, MUTED, MUTED_LT, RED, SHADOW, fieldInput, overlay, pillGhost, pillPrimary, seq2 } from "./packageUi";
+import { DIALOG_Z, BLUE, HAIR, HAIR_2, INK, INK_2, MUTED, MUTED_LT, RED, SHADOW, fieldInput, overlay, pillGhost, pillPrimary, seq2 } from "./packageUi";
 
 /**
  * עריכת מארז — design/Package Dialogs.dc.html ("edit"). Type, route,
@@ -15,15 +16,15 @@ import { BLUE, HAIR, HAIR_2, INK, INK_2, MUTED, MUTED_LT, RED, SHADOW, fieldInpu
  */
 type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
 
-/** Hoisted (not defined inside the dialog) so its inputs keep focus across re-renders. */
+/** Hoisted (not defined inside the dialog) so its inputs keep focus across re-renders.
+ *  Locked fields are the selection fields fixed at intake, so they are the
+ *  locked combobox rather than a text box. */
 function Field({ label, value, locked, hint, onChange, weight = 400 }: { label: string; value: string; locked?: boolean; hint?: string | null; onChange?: (v: string) => void; weight?: number }) {
   return (
     <div>
       <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>{label}</div>
       {locked ? (
-        <div style={{ ...fieldInput, background: "#f5f5f7", color: MUTED, fontWeight: weight, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          {value || "—"}<Lock size={14} strokeWidth={1.75} color={MUTED_LT} />
-        </div>
+        <SearchableCombobox<{ label: string }> dense locked options={[]} value={value ? { label: value } : null} onChange={() => {}} placeholder="—" />
       ) : (
         <input value={value} onChange={(e) => onChange?.(e.target.value)} style={{ ...fieldInput, fontWeight: weight }} />
       )}
@@ -64,6 +65,7 @@ export default function PackageEditDialog({
   if (!open || !pkg) return null;
 
   const opening = (pkg.current_route_step ?? 1) <= 1 && !pkg.is_finished && (pkg.status === "queue" || pkg.status === "test");
+  const memberTypes = itemTypes.filter((t) => !t.is_package);
 
   const save = async () => {
     setSaving(true); setError(null);
@@ -122,7 +124,7 @@ export default function PackageEditDialog({
 
   return (
     <>
-      <div onClick={() => !saving && onClose()} style={{ ...overlay, zIndex: 70 }}>
+      <div onClick={() => !saving && onClose()} style={{ ...overlay, zIndex: DIALOG_Z - 10 }}>
         <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(680px, 94vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
             <div style={{ minWidth: 0 }}>
@@ -179,14 +181,20 @@ export default function PackageEditDialog({
               {opening ? (
                 addOpen ? (
                   <div style={{ marginTop: 12, border: `1px solid ${HAIR}`, borderRadius: 12, padding: 14, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                    <select value={add.itemType} onChange={(e) => setAdd({ ...add, itemType: e.target.value })} style={{ ...fieldInput, height: 40, cursor: "pointer" }}>
-                      <option value="">סוג פריט…</option>
-                      {itemTypes.filter((t) => !t.is_package).map((t) => <option key={t.item_type_id} value={t.item_type_id}>{t.item_type_desc}</option>)}
-                    </select>
-                    <input placeholder="מספר סריאלי" value={add.serialNumber} onChange={(e) => setAdd({ ...add, serialNumber: e.target.value })} style={{ ...fieldInput, height: 40 }} />
-                    <input placeholder="מק״ט" value={add.makat} onChange={(e) => setAdd({ ...add, makat: e.target.value })} style={{ ...fieldInput, height: 40 }} />
-                    <input placeholder="דגם" value={add.model} onChange={(e) => setAdd({ ...add, model: e.target.value })} style={{ ...fieldInput, height: 40 }} />
-                    <input placeholder="יצרן" value={add.manufacturer} onChange={(e) => setAdd({ ...add, manufacturer: e.target.value })} style={{ ...fieldInput, height: 40 }} />
+                    {/* The inputs take the field height (44) so they line up with the type field. */}
+                    <SearchableCombobox<ItemTypeOption>
+                      dense
+                      options={memberTypes}
+                      value={memberTypes.find((t) => String(t.item_type_id) === add.itemType) ?? null}
+                      onChange={(t) => setAdd({ ...add, itemType: t ? String(t.item_type_id) : "" })}
+                      getOptionLabel={(t) => t.item_type_desc}
+                      isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
+                      placeholder="סוג פריט…"
+                    />
+                    <input placeholder="מספר סריאלי" value={add.serialNumber} onChange={(e) => setAdd({ ...add, serialNumber: e.target.value })} style={fieldInput} />
+                    <input placeholder="מק״ט" value={add.makat} onChange={(e) => setAdd({ ...add, makat: e.target.value })} style={fieldInput} />
+                    <input placeholder="דגם" value={add.model} onChange={(e) => setAdd({ ...add, model: e.target.value })} style={fieldInput} />
+                    <input placeholder="יצרן" value={add.manufacturer} onChange={(e) => setAdd({ ...add, manufacturer: e.target.value })} style={fieldInput} />
                     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                       <button type="button" onClick={() => setAddOpen(false)} style={{ ...pillGhost, padding: "9px 16px" }}>ביטול</button>
                       <button type="button" onClick={addItem} disabled={adding} style={{ ...pillPrimary, padding: "9px 18px" }}>הוסף</button>

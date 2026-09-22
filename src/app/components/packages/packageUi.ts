@@ -114,6 +114,17 @@ export const pillDanger: CSSProperties = {
 export const fieldInput: CSSProperties = {
   width: "100%", height: 44, border: `1px solid ${HAIR}`, borderRadius: 10, padding: "0 13px", fontSize: 14, outline: "none", background: "#fff", fontFamily: "inherit", color: INK,
 };
+/**
+ * Stacking for the package dialogs and wizards. AppShell puts the top bar at
+ * 1100 and the navigation rail at 1200, the design-system dialogs sit at 1300
+ * and the combobox / menu poppers at 1400+. Package overlays therefore live
+ * between the chrome and the primitives; secondary dialogs that open on top
+ * of a primary one (delete, the closing decision) add 10, the ones a wizard
+ * or the list opens underneath another (edit, labels, the wizard shell)
+ * subtract 10.
+ */
+export const DIALOG_Z = 1250;
+
 export const overlay: CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+  position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: DIALOG_Z, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
 };

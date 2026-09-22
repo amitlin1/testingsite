@@ -51,10 +51,10 @@ export default function PackagePage() {
 
   React.useEffect(() => { load(); }, [load]);
 
-  if (loading && !pkg) return <div dir="rtl" style={{ padding: 32, color: MUTED }}>טוען…</div>;
+  if (loading && !pkg) return <div dir="rtl" style={{ height: "100%", overflowY: "auto", padding: 32, color: MUTED, boxSizing: "border-box" }}>טוען…</div>;
   if (notFound || !pkg) {
     return (
-      <div dir="rtl" style={{ padding: 32 }}>
+      <div dir="rtl" style={{ height: "100%", overflowY: "auto", padding: 32, boxSizing: "border-box" }}>
         <div style={{ fontSize: 16, fontWeight: 600 }}>המארז לא נמצא.</div>
         <button type="button" onClick={() => router.push("/packages")} style={{ ...pillGhost, marginTop: 14 }}>חזרה למארזים</button>
       </div>
@@ -74,8 +74,11 @@ export default function PackagePage() {
   };
   const dotOf = (t: Timeline[number]) => (t.state === "done" ? GREEN : t.state === "pending" || t.state === "queued" || t.state === "blocked" ? (t.state === "blocked" || t.state === "queued" ? AMBER : BLUE) : GREY);
 
+  // The page scrolls its own wrapper, inside the fixed frame (same principle
+  // as /packages), never the shell's content box.
   return (
-    <div dir="rtl" style={{ maxWidth: 1320, margin: "0 auto", padding: "28px 24px 64px", color: INK }}>
+    <div dir="rtl" style={{ height: "100%", overflowY: "auto", overscrollBehavior: "contain", color: INK }}>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "28px 24px 64px" }}>
       <button type="button" onClick={() => router.push("/packages")} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13.5, color: BLUE, fontWeight: 600, cursor: "pointer", background: "transparent", border: 0, padding: 0, fontFamily: "inherit" }}>
         <ChevronLeft size={15} strokeWidth={2} />חזרה למארזים
       </button>
@@ -209,6 +212,7 @@ export default function PackagePage() {
           items={pkg.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
         />
       )}
+    </div>
     </div>
   );
 }

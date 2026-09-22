@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useState, useMemo, useEffect, useLayoutEffect } from "react";
+import React, { useRef, useState, useMemo, useEffect, useLayoutEffect, useCallback, useId } from "react";
 import { createPortal } from "react-dom";
 import { DismissableLayerBranch } from "@radix-ui/react-dismissable-layer";
 import { X, ChevronDown } from "lucide-react";
@@ -23,11 +23,32 @@ import { sxToStyle, type SxInput } from "./sx";
    scroll (capture phase, so inner scrollers count) and on resize. Result: glued
    to the bottom edge of the trigger, and never clipped, in any card or dialog.
 
-   The public API is unchanged, so every consumer (SearchableCombobox,
-   WorkerPicker, dashboard filters, dialog fields) keeps working untouched.
+   FLIP RULE. The list opens upward only when the room under the field is
+   smaller than what the list actually needs (its rendered height, capped at
+   MENU_MAX_H, plus the gap and the viewport edge) AND there is more room
+   above. A fixed threshold would flip a three-row list that fits perfectly.
+   The list is measured again right after it mounts (layout effect, before
+   paint), so the first open already lands on the right side — and the side is
+   then LOCKED for the rest of that open, so typing that shrinks or grows the
+   list can never make it jump between above and below the field.
+
+   KEYBOARD. ArrowDown / ArrowUp move a highlight (`data-highlighted` on the
+   row; pointer movement sets the same state), Enter selects the highlighted
+   row, Escape closes the list (and only the list: the event stops there so a
+   surrounding dialog stays open). The input is a WAI-ARIA combobox:
+   aria-expanded / aria-controls / aria-activedescendant follow the state.
+   When the list closes for any reason the text snaps back to the selected
+   option's label (or empty), so a half-typed search never survives Esc, Tab
+   or an outside click. freeSolo keeps whatever was typed.
+
+   The public API is unchanged for every consumer; renderOption additionally
+   receives `highlighted` in its state and `data-highlighted` in its props.
    ========================================================================== */
 
-type Reason = "selectOption" | "removeOption" | "clear" | "createOption" | "blur" | "input";
+type Reason = "selectOption" | "removeOption" | "clear" | "createOption" | "blur" | "input" | "reset";
+
+/** Props handed to renderOption for one row. Spread them on the <li>. */
+export type OptionLiProps = React.LiHTMLAttributes<HTMLLIElement> & { key?: React.Key; "data-highlighted"?: "" };
 
 export interface AutocompleteProps<
   T,
@@ -46,7 +67,7 @@ export interface AutocompleteProps<
   getOptionLabel?: (option: T) => string;
   isOptionEqualToValue?: (option: T, value: T) => boolean;
   renderInput: (params: RenderInputParams) => React.ReactNode;
-  renderOption?: (props: React.HTMLAttributes<HTMLLIElement> & { key?: React.Key }, option: T, state: { selected: boolean }) => React.ReactNode;
+  renderOption?: (props: OptionLiProps, option: T, state: { selected: boolean; highlighted: boolean }) => React.ReactNode;
   renderTags?: (value: T[], getTagProps: (opts: { index: number }) => { key: number; onDelete: () => void }) => React.ReactNode;
   filterOptions?: (options: T[], state: { inputValue: string }) => T[];
   multiple?: boolean;
@@ -79,6 +100,12 @@ export interface RenderInputParams {
 
 const defaultLabel = (o: unknown) => (typeof o === "string" ? o : String((o as { label?: string })?.label ?? ""));
 
+// Field contract: the list is at most this tall; the gap to the field and the
+// minimum distance kept from the viewport edge.
+const MENU_MAX_H = 264;
+const GAP = 6;
+const EDGE = 8;
+
 export function Autocomplete<
   T,
   _Multiple = boolean | undefined,
@@ -94,23 +121,24 @@ export function Autocomplete<
   } = props;
 
   const anchorRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const listId = useId();
   const [open, setOpen] = useState(false);
-  const prevOpen = useRef(open);
-  useEffect(() => {
-    if (open && !prevOpen.current) onOpen?.();
-    else if (!open && prevOpen.current) onClose?.();
-    prevOpen.current = open;
-  }, [open, onOpen, onClose]);
   const [internalValue, setInternalValue] = useState<T | T[] | null>(defaultValue ?? (multiple ? ([] as T[]) : null));
   const val = value !== undefined ? value : internalValue;
-  const [inputText, setInputText] = useState("");
+  const selectedSingle = !multiple && val ? (val as T) : null;
+  const selectedLabel = selectedSingle ? getOptionLabel(selectedSingle) : "";
+  // Seeded from the value, so a field that mounts with one never reports a
+  // spurious "reset" before anyone touched it.
+  const [inputText, setInputText] = useState(selectedLabel);
   const inputValue = inputValueProp !== undefined ? inputValueProp : inputText;
+  // Index into `filtered` of the row the keyboard / pointer is on; -1 = none.
+  const [highlight, setHighlight] = useState(-1);
+  const scrollToHighlight = useRef(false);
+  // The side chosen once the list has been measured for real stays for the
+  // rest of that open (typing must not bounce the list between above/below).
+  const lockedPlacement = useRef<"top" | "bottom" | null>(null);
 
-  // Live page-coordinates of the popup, measured from the field (the anchor).
-  // `placement` flips to "top" when there isn't room below the field.
-  const MENU_MAX_H = 320;
-  const MIN_SPACE = 160; // below this much room under the field, prefer opening up
-  const listRef = useRef<HTMLUListElement>(null);
   const [pos, setPos] = useState<{
     left: number; width: number; dir: "ltr" | "rtl";
     placement: "bottom" | "top"; top?: number; bottom?: number; maxH: number;
@@ -125,58 +153,97 @@ export function Autocomplete<
     onInputChange?.(e, v, reason);
   };
 
-  const selectedSingle = !multiple && val ? (val as T) : null;
+  // onOpen / onClose callbacks, and the highlight reset when the list closes.
+  const prevOpen = useRef(open);
+  useEffect(() => {
+    if (open && !prevOpen.current) onOpen?.();
+    else if (!open && prevOpen.current) { onClose?.(); setHighlight(-1); lockedPlacement.current = null; }
+    prevOpen.current = open;
+  }, [open, onOpen, onClose]);
+
+  // Closed ⇒ the text is the selected option's label (or empty). This is what
+  // discards a partial search on Esc / Tab / outside click, and follows a
+  // value changed from outside while the list is closed. freeSolo owns its
+  // text, so it is left alone.
+  useLayoutEffect(() => {
+    if (open || multiple || freeSolo) return;
+    if (inputValue !== selectedLabel) setInput(null, selectedLabel, "reset");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, selectedLabel]);
 
   const filtered = useMemo(() => {
     if (filterOptions) return filterOptions(options, { inputValue });
     const q = inputValue.trim().toLowerCase();
-    const selectedLabel = selectedSingle ? getOptionLabel(selectedSingle) : "";
     if (!q || (selectedSingle && inputValue === selectedLabel)) return options;
     return options.filter((o) => getOptionLabel(o).toLowerCase().includes(q));
-  }, [options, inputValue, filterOptions, selectedSingle, getOptionLabel]);
+  }, [options, inputValue, filterOptions, selectedSingle, selectedLabel, getOptionLabel]);
+  const hl = highlight < filtered.length ? highlight : -1;
+  useEffect(() => {
+    if (highlight >= filtered.length && highlight !== -1) setHighlight(-1);
+  }, [highlight, filtered.length]);
 
-  // Measure the field and keep the popup glued to it (open, scroll, resize).
-  // Raw viewport coordinates from getBoundingClientRect() + position:fixed — no
-  // scroll math — so it's immune to AppShell's inner scroller and any ancestor
-  // with an offset / overflow. When flipped up, we anchor by `bottom` so the
-  // list grows upward hugging the field regardless of how many items it has.
-  useLayoutEffect(() => {
-    if (!open || !anchorRef.current) { setPos(null); return; }
+  // Measure the field and place the popup. Raw viewport coordinates from
+  // getBoundingClientRect() + position:fixed — no scroll math — so it's immune
+  // to AppShell's inner scroller and any ancestor with an offset / overflow.
+  // When flipped up, we anchor by `bottom` so the list grows upward hugging the
+  // field regardless of how many items it has.
+  const measure = useCallback(() => {
     const el = anchorRef.current;
-    const GAP = 4, EDGE = 8; // px gap to field, min gap to viewport edge
-    const update = () => {
-      const r = el.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const spaceBelow = vh - r.bottom;
-      const spaceAbove = r.top;
-      const dir = getComputedStyle(el).direction === "rtl" ? "rtl" : "ltr";
-      // open up only when there is genuinely no room below AND above has more
-      const flip = spaceBelow < MIN_SPACE && spaceAbove > spaceBelow;
-      if (flip) {
-        // anchor by bottom => grows upward, glued to the field, item-count-agnostic
-        setPos({
-          placement: "top",
-          bottom: vh - r.top + GAP,
-          left: r.left, width: r.width, dir,
-          maxH: Math.max(120, Math.min(MENU_MAX_H, spaceAbove - GAP - EDGE)),
-        });
-      } else {
-        setPos({
-          placement: "bottom",
-          top: r.bottom + GAP,
-          left: r.left, width: r.width, dir,
-          maxH: Math.max(120, Math.min(MENU_MAX_H, spaceBelow - GAP - EDGE)),
-        });
-      }
-    };
-    update();
-    window.addEventListener("scroll", update, true); // capture: catch inner scrollers too
-    window.addEventListener("resize", update);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vh = window.innerHeight;
+    const spaceBelow = vh - r.bottom;
+    const spaceAbove = r.top;
+    const dir = getComputedStyle(el).direction === "rtl" ? "rtl" : "ltr";
+    // What the list needs: its real height (once rendered) capped at MENU_MAX_H.
+    // Before the first render it is assumed full-height, and re-measured right
+    // after the list mounts (still before paint).
+    const listH = listRef.current?.scrollHeight ?? 0;
+    const need = (listH > 0 ? Math.min(MENU_MAX_H, listH) : MENU_MAX_H) + GAP + EDGE;
+    const flip = lockedPlacement.current
+      ? lockedPlacement.current === "top"
+      : spaceBelow < need && spaceAbove > spaceBelow;
+    if (!lockedPlacement.current && listH > 0) lockedPlacement.current = flip ? "top" : "bottom";
+    if (flip) {
+      setPos({
+        placement: "top",
+        bottom: vh - r.top + GAP,
+        left: r.left, width: r.width, dir,
+        maxH: Math.max(120, Math.min(MENU_MAX_H, spaceAbove - GAP - EDGE)),
+      });
+    } else {
+      setPos({
+        placement: "bottom",
+        top: r.bottom + GAP,
+        left: r.left, width: r.width, dir,
+        maxH: Math.max(120, Math.min(MENU_MAX_H, spaceBelow - GAP - EDGE)),
+      });
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return; }
+    measure();
+    window.addEventListener("scroll", measure, true); // capture: catch inner scrollers too
+    window.addEventListener("resize", measure);
     return () => {
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
     };
-  }, [open, filtered.length]);
+  }, [open, filtered.length, measure]);
+
+  // Second pass: the list exists now, so its real height decides the side.
+  const listMounted = open && pos !== null;
+  useLayoutEffect(() => {
+    if (listMounted) measure();
+  }, [listMounted, filtered.length, loading, measure]);
+
+  // Keep the highlighted row in view when it moved by keyboard.
+  useLayoutEffect(() => {
+    if (!open || !scrollToHighlight.current) return;
+    scrollToHighlight.current = false;
+    listRef.current?.querySelector<HTMLElement>("[data-highlighted]")?.scrollIntoView({ block: "nearest" });
+  }, [open, hl]);
 
   const isSelected = (o: T) => {
     if (multiple) return (val as T[]).some((v) => isOptionEqualToValue(o, v));
@@ -202,6 +269,20 @@ export function Autocomplete<
     setInput(e, "", "clear");
   };
 
+  const moveHighlight = (dir: 1 | -1) => {
+    if (loading || filtered.length === 0) return;
+    // Nothing highlighted yet: step from the selected row, so it keeps its
+    // tint until the cursor reaches it.
+    const from = hl >= 0
+      ? hl
+      : selectedSingle != null
+        ? filtered.findIndex((o) => isOptionEqualToValue(o, selectedSingle))
+        : -1;
+    const next = dir === 1 ? Math.min(filtered.length - 1, from + 1) : Math.max(0, from < 0 ? 0 : from - 1);
+    scrollToHighlight.current = true;
+    setHighlight(next);
+  };
+
   // Tags for multiple
   const tags = multiple
     ? (val as T[]).map((o, index) => (
@@ -213,19 +294,31 @@ export function Autocomplete<
       ))
     : undefined;
 
+  // The × and the arrow carry their own class names (sh-ac-clear / sh-ac-arrow)
+  // so stylesheets never depend on lucide's generated class names. A disabled
+  // field ignores both: it must not be clearable or openable from its arrow.
   const endAdornment = (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
       {loading && <CircularProgress size={18} />}
-      {!disableClearable && ((multiple && (val as T[]).length > 0) || (!multiple && selectedSingle)) && (
-        <X size={16} strokeWidth={1.75} style={{ color: "var(--color-ink-muted-48)", cursor: "pointer" }}
+      {!disableClearable && !disabled && ((multiple && (val as T[]).length > 0) || (!multiple && selectedSingle)) && (
+        <X className="sh-ac-clear" size={16} strokeWidth={1.75} style={{ color: "var(--color-ink-muted-48)", cursor: "pointer" }}
           onMouseDown={(e) => { e.preventDefault(); clear(e); }} />
       )}
-      <ChevronDown size={18} strokeWidth={1.75} style={{ color: "var(--color-ink-muted-48)", cursor: "pointer", transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s" }}
-        onMouseDown={(e) => { e.preventDefault(); setOpen((o) => !o); }} />
+      <ChevronDown className="sh-ac-arrow" size={18} strokeWidth={1.75}
+        style={{ color: "var(--color-ink-muted-48)", cursor: disabled ? "default" : "pointer", transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s" }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          if (disabled) return;
+          if (open) { setOpen(false); return; }
+          setOpen(true);
+          // Focus goes with the list: otherwise a list opened from the arrow
+          // could never be closed by a click elsewhere (there is nothing to blur).
+          anchorRef.current?.querySelector("input")?.focus();
+        }} />
     </span>
   );
 
-  const displayValue = multiple ? inputValue : open ? inputValue : selectedSingle ? getOptionLabel(selectedSingle) : inputValue;
+  const displayValue = multiple ? inputValue : open ? inputValue : selectedSingle ? selectedLabel : inputValue;
 
   const params: RenderInputParams = {
     id,
@@ -237,7 +330,12 @@ export function Autocomplete<
     inputProps: {
       value: displayValue,
       disabled,
-      onChange: (e) => { setInput(e, e.target.value, "input"); if (!open) setOpen(true); },
+      role: "combobox",
+      "aria-autocomplete": "list",
+      "aria-expanded": open,
+      "aria-controls": open ? listId : undefined,
+      "aria-activedescendant": open && hl >= 0 ? `${listId}-${hl}` : undefined,
+      onChange: (e) => { setInput(e, e.target.value, "input"); setHighlight(0); if (!open) setOpen(true); },
       onFocus: () => setOpen(true),
       // Reopen the list on click even when a value is already selected.
       onClick: () => setOpen(true),
@@ -246,7 +344,22 @@ export function Autocomplete<
         if (!multiple && freeSolo) setValue(e, inputValue as unknown as T, "blur");
       },
       onKeyDown: (e) => {
-        if (e.key === "Escape") setOpen(false);
+        if (e.key === "Escape") {
+          // Only the list closes; a dialog around the field must not.
+          if (open) { e.stopPropagation(); e.preventDefault(); setOpen(false); }
+          return;
+        }
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          if (!open) { setOpen(true); return; }
+          moveHighlight(e.key === "ArrowDown" ? 1 : -1);
+          return;
+        }
+        if (e.key === "Enter" && open && !loading && hl >= 0) {
+          e.preventDefault();
+          handleSelect(e, filtered[hl]);
+          return;
+        }
         if (e.key === "Backspace" && multiple && !inputValue && (val as T[]).length) {
           handleSelect(e, (val as T[])[(val as T[]).length - 1]);
         }
@@ -272,6 +385,7 @@ export function Autocomplete<
         <DismissableLayerBranch>
           <ul
             ref={listRef}
+            id={listId}
             role="listbox"
             className="sh-select-content"
             dir={pos.dir}
@@ -295,19 +409,27 @@ export function Autocomplete<
             onMouseDown={(e) => e.preventDefault()}
           >
             {loading ? (
-              <li className="sh-select-item" style={{ color: "var(--color-ink-muted-48)" }}>{loadingText}</li>
+              <li className="sh-select-item" role="presentation" style={{ color: "var(--color-ink-muted-48)" }}>{loadingText}</li>
             ) : filtered.length === 0 ? (
-              <li className="sh-select-item" style={{ color: "var(--color-ink-muted-48)" }}>{noOptionsText}</li>
+              <li className="sh-select-item" role="presentation" style={{ color: "var(--color-ink-muted-48)" }}>{noOptionsText}</li>
             ) : (
               filtered.map((o, i) => {
                 const selected = isSelected(o);
-                const liProps: React.HTMLAttributes<HTMLLIElement> & { key?: React.Key } = {
+                const highlighted = i === hl;
+                const liProps: OptionLiProps = {
                   key: i,
+                  id: `${listId}-${i}`,
                   className: "sh-select-item",
+                  role: "option",
+                  "aria-selected": selected,
+                  "data-highlighted": highlighted ? "" : undefined,
                   onClick: (e) => handleSelect(e, o),
+                  // Pointer MOVEMENT, not enter: a keyboard scroll that slides a
+                  // row under a resting cursor must not steal the highlight.
+                  onMouseMove: () => { if (!highlighted) setHighlight(i); },
                   style: selected ? { color: "var(--color-primary)", fontWeight: 600 } : undefined,
                 };
-                if (renderOption) return renderOption(liProps, o, { selected });
+                if (renderOption) return renderOption(liProps, o, { selected, highlighted });
                 const { key: _k, ...liRest } = liProps;
                 return <li key={i} {...liRest}>{getOptionLabel(o)}</li>;
               })

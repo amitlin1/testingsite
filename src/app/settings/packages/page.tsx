@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { Alert, ConfirmDialog, Snackbar } from "@/components/ui";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 
 /**
  * הגדרות → מארזים — docs/packages/PLAN.md §3, design
@@ -435,14 +436,18 @@ export default function PackagesSettingsPage() {
                             </button>
                           </div>
                         </td>
-                        <td style={{ padding: "9px 12px" }}>
-                          <select value={r.item_type_id} onChange={(e) => patchRow(i, { item_type_id: e.target.value === "" ? "" : Number(e.target.value), route_warning: null })}
-                            style={{ ...input, minWidth: 150, cursor: "pointer", fontSize: 14 }}>
-                            <option value="">בחר סוג פריט…</option>
-                            {memberTypes.map((t) => (
-                              <option key={t.item_type_id} value={t.item_type_id}>{t.item_type_desc}</option>
-                            ))}
-                          </select>
+                        {/* No overflow on this cell: the list is portaled and must open over the rows below. */}
+                        <td style={{ padding: "9px 12px", minWidth: 186 }}>
+                          <SearchableCombobox<ItemTypeOption>
+                            dense
+                            denseHeight={38}
+                            options={memberTypes}
+                            value={memberTypes.find((t) => t.item_type_id === r.item_type_id) ?? null}
+                            onChange={(t) => patchRow(i, { item_type_id: t ? t.item_type_id : "", route_warning: null })}
+                            getOptionLabel={(t) => t.item_type_desc}
+                            isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
+                            placeholder="בחר סוג פריט…"
+                          />
                           {r.route_warning && (
                             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11.5, color: AMBER_INK }}>
                               <CircleAlert size={13} strokeWidth={2} />המסלול לא עומד בכללי המארז

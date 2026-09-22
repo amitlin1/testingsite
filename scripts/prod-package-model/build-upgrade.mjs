@@ -132,10 +132,18 @@ END
 $upgrade$;
 
 -- מיפוי המזהים נשמר גם בטבלה קבועה, לא רק בלשונית
+-- Read by the app: /api/testing/locate-by-barcode answers a scan of an OLD label
+-- through it, and /packages offers new labels for every box whose
+-- relabeled_at is still NULL (set when they are printed). Not in
+-- schema.prisma; guarded in scripts/check-migration-safety.js.
 CREATE TABLE IF NOT EXISTS legacy_id_map (
   legacy_id bigint, new_id bigint, package_id bigint, package_seq int, item_type text, serial_no text, shipment_code text,
-  converted_at timestamptz NOT NULL DEFAULT now()
+  converted_at timestamptz NOT NULL DEFAULT now(),
+  relabeled_at timestamptz
 );
+-- A map created by the first version of this file lacks the column; harmless on a new one.
+ALTER TABLE legacy_id_map ADD COLUMN IF NOT EXISTS relabeled_at timestamptz;
+CREATE INDEX IF NOT EXISTS legacy_id_map_legacy_idx ON legacy_id_map (legacy_id);
 INSERT INTO legacy_id_map (legacy_id, new_id, package_id, package_seq, item_type, serial_no, shipment_code)
 SELECT legacy_id, new_id, package_id, package_seq, item_type, serial_no, shipment_code FROM fix_idmap;
 

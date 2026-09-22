@@ -10,7 +10,7 @@ export const S = path.dirname(fileURLToPath(import.meta.url));
 export const shotsDir = path.join(S, "shots");
 fs.mkdirSync(shotsDir, { recursive: true });
 // Target and login come from the environment (see README.md):
-//   E2E_BASE=http://10.10.200.120  E2E_USER=pkgtest  E2E_PASS=...
+//   E2E_BASE=http://<app host>  E2E_USER=<keycloak user>  E2E_PASS=...
 const credsFile = process.env.E2E_CREDS_FILE ?? path.join(S, ".e2e-user.json");
 const fileCreds = fs.existsSync(credsFile) ? JSON.parse(fs.readFileSync(credsFile, "utf8")) : {};
 export const creds = { base: process.env.E2E_BASE ?? fileCreds.base, username: process.env.E2E_USER ?? fileCreds.username, password: process.env.E2E_PASS ?? fileCreds.password };
@@ -81,11 +81,13 @@ export async function bodyHas(page, needle) {
   return t.includes(needle);
 }
 
-export async function clickByText(page, text, tag = "button") {
-  const handle = await page.evaluateHandle((t, tg) => {
+/** Clicks the first <tag> whose text contains `text` — or equals it with `{ exact: true }`,
+ *  for labels that are a prefix of another button's ("מדבקות" vs "מדבקות למארזים שהוסבו"). */
+export async function clickByText(page, text, tag = "button", { exact = false } = {}) {
+  const handle = await page.evaluateHandle((t, tg, ex) => {
     const els = [...document.querySelectorAll(tg)];
-    return els.find((e) => (e.innerText || "").trim().includes(t)) || null;
-  }, text, tag);
+    return els.find((e) => { const s = (e.innerText || "").trim(); return ex ? s === t : s.includes(t); }) || null;
+  }, text, tag, exact);
   const el = handle.asElement();
   if (!el) throw new Error(`no <${tag}> with text "${text}"`);
   await el.click();
@@ -97,4 +99,46 @@ export function summary() {
   console.log(`\n${pass}/${results.length} checks passed`);
   for (const r of results.filter((r) => !r.ok)) console.log(`  FAIL ${r.name} ${r.detail}`);
   fs.writeFileSync(path.join(S, "results.json"), JSON.stringify(results, null, 2));
+}
+
+/**
+ * The ids the suites need, resolved by NAME from the running app after login,
+ * so the same scripts run against any database (dev config, the production
+ * clone, a fresh one):
+ *   PKG_TYPE / PKG_TYPE_NAME   the package type (E2E_PKG_TYPE, default "מארז מגבר"); PKG_TYPE_NAMES = every package type's name
+ *   OTHER_PKG_TYPE   any other package type (for the "cannot retype a box" rule)
+ *   OPENING_TYPE / CLOSING_TYPE   first and last step of that package type's route
+ *   RESEARCH_TYPE   the station type that has a research station
+ *   TYPES   item types by key; E2E_ITEM_TYPES="amp=מגבר הספק,kit=ערכת מחברים,..." overrides
+ */
+export async function resolveConfig(page) {
+  const pkgName = process.env.E2E_PKG_TYPE ?? "מארז מגבר";
+  const itemNames = { amp: "מגבר הספק", kit: "ערכת מחברים", cable: "כבל תדר גבוה", psu: "ספק כוח" };
+  for (const kv of (process.env.E2E_ITEM_TYPES ?? "").split(",").filter(Boolean)) {
+    const [k, v] = kv.split("=");
+    if (k && v) itemNames[k.trim()] = v.trim();
+  }
+  const pkgTypes = (await api(page, "/api/settings/package-types")).json || [];
+  const pkg = pkgTypes.find((t) => t.item_type_desc === pkgName);
+  if (!pkg) throw new Error(`package type "${pkgName}" not found (set E2E_PKG_TYPE); have: ${pkgTypes.map((t) => t.item_type_desc).join(", ") || "none"}`);
+  const other = pkgTypes.find((t) => t.item_type_id !== pkg.item_type_id);
+  const routes = (await api(page, `/api/settings/testing-routes?itemTypeId=${pkg.item_type_id}&routeNumber=${pkg.default_route_number ?? 1}`)).json || [];
+  const steps = routes[0]?.route_steps ?? [];
+  if (steps.length < 2) throw new Error(`package type "${pkgName}" has no usable route (steps: ${JSON.stringify(steps)})`);
+  const itemTypes = (await api(page, "/api/itemTypes")).json || [];
+  const TYPES = {};
+  for (const [k, name] of Object.entries(itemNames)) {
+    const t = itemTypes.find((x) => x.item_type_desc === name);
+    if (t) TYPES[k] = t.item_type_id;
+  }
+  const missing = Object.keys(itemNames).filter((k) => TYPES[k] == null);
+  if (missing.length) throw new Error(`item types not found by name: ${missing.map((k) => k + "=" + itemNames[k]).join(", ")} (set E2E_ITEM_TYPES)`);
+  let RESEARCH_TYPE = null;
+  for (const st of (await api(page, "/api/settings/test-stations-type")).json || []) {
+    const stations = (await api(page, `/api/testing/test-stations?typeId=${st.test_station_type_id}`)).json || [];
+    if (stations.some((x) => x.is_research)) { RESEARCH_TYPE = st.test_station_type_id; break; }
+  }
+  const cfg = { PKG_TYPE: pkg.item_type_id, PKG_TYPE_NAME: pkg.item_type_desc, PKG_TYPE_NAMES: pkgTypes.map((t) => t.item_type_desc), OTHER_PKG_TYPE: other?.item_type_id ?? null, OPENING_TYPE: Number(steps[0]), CLOSING_TYPE: Number(steps[steps.length - 1]), RESEARCH_TYPE, TYPES };
+  console.log(`config: package type ${pkg.item_type_desc} #${cfg.PKG_TYPE}, opening #${cfg.OPENING_TYPE}, closing #${cfg.CLOSING_TYPE}, research #${cfg.RESEARCH_TYPE}, items ${JSON.stringify(TYPES)}`);
+  return cfg;
 }

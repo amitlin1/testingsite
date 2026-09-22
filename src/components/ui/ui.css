@@ -261,6 +261,37 @@
 .sh-select-item[data-state="checked"] { color: var(--color-primary); font-weight: var(--fw-semibold); }
 .sh-select-item[data-disabled] { color: var(--color-ink-muted-48); pointer-events: none; }
 
+/* ------------------------------------------------ SearchableCombobox ----- */
+/* Locked: read-only value, lock instead of the arrow (the component never
+   opens it), no focus ring. */
+.sh-input-wrap.sh-combo--locked { background: var(--color-canvas-parchment); }
+.sh-input-wrap.sh-combo--locked:focus-within { border-color: var(--color-hairline); box-shadow: none; }
+.sh-input-wrap.sh-combo--locked > input { color: var(--color-ink-muted-48); cursor: default; }
+
+/* Dense: the package screens' field metrics. The primitive's × (.sh-ac-clear) and
+   arrow (.sh-ac-arrow) are pinned at fixed insets (× 38px, arrow 12px) so every
+   field lines up to the pixel; the end padding keeps text clear of both. */
+.sh-input-wrap.sh-combo--dense { position: relative; height: 44px; min-height: 0; border-radius: 8px; padding-inline: 13px 66px; gap: 0; }
+.sh-input-wrap.sh-combo--dense.sh-combo--h38 { height: 38px; }
+.sh-input-wrap.sh-combo--dense.sh-combo--h34 { height: 34px; }
+.sh-input-wrap.sh-combo--dense.sh-combo--icon { padding-inline-start: 38px; }
+.sh-input-wrap.sh-combo--dense.sh-combo--locked { padding-inline-end: 36px; }
+.sh-input-wrap.sh-combo--dense > input { height: 100%; padding: 0; font-size: 14.5px; }
+.sh-combo--dense > .sh-adornment { display: contents; }
+.sh-combo--dense > .sh-adornment:first-child > * { position: absolute; inset-inline-start: 13px; top: 50%; transform: translateY(-50%); }
+.sh-combo--dense .sh-ac-arrow { position: absolute; inset-inline-end: 12px; top: 50%; margin-top: -9px; }
+.sh-combo--dense .sh-ac-clear { position: absolute; inset-inline-end: 38px; top: 50%; margin-top: -8px; }
+.sh-combo--dense .sh-combo-lock { position: absolute; inset-inline-end: 12px; top: 50%; margin-top: -7.5px; color: var(--color-ink-muted-48); }
+
+.sh-select-content:has(> .sh-combo-option), .sh-select-content:has(> li > .sh-combo-empty) { border-radius: 10px; padding: 5px; }
+.sh-combo-option { justify-content: flex-start; gap: 8px; padding: 9px 10px; border-radius: 6px; font-size: 14px; }
+.sh-combo-option[aria-selected="true"] { background: var(--color-primary-tint); }
+.sh-combo-option[data-highlighted] { background: var(--color-canvas-parchment); }
+.sh-combo-check { width: 15px; display: inline-flex; flex-shrink: 0; color: var(--color-primary); }
+.sh-combo-text { min-width: 0; }
+.sh-combo-sub { display: block; margin-top: 1px; font-size: 12px; color: var(--color-ink-muted-40); }
+.sh-combo-empty { font-size: 14px; color: var(--color-ink-muted-40); }
+
 /* --------------------------------------------------------------- Menu ----- */
 .sh-menu-content {
   z-index: 1400;

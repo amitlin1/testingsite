@@ -69,6 +69,8 @@ const GUARDED_NAMES = [
   "metrics_drift_open",
   "job_run_recent",
   // guards added to legacy tables
+  "legacy_id_map_legacy_idx",
+  "legacy_id_map", // old→new id map written by the production package upgrade (scripts/prod-package-model); not in schema.prisma, read by locate-by-barcode
   "testing_routes_type_number_uq",
   "ir_item_fk",
   // triggers

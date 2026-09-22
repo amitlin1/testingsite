@@ -2,10 +2,10 @@
 // item, nested package, add-after-opening, cascade delete, shipments declare
 // package types only, package-type settings API, the "item that never arrived"
 // decision in the closing wizard, dashboard render.
-import { launch, login, api, goto, shot, bodyHas, check, summary } from "./lib.mjs";
+import { launch, login, api, goto, shot, bodyHas, check, summary, resolveConfig } from "./lib.mjs";
 
-const OPENING_TYPE = 5, CLOSING_TYPE = 8, RESEARCH_TYPE = 9, PKG_TYPE_AMP = 15;
-const TYPES = { amp: 6, kit: 11, cable: 10, psu: 7 };
+// Ids are resolved by name from the running app after login (lib.mjs resolveConfig).
+let OPENING_TYPE, CLOSING_TYPE, RESEARCH_TYPE, PKG_TYPE_AMP, TYPES;
 const uuid = () => crypto.randomUUID();
 const tag = Date.now().toString().slice(-6);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -14,6 +14,7 @@ const W = { WorkerID: 9902, WorkerName: "pkgtest" };
 const { browser, page, errors } = await launch();
 try {
   await login(page);
+  ({ OPENING_TYPE, CLOSING_TYPE, RESEARCH_TYPE, PKG_TYPE: PKG_TYPE_AMP, TYPES } = await resolveConfig(page));
   const stations = async (typeId) => (await api(page, `/api/testing/test-stations?typeId=${typeId}`)).json || [];
   const openSt = (await stations(OPENING_TYPE)).find((s) => !s.is_research);
   const closeSt = (await stations(CLOSING_TYPE)).find((s) => !s.is_research);

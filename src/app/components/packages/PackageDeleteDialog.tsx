@@ -2,7 +2,7 @@
 import React from "react";
 import type { PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
-import { HAIR, HAIR_2, INK, INK_2, MUTED, RED, SHADOW, fmtId, overlay, pillGhost, seq2 } from "./packageUi";
+import { DIALOG_Z, HAIR, HAIR_2, INK, INK_2, MUTED, RED, SHADOW, fmtId, overlay, pillGhost, seq2 } from "./packageUi";
 
 /**
  * מחיקת מארז — design/Packages.dc.html (deleteOpen). Lists the items that go
@@ -40,7 +40,7 @@ export default function PackageDeleteDialog({
   };
 
   return (
-    <div onClick={() => !busy && onClose()} style={{ ...overlay, zIndex: 90 }}>
+    <div onClick={() => !busy && onClose()} style={{ ...overlay, zIndex: DIALOG_Z + 10 }}>
       <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, overflow: "hidden", color: INK }}>
         <div style={{ padding: "22px 24px 0" }}>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>מחיקת מארז</div>

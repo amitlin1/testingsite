@@ -705,6 +705,9 @@ function TestingPageView() {
   const [scannerOpen, setScannerOpen] = React.useState(false);
   const [scanInput, setScanInput] = React.useState("");
   const [scanError, setScanError] = React.useState<string | null>(null);
+  // Set when a scan came from a pre-upgrade label that the server resolved
+  // through legacy_id_map (locate-by-barcode); the worker is told to reprint.
+  const [legacyNotice, setLegacyNotice] = React.useState<string | null>(null);
   const [scanLoading, setScanLoading] = React.useState(false);
   const [highlightedItemId, setHighlightedItemId] = React.useState<number | null>(null);
   const [finishedDialogOpen, setFinishedDialogOpen] = React.useState(false);
@@ -924,6 +927,11 @@ function TestingPageView() {
         setScanError(data?.error || "שגיאה באיתור הפריט");
         return;
       }
+      setLegacyNotice(
+        data.legacyId != null
+          ? `נסרקה מדבקה ישנה (${data.legacyId}) — הפריט זוהה כ-${data.resolvedItemId}. יש להדפיס לקופסה מדבקה חדשה מעמוד המארזים ("מדבקות למארזים שהוסבו").`
+          : null,
+      );
 
       // Item already finished its route — show the friendly dialog, not an error.
       if (data.finished) {
@@ -1171,6 +1179,15 @@ function TestingPageView() {
           workerLocked={tokenWorkerId != null}
           onScan={() => { setScanError(null); setScanInput(""); setScannerOpen(true); }}
         />
+
+        {legacyNotice && (
+          <Container maxWidth="xl" sx={{ mt: 2 }}>
+            <Box role="status" dir="rtl" sx={{ display: "flex", alignItems: "center", gap: 1.5, px: "14px", py: "10px", borderRadius: "10px", bgcolor: "#fff7e6", border: "1px solid #f3d9a4", color: "#8a5a00", fontSize: 14 }}>
+              <span style={{ flex: 1 }}>{legacyNotice}</span>
+              <button type="button" onClick={() => setLegacyNotice(null)} aria-label="סגור" style={{ border: 0, background: "transparent", color: "inherit", fontSize: 18, lineHeight: 1, cursor: "pointer" }}>×</button>
+            </Box>
+          </Container>
+        )}
 
         {/* Main Content Area */}
         <Container maxWidth="xl" sx={{ mt: 3, mb: 5, flex: 1 }}>

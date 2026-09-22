@@ -4,7 +4,9 @@ Branch `feat/package-model` (base `main`). Work done 2026-09-15 → 2026-09-17 i
 session; written for a reviewing agent that has this repo checked out. Later work on the same
 branch by another session is listed at the end so it is not mistaken for part of this one.
 
-Everything described here is committed unless a section says otherwise.
+Everything described here is committed unless a section says otherwise. Revised 2026-09-22 after a
+review pass; what that pass changed is in [REVIEW-scroll-and-fields.md](REVIEW-scroll-and-fields.md)
+§0 and is uncommitted (see §10).
 
 ---
 
@@ -49,7 +51,9 @@ implemented and what is still the owner's call is in [DESIGN_REVIEW.md](DESIGN_R
 | `0382a7a` | tests | Browser test suite `scripts/e2e-packages/` |
 
 Useful diffs: `git diff main..0382a7a --stat` for the whole picture; each phase commit message
-lists its own scope.
+lists its own scope. Two later commits by the owner, `a38dc93` ("85454") and `277fc3d` ("5454"),
+should be reworded before a pull request; and because phases 1/3a/3c import
+`@/lib/api/direct-upload`, which `a38dc93` added, the branch does not build at any commit before it.
 
 ---
 
@@ -84,15 +88,15 @@ lists its own scope.
 
 ## 4. Production upgrade kit — the part that touches real data
 
-Production (`testingsite` on the customer's DB server, user `p7300admin`) is still on the
-pre-package schema. The kit is three files; the copies the operator runs sit on
-**`E:\package-model\`** on this machine, the sources are in the repo:
+Production (`testingsite` on the customer's DB server) is still on the pre-package schema. The kit
+is three files in the repo; the operator runs copies outside it (where they live on this machine is
+in §6, with the rest of the machine-local state):
 
-| Run order | On drive E | Source in repo | What it does |
-|---|---|---|---|
-| already run | `E:\package-model\01-diagnose-production.sql` | `scripts/diagnose-legacy-for-packages.sql` | Read-only diagnostic (temp table + DO block, SELECTs only, adapts to old/new schema). Its production output is `E:\package-model\diag_202609170032.csv`. |
-| 1 | `E:\package-model\1-backup-before-packages.ps1` | `scripts/prod-package-model/1-backup-before-packages.ps1` | `pg_dump -Fc` inside the `postgres` container, copied out with `docker cp`, verified with `pg_restore --list`; prints the restore commands. |
-| 2 | `E:\package-model\2-upgrade-to-packages.sql` | `scripts/prod-package-model/2-upgrade-to-packages.sql` | ONE `DO` block (atomic, no BEGIN/COMMIT for the operator): preconditions → the Prisma migration verbatim (`SELECT setval` → `PERFORM`) → `_prisma_migrations` row with the file's sha256 → all data fixes → `legacy_id_map` table + two result sets (report, old→new ids). Refuses to run twice. |
+| Run order | Source in repo | What it does |
+|---|---|---|
+| already run (2026-09-17) | `scripts/diagnose-legacy-for-packages.sql` | Read-only diagnostic (temp table + DO block, SELECTs only, adapts to old/new schema). |
+| 1 | `scripts/prod-package-model/1-backup-before-packages.ps1` | `pg_dump -Fc` inside the `postgres` container, copied out with `docker cp`, verified with `pg_restore --list`, then **restored into `<db>_restorecheck` and its row counts compared** before the scratch DB is dropped (`-SkipRestoreCheck` skips); prints the restore commands. |
+| 2 | `scripts/prod-package-model/2-upgrade-to-packages.sql` | ONE `DO` block (atomic, no BEGIN/COMMIT for the operator): preconditions → the Prisma migration verbatim (`SELECT setval` → `PERFORM`) → `_prisma_migrations` row with the file's sha256 → all data fixes → `legacy_id_map` table (with `relabeled_at`, read by the app) + two result sets (report, old→new ids). Refuses to run twice. |
 
 `2-upgrade-to-packages.sql` is **generated** by `scripts/prod-package-model/build-upgrade.mjs`
 from the migration file and `scripts/prod-package-model/03-fix-production.sql` (the data-fix
@@ -116,42 +120,54 @@ station types: צילום (#1, the only `parents_only`), פירוק, שיקוף,
 - the 6 research items are converted and put back to waiting (their `research_history` rows
   move to the new id); the 3 items with files are converted and `file_objects.entity_id` is
   re-pointed (objects stay under the old key — listing is by registry, verified);
-- orphan routes deleted with `metrics_forget_item`; `cfg_strict = true` (any blocked group
-  aborts everything).
+- orphan routes deleted with `metrics_forget_item`;
+- `cfg_strict` differs between the two forms, deliberately: **false in `03`** (a manual dry run
+  reports every blocked group and rolls back with the full report) and **forced to true by the
+  builder in `2-upgrade`** (any blocked group aborts the one-shot, nothing half-done). So a clean
+  dry run does not by itself prove the one-shot will not abort — read the blocked-group lines of
+  the dry-run report.
 
 **Verified on this machine:** `2-upgrade` on an old-schema clone of the dev DB (dev config):
 migration applied and recorded with the right checksum, converted groups got 16-digit ids,
 `route_run` + open `queued` intervals + `legacy_import` events, no ledger rows left for deleted
 ids, second run refused. The backup script produced a valid dump of the dev DB.
 
-**Not done / owner's steps:** stop `next-app` in production → backup → upgrade → deploy the
-image built from this branch → print new labels for the 110 boxes (the physical labels carry the
-old 8–10-digit ids; the mapping is in `legacy_id_map` and in the upgrade's second result set).
+**Not done / owner's steps:** stop `next-app` in production → backup (the script now rehearses
+the restore) → upgrade → **check `MINIO_PUBLIC_ENDPOINT` from a browser on the shop floor** (a wrong
+value now blocks "המשך" in the wizards instead of silently losing photos, so it will be noticed at
+the first box, but it should be right before that) → deploy the image built from this branch →
+print new labels for the 110 boxes from `/packages` → "מדבקות למארזים שהוסבו" (one bulk print;
+marks them relabeled through `POST /api/packages/converted`). Until a box is relabeled its old
+label still scans: `locate-by-barcode` resolves it through `legacy_id_map` and the testing screen
+says to reprint.
 
 ---
 
 ## 5. Test evidence
 
 - **Integration suites** (`npm test`, needs `TEST_DATABASE_URL` → `testingsite_metrics_test`):
-  143 / 144. The one failure is pre-existing on `main` (§2.8 p95 queue age on
-  `tests/by-station` has no work-clock twin). Suites #16–#19 in
+  144 / 144 (2026-09-22; was 143 / 144 — the one failure, the §2.8 p95
+  queue age on `tests/by-station` without a work-clock twin, is fixed: `_new_p95QueueAgeWorkMinutes`
+  ships beside it). Suites #16–#19 in
   `src/app/lib/metrics/__tests__/write-path.integration.test.ts` cover the package routing.
 - **Browser suites** `scripts/e2e-packages/` (puppeteer-core + local Chrome, README inside),
   run against the new build on this machine:
 
   | Suite | Covers | Result |
   |---|---|---|
-  | `01-smoke` | login, every screen, every read API | 22/22 |
-  | `02-flow` | API lifecycle: intake → opening → item stations → status 6 → closing → done | 29/30 (the 1 is a deliberate 409 logged as a console error; filtered since) |
-  | `03-wizards-ui` | both wizards in Chrome incl. real MinIO uploads, dialogs, palette | 37/37 |
-  | `05-rules` | retype reset, last item, cascade delete, shipment validation, settings API, "never arrived" decision, dashboard | 30/30 |
-  | `07-hydration` | browser errors per page | 9/9 |
+  | `01-smoke` | login, every screen, every read API | 22/22; rerun 2026-09-22: 22/22 |
+  | `02-flow` | API lifecycle: intake → opening → item stations → status 6 → closing → done | 29/30 on 2026-09-17 (the 1 was a deliberate 409 logged as a console error, filtered since); rerun 2026-09-22: 30/30 |
+  | `03-wizards-ui` | both wizards in Chrome incl. real MinIO uploads, dialogs, palette | 37/37; rerun 2026-09-22: 37/37 |
+  | `05-rules` | retype reset, last item, cascade delete, shipment validation, settings API, "never arrived" decision, dashboard | 30/30; rerun 2026-09-22: 30/30 |
+  | `07-hydration` | browser errors per page | 9/9; rerun 2026-09-22: 9/9 |
+  | `08-scroll-fields` | `/packages` internal scroll, the dense combobox contract | 2026-09-22: 60/60 |
 
 - **Bugs the browser tests found** (both fixed and committed): the closing decision dialog
   wiped the worker's choice every second (`PackageDecisionDialog` reset effect keyed on a
   per-render object while the testing page re-renders on its clocks); the palette's dashboard
   link. Also found: the wizards let a photo upload fail silently (badge "ההעלאה נכשלה" but
-  "המשך" stays enabled) — reported to the owner as a decision, not changed.
+  "המשך" stays enabled) — **fixed 2026-09-22**: a failed shot blocks the step (and finishing at
+  the regular photo station) until it is removed and retaken.
 
 ---
 
@@ -171,7 +187,14 @@ old 8–10-digit ids; the mapping is in `legacy_id_map` and in the upgrade's sec
   through the admin service account; `node scripts/e2e-packages/kc-test-user.mjs delete` removes it.
 - Gotcha worth remembering: with `MINIO_PUBLIC_ENDPOINT` empty the browser is told to upload
   to `host.docker.internal:9000`, which times out from Chrome on the host; uploads then stay
-  `pending` in `file_objects`. Production derives it from `DB_HOST`, which should be fine — verify.
+  `pending` in `file_objects`. Since 2026-09-22 the wizards refuse to continue past a failed
+  shot, so this is loud rather than silent — but it is still a precondition of the deploy (§4).
+- Operator copies of the production kit on this machine: `E:\package-model\`
+  (`1-backup-before-packages.ps1`, `2-upgrade-to-packages.sql`, the diagnostic as
+  `01-diagnose-production.sql`, and its production output `diag_202609170032.csv`). Refreshed
+  2026-09-22 after the builder change; byte-identical to the repo sources at that time.
+- `testingsite_pkgtest` had `legacy_id_map.relabeled_at` (+ index) added by hand on 2026-09-22 —
+  the same DDL the rebuilt one-shot creates — so the relabel path could be exercised there.
 
 ---
 
@@ -183,10 +206,12 @@ From [DESIGN_REVIEW.md](DESIGN_REVIEW.md), all implemented with a default and aw
 2. "Photos and weights are deleted" on a retype reset was in the design; nothing is deleted
    (history is kept, PLAN §4).
 3. Separate `/packages` page (design) vs "packages expanded inside the items page" (decision 17).
+   **Close this before the scroll/combobox work merges**: the fixed-height `/packages` layout,
+   `packages.css` and browser suite 08 all assume the separate page.
 4. The design's Items artboard still had a tiny "הוסף פריט" dialog; removed, items are only
    created through package intake.
 
-Plus, from testing: whether a failed photo upload should block "המשך" in the wizards.
+The failed-upload question from testing is settled by the safe default: it blocks (§5).
 
 ---
 
@@ -198,8 +223,9 @@ Plus, from testing: whether a failed photo upload should block "המשך" in the
 - The conversion script only converts untouched groups (by design, PLAN §8); production has
   none touched, but any site with tested legacy items would keep them as loose legacy items,
   which still flow through regular stations and appear as item rows even at package-level ones.
-- `scripts/e2e-packages` hard-codes the dev-config ids (station types 5/8/9, package type 15,
-  item types 6/10/11/7); README says so.
+- `scripts/e2e-packages` resolves the ids it needs by name after login (`resolveConfig` in
+  `lib.mjs`; env overrides in the README), so the suites run against any database. Suites 04 and
+  06 never existed; the numbering gap is noted in the README.
 
 ---
 
@@ -230,5 +256,9 @@ Plus, from testing: whether a failed photo upload should block "המשך" in the
 - **Uncommitted in the working tree** (another session, written up on 2026-09-22): internal
   scroll on `/packages` and the shared `SearchableCombobox` in every package field, with its
   own review doc [REVIEW-scroll-and-fields.md](REVIEW-scroll-and-fields.md) and test
-  `scripts/e2e-packages/08-scroll-fields.mjs`. UI only; it does not touch the database or the
-  migration scripts.
+  `scripts/e2e-packages/08-scroll-fields.mjs` — plus the review pass of the same day (that
+  doc's §0): the combobox behaviour moved into the `Autocomplete` primitive, the dialog
+  z-index fix, failed uploads blocking, the legacy-barcode fallback and bulk relabel (new API
+  `/api/packages/converted`, `relabeled_at` in the upgrade's `legacy_id_map`, builder rerun),
+  the §2.8 p95 twin, the e2e ids by name, the backup restore rehearsal, and the guard entry for
+  `legacy_id_map`. Commit it together with this summary, which links to it.

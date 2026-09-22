@@ -1,23 +1,34 @@
 "use client";
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Search, ChevronDown } from "lucide-react";
+import { Plus, Printer, Search } from "lucide-react";
 import type { PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import PackageIdText, { MiniItems, StatusPill } from "@/app/components/packages/PackageIdText";
 import PackageIntakeDialog from "@/app/components/packages/PackageIntakeDialog";
 import PackageDeleteDialog from "@/app/components/packages/PackageDeleteDialog";
 import PackageEditDialog from "@/app/components/packages/PackageEditDialog";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
+import PackageRelabelDialog, { type RelabelPackage } from "@/app/components/packages/PackageRelabelDialog";
 import {
-  AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, HAIR, HAIR_2, INK, INK_2, ITEM_STATES, LEGEND, MUTED, MUTED_LT, PKG_STATUS, RED, FOCUS,
+  AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, HAIR, HAIR_2, INK, INK_2, ITEM_STATES, LEGEND, MUTED, MUTED_LT, PKG_STATUS, RED,
   fmtDate, fmtDateTime, pillGhost, pillPrimary, seq2,
 } from "@/app/components/packages/packageUi";
+import "./packages.css";
 
 /**
  * ניהול מארזים — design/Packages.dc.html (list + side panel). Five columns,
- * a sticky 340px panel with the selected box's contents, and the intake /
- * labels / edit / delete dialogs.
+ * a 340px panel with the selected box's contents, and the intake / labels /
+ * edit / delete dialogs.
+ *
+ * Fixed-height screen: the page fills AppShell's content box (which already
+ * sits beside the rail and under the top bar) and never scrolls itself — not
+ * at any width. Header, stats and filters keep their height; the split below
+ * absorbs the rest, and only the table body and the side panel scroll. Below
+ * 1100px the panel drops under the table and the split becomes the scroller,
+ * so the header and filters still stay put. The layout classes live in
+ * packages.css (anything a media query must override cannot be inline).
  */
 
 type Option = { value: string; label: string };
@@ -28,17 +39,19 @@ const itemLine = (it: PackageView["items"][number]) => (it.serial_no ? `${it.ser
 const blockedNote = (p: PackageView) =>
   `${p.blocked_by.length} פריטים עדיין לא הגיעו לעמדת הסגירה · ${p.blocked_by.map((b) => b.station_name ?? "—").join(" · ")}`;
 
+/** A list filter: empty = everything (the placeholder says so); × goes back to it. */
 function FilterSelect({ value, onChange, options, allLabel }: { value: string; onChange: (v: string) => void; options: Option[]; allLabel: string }) {
-  const active = value !== "";
   return (
-    <div style={{ position: "relative", minWidth: 150 }}>
-      <select value={value} onChange={(e) => onChange(e.target.value)}
-        style={{ height: 42, width: "100%", border: `1px solid ${active ? FOCUS : HAIR}`, borderRadius: 10, background: "#fff", padding: "0 36px 0 14px", fontSize: 14, color: active ? BLUE : INK, fontWeight: active ? 600 : 400, appearance: "none", cursor: "pointer", fontFamily: "inherit", outline: "none" }}>
-        <option value="">{allLabel}</option>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <ChevronDown size={15} strokeWidth={1.75} color={MUTED} style={{ position: "absolute", insetInlineEnd: 12, top: 14, pointerEvents: "none" }} />
-    </div>
+    <SearchableCombobox<Option>
+      dense
+      width={190}
+      options={options}
+      value={options.find((o) => o.value === value) ?? null}
+      onChange={(o) => onChange(o ? o.value : "")}
+      getOptionLabel={(o) => o.label}
+      isOptionEqualToValue={(a, b) => a.value === b.value}
+      placeholder={allLabel}
+    />
   );
 }
 
@@ -69,6 +82,30 @@ function PackagesPageInner() {
   const [labelsOpen, setLabelsOpen] = React.useState(false);
   const [customers, setCustomers] = React.useState<Option[]>([]);
   const [shipments, setShipments] = React.useState<(Option & { source_id?: number | null })[]>([]);
+  // Boxes the production upgrade converted from legacy items and that still
+  // wear their old label (legacy_id_map.relabeled_at IS NULL). Empty where
+  // the upgrade never ran, so the button below simply never shows.
+  const [converted, setConverted] = React.useState<{ pkg: PackageView; legacyIds: string[] }[]>([]);
+  const [relabelOpen, setRelabelOpen] = React.useState(false);
+  const loadConverted = React.useCallback(() => {
+    apiFetch("/api/packages/converted").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d) return;
+      const byPkg = new Map<string, string[]>();
+      for (const l of (d.legacy ?? []) as { legacy_id: string; package_id: string | null }[]) {
+        if (l.package_id) byPkg.set(l.package_id, [...(byPkg.get(l.package_id) ?? []), l.legacy_id]);
+      }
+      setConverted(((d.packages ?? []) as PackageView[]).map((pkg) => ({ pkg, legacyIds: byPkg.get(pkg.item_id) ?? [] })));
+    }).catch(() => {});
+  }, []);
+  React.useEffect(() => { loadConverted(); }, [loadConverted]);
+  const relabelPackages = React.useMemo<RelabelPackage[]>(
+    () => converted.map((c) => ({ ...c, sourceId: shipments.find((s) => s.value === String(c.pkg.shipment_id))?.source_id ?? null })),
+    [converted, shipments],
+  );
+  const markRelabeled = (packageIds: string[]) => {
+    if (packageIds.length === 0) return;
+    apiFetch("/api/packages/converted", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ packageIds }) }).catch(() => {}).finally(loadConverted);
+  };
   const [types, setTypes] = React.useState<Option[]>([]);
 
   const load = React.useCallback(async () => {
@@ -111,9 +148,9 @@ function PackagesPageInner() {
   const selSource = sel ? shipments.find((s) => s.value === String(sel.shipment_id))?.source_id ?? null : null;
 
   return (
-    <div dir="rtl" style={{ padding: "28px 24px 64px", color: INK, maxWidth: 1440, margin: "0 auto" }}>
+    <div dir="rtl" className="pkg-page" style={{ color: INK }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+      <div className="pkg-fixed" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1 }}>ניהול מארזים</h1>
@@ -121,23 +158,30 @@ function PackagesPageInner() {
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 16, color: INK_2, lineHeight: 1.5 }}>כל המארזים שנקלטו במערכת, תכולתם ומצב הבדיקה של כל פריט.</p>
         </div>
-        <button type="button" onClick={() => setIntakeOpen(true)} style={{ ...pillPrimary, display: "inline-flex", alignItems: "center", gap: 7, padding: "12px 22px", fontSize: 15, whiteSpace: "nowrap" }}>
-          <Plus size={18} strokeWidth={2} />קליטת מארז
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {converted.length > 0 && (
+            <button type="button" onClick={() => setRelabelOpen(true)} title="מארזים שהוסבו מהמערכת הישנה ועדיין נושאים מדבקה עם המזהה הישן" style={{ ...pillGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "12px 20px", fontSize: 14, whiteSpace: "nowrap" }}>
+              <Printer size={17} strokeWidth={1.75} />מדבקות למארזים שהוסבו ({converted.length})
+            </button>
+          )}
+          <button type="button" onClick={() => setIntakeOpen(true)} style={{ ...pillPrimary, display: "inline-flex", alignItems: "center", gap: 7, padding: "12px 22px", fontSize: 15, whiteSpace: "nowrap" }}>
+            <Plus size={18} strokeWidth={2} />קליטת מארז
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginTop: 24 }}>
+      <div className="pkg-fixed pkg-stats">
         {stats.map((s) => (
-          <div key={s.label} style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, padding: "16px 18px" }}>
-            <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.5px", lineHeight: 1, color: s.tone, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
-            <div style={{ fontSize: 13, color: MUTED, marginTop: 6 }}>{s.label}</div>
+          <div key={s.label} className="pkg-stat">
+            <div className="pkg-stat-value" style={{ color: s.tone }}>{s.value}</div>
+            <div className="pkg-stat-label">{s.label}</div>
           </div>
         ))}
       </div>
 
       {/* Search + filters + legend */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
+      <div className="pkg-fixed" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
         <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 360 }}>
           <Search size={16} strokeWidth={1.75} color={MUTED} style={{ position: "absolute", insetInlineStart: 14, top: 13, pointerEvents: "none" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="חיפוש לפי מזהה, סריאלי, מק״ט או סוג מארז"
@@ -155,17 +199,19 @@ function PackagesPageInner() {
       </div>
 
       {/* Table + panel */}
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginTop: 18, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 0, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
+      <div className="pkg-split">
+        <div className="pkg-table-wrap" style={{ background: "#fff", border: `1px solid ${HAIR}` }}>
+          <div className="pkg-table-scroll">
             <table style={{ width: "100%", minWidth: 680, borderCollapse: "collapse" }}>
+              {/* The rule under the header is a box-shadow (in packages.css), not a
+                  border: a collapsed border scrolls away from a sticky row. */}
               <thead>
-                <tr style={{ background: "#f5f5f7" }}>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 16px", borderBottom: `1px solid ${HAIR}` }}>מזהה המארז</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 12px", borderBottom: `1px solid ${HAIR}` }}>סוג מארז · לקוח</th>
-                  <th style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 12px", borderBottom: `1px solid ${HAIR}` }}>פריטים</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 12px", borderBottom: `1px solid ${HAIR}` }}>סטטוס המארז</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 16px", borderBottom: `1px solid ${HAIR}`, width: 190 }}>מצב הפריטים</th>
+                <tr>
+                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 16px" }}>מזהה המארז</th>
+                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 12px" }}>סוג מארז · לקוח</th>
+                  <th style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 12px" }}>פריטים</th>
+                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 12px" }}>סטטוס המארז</th>
+                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "13px 16px", width: 190 }}>מצב הפריטים</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,17 +245,17 @@ function PackagesPageInner() {
                 })}
               </tbody>
             </table>
+            {!loading && list.length === 0 && (
+              <div style={{ textAlign: "center", padding: "64px 24px" }}>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>אין מארזים תואמים.</div>
+                <div style={{ fontSize: 14, color: MUTED }}>שנה את הסינון, או קלוט מארז חדש מהמשלוח.</div>
+                <button type="button" onClick={() => setIntakeOpen(true)} style={{ ...pillPrimary, marginTop: 16, padding: "10px 20px" }}>קליטת מארז</button>
+              </div>
+            )}
           </div>
-          {!loading && list.length === 0 && (
-            <div style={{ textAlign: "center", padding: "64px 24px" }}>
-              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>אין מארזים תואמים.</div>
-              <div style={{ fontSize: 14, color: MUTED }}>שנה את הסינון, או קלוט מארז חדש מהמשלוח.</div>
-              <button type="button" onClick={() => setIntakeOpen(true)} style={{ ...pillPrimary, marginTop: 16, padding: "10px 20px" }}>קליטת מארז</button>
-            </div>
-          )}
         </div>
 
-        <div style={{ width: 340, flexShrink: 0, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, position: "sticky", top: 76 }}>
+        <div className="pkg-panel" style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16 }}>
           {!sel ? (
             <div style={{ padding: "40px 24px", textAlign: "center" }}>
               <div style={{ fontSize: 15, fontWeight: 600 }}>בחר מארז</div>
@@ -250,7 +296,7 @@ function PackagesPageInner() {
                   <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, letterSpacing: ".6px", textTransform: "uppercase" }}>תכולת המארז</div>
                   <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{sel.finished_count}/{sel.items.length} סיימו</div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12, maxHeight: 300, overflowY: "auto" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
                   {sel.items.map((it) => (
                     <div key={it.item_id} onClick={() => router.push(`/items/${it.item_id}/history`)} style={{ display: "flex", alignItems: "center", gap: 11, border: `1px solid ${HAIR}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
                       <span style={{ width: 30, height: 30, borderRadius: 8, background: chipBg(it.state), color: chipTone(it.state), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
@@ -277,6 +323,9 @@ function PackagesPageInner() {
       <PackageIntakeDialog open={intakeOpen} onClose={() => setIntakeOpen(false)} onCreated={(id) => { load(); setSelectedId(String(id)); }} initialShipmentId={shipment ? Number(shipment) : null} />
       <PackageEditDialog open={editOpen} pkg={sel} onClose={() => setEditOpen(false)} onChanged={load} onDeleteRequest={() => { setEditOpen(false); setDeleteOpen(true); }} />
       <PackageDeleteDialog open={deleteOpen} pkg={sel} onClose={() => setDeleteOpen(false)} onDeleted={() => { setDeleteOpen(false); setSelectedId(null); load(); }} />
+      {relabelOpen && (
+        <PackageRelabelDialog open onClose={() => setRelabelOpen(false)} packages={relabelPackages} onPrinted={(ids) => { setRelabelOpen(false); markRelabeled(ids); }} />
+      )}
       {sel && labelsOpen && (
         <PackageLabelsDialog
           open

@@ -1,10 +1,11 @@
 "use client";
 import React from "react";
-import { Lock, ChevronDown, Trash2, Plus, CircleAlert, Check } from "lucide-react";
+import { Lock, Trash2, Plus, CircleAlert, Check } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import PackageLabelsDialog from "./PackageLabelsDialog";
 import {
-  BLUE, FOCUS, HAIR, HAIR_2, INK, INK_2, MUTED, MUTED_LT, RED, RED_BG, AMBER, AMBER_INK, AMBER_BG, AMBER_BORDER, SHADOW,
+  DIALOG_Z, BLUE, FOCUS, HAIR, HAIR_2, INK, INK_2, MUTED, MUTED_LT, RED, RED_BG, AMBER, AMBER_INK, AMBER_BG, AMBER_BORDER, SHADOW,
   fieldInput, fmtId, overlay, pillGhost, pillPrimary, seq2,
 } from "./packageUi";
 
@@ -29,6 +30,8 @@ type ContentsLine = {
   route_number: number;
 };
 type Contents = { default_route_number: number | null; lines: ContentsLine[] };
+type RouteOption = { value: string; label: string };
+const routeOption = (n: number | string): RouteOption => ({ value: String(n), label: `מסלול ${n}` });
 
 type Row = {
   key: number;
@@ -275,14 +278,16 @@ export default function PackageIntakeDialog({
                   <div style={{ fontSize: 13.5, color: MUTED, marginTop: 5 }}>בחר משלוח, ואז סוג מארז מתוך מה שהוצהר עליו.</div>
                   <div style={{ maxWidth: 420, marginTop: 18 }}>
                     <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>משלוח</div>
-                    <div style={{ position: "relative" }}>
-                      <select value={shipmentId} onChange={(e) => { setShipmentId(e.target.value === "" ? "" : Number(e.target.value)); setPackageType(""); }}
-                        style={{ ...fieldInput, borderColor: shipmentId !== "" ? FOCUS : HAIR, color: shipmentId !== "" ? BLUE : INK, fontWeight: 600, appearance: "none", paddingInlineEnd: 36, cursor: "pointer" }}>
-                        <option value="">בחר משלוח…</option>
-                        {shipments.map((s) => <option key={s.id} value={s.id}>{s.shipment_code} · {s.customer_name ?? s.customer_code ?? ""}</option>)}
-                      </select>
-                      <ChevronDown size={15} strokeWidth={1.75} color={MUTED} style={{ position: "absolute", insetInlineEnd: 14, top: 15, pointerEvents: "none" }} />
-                    </div>
+                    <SearchableCombobox<Shipment>
+                      dense
+                      options={shipments}
+                      value={shipment}
+                      onChange={(s) => { setShipmentId(s ? s.id : ""); setPackageType(""); }}
+                      getOptionLabel={(s) => s.shipment_code}
+                      getOptionSubtitle={(s) => s.customer_name ?? s.customer_code ?? null}
+                      isOptionEqualToValue={(a, b) => a.id === b.id}
+                      placeholder="בחר משלוח…"
+                    />
                   </div>
                   {shipmentId !== "" && (
                     <>
@@ -331,14 +336,18 @@ export default function PackageIntakeDialog({
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16, maxWidth: 660, marginTop: 20 }}>
                     <div>
                       <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>מסלול המארז</div>
-                      <select value={routeNumber} onChange={(e) => setRouteNumber(e.target.value)} style={{ ...fieldInput, fontWeight: 600, cursor: "pointer" }}>
-                        <option value="">מסלול {contents?.default_route_number ?? 1} (ברירת מחדל)</option>
-                        {packageRoutes.map((n) => <option key={n} value={n}>מסלול {n}</option>)}
-                      </select>
+                      <SearchableCombobox<RouteOption>
+                        dense
+                        options={packageRoutes.map(routeOption)}
+                        value={routeNumber === "" ? null : routeOption(routeNumber)}
+                        onChange={(o) => setRouteNumber(o ? o.value : "")}
+                        isOptionEqualToValue={(a, b) => a.value === b.value}
+                        placeholder={`מסלול ${contents?.default_route_number ?? 1} (ברירת מחדל)`}
+                      />
                     </div>
                     <div>
                       <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>סוג מארז</div>
-                      <div style={{ ...fieldInput, background: "#f5f5f7", color: MUTED, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "space-between" }}>{packageTypeDesc}<Lock size={14} strokeWidth={1.75} color={MUTED_LT} /></div>
+                      <SearchableCombobox<RouteOption> dense locked options={[]} value={{ value: String(packageType), label: packageTypeDesc }} onChange={() => {}} />
                       <div style={{ fontSize: 11.5, color: MUTED, marginTop: 5 }}>סוג המארז נקבע בקליטה ואינו ניתן לשינוי אחר כך.</div>
                     </div>
                     <div>
@@ -404,11 +413,18 @@ export default function PackageIntakeDialog({
                                       <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, background: "#f5f5f7", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "2px 8px" }}>מהתבנית</span>
                                     </>
                                   ) : (
-                                    <select value={r.itemType} onChange={(e) => { const v = e.target.value === "" ? "" : Number(e.target.value); patchRow(i, { itemType: v, typeDesc: memberTypes.find((t) => t.item_type_id === v)?.item_type_desc ?? "", route: "" }); }}
-                                      style={{ ...fieldInput, height: 38, minWidth: 160, cursor: "pointer" }}>
-                                      <option value="">בחר סוג פריט…</option>
-                                      {memberTypes.map((t) => <option key={t.item_type_id} value={t.item_type_id}>{t.item_type_desc}</option>)}
-                                    </select>
+                                    <div style={{ minWidth: 186 }}>
+                                      <SearchableCombobox<ItemTypeOption>
+                                        dense
+                                        denseHeight={38}
+                                        options={memberTypes}
+                                        value={memberTypes.find((t) => t.item_type_id === r.itemType) ?? null}
+                                        onChange={(t) => patchRow(i, { itemType: t ? t.item_type_id : "", typeDesc: t?.item_type_desc ?? "", route: "" })}
+                                        getOptionLabel={(t) => t.item_type_desc}
+                                        isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
+                                        placeholder="בחר סוג פריט…"
+                                      />
+                                    </div>
                                   )}
                                 </div>
                               </td>
@@ -420,10 +436,17 @@ export default function PackageIntakeDialog({
                               </td>
                               <td style={{ padding: "10px 12px", fontSize: 13.5, color: INK_2, whiteSpace: "nowrap" }}>
                                 {routesOfType(r.itemType).length > 1 ? (
-                                  <select value={r.route} onChange={(e) => patchRow(i, { route: e.target.value })} style={{ ...fieldInput, height: 34, width: "auto", fontSize: 13, cursor: "pointer" }}>
-                                    <option value="">{routeLabel({ ...r, route: "" })}</option>
-                                    {routesOfType(r.itemType).map((n) => <option key={n} value={n}>מסלול {n}</option>)}
-                                  </select>
+                                  <div style={{ minWidth: 170 }}>
+                                    <SearchableCombobox<RouteOption>
+                                      dense
+                                      denseHeight={34}
+                                      options={routesOfType(r.itemType).map(routeOption)}
+                                      value={r.route === "" ? null : routeOption(r.route)}
+                                      onChange={(o) => patchRow(i, { route: o ? o.value : "" })}
+                                      isOptionEqualToValue={(a, b) => a.value === b.value}
+                                      placeholder={routeLabel({ ...r, route: "" })}
+                                    />
+                                  </div>
                                 ) : routeLabel(r)}
                               </td>
                               <td style={{ padding: "10px 12px" }}>
@@ -525,6 +548,7 @@ export default function PackageIntakeDialog({
       {labelsFor && shipment && (
         <PackageLabelsDialog
           open
+          zIndex={DIALOG_Z + 10} // the intake overlay stays mounted underneath
           onClose={() => { setLabelsFor(null); onClose(); }}
           packageId={labelsFor.packageId}
           packageType={packageTypeDesc}

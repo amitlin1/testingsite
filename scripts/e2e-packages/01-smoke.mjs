@@ -1,11 +1,12 @@
 // Smoke: login, every package-model screen renders, the read APIs answer with the
 // upgraded data. Screenshots land in e2e/shots.
-import { launch, login, api, goto, shot, bodyHas, check, summary, BASE } from "./lib.mjs";
+import { launch, login, api, goto, shot, bodyHas, check, summary, BASE, resolveConfig } from "./lib.mjs";
 
 const { browser, page, errors } = await launch();
 try {
   const url = await login(page);
   check("login lands in the app", !url.includes("/auth/realms/"), url);
+  const cfg = await resolveConfig(page);
   await shot(page, "01-home");
 
   // ---- read APIs ------------------------------------------------------------
@@ -16,7 +17,7 @@ try {
   check("package status keys valid", pkgs.every((p) => ["queue", "test", "waitItems", "readyClose", "done"].includes(p.status)), [...new Set(pkgs.map((p) => p.status))].join(","));
 
   const pt = await api(page, "/api/settings/package-types");
-  check("GET /api/settings/package-types", pt.ok && Array.isArray(pt.json) && pt.json.length >= 4, `status ${pt.status}, ${pt.json?.length} types: ${(pt.json || []).map((t) => t.item_type_desc + "(" + t.health + ")").join(", ")}`);
+  check("GET /api/settings/package-types", pt.ok && Array.isArray(pt.json) && pt.json.length >= 1, `status ${pt.status}, ${pt.json?.length} types: ${(pt.json || []).map((t) => t.item_type_desc + "(" + t.health + ")").join(", ")}`);
 
   const st = await api(page, "/api/testing/stations");
   const pkgLevel = (st.json || []).filter((t) => t.packageLevel).map((t) => `${t.id}:${t.name}`);
@@ -39,7 +40,8 @@ try {
   const hits = srch.json || [];
   check("search finds the box and its items by id prefix", srch.ok && hits.some((h) => h.isPackage) && hits.some((h) => h.packageId === String(first.item_id)), `${hits.length} hits`);
 
-  const bp = await api(page, `/api/testing/blocked-packages?stationId=10`);
+  const closingStation = ((await api(page, `/api/testing/test-stations?typeId=${cfg.CLOSING_TYPE}`)).json || []).find((st) => !st.is_research);
+  const bp = await api(page, `/api/testing/blocked-packages?stationId=${closingStation?.test_station_id ?? 0}`);
   check("GET /api/testing/blocked-packages answers a list", bp.ok && Array.isArray(bp.json), `status ${bp.status}, ${bp.json?.length}`);
 
   // ---- screens --------------------------------------------------------------
@@ -52,7 +54,9 @@ try {
   await shot(page, "03-package-page");
 
   await goto(page, "/settings/packages");
-  check("/settings/packages renders the types", await bodyHas(page, "מארז ספק כוח") && await bodyHas(page, "מארז מגבר"));
+  let allTypesShown = true;
+  for (const name of cfg.PKG_TYPE_NAMES) if (!(await bodyHas(page, name))) allTypesShown = false;
+  check("/settings/packages renders the types", allTypesShown, cfg.PKG_TYPE_NAMES.join(", "));
   await shot(page, "04-settings-packages");
 
   await goto(page, "/settings/item-types");

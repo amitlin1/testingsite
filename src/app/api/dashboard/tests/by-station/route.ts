@@ -42,7 +42,7 @@
 //    under-report the research lab, which is why they are named here.
 //  - the queue's AGE now ships as a distribution, not as one number: the mean
 //    (`averageCurrentQueueTimeMinutes`, unchanged) plus `_new_oldestQueueAge*`
-//    and `_new_p95QueueAgeWallMinutes`. The mean answers "is this queue busy";
+//    and `_new_p95QueueAge{Wall,Work}Minutes`. The mean answers "is this queue busy";
 //    the max answers "is something rotting in it", which is what the board is
 //    actually opened for, and a mean over twenty items that arrived in the last
 //    ten minutes hides a single item that has been waiting since Thursday.
@@ -86,6 +86,7 @@ interface StationLoadResponseRow extends StationLoadRow {
   _new_oldestQueueAgeWallMinutes: number | null;
   _new_oldestQueueAgeWorkMinutes: number | null;
   _new_p95QueueAgeWallMinutes: number | null;
+  _new_p95QueueAgeWorkMinutes: number | null;
   _new_activeTestAgeWallMinutes: number | null;
   _new_activeTestAgeWorkMinutes: number | null;
   // Q4 additions — the window's flow, and its durations in both clocks.
@@ -180,6 +181,7 @@ export const GET = withAuth(async (req: Request) => {
         _new_oldestQueueAgeWallMinutes: b.oldest_queue_age_wall_min,
         _new_oldestQueueAgeWorkMinutes: b.oldest_queue_age_work_min,
         _new_p95QueueAgeWallMinutes: b.p95_queue_age_wall_min,
+        _new_p95QueueAgeWorkMinutes: b.p95_queue_age_work_min,
         _new_activeTestAgeWallMinutes: b.active_test_age_wall_min,
         _new_activeTestAgeWorkMinutes: b.active_test_age_work_min,
 

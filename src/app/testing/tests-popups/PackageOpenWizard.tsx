@@ -9,8 +9,9 @@ import { newActionId } from "@/app/lib/metrics/action-id";
 import PackageWizardShell, { type ItemStepperRow, type WizardStep } from "./PackageWizardShell";
 import { PhotoUploader, PassFail, emptyPhotos, type Photos, type RefImg } from "./stationKit";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import {
-  AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, FOCUS, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, MUTED_LT, RED, RED_BG, fieldInput, seq2,
+  DIALOG_Z, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, FOCUS, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, MUTED_LT, RED, RED_BG, fieldInput, seq2,
 } from "@/app/components/packages/packageUi";
 
 /**
@@ -196,6 +197,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const cur = inItemFlow ? items[itemIdx!] : null;
   const curWork = cur ? workOf(cur.item_id) : null;
   const doneCount = items.filter((it) => workOf(it.item_id).done).length;
+  const memberTypes = itemTypes.filter((t) => !t.is_package);
   const templateCount = Array.isArray(pkg.template_snapshot)
     ? (pkg.template_snapshot as { quantity?: number }[]).reduce((n, l) => n + Math.max(1, Number(l.quantity ?? 1)), 0)
     : items.length;
@@ -222,9 +224,17 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   let nextEnabled = true;
   if (inItemFlow && curWork) {
     nextLabel = itemPhase === "weigh" ? "סיום פריט" : "המשך";
-    nextEnabled = itemPhase === "photo" ? curWork.photos.ok !== "" && !curWork.photos.photos.some((s) => s.uploading) : curWork.meas.trim() !== "";
+    // A shot still uploading, or one whose upload failed, blocks the step: a
+    // failed upload leaves nothing in storage, so continuing would silently
+    // lose the photo. The worker removes the red shot and takes it again.
+    const itemShots = curWork.photos.photos;
+    nextEnabled = itemPhase === "photo" ? curWork.photos.ok !== "" && !itemShots.some((s) => s.uploading || s.failed) : curWork.meas.trim() !== "";
+    if (itemPhase === "photo" && itemShots.some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
   } else if (stepKey === "scan") nextEnabled = scan.trim() !== "";
-  else if (stepKey === "boxPhoto") nextEnabled = boxPhotos.ok !== "" && !boxPhotos.photos.some((s) => s.uploading);
+  else if (stepKey === "boxPhoto") {
+    nextEnabled = boxPhotos.ok !== "" && !boxPhotos.photos.some((s) => s.uploading || s.failed);
+    if (boxPhotos.photos.some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
+  }
   else if (stepKey === "items") { nextEnabled = items.length > 0 && doneCount === items.length; nextLabel = nextEnabled ? "המשך לספירה" : `נותרו ${items.length - doneCount} פריטים`; }
   else if (stepKey === "count") nextEnabled = counted != null;
   else if (stepKey === "labels") nextLabel = "הדפס וסיים";
@@ -234,6 +244,13 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
 
   // ---- finish: one result per item, then the box ---------------------------
   const finish = async () => {
+    // Belt and braces for the per-step gate: nothing is submitted while a shot
+    // is still uploading or failed, whichever way the worker reached this step.
+    const shots = [boxPhotos, ...items.map((it) => workOf(it.item_id).photos)].flatMap((ph) => ph.photos);
+    if (shots.some((sh) => sh.uploading || sh.failed)) {
+      setError(shots.some((sh) => sh.failed) ? "יש צילום שההעלאה שלו נכשלה — הסר אותו וצלם שוב לפני הסיום." : "יש צילום שעדיין עולה — המתן לסיום ההעלאה.");
+      return;
+    }
     setSubmitting(true); setError(null);
     const submitId = (submitIdRef.current ??= newActionId());
     const keysOf = (ph: Photos) => ph.photos.map((s) => s.objectKey).filter(Boolean);
@@ -313,7 +330,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         open={open} onClose={onClose}
         stationName={station.test_station_desc} stationCode={String(station.test_station_id)}
         title="פתיחת מארז" pkg={pkg} workerName={workerName}
-        steps={STEPS} stepIndex={step} onStep={(i) => { if (!doneStep && !submitting && i < STEPS.length - 1) { setItemIdx(null); setStep(i); } }}
+        steps={STEPS} stepIndex={step} onStep={(i) => { if (!doneStep && !submitting && i < STEPS.length - 1 && (i <= step || nextEnabled)) { setItemIdx(null); setStep(i); } }}
         itemStepper={itemStepper} itemProgress={`${doneCount}/${items.length}`}
         stepTitle={stepTitle} stepSubtitle={stepSubtitle}
         stepCounter={inItemFlow ? `פריט ${itemIdx! + 1} מתוך ${items.length}` : `שלב ${step + 1} מתוך ${STEPS.length}`}
@@ -413,14 +430,20 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
             </div>
             {addOpen ? (
               <div style={{ marginTop: 16, border: `1px solid ${HAIR}`, borderRadius: 14, padding: 14, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, maxWidth: 620 }}>
-                <select value={add.itemType} onChange={(e) => setAdd({ ...add, itemType: e.target.value })} style={{ ...fieldInput, height: 40, cursor: "pointer" }}>
-                  <option value="">סוג פריט…</option>
-                  {itemTypes.filter((t) => !t.is_package).map((t) => <option key={t.item_type_id} value={t.item_type_id}>{t.item_type_desc}</option>)}
-                </select>
-                <input placeholder="מספר סריאלי" value={add.serialNumber} onChange={(e) => setAdd({ ...add, serialNumber: e.target.value })} style={{ ...fieldInput, height: 40 }} />
-                <input placeholder="מק״ט" value={add.makat} onChange={(e) => setAdd({ ...add, makat: e.target.value })} style={{ ...fieldInput, height: 40 }} />
-                <input placeholder="דגם" value={add.model} onChange={(e) => setAdd({ ...add, model: e.target.value })} style={{ ...fieldInput, height: 40 }} />
-                <input placeholder="יצרן" value={add.manufacturer} onChange={(e) => setAdd({ ...add, manufacturer: e.target.value })} style={{ ...fieldInput, height: 40 }} />
+                {/* The inputs take the field height (44) so they line up with the type field. */}
+                <SearchableCombobox<ItemTypeOption>
+                  dense
+                  options={memberTypes}
+                  value={memberTypes.find((t) => String(t.item_type_id) === add.itemType) ?? null}
+                  onChange={(t) => setAdd({ ...add, itemType: t ? String(t.item_type_id) : "" })}
+                  getOptionLabel={(t) => t.item_type_desc}
+                  isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
+                  placeholder="סוג פריט…"
+                />
+                <input placeholder="מספר סריאלי" value={add.serialNumber} onChange={(e) => setAdd({ ...add, serialNumber: e.target.value })} style={fieldInput} />
+                <input placeholder="מק״ט" value={add.makat} onChange={(e) => setAdd({ ...add, makat: e.target.value })} style={fieldInput} />
+                <input placeholder="דגם" value={add.model} onChange={(e) => setAdd({ ...add, model: e.target.value })} style={fieldInput} />
+                <input placeholder="יצרן" value={add.manufacturer} onChange={(e) => setAdd({ ...add, manufacturer: e.target.value })} style={fieldInput} />
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <button type="button" onClick={() => setAddOpen(false)} style={{ minHeight: 40, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK }}>ביטול</button>
                   <button type="button" onClick={addMissing} disabled={busy} style={{ minHeight: 40, background: BLUE, color: "#fff", border: 0, borderRadius: 9999, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>הוסף</button>
@@ -493,6 +516,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
 
       {labelsOpen && (
         <PackageLabelsDialog
+          zIndex={DIALOG_Z} // above the wizard shell (DIALOG_Z - 10)
           open
           onClose={() => { setLabelsOpen(false); finish(); }}
           onPrinted={() => setLabelsPrinted(true)}

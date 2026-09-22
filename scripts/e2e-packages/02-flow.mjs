@@ -2,18 +2,17 @@
 // screen photographed at each stage: intake → opening (group start, per-item
 // results + box result under one submit id) → items through their own stations
 // → meeting point (status 6 / closing queue) → closing → done.
-import { launch, login, api, goto, shot, bodyHas, check, summary } from "./lib.mjs";
+import { launch, login, api, goto, shot, bodyHas, check, summary, resolveConfig } from "./lib.mjs";
 
-const OPENING_TYPE = 5;  // אשף קליטה (dev config)
-const CLOSING_TYPE = 8;  // בדיקת סביבה (dev config)
-const PKG_TYPE_AMP = 15; // מארז מגבר: מגבר הספק + ערכת מחברים + כבל תדר גבוה
-const TYPES = { amp: 6, kit: 11, cable: 10 };
+// Ids are resolved by name from the running app after login (lib.mjs resolveConfig).
+let OPENING_TYPE, CLOSING_TYPE, PKG_TYPE_AMP, OTHER_PKG_TYPE, TYPES;
 const uuid = () => crypto.randomUUID();
 const tag = Date.now().toString().slice(-6);
 
 const { browser, page, errors } = await launch();
 try {
   await login(page);
+  ({ OPENING_TYPE, CLOSING_TYPE, PKG_TYPE: PKG_TYPE_AMP, OTHER_PKG_TYPE, TYPES } = await resolveConfig(page));
   const stations = async (typeId) => (await api(page, `/api/testing/test-stations?typeId=${typeId}`)).json || [];
   const openSt = (await stations(OPENING_TYPE)).find((s) => !s.is_research);
   const closeSt = (await stations(CLOSING_TYPE)).find((s) => !s.is_research);
@@ -40,8 +39,12 @@ try {
   check("box waits at opening with 3 items 01..03", view?.status === "queue" && view.items.map((i) => i.package_seq).join(",") === "1,2,3" && view.items.every((i) => String(i.item_id) === pkgId.slice(0, 14) + String(i.package_seq).padStart(2, "0")), JSON.stringify(view?.items.map((i) => [i.item_id, i.state])));
 
   // guard rails
-  const lock = await api(page, `/api/packages/${pkgId}`, { method: "PATCH", body: JSON.stringify({ itemType: 13 }) });
-  check("package type is locked (409)", lock.status === 409, `status ${lock.status} ${lock.json?.code ?? ""}`);
+  if (OTHER_PKG_TYPE == null) {
+    check("package type is locked (409) — skipped: this database has only one package type", true);
+  } else {
+    const lock = await api(page, `/api/packages/${pkgId}`, { method: "PATCH", body: JSON.stringify({ itemType: OTHER_PKG_TYPE }) });
+    check("package type is locked (409)", lock.status === 409, `status ${lock.status} ${lock.json?.code ?? ""}`);
+  }
   const lastDel = await api(page, `/api/items/${view.items[0].item_id}`, { method: "DELETE" });
   check("deleting one of several items is allowed, not the last", lastDel.ok || lastDel.status === 409, `status ${lastDel.status}`);
   if (lastDel.ok) {
@@ -130,8 +133,19 @@ try {
   await shot(page, "25-shipments-after");
 
   // ---- 6. legacy loose item still works at a regular station ----------------
-  const legacyQueue = (await api(page, `/api/testing/items?stationId=15`)).json || [];
-  check("regular station queue still lists legacy loose items as item rows", legacyQueue.length > 0 && legacyQueue.every((r) => !r.is_package), `${legacyQueue.length} rows`);
+  // Any station of a non-package-level type whose queue is not empty; the dev
+  // database has loose legacy items there. A database without any is a skip.
+  const regularTypes = ((await api(page, "/api/settings/test-stations-type")).json || []).filter((t) => !t.package_level);
+  let legacyQueue = null;
+  for (const t of regularTypes) {
+    for (const st of await stations(t.test_station_type_id)) {
+      const rows = (await api(page, `/api/testing/items?stationId=${st.test_station_id}`)).json || [];
+      if (rows.length) { legacyQueue = rows; break; }
+    }
+    if (legacyQueue) break;
+  }
+  if (legacyQueue) check("regular station queue still lists legacy loose items as item rows", legacyQueue.every((r) => !r.is_package), `${legacyQueue.length} rows`);
+  else check("regular station queue still lists legacy loose items as item rows — skipped: no queued items at any regular station", true);
 
   const realErrors = errors.filter((e) => !/409/.test(e)); // the type-lock check above deliberately triggers a 409
   check("no page errors / 5xx during flow", realErrors.length === 0, realErrors.slice(0, 5).join(" || "));

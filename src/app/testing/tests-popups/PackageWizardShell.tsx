@@ -3,7 +3,7 @@ import React from "react";
 import { Info, Check } from "lucide-react";
 import type { PackageView } from "@/app/lib/packages/read";
 import PackageIdText from "@/app/components/packages/PackageIdText";
-import { BLUE, GREEN, HAIR, INK, MUTED, MUTED_LT, SHADOW } from "@/app/components/packages/packageUi";
+import { DIALOG_Z, BLUE, GREEN, HAIR, INK, MUTED, MUTED_LT, SHADOW } from "@/app/components/packages/packageUi";
 
 /**
  * The chrome shared by the package opening / closing wizards —
@@ -47,7 +47,7 @@ export default function PackageWizardShell({
 }) {
   if (!open) return null;
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: DIALOG_Z - 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div dir="rtl" style={{ width: "min(1040px, 96vw)", height: "min(720px, 92vh)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK }}>
         {/* Rail */}
         <div style={{ width: 268, flexShrink: 0, background: "#f5f5f7", borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", padding: "20px 18px", overflowY: "auto" }}>

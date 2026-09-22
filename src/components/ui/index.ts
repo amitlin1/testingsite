@@ -36,7 +36,7 @@ export {
 export { Tooltip } from "./Tooltip";
 export { Menu } from "./Menu";
 export { Autocomplete } from "./Autocomplete";
-export type { AutocompleteProps } from "./Autocomplete";
+export type { AutocompleteProps, OptionLiProps } from "./Autocomplete";
 export {
   Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, ListItemAvatar, ListSubheader,
   Collapse, Toolbar, Breadcrumbs,
