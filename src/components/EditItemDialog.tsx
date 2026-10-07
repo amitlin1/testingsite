@@ -3,6 +3,7 @@ import * as React from "react";
 import { X, Trash2, AlertTriangle } from "lucide-react";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { apiFetch } from "@/lib/api/client";
+import { useDraggable } from "@/components/ui/useDraggable";
 import type { ItemRow } from "@/types";
 
 /* =========================================================================
@@ -57,6 +58,7 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
     }
   }, [open, item]);
 
+  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable(open);
   if (!open || !item) return null;
 
   const set = (k: keyof EditItemForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -132,11 +134,13 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={stop} dir="rtl" className="shx-scroll" style={{ width: "min(640px,94vw)", maxHeight: "88vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, boxShadow: "rgba(0,0,0,0.22) 3px 5px 30px 0", fontFamily: "var(--shx-font)", color: "#1d1d1f" }}>
+    // Above the app bar (1100) and side nav (1200), like the package dialogs:
+    // a popup moved to the top must not slide under them.
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1250, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div ref={dragRef} onPointerDown={onDragStart} onClick={stop} dir="rtl" className="shx-scroll" style={{ ...dragStyle, width: "min(640px,94vw)", maxHeight: "88vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, boxShadow: "rgba(0,0,0,0.22) 3px 5px 30px 0", fontFamily: "var(--shx-font)", color: "#1d1d1f" }}>
 
         {/* ---- header ---- */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: "1px solid #e0e0e0" }}>
+        <div data-drag-handle="" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: "1px solid #e0e0e0" }}>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>עריכת פריט #{item.item_id}</div>
           <button onClick={onClose} aria-label="סגור" style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "#f5f5f7", color: "#1d1d1f", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <X size={18} strokeWidth={1.75} />
@@ -200,7 +204,7 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
 
       {/* ---- delete confirmation (stacked above) ---- */}
       {confirmOpen && (
-        <div onClick={stop} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div onClick={stop} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 1260, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div dir="rtl" style={{ width: "min(440px,92vw)", background: "#fff", borderRadius: 16, boxShadow: "rgba(0,0,0,0.25) 3px 5px 30px 0", fontFamily: "var(--shx-font)", color: "#1d1d1f", padding: 24 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
               <AlertTriangle size={20} color="#bf3535" strokeWidth={2} />

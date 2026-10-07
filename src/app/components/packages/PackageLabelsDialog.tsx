@@ -5,6 +5,7 @@ import { useReactToPrint } from "react-to-print";
 import { X, Check, Minus, Plus } from "lucide-react";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { DIALOG_Z, BLUE, HAIR, INK, INK_2, MUTED, MUTED_LT, SHADOW, AMBER_INK, AMBER_BG, AMBER_BORDER, GREY, barcodeOf, fmtId, seq2, pillGhost, overlay } from "./packageUi";
+import { useDraggable } from "@/components/ui/useDraggable";
 
 const PRINTERS = [{ label: "מדפסת המערכת" }];
 const LABEL_SIZES = [{ label: "57 × 32 מ״מ" }];
@@ -159,6 +160,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
 
   const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: `Package-${packageId}-labels`, onAfterPrint: onPrinted });
 
+  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable(open);
   if (!open) return null;
 
   const itemsOnCount = itemsOn.filter(Boolean).length;
@@ -180,8 +182,8 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
 
   return (
     <div onClick={onClose} style={{ ...overlay, zIndex }}>
-      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(880px, 96vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
-        <div className="no-print" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
+      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(880px, 96vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
+        <div data-drag-handle="" className="no-print" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>הדפסת מדבקות</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 13.5, color: MUTED, marginTop: 4 }}>

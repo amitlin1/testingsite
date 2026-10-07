@@ -88,6 +88,9 @@ export type PackageView = {
   /** Items that keep the box out of the closing queue, with where they are. */
   blocked_by: { item_id: string; package_seq: number | null; item_type_desc: string; station_name: string | null }[];
   template_snapshot: unknown;
+  /** The box label scanned at the opening station (its step-1 result); the
+   *  closing wizard starts from it. Null until opened. */
+  opening_sku: string | null;
 };
 
 export type PackageListFilters = {
@@ -124,6 +127,7 @@ type PkgRow = {
   opened_at: Date | null;
   template_snapshot: unknown;
   closing_details: unknown;
+  opening_sku: string | null;
 };
 
 type MemberRow = {
@@ -205,7 +209,10 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
            (SELECT r.details FROM test_results r
              WHERE r.item_id = i.item_id
                AND r.route_step = COALESCE(array_length(tr.route_steps, 1), 0)
-             ORDER BY r.test_result_id DESC LIMIT 1) AS closing_details
+             ORDER BY r.test_result_id DESC LIMIT 1) AS closing_details,
+           (SELECT NULLIF(TRIM(r.details->>'sku'), '') FROM test_results r
+             WHERE r.item_id = i.item_id AND r.route_step = 1
+             ORDER BY r.test_result_id DESC LIMIT 1) AS opening_sku
     FROM items i
     JOIN item_types it ON it.item_type_id = i.item_type_id
     LEFT JOIN customers c ON c.id = i.customer_id
@@ -326,6 +333,7 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       finished_count: items.filter((it) => it.state === "done").length,
       blocked_by: blocked,
       template_snapshot: p.template_snapshot ?? null,
+      opening_sku: p.opening_sku ?? null,
     });
   }
 

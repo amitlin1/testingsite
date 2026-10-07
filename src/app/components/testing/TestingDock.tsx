@@ -206,6 +206,8 @@ export default function TestingDock({
               hideHeader
               size="small"
               disabled={workerLocked}
+              // Only who may test: the roles /testing is open to (src/lib/routes.ts).
+              roles={["manager", "tester"]}
               placeholder={workerLocked ? "מזוהה מההתחברות" : "חפש עובד…"}
               onOpen={() => setWorkerOpen(true)}
               onClose={() => setWorkerOpen(false)}

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { Alert, ConfirmDialog, Snackbar } from "@/components/ui";
+import { useDraggable } from "@/components/ui/useDraggable";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 
 /**
@@ -40,7 +41,6 @@ type ServerLine = {
   model: string | null;
   manufacturer_name: string | null;
   manufacturer_no: string | null;
-  manufacturer_sku: string | null;
   route_number: number;
   sort_order: number;
   route_warning: string | null;
@@ -64,7 +64,6 @@ type DraftLine = {
   model: string;
   manufacturer_name: string;
   manufacturer_no: string;
-  manufacturer_sku: string;
   route_number: string;
   route_warning: string | null;
 };
@@ -88,7 +87,6 @@ const toDraft = (l: ServerLine): DraftLine => ({
   model: l.model ?? "",
   manufacturer_name: l.manufacturer_name ?? "",
   manufacturer_no: l.manufacturer_no ?? "",
-  manufacturer_sku: l.manufacturer_sku ?? "",
   route_number: l.route_number === 1 ? "" : String(l.route_number),
   route_warning: l.route_warning,
 });
@@ -124,6 +122,7 @@ export default function PackagesSettingsPage() {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [newOpen, setNewOpen] = React.useState(false);
+  const { ref: newDragRef, onPointerDown: onNewDragStart, style: newDragStyle } = useDraggable(newOpen);
   const [newName, setNewName] = React.useState("");
   const [newRoute, setNewRoute] = React.useState("");
   const [newBusy, setNewBusy] = React.useState(false);
@@ -194,7 +193,7 @@ export default function PackagesSettingsPage() {
     });
   const addRow = () =>
     setDraft((rows) => rows.concat([{
-      key: keySeq++, item_type_id: "", quantity: "1", makat: "", model: "", manufacturer_name: "", manufacturer_no: "", manufacturer_sku: "", route_number: "", route_warning: null,
+      key: keySeq++, item_type_id: "", quantity: "1", makat: "", model: "", manufacturer_name: "", manufacturer_no: "", route_number: "", route_warning: null,
     }]));
   const revert = () => {
     if (!contents) return;
@@ -222,7 +221,6 @@ export default function PackagesSettingsPage() {
             model: r.model || null,
             manufacturer_name: r.manufacturer_name || null,
             manufacturer_no: r.manufacturer_no || null,
-            manufacturer_sku: r.manufacturer_sku || null,
             route_number: r.route_number === "" ? 1 : Number(r.route_number),
             sort_order: i,
           })),
@@ -407,7 +405,7 @@ export default function PackagesSettingsPage() {
 
             {draft.length > 0 && (
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", minWidth: 1020, borderCollapse: "collapse" }}>
+                <table style={{ width: "100%", minWidth: 900, borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#f5f5f7" }}>
                       <th style={eth("center", { width: 64 })}>סדר</th>
@@ -417,7 +415,6 @@ export default function PackagesSettingsPage() {
                       <th style={eth("right")}>דגם</th>
                       <th style={eth("right")}>יצרן</th>
                       <th style={eth("right")}>מספר יצרן</th>
-                      <th style={eth("right")}>מק״ט יצרן <span style={{ fontWeight: 400, color: MUTED_LT }}>(פריט ייחוס)</span></th>
                       <th style={eth("center", { width: 120 })}>מסלול ברירת מחדל</th>
                       <th style={{ padding: "11px 16px", borderBottom: `1px solid ${HAIR}`, width: 56 }}></th>
                     </tr>
@@ -461,7 +458,6 @@ export default function PackagesSettingsPage() {
                         <td style={{ padding: "9px 12px" }}><input value={r.model} onChange={(e) => patchRow(i, { model: e.target.value })} style={input} /></td>
                         <td style={{ padding: "9px 12px" }}><input value={r.manufacturer_name} onChange={(e) => patchRow(i, { manufacturer_name: e.target.value })} style={input} /></td>
                         <td style={{ padding: "9px 12px" }}><input value={r.manufacturer_no} onChange={(e) => patchRow(i, { manufacturer_no: e.target.value })} style={{ ...input, fontVariantNumeric: "tabular-nums" }} /></td>
-                        <td style={{ padding: "9px 12px" }}><input value={r.manufacturer_sku} onChange={(e) => patchRow(i, { manufacturer_sku: e.target.value })} placeholder="אופציונלי" style={{ ...input, fontVariantNumeric: "tabular-nums" }} /></td>
                         <td style={{ padding: "9px 12px" }}>
                           <input value={r.route_number} onChange={(e) => patchRow(i, { route_number: digits(e.target.value), route_warning: null })} placeholder="1" inputMode="numeric"
                             style={{ ...input, minWidth: 76, fontSize: 14, fontWeight: 600, textAlign: "center", fontVariantNumeric: "tabular-nums", borderColor: r.route_number === "" ? HAIR : "#0071e3", color: r.route_number === "" ? MUTED_LT : BLUE }} />
@@ -502,9 +498,10 @@ export default function PackagesSettingsPage() {
 
       {/* New package type */}
       {newOpen && (
-        <div onClick={() => !newBusy && setNewOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: "rgba(0,0,0,0.22) 3px 5px 30px 0", overflow: "hidden" }}>
-            <div style={{ padding: "22px 24px 0" }}>
+        // Above the app bar (1100) and side nav (1200): moved to the top, it must not slide under them.
+        <div onClick={() => !newBusy && setNewOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1250, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div ref={newDragRef} onPointerDown={onNewDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: "rgba(0,0,0,0.22) 3px 5px 30px 0", overflow: "hidden", ...newDragStyle }}>
+            <div data-drag-handle="" style={{ padding: "22px 24px 0" }}>
               <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>סוג מארז חדש</div>
               <div style={{ fontSize: 13.5, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>נוצר סוג פריט חדש המסומן כמארז. אחרי היצירה אפשר להגדיר לו תכולה.</div>
             </div>
@@ -532,6 +529,7 @@ export default function PackagesSettingsPage() {
       )}
 
       <ConfirmDialog
+        draggable={false}
         open={deleteTarget != null}
         title="מחיקת סוג מארז"
         message={deleteTarget ? `למחוק את סוג המארז "${deleteTarget.item_type_desc}"? פעולה זו אינה ניתנת לביטול.` : ""}

@@ -10,6 +10,7 @@
  *
  * Sources (kept as the single truth, edit THEM, then rebuild):
  *   prisma/migrations/20260915120000_package_model/migration.sql
+ *   prisma/migrations/<FOLLOW_UPS>/migration.sql   (later package-model changes)
  *   scripts/prod-package-model/03-fix-production.sql   (CONFIG + steps 1–8)
  */
 import fs from "node:fs";
@@ -26,6 +27,18 @@ const outPath = path.join(here, "2-upgrade-to-packages.sql");
 
 const migration = fs.readFileSync(migrationPath, "utf8").replace(/\r\n/g, "\n");
 const checksum = createHash("sha256").update(Buffer.from(migration, "utf8")).digest("hex");
+
+// Package-model migrations written after the first one. They run right after
+// it and are registered the same way, so the upgraded database ends on the
+// current schema and `migrate deploy` has nothing left to apply. Each must be
+// plain DDL that plpgsql runs as-is (no top-level SELECT).
+const FOLLOW_UPS = ["20261006120000_package_contents_drop_manufacturer_sku"];
+const followUps = FOLLOW_UPS.map((name) => {
+  const sql = fs.readFileSync(path.join(repo, "prisma", "migrations", name, "migration.sql"), "utf8").replace(/\r\n/g, "\n");
+  if (/^\s*SELECT\s/m.test(sql)) throw new Error(`${name}: a top-level SELECT plpgsql cannot run — extend the builder`);
+  return { name, sql, checksum: createHash("sha256").update(Buffer.from(sql, "utf8")).digest("hex") };
+});
+const indent = (sql) => sql.split("\n").map((l) => (l.trim() === "" ? "" : "  " + l)).join("\n");
 const fix = fs.readFileSync(fixPath, "utf8").replace(/\r\n/g, "\n");
 
 // ---- the migration, as plpgsql statements -----------------------------------
@@ -65,6 +78,7 @@ const out = `-- ================================================================
 -- =============================================================================
 -- נבנה אוטומטית על ידי build-upgrade.mjs מתוך:
 --   prisma/migrations/${migrationName}/migration.sql   (הסכימה)
+${followUps.map((f) => `--   prisma/migrations/${f.name}/migration.sql`).join("\n")}
 --   scripts/prod-package-model/03-fix-production.sql   (סידור הנתונים)
 --
 -- מה קורה כשמריצים (בסדר הזה, הכול או כלום):
@@ -104,8 +118,8 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'items' AND column_name = 'parent_item_id') THEN
     RAISE EXCEPTION 'הסכימה כבר שודרגה (אין items.parent_item_id) — הסקריפט כבר רץ. לא בוצע כלום.';
   END IF;
-  IF EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '${migrationName}') THEN
-    RAISE EXCEPTION 'המיגרציה ${migrationName} כבר רשומה. לא בוצע כלום.';
+  IF EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name IN (${[migrationName, ...FOLLOW_UPS].map((n) => `'${n}'`).join(", ")})) THEN
+    RAISE EXCEPTION 'מיגרציית המארזים כבר רשומה. לא בוצע כלום.';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'route_run') THEN
     RAISE EXCEPTION 'טבלאות ה-ledger חסרות (route_run) — חסרות מיגרציות קודמות. לא בוצע כלום.';
@@ -121,10 +135,15 @@ BEGIN
   -- ============================================================ ב. המיגרציה
 ${migrationBody}
 
+${followUps.map((f) => `  -- ---------------------------------------------------- ${f.name}\n${indent(f.sql)}`).join("\n\n")}
+
   -- ============================================================ ג. רישום
   INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
   VALUES (gen_random_uuid()::text, '${checksum}', now(), '${migrationName}', NULL, NULL, now(), 1);
   INSERT INTO fix_report(step, detail) VALUES ('0 מיגרציה', '${migrationName} הוחלה ונרשמה');
+${followUps.map((f) => `  INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
+  VALUES (gen_random_uuid()::text, '${f.checksum}', now(), '${f.name}', NULL, NULL, now(), 1);
+  INSERT INTO fix_report(step, detail) VALUES ('0 מיגרציה', '${f.name} הוחלה ונרשמה');`).join("\n")}
 
   -- ============================================================ ד. הנתונים
 ${body}

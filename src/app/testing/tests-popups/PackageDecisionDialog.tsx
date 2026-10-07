@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { DIALOG_Z, HAIR, INK, INK_2, MUTED, BLUE, RED, SHADOW, seq2 } from "@/app/components/packages/packageUi";
+import { useDraggable } from "@/components/ui/useDraggable";
 
 /**
  * פריט שלא הגיע לסגירה — design/Package Stations.dc.html (decide). Two
@@ -25,6 +26,7 @@ export default function PackageDecisionDialog({
   // choice and note mid-typing.
   const itemId = item?.item_id ?? null;
   React.useEffect(() => { if (open) { setChoice(null); setNote(""); } }, [open, itemId]);
+  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable(open);
   if (!open || !item) return null;
 
   const choices: { key: PackDecision; label: string; note: string; tone: string }[] = [
@@ -35,9 +37,9 @@ export default function PackageDecisionDialog({
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: DIALOG_Z + 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, overflow: "hidden", color: INK }}>
+      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, overflow: "hidden", color: INK }}>
         <div style={{ padding: "22px 24px 0" }}>
-          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>פריט שלא הגיע לסגירה</div>
+          <div data-drag-handle="" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>פריט שלא הגיע לסגירה</div>
           <div style={{ fontSize: 14, color: INK_2, marginTop: 9, lineHeight: 1.55 }}>
             פריט {seq2(item.package_seq)} · {item.item_type_desc} סיים את המסלול {item.station_name ? `בעמדת ${item.station_name}` : "במקום אחר"} ולא הגיע לעמדת הסגירה. בחר מה נעשה איתו.
           </div>

@@ -221,26 +221,38 @@ async function getRealmRole(name: string): Promise<KcRole> {
   return (await res.json()) as KcRole;
 }
 
-/** Ensure the user holds exactly ONE app role (manager|tester|storekeeper|mashan). */
+/**
+ * Ensure the user holds exactly ONE app role (manager|tester|storekeeper|mashan).
+ *
+ * Order matters: the new role is resolved and granted BEFORE the old one is
+ * revoked. Revoking first left a user with no role at all whenever the grant
+ * then failed (a realm without the role, Keycloak down) — the change reported
+ * an error yet had already taken effect. Now a failure before the grant
+ * changes nothing; a failed revoke still throws (a demotion that keeps the old
+ * role is a real authorization bug), leaving both roles for a retry to fix.
+ */
 async function setSingleAppRole(id: string, role: AppRole): Promise<void> {
   const current = await getUserRealmRoles(id);
+  if (!current.some((r) => r.name === role)) {
+    let target: KcRole;
+    try {
+      target = await getRealmRole(role);
+    } catch {
+      throw new AdminError(`התפקיד "${role}" לא מוגדר ב-Keycloak — יש ליצור אותו ב-Realm roles. לא בוצע שינוי.`, 409);
+    }
+    const add = await kc(`/users/${id}/role-mappings/realm`, {
+      method: "POST",
+      body: JSON.stringify([{ id: target.id, name: target.name }]),
+    });
+    if (!add.ok) throw new AdminError(`addRole ${add.status}`, add.status);
+  }
   const stale = current.filter((r) => isAppRole(r.name) && r.name !== role);
   if (stale.length) {
     const del = await kc(`/users/${id}/role-mappings/realm`, {
       method: "DELETE",
       body: JSON.stringify(stale.map((r) => ({ id: r.id, name: r.name }))),
     });
-    // Don't let a failed role REVOCATION pass silently — a demotion that only
-    // adds the new role but keeps the old one is a real authorization bug.
     if (!del.ok) throw new AdminError(`removeRoles ${del.status}`, del.status);
-  }
-  if (!current.some((r) => r.name === role)) {
-    const r = await getRealmRole(role);
-    const add = await kc(`/users/${id}/role-mappings/realm`, {
-      method: "POST",
-      body: JSON.stringify([{ id: r.id, name: r.name }]),
-    });
-    if (!add.ok) throw new AdminError(`addRole ${add.status}`, add.status);
   }
 }
 

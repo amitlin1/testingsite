@@ -75,7 +75,6 @@ type TemplateLine = {
   model: string | null;
   manufacturer_name: string | null;
   manufacturer_no: string | null;
-  manufacturer_sku: string | null;
   route_number: number;
   sort_order: number;
 };
@@ -106,7 +105,7 @@ async function loadTemplate(tx: TransactionClient, packageTypeId: number): Promi
     orderBy: [{ sort_order: "asc" }, { id: "asc" }],
     select: {
       item_type_id: true, quantity: true, makat: true, model: true, manufacturer_name: true,
-      manufacturer_no: true, manufacturer_sku: true, route_number: true, sort_order: true,
+      manufacturer_no: true, route_number: true, sort_order: true,
     },
   });
   return rows;

@@ -8,6 +8,8 @@ import { apiFetch } from "@/lib/api/client";
 export type Worker = {
   worker_id: number;
   worker_name: string;
+  /** Keycloak realm roles (from /api/workers-directory). */
+  roles?: string[];
 };
 
 type WorkerPickerProps = {
@@ -31,6 +33,9 @@ type WorkerPickerProps = {
   fullWidth?: boolean;
   /** Smaller variant for headers/toolbars. */
   size?: "small" | "medium";
+  /** List only workers holding at least one of these roles (e.g. the roles a
+   *  screen is open to). The selected value still resolves from everyone. */
+  roles?: readonly string[];
   /** Forwarded to the underlying combobox (e.g. to pin a hover panel open). */
   onOpen?: () => void;
   onClose?: () => void;
@@ -53,6 +58,7 @@ export default function WorkerPicker({
   disabled = false,
   fullWidth = true,
   size = "medium",
+  roles,
   onOpen,
   onClose,
 }: WorkerPickerProps) {
@@ -101,7 +107,7 @@ export default function WorkerPicker({
       <SearchableCombobox<Worker>
         size={size}
         disabled={disabled}
-        options={workers}
+        options={roles ? workers.filter((w) => w.roles?.some((r) => roles.includes(r))) : workers}
         getOptionLabel={(option) => option.worker_name}
         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
         value={workers.find((w) => w.worker_id === value) || null}

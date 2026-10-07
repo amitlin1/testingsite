@@ -60,6 +60,11 @@ export const ROLE_PROTECTED: ReadonlyArray<{
   // session (the gate was on /dashboard only), exposing all customer analytics
   // to tester/storekeeper roles. Handlers also self-gate with withAuth.
   { prefix: "/api/dashboard", any: ["manager"] },
+  // Testing API — the same roles as the /testing page below. Without it a
+  // storekeeper, kept off the page, could still start a test or post a result
+  // by calling these directly. Every caller is the testing page and its
+  // wizards (plus the manager-only dashboard's station list).
+  { prefix: "/api/testing", any: ["manager", "tester"] },
   // Work-hours API — admin + timekeeper (משאן). Handlers also self-gate with withAuth.
   { prefix: "/api/settings/work-hours", any: ["manager", "mashan"] },
   // Settings — specific pages are manager-only, the rest are open to all roles.
@@ -67,6 +72,12 @@ export const ROLE_PROTECTED: ReadonlyArray<{
   { prefix: "/settings/customers", any: ["manager"] }, // customer code — manager only
   // Work-hours page — admin + timekeeper (משאן). MUST precede the generic /settings rule.
   { prefix: "/settings/work-hours", any: ["manager", "mashan"] },
+  // Test configuration — not the storekeeper's (they don't test). MUST precede
+  // the generic /settings rule. Pages only: the intake and the queues still
+  // read routes / stations through /api/settings/* (see the role plan).
+  { prefix: "/settings/testing-routes", any: ["manager", "tester"] },
+  { prefix: "/settings/test-stations", any: ["manager", "tester"] },
+  { prefix: "/settings/test-station-status", any: ["manager", "tester"] },
   { prefix: "/settings", any: ["manager", "tester", "storekeeper"] }, // other settings — all roles
   // Main sections — each role reaches its own area.
   { prefix: "/testing", any: ["manager", "tester"] }, // testing — not storekeeper

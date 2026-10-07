@@ -137,7 +137,9 @@ export default function JobHealthStrip({
       </div>
       <div style={{ width: 1, height: 16, background: "var(--color-hairline)", flexShrink: 0 }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-        {chips.map((chip) => (
+        {/* A lone anomaly is both one of payload.reasons and the anomaly chip,
+            word for word — show it once (the text is also the React key). */}
+        {chips.filter((chip, i) => chips.findIndex((c) => c.text === chip.text) === i).map((chip) => (
           <span
             key={chip.text}
             style={{

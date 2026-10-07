@@ -394,7 +394,7 @@ export function StationShell({
 
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         {/* Header */}
-        <Box sx={{ p: isMobile ? "16px 18px" : "24px 32px", borderBottom: `1px solid ${HAIR}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1.5, flexShrink: 0 }}>
+        <Box data-drag-handle="" sx={{ p: isMobile ? "16px 18px" : "24px 32px", borderBottom: `1px solid ${HAIR}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1.5, flexShrink: 0 }}>
           <Box sx={{ minWidth: 0, flex: 1 }}>
             {!isWide && <Typography sx={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", color: BLUE, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{contextLabel} · {itemName}</Typography>}
             <Typography sx={{ fontSize: isWide ? 24 : 20, fontWeight: 700, letterSpacing: "-0.4px", mt: isWide ? 0 : "2px", color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.title}</Typography>

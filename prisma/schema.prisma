@@ -122,8 +122,6 @@ model package_contents {
   model             String?
   manufacturer_name String?
   manufacturer_no   String?
-  /// Manufacturer SKU used by the intake wizard to find the reference item.
-  manufacturer_sku  String?
   /// Default route of the item type when created from this template.
   route_number      Int        @default(1)
   sort_order        Int        @default(0)

@@ -7,6 +7,7 @@ import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import PackageIdText from "./PackageIdText";
 import LastItemDialog from "./LastItemDialog";
 import { DIALOG_Z, BLUE, HAIR, HAIR_2, INK, INK_2, MUTED, MUTED_LT, RED, SHADOW, fieldInput, overlay, pillGhost, pillPrimary, seq2 } from "./packageUi";
+import { useDraggable } from "@/components/ui/useDraggable";
 
 /**
  * עריכת מארז — design/Package Dialogs.dc.html ("edit"). Type, route,
@@ -62,6 +63,7 @@ export default function PackageEditDialog({
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
   }, [open, pkg]);
 
+  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable(open);
   if (!open || !pkg) return null;
 
   const opening = (pkg.current_route_step ?? 1) <= 1 && !pkg.is_finished && (pkg.status === "queue" || pkg.status === "test");
@@ -125,8 +127,8 @@ export default function PackageEditDialog({
   return (
     <>
       <div onClick={() => !saving && onClose()} style={{ ...overlay, zIndex: DIALOG_Z - 10 }}>
-        <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(680px, 94vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
+        <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(680px, 94vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
+          <div data-drag-handle="" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>עריכת מארז</div>
               <div style={{ marginTop: 5 }}><PackageIdText id={pkg.item_id} size={14} /></div>

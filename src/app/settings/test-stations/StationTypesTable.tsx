@@ -274,7 +274,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} draggable={false}>
         <DialogTitle>מחיקה</DialogTitle>
         <DialogContent>בטוח שברצונך למחוק?</DialogContent>
         <DialogActions>

@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState, useMemo } from "react";
-import { Snackbar, Alert } from "@/components/ui";
-import { Search, Plus, X, Pencil, Send, History, FileText, Barcode, Truck, Hourglass, Layers, PackageCheck, Percent, Inbox, FlaskConical } from "lucide-react";
+import { Snackbar, Alert, ConfirmDialog } from "@/components/ui";
+import { Search, Plus, X, Pencil, Trash2, Send, History, FileText, Barcode, Truck, Hourglass, Layers, PackageCheck, Percent, Inbox, FlaskConical } from "lucide-react";
 import DataTable, { StatusPill, RowActions, IconAction, ProgressCell, type Column } from "@/components/DataTable";
 import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import SearchableCombobox from "../common/SearchableCombobox";
@@ -86,6 +86,8 @@ export default function ShipmentTable() {
     const [sendOpen, setSendOpen] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [barcodesOpen, setBarcodesOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Shipment | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
 
     // PDF printing
@@ -237,7 +239,41 @@ export default function ShipmentTable() {
         setSnackbarOpen(true);
     };
 
+    // The server refuses a shipment that was sent or already has boxes
+    // (DELETE /api/shipments/[id]); the row says so before anyone tries.
+    const deleteBlockedReason = (s: Shipment): string | null =>
+        s.is_sent ? "לא ניתן למחוק משלוח שנשלח"
+            : (s.sampled_amount || 0) > 0 ? "לא ניתן למחוק משלוח שנקלטו בו מארזים"
+                : null;
+
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        try {
+            const res = await apiFetch(`/api/shipments/${deleteTarget.id}`, { method: "DELETE" });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                setSnackbarMessage(`משלוח ${deleteTarget.shipment_code} נמחק`);
+                setSnackbarSeverity("success");
+                setDeleteTarget(null);
+                loadShipments();
+            } else {
+                setSnackbarMessage(data?.error || "שגיאה במחיקת המשלוח");
+                setSnackbarSeverity("error");
+            }
+        } catch {
+            setSnackbarMessage("שגיאה בתקשורת");
+            setSnackbarSeverity("error");
+        } finally {
+            setDeleting(false);
+            setSnackbarOpen(true);
+        }
+    };
+
+    // A sent shipment is closed: no editing and no further returns
+    // (PUT /api/shipments/[id] and POST /api/shipment-history refuse it too).
     const handleRowClick = (row: Shipment) => {
+        if (row.is_sent) return;
         setSelectedShipment(row);
         setUpdateOpen(true);
     };
@@ -277,11 +313,12 @@ export default function ShipmentTable() {
             },
         },
         {
-            key: "actions", header: "פעולות", align: "center", width: 192,
+            key: "actions", header: "פעולות", align: "center", width: 230,
             cell: (r) => (
                 <RowActions>
-                    <IconAction title="עריכת משלוח" onClick={() => handleRowClick(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
-                    <IconAction title="החזר משלוח" onClick={() => { setSelectedShipment(r); setSendOpen(true); }}><Send size={16} strokeWidth={1.75} /></IconAction>
+                    <IconAction title={r.is_sent ? "המשלוח נשלח — לא ניתן לערוך" : "עריכת משלוח"} disabled={!!r.is_sent} onClick={() => handleRowClick(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
+                    <IconAction title={deleteBlockedReason(r) ?? "מחיקת משלוח"} danger disabled={deleteBlockedReason(r) != null} onClick={() => setDeleteTarget(r)}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
+                    <IconAction title={r.is_sent ? "המשלוח כבר נשלח" : "החזר משלוח"} disabled={!!r.is_sent} onClick={() => { setSelectedShipment(r); setSendOpen(true); }}><Send size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title="היסטוריה" onClick={() => { setSelectedShipment(r); setHistoryOpen(true); }}><History size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title="הורד PDF" onClick={() => handlePDFClick(r)}><FileText size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title="הדפס ברקודים לכל הפריטים" onClick={() => { setSelectedShipment(r); setBarcodesOpen(true); }}><Barcode size={16} strokeWidth={1.75} /></IconAction>
@@ -460,6 +497,18 @@ export default function ShipmentTable() {
                 open={historyOpen}
                 onClose={() => setHistoryOpen(false)}
                 shipment={selectedShipment}
+            />
+
+            <ConfirmDialog
+                draggable={false}
+                open={deleteTarget != null}
+                title="מחיקת משלוח"
+                message={deleteTarget ? `האם למחוק את משלוח ${deleteTarget.shipment_code}? פעולה זו אינה ניתנת לביטול.` : ""}
+                confirmText="מחק משלוח"
+                destructive
+                busy={deleting}
+                onConfirm={handleDelete}
+                onCancel={() => setDeleteTarget(null)}
             />
 
             <ShipmentBarcodesDialog

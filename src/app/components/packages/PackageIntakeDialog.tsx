@@ -8,6 +8,7 @@ import {
   DIALOG_Z, BLUE, FOCUS, HAIR, HAIR_2, INK, INK_2, MUTED, MUTED_LT, RED, RED_BG, AMBER, AMBER_INK, AMBER_BG, AMBER_BORDER, SHADOW,
   fieldInput, fmtId, overlay, pillGhost, pillPrimary, seq2,
 } from "./packageUi";
+import { useDraggable } from "@/components/ui/useDraggable";
 
 /**
  * קליטת מארז — design/Packages.dc.html (intake dialog, 1200px). Four steps in
@@ -149,6 +150,7 @@ export default function PackageIntakeDialog({
     return () => { cancelled = true; };
   }, [packageType, expandTemplate]);
 
+  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable(open);
   if (!open) return null;
 
   // --- derived ----------------------------------------------------------
@@ -238,10 +240,10 @@ export default function PackageIntakeDialog({
   return (
     <>
       <div onClick={() => !saving && onClose()} style={overlay}>
-        <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: 1200, maxWidth: "100%", height: "min(760px, 92vh)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK }}>
+        <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: 1200, maxWidth: "100%", height: "min(760px, 92vh)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK }}>
           {/* Sidebar */}
           <div style={{ width: 288, flexShrink: 0, background: "#f5f5f7", borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", padding: "22px 20px" }}>
-            <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.3px" }}>קליטת מארז</div>
+            <div data-drag-handle="" style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.3px" }}>קליטת מארז</div>
             <div style={{ fontSize: 13, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>המארז והפריטים נוצרים יחד בשמירה אחת.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 22 }}>
               {STEPS.map((s, i) => {

@@ -225,28 +225,28 @@ export default function UsersPage() {
     try {
       const res = editing
         ? await apiFetch(`/api/users/${editing.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              firstName: form.firstName,
-              lastName: form.lastName,
-              employeeNumber: form.employeeNumber,
-              role: form.role,
-            }),
-          })
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: form.firstName,
+            lastName: form.lastName,
+            employeeNumber: form.employeeNumber,
+            role: form.role,
+          }),
+        })
         : await apiFetch("/api/users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username: form.username,
-              firstName: form.firstName,
-              lastName: form.lastName,
-              employeeNumber: form.employeeNumber,
-              role: form.role,
-              temporaryPassword: form.temporaryPassword,
-              mustChangePassword: form.mustChange,
-            }),
-          });
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: form.username,
+            firstName: form.firstName,
+            lastName: form.lastName,
+            employeeNumber: form.employeeNumber,
+            role: form.role,
+            temporaryPassword: form.temporaryPassword,
+            mustChangePassword: form.mustChange,
+          }),
+        });
       if (!res.ok) {
         const e = await res.json().catch(() => null);
         throw new Error(e?.error);
@@ -656,11 +656,11 @@ export default function UsersPage() {
       </Dialog>
 
       {/* ---- Delete dialog ---- */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="sm" fullWidth>
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth draggable={false}>
         <DialogTitle>מחיקת משתמש</DialogTitle>
         <DialogContent dir="rtl">
           <DialogContentText>
-            האם למחוק את &quot;{deleteTarget?.fullName}&quot;? החשבון יוסר מ-Keycloak.
+            האם למחוק את &quot;{deleteTarget?.fullName}&quot;?
           </DialogContentText>
           <Typography variant="caption" sx={{ color: "var(--color-destructive)", display: "block", mt: 1 }}>
             פעולה זו אינה ניתנת לביטול.

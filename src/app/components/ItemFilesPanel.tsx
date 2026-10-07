@@ -30,6 +30,8 @@ import { FileIcon } from "@/app/components/files/FileIcon";
 import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
 import WorkerPicker from "./WorkerPicker";
 import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
+import { useSession } from "next-auth/react";
+import { isAdmin } from "@/lib/auth/roles";
 import TextEditorModal from "./TextEditorModal";
 import OnlyOfficeEditorModal from "./OnlyOfficeEditorModal";
 import { apiFetch } from "@/lib/api/client";
@@ -131,15 +133,18 @@ export default function ItemFilesPanel({
 
   // Standalone worker (used when no workerId was passed in from a parent).
   const tokenWorkerId = useTokenWorkerId();
+  const { data: session } = useSession();
+  const isManager = isAdmin(session?.roles ?? []);
   const [internalWorkerId, setInternalWorkerId] = React.useState<number | null>(null);
+  const standalone = workerIdProp === undefined || workerIdProp === null;
+  // Standalone mode: the logged-in worker (from their token), locked — only a
+  // manager starts from themselves and may pick someone else. Same rule as the
+  // shipment worker fields (useShipmentWorker).
+  const workerLocked = standalone && tokenWorkerId != null && !isManager;
   const effectiveWorkerId =
     workerIdProp !== undefined && workerIdProp !== null
       ? workerIdProp
-      : (tokenWorkerId ?? internalWorkerId);
-  const standalone = workerIdProp === undefined || workerIdProp === null;
-  // Standalone mode: the logged-in user's worker id (from their token) is used
-  // and the picker is locked — no manual self-selection.
-  const workerLocked = standalone && tokenWorkerId != null;
+      : workerLocked ? tokenWorkerId : (internalWorkerId ?? tokenWorkerId);
 
   // Editor modal state
   const [textEditorFile, setTextEditorFile] = React.useState<ItemFile | null>(null);
@@ -513,6 +518,7 @@ export default function ItemFilesPanel({
         />
       )}
       <ConfirmDialog
+        draggable={false}
         open={pendingDelete != null}
         title="מחיקת קובץ"
         message={pendingDelete ? `הקובץ "${pendingDelete.fileName}" יימחק לצמיתות. להמשיך?` : undefined}

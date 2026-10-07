@@ -86,8 +86,8 @@
      above the Autocomplete portal (1450) so a palette opened over a dialog
      still wins. */
   z-index: 1600;
-  background: rgba(29, 29, 31, 0.45);
-  backdrop-filter: blur(3px);
+  /* The app-wide popup scrim: plain grey, no blur. */
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: flex-start;
   justify-content: center;

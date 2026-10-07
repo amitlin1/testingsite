@@ -99,7 +99,7 @@ try {
   const newTypeId = newType.json?.item_type_id ?? newType.json?.id;
   check("D: create a package type", (newType.status === 201 || newType.ok) && newTypeId, `status ${newType.status} ${JSON.stringify(newType.json).slice(0, 120)}`);
   if (newTypeId) {
-    const contents = await api(page, `/api/settings/item-types/${newTypeId}/contents`, { method: "PUT", body: JSON.stringify({ default_route_number: 1, lines: [{ item_type_id: TYPES.amp, quantity: 1, manufacturer_sku: "MK-6130" }, { item_type_id: TYPES.kit, quantity: 2 }] }) });
+    const contents = await api(page, `/api/settings/item-types/${newTypeId}/contents`, { method: "PUT", body: JSON.stringify({ default_route_number: 1, lines: [{ item_type_id: TYPES.amp, quantity: 1, makat: "MK-6130" }, { item_type_id: TYPES.kit, quantity: 2 }] }) });
     check("D: save contents", contents.ok, `status ${contents.status} ${JSON.stringify(contents.json).slice(0, 160)}`);
     const list = (await api(page, "/api/settings/package-types")).json || [];
     const mine = list.find((t) => t.item_type_id === newTypeId);

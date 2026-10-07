@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>עריכה ומחיקת פריט</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f7f7f5; --surface:#ffffff; --surface-2:#f0efeb; --text:#1c1c1a; --muted:#5d5d58;
+  --border:#e2e0da; --accent:#2f5bd3; --accent-soft:#e7edfc;
+  --ok:#1f7a4a; --ok-soft:#e3f3ea; --warn:#8a5a00; --warn-soft:#fff5dc;
+  --bad:#b3302f; --bad-soft:#fbe8e7; --code-bg:#1e1f24; --code-text:#e6e6e6;
+  --add:#1b4d2e; --del:#5a1f1f;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141413; --surface:#1d1d1b; --surface-2:#262624; --text:#ecebe7; --muted:#a3a29c;
+    --border:#34332f; --accent:#7c9dff; --accent-soft:#1f2a47;
+    --ok:#5fcf8e; --ok-soft:#173325; --warn:#f0c060; --warn-soft:#3a2e12;
+    --bad:#ff8a85; --bad-soft:#3d1a19; --code-bg:#0f1013; --code-text:#e6e6e6;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141413; --surface:#1d1d1b; --surface-2:#262624; --text:#ecebe7; --muted:#a3a29c;
+  --border:#34332f; --accent:#7c9dff; --accent-soft:#1f2a47;
+  --ok:#5fcf8e; --ok-soft:#173325; --warn:#f0c060; --warn-soft:#3a2e12;
+  --bad:#ff8a85; --bad-soft:#3d1a19; --code-bg:#0f1013; --code-text:#e6e6e6;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Heebo,"Segoe UI",Arial,sans-serif;font-size:17px;line-height:1.75}
+.wrap{max-width:980px;margin:0 auto;padding:40px 16px 100px}
+header.hero{padding:24px 0 8px}
+.kicker{color:var(--accent);font-weight:700;font-size:14px;letter-spacing:.3px}
+h1{font-size:clamp(30px,5vw,44px);line-height:1.2;margin:6px 0 14px;font-weight:800}
+.lead{font-size:19px;color:var(--muted);max-width:760px}
+h2{font-size:28px;margin:64px 0 14px;padding-top:12px;border-top:1px solid var(--border);font-weight:800}
+h3{font-size:21px;margin:36px 0 10px;font-weight:700}
+h4{font-size:17px;margin:24px 0 6px;font-weight:700}
+p{margin:10px 0}
+a{color:var(--accent)}
+code{font-family:"JetBrains Mono",Consolas,monospace;font-size:.88em;background:var(--surface-2);padding:1px 6px;border-radius:5px;direction:ltr;unicode-bidi:isolate}
+pre{direction:ltr;text-align:left;background:var(--code-bg);color:var(--code-text);padding:16px 18px;border-radius:10px;overflow-x:auto;font-family:"JetBrains Mono",Consolas,monospace;font-size:13.5px;line-height:1.6;margin:12px 0}
+pre code{background:none;padding:0;color:inherit;font-size:inherit}
+pre .c{color:#8b949e}
+pre .k{color:#ff9e9e}
+pre .s{color:#a5d6a7}
+pre .f{color:#90caf9}
+pre .add{background:rgba(46,160,67,.22);display:block;margin:0 -18px;padding:0 18px}
+pre .del{background:rgba(248,81,73,.2);display:block;margin:0 -18px;padding:0 18px}
+.file{display:inline-block;font-family:"JetBrains Mono",Consolas,monospace;font-size:13px;direction:ltr;background:var(--accent-soft);color:var(--accent);padding:2px 10px;border-radius:6px;margin:4px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin:16px 0}
+.note{border-inline-start:4px solid var(--accent);background:var(--accent-soft);padding:14px 18px;border-radius:8px;margin:16px 0}
+.warn{border-inline-start:4px solid var(--warn);background:var(--warn-soft);padding:14px 18px;border-radius:8px;margin:16px 0}
+.bad{border-inline-start:4px solid var(--bad);background:var(--bad-soft);padding:14px 18px;border-radius:8px;margin:16px 0}
+.good{border-inline-start:4px solid var(--ok);background:var(--ok-soft);padding:14px 18px;border-radius:8px;margin:16px 0}
+.note b:first-child,.warn b:first-child,.bad b:first-child,.good b:first-child{display:block;margin-bottom:2px}
+nav.toc{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px;margin:28px 0}
+nav.toc ol{margin:6px 0 0;padding-inline-start:22px;columns:2;column-gap:32px}
+nav.toc li{break-inside:avoid;margin:3px 0}
+nav.toc a{text-decoration:none}
+nav.toc a:hover{text-decoration:underline}
+.timeline{position:relative;margin:20px 0;padding-inline-start:26px}
+.timeline::before{content:"";position:absolute;inset-inline-start:7px;top:6px;bottom:6px;width:2px;background:var(--border)}
+.tl{position:relative;margin-bottom:18px}
+.tl::before{content:"";position:absolute;inset-inline-start:-25px;top:8px;width:14px;height:14px;border-radius:50%;background:var(--surface);border:3px solid var(--accent)}
+.tl .hash{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--muted);direction:ltr;display:inline-block}
+.tl .t{font-weight:700}
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin:18px 0}
+.flow .box{flex:1 1 150px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:14.5px;line-height:1.5}
+.flow .box b{display:block;font-size:15px;margin-bottom:4px}
+.flow .arrow{align-self:center;color:var(--muted);font-size:22px}
+.flow .box.ui{border-top:4px solid var(--accent)}
+.flow .box.api{border-top:4px solid var(--warn)}
+.flow .box.db{border-top:4px solid var(--ok)}
+.flow .box.led{border-top:4px solid var(--bad)}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:15px;background:var(--surface);border-radius:10px;overflow:hidden}
+th,td{border:1px solid var(--border);padding:9px 12px;text-align:right;vertical-align:top}
+th{background:var(--surface-2);font-weight:700}
+.tablewrap{overflow-x:auto}
+.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0}
+.steps li{counter-increment:s;position:relative;padding:10px 52px 10px 14px;margin:8px 0;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.steps li::before{content:counter(s);position:absolute;right:12px;top:10px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
+.tag{display:inline-block;font-size:12.5px;font-weight:700;padding:1px 9px;border-radius:999px;margin-inline-start:6px;vertical-align:middle}
+.tag.ui{background:var(--accent-soft);color:var(--accent)}
+.tag.api{background:var(--warn-soft);color:var(--warn)}
+.tag.db{background:var(--ok-soft);color:var(--ok)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+details{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;margin:10px 0}
+details summary{cursor:pointer;font-weight:700}
+.mock{border:1px solid var(--border);border-radius:14px;background:var(--surface);max-width:520px;margin:16px auto;overflow:hidden;font-size:14px}
+.mock .mh{padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;display:flex;justify-content:space-between}
+.mock .mb{padding:14px 16px}
+.mock .pills span{display:inline-block;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:2px 10px;margin:0 0 6px 6px;font-size:12.5px}
+.mock .fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.mock .fields div{border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--muted)}
+.mock .mf{padding:10px 16px;border-top:1px solid var(--border);background:var(--surface-2);display:flex;gap:8px;align-items:center}
+.mock .btn{border:1px solid var(--border);border-radius:8px;padding:4px 12px;background:var(--surface)}
+.mock .btn.del{color:var(--bad)}
+.mock .btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+.themebtn{position:fixed;left:16px;bottom:16px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 14px;cursor:pointer;font-family:inherit;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+@media (max-width:700px){
+  body{font-size:16px}
+  nav.toc ol{columns:1}
+  .grid2{grid-template-columns:1fr}
+  .flow .arrow{transform:rotate(90deg);width:100%;text-align:center}
+  .mock .fields{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">מדריך פנימי · מערכת מעקב פריטים ובדיקות</div>
+  <h1>עריכה ומחיקה של פריט: הסבר מלא</h1>
+  <p class="lead">מה הפיצ'ר עושה במערכת, איך הוא בנוי, ומה השתנה בקוד בכל שלב, מהגרסה הראשונה ועד התיקונים שחיברו אותו ללדג'ר המדדים ולמודל המארזים.</p>
+</header>
+
+<nav class="toc">
+  <b>תוכן העניינים</b>
+  <ol>
+    <li><a href="#what">מה הפיצ'ר עושה (מבט משתמש)</a></li>
+    <li><a href="#concepts">מושגי יסוד במערכת</a></li>
+    <li><a href="#arch">איך החלקים מתחברים</a></li>
+    <li><a href="#timeline">ציר הזמן של השינויים</a></li>
+    <li><a href="#c1">שלב 1: הפיצ'ר הבסיסי</a></li>
+    <li><a href="#c2">שלב 2: חיבור ללדג'ר המדדים</a></li>
+    <li><a href="#c3">שלב 3: שינוי סוג = מסלול חדש</a></li>
+    <li><a href="#c4">שלב 4: התאמה למודל המארזים</a></li>
+    <li><a href="#flows">התהליכים צעד אחר צעד</a></li>
+    <li><a href="#status">קודי תשובה של ה-API</a></li>
+    <li><a href="#faq">שאלות נפוצות</a></li>
+    <li><a href="#files">מפת הקבצים</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================== -->
+<h2 id="what">1. מה הפיצ'ר עושה (מבט משתמש)</h2>
+
+<p>בטבלת הפריטים (המסך הראשי שמציג את כל הפריטים שנקלטו) נוספה עמודה בשם <b>"פעולות"</b> ובה כפתור עיפרון ✏️. לחיצה עליו פותחת חלון בשם <b>"עריכת פריט #מספר"</b>. בחלון הזה אפשר:</p>
+
+<div class="grid2">
+  <div class="card">
+    <h4 style="margin-top:0">✏️ לערוך את פרטי הפריט</h4>
+    <p>לקוח, סוג פריט, מספר סיריאלי, מק"ט, דגם, יצרן ומספר יצרן.</p>
+    <p style="color:var(--muted);font-size:15px">ברקוד, סטטוס והתקדמות מוצגים לקריאה בלבד. אי אפשר לשנות אותם מכאן, כי תהליך הבדיקה בתחנות הוא שקובע אותם.</p>
+  </div>
+  <div class="card">
+    <h4 style="margin-top:0">🗑️ למחוק את הפריט</h4>
+    <p>כפתור אדום "מחק פריט" בתחתית החלון. לפני המחיקה נפתח חלון אישור נוסף.</p>
+    <p style="color:var(--muted);font-size:15px">אם לפריט יש פריטים שתלויים בו (פריטים מחוברים, או פריטים בתוך מארז), המערכת מציגה את רשימתם ומבקשת אישור למחוק את כולם יחד.</p>
+  </div>
+</div>
+
+<p>כך בערך נראה החלון:</p>
+<div class="mock" aria-hidden="true">
+  <div class="mh"><span>עריכת פריט #10452</span><span>✕</span></div>
+  <div class="mb">
+    <div class="pills"><span>ברקוד: 10452</span><span>סטטוס: בתור</span><span>התקדמות: 2/4</span></div>
+    <div class="fields">
+      <div>לקוח ▾</div><div>סוג פריט ▾</div>
+      <div>מס׳ סיריאלי</div><div>מק״ט</div>
+      <div>דגם</div><div>יצרן</div>
+      <div>מס׳ יצרן</div>
+    </div>
+  </div>
+  <div class="mf"><span class="btn del">🗑 מחק פריט</span><span style="flex:1"></span><span class="btn">ביטול</span><span class="btn pri">שמור שינויים</span></div>
+</div>
+
+<div class="warn"><b>שינוי סוג פריט הוא לא "עוד שדה"</b>אם משנים את סוג הפריט, מופיעה אזהרה צהובה: הפריט יחזור לתחילת המסלול של הסוג החדש וההתקדמות שלו תתאפס. הסיבה: לכל סוג פריט יש מסלול תחנות משלו, ולכן שלבים שהפריט כבר עבר לא אומרים כלום על המסלול החדש. בהמשך (<a href="#c3">שלב 3</a>) מוסבר איך זה ממומש.</div>
+
+<!-- ================================================================== -->
+<h2 id="concepts">2. מושגי יסוד במערכת</h2>
+<p>כדי להבין את הקוד צריך להכיר כמה טבלאות ומושגים. זה החלק החשוב ביותר, כי רוב המורכבות של הפיצ'ר נובעת מהם.</p>
+
+<h3>הטבלאות "התפעוליות"</h3>
+<div class="tablewrap"><table>
+<tr><th style="width:26%">טבלה</th><th>מה היא שומרת</th></tr>
+<tr><td><code>items</code></td><td>הפריט עצמו: לקוח, סוג, סיריאלי, מק"ט, דגם, יצרן, משלוח. זה "כרטיס הזהות" של הפריט.</td></tr>
+<tr><td><code>item_routes</code></td><td>איפה הפריט נמצא כרגע במסלול הבדיקות: באיזה שלב (<code>current_route_step</code>), מה הסטטוס (<code>current_status</code>: 1 בבדיקה, 2 בתור, 3 הושלם), באיזו תחנה, ואם הוא סיים. שורה אחת לכל פריט.</td></tr>
+<tr><td><code>item_route_history</code></td><td>היסטוריה: כל מעבר של הפריט בתחנה, מתי נכנס לתור, מתי התחיל ומתי סיים.</td></tr>
+<tr><td><code>test_results</code></td><td>תוצאות הבדיקות שנרשמו לפריט.</td></tr>
+<tr><td><code>testing_routes</code></td><td>הגדרת המסלולים: לכל סוג פריט רשימת שלבים (<code>route_steps</code>), למשל <code>{5,7,6,8}</code>, כלומר סוגי תחנות לפי הסדר.</td></tr>
+</table></div>
+
+<h3>לדג'ר המדדים (Metrics Ledger)</h3>
+<p>זו שכבה נפרדת שנבנתה כדי להזין את <b>לוח הניהול (הדשבורד)</b>: כמה פריטים הושלמו, זמני טיפול, עומס בתחנות וכדומה. במקום לחשב את כל זה כל פעם מחדש מהטבלאות התפעוליות, המערכת <b>רושמת כל אירוע</b> ובונה ממנו טבלאות מוכנות לקריאה:</p>
+<div class="tablewrap"><table>
+<tr><th style="width:26%">טבלה</th><th>מה היא שומרת</th></tr>
+<tr><td><code>route_run</code></td><td>"ריצה": מעבר אחד של פריט על המסלול, מההתחלה ועד הסוף. ריצה שנסגרה (<code>closed_at</code> מלא) נחשבת <b>פריט שהושלם</b>. יש גם שדה <code>is_trusted</code>: ריצה לא-אמינה לא נספרת בדשבורד.</td></tr>
+<tr><td><code>item_state_event</code></td><td>יומן אירועים: "הפריט נכנס לתור", "התחיל בדיקה" וכו'. הטבלה היא <b>append-only</b>, כלומר אפשר רק להוסיף שורות. טריגר בבסיס הנתונים חוסם עדכון או מחיקה.</td></tr>
+<tr><td><code>item_state_interval</code></td><td>קטעי זמן: מתי הפריט היה בכל מצב ובכל תחנה, כולל זמן "קיר" וזמן עבודה נטו. קטע שעדיין פתוח = הפריט עדיין במצב הזה.</td></tr>
+</table></div>
+
+<div class="note"><b>הנקודה הקריטית: אין מפתח זר (FK) מהלדג'ר ל-items</b>
+כדי שהשאילתות של הדשבורד יהיו מהירות, הלדג'ר <b>מעתיק ו"מקפיא"</b> את פרטי הפריט (לקוח, משלוח, סיריאלי, סוג) לתוך כל ריצה וכל קטע זמן, כך שאף שאילתה לא צריכה לעשות JOIN לטבלת <code>items</code>. המחיר: בסיס הנתונים <b>לא יודע</b> שהשורות האלה שייכות לפריט. אם מוחקים פריט או משנים את הלקוח שלו, שום דבר לא נכשל, והנתונים בלדג'ר פשוט נשארים שגויים בשקט. זו בדיוק הבעיה ששלב 2 פותר.</div>
+
+<h3>מושגים טכניים</h3>
+<div class="tablewrap"><table>
+<tr><th style="width:26%">מושג</th><th>הסבר</th></tr>
+<tr><td>טרנזקציה (Transaction)</td><td>קבוצת פעולות על בסיס הנתונים שמתבצעות "הכול או כלום". אם פעולה אחת נכשלת, כל השאר מבוטלות. בקוד: <code>prisma.$transaction(async (tx) =&gt; {...})</code>, וכל פעולה בתוכה משתמשת ב-<code>tx</code>.</td></tr>
+<tr><td>FK (מפתח זר)</td><td>קשר שבסיס הנתונים אוכף בין טבלאות. למשל <code>items.parent_item_id</code> מצביע על פריט אחר, ולכן אי אפשר למחוק פריט "אבא" כשיש לו "ילדים".</td></tr>
+<tr><td>Prisma</td><td>הספרייה שדרכה הקוד מדבר עם PostgreSQL. <code>tx.items.update(...)</code> = פקודת UPDATE.</td></tr>
+<tr><td>API Route</td><td>בפרויקט Next.js, קובץ <code>route.ts</code> בתיקייה <code>src/app/api/...</code> מגדיר כתובת בשרת. פונקציה בשם <code>PUT</code> מטפלת בבקשות עדכון, ו-<code>DELETE</code> בבקשות מחיקה.</td></tr>
+<tr><td>פונקציית DB (plpgsql)</td><td>פונקציה שכתובה ב-SQL ויושבת בתוך PostgreSQL. היא נוצרת בקובץ migration ונקראת מהקוד עם <code>SELECT function_name(...)</code>.</td></tr>
+</table></div>
+
+<!-- ================================================================== -->
+<h2 id="arch">3. איך החלקים מתחברים</h2>
+<p>המסלול של בקשה, מהלחיצה על הכפתור ועד בסיס הנתונים:</p>
+
+<div class="flow">
+  <div class="box ui"><b>ItemTable</b>טבלת הפריטים. כפתור העיפרון שומר את הפריט שנבחר ב-state.</div>
+  <div class="arrow">←</div>
+  <div class="box ui"><b>EditItemDialog</b>החלון. מחזיק את הטופס, שולח <code>PUT</code> או <code>DELETE</code>.</div>
+  <div class="arrow">←</div>
+  <div class="box api"><b>/api/items/[id]</b>השרת. בודק, ומבצע הכול בטרנזקציה אחת.</div>
+  <div class="arrow">←</div>
+  <div class="box db"><b>טבלאות תפעוליות</b>items, item_routes, history, results</div>
+  <div class="arrow">+</div>
+  <div class="box led"><b>לדג'ר המדדים</b>דרך <code>item-lifecycle.ts</code> ופונקציות SQL</div>
+</div>
+
+<p>אחרי שהשרת מחזיר תשובה, החלון קורא ל-<code>onSaved</code> או ל-<code>onDeleted</code>. הטבלה מציגה הודעה קטנה (Snackbar) של הצלחה או כישלון, ובמקרה של הצלחה טוענת מחדש את רשימת הפריטים.</p>
+
+<!-- ================================================================== -->
+<h2 id="timeline">4. ציר הזמן של השינויים</h2>
+<div class="timeline">
+  <div class="tl"><span class="hash">c6926ca</span> · 01/09/2026 09:44 · mendi4321<br><span class="t">עריכה ומחיקה של פריט</span>: הפיצ'ר הבסיסי. חלון עריכה, כפתור בטבלה, ו-PUT/DELETE בשרת.</div>
+  <div class="tl"><span class="hash">a75d79b</span> · 01/09/2026 10:32 · amit-lin<br><span class="t">Teach item edit and delete about the metrics ledger</span>: הגרסה הראשונה לא ידעה שהלדג'ר קיים. נוספו פונקציות SQL שמנקות ומסנכרנות אותו.</div>
+  <div class="tl"><span class="hash">abac1a5</span> · 01/09/2026 12:22 · amit-lin<br><span class="t">Changing an item's type re-routes it; the shipment is no longer editable</span>: שינוי סוג מחזיר את הפריט להתחלה, ושדה המשלוח הוסר מהעריכה.</div>
+  <div class="tl"><span class="hash">519bf10 … 8018ca0</span> · מאוחר יותר<br><span class="t">Package model</span>: מודל המארזים החליף "פריט אבא/ילד" ב"מארז ופריטים בתוכו", והוסיף כללים לעריכה ולמחיקה.</div>
+</div>
+
+<!-- ================================================================== -->
+<h2 id="c1">5. שלב 1: הפיצ'ר הבסיסי <span class="tag ui">c6926ca</span></h2>
+<p>הקומיט הזה הוסיף 439 שורות בחמישה קבצים. נעבור עליהם אחד אחד.</p>
+
+<h3>5.1 הוספת <code>customer_id</code> לרשימת הפריטים</h3>
+<span class="file">src/app/api/items/route.ts</span> · <span class="file">src/types/index.ts</span>
+<p>רשימת הפריטים הבסיסית החזירה רק את <b>קוד הלקוח</b> (טקסט לתצוגה), לא את <b>המזהה</b> שלו. כדי שחלון העריכה יוכל לסמן מראש את הלקוח הנוכחי בתיבת הבחירה, הוא צריך את המזהה. לכן נוספה שורה אחת לשאילתה ושדה אחד לטיפוס:</p>
+<pre><code>    ir.is_finished,
+<span class="add">+   i.customer_id,</span>
+    RTRIM(c.customer_code) AS customer_code,</code></pre>
+<pre><code>export type ItemRow = {
+  ...
+<span class="add">+ customer_id: number | null;</span>
+  customer_code: string | null;</code></pre>
+
+<h3>5.2 כפתור העריכה בטבלה</h3>
+<span class="file">src/app/components/ItemTable.tsx</span>
+<p>שלושה דברים נוספו לקומפוננטה של הטבלה:</p>
+<p><b>א. state לפריט שנערך כרגע.</b> כשהערך הוא <code>null</code> החלון סגור. כשיש בו פריט, החלון פתוח עבורו.</p>
+<pre><code><span class="k">const</span> [editingItem, setEditingItem] = React.useState&lt;ItemRow | <span class="k">null</span>&gt;(<span class="k">null</span>);</code></pre>
+<p><b>ב. עמודה חדשה "פעולות"</b> עם כפתור עיפרון. לחיצה עליו שומרת את השורה ב-state:</p>
+<pre><code>{
+  key: <span class="s">"actions"</span>, header: <span class="s">"פעולות"</span>, align: <span class="s">"center"</span>, width: 70,
+  cell: (r) =&gt; (
+    &lt;RowActions&gt;
+      &lt;IconAction title=<span class="s">"ערוך פריט"</span> onClick={() =&gt; setEditingItem(r)}&gt;
+        &lt;Pencil size={16} strokeWidth={1.75} /&gt;
+      &lt;/IconAction&gt;
+    &lt;/RowActions&gt;
+  ),
+},</code></pre>
+<p><b>ג. רשימות אפשרויות ופונקציות תוצאה.</b> החלון צריך לקבל את רשימת הלקוחות וסוגי הפריטים לתיבות הבחירה. הן מחושבות עם <code>useMemo</code> (כלומר רק כשהנתונים משתנים), ובכוונה <b>לא מסוננות</b>, כדי שהלקוח או הסוג הנוכחי של הפריט תמיד יופיעו ברשימה:</p>
+<pre><code><span class="k">const</span> editCustomerOptions = React.useMemo(
+  () =&gt; customers.map((c) =&gt; ({ value: String(c.id), label: ... })),
+  [customers]
+);
+
+<span class="k">const</span> <span class="f">onEditResult</span> = (success: boolean, message?: string) =&gt; {
+  setSnackbarMessage(success ? <span class="s">"הפריט עודכן בהצלחה"</span> : (message || <span class="s">"עדכון הפריט נכשל"</span>));
+  setSnackbarSeverity(success ? <span class="s">"success"</span> : <span class="s">"error"</span>);
+  setSnackbarOpen(<span class="k">true</span>);
+  <span class="k">if</span> (success) loadItems();   <span class="c">// רענון הטבלה</span>
+};</code></pre>
+<p>ובסוף, הקומפוננטה של החלון עצמו:</p>
+<pre><code>&lt;EditItemDialog
+  open={!!editingItem}              <span class="c">// פתוח אם יש פריט</span>
+  item={editingItem}
+  customerOptions={editCustomerOptions}
+  itemTypeOptions={editItemTypeOptions}
+  onClose={() =&gt; setEditingItem(<span class="k">null</span>)}
+  onSaved={onEditResult}
+  onDeleted={onDeleteResult}
+/&gt;</code></pre>
+
+<h3>5.3 חלון העריכה</h3>
+<span class="file">src/components/EditItemDialog.tsx</span> (קובץ חדש, כ-276 שורות)
+<p>זה הקובץ הגדול של הפיצ'ר. הוא בנוי כך:</p>
+
+<h4>מילוי הטופס כשהחלון נפתח</h4>
+<p>ה-<code>useEffect</code> רץ בכל פעם שהחלון נפתח או שהפריט משתנה. הוא ממלא את הטופס בערכים הנוכחיים של הפריט, וגם מאפס את מצב חלון האישור של המחיקה:</p>
+<pre><code>React.useEffect(() =&gt; {
+  <span class="k">if</span> (open &amp;&amp; item) {
+    setForm({
+      customer: item.customer_id != <span class="k">null</span> ? String(item.customer_id) : <span class="s">""</span>,
+      itemType: item.item_type_id != <span class="k">null</span> ? String(item.item_type_id) : <span class="s">""</span>,
+      serialNumber: item.serial_no ?? <span class="s">""</span>,
+      ...
+    });
+    setConfirmOpen(<span class="k">false</span>);
+    setConnectedItems(<span class="k">null</span>);
+  }
+}, [open, item]);</code></pre>
+<p>כל הערכים בטופס נשמרים כמחרוזות (גם מזהים מספריים), כי כך תיבות הקלט עובדות. ההמרה חזרה למספר נעשית רק בשליחה.</p>
+
+<h4>ולידציה</h4>
+<pre><code><span class="k">const</span> REQUIRED = [<span class="s">"customer"</span>, <span class="s">"itemType"</span>, <span class="s">"serialNumber"</span>, <span class="s">"makat"</span>, <span class="s">"model"</span>, <span class="s">"manufacturer"</span>, <span class="s">"manufacturerNo"</span>];
+<span class="k">const</span> valid = REQUIRED.every((k) =&gt; form[k].trim() !== <span class="s">""</span>);</code></pre>
+<p>כל עוד חסר שדה, כפתור "שמור שינויים" מושבת (<code>disabled={!valid || saving}</code>).</p>
+
+<h4>שמירה: <code>handleSave</code></h4>
+<pre><code><span class="k">const</span> res = <span class="k">await</span> apiFetch(<span class="s">`/api/items/${item.item_id}`</span>, {
+  method: <span class="s">"PUT"</span>,
+  headers: { <span class="s">"Content-Type"</span>: <span class="s">"application/json"</span> },
+  body: JSON.stringify({ customer: Number(form.customer), itemType: Number(form.itemType), ... }),
+});
+<span class="k">if</span> (!res.ok) {
+  <span class="k">const</span> err = <span class="k">await</span> res.json().catch(() =&gt; ({}));
+  <span class="k">throw new</span> Error(err.error || <span class="s">"עדכון הפריט נכשל"</span>);   <span class="c">// הודעת השגיאה מהשרת</span>
+}
+onSaved(<span class="k">true</span>);
+onClose();</code></pre>
+<p>אם השרת החזיר שגיאה, ההודעה שלו (בעברית) מוצגת למשתמש. בזמן השמירה הכפתור מציג "שומר…" כדי שלא ילחצו פעמיים.</p>
+
+<h4>מחיקה בשני שלבים: <code>handleDeleteConfirm</code></h4>
+<p>זה החלק המעניין. לחיצה על "מחק פריט" לא מוחקת מיד. היא פותחת <b>חלון אישור שני</b> שנערם מעל החלון הראשון (<code>zIndex: 70</code> מול 60). בחלון הזה יש שני מצבים:</p>
+<ol>
+  <li><b>מחיקה רגילה</b>: נשלח <code>DELETE</code> בלי גוף.</li>
+  <li>אם השרת עונה <b>409</b> עם רשימת <code>connectedItems</code>, זה <b>לא נחשב כישלון</b>. החלון עובר למצב שמציג את הפריטים המחוברים בשמם, עם כפתור "מחק את הפריט והפריטים המחוברים". לחיצה עליו שולחת שוב <code>DELETE</code>, הפעם עם <code>{ cascade: true }</code>.</li>
+</ol>
+<pre><code><span class="k">const</span> <span class="f">handleDeleteConfirm</span> = <span class="k">async</span> (cascade = <span class="k">false</span>) =&gt; {
+  <span class="k">const</span> res = <span class="k">await</span> apiFetch(<span class="s">`/api/items/${item.item_id}`</span>, {
+    method: <span class="s">"DELETE"</span>,
+    ...(cascade ? { headers: {...}, body: JSON.stringify({ cascade: <span class="k">true</span> }) } : {}),
+  });
+  <span class="k">if</span> (!res.ok) {
+    <span class="k">const</span> err = <span class="k">await</span> res.json().catch(() =&gt; ({}));
+    <span class="k">if</span> (res.status === 409 &amp;&amp; Array.isArray(err.connectedItems)) {
+      setConnectedItems(err.connectedItems);   <span class="c">// מציגים את הרשימה ומחכים להחלטה</span>
+      <span class="k">return</span>;
+    }
+    <span class="k">throw new</span> Error(err.error || <span class="s">"מחיקת הפריט נכשלה"</span>);
+  }
+  onDeleted(<span class="k">true</span>);
+  onClose();
+};</code></pre>
+<div class="note"><b>למה ככה ולא לשאול מראש?</b>הלקוח (הדפדפן) לא יודע אם לפריט יש פריטים מחוברים. במקום בקשה נפרדת כדי לבדוק, השרת בודק בעצמו ומחזיר את הרשימה אם צריך. כך יש רק מקור אמת אחד, ואי אפשר למחוק "בטעות" גם את הילדים בלי שהמשתמש ראה אותם.</div>
+<p>גם הטקסט של האישור משתנה לפי מצב הפריט: אם הפריט כבר עבר שלב בבדיקות (<code>hasProgress</code>), מוצגת אזהרה חזקה יותר, שגם היסטוריית הבדיקות ותוצאותיו יימחקו לצמיתות.</p>
+
+<h4>רכיבי עזר</h4>
+<p>בתחתית הקובץ יש שלוש קומפוננטות קטנות: <code>Field</code> (תווית + שדה), <code>ReadOnlyPill</code> (ה"כמוסות" של ברקוד/סטטוס/התקדמות), ו-<code>Select</code>, עטיפה של <code>SearchableCombobox</code> שממירה בין מחרוזת לאובייקט אפשרות.</p>
+
+<h3>5.4 השרת: PUT ו-DELETE</h3>
+<span class="file">src/app/api/items/[id]/route.ts</span>
+<p>לקובץ הזה כבר הייתה פונקציית <code>GET</code> (להצגת פריט). נוספו שתיים:</p>
+
+<h4>PUT בגרסה הראשונה</h4>
+<p>פשוט: קורא את הגוף, בודק שכל השדות מלאים (אחרת 400), ומעדכן את שורת הפריט ב-<code>items</code>. בגרסה הזו אפשר היה גם לשנות <b>משלוח</b> (<code>shipment_id</code>). אם הפריט לא קיים, Prisma זורקת שגיאה עם הקוד <code>P2025</code>, והשרת ממיר אותה ל-404.</p>
+<pre><code><span class="k">const</span> updated = <span class="k">await</span> prisma.items.update({
+  where: { item_id: itemIdBig },
+  data: { customer_id: Number(customer), item_type_id: Number(itemType), ..., shipment_id: Number(shipment) },
+});</code></pre>
+
+<h4>DELETE בגרסה הראשונה</h4>
+<p>למה צריך למחוק ידנית ארבע טבלאות? כי ל-<code>item_routes</code>, <code>item_route_history</code> ו-<code>test_results</code> <b>אין FK</b> ל-<code>items</code>. אם מוחקים רק את הפריט, השורות שלהן נשארות "יתומות". לכן המחיקה עוברת על כולן, בסדר הזה, בתוך טרנזקציה:</p>
+<pre><code><span class="k">await</span> prisma.$transaction(<span class="k">async</span> (tx) =&gt; {
+  <span class="k">await</span> tx.test_results.deleteMany({ where: { item_id: { in: idsToDelete } } });
+  <span class="k">await</span> tx.item_route_history.deleteMany(...);
+  <span class="k">await</span> tx.item_routes.deleteMany(...);
+  <span class="c">// קודם הילדים: הם מחזיקים את ה-FK (parent_item_id) לאבא</span>
+  <span class="k">if</span> (children.length &gt; 0) <span class="k">await</span> tx.items.deleteMany(...children);
+  <span class="k">await</span> tx.items.delete({ where: { item_id: itemIdBig } });
+});</code></pre>
+<p>ולפני כל זה, הבדיקה של הילדים: אם יש כאלה ולא נשלח <code>cascade: true</code>, השרת מחזיר 409 עם הרשימה, כמו שתואר קודם.</p>
+
+<!-- ================================================================== -->
+<h2 id="c2">6. שלב 2: חיבור ללדג'ר המדדים <span class="tag api">a75d79b</span></h2>
+
+<h3>6.1 הבעיה</h3>
+<p>הפיצ'ר נכתב על <code>main</code> <b>לפני</b> שהלדג'ר מוזג, ולכן לא ידע עליו. ובגלל שלדג'ר בכוונה בלי FK, שום דבר לא נכשל. אבל שני המסלולים היו שגויים בשקט:</p>
+<div class="bad"><b>מחיקה השאירה "רוח רפאים"</b>הפריט נמחק, אבל הריצה, האירועים וקטעי הזמן שלו נשארו בלדג'ר. קטע הזמן הפתוח נשאר פתוח לנצח, ולכן כל מספר בדשבורד המשיך לספור פריט שכבר לא קיים. בנוסף, בדיקת בריאות בשם <code>runs_open_past_60d</code> הייתה נדלקת באדום כעבור 60 יום, בלי שום דרך לדעת למה.</div>
+<div class="bad"><b>עריכה לא הגיעה לדשבורד</b>נניח שמתקנים לקוח שהוקלד לא נכון. <code>items</code> מתעדכן, אבל העותקים ה"מוקפאים" בריצות ובקטעי הזמן נשארים עם הלקוח הישן, כך שבדשבורד הפריט המשיך להיות משויך ללקוח הקודם.</div>
+
+<h3>6.2 הפתרון: שלוש פונקציות בבסיס הנתונים</h3>
+<span class="file">prisma/migrations/20260902000000_metrics_item_lifecycle/migration.sql</span>
+<p>הפונקציות נכתבו ב-SQL, בתוך בסיס הנתונים, כי שם גם שאר הכללים (invariants) של הלדג'ר נאכפים. כך הכללים נשארים במקום אחד.</p>
+
+<h4><code>metrics_forget_item(item_id)</code>: "לשכוח" פריט</h4>
+<p>מוחקת את כל עקבות הפריט בלדג'ר. הסדר נכפה על ידי המפתחות הזרים שבתוך הלדג'ר עצמו:</p>
+<ol class="steps">
+  <li>נעילה (<code>pg_advisory_xact_lock</code>) על הפריט, אותה נעילה שבה משתמשות פונקציות הלדג'ר האחרות, כדי שמחיקה לא תתנגש עם עדכון במקביל.</li>
+  <li>מחיקת קטעי הזמן (<code>item_state_interval</code>), כי הם מצביעים גם על הריצה וגם על האירועים.</li>
+  <li>ניתוק <code>test_results.state_event_id</code> מהאירועים שעומדים להימחק.</li>
+  <li>פתיחת "פתח המילוט" (הסבר בהמשך) ומחיקת האירועים (<code>item_state_event</code>), ואז סגירתו מיד.</li>
+  <li>מחיקת הריצות (<code>route_run</code>).</li>
+  <li>מחיקה מטבלת <code>metrics_drift</code>, רק אם היא עדיין קיימת. בדיקה עם <code>to_regclass</code>, כי זו טבלה זמנית שנמחקת שבוע אחרי ההתקנה, ובלי הבדיקה הפונקציה הייתה מתחילה להיכשל ביום שהיא נמחקה.</li>
+</ol>
+<p>הפונקציה <b>אידמפוטנטית</b>: הרצה שנייה לא עושה כלום ולא נכשלת. היא מחזירה את מספר קטעי הזמן שנמחקו.</p>
+
+<h4>פתח המילוט בטריגר ה-append-only</h4>
+<p>טבלת האירועים מוגנת בטריגר (<code>deny_mutation</code>) שזורק שגיאה על כל UPDATE או DELETE. תיקון רגיל נעשה ע"י הוספת אירוע תיקון. אבל <b>מחיקה היא לא תיקון</b>: אחרי שהפריט נמחק אין "נושא" שהאירועים מדברים עליו. לכן הטריגר קיבל חריג אחד:</p>
+<pre><code><span class="k">IF</span> current_setting(<span class="s">'app.metrics_forget'</span>, <span class="k">true</span>) = <span class="s">'1'</span> <span class="k">AND</span> TG_OP <span class="k">IN</span> (<span class="s">'DELETE'</span>, <span class="s">'UPDATE'</span>) <span class="k">THEN</span>
+  <span class="k">RETURN NULL</span>;
+<span class="k">END IF</span>;
+<span class="k">RAISE EXCEPTION</span> <span class="s">'% is append-only (attempted %)'</span>, ...</code></pre>
+<p>המשתנה <code>app.metrics_forget</code> מוגדר רק בתוך הטרנזקציה הנוכחית, ורק לאורך פקודה אחת. <code>TRUNCATE</code> נשאר חסום תמיד.</p>
+<div class="note"><b>למה לא פשוט לכבות את הטריגר?</b><code>ALTER TABLE ... DISABLE TRIGGER</code> לוקח נעילה בלעדית (ACCESS EXCLUSIVE) על כל טבלת האירועים. כל עובד שמנסה לשלוח בדיקה באותו רגע היה נתקע. בנוסף זה דורש הרשאות בעלים על הטבלה, שלאפליקציה אין סיבה להחזיק.</div>
+
+<h4><code>metrics_resync_item_dims(item_id)</code>: סנכרון אחרי עריכה</h4>
+<p>קוראת מחדש את פרטי הפריט מ-<code>items</code> ומעדכנת את העותקים ה"מוקפאים" בריצות, ואחר כך בקטעי הזמן. היא <b>לא מקבלת</b> את הערכים כפרמטרים. היא קוראת אותם בעצמה עם <b>אותם ביטויים</b> שבהם הריצה נוצרה, כך ששני המקומות לא יכולים לצאת מסנכרון. בנוסף, היא מעדכנת רק שורות שבאמת השתנו (<code>IS DISTINCT FROM</code>).</p>
+
+<h4>(זמני) <code>metrics_refresh_run_plan</code></h4>
+<p>בקומיט הזה נוספה גם פונקציה שמעדכנת את "תוכנית המסלול" של הריצה הפתוחה כשהסוג משתנה, ושינוי סוג אחרי שהפריט יצא משלב 1 נחסם עם 409. שתי ההחלטות האלה <b>בוטלו בשלב 3</b>.</p>
+
+<h3>6.3 הצד של TypeScript</h3>
+<span class="file">src/app/lib/metrics/item-lifecycle.ts</span> (קובץ חדש)
+<p>עטיפות דקות שקוראות לפונקציות ה-SQL. החוק החשוב, שכתוב בראש הקובץ: <b>תמיד לקרוא להן עם אותו <code>tx</code></b> של הכתיבה שלפניהן, כדי שהטבלאות התפעוליות והלדג'ר יתעדכנו יחד או לא יתעדכנו בכלל.</p>
+<pre><code><span class="k">export async function</span> <span class="f">forgetItem</span>(tx: TransactionClient, itemId: bigint): Promise&lt;number&gt; {
+  <span class="k">const</span> rows = <span class="k">await</span> tx.$queryRaw&lt;{ n: number }[]&gt;`
+    SELECT metrics_forget_item(${itemId}::bigint) AS n`;
+  <span class="k">return</span> rows[0]?.n ?? 0;
+}</code></pre>
+
+<h3>6.4 השינויים ב-route.ts</h3>
+<p><b>ב-DELETE</b>, בתחילת הטרנזקציה, לפני מחיקת השורות התפעוליות:</p>
+<pre><code><span class="add">+ for (const id of idsToDelete) {</span>
+<span class="add">+   await forgetItem(tx, id);</span>
+<span class="add">+ }</span>
+  <span class="k">await</span> tx.test_results.deleteMany(...);</code></pre>
+<p><b>ב-PUT</b>, העדכון עבר לתוך טרנזקציה, ובסופה נקרא <code>resyncItemDims</code>. בנוסף, השדה <code>item_routes.item_type_id</code> עודכן יחד עם <code>items.item_type_id</code>, כי זו אותה עובדה בשני מקומות, והלדג'ר קורא את הסוג דווקא מ-<code>item_routes</code>.</p>
+
+<h3>6.5 סקריפטי ההתקנה</h3>
+<p>הקובץ <code>release/db-scripts/UPGRADE_ALL_IN_ONE.sql</code> (קובץ ה-SQL האחד שמריצים בשדרוג של השרת בייצור) קיבל חלק חמישי עם ה-migration החדש. במקביל עודכנו <code>scripts/build-upgrade-sql.js</code>, שבונה אותו, ו-<code>scripts/check-migration-safety.js</code>, שבודק שה-migration בטוח. בתיעוד <code>docs/PRISMA_UNMANAGED_OBJECTS.md</code> נרשמו הפונקציות החדשות, כי Prisma לא מנהלת אותן בעצמה.</p>
+
+<!-- ================================================================== -->
+<h2 id="c3">7. שלב 3: שינוי סוג = מסלול חדש <span class="tag api">abac1a5</span></h2>
+
+<h3>7.1 ההחלטה</h3>
+<p>בשלב 2 שינוי סוג נחסם אחרי שלב 1. הבעיה: זה חוסם את המפעיל במקום לעשות את העבודה. בשלב 3 הוחלט ש<b>שינוי סוג = התחלה מחדש</b>. סוג אחר יכול לעבור בתחנות אחרות לגמרי, ולכן הפריט חוזר לשלב 1 של המסלול החדש.</p>
+
+<h3>7.2 מה קורה ב-PUT כשהסוג משתנה</h3>
+<p>הכול בתוך טרנזקציה אחת:</p>
+<ol class="steps">
+  <li>קוראים את הסוג הנוכחי מ-<code>item_routes</code> ומשווים לסוג החדש (<code>typeChanged</code>).</li>
+  <li>מעדכנים את <code>items</code> כרגיל, כולל הסוג החדש.</li>
+  <li>מאפסים את <code>item_routes</code>: סוג חדש, מסלול 1, שלב 1, סטטוס 2 (בתור), <code>is_finished = false</code>, והתחנה שמשרתת את שלב 1 <b>של המסלול החדש</b> (<code>findStationForRouteStep</code>).</li>
+  <li><b>נוטשים</b> את הריצה הפתוחה בלדג'ר (<code>abandonRun(tx, id, "retyped")</code>).</li>
+  <li>רושמים מעבר חדש ל-<code>queued</code> (<code>recordTransition</code>). מכיוון שאין ריצה פתוחה, הלדג'ר פותח ריצה חדשה, לפי המסלול של הסוג החדש.</li>
+  <li><code>resyncItemDims</code> לשאר השדות.</li>
+</ol>
+<p>התשובה כוללת <code>retyped: true</code> כשהיה שינוי סוג.</p>
+<div class="note"><b>למה הסדר של שלבים 4 ו-5 חשוב?</b>הלדג'ר משתמש מחדש בריצה פתוחה אם יש כזו, ויש אילוץ (<code>route_run_one_open</code>) שאוסר שתי ריצות פתוחות לאותו פריט. אם לא סוגרים קודם את הישנה, המעבר החדש היה נרשם על הריצה שנבנתה לסוג הישן.</div>
+
+<h3>7.3 <code>metrics_abandon_run</code>: לסגור בלי "להשלים"</h3>
+<p>זה הלב של השלב. בדשבורד יש הגדרה אחת בלבד ל"הושלם": <b>ריצה ש-<code>closed_at</code> שלה מלא</b>. אם סוגרים את הריצה הישנה בדרך הרגילה, הפריט ייספר כאילו נמסר ללקוח רק כי תיקנו לו את הסוג, והוא גם יעוות את ממוצעי זמן הטיפול.</p>
+<p>הפתרון: הריצה נסגרת עם <b><code>is_trusted = false</code></b>. כל שאילתה בדשבורד שסופרת השלמות כבר מסננת לפי <code>rr.is_trusted</code>, בדיוק למקרים כאלה. כך הריצה נשארת לתיעוד (audit) אבל לא נספרת.</p>
+<pre><code><span class="k">UPDATE</span> route_run
+   <span class="k">SET</span> closed_at    = v_at,
+       close_reason = p_reason,      <span class="c">-- 'retyped'</span>
+       is_trusted   = <span class="k">false</span>
+ <span class="k">WHERE</span> route_run_id = v_run;</code></pre>
+<div class="good"><b>קטעי הזמן כן נשארים אמינים</b>הזמן שהפריט בילה בתחנות באמת הושקע, בתחנות אמיתיות, ע"י אנשים אמיתיים. לכן מדדי עומס תחנות ממשיכים לראות אותו. רק "השלמת המסלול" מבוטלת.</div>
+<p>פרט עדין בפונקציה: זמן הסגירה (<code>v_at</code>) נקבע למיקרו-שנייה אחת אחרי תחילת קטע הזמן הפתוח האחרון, אם הוא בעתיד. הלדג'ר לפעמים מזיז אירועים קדימה בזמן כדי לשמור על סדר, וסגירה לפי השעון הרגיל הייתה יוצרת טווח זמן ריק או הפוך, שנכשל בבדיקת התקינות (<code>isi_shape</code>).</p>
+
+<h3>7.4 הסוג כבר לא מסונכרן לריצות ישנות</h3>
+<p><code>metrics_resync_item_dims</code> עודכנה כך ש<b>לא</b> תשנה את <code>item_type_id</code>. ההיגיון: לקוח או סיריאלי שגויים הם טעות הקלדה, והערך הישן "אף פעם לא היה נכון", אז מתקנים גם אחורה. הסוג שונה: הריצה הנטושה <b>באמת</b> קרתה תחת הסוג הישן, ושינוי התווית שלה היה מעביר עבודה שנמדדה למסלול שמעולם לא רץ. מאותה סיבה <code>metrics_refresh_run_plan</code> נמחקה: ריצה חדשה היא התשובה הכנה.</p>
+
+<h3>7.5 המשלוח הוצא מהעריכה</h3>
+<p>שדה המשלוח נקבע בקליטה ו"מוקפא" בכל ריצה. העברת פריט ממשלוח למשלוח היא <b>העברה</b>, לא תיקון טעות, והיא צריכה תהליך משלה. לכן:</p>
+<ul>
+  <li>ב-<code>ItemTable.tsx</code> נמחקו <code>editShipmentOptions</code> וה-prop <code>shipmentOptions</code>.</li>
+  <li>ב-<code>EditItemDialog.tsx</code> נמחק שדה המשלוח מהטופס.</li>
+  <li>ב-<code>route.ts</code> ה-PUT כבר לא קורא <code>shipment</code> מהגוף.</li>
+</ul>
+
+<h3>7.6 האזהרה בחלון</h3>
+<p>החלון מחשב אם הסוג בטופס שונה מהסוג המקורי, ואם כן מציג אזהרה <b>לפני</b> השמירה, כי אין דרך לבטל את זה מהממשק:</p>
+<pre><code><span class="k">const</span> typeChanged = form.itemType !== <span class="s">""</span> &amp;&amp; form.itemType !== String(item.item_type_id ?? <span class="s">""</span>);
+...
+{typeChanged &amp;&amp; (
+  &lt;div role=<span class="s">"status"</span> ...&gt;
+    שינוי סוג הפריט יחזיר אותו לתחילת המסלול של הסוג החדש
+    {hasProgress ? <span class="s">", וההתקדמות הנוכחית שלו תתאפס"</span> : <span class="s">""</span>}. ...
+  &lt;/div&gt;
+)}</code></pre>
+
+<h3>7.7 איך זה נבדק</h3>
+<p>לפי הודעת הקומיט, הבדיקות רצו על בסיס הנתונים האמיתי בתוך טרנזקציה שבוטלה בסוף (rollback), כך ששום נתון לא השתנה:</p>
+<ul>
+  <li>פריט באמצע מסלול שונה סוגו: ריצה 12 נסגרה עם <code>retyped</code> ו-<code>is_trusted = false</code>, וריצה חדשה נפתחה על המסלול <code>{1,2}</code>.</li>
+  <li><b>סך ההשלמות היה 608 לפני ו-608 אחרי</b>, וזו כל המטרה.</li>
+  <li>פריט שכבר הסתיים ושונה סוגו: הריצה המוגמרת שלו נשארת אמינה ונספרת, כי הוא באמת סיים תחת הסוג הישן.</li>
+  <li>ארבע בדיקות התקינות (<code>metrics_selfcheck</code>) נשארו על 0.</li>
+</ul>
+
+<!-- ================================================================== -->
+<h2 id="c4">8. שלב 4: התאמה למודל המארזים <span class="tag db">Package model</span></h2>
+<p>אחרי הפיצ'ר, מודל המארזים שינה את המבנה: במקום "פריט אבא" ו"פריטים מחוברים" (<code>parent_item_id</code>) יש עכשיו <b>מארז</b> ופריטים בתוכו (<code>package_id</code>). הקוד של עריכה ומחיקה עודכן בהתאם. זה המצב <b>הנוכחי</b> של הקוד:</p>
+
+<h3>עריכה (PUT): כללים חדשים</h3>
+<div class="tablewrap"><table>
+<tr><th>מצב</th><th>מה קורה</th></tr>
+<tr><td>מנסים לשנות סוג של <b>מארז</b></td><td>נחסם (409, <code>PACKAGE_TYPE_LOCKED</code>): "לא ניתן לשנות סוג של מארז, יש למחוק וליצור מחדש".</td></tr>
+<tr><td>משנים פריט לסוג שהוא בעצמו סוג מארז</td><td>נחסם (<code>NESTED_PACKAGE</code>): אין מארז בתוך מארז.</td></tr>
+<tr><td>פריט בתוך מארז, והמסלול החדש לא מתאים למסלול של המארז</td><td>נחסם (409, <code>ITEM_ROUTE_SHAPE</code>): המסלול החדש חייב להתחיל ולהיגמר איפה שהמארז מתחיל ונגמר.</td></tr>
+<tr><td>פריט בתוך מארז שעדיין בשלב הפתיחה</td><td>רק הפריט מתחיל מחדש, כמו בשלב 3.</td></tr>
+<tr><td>פריט בתוך מארז <b>שכבר נפתח</b></td><td>כל המארז חוזר לעמדת הפתיחה (<code>resetPackageToOpening</code>). זה מותר רק עם <code>confirmPackageReset: true</code>, ובלעדיו מתקבל 409 <code>PACKAGE_RESET_REQUIRED</code>.</td></tr>
+<tr><td>מארז (לא פריט בתוכו)</td><td>סיריאלי, דגם ויצרן יכולים להיות ריקים. שדות החובה בשרת: לקוח, סוג ומק"ט.</td></tr>
+</table></div>
+<p>שגיאות המארזים נזרקות כ-<code>PackageError</code> עם <code>code</code> ו-<code>status</code>, והשרת מחזיר אותם כ-JSON: <code>{ error, code }</code>. גם <code>workerId</code> ו-<code>workerName</code> נשלחים עכשיו, כדי שאירועי הלדג'ר יירשמו על שם העובד.</p>
+
+<h3>מחיקה (DELETE): כללים חדשים</h3>
+<ul>
+  <li><b>מחיקת מארז</b> מוחקת את כל הפריטים שבתוכו. בלי <code>cascade: true</code> מתקבל 409 <code>PACKAGE_HAS_ITEMS</code> עם הרשימה, בדיוק כמו המנגנון מהשלב הראשון.</li>
+  <li><b>מחיקת הפריט האחרון במארז</b> נחסמת (409 <code>LAST_PACKAGE_ITEM</code>), כי אסור מארז ריק. צריך למחוק את המארז עצמו.</li>
+  <li>אחרי שפריט יוצא ממארז, נבדק מחדש אם המארז מוכן לסגירה (<code>recheckPackageReadiness</code>), כי אולי זה היה הפריט האחרון שחיכו לו.</li>
+</ul>
+<p>בצד הממשק השינוי קטן: ב-<code>EditItemDialog.tsx</code> "תת-פריט" מזוהה עכשיו לפי <code>item.package_id</code> במקום <code>parent_item_id</code>.</p>
+
+<!-- ================================================================== -->
+<h2 id="flows">9. התהליכים צעד אחר צעד</h2>
+
+<details open>
+<summary>תיקון לקוח שהוקלד לא נכון</summary>
+<ol class="steps">
+  <li><span class="tag ui">UI</span> לוחצים ✏️, בוחרים לקוח אחר, לוחצים "שמור שינויים".</li>
+  <li><span class="tag ui">UI</span> נשלח <code>PUT /api/items/10452</code> עם כל השדות.</li>
+  <li><span class="tag api">API</span> בדיקת שדות חובה. פותחים טרנזקציה.</li>
+  <li><span class="tag db">DB</span> <code>items.customer_id</code> מתעדכן. הסוג לא השתנה, ולכן אין נגיעה במסלול.</li>
+  <li><span class="tag db">DB</span> <code>metrics_resync_item_dims</code> מעדכן את הלקוח בכל הריצות וקטעי הזמן של הפריט.</li>
+  <li><span class="tag ui">UI</span> "הפריט עודכן בהצלחה", והטבלה נטענת מחדש. בדשבורד הפריט משויך מעכשיו ללקוח הנכון, גם אחורה.</li>
+</ol>
+</details>
+
+<details>
+<summary>שינוי סוג של פריט שנמצא באמצע הבדיקות</summary>
+<ol class="steps">
+  <li><span class="tag ui">UI</span> בוחרים סוג אחר, ומופיעה אזהרה צהובה. לוחצים "שמור".</li>
+  <li><span class="tag api">API</span> <code>typeChanged = true</code>. בודקים כללי מארזים (אם הפריט בתוך מארז).</li>
+  <li><span class="tag db">DB</span> <code>items</code> מתעדכן. <code>item_routes</code> מאופס לשלב 1 של המסלול החדש, בתור, בתחנה המתאימה.</li>
+  <li><span class="tag db">DB</span> <code>metrics_abandon_run</code>: הריצה הישנה נסגרת כ<b>לא-אמינה</b>, וקטעי הזמן שלה נסגרים עם הזמנים שנמדדו.</li>
+  <li><span class="tag db">DB</span> <code>recordTransition(queued)</code>: נפתחת ריצה חדשה לפי המסלול החדש.</li>
+  <li><span class="tag ui">UI</span> הפריט מופיע בתור של התחנה הראשונה במסלול החדש. בדשבורד מספר ההשלמות לא משתנה.</li>
+</ol>
+</details>
+
+<details>
+<summary>מחיקת פריט בודד</summary>
+<ol class="steps">
+  <li><span class="tag ui">UI</span> "מחק פריט", ואז חלון אישור. אם הפריט כבר עבר בדיקות, מוצגת אזהרה על מחיקת ההיסטוריה.</li>
+  <li><span class="tag ui">UI</span> "מחק לצמיתות", ונשלח <code>DELETE</code> בלי גוף.</li>
+  <li><span class="tag api">API</span> אין פריטים תלויים, ולכן ממשיכים.</li>
+  <li><span class="tag db">DB</span> בטרנזקציה: <code>metrics_forget_item</code>, ואז <code>test_results</code>, <code>item_route_history</code>, <code>item_routes</code>, ולבסוף <code>items</code>.</li>
+  <li><span class="tag ui">UI</span> "הפריט נמחק בהצלחה". הדשבורד כבר לא סופר אותו.</li>
+</ol>
+</details>
+
+<details>
+<summary>מחיקת מארז שיש בו פריטים</summary>
+<ol class="steps">
+  <li><span class="tag ui">UI</span> "מחק לצמיתות", ונשלח <code>DELETE</code> בלי גוף.</li>
+  <li><span class="tag api">API</span> נמצאו פריטים בתוך המארז, ולכן נשלח 409 עם <code>connectedItems</code>.</li>
+  <li><span class="tag ui">UI</span> החלון מציג את רשימת הפריטים (מספר, דגם, סיריאלי) ואת הכפתור "מחק את הפריט והפריטים המחוברים".</li>
+  <li><span class="tag ui">UI</span> אישור, ונשלח <code>DELETE</code> עם <code>{ cascade: true }</code>.</li>
+  <li><span class="tag db">DB</span> "לשכוח" את כולם בלדג'ר, למחוק שורות תפעוליות, קודם הפריטים שבפנים (הם מחזיקים את ה-FK) ואז המארז.</li>
+</ol>
+</details>
+
+<!-- ================================================================== -->
+<h2 id="status">10. קודי תשובה של ה-API</h2>
+<div class="tablewrap"><table>
+<tr><th>קוד</th><th>מתי</th><th>מה הממשק עושה</th></tr>
+<tr><td><b>200</b></td><td>הצלחה. ב-PUT: <code>{ ok, item_id, retyped, packageReset }</code>. ב-DELETE: <code>{ ok, deletedConnectedCount }</code></td><td>הודעת הצלחה ורענון הטבלה</td></tr>
+<tr><td><b>400</b></td><td>שדות חובה חסרים</td><td>מציג את הודעת השגיאה</td></tr>
+<tr><td><b>404</b></td><td>הפריט לא נמצא (Prisma <code>P2025</code>, או <code>ITEM_NOT_FOUND</code>)</td><td>מציג "הפריט לא נמצא"</td></tr>
+<tr><td><b>409</b></td><td>קונפליקט: יש פריטים תלויים, פריט אחרון במארז, או אחד מכללי המארזים</td><td>אם יש <code>connectedItems</code>: מציג רשימה ומבקש אישור. אחרת: מציג שגיאה</td></tr>
+<tr><td><b>500</b></td><td>שגיאה לא צפויה</td><td>"עדכון/מחיקת הפריט נכשלה"</td></tr>
+</table></div>
+
+<!-- ================================================================== -->
+<h2 id="faq">11. שאלות נפוצות</h2>
+
+<details><summary>למה אי אפשר לערוך סטטוס או התקדמות מהחלון?</summary>
+<p>הם שייכים ל-<code>item_routes</code> ומונעים ע"י תהליך הבדיקה בתחנות. שינוי ידני היה עוקף את הלדג'ר ויוצר מצב שלא קרה באמת. החריג היחיד הוא שינוי סוג, שמאפס את המסלול בצורה מבוקרת.</p></details>
+
+<details><summary>למה כל דבר בטרנזקציה אחת?</summary>
+<p>כי יש כמה טבלאות שחייבות להסכים זו עם זו. אם, למשל, המחיקה מ-<code>items</code> הייתה מצליחה והניקוי של הלדג'ר נכשל, היינו חוזרים בדיוק לבאג של "פריט רוח רפאים". בטרנזקציה, או שהכול קורה או ששום דבר לא קורה.</p></details>
+
+<details><summary>למה פונקציות SQL ולא קוד TypeScript?</summary>
+<p>הכללים של הלדג'ר (append-only, ריצה פתוחה אחת, סדר מחיקה לפי FK, נעילות) כבר חיים בבסיס הנתונים. כשהלוגיקה נמצאת שם, היא משתמשת באותם ביטויים ובאותן נעילות כמו שאר הלדג'ר, ואי אפשר "לשכוח" אותה אם מישהו כותב נתיב אחר לבסיס הנתונים.</p></details>
+
+<details><summary>אם שיניתי סוג בטעות, איך מחזירים?</summary>
+<p>משנים שוב לסוג המקורי, אבל הפריט יתחיל שוב משלב 1. ההתקדמות הקודמת לא חוזרת, ולכן יש אזהרה לפני השמירה. ההיסטוריה ותוצאות הבדיקה הקודמות כן נשמרות.</p></details>
+
+<details><summary>למה אי אפשר לשנות משלוח?</summary>
+<p>המשלוח "מוקפא" בכל ריצה בלדג'ר ומשפיע על דוחות לפי משלוח. העברה בין משלוחים היא פעולה עסקית נפרדת (העברה) ולא תיקון טעות, ולכן צריכה תהליך משלה, שעוד לא נבנה.</p></details>
+
+<details><summary>מה ההבדל בין "נטישה" של ריצה למחיקה שלה?</summary>
+<p>מחיקה (<code>forget</code>) מעלימה את הריצה לגמרי, וזה מתאים רק כשהפריט עצמו נמחק. נטישה (<code>abandon</code>) סוגרת אותה ומסמנת אותה כלא-אמינה: היא נשארת לתיעוד, הזמן שנמדד בתחנות ממשיך להיספר בעומס, אבל היא לא נספרת כהשלמה.</p></details>
+
+<!-- ================================================================== -->
+<h2 id="files">12. מפת הקבצים</h2>
+<div class="tablewrap"><table>
+<tr><th>קובץ</th><th>תפקיד</th><th>שלבים</th></tr>
+<tr><td><code>src/components/EditItemDialog.tsx</code></td><td>חלון העריכה, אישור המחיקה, ואזהרת שינוי הסוג</td><td>1, 3, 4</td></tr>
+<tr><td><code>src/app/components/ItemTable.tsx</code></td><td>כפתור העיפרון, רשימות האפשרויות, והודעות התוצאה</td><td>1, 3, 4</td></tr>
+<tr><td><code>src/app/api/items/[id]/route.ts</code></td><td>PUT ו-DELETE בשרת</td><td>1, 2, 3, 4</td></tr>
+<tr><td><code>src/app/api/items/route.ts</code></td><td>הוספת <code>customer_id</code> לרשימה</td><td>1</td></tr>
+<tr><td><code>src/types/index.ts</code></td><td>השדה <code>customer_id</code> בטיפוס <code>ItemRow</code></td><td>1</td></tr>
+<tr><td><code>src/app/lib/metrics/item-lifecycle.ts</code></td><td><code>forgetItem</code>, <code>resyncItemDims</code>, <code>abandonRun</code></td><td>2, 3</td></tr>
+<tr><td><code>prisma/migrations/20260902000000_metrics_item_lifecycle/migration.sql</code></td><td>פונקציות ה-SQL ופתח המילוט בטריגר</td><td>2, 3</td></tr>
+<tr><td><code>release/db-scripts/UPGRADE_ALL_IN_ONE.sql</code></td><td>קובץ השדרוג לייצור</td><td>2, 3</td></tr>
+<tr><td><code>scripts/build-upgrade-sql.js</code>, <code>scripts/check-migration-safety.js</code></td><td>בניית קובץ השדרוג ובדיקת בטיחות</td><td>2, 3</td></tr>
+</table></div>
+
+<p style="color:var(--muted);font-size:14px;margin-top:40px">המסמך מבוסס על הקומיטים <code>c6926ca</code>, <code>a75d79b</code>, <code>abac1a5</code> ועל מצב הקוד בענף <code>menachem</code> (קומיט <code>4dd2fee</code>).</p>
+
+</div>
+<button class="themebtn" id="themebtn" type="button">🌓 מצב תצוגה</button>
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('themebtn');
+  try{var s=localStorage.getItem('theme'); if(s) root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark';
+    root.setAttribute('data-theme',next);
+    try{localStorage.setItem('theme',next);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

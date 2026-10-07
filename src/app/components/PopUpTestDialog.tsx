@@ -118,7 +118,7 @@ export default function PopUpTestDialog({
       }}
     >
         {/* Header Section */}
-        <Box sx={{
+        <Box data-drag-handle="" sx={{
             position: "relative",
             p: 4,
             pb: 2,

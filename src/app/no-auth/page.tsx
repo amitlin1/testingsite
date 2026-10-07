@@ -15,7 +15,6 @@ export default async function NoAuthPage({
     <main style={{ padding: "4rem", textAlign: "center" }}>
       <h1>אין הרשאה</h1>
       <p>אין לך הרשאה לגשת לעמוד זה.</p>
-      {from ? <p style={{ opacity: 0.6, fontSize: "0.9rem" }}>{from}</p> : null}
     </main>
   );
 }

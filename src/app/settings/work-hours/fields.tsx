@@ -24,7 +24,7 @@ export function DialogShell({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth dir="rtl">
       <DialogContent sx={{ p: 0 }}>
-        <div style={{ padding: "20px 24px 0" }}>
+        <div data-drag-handle="" style={{ padding: "20px 24px 0" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
             <button
               type="button"

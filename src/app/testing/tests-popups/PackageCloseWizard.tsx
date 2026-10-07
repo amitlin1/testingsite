@@ -7,8 +7,9 @@ import { apiFetch } from "@/lib/api/client";
 import { newActionId } from "@/app/lib/metrics/action-id";
 import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
 import PackageDecisionDialog, { type PackDecision } from "./PackageDecisionDialog";
+import { ScanField, useReferenceLookup } from "./referenceScan";
 import {
-  AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, FOCUS, GREEN, GREEN_BG, GREY, HAIR, HAIR_2, INK, INK_2, MUTED, RED, RED_BG, fieldInput, seq2,
+  AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, MUTED, RED, RED_BG, seq2,
 } from "@/app/components/packages/packageUi";
 
 /**
@@ -18,6 +19,10 @@ import {
  * note) → packing checks → done. "סגור מארז" records one result per arrived
  * item and then the box's, whose details carry the decisions
  * (docs/packages/PLAN.md §4, decision 5; DESIGN_REVIEW.md).
+ *
+ * The scan starts from the label scanned when the box was opened
+ * (pkg.opening_sku) and, like the opening, is looked up among the package
+ * type's reference items; the worker may rescan it.
  */
 
 const STEPS: WizardStep[] = [
@@ -47,9 +52,11 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
 
   React.useEffect(() => {
     if (!open) return;
-    setStep(0); setScan(""); setPacked({}); setDecisions({}); setDecideFor(null); setChecks(CHECKS.map(() => false)); setNote("");
+    setStep(0); setScan(pkg?.opening_sku ?? ""); setPacked({}); setDecisions({}); setDecideFor(null); setChecks(CHECKS.map(() => false)); setNote("");
     setSubmitting(false); setError(null); submitIdRef.current = null; committedRef.current = new Set();
   }, [open, pkg]);
+
+  const boxLookup = useReferenceLookup(scan, item.item_type_id, open);
 
   if (!open || !pkg) return null;
 
@@ -60,7 +67,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   const checksAll = checks.every(Boolean);
   const stepKey = STEPS[step].key;
   const anyMissing = items.some((it) => decisions[it.item_id]?.decision === "missing");
-  const scanMatches = scan.trim() !== "" && (scan.trim() === (item.makat ?? "").trim() || scan.trim().split("-")[0] === String(item.item_id));
+  const fromOpening = pkg.opening_sku != null && scan.trim() === pkg.opening_sku;
 
   let stepSubtitle = "";
   let systemMsg: string | null = null;
@@ -70,7 +77,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
 
   let nextLabel = "המשך";
   let nextEnabled = true;
-  if (stepKey === "scan") nextEnabled = scan.trim() !== "";
+  if (stepKey === "scan") nextEnabled = scan.trim() !== "" && !boxLookup.checking;
   else if (stepKey === "arrival") { nextEnabled = allResolved; nextLabel = allResolved ? "המשך" : "נדרשת החלטה לכל פריט"; }
   else if (stepKey === "packOk") { nextEnabled = checksAll; nextLabel = "סגור מארז"; }
   else if (stepKey === "done") nextLabel = "סיום וחזרה לתור";
@@ -97,7 +104,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
       await onSubmit({
         Result: anyMissing ? 0 : 1, Passed: !anyMissing, Comments: note || undefined, WorkerID: workerId ?? undefined, SubmitID: submitId,
         Details: {
-          sku: scan.trim(), closing: true, checks: CHECKS.map((label, i) => ({ label, ok: checks[i] })), note,
+          sku: scan.trim(), hasRU: boxLookup.ref?.hasRU ?? null, closing: true, checks: CHECKS.map((label, i) => ({ label, ok: checks[i] })), note,
           packed: items.filter((it) => arrived(it) && packed[it.item_id]).map((it) => it.item_id),
           decisions: items.filter((it) => decisions[it.item_id]).map((it) => ({ item_id: it.item_id, decision: decisions[it.item_id].decision, note: decisions[it.item_id].note })),
         },
@@ -139,20 +146,14 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
         )}
 
         {stepKey === "scan" && (
-          <div style={{ maxWidth: 420, marginTop: 20 }}>
-            <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>מק״ט המארז</div>
-            <input value={scan} onChange={(e) => setScan(e.target.value)} autoFocus placeholder="סרוק את מדבקת הקופסה"
-              onKeyDown={(e) => { if (e.key === "Enter") onNext(); }}
-              style={{ ...fieldInput, height: 52, borderRadius: 11, fontSize: 17, fontVariantNumeric: "tabular-nums", letterSpacing: 1, borderColor: scan.trim() === "" ? HAIR : FOCUS }} />
-            {scan.trim() !== "" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 9, background: scanMatches ? GREEN_BG : AMBER_BG, border: `1px solid ${scanMatches ? "rgba(31,138,91,0.22)" : AMBER_BORDER}`, borderRadius: 11, padding: "12px 14px", marginTop: 12 }}>
-                <span style={{ color: scanMatches ? GREEN : AMBER_INK, display: "inline-flex" }}>{scanMatches ? <Check size={18} strokeWidth={2} /> : <CircleAlert size={18} strokeWidth={2} />}</span>
-                <div style={{ fontSize: 14, fontWeight: 600, color: scanMatches ? GREEN : AMBER_INK }}>
-                  {scanMatches ? `זוהה ${pkg.item_type_desc} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}` : "הסריקה לא תואמת למק״ט או למזהה של המארז — בדוק שזו הקופסה הנכונה"}
-                </div>
-              </div>
-            )}
-          </div>
+          <>
+            <ScanField
+              label="מק״ט המארז" placeholder="סרוק את מדבקת הקופסה"
+              value={scan} onChange={setScan} lookup={boxLookup} onSubmit={onNext}
+              found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
+              missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה`} />
+            {fromOpening && <div style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>הושלם מסריקת הפתיחה</div>}
+          </>
         )}
 
         {stepKey === "arrival" && (

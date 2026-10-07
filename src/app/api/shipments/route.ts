@@ -3,7 +3,7 @@ import { prisma } from "@/app/lib/prisma";
 import { saveSignature } from "../../../lib/file-utils";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { withAuth } from "@/lib/auth/withAuth";
-import { hasRole } from "@/lib/auth/roles";
+import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
 import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 
 // GET: Fetch all shipments
@@ -168,25 +168,12 @@ export const POST = withAuth(async (request, { session }) => {
       );
     }
 
-    // "עובד מקבל" (receiving worker): a storekeeper is always attributed as
-    // THEMSELVES — never trust a client-submitted id/name for that case, same
-    // integrity reasoning as any other server-derived identity field. Someone
-    // else (e.g. a manager entering data on a storekeeper's behalf) falls
-    // through to the manual picker's submitted id/name instead.
-    let finalRecievingWorkerId: number | null = recieving_worker_id || null;
-    let finalRecievingWorkerName: string | null = recieving_worker_name || null;
-    if (hasRole(session.roles ?? [], "storekeeper")) {
-      const empNo = session.user.employeeNumber ? Number(session.user.employeeNumber) : NaN;
-      if (!Number.isFinite(empNo) || empNo <= 0) {
-        return NextResponse.json(
-          { error: "לא ניתן לזהות אותך כמחסנאי — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו ב'הגדרות > משתמשים'." },
-          { status: 400 },
-        );
-      }
-      finalRecievingWorkerId = empNo;
-      finalRecievingWorkerName =
-        session.user.displayName ?? session.user.name ?? session.user.preferredUsername;
-    }
+    // "עובד מקבל": the logged-in worker, unless a manager picked someone else
+    // (resolveShipmentWorker — never trust a non-manager's submitted id/name).
+    const receiver = resolveShipmentWorker(session, { id: recieving_worker_id, name: recieving_worker_name });
+    if ("error" in receiver) return NextResponse.json({ error: receiver.error }, { status: 400 });
+    const finalRecievingWorkerId = receiver.worker.id;
+    const finalRecievingWorkerName = receiver.worker.name;
 
     const newShipment = await prisma.$transaction(async (tx) => {
       // First create the shipment without signature

@@ -19,6 +19,7 @@ import { Shipment } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import SignatureCanvas from 'react-signature-canvas';
 import { apiFetch } from "@/lib/api/client";
+import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
 
 type ShipmentSendPopupProps = {
     open: boolean;
@@ -52,6 +53,10 @@ export default function ShipmentSendPopup({
     const [history, setHistory] = useState<{ item_type_id: number; makat: number | null; total_sent: number }[]>([]);
 
     const [isSigned, setIsSigned] = useState(false);
+
+    // "עובד מוציא" is the logged-in worker; only a manager may pick someone
+    // else (useShipmentWorker — POST /api/shipment-history applies the same rule).
+    const sender = useShipmentWorker(workers);
 
     const {
         control,
@@ -123,6 +128,13 @@ export default function ShipmentSendPopup({
         }
     }, [open, shipment, reset]);
 
+    // Declared after the reset above so it lands on the fresh form.
+    useEffect(() => {
+        if (!open || !shipment || sender.selfId == null) return;
+        setValue("sending_worker_id", sender.selfId);
+        setValue("sending_worker_name", sender.selfName);
+    }, [open, shipment, sender.selfId, sender.selfName, setValue]);
+
     const onSubmit = async (data: SendFormValues) => {
         if (!shipment) return;
 
@@ -188,8 +200,13 @@ export default function ShipmentSendPopup({
             }}>
                 החזרת משלוח
             </DialogTitle>
-            <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
+                    {sender.blocked && (
+                        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                            לא ניתן לזהות אותך — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
+                        </Alert>
+                    )}
                     <Alert severity="info" sx={{ mb: 2 }}>
                         הכמויות הן מספר מארזים. לכל סוג מארז אפשר לשלוח עד הכמות שהוצהרה פחות מה שכבר נשלח.
                     </Alert>
@@ -245,7 +262,7 @@ export default function ShipmentSendPopup({
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
                                     <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
-                                        options={workers.filter(w => w.roles.includes("storekeeper"))}
+                                        options={sender.options}
                                         getOptionLabel={(option) => option.worker_name}
                                         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
@@ -253,11 +270,13 @@ export default function ShipmentSendPopup({
                                             onChange(newValue?.worker_id ?? null);
                                             setValue("sending_worker_name", newValue?.worker_name ?? null);
                                         }}
-                                        placeholder="בחר עובד…"
+                                        disabled={sender.locked}
+                                        placeholder={sender.locked ? "מזוהה מההתחברות" : "בחר עובד…"}
                                         error={!!errors.sending_worker_id}
                                     />
                                 )}
                             />
+                            {sender.locked && !sender.blocked && <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 0.5 }}>מזוהה מההתחברות</Typography>}
                         </Box>
                     </Box>
 
@@ -267,7 +286,9 @@ export default function ShipmentSendPopup({
                             הוסף סוג מארז לשליחה
                         </Button>
                         {fields.map((item, index) => (
-                            <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
+                            // One line: type, amount, delete — tops aligned so the amount's
+                            // note / error underneath doesn't push the line out of shape.
+                            <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1.5, alignItems: 'flex-start' }}>
                                 <Controller
                                     name={`items.${index}` as const}
                                     control={control}
@@ -279,7 +300,7 @@ export default function ShipmentSendPopup({
                                             <SearchableCombobox<(typeof availableItems)[number]>
                                                 options={availableItems}
                                                 getOptionLabel={(option) =>
-                                                    `${option.item_type_desc || '—'} · מק״ט ${option.makat || '—'} · ${option.quantity} מארזים`
+                                                    `${option.item_type_desc || '—'}`
                                                 }
                                                 // Find the matching option based on item_type_id and makat
                                                 value={availableItems.find(opt =>
@@ -348,19 +369,19 @@ export default function ShipmentSendPopup({
                                         return (
                                             <TextField
                                                 {...field}
-                                                label={`מארזים (מקס׳ ${maxAllowed})`}
+                                                placeholder="מארזים"
                                                 type="number"
                                                 required
                                                 size="small"
                                                 sx={{ width: 160 }}
                                                 onChange={(e) => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
                                                 error={!!errors.items?.[index]?.amount}
-                                                helperText={errors.items?.[index]?.amount ? (errors.items[index]?.amount?.message || "כמות לא תקינה") : ""}
+                                                helperText={errors.items?.[index]?.amount ? (errors.items[index]?.amount?.message || "כמות לא תקינה") : `מקס׳ ${maxAllowed}`}
                                             />
                                         );
                                     }}
                                 />
-                                <Button color="error" onClick={() => remove(index)}>
+                                <Button color="error" variant="outlined" onClick={() => remove(index)} sx={{ flexShrink: 0 }}>
                                     מחק
                                 </Button>
                             </Box>
@@ -394,7 +415,7 @@ export default function ShipmentSendPopup({
                     </Button>
                     <Button
                         type="submit"
-                        disabled={!isValid || !isSigned}
+                        disabled={!isValid || !isSigned || sender.blocked}
                         variant="contained"
                         color="success"
                         sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}

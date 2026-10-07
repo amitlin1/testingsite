@@ -898,6 +898,7 @@ export default function FilesPage() {
         onClose={() => setDeleteOpen(false)}
         maxWidth="xs"
         fullWidth
+        draggable={false}
       >
         <DialogTitle>אישור מחיקה</DialogTitle>
         <DialogContent>

@@ -3,6 +3,11 @@ import React, { forwardRef } from "react";
 import * as RDialog from "@radix-ui/react-dialog";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
+import { useDraggable } from "./useDraggable";
+
+/** Whether the surrounding Dialog moves; its DialogTitle is the handle only then
+ *  (a fixed delete confirmation shows no move cursor). */
+const DraggableDialog = React.createContext(false);
 
 const MAXW: Record<string, number> = { xs: 444, sm: 600, md: 900, lg: 1200, xl: 1536 };
 
@@ -20,6 +25,9 @@ export interface DialogProps {
   PaperProps?: { sx?: SxInput; style?: React.CSSProperties; className?: string };
   slotProps?: { paper?: { sx?: SxInput; style?: React.CSSProperties; className?: string } };
   "aria-labelledby"?: string;
+  /** Moved by its DialogTitle (or any `data-drag-handle` inside). Default on;
+   *  delete confirmations turn it off. */
+  draggable?: boolean;
 }
 
 export function Dialog({
@@ -34,8 +42,10 @@ export function Dialog({
   sx,
   PaperProps,
   slotProps,
+  draggable = true,
 }: DialogProps) {
   const paper = { ...slotProps?.paper, ...PaperProps };
+  const { ref: dragRef, onPointerDown: onDragStart, offset: dragOffset, moved: dragMoved } = useDraggable(open, draggable && !fullScreen);
   const contentStyle: React.CSSProperties = fullScreen
     ? { width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", borderRadius: 0, top: 0, left: 0, transform: "none" }
     : {
@@ -50,14 +60,20 @@ export function Dialog({
       <RDialog.Portal>
         <RDialog.Overlay className="sh-dialog-overlay" />
         <RDialog.Content
+          ref={dragRef}
+          onPointerDown={onDragStart}
           dir={dir}
           className={cn("sh-dialog-content", paper.className)}
-          style={{ ...contentStyle, ...sxToStyle(sx), ...sxToStyle(paper.sx), ...paper.style }}
+          style={{
+            ...contentStyle, ...sxToStyle(sx), ...sxToStyle(paper.sx), ...paper.style,
+            // Centred by translate(-50%, -50%) in ui.css; the drag adds to it.
+            ...(dragMoved ? { transform: `translate(calc(-50% + ${dragOffset.x}px), calc(-50% + ${dragOffset.y}px))` } : {}),
+          }}
           onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); }}
           onPointerDownOutside={(e) => { onClose?.(e, "backdropClick"); }}
           aria-describedby={undefined}
         >
-          {children}
+          <DraggableDialog.Provider value={draggable && !fullScreen}>{children}</DraggableDialog.Provider>
         </RDialog.Content>
       </RDialog.Portal>
     </RDialog.Root>
@@ -71,8 +87,9 @@ export const DialogTitle = forwardRef<HTMLHeadingElement, DialogTitleProps>(func
   { sx, style, className, children, ...rest },
   ref,
 ) {
+  const draggable = React.useContext(DraggableDialog);
   return (
-    <RDialog.Title ref={ref} className={cn("sh-dialog-title", className)} style={{ ...sxToStyle(sx), ...style }} {...rest}>
+    <RDialog.Title ref={ref} data-drag-handle={draggable ? "" : undefined} className={cn("sh-dialog-title", className)} style={{ ...sxToStyle(sx), ...style }} {...rest}>
       {children}
     </RDialog.Title>
   );

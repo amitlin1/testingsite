@@ -18,9 +18,7 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { Shipment, NewShipment, Customers } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
-import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
-import { useSession } from "next-auth/react";
-import { hasRole } from "@/lib/auth/roles";
+import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
 
 type ShipmentUpdatePopupProps = {
     open: boolean;
@@ -42,14 +40,9 @@ export default function ShipmentUpdatePopup({
     const [itemTypes, setItemTypes] = useState<{ id: number; name: string; is_package?: boolean }[]>([]);
     const [sources, setSources] = useState<{ id: number; desc: string }[]>([]);
 
-    // "עובד מקבל" — same rule as ShipmentInsertPopup: a storekeeper is always
-    // attributed as themselves; missing employeeNumber blocks rather than
-    // degrades silently; anyone else keeps the manual picker.
-    const { data: session } = useSession();
-    const tokenWorkerId = useTokenWorkerId();
-    const isStorekeeper = hasRole(session?.roles ?? [], "storekeeper");
-    const canAutoFillReceiver = isStorekeeper && tokenWorkerId != null;
-    const blockedNoEmployeeNumber = isStorekeeper && tokenWorkerId == null;
+    // "עובד מקבל" — same rule as ShipmentInsertPopup (useShipmentWorker): only
+    // a manager may change it; the server applies the same rule.
+    const receiver = useShipmentWorker(workers);
 
     const {
         control,
@@ -133,16 +126,16 @@ export default function ShipmentUpdatePopup({
         }
     }, [open, shipment, reset]);
 
-    // "עובד מקבל" — only auto-assign when nobody's attributed yet; editing an
-    // already-received shipment (e.g. fixing the customer code) must not
-    // silently reassign who received it just because a storekeeper opened it.
+    // Editing keeps whoever already received the shipment (fixing the customer
+    // code must not reassign it to the editor); only a shipment nobody is
+    // attributed to yet starts from the logged-in worker.
     const receiverAlreadySet = shipment?.recieving_worker_id != null;
-    const lockReceiverField = canAutoFillReceiver && !receiverAlreadySet;
     useEffect(() => {
-        if (!open || !lockReceiverField) return;
-        setValue("recieving_worker_id", tokenWorkerId);
-        setValue("recieving_worker_name", workers.find((w) => w.worker_id === tokenWorkerId)?.worker_name ?? null);
-    }, [open, lockReceiverField, tokenWorkerId, workers, setValue]);
+        if (!open || receiverAlreadySet || receiver.selfId == null) return;
+        setValue("recieving_worker_id", receiver.selfId);
+        setValue("recieving_worker_name", receiver.selfName);
+    }, [open, receiverAlreadySet, receiver.selfId, receiver.selfName, setValue]);
+    const receiverBlocked = receiver.blocked && !receiverAlreadySet;
 
     const onSubmit = async (data: NewShipment) => {
         if (!shipment) return;
@@ -201,11 +194,11 @@ export default function ShipmentUpdatePopup({
             }}>
                 עדכון משלוח
             </DialogTitle>
-            <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
-                    {blockedNoEmployeeNumber && !receiverAlreadySet && (
+                    {receiverBlocked && (
                         <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-                            לא ניתן לזהות אותך כמחסנאי — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
+                            לא ניתן לזהות אותך — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
                         </Alert>
                     )}
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
@@ -258,7 +251,7 @@ export default function ShipmentUpdatePopup({
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
                                     <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
-                                        options={workers.filter(w => w.roles.includes("storekeeper"))}
+                                        options={receiver.options}
                                         getOptionLabel={(option) => option.worker_name}
                                         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
@@ -266,13 +259,14 @@ export default function ShipmentUpdatePopup({
                                             onChange(newValue?.worker_id ?? null);
                                             setValue("recieving_worker_name", newValue?.worker_name ?? null);
                                         }}
-                                        disabled={lockReceiverField}
-                                        placeholder={lockReceiverField ? "מזוהה מההתחברות" : "בחר עובד…"}
+                                        disabled={receiver.locked}
+                                        placeholder={receiver.locked ? "מזוהה מההתחברות" : "בחר עובד…"}
                                         error={!!errors.recieving_worker_id}
                                         helperText={errors.recieving_worker_id?.message}
                                     />
                                 )}
                             />
+                            {receiver.locked && !receiverBlocked && <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 0.5 }}>{receiverAlreadySet ? "רק מנהל יכול לשנות" : "מזוהה מההתחברות"}</Typography>}
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
                             <FieldLabel>מקור</FieldLabel>
@@ -326,42 +320,24 @@ export default function ShipmentUpdatePopup({
                         {fields.map((item, index) => (
                             <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
                                 <Box sx={{ width: 300 }}>
-                                <Controller
-                                    name={`shipment_items.${index}.item_type_id` as const}
-                                    control={control}
-                                    rules={{ required: true }}
-                                    render={({ field: { onChange, value } }) => (
-                                        <SearchableCombobox<{ id: number; name: string }>
-                                            options={itemTypes}
-                                            getOptionLabel={(option) => option.name}
-                                            isOptionEqualToValue={(o, v) => o.id === v.id}
-                                            value={itemTypes.find((t) => t.id === value) || null}
-                                            onChange={(newValue) => onChange(newValue?.id ?? null)}
-                                            placeholder="סוג מארז"
-                                            error={!!errors.shipment_items?.[index]?.item_type_id}
-                                        />
-                                    )}
-                                />
+                                    <Controller
+                                        name={`shipment_items.${index}.item_type_id` as const}
+                                        control={control}
+                                        rules={{ required: true }}
+                                        render={({ field: { onChange, value } }) => (
+                                            <SearchableCombobox<{ id: number; name: string }>
+                                                options={itemTypes}
+                                                getOptionLabel={(option) => option.name}
+                                                isOptionEqualToValue={(o, v) => o.id === v.id}
+                                                value={itemTypes.find((t) => t.id === value) || null}
+                                                onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                                placeholder="סוג מארז"
+                                                error={!!errors.shipment_items?.[index]?.item_type_id}
+                                            />
+                                        )}
+                                    />
                                 </Box>
-                                <Controller
-                                    name={`shipment_items.${index}.makat` as const}
-                                    control={control}
-                                    rules={{
-                                        required: "שדה חובה",
-                                    }}
-                                    render={({ field }) => (
-                                        <TextField
-                                            {...field}
-                                            placeholder="מקט"
-                                            required
-                                            size="small"
-                                            sx={{ width: 100 }}
-                                            value={field.value ?? ""}
-                                            onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
-                                            error={!!errors.shipment_items?.[index]?.makat}
-                                        />
-                                    )}
-                                />
+
                                 <Controller
                                     name={`shipment_items.${index}.quantity` as const}
                                     control={control}
@@ -405,7 +381,7 @@ export default function ShipmentUpdatePopup({
                     </Button>
                     <Button
                         type="submit"
-                        disabled={!isValid || (blockedNoEmployeeNumber && !receiverAlreadySet)}
+                        disabled={!isValid || receiverBlocked}
                         variant="contained"
                         sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >

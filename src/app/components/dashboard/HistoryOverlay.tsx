@@ -31,6 +31,7 @@
 import * as React from "react";
 
 import { apiFetch } from "@/lib/api/client";
+import { useDraggable } from "@/components/ui/useDraggable";
 import { Skeleton } from "@/components/ui";
 import { Close, FilterList, Info } from "@/components/ui/icons";
 import {
@@ -330,6 +331,7 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
   );
 
   const stats = useStatCells(target, points);
+  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable();
 
   return (
     <div
@@ -340,7 +342,7 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
         position: "fixed",
         inset: 0,
         zIndex: 1300,
-        background: "var(--dash-scrim, rgba(0,0,0,.28))",
+        background: "rgba(0,0,0,0.4)", // the app-wide popup scrim
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -350,6 +352,8 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
       }}
     >
       <div
+        ref={dragRef}
+        onPointerDown={onDragStart}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -364,10 +368,12 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          ...dragStyle,
         }}
       >
         {/* header */}
         <div
+          data-drag-handle=""
           style={{
             display: "flex",
             alignItems: "flex-start",

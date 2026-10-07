@@ -26,7 +26,6 @@ type LineIn = {
   model?: string | null;
   manufacturer_name?: string | null;
   manufacturer_no?: string | null;
-  manufacturer_sku?: string | null;
   route_number?: number | null;
   sort_order?: number | null;
 };
@@ -82,7 +81,6 @@ async function describe(packageTypeId: number) {
       model: l.model,
       manufacturer_name: l.manufacturer_name,
       manufacturer_no: l.manufacturer_no,
-      manufacturer_sku: l.manufacturer_sku,
       route_number: l.route_number,
       sort_order: l.sort_order,
       route_warning: routeWarning,
@@ -155,7 +153,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         model: l.model == null ? null : String(l.model).trim() || null,
         manufacturer_name: l.manufacturer_name == null ? null : String(l.manufacturer_name).trim() || null,
         manufacturer_no: l.manufacturer_no == null ? null : String(l.manufacturer_no).trim() || null,
-        manufacturer_sku: l.manufacturer_sku == null ? null : String(l.manufacturer_sku).trim() || null,
         route_number: routeNumber,
         sort_order: Number.isInteger(Number(l.sort_order)) ? Number(l.sort_order) : i,
       });
@@ -209,7 +206,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             model: l.model ?? null,
             manufacturer_name: l.manufacturer_name ?? null,
             manufacturer_no: l.manufacturer_no ?? null,
-            manufacturer_sku: l.manufacturer_sku ?? null,
             route_number: l.route_number ?? 1,
             sort_order: l.sort_order ?? 0,
           })),

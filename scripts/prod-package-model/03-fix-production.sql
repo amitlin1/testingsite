@@ -331,7 +331,7 @@ BEGIN
     SELECT test_station_id INTO v_station FROM test_stations
      WHERE test_station_type_id = v_open AND status <> 3 ORDER BY (status = 2) DESC, test_station_id LIMIT 1;
     SELECT COALESCE(jsonb_agg(jsonb_build_object('item_type_id', item_type_id, 'quantity', quantity, 'makat', makat, 'model', model,
-             'manufacturer_name', manufacturer_name, 'manufacturer_no', manufacturer_no, 'manufacturer_sku', manufacturer_sku,
+             'manufacturer_name', manufacturer_name, 'manufacturer_no', manufacturer_no,
              'route_number', route_number, 'sort_order', sort_order) ORDER BY sort_order, id), '[]'::jsonb)
       INTO v_template FROM package_contents WHERE package_type_id = v_pkg_type;
 

@@ -4,6 +4,7 @@ import { useReactToPrint } from "react-to-print";
 import { X } from "lucide-react";
 import type { PackageView } from "@/app/lib/packages/read";
 import { DIALOG_Z, BLUE, HAIR, INK, INK_2, MUTED, MUTED_LT, SHADOW, AMBER_INK, AMBER_BG, AMBER_BORDER, fmtId, overlay, pillGhost } from "./packageUi";
+import { useDraggable } from "@/components/ui/useDraggable";
 import { CopiesStepper, LabelSheet, Tick, customerLineOf, packageLabels, type LabelSpec } from "./PackageLabelsDialog";
 
 /**
@@ -56,6 +57,7 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
     onAfterPrint: () => setAskConfirm(true),
   });
 
+  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable(open);
   if (!open) return null;
 
   const chosen = packages.filter((_, i) => on[i]);
@@ -73,8 +75,8 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
 
   return (
     <div onClick={onClose} style={{ ...overlay, zIndex: DIALOG_Z - 10 }}>
-      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(880px, 96vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
-        <div className="no-print" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
+      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(880px, 96vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
+        <div data-drag-handle="" className="no-print" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>מדבקות חדשות למארזים שהוסבו</div>
             <div style={{ fontSize: 13.5, color: MUTED, marginTop: 4 }}>

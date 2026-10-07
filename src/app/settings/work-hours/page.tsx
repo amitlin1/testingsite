@@ -3,7 +3,7 @@ import * as React from "react";
 import { ChevronRight, ChevronLeft, Pencil, Trash2, Plus } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
 import DataTable, { RowActions, IconAction, type Column } from "@/components/DataTable";
-import { Snackbar, Alert } from "@/components/ui";
+import { Snackbar, Alert, ConfirmDialog } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import {
   WEEKDAY_LABELS,
@@ -68,6 +68,15 @@ export default function WorkHoursPage() {
   const [israeliCat, setIsraeliCat] = React.useState<Map<string, IsraeliHolidayCategory>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [toast, setToast] = React.useState<Toast>({ open: false, sev: "success", msg: "" });
+  // One confirmation for every delete / reset on this page — the app's own
+  // dialog, like the rest of the system, not the browser's window.confirm.
+  const [confirm, setConfirm] = React.useState<{ title: string; message: string; confirmText: string; run: () => Promise<void> } | null>(null);
+  const [confirmBusy, setConfirmBusy] = React.useState(false);
+  async function runConfirmed() {
+    if (!confirm) return;
+    setConfirmBusy(true);
+    try { await confirm.run(); } finally { setConfirmBusy(false); setConfirm(null); }
+  }
 
   const [dayDlg, setDayDlg] = React.useState<{ open: boolean; day: ResolvedDay | null }>({ open: false, day: null });
   const [wdDlg, setWdDlg] = React.useState<{ open: boolean; weekday: Weekday | null }>({ open: false, weekday: null });
@@ -155,22 +164,38 @@ export default function WorkHoursPage() {
     openDay(daysByDate.get(today) ?? monthDays[0] ?? ({} as ResolvedDay));
   }
 
-  async function deleteHoliday(h: DepartmentHoliday) {
-    if (!window.confirm(`למחוק את "${h.name}"?`)) return;
-    const res = await apiFetch(`/api/settings/work-hours/holidays/${h.id}`, { method: "DELETE" });
-    if (res.ok) { ok("החופשה נמחקה"); afterSave(); }
-    else fail((await res.json().catch(() => null))?.error || "מחיקת החופשה נכשלה");
+  function deleteHoliday(h: DepartmentHoliday) {
+    setConfirm({
+      title: "מחיקת חופשה", confirmText: "מחק",
+      message: `למחוק את "${h.name}"? פעולה זו אינה ניתנת לביטול.`,
+      run: async () => {
+        const res = await apiFetch(`/api/settings/work-hours/holidays/${h.id}`, { method: "DELETE" });
+        if (res.ok) { ok("החופשה נמחקה"); afterSave(); }
+        else fail((await res.json().catch(() => null))?.error || "מחיקת החופשה נכשלה");
+      },
+    });
   }
-  async function deleteOverride(o: WorkdayOverride) {
-    if (!window.confirm(`לאפס את ${OVERRIDE_LABELS[o.kind]} בתאריך ${o.date} לברירת המחדל?`)) return;
-    const res = await apiFetch(`/api/settings/work-hours/overrides/${o.id}`, { method: "DELETE" });
-    if (res.ok) { ok("החריגה בוטלה"); afterSave(); }
-    else fail((await res.json().catch(() => null))?.error || "ביטול החריגה נכשל");
+  function deleteOverride(o: WorkdayOverride) {
+    setConfirm({
+      title: "איפוס חריגה", confirmText: "אפס",
+      message: `לאפס את ${OVERRIDE_LABELS[o.kind]} בתאריך ${o.date} לברירת המחדל?`,
+      run: async () => {
+        const res = await apiFetch(`/api/settings/work-hours/overrides/${o.id}`, { method: "DELETE" });
+        if (res.ok) { ok("החריגה בוטלה"); afterSave(); }
+        else fail((await res.json().catch(() => null))?.error || "ביטול החריגה נכשל");
+      },
+    });
   }
-  async function deleteType(t: HolidayType) {
-    const res = await apiFetch(`/api/settings/work-hours/holiday-types/${t.id}`, { method: "DELETE" });
-    if (res.ok) { ok("הסוג נמחק"); void loadStatic(); }
-    else fail((await res.json().catch(() => null))?.error || "מחיקת הסוג נכשלה");
+  function deleteType(t: HolidayType) {
+    setConfirm({
+      title: "מחיקת סוג חופשה", confirmText: "מחק",
+      message: `למחוק את סוג החופשה "${t.name}"?`,
+      run: async () => {
+        const res = await apiFetch(`/api/settings/work-hours/holiday-types/${t.id}`, { method: "DELETE" });
+        if (res.ok) { ok("הסוג נמחק"); void loadStatic(); }
+        else fail((await res.json().catch(() => null))?.error || "מחיקת הסוג נכשלה");
+      },
+    });
   }
   async function addType() {
     const n = newType.trim();
@@ -452,6 +477,18 @@ export default function WorkHoursPage() {
           onTypeAdded={(t) => setHolidayTypes((prev) => [...prev, t])}
         />
       )}
+
+      <ConfirmDialog
+        draggable={false}
+        open={confirm != null}
+        title={confirm?.title ?? ""}
+        message={confirm?.message}
+        confirmText={confirm?.confirmText}
+        destructive
+        busy={confirmBusy}
+        onConfirm={runConfirmed}
+        onCancel={() => setConfirm(null)}
+      />
 
       <Snackbar open={toast.open} autoHideDuration={4000} onClose={() => setToast((t) => ({ ...t, open: false }))} anchorOrigin={{ vertical: "bottom", horizontal: "left" }}>
         <Alert severity={toast.sev} onClose={() => setToast((t) => ({ ...t, open: false }))}>{toast.msg}</Alert>

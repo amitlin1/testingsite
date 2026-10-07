@@ -3,6 +3,7 @@ import React from "react";
 import { Info, Check } from "lucide-react";
 import type { PackageView } from "@/app/lib/packages/read";
 import PackageIdText from "@/app/components/packages/PackageIdText";
+import { useDraggable } from "@/components/ui/useDraggable";
 import { DIALOG_Z, BLUE, GREEN, HAIR, INK, MUTED, MUTED_LT, SHADOW } from "@/app/components/packages/packageUi";
 
 /**
@@ -45,14 +46,31 @@ export default function PackageWizardShell({
   busy?: boolean;
   children: React.ReactNode;
 }) {
+  // Backdrop click / Esc close the wizard like an MUI Dialog (but not mid-save).
+  // The press must start on the backdrop too, so a text drag out of the card doesn't close it.
+  const pressedBackdrop = React.useRef(false);
+  // Moved by the rail's title or the step title.
+  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable(open);
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, busy, onClose]);
+
   if (!open) return null;
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: DIALOG_Z - 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div dir="rtl" style={{ width: "min(1040px, 96vw)", height: "min(720px, 92vh)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK }}>
+    <div
+      onMouseDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (pressedBackdrop.current && e.target === e.currentTarget && !busy) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: DIALOG_Z - 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div ref={dragRef} onPointerDown={onDragStart} dir="rtl" style={{ width: "min(1040px, 96vw)", height: "min(720px, 92vh)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK, ...dragStyle }}>
         {/* Rail */}
         <div style={{ width: 268, flexShrink: 0, background: "#f5f5f7", borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", padding: "20px 18px", overflowY: "auto" }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>{stationName}</div>
-          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px", marginTop: 3 }}>{title}</div>
+          <div data-drag-handle="">
+            <div style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>{stationName}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px", marginTop: 3 }}>{title}</div>
+          </div>
 
           <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "12px 13px", marginTop: 14 }}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: MUTED }}>{pkg.item_type_desc}</div>
@@ -102,7 +120,7 @@ export default function PackageWizardShell({
         {/* Body */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 28px" }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+            <div data-drag-handle="" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 21, fontWeight: 700, letterSpacing: "-0.3px" }}>{stepTitle}</div>
                 <div style={{ fontSize: 13.5, color: MUTED, marginTop: 5, lineHeight: 1.5 }}>{stepSubtitle}</div>

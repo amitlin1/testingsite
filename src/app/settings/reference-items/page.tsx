@@ -8,6 +8,7 @@ import {
   Dialog,
   TextField,
   CircularProgress,
+  ConfirmDialog,
 } from "@/components/ui";
 import { Add as AddIcon } from "@/components/ui/icons";
 import { Close as CloseIcon } from "@/components/ui/icons";
@@ -109,6 +110,7 @@ export default function ReferenceItemsPage() {
   const [uploadType, setUploadType] = React.useState<string>("");
   const [formError, setFormError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [dragOver, setDragOver] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -343,9 +345,10 @@ export default function ReferenceItemsPage() {
     }
   };
 
+  // Asked through the app's ConfirmDialog (below), not window.confirm.
   const deleteItem = async () => {
     if (editingId == null) return;
-    if (!window.confirm("למחוק את פריט הייחוס? פעולה זו אינה הפיכה.")) return;
+    setConfirmDelete(false);
     setSaving(true);
     try {
       const res = await apiFetch(`/api/settings/reference-items/${editingId}`, { method: "DELETE" });
@@ -603,6 +606,7 @@ export default function ReferenceItemsPage() {
       >
         {/* header */}
         <Box
+          data-drag-handle=""
           sx={{
             display: "flex",
             alignItems: "flex-start",
@@ -917,7 +921,7 @@ export default function ReferenceItemsPage() {
         >
           {editingId != null && (
             <Button
-              onClick={deleteItem}
+              onClick={() => setConfirmDelete(true)}
               disabled={saving}
               sx={{
                 color: C.danger,
@@ -956,6 +960,17 @@ export default function ReferenceItemsPage() {
           </Button>
         </Box>
       </Dialog>
+
+      <ConfirmDialog
+        draggable={false}
+        open={confirmDelete}
+        title="מחיקת פריט ייחוס"
+        message="למחוק את פריט הייחוס? פעולה זו אינה ניתנת לביטול."
+        confirmText="מחק"
+        destructive
+        onConfirm={deleteItem}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </Box>
   );
 }

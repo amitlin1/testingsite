@@ -8,6 +8,7 @@ import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { newActionId } from "@/app/lib/metrics/action-id";
 import PackageWizardShell, { type ItemStepperRow, type WizardStep } from "./PackageWizardShell";
 import { PhotoUploader, PassFail, emptyPhotos, type Photos, type RefImg } from "./stationKit";
+import { NO_REF, ScanField, useReferenceLookup } from "./referenceScan";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import {
@@ -17,12 +18,13 @@ import {
 /**
  * אשף פתיחת מארז — design/Package Stations.dc.html (open). Runs on a
  * package-level opening station for a PACKAGE row (item.package is its view).
- * Six steps: scan → box photos → items (photo → weigh each) → count →
- * labels → done. On "הדפס וסיים" every item gets its own result at this
+ * Six steps: scan → box photos → items (scan → photo → weigh each) →
+ * count → labels → done. On "הדפס וסיים" every item gets its own result at this
  * station and then the box does, all under one submit id
- * (docs/packages/PLAN.md §4). Reference images / weights come from the
- * reference-item lookup: the box by its own makat + package type, each item
- * by the template's manufacturer SKU (DESIGN_REVIEW.md, decision 1).
+ * (docs/packages/PLAN.md §4). Reference images / weights come from what the
+ * worker scans: the box label is looked up among the package type's
+ * reference items, each item's label among its own type's. A scan that finds
+ * nothing warns and lets the worker go on without a reference.
  */
 
 const PT_PACKAGE = "package";
@@ -32,13 +34,17 @@ const TOLERANCE_PCT = 5;
 const STEPS: WizardStep[] = [
   { key: "scan", label: "סריקת מק״ט המארז", note: "מדבקת הקופסה" },
   { key: "boxPhoto", label: "צילום הקופסה", note: "3 זוויות + תקינות" },
-  { key: "items", label: "פריטים במארז", note: "צילום ושקילה לכל פריט" },
+  { key: "items", label: "פריטים במארז", note: "סריקה, צילום ושקילה לכל פריט" },
   { key: "count", label: "ספירה", note: "הוזן מול רשום" },
   { key: "labels", label: "מדבקות", note: "קופסה + פריטים" },
   { key: "done", label: "סיום", note: "" },
 ];
 
 type ItemWork = {
+  /** What is typed / scanned on the item's scan screen. */
+  scan: string;
+  /** The SKU the reference below was looked up by; null until scanned. */
+  sku: string | null;
   photos: Photos;
   refImages: RefImg[];
   refWeight: number | null;
@@ -47,19 +53,7 @@ type ItemWork = {
   done: boolean;
 };
 
-const freshWork = (): ItemWork => ({ photos: emptyPhotos(), refImages: [], refWeight: null, hasRU: null, meas: "", done: false });
-
-async function lookupReference(sku: string, itemTypeId: number | null) {
-  const qs = new URLSearchParams({ sku });
-  if (itemTypeId != null) qs.set("itemTypeId", String(itemTypeId));
-  const res = await apiFetch(`/api/testing/reference-lookup?${qs.toString()}`);
-  const d = await res.json().catch(() => ({}));
-  return {
-    hasRU: !!d.hasRU,
-    refWeight: d.referenceWeight != null && d.referenceWeight !== "" ? Number(d.referenceWeight) : null,
-    imagesByType: (d.imagesByType ?? {}) as Record<string, RefImg[]>,
-  };
-}
+const freshWork = (): ItemWork => ({ scan: "", sku: null, photos: emptyPhotos(), refImages: [], refWeight: null, hasRU: null, meas: "", done: false });
 
 function weightResult(ref: number | null, meas: string) {
   if (ref == null || meas.trim() === "") return null;
@@ -70,11 +64,6 @@ function weightResult(ref: number | null, meas: string) {
   return { diff, diffPct, pass: diffPct <= TOLERANCE_PCT };
 }
 
-const templateSkuOf = (pkg: PackageView, it: PackageItemView): string | null => {
-  const lines = Array.isArray(pkg.template_snapshot) ? (pkg.template_snapshot as { item_type_id?: number; manufacturer_sku?: string | null }[]) : [];
-  return lines.find((l) => l.item_type_id === it.item_type_id)?.manufacturer_sku ?? null;
-};
-
 type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
 
 export default function PackageOpenWizard({ open, onClose, item, station, workerId, workerName, onSubmit }: StationTestDialogProps) {
@@ -82,12 +71,10 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const [step, setStep] = React.useState(0);
   const [scan, setScan] = React.useState("");
   const [boxPhotos, setBoxPhotos] = React.useState<Photos>(emptyPhotos());
-  const [boxRef, setBoxRef] = React.useState<RefImg[]>([]);
-  const [boxHasRU, setBoxHasRU] = React.useState<boolean | null>(null);
   const [items, setItems] = React.useState<PackageItemView[]>(pkg?.items ?? []);
   const [work, setWork] = React.useState<Record<string, ItemWork>>({});
   const [itemIdx, setItemIdx] = React.useState<number | null>(null);
-  const [itemPhase, setItemPhase] = React.useState<"photo" | "weigh">("photo");
+  const [itemPhase, setItemPhase] = React.useState<"scan" | "photo" | "weigh">("scan");
   const [countInput, setCountInput] = React.useState("");
   const [labelsOpen, setLabelsOpen] = React.useState(false);
   const [labelsPrinted, setLabelsPrinted] = React.useState(false);
@@ -100,21 +87,26 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const submitIdRef = React.useRef<string | null>(null);
   const committedRef = React.useRef<Set<string>>(new Set());
 
-  // ---- open: reset + box reference ---------------------------------------
+  // ---- open: reset ----------------------------------------------------------
   React.useEffect(() => {
     if (!open || !pkg) return;
-    setStep(0); setScan(""); setBoxPhotos(emptyPhotos()); setBoxRef([]); setBoxHasRU(null);
-    setItems(pkg.items); setWork({}); setItemIdx(null); setItemPhase("photo"); setCountInput("");
+    setStep(0); setScan(""); setBoxPhotos(emptyPhotos());
+    setItems(pkg.items); setWork({}); setItemIdx(null); setItemPhase("scan"); setCountInput("");
     setLabelsOpen(false); setLabelsPrinted(false); setSubmitting(false); setError(null); setAddOpen(false);
     submitIdRef.current = null; committedRef.current = new Set();
-    const sku = (item.makat ?? "").trim();
-    if (sku && item.item_type_id != null) {
-      lookupReference(sku, item.item_type_id).then((r) => { setBoxHasRU(r.hasRU); setBoxRef(r.imagesByType[PT_PACKAGE] ?? []); }).catch(() => setBoxHasRU(false));
-    } else {
-      setBoxHasRU(false);
-    }
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
-  }, [open, pkg, item.makat, item.item_type_id]);
+  }, [open, pkg]);
+
+  // ---- reference lookups, driven by what is scanned -------------------------
+  // The box: its label among the package type's reference items. The answer
+  // also supplies the box-photo reference set, so it stays live past step 1.
+  const boxLookup = useReferenceLookup(scan, item.item_type_id, open);
+  const boxHasRU = boxLookup.ref ? boxLookup.ref.hasRU : null;
+  const boxRef = boxLookup.ref?.imagesByType[PT_PACKAGE] ?? [];
+  // The item being worked on: its label among its own type's reference items,
+  // only while its scan screen is up. Moving on copies the answer into its work.
+  const scanItem = itemIdx != null ? items[itemIdx] : null;
+  const itemLookup = useReferenceLookup(scanItem ? (work[scanItem.item_id]?.scan ?? "") : "", scanItem?.item_type_id, itemPhase === "scan");
 
   const workOf = (id: string): ItemWork => work[id] ?? freshWork();
   const patchWork = (id: string, patch: Partial<ItemWork>) => setWork((w) => ({ ...w, [id]: { ...(w[id] ?? freshWork()), ...patch } }));
@@ -144,22 +136,10 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
       }));
   };
 
-  const startItem = async (idx: number) => {
-    const it = items[idx];
-    setItemIdx(idx); setItemPhase("photo"); setError(null);
-    const w = workOf(it.item_id);
-    if (w.hasRU == null) {
-      setBusy(true);
-      try {
-        const sku = (templateSkuOf(pkg!, it) ?? it.manufacturer_no ?? it.makat ?? "").trim();
-        const r = sku ? await lookupReference(sku, it.item_type_id) : { hasRU: false, refWeight: null, imagesByType: {} as Record<string, RefImg[]> };
-        patchWork(it.item_id, { hasRU: r.hasRU, refWeight: r.refWeight, refImages: r.imagesByType[PT_PRODUCT] ?? [] });
-      } catch {
-        patchWork(it.item_id, { hasRU: false });
-      } finally {
-        setBusy(false);
-      }
-    }
+  // Every item starts at its scan screen; a reopened one shows its last scan,
+  // and moving on with it unchanged keeps the photos already taken.
+  const startItem = (idx: number) => {
+    setItemIdx(idx); setItemPhase("scan"); setError(null);
   };
 
   const reloadItems = async () => {
@@ -212,11 +192,12 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   let stepSubtitle = "";
   let systemMsg: string | null = null;
   if (inItemFlow && cur) {
-    if (itemPhase === "photo") { stepTitle = `${cur.item_type_desc} · צילום`; stepSubtitle = `פריט ${seq2(cur.package_seq)} · ${cur.makat ?? ""}`; systemMsg = "נא לצלם את הפריט בדיוק לפי תמונות הייחוס."; }
+    if (itemPhase === "scan") { stepTitle = `${cur.item_type_desc} · סריקה`; stepSubtitle = `פריט ${seq2(cur.package_seq)} · ${cur.makat ?? ""}`; systemMsg = "סרוק את מק״ט היצרן של הפריט — לפיו נטענים תמונות ומשקל הייחוס."; }
+    else if (itemPhase === "photo") { stepTitle = `${cur.item_type_desc} · צילום`; stepSubtitle = `פריט ${seq2(cur.package_seq)} · ${cur.makat ?? ""}`; systemMsg = "נא לצלם את הפריט בדיוק לפי תמונות הייחוס."; }
     else { stepTitle = `${cur.item_type_desc} · שקילה`; stepSubtitle = `פריט ${seq2(cur.package_seq)} · משקל ייחוס מהקטלוג`; systemMsg = "נא לשקול את הפריט ולהזין את המשקל שנמדד."; }
   } else if (stepKey === "scan") { stepSubtitle = "סרוק את מדבקת הקופסה כדי לפתוח את המארז בעמדה."; systemMsg = "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה."; }
   else if (stepKey === "boxPhoto") { stepSubtitle = "שלוש זוויות של הקופסה, ואז קביעת תקינות."; systemMsg = "נא לצלם את הקופסה בדיוק לפי תמונות הייחוס."; }
-  else if (stepKey === "items") { stepSubtitle = "כל פריט עובר צילום ושקילה. אפשר לעבוד בכל סדר."; }
+  else if (stepKey === "items") { stepSubtitle = "כל פריט עובר סריקה, צילום ושקילה. אפשר לעבוד בכל סדר."; }
   else if (stepKey === "count") { stepSubtitle = "מה שנספר בעמדה מול מה שנרשם בקליטה ומול התבנית."; }
   else if (stepKey === "labels") { stepSubtitle = "בחר מה להדפיס. מדבקת הקופסה נדרשת תמיד."; }
 
@@ -228,9 +209,11 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     // failed upload leaves nothing in storage, so continuing would silently
     // lose the photo. The worker removes the red shot and takes it again.
     const itemShots = curWork.photos.photos;
-    nextEnabled = itemPhase === "photo" ? curWork.photos.ok !== "" && !itemShots.some((s) => s.uploading || s.failed) : curWork.meas.trim() !== "";
+    nextEnabled = itemPhase === "scan" ? curWork.scan.trim() !== "" && !itemLookup.checking
+      : itemPhase === "photo" ? curWork.photos.ok !== "" && !itemShots.some((s) => s.uploading || s.failed)
+      : curWork.meas.trim() !== "";
     if (itemPhase === "photo" && itemShots.some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
-  } else if (stepKey === "scan") nextEnabled = scan.trim() !== "";
+  } else if (stepKey === "scan") nextEnabled = scan.trim() !== "" && !boxLookup.checking;
   else if (stepKey === "boxPhoto") {
     nextEnabled = boxPhotos.ok !== "" && !boxPhotos.photos.some((s) => s.uploading || s.failed);
     if (boxPhotos.photos.some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
@@ -239,8 +222,6 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   else if (stepKey === "count") nextEnabled = counted != null;
   else if (stepKey === "labels") nextLabel = "הדפס וסיים";
   else if (stepKey === "done") nextLabel = "חזרה לתור";
-
-  const scanMatches = scan.trim() !== "" && (scan.trim() === (item.makat ?? "").trim() || scan.trim().split("-")[0] === String(item.item_id));
 
   // ---- finish: one result per item, then the box ---------------------------
   const finish = async () => {
@@ -266,7 +247,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
             ItemID: Number(it.item_id), StationID: station.test_station_id, WorkerID: workerId ?? undefined, WorkerName: workerName || undefined, SubmitID: submitId,
             Result: passed ? 1 : 0, Passed: passed, Comments: w.photos.note || undefined,
             Details: {
-              sku: templateSkuOf(pkg, it) ?? it.manufacturer_no ?? null, hasRU: w.hasRU,
+              sku: w.sku, hasRU: w.hasRU,
               weight: r ? { reference: w.refWeight, measured: Number(w.meas), diffPct: Number(r.diffPct.toFixed(1)), pass: r.pass } : null,
               product: { ok: w.photos.ok, note: w.photos.note, photos: keysOf(w.photos) },
               package_id: String(item.item_id), opening: true,
@@ -299,7 +280,16 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const onNext = () => {
     if (!nextEnabled || submitting) return;
     setError(null);
-    if (inItemFlow && cur) {
+    if (inItemFlow && cur && curWork) {
+      if (itemPhase === "scan") {
+        const sku = curWork.scan.trim();
+        // Same scan as last time: the reference is already in the work, keep it.
+        if (sku !== curWork.sku) {
+          const ref = itemLookup.ref ?? NO_REF;
+          patchWork(cur.item_id, { sku, hasRU: ref.hasRU, refWeight: ref.refWeight, refImages: ref.imagesByType[PT_PRODUCT] ?? [] });
+        }
+        setItemPhase("photo"); return;
+      }
       if (itemPhase === "photo") { setItemPhase("weigh"); return; }
       patchWork(cur.item_id, { done: true }); setItemIdx(null); return;
     }
@@ -309,7 +299,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   };
   const onBack = () => {
     setError(null);
-    if (inItemFlow) { if (itemPhase === "weigh") setItemPhase("photo"); else setItemIdx(null); return; }
+    if (inItemFlow) { if (itemPhase === "weigh") setItemPhase("photo"); else if (itemPhase === "photo") setItemPhase("scan"); else setItemIdx(null); return; }
     if (step > 0 && stepKey !== "done") setStep((s) => s - 1);
   };
 
@@ -317,11 +307,12 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     ? items.map((it, i) => {
         const w = workOf(it.item_id);
         const active = itemIdx === i;
-        return { key: it.item_id, type: it.item_type_desc, badge: seq2(it.package_seq), stateLabel: w.done ? "הושלם" : active ? (itemPhase === "photo" ? "צילום" : "שקילה") : "ממתין", active, done: w.done, onClick: () => startItem(i) };
+        return { key: it.item_id, type: it.item_type_desc, badge: seq2(it.package_seq), stateLabel: w.done ? "הושלם" : active ? (itemPhase === "scan" ? "סריקה" : itemPhase === "photo" ? "צילום" : "שקילה") : "ממתין", active, done: w.done, onClick: () => startItem(i) };
       })
     : null;
 
   const choiceBox = (value: Photos["ok"], onPick: (v: "pass" | "fail") => void) => <PassFail value={value} onChange={onPick} />;
+
   const doneStep = stepKey === "done";
 
   return (
@@ -347,9 +338,15 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         )}
 
         {inItemFlow && cur && curWork ? (
-          itemPhase === "photo" ? (
+          itemPhase === "scan" ? (
+            <ScanField key={cur.item_id}
+              label="מק״ט יצרן של הפריט" placeholder="סרוק את מדבקת הפריט"
+              value={curWork.scan} onChange={(v) => patchWork(cur.item_id, { scan: v })} lookup={itemLookup} onSubmit={onNext}
+              found={(ref) => `נמצא פריט ייחוס${ref.name ? ` · ${ref.name}` : ""} · ${(ref.imagesByType[PT_PRODUCT] ?? []).length} תמונות ייחוס${ref.refWeight != null ? ` · ${ref.refWeight} גר׳` : ""}`}
+              missing={`לא נמצא פריט ייחוס של ${cur.item_type_desc} עם המק״ט הזה — אפשר להמשיך, הצילום והשקילה יהיו ללא ייחוס`} />
+          ) : itemPhase === "photo" ? (
             <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
-              {curWork.hasRU === false && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>לסוג הפריט אין פריט ייחוס — צלם לפי שיקול דעת והמשך.</div>}
+              {curWork.hasRU === false && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>לא נמצא פריט ייחוס למק״ט שנסרק ({curWork.sku}) — צלם לפי שיקול דעת והמשך.</div>}
               <PhotoUploader photos={curWork.photos.photos} refImages={curWork.refImages} onPick={(f) => pickItemPhoto(cur, f)}
                 onRemove={(i) => patchWork(cur.item_id, { photos: { ...curWork.photos, photos: curWork.photos.photos.filter((_, j) => j !== i) } })} />
               <div>
@@ -385,23 +382,14 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
             </div>
           )
         ) : stepKey === "scan" ? (
-          <div style={{ maxWidth: 420, marginTop: 20 }}>
-            <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>מק״ט המארז</div>
-            <input value={scan} onChange={(e) => setScan(e.target.value)} autoFocus placeholder="סרוק את מדבקת הקופסה"
-              onKeyDown={(e) => { if (e.key === "Enter") onNext(); }}
-              style={{ ...fieldInput, height: 52, borderRadius: 11, fontSize: 17, fontVariantNumeric: "tabular-nums", letterSpacing: 1, borderColor: scan.trim() === "" ? HAIR : FOCUS }} />
-            {scan.trim() !== "" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 9, background: scanMatches ? GREEN_BG : AMBER_BG, border: `1px solid ${scanMatches ? "rgba(31,138,91,0.22)" : AMBER_BORDER}`, borderRadius: 11, padding: "12px 14px", marginTop: 12 }}>
-                <span style={{ color: scanMatches ? GREEN : AMBER_INK, display: "inline-flex" }}>{scanMatches ? <Check size={18} strokeWidth={2} /> : <CircleAlert size={18} strokeWidth={2} />}</span>
-                <div style={{ fontSize: 14, fontWeight: 600, color: scanMatches ? GREEN : AMBER_INK }}>
-                  {scanMatches ? `זוהה ${pkg.item_type_desc} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}` : "הסריקה לא תואמת למק״ט או למזהה של המארז — בדוק שזו הקופסה הנכונה"}
-                </div>
-              </div>
-            )}
-          </div>
+          <ScanField
+            label="מק״ט המארז" placeholder="סרוק את מדבקת הקופסה"
+            value={scan} onChange={setScan} lookup={boxLookup} onSubmit={onNext}
+            found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
+            missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה. אפשר להמשיך, צילום הקופסה יהיה ללא ייחוס`} />
         ) : stepKey === "boxPhoto" ? (
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
-            {boxHasRU === false && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>לסוג המארז אין פריט ייחוס — צלם את הקופסה משלוש זוויות והמשך.</div>}
+            {boxHasRU === false && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>לא נמצא פריט ייחוס למק״ט המארז שנסרק — צלם את הקופסה משלוש זוויות והמשך.</div>}
             <PhotoUploader photos={boxPhotos.photos} refImages={boxRef} onPick={pickBoxPhoto} onRemove={(i) => setBoxPhotos((p) => ({ ...p, photos: p.photos.filter((_, j) => j !== i) }))} />
             <div>
               <div style={{ fontSize: 14.5, fontWeight: 600 }}>האריזה תקינה?</div>

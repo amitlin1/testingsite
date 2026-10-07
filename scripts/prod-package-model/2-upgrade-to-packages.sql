@@ -3,6 +3,7 @@
 -- =============================================================================
 -- נבנה אוטומטית על ידי build-upgrade.mjs מתוך:
 --   prisma/migrations/20260915120000_package_model/migration.sql   (הסכימה)
+--   prisma/migrations/20261006120000_package_contents_drop_manufacturer_sku/migration.sql
 --   scripts/prod-package-model/03-fix-production.sql   (סידור הנתונים)
 --
 -- מה קורה כשמריצים (בסדר הזה, הכול או כלום):
@@ -76,8 +77,8 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'items' AND column_name = 'parent_item_id') THEN
     RAISE EXCEPTION 'הסכימה כבר שודרגה (אין items.parent_item_id) — הסקריפט כבר רץ. לא בוצע כלום.';
   END IF;
-  IF EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '20260915120000_package_model') THEN
-    RAISE EXCEPTION 'המיגרציה 20260915120000_package_model כבר רשומה. לא בוצע כלום.';
+  IF EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name IN ('20260915120000_package_model', '20261006120000_package_contents_drop_manufacturer_sku')) THEN
+    RAISE EXCEPTION 'מיגרציית המארזים כבר רשומה. לא בוצע כלום.';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'route_run') THEN
     RAISE EXCEPTION 'טבלאות ה-ledger חסרות (route_run) — חסרות מיגרציות קודמות. לא בוצע כלום.';
@@ -403,10 +404,36 @@ BEGIN
   UPDATE metrics_schema_version SET version = 3, applied_at = now() WHERE id = 1;
 
 
+  -- ---------------------------------------------------- 20261006120000_package_contents_drop_manufacturer_sku
+  -- ============================================================================
+  -- package_contents: drop manufacturer_sku.
+  --
+  -- WHY: the opening wizard used to find each item's reference item through a
+  -- manufacturer SKU typed into the package template. That value was frozen onto
+  -- items.template_snapshot when the box was created, so fixing the template
+  -- never reached a box that already existed, and an empty cell meant "no
+  -- reference" with nothing on screen saying why. The wizard now finds the
+  -- reference item from what the worker SCANS: the box label against the
+  -- package type's reference items, each item's label against its own type's.
+  -- The template no longer carries a SKU at all.
+  --
+  -- Old snapshots keep a "manufacturer_sku" key inside their JSON; nothing reads
+  -- it any more, so they are left as they are.
+  --
+  -- Idempotent: the air-gap procedure re-runs migration files against an
+  -- already-migrated database.
+  -- ============================================================================
+
+  ALTER TABLE "package_contents" DROP COLUMN IF EXISTS "manufacturer_sku";
+
+
   -- ============================================================ ג. רישום
   INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
   VALUES (gen_random_uuid()::text, 'c4130d6ef545240422dd3e8d06937c6d089b2317b7a7e59c06896a4e7dc218d3', now(), '20260915120000_package_model', NULL, NULL, now(), 1);
   INSERT INTO fix_report(step, detail) VALUES ('0 מיגרציה', '20260915120000_package_model הוחלה ונרשמה');
+  INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
+  VALUES (gen_random_uuid()::text, '217ea777c24706d8faa5a0df3d00c1380634a1f5689f4411d60fadc3f11f4ad6', now(), '20261006120000_package_contents_drop_manufacturer_sku', NULL, NULL, now(), 1);
+  INSERT INTO fix_report(step, detail) VALUES ('0 מיגרציה', '20261006120000_package_contents_drop_manufacturer_sku הוחלה ונרשמה');
 
   -- ============================================================ ד. הנתונים
   -- ------------------------------------------------- 1. שורות מסלול יתומות
@@ -648,7 +675,7 @@ BEGIN
     SELECT test_station_id INTO v_station FROM test_stations
      WHERE test_station_type_id = v_open AND status <> 3 ORDER BY (status = 2) DESC, test_station_id LIMIT 1;
     SELECT COALESCE(jsonb_agg(jsonb_build_object('item_type_id', item_type_id, 'quantity', quantity, 'makat', makat, 'model', model,
-             'manufacturer_name', manufacturer_name, 'manufacturer_no', manufacturer_no, 'manufacturer_sku', manufacturer_sku,
+             'manufacturer_name', manufacturer_name, 'manufacturer_no', manufacturer_no,
              'route_number', route_number, 'sort_order', sort_order) ORDER BY sort_order, id), '[]'::jsonb)
       INTO v_template FROM package_contents WHERE package_type_id = v_pkg_type;
 

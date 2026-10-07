@@ -140,7 +140,8 @@ export default function ItemTable() {
         return false;
       }
       if (typeFilter && row.item_type_id !== Number(typeFilter)) return false;
-      if (shipFilter && row.shipment_id !== Number(shipFilter)) return false;
+      // /api/items serializes shipment_id as a string (BigInt-safe) — compare as strings
+      if (shipFilter && String(row.shipment_id) !== shipFilter) return false;
       return true;
     });
   }, [rows, search, statusFilter, typeFilter, shipFilter]);

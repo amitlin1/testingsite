@@ -26,6 +26,8 @@ import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
 import { apiFetch } from "@/lib/api/client";
 import { newActionId } from "@/app/lib/metrics/action-id";
 import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
+import { useSession } from "next-auth/react";
+import { isAdmin } from "@/lib/auth/roles";
 // Icons
 import { Search as SearchIcon } from "@/components/ui/icons";
 import { Clear as ClearIcon } from "@/components/ui/icons";
@@ -647,6 +649,10 @@ function TestingPageView() {
   const [activeWorkerName, setActiveWorkerName] = React.useState<string>("");
   // Auth: the logged-in user's worker id, from their Keycloak employeeNumber.
   const tokenWorkerId = useTokenWorkerId();
+  const { data: authSession } = useSession();
+  // Same rule as the shipment worker fields (useShipmentWorker): everyone
+  // starts as themselves; only a manager may switch to another worker.
+  const workerLocked = tokenWorkerId != null && !isAdmin(authSession?.roles ?? []);
   React.useEffect(() => {
     try {
       const raw = window.localStorage.getItem(WORKER_STORAGE_KEY);
@@ -658,9 +664,10 @@ function TestingPageView() {
       /* ignore */
     }
   }, []);
-  // When the token carries a worker id, THAT is the active worker — it overrides
-  // any manual / localStorage choice (the user can't act as someone else). Falls
-  // back to the manual picker when the user has no employeeNumber.
+  // When the token carries a worker id, THAT is the active worker on load — it
+  // overrides any manual / localStorage choice. A non-manager stays on it
+  // (workerLocked); a manager may then switch. Falls back to the manual picker
+  // when the user has no employeeNumber.
   React.useEffect(() => {
     if (tokenWorkerId == null) return;
     setActiveWorkerId(tokenWorkerId);
@@ -1176,7 +1183,7 @@ function TestingPageView() {
           activeWorkerId={activeWorkerId}
           activeWorkerName={activeWorkerName}
           onWorkerChange={handleWorkerChange}
-          workerLocked={tokenWorkerId != null}
+          workerLocked={workerLocked}
           onScan={() => { setScanError(null); setScanInput(""); setScannerOpen(true); }}
         />
 

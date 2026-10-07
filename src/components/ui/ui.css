@@ -318,11 +318,12 @@
 .sh-menu-item--danger { color: var(--color-destructive); }
 
 /* ------------------------------------------------------------- Dialog ----- */
+/* Plain grey, no blur: the same scrim as the package dialogs (packageUi
+   `overlay`), so every popup in the app sits on one backdrop. */
 .sh-dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.32);
-  backdrop-filter: saturate(180%) blur(4px);
+  background: rgba(0,0,0,0.4);
   z-index: 1300;
 }
 .sh-dialog-content {
@@ -351,6 +352,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+/* Popup headers that move the popup (useDraggable). Phones get none: the
+   popups fill the screen there and the header must keep scrolling. */
+@media (min-width: 600px) {
+  [data-drag-handle] { cursor: move; touch-action: none; user-select: none; }
+  [data-drag-handle] :is(button, a, input, textarea, select, [role="button"], [data-no-drag]) { cursor: auto; }
+  [data-drag-handle] :is(button, a, [role="button"]) { cursor: pointer; }
 }
 .sh-dialog-body { padding: 0 28px 24px; overflow-y: auto; font-size: 17px; line-height: 1.47; }
 .sh-dialog-actions {

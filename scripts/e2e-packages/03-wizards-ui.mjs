@@ -128,7 +128,10 @@ try {
   check("opening wizard opened", await waitText(page, "סריקת מק״ט המארז", 15000));
   await shot(page, "40-open-scan");
   await typeInto(page, "סרוק את מדבקת הקופסה", makat);
-  check("scan recognised the box", await waitText(page, "זוהה", 5000));
+  // The scan is looked up among the package type's reference items; this
+  // test box has none, so the answer is the warning that still lets it go on.
+  check("scan looked up the box reference", await waitText(page, "בדוק שזו הקופסה הנכונה", 5000));
+  check("box scan without a reference still continues", await waitEnabled(page, "המשך", 5000));
   await clickExact(page, "המשך");
   check("box photo step", await waitText(page, "האריזה תקינה?", 8000));
   await uploadPhoto(page);
@@ -140,6 +143,11 @@ try {
   await shot(page, "42-open-items");
   for (let i = 0; i < 2; i++) {
     await clickExact(page, "התחל");
+    check(`item ${i + 1}: scan phase`, await waitText(page, "מק״ט יצרן של הפריט", 8000));
+    await typeInto(page, "סרוק את מדבקת הפריט", "MK-6130");
+    check(`item ${i + 1}: scan looked up`, await waitText(page, "פריט ייחוס", 5000));
+    check(`item ${i + 1}: scan continues`, await waitEnabled(page, "המשך", 5000));
+    await clickExact(page, "המשך");
     check(`item ${i + 1}: photo phase`, await waitText(page, "הפריט תקין?", 8000));
     await uploadPhoto(page);
     await clickExact(page, "תקין");

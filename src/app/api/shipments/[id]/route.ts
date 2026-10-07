@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
-import { hasRole } from "@/lib/auth/roles";
+import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
 import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 
 /** withAuth passes only (req, ctx); recover the [id] from the path. */
@@ -17,6 +17,11 @@ export const PUT = withAuth(async (request: NextRequest, { session }: WithAuthCt
     const shipmentId = idFromReq(request);
 
     try {
+        // A sent shipment is closed for editing (the shipments table locks it too).
+        const current = await prisma.shipments.findUnique({ where: { id: shipmentId }, select: { is_sent: true } });
+        if (!current) return NextResponse.json({ error: "המשלוח לא נמצא" }, { status: 404 });
+        if (current.is_sent) return NextResponse.json({ error: "לא ניתן לערוך משלוח שנשלח" }, { status: 409 });
+
         const body = await request.json();
         const { shipment_code, customer_id, shipment_date, amount, source_id, shipment_items, sending_worker_id, sending_worker_name, recieving_worker_id, recieving_worker_name, makat } = body;
 
@@ -28,24 +33,20 @@ export const PUT = withAuth(async (request: NextRequest, { session }: WithAuthCt
             );
         }
 
-        // Same rule as POST /api/shipments: a storekeeper is always attributed
-        // as THEMSELVES for "עובד מקבל" — never trust a client-submitted id/name
-        // for that case. Anyone else falls through to the manual picker's
-        // submitted id/name.
-        let finalRecievingWorkerId: number | null = recieving_worker_id || null;
-        let finalRecievingWorkerName: string | null = recieving_worker_name || null;
-        if (hasRole(session.roles ?? [], "storekeeper")) {
-            const empNo = session.user.employeeNumber ? Number(session.user.employeeNumber) : NaN;
-            if (!Number.isFinite(empNo) || empNo <= 0) {
-                return NextResponse.json(
-                    { error: "לא ניתן לזהות אותך כמחסנאי — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו ב'הגדרות > משתמשים'." },
-                    { status: 400 },
-                );
-            }
-            finalRecievingWorkerId = empNo;
-            finalRecievingWorkerName =
-                session.user.displayName ?? session.user.name ?? session.user.preferredUsername;
-        }
+        // Same rule as POST /api/shipments (resolveShipmentWorker), except that an
+        // edit by a non-manager keeps whoever already received the shipment.
+        const existing = await prisma.shipments.findUnique({
+            where: { id: shipmentId },
+            select: { recieving_worker_id: true, recieving_worker_name: true },
+        });
+        const receiver = resolveShipmentWorker(
+            session,
+            { id: recieving_worker_id, name: recieving_worker_name },
+            existing ? { id: existing.recieving_worker_id, name: existing.recieving_worker_name } : null,
+        );
+        if ("error" in receiver) return NextResponse.json({ error: receiver.error }, { status: 400 });
+        const finalRecievingWorkerId = receiver.worker.id;
+        const finalRecievingWorkerName = receiver.worker.name;
 
         // Package model (docs/packages/PLAN.md §9.10): declared lines are
         // package types only — same rule as POST /api/shipments.

@@ -27,9 +27,7 @@ import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
 import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat } from '@/app/lib/qrParser';
 import { apiFetch } from "@/lib/api/client";
-import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
-import { useSession } from "next-auth/react";
-import { hasRole } from "@/lib/auth/roles";
+import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
 
 type ShipmentInsertPopupProps = {
     open: boolean;
@@ -64,16 +62,9 @@ export default function ShipmentInsertPopup({
     const [sources, setSources] = useState<{ id: number; desc: string }[]>([]);
     const theme = useTheme();
 
-    // The logged-in user IS the receiving worker when they hold the Keycloak
-    // "storekeeper" role — same "can't act as someone else" rule as the testing
-    // page's worker picker (see useTokenWorkerId). A storekeeper with no
-    // employeeNumber set can't be identified at all and is blocked below rather
-    // than silently degraded; anyone else falls back to the manual picker.
-    const { data: session } = useSession();
-    const tokenWorkerId = useTokenWorkerId();
-    const isStorekeeper = hasRole(session?.roles ?? [], "storekeeper");
-    const canAutoFillReceiver = isStorekeeper && tokenWorkerId != null;
-    const blockedNoEmployeeNumber = isStorekeeper && tokenWorkerId == null;
+    // "עובד מקבל" is the logged-in worker; only a manager may pick someone
+    // else (useShipmentWorker — the server applies the same rule).
+    const receiver = useShipmentWorker(workers);
 
     const {
         control,
@@ -104,6 +95,8 @@ export default function ShipmentInsertPopup({
     // When a shipment is filled from a scanned barcode its details are locked for
     // manual editing — only the fields the barcode does not provide stay editable.
     const [scanned, setScanned] = useState(false);
+    // The date is locked only when the barcode actually supplied a valid one.
+    const [scannedDate, setScannedDate] = useState(false);
 
     // Duplicate-shipment dialog (shown when a scanned shipment already exists).
     const [duplicate, setDuplicate] = useState<Shipment | null>(null);
@@ -153,8 +146,9 @@ export default function ShipmentInsertPopup({
         // Convert and set shipment date
         const convertedDate = convertQrDateToInputFormat(parsedData.supplyDate);
         if (convertedDate) {
-            setValue('shipment_date', new Date(convertedDate));
+            setValue('shipment_date', new Date(convertedDate), { shouldValidate: true });
         }
+        setScannedDate(!!convertedDate);
 
         // Lock the barcode-derived fields against manual editing.
         setScanned(true);
@@ -209,22 +203,19 @@ export default function ShipmentInsertPopup({
         if (open) {
             reset({ ...defaultShipment, source_id: 1, shipment_items: [{ item_type_id: 0, quantity: 0 }] });
             setScanned(false);
+            setScannedDate(false);
             setDuplicate(null);
             setIsSigned(false);
             sigCanvas.current?.clear();
         }
     }, [open, reset]);
 
-    // "עובד מקבל" means "the storekeeper who received it" — auto-fill and lock
-    // it to self only when the logged-in user actually holds that role. Their
-    // employeeNumber is trusted as-is now: recieving_worker_id has no DB
-    // foreign key anymore (the local `workers` table is gone), so there's no
-    // FK-safety check needed — just role + presence of an id.
+    // Every new shipment starts from the logged-in worker (a manager may change it).
     useEffect(() => {
-        if (!open || !canAutoFillReceiver) return;
-        setValue("recieving_worker_id", tokenWorkerId);
-        setValue("recieving_worker_name", workers.find((w) => w.worker_id === tokenWorkerId)?.worker_name ?? null);
-    }, [open, canAutoFillReceiver, tokenWorkerId, workers, setValue]);
+        if (!open || receiver.selfId == null) return;
+        setValue("recieving_worker_id", receiver.selfId);
+        setValue("recieving_worker_name", receiver.selfName);
+    }, [open, receiver.selfId, receiver.selfName, setValue]);
 
     const onSubmit = async (data: NewShipment) => {
         try {
@@ -422,7 +413,12 @@ export default function ShipmentInsertPopup({
                 </DialogActions>
             </Dialog>
 
-            <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            {/* ה-form חייב להיות flex column כדי ש-DialogContent יגלול והכפתורים יישארו גלויים */}
+            <form
+                onSubmit={handleSubmit(onSubmit)}
+                noValidate
+                style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}
+            >
                 <DialogContent>
                     {scanned && (
                         <Alert
@@ -433,9 +429,9 @@ export default function ShipmentInsertPopup({
                             הנתונים מולאו מסריקת ברקוד ונעולים לעריכה. ניתן להזין ידנית רק את שדות המארזים שאינם כלולים בברקוד.
                         </Alert>
                     )}
-                    {blockedNoEmployeeNumber && (
+                    {receiver.blocked && (
                         <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-                            לא ניתן לזהות אותך כמחסנאי — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
+                            לא ניתן לזהות אותך — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
                         </Alert>
                     )}
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
@@ -525,7 +521,7 @@ export default function ShipmentInsertPopup({
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
                                     <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
-                                        options={workers.filter(w => w.roles.includes("storekeeper"))}
+                                        options={receiver.options}
                                         getOptionLabel={(option) => option.worker_name}
                                         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
                                         value={workers.find((w) => w.worker_id === value) || null}
@@ -533,16 +529,15 @@ export default function ShipmentInsertPopup({
                                             onChange(newValue?.worker_id ?? null);
                                             setValue("recieving_worker_name", newValue?.worker_name ?? null);
                                         }}
-                                        disabled={scanned || canAutoFillReceiver}
-                                        // canAutoFillReceiver guarantees a matching row, so `value` above always
-                                        // resolves to it and its name renders as the combobox's value — no need
-                                        // to fall back to a raw-id placeholder here.
-                                        placeholder={canAutoFillReceiver ? "מזוהה מההתחברות" : "בחר עובד…"}
+                                        // Not from the barcode, so a scan doesn't lock it — only the role does.
+                                        disabled={receiver.locked}
+                                        placeholder={receiver.locked ? "מזוהה מההתחברות" : "בחר עובד…"}
                                         error={!!errors.recieving_worker_id}
                                         helperText={errors.recieving_worker_id?.message}
                                     />
                                 )}
                             />
+                            {receiver.locked && !receiver.blocked && <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 0.5 }}>מזוהה מההתחברות</Typography>}
                         </Box>
                         <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
                             <FieldLabel required>מקור</FieldLabel>
@@ -577,7 +572,7 @@ export default function ShipmentInsertPopup({
                                         type="date"
                                         fullWidth
                                         size="small"
-                                        disabled={scanned}
+                                        disabled={scannedDate}
                                         value={value ? new Date(value).toISOString().split("T")[0] : ""}
                                         onChange={(e) => onChange(e.target.value ? new Date(e.target.value) : null)}
                                         error={!!errors.shipment_date}
@@ -614,21 +609,7 @@ export default function ShipmentInsertPopup({
                                         )}
                                     />
                                 </Box>
-                                <Controller
-                                    name={`shipment_items.${index}.makat` as const}
-                                    control={control}
-                                    render={({ field }) => (
-                                        <TextField
-                                            {...field}
-                                            placeholder="מקט"
-                                            size="small"
-                                            sx={{ width: 130 }}
-                                            value={field.value ?? ""}
-                                            onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
-                                            error={!!errors.shipment_items?.[index]?.makat}
-                                        />
-                                    )}
-                                />
+
                                 <Controller
                                     name={`shipment_items.${index}.quantity` as const}
                                     control={control}
@@ -713,7 +694,7 @@ export default function ShipmentInsertPopup({
                     <Button
                         type="submit"
                         // הכפתור יהיה חסום אם הטופס לא תקין, שעדיין לא חתמו, או שלא ניתן לזהות את המחסנאי
-                        disabled={!isValid || !isSigned || blockedNoEmployeeNumber}
+                        disabled={!isValid || !isSigned || receiver.blocked}
                         variant="contained"
                         sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >

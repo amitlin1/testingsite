@@ -213,7 +213,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} draggable={false}>
         <DialogTitle>מחיקה</DialogTitle>
         <DialogContent>בטוח שברצונך למחוק את העמדה &quot;{rowToDelete?.test_station_desc}&quot;?</DialogContent>
         <DialogActions>

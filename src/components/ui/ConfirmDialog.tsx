@@ -17,6 +17,8 @@ export interface ConfirmDialogProps {
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Moved by its title like other dialogs. Delete confirmations pass false. */
+  draggable?: boolean;
 }
 
 /**
@@ -34,10 +36,11 @@ export function ConfirmDialog({
   busy,
   onConfirm,
   onCancel,
+  draggable = true,
 }: ConfirmDialogProps) {
   const Icon = destructive ? Warning : Info;
   return (
-    <Dialog open={open} onClose={() => { if (!busy) onCancel(); }} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={() => { if (!busy) onCancel(); }} maxWidth="xs" fullWidth draggable={draggable}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, justifyContent: "flex-start" }}>
         <Icon color={destructive ? "error" : "primary"} />
         <span style={{ flex: 1, minWidth: 0 }}>{title}</span>

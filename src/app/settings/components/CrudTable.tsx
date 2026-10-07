@@ -156,7 +156,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
   ];
 
   return (
-    <div dir="rtl" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
+    <div dir="rtl" style={{ maxWidth: 1180, margin: "auto", height: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
       {/* Items-style header: title + subtitle + count pill, blue add pill, then search row */}
       <SettingsToolbar
         title={title}
@@ -211,7 +211,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
       </Dialog>
 
       {/* Delete Confirm Dialog */}
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} draggable={false}>
         <DialogTitle>מחיקת {entityName}</DialogTitle>
         <DialogContent dir="rtl">
           <Typography>

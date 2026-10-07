@@ -112,7 +112,7 @@ async function main() {
   const contents = new Map(); // packageType -> lines
   for (const r of await q(
     `SELECT package_type_id, item_type_id, quantity, makat, model, manufacturer_name, manufacturer_no,
-            manufacturer_sku, route_number, sort_order
+            route_number, sort_order
        FROM package_contents ORDER BY package_type_id, sort_order, id`,
   )) {
     if (!contents.has(r.package_type_id)) contents.set(r.package_type_id, []);

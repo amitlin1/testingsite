@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { saveSignature } from "../../../lib/file-utils";
+import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
+import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
 
 // GET: Fetch sent history aggregated by item type and makat for a specific shipment
 export async function GET(request: NextRequest) {
@@ -30,10 +32,16 @@ export async function GET(request: NextRequest) {
 }
 
 // POST: Add new shipment history entries (Send Shipment)
-export async function POST(request: Request) {
+export const POST = withAuth(async (request: NextRequest, { session }: WithAuthCtx) => {
     try {
         const body = await request.json();
-        const { shipment_id, sending_worker_id, sending_worker_name, sent_date, sent_shipment_code, items, signature_base64 } = body;
+        const { shipment_id, sent_date, sent_shipment_code, items, signature_base64 } = body;
+
+        // "עובד מוציא": the logged-in worker, unless a manager picked someone else.
+        const sender = resolveShipmentWorker(session, { id: body.sending_worker_id, name: body.sending_worker_name });
+        if ("error" in sender) return NextResponse.json({ error: sender.error }, { status: 400 });
+        const sending_worker_id = sender.worker.id;
+        const sending_worker_name = sender.worker.name;
 
         // Basic validation
         if (!shipment_id || !sent_date || !sent_shipment_code || !items || !Array.isArray(items) || items.length === 0) {
@@ -42,6 +50,9 @@ export async function POST(request: Request) {
                 { status: 400 }
             );
         }
+        const shipment = await prisma.shipments.findUnique({ where: { id: Number(shipment_id) }, select: { is_sent: true } });
+        if (!shipment) return NextResponse.json({ error: "המשלוח לא נמצא" }, { status: 404 });
+        if (shipment.is_sent) return NextResponse.json({ error: "המשלוח כבר נשלח" }, { status: 409 });
         if (!signature_base64) {
             return NextResponse.json(
                 { error: "Signature is required" },
@@ -91,4 +102,4 @@ export async function POST(request: Request) {
             { status: 500 }
         );
     }
-}
+});

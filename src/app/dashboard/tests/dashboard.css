@@ -32,7 +32,6 @@
   --dash-strip-divider: rgba(255, 255, 255, 0.1);
   --dash-row-hover: rgba(0, 0, 0, 0.02);
   --dash-nav-hover: rgba(0, 0, 0, 0.035);
-  --dash-scrim: rgba(0, 0, 0, 0.28);
 
   /* §14.2 — height:100% and NOT 100vh. AppShell's content area is already
      calc(100vh - 56px) with overflowY:auto; 100vh here would add a second

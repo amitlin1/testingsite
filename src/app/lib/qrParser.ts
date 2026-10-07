@@ -58,18 +58,29 @@ export function isValidShipmentQr(qrPayload: string): boolean {
 
 /**
  * Convert date from DD/MM/YYYY format (QR format) to YYYY-MM-DD (input date format)
+ *
+ * A barcode scanner "types" the payload as keystrokes, so on a Hebrew keyboard
+ * layout the "/" key arrives as "." — accept "/", "." and "-" as separators,
+ * and a year-first YYYY-MM-DD as well.
+ *
  * @param dateStr - Date string in DD/MM/YYYY format
  * @returns Date string in YYYY-MM-DD format or null if invalid
  */
 export function convertQrDateToInputFormat(dateStr: string): string | null {
   if (!dateStr) return null;
-  
-  const parts = dateStr.split('/');
-  if (parts.length !== 3) return null;
-  
-  const [day, month, year] = parts;
-  if (!day || !month || !year) return null;
-  
-  // Return in YYYY-MM-DD format
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+  const parts = dateStr.trim().split(/[/.\-]/).map((p) => p.trim());
+  if (parts.length !== 3 || parts.some((p) => !/^\d+$/.test(p))) return null;
+
+  let [day, month, year] = parts;
+  if (parts[0].length === 4) [year, month, day] = parts;
+  if (year.length === 2) year = `20${year}`;
+  if (year.length !== 4) return null;
+
+  const iso = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  // Reject impossible dates (31/02, 13th month) — they'd make an Invalid Date downstream
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== iso) return null;
+
+  return iso;
 }
