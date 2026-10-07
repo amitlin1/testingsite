@@ -8,7 +8,7 @@
 -- against the application database. It is NOT idempotent — run it once, on an
 -- empty database.
 --
--- Migrations included (21):
+-- Migrations included (24):
 --   0_init
 --   20260217140614_add_poc_and_stokekeeper
 --   20260218000000_dashboard_optimization
@@ -30,6 +30,9 @@
 --   20260825000000_metrics_ledger_additive
 --   20260828090000_station_type_stale_timeout
 --   20260901000000_metrics_drop_snapshots
+--   20260902000000_metrics_item_lifecycle
+--   20260915120000_package_model
+--   20261006120000_package_contents_drop_manufacturer_sku
 -- ===========================================================================
 
 
@@ -2261,6 +2264,10 @@ DROP TABLE IF EXISTS
 CASCADE;
 
 -- 3. The dual-run scaffold ---------------------------------------------------
+-- metrics-guard: intentional-drop trg_metrics_drift, metrics_detect_drift, metrics_drift, metrics_drift_open
+-- (declared for scripts/check-migration-safety.js: these three objects are
+--  being RETIRED on purpose, not lost to a regenerated Prisma diff. The marker
+--  covers this file only; every other guarded object still blocks here.)
 -- metrics_drift existed to prove, over a release, that every item_routes writer
 -- also emits its ledger event. Once that week is green the trigger is pure cost
 -- on the hot path of every test submission. Ordered trigger -> function -> table
@@ -2334,6 +2341,605 @@ $$;
 UPDATE metrics_schema_version SET version = 2, applied_at = now() WHERE id = 1;
 
 
+-- ---------------------------------------------------------------------------
+-- migration: 20260902000000_metrics_item_lifecycle
+-- ---------------------------------------------------------------------------
+-- ===========================================================================
+--  מחזור החיים של פריט מול הלדג'ר — מחיקה, עריכה ושינוי סוג
+-- ===========================================================================
+--
+--  Three write paths reach `items` without going through metrics_record():
+--  deleting an item, correcting its master data, and changing its type. None of
+--  them is a state transition — an event says "the item moved", and here the
+--  item stopped existing, or its identity changed, or its whole route was
+--  replaced.
+--
+--  The ledger deliberately keeps no FK to `items` (§3.6: no read query joins
+--  items, so the dimensions are frozen onto every row). That is what makes the
+--  reads fast, and it is exactly why nothing raised when those paths skipped
+--  it: a deleted item simply kept being counted, forever, from rows nothing
+--  pointed at any more.
+--
+--  §1  deny_mutation gains one sanctioned escape hatch
+--  §2  metrics_forget_item      — the item is being hard-deleted
+--  §3  metrics_resync_item_dims — the item's frozen dimensions were corrected
+--  §4  metrics_abandon_run      — the item's type changed; the run is void
+-- ===========================================================================
+
+-- §1 חריג יחיד ל-append-only --------------------------------------------------
+--
+-- item_state_event is append-only, enforced by trg_ise_immutable, and
+-- corrections are INSERTs. Erasure is a different thing from a correction:
+-- when a row disappears from `items` there is no longer a subject for the
+-- events to be about, and a retraction event would still leave the run and its
+-- intervals standing.
+--
+-- The escape hatch is a transaction-local GUC rather than
+-- `ALTER TABLE ... DISABLE TRIGGER`, for two reasons: DISABLE takes an ACCESS
+-- EXCLUSIVE lock on item_state_event, which would stall every concurrent
+-- worker submit for the length of the delete, and it needs table ownership,
+-- which the application role has no other reason to hold. The same pattern is
+-- already used by isi_rebuild_run with app.isi_rebuilding.
+--
+-- set_config(..., true) is scoped to the transaction, and metrics_forget_item
+-- clears it as soon as its own DELETE returns, so the window is one statement
+-- wide. Every other UPDATE / DELETE / TRUNCATE still raises exactly as before.
+CREATE OR REPLACE FUNCTION deny_mutation() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+BEGIN
+  -- UPDATE as well as DELETE: metrics_forget_item clears the self-FK
+  -- (supersedes) inside the doomed set before removing it. TRUNCATE is never
+  -- part of a legitimate erase and stays blocked unconditionally.
+  IF current_setting('app.metrics_forget', true) = '1' AND TG_OP IN ('DELETE', 'UPDATE') THEN
+    RETURN NULL;
+  END IF;
+  RAISE EXCEPTION '% is append-only (attempted %)', TG_TABLE_NAME, TG_OP
+    USING HINT = 'corrections are INSERTs: see the correction recipe (retraction: kind=correction; replacement: kind=transition, reason=correction, supersedes=<event_id>)';
+END $$;
+
+-- §2 metrics_forget_item ------------------------------------------------------
+--
+-- Erase every ledger trace of one item. Called from DELETE /api/items/[id],
+-- in the SAME transaction as the `items` delete — the §4.8 guarantee applies
+-- here too: either the item and its ledger both go, or neither does.
+--
+-- Order is forced by the FKs: intervals reference both route_run and
+-- item_state_event, so they go first; events reference route_run, so the run
+-- goes last.
+--
+-- Idempotent: an item with no ledger rows (created before the ledger, or
+-- already forgotten) is a no-op. Returns the number of intervals removed,
+-- which is what the caller can meaningfully log.
+CREATE OR REPLACE FUNCTION metrics_forget_item(p_item_id bigint)
+RETURNS int
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE n_intervals int := 0;
+BEGIN
+  -- Same key metrics_open_run and isi_rebuild_run take, so a forget can never
+  -- interleave with a fold for the same item.
+  PERFORM pg_advisory_xact_lock(hashtextextended('isi:'||p_item_id::text, 0));
+
+  DELETE FROM item_state_interval WHERE item_id = p_item_id;
+  GET DIAGNOSTICS n_intervals = ROW_COUNT;
+
+  -- test_results.state_event_id is a bare bigint anchor with no FK (§8), so a
+  -- stale value would not raise — it would just point into nothing. The rows
+  -- are usually gone already by the time this runs; clearing them here keeps
+  -- the function correct whatever order the caller chose.
+  UPDATE test_results SET state_event_id = NULL
+   WHERE state_event_id IN (SELECT event_id FROM item_state_event WHERE item_id = p_item_id);
+
+  PERFORM set_config('app.metrics_forget', '1', true);
+
+  -- `supersedes` is a self-FK. Corrections always supersede an event on the
+  -- same item, so the whole chain is inside the doomed set and one statement
+  -- clears it — but a pointer from outside would abort the delete, so drop
+  -- those first rather than trusting the invariant.
+  UPDATE item_state_event SET supersedes = NULL
+   WHERE supersedes IN (SELECT event_id FROM item_state_event WHERE item_id = p_item_id)
+     AND item_id <> p_item_id;
+
+  DELETE FROM item_state_event WHERE item_id = p_item_id;
+
+  PERFORM set_config('app.metrics_forget', '', true);
+
+  DELETE FROM route_run WHERE item_id = p_item_id;
+
+  -- metrics_drift is dual-run scaffolding: it exists only between the additive
+  -- migration and the destructive drop a week later, which removes it. This
+  -- function has to work on both sides of that, and plpgsql resolves a static
+  -- table reference at execution time -- so a plain DELETE here would start
+  -- failing the moment the legacy drop ran.
+  IF to_regclass('public.metrics_drift') IS NOT NULL THEN
+    EXECUTE 'DELETE FROM metrics_drift WHERE item_id = $1' USING p_item_id;
+  END IF;
+
+  RETURN n_intervals;
+END $$;
+
+-- §3 metrics_resync_item_dims -------------------------------------------------
+--
+-- Push the item's current dimensions back onto its frozen copies. Called from
+-- PUT /api/items/[id] after the `items` update, in the same transaction.
+--
+-- It takes no dimension parameters on purpose: it re-reads items with the
+-- *same expressions* metrics_open_run uses to freeze them in the first place,
+-- so the two can never drift apart. Add a dimension to route_run and there is
+-- exactly one other place to change.
+--
+-- item_type_id is deliberately NOT synced here. Every other dimension is a
+-- correction of master data mistyped at intake ("this was always customer 12"),
+-- so the honest reading is that the old value was never true. The type is
+-- different: it decides which route the item walks, so changing it ends the
+-- current run and starts a new one (§4). The abandoned run really did happen
+-- under the old type, and relabelling it would move measured work onto a route
+-- that never ran it.
+CREATE OR REPLACE FUNCTION metrics_resync_item_dims(p_item_id bigint)
+RETURNS int
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE n_runs int := 0;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('isi:'||p_item_id::text, 0));
+
+  UPDATE route_run rr
+     SET customer_id    = it.customer_id,
+         shipment_id    = it.shipment_id,
+         parent_item_id = it.parent_item_id,
+         unit_id        = COALESCE(it.parent_item_id, it.item_id),
+         is_accessory   = it.parent_item_id IS NOT NULL,
+         serial_no      = COALESCE(TRIM(it.serial_no), '')
+    FROM items it
+   WHERE it.item_id = p_item_id
+     AND rr.item_id = p_item_id
+     AND (rr.customer_id, rr.shipment_id, rr.parent_item_id,
+          rr.unit_id, rr.is_accessory, rr.serial_no)
+         IS DISTINCT FROM
+         (it.customer_id, it.shipment_id, it.parent_item_id,
+          COALESCE(it.parent_item_id, it.item_id), it.parent_item_id IS NOT NULL,
+          COALESCE(TRIM(it.serial_no), ''));
+  GET DIAGNOSTICS n_runs = ROW_COUNT;
+
+  -- Intervals copy their dimensions from the run at fold time (isi_apply_one),
+  -- so they follow the run rather than re-reading items. item_type_id is left
+  -- alone here for the same reason it is above.
+  UPDATE item_state_interval i
+     SET customer_id  = rr.customer_id,
+         shipment_id  = rr.shipment_id,
+         unit_id      = rr.unit_id,
+         is_accessory = rr.is_accessory,
+         serial_no    = rr.serial_no
+    FROM route_run rr
+   WHERE rr.route_run_id = i.route_run_id
+     AND i.item_id = p_item_id
+     AND (i.customer_id, i.shipment_id, i.unit_id, i.is_accessory, i.serial_no)
+         IS DISTINCT FROM
+         (rr.customer_id, rr.shipment_id, rr.unit_id, rr.is_accessory, rr.serial_no);
+
+  RETURN n_runs;
+END $$;
+
+-- §4 metrics_abandon_run ------------------------------------------------------
+--
+-- Changing an item's type sends it back to the start of a different route:
+-- another type can have entirely different stations, so the steps already
+-- walked mean nothing on the new route. In ledger terms the current run is
+-- over — but it did NOT finish, and that distinction is the whole point of
+-- this function.
+--
+-- "Finished" has exactly one definition in the read path (§5.3ב): a run whose
+-- closed_at is set. Closing an abandoned run the ordinary way would therefore
+-- add it to the completion count, the completion percentage and both turnaround
+-- averages — an item counted as delivered because someone corrected its type.
+-- `is_trusted = false` is the sanctioned way out: every query that counts
+-- closures carries `rr.is_trusted` for exactly this purpose, so an untrusted run
+-- stays in the audit trail and out of the numbers.
+--
+-- The intervals keep their own is_trusted. That time really was spent, at real
+-- stations, by real people, so station load and queue durations should still
+-- see it. Only the route *completion* is void.
+--
+-- Afterwards the caller records a fresh `queued` transition. metrics_record
+-- finds no open run and calls metrics_open_run, which reads item_routes — by
+-- then already pointing at the new type — and freezes the new route's plan onto
+-- run_no + 1.
+--
+-- Returns the abandoned route_run_id, or NULL when the item had no open run.
+CREATE OR REPLACE FUNCTION metrics_abandon_run(p_item_id bigint, p_reason text)
+RETURNS bigint
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE v_run bigint; v_at timestamptz; v_ver int;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('isi:'||p_item_id::text, 0));
+
+  SELECT route_run_id INTO v_run FROM route_run
+   WHERE item_id = p_item_id AND closed_at IS NULL;
+  IF v_run IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  -- metrics_record clamps occurred_at forward past the item's last event, so an
+  -- open interval can legitimately start slightly in the future. Closing at a
+  -- plain clock_timestamp() would then build an empty or inverted range and trip
+  -- isi_shape. Stay one microsecond past the newest open interval.
+  SELECT GREATEST(clock_timestamp(),
+                  COALESCE(max(lower(i.valid_range)), clock_timestamp())
+                    + interval '1 microsecond')
+    INTO v_at
+    FROM item_state_interval i
+   WHERE i.item_id = p_item_id AND upper_inf(i.valid_range);
+
+  v_ver := current_calendar_version();
+
+  -- Closed exactly the way isi_apply_one closes an interval on a transition:
+  -- both clocks filled, business date stamped, calendar version pinned.
+  UPDATE item_state_interval SET
+    valid_range         = tstzrange(lower(valid_range), v_at, '[)'),
+    closed_at           = v_at,
+    close_business_date = business_date(v_at),
+    exit_reason         = p_reason,
+    wall_seconds        = EXTRACT(EPOCH FROM (v_at - lower(valid_range))),
+    work_seconds        = work_seconds_between(lower(valid_range), v_at, v_ver),
+    calendar_version    = v_ver
+   WHERE item_id = p_item_id AND upper_inf(valid_range) AND NOT is_terminal;
+
+  -- A terminal interval carries no durations (§3.6), so it closes without them.
+  UPDATE item_state_interval SET
+    valid_range         = tstzrange(lower(valid_range), v_at, '[)'),
+    closed_at           = v_at,
+    close_business_date = business_date(v_at),
+    exit_reason         = p_reason
+   WHERE item_id = p_item_id AND upper_inf(valid_range) AND is_terminal;
+
+  UPDATE route_run
+     SET closed_at    = v_at,
+         close_reason = p_reason,
+         is_trusted   = false
+   WHERE route_run_id = v_run;
+
+  RETURN v_run;
+END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20260915120000_package_model
+-- ---------------------------------------------------------------------------
+-- ===========================================================================
+--  מודל המארזים — docs/packages/PLAN.md
+-- ===========================================================================
+--
+--  "פריט אב / פריט ילד" הופך ל"מארז / פריט במארז". המארז הוא הקופסה: שורת
+--  items מסוג מארז (item_types.is_package) עם מסלול משלה; הפריטים שבתוכה
+--  מצביעים עליה דרך items.package_id (לשעבר parent_item_id).
+--
+--  §1  item_types.is_package + package_contents (תכולת מארז)
+--  §2  items: package_id, package_seq, package_next_seq, template_snapshot,
+--      serial_no nullable; מילוי package_seq לנתונים קיימים
+--  §3  test_stations_type.parents_only → package_level
+--  §4  item_status 6 — ממתין לפריטי המארז
+--  §5  ledger: שינויי שם (package_id, is_package_item), מצב חדש
+--      waiting_for_package_items, והפונקציות שנוגעות בעמודות האלה מוחלפות
+--      במלואן (metrics_open_run, isi_apply_one, metrics_resync_item_dims)
+--  §6  metrics_schema_version → 3
+--
+--  הנתונים הקיימים: הקישורים הישנים נשמרים כ-package_id ומקבלים package_seq
+--  לפי סדר המזהים, כדי שה-constraints יחזיקו. אב ישן הוא מבחינה מבנית
+--  "מארז" עד שסקריפט ההסבה (PLAN.md §8) ממיר אותו.
+-- ===========================================================================
+
+-- §1 סוגי מארז ותכולה ---------------------------------------------------------
+
+ALTER TABLE "item_types" ADD COLUMN "is_package" BOOLEAN NOT NULL DEFAULT false;
+-- Package types only: the route the intake form pre-selects (NULL = 1).
+ALTER TABLE "item_types" ADD COLUMN "default_route_number" INTEGER;
+
+CREATE TABLE "package_contents" (
+    "id"                SERIAL NOT NULL,
+    "package_type_id"   INTEGER NOT NULL,
+    "item_type_id"      INTEGER NOT NULL,
+    "quantity"          INTEGER NOT NULL,
+    "makat"             TEXT,
+    "model"             TEXT,
+    "manufacturer_name" TEXT,
+    "manufacturer_no"   TEXT,
+    "manufacturer_sku"  TEXT,
+    "route_number"      INTEGER NOT NULL DEFAULT 1,
+    "sort_order"        INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "package_contents_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "package_contents_quantity_chk" CHECK ("quantity" > 0),
+    CONSTRAINT "package_contents_route_chk" CHECK ("route_number" >= 1)
+);
+
+CREATE UNIQUE INDEX "package_contents_type_uq" ON "package_contents"("package_type_id", "item_type_id");
+CREATE INDEX "idx_package_contents_package_type" ON "package_contents"("package_type_id");
+
+ALTER TABLE "package_contents"
+  ADD CONSTRAINT "fk_package_contents_package_type"
+  FOREIGN KEY ("package_type_id") REFERENCES "item_types"("item_type_id") ON DELETE CASCADE ON UPDATE NO ACTION;
+ALTER TABLE "package_contents"
+  ADD CONSTRAINT "fk_package_contents_item_type"
+  FOREIGN KEY ("item_type_id") REFERENCES "item_types"("item_type_id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- §2 items ---------------------------------------------------------------------
+
+ALTER TABLE "items" RENAME COLUMN "parent_item_id" TO "package_id";
+ALTER TABLE "items" RENAME CONSTRAINT "items_parent_item_id_fkey" TO "items_package_id_fkey";
+
+ALTER TABLE "items" ADD COLUMN "package_seq"       SMALLINT;
+ALTER TABLE "items" ADD COLUMN "package_next_seq"  SMALLINT NOT NULL DEFAULT 1;
+ALTER TABLE "items" ADD COLUMN "template_snapshot" JSONB;
+ALTER TABLE "items" ALTER COLUMN "serial_no" DROP NOT NULL;
+
+-- Legacy rows: every item that already points at another item gets a
+-- position inside it, in item_id order, and the "package" learns the next
+-- position to hand out. Structural only — see the header.
+UPDATE "items" i
+   SET "package_seq" = s.rn
+  FROM (SELECT item_id, row_number() OVER (PARTITION BY package_id ORDER BY item_id) AS rn
+          FROM "items" WHERE package_id IS NOT NULL) s
+ WHERE i.item_id = s.item_id;
+
+UPDATE "items" p
+   SET "package_next_seq" = c.n + 1
+  FROM (SELECT package_id, count(*) AS n FROM "items" WHERE package_id IS NOT NULL GROUP BY package_id) c
+ WHERE p.item_id = c.package_id;
+
+ALTER TABLE "items" ADD CONSTRAINT "items_package_seq_shape" CHECK (("package_id" IS NULL) = ("package_seq" IS NULL));
+ALTER TABLE "items" ADD CONSTRAINT "items_package_seq_range" CHECK ("package_seq" IS NULL OR ("package_seq" BETWEEN 1 AND 99));
+CREATE UNIQUE INDEX "items_package_seq_uq" ON "items"("package_id", "package_seq");
+CREATE INDEX "idx_items_package_id" ON "items"("package_id");
+
+-- §3 עמדות ברמת מארז -----------------------------------------------------------
+
+ALTER TABLE "test_stations_type" RENAME COLUMN "parents_only" TO "package_level";
+
+-- §4 סטטוס 6 -------------------------------------------------------------------
+-- A package that reached the closing step before all of its items did.
+-- DO NOTHING on purpose: if id 6 is already taken by a locally-defined status
+-- the migration must not overwrite it — reconcile by hand.
+
+INSERT INTO "item_status" ("item_status_id", "item_status_desc")
+VALUES (6, 'ממתין לפריטי המארז')
+ON CONFLICT ("item_status_id") DO NOTHING;
+
+SELECT setval(pg_get_serial_sequence('item_status', 'item_status_id'),
+              GREATEST((SELECT max(item_status_id) FROM item_status), 1), true);
+
+-- §5 ledger --------------------------------------------------------------------
+
+ALTER TABLE "route_run"           RENAME COLUMN "parent_item_id" TO "package_id";
+ALTER TABLE "route_run"           RENAME COLUMN "is_accessory"   TO "is_package_item";
+ALTER TABLE "item_state_interval" RENAME COLUMN "is_accessory"   TO "is_package_item";
+
+-- Three new reasons (§3.4 taxonomy): the box starts waiting for its items,
+-- the last item arrives, and a whole box is sent back to its opening step.
+-- The reason vocabulary is a CHECK constraint, so it is replaced wholesale
+-- (a CHECK cannot be altered in place). The drop is deliberate:
+-- metrics-guard: intentional-drop ise_reason_chk
+ALTER TABLE item_state_event DROP CONSTRAINT IF EXISTS ise_reason_chk;
+ALTER TABLE item_state_event ADD CONSTRAINT ise_reason_chk CHECK (reason IN (
+  'item_created','test_started','result_submitted','sent_to_research','returned_to_route',
+  'research_note','released_by_user','released_stale','no_station_for_type',
+  'station_reassigned','manual_override','legacy_import','correction',
+  'package_items_pending','package_items_ready','package_reset'));
+
+-- Waiting state with no station: the package sits before the closing step
+-- until its last item arrives. is_waiting so waiting-time queries see it,
+-- NOT at_station so it never counts as station work. Sorted between queued
+-- and done.
+INSERT INTO metric_state
+  (state_key, legacy_status_id, label_he, is_terminal, is_waiting, is_active_work, is_research, at_station, sort_order)
+VALUES
+  ('waiting_for_package_items', 6, 'ממתין לפריטי המארז', false, true, false, false, false, 25)
+ON CONFLICT (state_key) DO UPDATE
+  SET label_he = EXCLUDED.label_he, legacy_status_id = EXCLUDED.legacy_status_id;
+
+-- metrics_open_run: identical to the ledger migration's text except for the
+-- renamed columns. unit_id = COALESCE(package_id, item_id) — the package for
+-- an item in a box, the package itself for a package row.
+CREATE OR REPLACE FUNCTION metrics_open_run(p_item_id bigint, p_at timestamptz)
+RETURNS bigint LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE v_run bigint; v_no int;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('isi:'||p_item_id::text, 0));
+
+  UPDATE item_state_interval
+     SET valid_range = tstzrange(lower(valid_range), p_at, '[)'),
+         closed_at   = p_at,
+         close_business_date = business_date(p_at),
+         exit_reason = 'reroute'
+   WHERE item_id = p_item_id AND upper_inf(valid_range) AND is_terminal;
+
+  SELECT 1 + COALESCE(max(run_no), 0) INTO v_no FROM route_run WHERE item_id = p_item_id;
+
+  INSERT INTO route_run (item_id, run_no, route_number, item_type_id, planned_steps, plan_digest,
+                         opened_at, customer_id, shipment_id, package_id, unit_id,
+                         is_package_item, serial_no, is_trusted)
+  SELECT ir.item_id, v_no, ir.route_number, ir.item_type_id,
+         COALESCE(tr.route_steps, '{}'), md5(COALESCE(tr.route_steps, '{}')::text),
+         p_at, it.customer_id, it.shipment_id, it.package_id,
+         COALESCE(it.package_id, it.item_id), it.package_id IS NOT NULL,
+         COALESCE(TRIM(it.serial_no), ''), true
+  FROM item_routes ir
+  JOIN items it ON it.item_id = ir.item_id
+  LEFT JOIN testing_routes tr
+         ON tr.item_type_id = ir.item_type_id AND tr.route_number = ir.route_number
+  WHERE ir.item_id = p_item_id
+  RETURNING route_run_id INTO v_run;
+
+  IF v_run IS NULL THEN
+    RAISE EXCEPTION 'metrics_open_run: no item_routes row for item %', p_item_id;
+  END IF;
+  RETURN v_run;
+END $$;
+
+-- isi_apply_one: the fold. Two changes against the ledger migration's text:
+-- the renamed columns, and waiting_for_package_items carries the station TYPE
+-- it is blocked before (planned_steps[step_no]) exactly as queued does, so the
+-- closing-station queue can be read from the ledger for packages too.
+CREATE OR REPLACE FUNCTION isi_apply_one(e item_state_event) RETURNS void
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE
+  v_open item_state_interval; v_ver int;
+  v_terminal boolean; v_at_station boolean;
+  v_attempt int; v_run route_run; v_sttype int;
+  v_prev_at timestamptz; v_prev_seq smallint; v_prev_id bigint;
+BEGIN
+  IF e.kind <> 'transition' THEN RETURN; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('isi:'||e.item_id::text, 0));
+  v_ver := current_calendar_version();
+  SELECT * INTO v_run FROM route_run WHERE route_run_id = e.route_run_id;
+
+  IF COALESCE(current_setting('app.isi_rebuilding', true), '') = '1' THEN
+    SELECT * INTO v_open FROM item_state_interval
+     WHERE route_run_id = e.route_run_id AND upper_inf(valid_range) FOR UPDATE;
+  ELSE
+    SELECT * INTO v_open FROM item_state_interval
+     WHERE item_id = e.item_id AND upper_inf(valid_range) FOR UPDATE;
+  END IF;
+
+  IF FOUND THEN
+    SELECT ev.occurred_at, ev.seq, ev.event_id INTO v_prev_at, v_prev_seq, v_prev_id
+      FROM item_state_event ev WHERE ev.event_id = v_open.entry_event_id;
+
+    IF (e.occurred_at, e.seq, e.event_id) < (v_prev_at, v_prev_seq, v_prev_id) THEN
+      IF COALESCE(current_setting('app.isi_rebuilding', true), '') = '1' THEN
+        RAISE EXCEPTION 'out-of-order event % during rebuild of run %', e.event_id, e.route_run_id;
+      END IF;
+      PERFORM isi_rebuild_run(v_open.route_run_id);
+      RETURN;
+    ELSIF (e.occurred_at, e.seq) = (v_prev_at, v_prev_seq) THEN
+      IF e.to_state = v_open.state_key THEN RETURN; END IF;
+      RAISE EXCEPTION 'zero-length interval for item % (% -> %) at %',
+        e.item_id, v_open.state_key, e.to_state, e.occurred_at;
+    END IF;
+
+    IF v_open.is_terminal THEN
+      UPDATE item_state_interval SET
+        valid_range = tstzrange(lower(valid_range), e.occurred_at, '[)'),
+        closed_at = e.occurred_at, close_business_date = business_date(e.occurred_at),
+        exit_event_id = e.event_id, exit_reason = e.reason
+      WHERE interval_id = v_open.interval_id;
+    ELSE
+      UPDATE item_state_interval SET
+        valid_range      = tstzrange(lower(valid_range), e.occurred_at, '[)'),
+        closed_at        = e.occurred_at,
+        close_business_date = business_date(e.occurred_at),
+        exit_event_id    = e.event_id,
+        exit_reason      = e.reason,
+        exited_by_worker_id   = e.worker_id,
+        exited_by_worker_name = e.worker_name,
+        wall_seconds     = EXTRACT(EPOCH FROM (e.occurred_at - lower(valid_range))),
+        work_seconds     = work_seconds_between(lower(valid_range), e.occurred_at, v_ver),
+        calendar_version = v_ver
+      WHERE interval_id = v_open.interval_id;
+    END IF;
+  END IF;
+
+  SELECT is_terminal, at_station INTO v_terminal, v_at_station
+    FROM metric_state WHERE state_key = e.to_state;
+
+  IF v_terminal THEN
+    UPDATE route_run SET closed_at = e.occurred_at, close_reason = e.reason
+     WHERE route_run_id = e.route_run_id AND closed_at IS NULL;
+  END IF;
+
+  SELECT 1 + count(*) INTO v_attempt FROM item_state_interval
+   WHERE route_run_id = e.route_run_id AND step_no = e.step_no AND state_key = e.to_state;
+
+  v_sttype := CASE
+    WHEN v_at_station THEN e.station_type_id
+    WHEN e.to_state IN ('queued', 'waiting_for_package_items')
+                      THEN NULLIF(v_run.planned_steps[e.step_no], 0)
+    ELSE NULL END;
+
+  INSERT INTO item_state_interval (route_run_id,item_id,state_key,is_terminal,step_no,attempt_no,
+    station_id,station_type_id,entered_by_worker_id,entered_by_worker_name,
+    entry_reason,entry_event_id,valid_range,start_business_date,
+    customer_id,shipment_id,item_type_id,unit_id,is_package_item,serial_no,is_trusted)
+  VALUES (e.route_run_id,e.item_id,e.to_state,v_terminal,e.step_no,v_attempt,
+    CASE WHEN v_at_station THEN e.station_id END, v_sttype,
+    CASE WHEN v_at_station THEN e.worker_id END,
+    CASE WHEN v_at_station THEN e.worker_name END,
+    e.reason,e.event_id,tstzrange(e.occurred_at,NULL,'[)'),business_date(e.occurred_at),
+    v_run.customer_id,v_run.shipment_id,v_run.item_type_id,v_run.unit_id,
+    v_run.is_package_item,v_run.serial_no, e.is_trusted AND v_run.is_trusted);
+END $$;
+
+-- metrics_resync_item_dims: same expressions as metrics_open_run, renamed.
+CREATE OR REPLACE FUNCTION metrics_resync_item_dims(p_item_id bigint)
+RETURNS int
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE n_runs int := 0;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('isi:'||p_item_id::text, 0));
+
+  UPDATE route_run rr
+     SET customer_id     = it.customer_id,
+         shipment_id     = it.shipment_id,
+         package_id      = it.package_id,
+         unit_id         = COALESCE(it.package_id, it.item_id),
+         is_package_item = it.package_id IS NOT NULL,
+         serial_no       = COALESCE(TRIM(it.serial_no), '')
+    FROM items it
+   WHERE it.item_id = p_item_id
+     AND rr.item_id = p_item_id
+     AND (rr.customer_id, rr.shipment_id, rr.package_id,
+          rr.unit_id, rr.is_package_item, rr.serial_no)
+         IS DISTINCT FROM
+         (it.customer_id, it.shipment_id, it.package_id,
+          COALESCE(it.package_id, it.item_id), it.package_id IS NOT NULL,
+          COALESCE(TRIM(it.serial_no), ''));
+  GET DIAGNOSTICS n_runs = ROW_COUNT;
+
+  UPDATE item_state_interval i
+     SET customer_id     = rr.customer_id,
+         shipment_id     = rr.shipment_id,
+         unit_id         = rr.unit_id,
+         is_package_item = rr.is_package_item,
+         serial_no       = rr.serial_no
+    FROM route_run rr
+   WHERE rr.route_run_id = i.route_run_id
+     AND i.item_id = p_item_id
+     AND (i.customer_id, i.shipment_id, i.unit_id, i.is_package_item, i.serial_no)
+         IS DISTINCT FROM
+         (rr.customer_id, rr.shipment_id, rr.unit_id, rr.is_package_item, rr.serial_no);
+
+  RETURN n_runs;
+END $$;
+
+-- §6 גרסת סכמה ----------------------------------------------------------------
+-- The app's write gate (src/app/lib/metrics/schema-gate.ts) requires 3 from
+-- this image on: an older image would write parent_item_id / is_accessory
+-- into columns that no longer exist.
+UPDATE metrics_schema_version SET version = 3, applied_at = now() WHERE id = 1;
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261006120000_package_contents_drop_manufacturer_sku
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- package_contents: drop manufacturer_sku.
+--
+-- WHY: the opening wizard used to find each item's reference item through a
+-- manufacturer SKU typed into the package template. That value was frozen onto
+-- items.template_snapshot when the box was created, so fixing the template
+-- never reached a box that already existed, and an empty cell meant "no
+-- reference" with nothing on screen saying why. The wizard now finds the
+-- reference item from what the worker SCANS: the box label against the
+-- package type's reference items, each item's label against its own type's.
+-- The template no longer carries a SKU at all.
+--
+-- Old snapshots keep a "manufacturer_sku" key inside their JSON; nothing reads
+-- it any more, so they are left as they are.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database.
+-- ============================================================================
+
+ALTER TABLE "package_contents" DROP COLUMN IF EXISTS "manufacturer_sku";
+
+
 -- ===========================================================================
 -- Prisma migration bookkeeping
 -- ===========================================================================
@@ -2355,71 +2961,71 @@ CREATE TABLE IF NOT EXISTS public._prisma_migrations (
 
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '7e93286860212b2e723e6353b02c8036833ad9e6ee82475b9bf9a9f4ec3c2dcc', now(), '0_init', now(), 1
+SELECT gen_random_uuid()::text, 'c1adb2da4e20a3462d7cfa1372f454055a728d4522dc81288714ee70a6b1ff7b', now(), '0_init', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '0_init');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'b86a2309bec8883b5b8745215af4811874a3331a62d5fa9b92f3990d5db25542', now(), '20260217140614_add_poc_and_stokekeeper', now(), 1
+SELECT gen_random_uuid()::text, '129ad2bdb73406f04ec6600217902d7f5f35588b12ce031a4f286e0912758fb3', now(), '20260217140614_add_poc_and_stokekeeper', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260217140614_add_poc_and_stokekeeper');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'e51d7ba7fcc2abcdcdecdeeb42f45873af7774145d68e30c079f5e7a29ccbfa3', now(), '20260218000000_dashboard_optimization', now(), 1
+SELECT gen_random_uuid()::text, '5f52e4526c54efee041fe42961a137b464f7cb66aa52ac9496e6c4787c9d33b2', now(), '20260218000000_dashboard_optimization', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260218000000_dashboard_optimization');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '5bda4bc61d33b49a0c929b01d8493f225ef333c35ae303fe7364c1a344e34c14', now(), '20260224085257_update_database_structure', now(), 1
+SELECT gen_random_uuid()::text, 'fd9ca147ba9cc1d41e267fd83031d0d5fcbee6caaec8e7a5af2e08f37b9c3611', now(), '20260224085257_update_database_structure', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260224085257_update_database_structure');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '4fd64ec766727e98ba5325c148e0f5bba9ffb553d2cb12a2ea4475ba914b83a9', now(), '20260528000000_add_file_objects', now(), 1
+SELECT gen_random_uuid()::text, '5f5c338d53746050435f5146bcb086b817508dc44a650a67933f9e8a0cd8f4da', now(), '20260528000000_add_file_objects', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260528000000_add_file_objects');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '67d6229068ddf572a309e4ee4d0f4dade5e0bcd8f427c9fb071236a2bdcfda58', now(), '20260604000000_add_updated_by_to_file_objects', now(), 1
+SELECT gen_random_uuid()::text, '8849ed1877e67659e6241892c1b62a0fe54c49adb6613e57efdbbe76f63dfc95', now(), '20260604000000_add_updated_by_to_file_objects', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260604000000_add_updated_by_to_file_objects');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '984965ff64ce090e4b4a9693b05896054aa2755ec1f91a129ddabc926ac22214', now(), '20260709084717_add_reference_items', now(), 1
+SELECT gen_random_uuid()::text, '8019ca61a68bb2254e047fd3d3e74039244069f5eea58dd41dd9a94a8e6b439d', now(), '20260709084717_add_reference_items', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260709084717_add_reference_items');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'a042b6600c184cf096bf46414cf02ccdf3de2fcfaa21e8e4d694971a024ef64d', now(), '20260712085744_add_reference_weight', now(), 1
+SELECT gen_random_uuid()::text, '03811785e44dde50a3e52b728279490fb76058180b509576a7795a889a48f691', now(), '20260712085744_add_reference_weight', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260712085744_add_reference_weight');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '85143be9c6e79b770348e658904b6cf7cd19680b08f54bfa3dfb27d2678f459d', now(), '20260712124950_add_test_results', now(), 1
+SELECT gen_random_uuid()::text, '2b87f6fd064611824101bb54a63db526aef96cedff932c5c8ad0d8da9dfc0e50', now(), '20260712124950_add_test_results', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260712124950_add_test_results');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'b126ca8bdc1eecebc8c1483eae7f75d74878bf87c96f295c306af690a6ebda5d', now(), '20260713131814_add_settings_unique_constraints', now(), 1
+SELECT gen_random_uuid()::text, 'ab9ff34a02996b1a63010912b0284d7754168c05ff6850586c01f05ff1a32b86', now(), '20260713131814_add_settings_unique_constraints', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260713131814_add_settings_unique_constraints');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '269033383c5b5f383f99c739d33f106dff71b66289ea788bdca3ddc567c8aa89', now(), '20260719000000_add_photo_types', now(), 1
+SELECT gen_random_uuid()::text, '341b2cd639d9eb4eba5cccb24e60bd9fd1a05dcdd3b6f566f6dd9d6ef450e360', now(), '20260719000000_add_photo_types', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260719000000_add_photo_types');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '994f3517b78704e9cd382e1fbf4bd7d7c02b220398ba7a79262378c8916a83cb', now(), '20260719120000_add_disassembly_assembly_photo_types', now(), 1
+SELECT gen_random_uuid()::text, 'db5160d8bb0b64eafd2ab0d683a2ca3ca30dec9aa2d978e6993e94fc20abbde5', now(), '20260719120000_add_disassembly_assembly_photo_types', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260719120000_add_disassembly_assembly_photo_types');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '97781e7899dc56702c8defe52a75032bcca2ed3e4c1144c2af5bbcbc98cf022c', now(), '20260720100000_add_station_type_parents_only', now(), 1
+SELECT gen_random_uuid()::text, 'cc622684f3d31764bb7b66fd99830baf503b0a80b616a545ae23ed8cc4c05497', now(), '20260720100000_add_station_type_parents_only', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260720100000_add_station_type_parents_only');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'd13c39f6dc0ec9525209870657c94084208de24743cddc77a5e443a8c1be6c54', now(), '20260727120000_add_work_hours', now(), 1
+SELECT gen_random_uuid()::text, 'a8bb17d78a8b08fcd71d77f65a967b69f6ac5e1cb4097f64feea33a720a61850', now(), '20260727120000_add_work_hours', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260727120000_add_work_hours');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, 'f83434385aaff2c8b57af28de5a55b088d95557b91818137c949c905f7956747', now(), '20260816103131_add_worker_name_snapshots', now(), 1
+SELECT gen_random_uuid()::text, '1c8f7bf35a93b5623e959e43980bc5ad35318de2436c028d72f545f59940eb5f', now(), '20260816103131_add_worker_name_snapshots', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260816103131_add_worker_name_snapshots');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '7a77ea889e4002467586e3b57e907bad92ddd06a68a58efd1755b585cf6a5abb', now(), '20260816103434_drop_local_workers_table', now(), 1
+SELECT gen_random_uuid()::text, '8e50068c771164ff72bb4fe4783ed75b82c85193028ad0af39ba6d66e9d7f6d9', now(), '20260816103434_drop_local_workers_table', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260816103434_drop_local_workers_table');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '472323f00f5d3a2045521b38081c46daa6ee97140302cdf2539b137e52cff6ef', now(), '20260816114251_makat_to_text', now(), 1
+SELECT gen_random_uuid()::text, '42324749850738357abdbdbcf3543a695398f1d9b7f58b131e7809f85cb4edf3', now(), '20260816114251_makat_to_text', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260816114251_makat_to_text');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
@@ -2435,5 +3041,17 @@ SELECT gen_random_uuid()::text, '35b07e3b670c1b4c550b72b7fdf3df70e738ccd108e3719
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260828090000_station_type_stale_timeout');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-SELECT gen_random_uuid()::text, '11b1718f275184aff0dfd820176cc6e591cfc4b6ec0da959251e926461ac9830', now(), '20260901000000_metrics_drop_snapshots', now(), 1
+SELECT gen_random_uuid()::text, '8831b32d646b0142acbf4d41a589a914f1cb7e7a47d7141bcafcdceb8d253a48', now(), '20260901000000_metrics_drop_snapshots', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260901000000_metrics_drop_snapshots');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '3845fc3db7d6fbc9669a7d6b65636be43c2718d9238d77890ee6e61f585df05e', now(), '20260902000000_metrics_item_lifecycle', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260902000000_metrics_item_lifecycle');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, 'c4130d6ef545240422dd3e8d06937c6d089b2317b7a7e59c06896a4e7dc218d3', now(), '20260915120000_package_model', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20260915120000_package_model');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '217ea777c24706d8faa5a0df3d00c1380634a1f5689f4411d60fadc3f11f4ad6', now(), '20261006120000_package_contents_drop_manufacturer_sku', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261006120000_package_contents_drop_manufacturer_sku');
