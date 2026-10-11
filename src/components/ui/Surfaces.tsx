@@ -47,7 +47,7 @@ export const Card = forwardRef<HTMLElement, CardProps>(function Card(
   const base: React.CSSProperties = {
     backgroundColor: "var(--color-canvas)",
     border: "1px solid var(--color-hairline)",
-    borderRadius: "var(--r-lg)",
+    borderRadius: "var(--r-card)",   // one card radius (tables and KPI tiles use it too)
   };
   return (
     <Component ref={ref} style={{ ...base, ...style }} {...(rest as AnyProps)}>

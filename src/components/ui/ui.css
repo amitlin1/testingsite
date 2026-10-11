@@ -315,7 +315,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 /* Dense: the package screens' field metrics. The primitive's × (.sh-ac-clear) and
    arrow (.sh-ac-arrow) are pinned at fixed insets (× 38px, arrow 12px) so every
    field lines up to the pixel; the end padding keeps text clear of both. */
-.sh-input-wrap.sh-combo--dense { position: relative; height: 44px; min-height: 0; border-radius: 8px; padding-inline: 13px 66px; gap: 0; }
+.sh-input-wrap.sh-combo--dense { position: relative; height: 44px; min-height: 0; border-radius: var(--r-field); padding-inline: 13px 66px; gap: 0; }
 .sh-input-wrap.sh-combo--dense.sh-combo--h38 { height: 38px; }
 .sh-input-wrap.sh-combo--dense.sh-combo--h34 { height: 34px; }
 .sh-input-wrap.sh-combo--dense.sh-combo--icon { padding-inline-start: 38px; }

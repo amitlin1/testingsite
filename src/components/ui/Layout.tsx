@@ -181,7 +181,8 @@ export function ListItemAvatar({ children, style, sx, ...rest }: React.HTMLAttri
 }
 export function ListSubheader({ children, style, ...rest }: React.HTMLAttributes<HTMLLIElement>) {
   return (
-    <li style={{ listStyle: "none", padding: "8px 16px", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--color-ink-muted-48)", ...style }} {...rest}>
+    // No uppercase / tracking: Hebrew has no capitals, so they only cost legibility.
+    <li style={{ listStyle: "none", padding: "8px 16px", fontSize: "var(--text-fine)", fontWeight: 600, color: "var(--color-ink-muted-48)", ...style }} {...rest}>
       {children}
     </li>
   );
