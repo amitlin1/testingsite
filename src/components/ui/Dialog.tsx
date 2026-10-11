@@ -117,8 +117,9 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
       ref={ref}
       className={cn("sh-dialog-body", className)}
       style={{
+        // Top only: DialogActions draws its own top border, so a bottom one
+        // here doubled the line above the buttons.
         borderTop: dividers ? "1px solid var(--color-hairline)" : undefined,
-        borderBottom: dividers ? "1px solid var(--color-hairline)" : undefined,
         ...sxToStyle(sx),
         ...style,
       }}
