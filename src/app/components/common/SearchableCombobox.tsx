@@ -58,6 +58,9 @@ export interface ComboboxProps<T>
   getOptionSubtitle?: (option: T) => string | null | undefined;
   /** Icon rendered at the inline-start of the trigger input. */
   startIcon?: React.ReactNode;
+  /** Accessible name when the field has no visible label (e.g. a filter in a
+   *  row of placeholders). A visible `label` wins. */
+  ariaLabel?: string;
   /** Fixed container width; when omitted the field is full-width. */
   width?: number | string;
   /** Forwarded to the trigger TextField. */
@@ -95,6 +98,7 @@ export default function SearchableCombobox<T>({
   renderOptionContent,
   getOptionSubtitle,
   startIcon,
+  ariaLabel,
   width,
   noOptionsText = "אין תוצאה תואמת",
   inputSx,
@@ -222,8 +226,9 @@ export default function SearchableCombobox<T>({
                 autoComplete: "off",
                 onMouseDown: (e) => e.preventDefault(),
                 "aria-labelledby": labelledBy,
+                "aria-label": labelledBy ? undefined : ariaLabel,
               }
-            : { ...params.inputProps, "aria-labelledby": labelledBy };
+            : { ...params.inputProps, "aria-labelledby": labelledBy, "aria-label": labelledBy ? undefined : ariaLabel };
           // The primitive already shows its own spinner while loading.
           const endAdornment = locked ? <LockIcon className="sh-combo-lock" fontSize={15} /> : params.InputProps.endAdornment;
           return (
