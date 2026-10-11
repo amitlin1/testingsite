@@ -49,9 +49,10 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   user-select: none;
   white-space: nowrap;
   transition: transform var(--t-press) var(--ease-press),
-    background-color .2s ease, border-color .2s ease, color .2s ease;
+    background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
 }
-.sh-btn:active:not(:disabled):not([aria-disabled="true"]) { transform: scale(.95); }
+.sh-btn:active:not(:disabled):not([aria-disabled="true"]) { transform: scale(.97); }
+.sh-btn[aria-busy="true"] { cursor: progress; }
 .sh-btn:focus-visible {
   outline: 2px solid var(--color-primary-focus);
   outline-offset: 2px;
@@ -64,12 +65,12 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 }
 .sh-btn--full { width: 100%; }
 
-/* contained (default) */
+/* contained (default). 15px / 40px: the control size of this dense UI. */
 .sh-btn--contained {
   border-radius: var(--r-pill);
-  font-size: 17px;
-  padding: 11px 22px;
-  min-height: 38px;
+  font-size: var(--text-body);
+  padding: 9px 20px;
+  min-height: 40px;
   color: var(--color-on-primary);
   background: var(--color-primary);
 }
@@ -78,14 +79,16 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-btn--contained.sh-btn--error:hover:not(:disabled) { background: var(--color-destructive-hover); }
 .sh-btn--contained.sh-btn--success { background: var(--color-success-ink); }
 .sh-btn--contained.sh-btn--success:hover:not(:disabled) { background: var(--color-success-ink-hover); }
+.sh-btn--contained.sh-btn--warning { background: var(--color-warning-ink); }
+.sh-btn--contained.sh-btn--warning:hover:not(:disabled) { background: color-mix(in srgb, var(--color-warning-ink) 88%, black); }
 .sh-btn--contained.sh-btn--inherit { background: var(--color-ink); color: var(--color-on-dark); }
 
 /* outlined (secondary) */
 .sh-btn--outlined {
   border-radius: var(--r-pill);
-  font-size: 17px;
-  padding: 10px 21px;
-  min-height: 38px;
+  font-size: var(--text-body);
+  padding: 8px 19px;
+  min-height: 40px;
   background: transparent;
   color: var(--color-primary);
   border: 1px solid var(--color-primary);
@@ -93,14 +96,16 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-btn--outlined:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
 .sh-btn--outlined.sh-btn--error { color: var(--color-destructive); border-color: var(--color-destructive); }
 .sh-btn--outlined.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); }
-.sh-btn--outlined.sh-btn--inherit { color: var(--color-ink); border-color: var(--color-hairline); }
+.sh-btn--outlined.sh-btn--warning { color: var(--color-warning-ink); border-color: var(--color-warning-ink); }
+.sh-btn--outlined.sh-btn--inherit { color: var(--color-ink); border-color: var(--color-border-strong); }
 .sh-btn--outlined.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
 
 /* text */
 .sh-btn--text {
   border-radius: var(--r-sm);
-  font-size: 17px;
+  font-size: var(--text-body);
   padding: 8px 12px;
+  min-height: 36px;
   background: transparent;
   color: var(--color-primary);
   border-color: transparent;
@@ -108,13 +113,14 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-btn--text:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
 .sh-btn--text.sh-btn--error { color: var(--color-destructive); }
 .sh-btn--text.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); }
+.sh-btn--text.sh-btn--warning { color: var(--color-warning-ink); }
 .sh-btn--text.sh-btn--inherit { color: var(--color-ink); }
 .sh-btn--text.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
 
 /* dark utility */
 .sh-btn--dark {
   border-radius: var(--r-sm);
-  font-size: 14px;
+  font-size: var(--text-body-sm);
   padding: 8px 15px;
   min-height: 32px;
   background: var(--color-ink);
@@ -124,9 +130,9 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-btn--dark:hover:not(:disabled) { background: var(--color-surface-black); }
 
 /* sizes (override padding/height) */
-.sh-btn--small { font-size: 14px; padding: 7px 14px; min-height: 32px; }
+.sh-btn--small { font-size: var(--text-body-sm); padding: 6px 14px; min-height: 32px; }
 .sh-btn--small.sh-btn--text { padding: 5px 10px; }
-.sh-btn--large { font-size: 18px; padding: 13px 26px; min-height: 44px; }
+.sh-btn--large { font-size: var(--text-lead); padding: 11px 24px; min-height: 44px; }
 
 /* ----------------------------------------------- Direction icons ------- */
 /* ArrowBack / ArrowForward mean a reading direction, and lucide draws them
