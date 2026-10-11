@@ -71,7 +71,7 @@ export const ToggleButton = forwardRef<HTMLButtonElement, ToggleButtonProps>(fun
         background: isSelected ? tint.bg : "transparent",
         color: isSelected ? tint.fg : "var(--color-ink-muted-48)",
         fontWeight: isSelected ? 600 : 400,
-        transition: "background .15s ease, color .15s ease",
+        transition: "background var(--dur-fast) ease, color var(--dur-fast) ease",
         opacity: isDisabled ? 0.5 : 1,
         ...sxToStyle(sx),
         ...style,

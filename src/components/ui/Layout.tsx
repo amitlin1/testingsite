@@ -208,7 +208,7 @@ export const Collapse = forwardRef<HTMLDivElement, CollapseProps>(function Colla
         display: "grid",
         gridTemplateRows: horizontal ? undefined : open ? "1fr" : "0fr",
         gridTemplateColumns: horizontal ? (open ? "1fr" : "0fr") : undefined,
-        transition: "grid-template-rows .25s ease, grid-template-columns .25s ease",
+        transition: "grid-template-rows var(--dur-slow) var(--ease-out), grid-template-columns var(--dur-slow) var(--ease-out)",
         ...sxToStyle(sx),
         ...style,
       }}

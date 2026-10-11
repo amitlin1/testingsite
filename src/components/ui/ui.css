@@ -74,13 +74,13 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   color: var(--color-on-primary);
   background: var(--color-primary);
 }
-.sh-btn--contained:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-primary-hover); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--contained:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-primary-hover); } }
 .sh-btn--contained.sh-btn--error { background: var(--color-destructive); }
-.sh-btn--contained.sh-btn--error:hover:not(:disabled) { background: var(--color-destructive-hover); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--contained.sh-btn--error:hover:not(:disabled) { background: var(--color-destructive-hover); } }
 .sh-btn--contained.sh-btn--success { background: var(--color-success-ink); }
-.sh-btn--contained.sh-btn--success:hover:not(:disabled) { background: var(--color-success-ink-hover); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--contained.sh-btn--success:hover:not(:disabled) { background: var(--color-success-ink-hover); } }
 .sh-btn--contained.sh-btn--warning { background: var(--color-warning-ink); }
-.sh-btn--contained.sh-btn--warning:hover:not(:disabled) { background: color-mix(in srgb, var(--color-warning-ink) 88%, black); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--contained.sh-btn--warning:hover:not(:disabled) { background: color-mix(in srgb, var(--color-warning-ink) 88%, black); } }
 .sh-btn--contained.sh-btn--inherit { background: var(--color-ink); color: var(--color-on-dark); }
 
 /* outlined (secondary) */
@@ -93,12 +93,12 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   color: var(--color-primary);
   border: 1px solid var(--color-primary);
 }
-.sh-btn--outlined:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--outlined:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); } }
 .sh-btn--outlined.sh-btn--error { color: var(--color-destructive); border-color: var(--color-destructive); }
-.sh-btn--outlined.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--outlined.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); } }
 .sh-btn--outlined.sh-btn--warning { color: var(--color-warning-ink); border-color: var(--color-warning-ink); }
 .sh-btn--outlined.sh-btn--inherit { color: var(--color-ink); border-color: var(--color-border-strong); }
-.sh-btn--outlined.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--outlined.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); } }
 
 /* text */
 .sh-btn--text {
@@ -110,12 +110,12 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   color: var(--color-primary);
   border-color: transparent;
 }
-.sh-btn--text:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--text:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); } }
 .sh-btn--text.sh-btn--error { color: var(--color-destructive); }
-.sh-btn--text.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--text.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); } }
 .sh-btn--text.sh-btn--warning { color: var(--color-warning-ink); }
 .sh-btn--text.sh-btn--inherit { color: var(--color-ink); }
-.sh-btn--text.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--text.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); } }
 
 /* dark utility */
 .sh-btn--dark {
@@ -127,7 +127,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   color: var(--color-on-dark);
   border-color: transparent;
 }
-.sh-btn--dark:hover:not(:disabled) { background: var(--color-surface-black); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--dark:hover:not(:disabled) { background: var(--color-surface-black); } }
 
 /* sizes (override padding/height) */
 .sh-btn--small { font-size: var(--text-body-sm); padding: 6px 14px; min-height: 32px; }
@@ -153,10 +153,10 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   border: none;
   cursor: pointer;
   color: var(--color-ink);
-  transition: background-color .15s ease, color .15s ease, transform var(--t-press) var(--ease-press);
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--t-press) var(--ease-press);
 }
-.sh-iconbtn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 5%, transparent); }
-.sh-iconbtn:active:not(:disabled) { transform: scale(.92); }
+@media (hover: hover) and (pointer: fine) { .sh-iconbtn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 5%, transparent); } }
+.sh-iconbtn:active:not(:disabled) { transform: scale(.95); }
 .sh-iconbtn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
 .sh-iconbtn:disabled { color: var(--color-ink-muted-48); cursor: not-allowed; }
 .sh-iconbtn--small { width: 32px; height: 32px; }
@@ -164,7 +164,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-iconbtn--primary { color: var(--color-primary); }
 .sh-iconbtn--error { color: var(--color-destructive); }
 .sh-iconbtn--round { border-radius: var(--r-full); background: var(--color-surface-chip-translucent); }
-.sh-iconbtn--round:hover:not(:disabled) { background: rgba(190,190,195,.8); }
+@media (hover: hover) and (pointer: fine) { .sh-iconbtn--round:hover:not(:disabled) { background: rgba(190,190,195,.8); } }
 
 /* --------------------------------------------------------------- Input ---- */
 .sh-input {
@@ -179,7 +179,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   border-radius: var(--r-sm);
   padding: 10px 14px;
   outline: none;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 .sh-input::placeholder { color: var(--color-ink-muted-48); }
 .sh-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
@@ -213,7 +213,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
   padding-inline: 14px;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 .sh-input-wrap:focus-within { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
 .sh-input-wrap.sh-input--error { border-color: var(--color-destructive); }
@@ -267,7 +267,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   border-radius: var(--r-sm);
   padding: 10px 14px;
   outline: none;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 .sh-select-trigger:focus, .sh-select-trigger[data-state="open"] {
   border-color: var(--color-primary-focus);
@@ -428,7 +428,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   border: none;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background .2s ease;
+  transition: background var(--dur-fast) ease;
   padding: 0;
 }
 .sh-switch[data-state="checked"] { background: var(--color-primary); }
@@ -440,7 +440,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   border-radius: 50%;
   background: var(--color-canvas);
   transform: translateX(3px);
-  transition: transform .2s ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 .sh-switch[data-state="checked"] .sh-switch-thumb { transform: translateX(21px); }
 :dir(rtl) .sh-switch-thumb { transform: translateX(-3px); }
@@ -499,9 +499,9 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: color .15s ease, border-color .15s ease;
+  transition: color var(--dur-fast) ease, border-color var(--dur-fast) ease;
 }
-.sh-tab:hover { color: var(--color-ink); }
+@media (hover: hover) and (pointer: fine) { .sh-tab:hover { color: var(--color-ink); } }
 .sh-tab[data-state="active"], .sh-tab[aria-selected="true"] {
   color: var(--color-ink);
   font-weight: var(--fw-semibold);
@@ -509,20 +509,20 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 }
 
 /* ------------------------------------------------------- ListItemButton -- */
-.sh-list-button { transition: background-color .12s ease, color .12s ease; text-decoration: none; color: inherit; }
-.sh-list-button:hover { background: var(--color-canvas-parchment); }
+.sh-list-button { transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; text-decoration: none; color: inherit; }
+@media (hover: hover) and (pointer: fine) { .sh-list-button:hover { background: var(--color-canvas-parchment); } }
 .sh-list-button--selected { background: color-mix(in srgb, var(--color-primary) 8%, transparent); color: var(--color-primary); font-weight: var(--fw-semibold); }
-.sh-list-button--selected:hover { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
+@media (hover: hover) and (pointer: fine) { .sh-list-button--selected:hover { background: color-mix(in srgb, var(--color-primary) 12%, transparent); } }
 
 /* ---------------------------------------------------------- Link ---------- */
-.sh-link:hover { color: var(--color-primary-hover); }
+@media (hover: hover) and (pointer: fine) { .sh-link:hover { color: var(--color-primary-hover); } }
 .sh-link--always { text-decoration: underline; }
-.sh-link--none:hover { text-decoration: none; }
-.sh-link:not(.sh-link--none):not(.sh-link--always):hover { text-decoration: underline; }
+@media (hover: hover) and (pointer: fine) { .sh-link--none:hover { text-decoration: none; } }
+@media (hover: hover) and (pointer: fine) { .sh-link:not(.sh-link--none):not(.sh-link--always):hover { text-decoration: underline; } }
 
 /* --------------------------------------------------- CardActionArea ------- */
-.sh-card-action { transition: background-color .12s ease; }
-.sh-card-action:hover { background: color-mix(in srgb, var(--color-ink) 2%, transparent); }
+.sh-card-action { transition: background-color var(--dur-fast) ease; }
+@media (hover: hover) and (pointer: fine) { .sh-card-action:hover { background: color-mix(in srgb, var(--color-ink) 2%, transparent); } }
 
 /* ------------------------------------------------- App rail (navBar) ---- */
 /* The dark side navigation. Inline styles cannot express its states, so they
@@ -600,14 +600,14 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 
 /* ------------------------------------------------------- Feedback ------ */
 .sh-alert-close { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -2px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; flex-shrink: 0; }
-.sh-alert-close:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); }
+@media (hover: hover) and (pointer: fine) { .sh-alert-close:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); } }
 .sh-alert-close:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
 .sh-progress-fill { transform-origin: left; }
 :dir(rtl) > .sh-progress-fill { transform-origin: right; }
 
 /* ------------------------------------------------------------ Chip / Tag --- */
 .sh-chip-delete { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-inline-end: -4px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; }
-.sh-chip-delete:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); }
+@media (hover: hover) and (pointer: fine) { .sh-chip-delete:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); } }
 .sh-chip-delete:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
 .sh-tag { display: inline-flex; align-items: center; gap: 5px; font-weight: var(--fw-semibold); line-height: 1.3; border-radius: var(--r-pill); white-space: nowrap; }
 .sh-tag--sm { font-size: var(--text-micro); padding: 3px 10px; }
@@ -651,8 +651,8 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   white-space: nowrap;
 }
 .sh-table tbody td { padding: 12px; font-size: 14px; color: var(--color-ink); vertical-align: middle; }
-.sh-table tbody tr { border-top: 1px solid var(--color-divider-soft); transition: background .12s ease; }
-.sh-table tbody tr:hover { background: var(--color-surface-pearl); }
+.sh-table tbody tr { border-top: 1px solid var(--color-divider-soft); transition: background var(--dur-fast) ease; }
+@media (hover: hover) and (pointer: fine) { .sh-table tbody tr:hover { background: var(--color-surface-pearl); } }
 .sh-table--sticky thead th, .sh-table--sticky thead td { position: sticky; top: 0; z-index: 2; }
 .sh-table tbody tr.sh-row--clickable { cursor: pointer; }
 /* Inset ring: an outside one is clipped by the scrolling table frame. */

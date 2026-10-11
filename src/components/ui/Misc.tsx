@@ -137,9 +137,10 @@ function makeTransition(kind: "fade" | "grow") {
   return forwardRef<HTMLElement, TransitionProps>(function Transition({ in: inProp = true, unmountOnExit, children, style }, ref) {
     if (unmountOnExit && !inProp) return null;
     const t: React.CSSProperties = {
-      transition: "opacity .2s ease, transform .2s ease",
+      // Nothing appears from nothing: grow starts at .95 (not .85), ease-out.
+      transition: "opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out)",
       opacity: inProp ? 1 : 0,
-      transform: kind === "grow" ? (inProp ? "scale(1)" : "scale(0.85)") : undefined,
+      transform: kind === "grow" ? (inProp ? "scale(1)" : "scale(0.95)") : undefined,
       transformOrigin: "center",
     };
     return React.cloneElement(children, {

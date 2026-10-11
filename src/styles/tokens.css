@@ -136,8 +136,9 @@
   --topnav-h:56px; --subnav-h:52px;   /* the shell’s real sizes (AppShell / navBar) */
 }
 
-/* Press affordance: the only button motion in the system */
-.sh-press:active { transform: scale(0.95); }
+/* Press affordance: the only button motion in the system (same as .sh-btn). */
+.sh-press { transition: transform var(--t-press) var(--ease-press); }
+.sh-press:active { transform: scale(0.97); }
 
 /* Spinner + skeleton shimmer keyframes used by ui/Progress + ui/Skeleton */
 @keyframes sh-spin { to { transform: rotate(360deg); } }
