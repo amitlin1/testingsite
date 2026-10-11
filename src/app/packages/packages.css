@@ -400,3 +400,8 @@
 @media (prefers-reduced-motion: reduce) {
   .pkg-pill:active, .pkg-cta:active, .pkg-iconbtn:active, .pkg-dlg-x:active, .pkg-press:active { transform: none !important; }
 }
+
+/* The station wizards (and intake) open for every box, many times a day:
+   frequent → no entrance choreography (emil). The system dialog's fade/scale
+   stays for the occasional package dialogs. */
+.pkg-dlg.pkg-dlg--full[data-state] { animation: none; }
