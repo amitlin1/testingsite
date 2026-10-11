@@ -32,7 +32,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
     transition-property: color, background-color, border-color, outline-color, opacity, box-shadow, fill, stroke !important;
     scroll-behavior: auto !important;
   }
-  .sh-btn:active, .sh-iconbtn:active, .sh-press:active, .shx-btn:active { transform: none !important; }
+  .sh-btn:active, .sh-iconbtn:active, .sh-press:active { transform: none !important; }
   .sh-skeleton { animation: none !important; background: var(--color-canvas-parchment) !important; }
   .sh-progress-indeterminate { animation: none !important; width: 100% !important; opacity: .45; }
 }
@@ -661,8 +661,8 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 }
 
 /* --------------------------------------------------------- Table ---------- */
-/* Matches the Items-screen table (DataTable / shx-table): flat parchment
-   header (12px, muted, no uppercase), hairline dividers, hover on all rows. */
+/* The one table look (Table primitive and DataTable): flat parchment header
+   (12px, muted, no uppercase), hairline dividers, hover on all rows. */
 .sh-table { width: 100%; border-collapse: collapse; }
 .sh-table thead th,
 .sh-table thead td {

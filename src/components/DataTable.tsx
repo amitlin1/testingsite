@@ -76,7 +76,7 @@ export default function DataTable<T>({
     : { background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "var(--r-card)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight };
   return (
     <div style={cardStyle}>
-      <div className="shx-scroll" style={{ overflowX: "auto", overflowY: fill ? "auto" : undefined, flex: fill ? 1 : undefined, minHeight: fill ? 0 : undefined }}>
+      <div style={{ overflowX: "auto", overflowY: fill ? "auto" : undefined, flex: fill ? 1 : undefined, minHeight: fill ? 0 : undefined }}>
         <table className={"sh-table" + (stickyHeader ? " sh-table--sticky" : "")} style={{ minWidth }}>
           <thead>
             <tr>
