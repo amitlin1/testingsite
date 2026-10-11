@@ -12,8 +12,9 @@ import { NO_REF, ScanField, useReferenceLookup } from "./referenceScan";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import {
-  DIALOG_Z, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, FOCUS, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, MUTED_LT, RED, RED_BG, fieldInput, seq2,
+  AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, RED, RED_BG, seq2,
 } from "@/app/components/packages/packageUi";
+import "@/app/packages/packages.css";
 
 /**
  * אשף פתיחת מארז — design/Package Stations.dc.html (open). Runs on a
@@ -86,6 +87,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
   const submitIdRef = React.useRef<string | null>(null);
   const committedRef = React.useRef<Set<string>>(new Set());
+  const uid = React.useId();
 
   // ---- open: reset ----------------------------------------------------------
   React.useEffect(() => {
@@ -331,8 +333,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         onBack={onBack} nextLabel={nextLabel} nextEnabled={nextEnabled && !busy} onNext={onNext} busy={submitting}
       >
         {error && (
-          <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent)", borderRadius: 10, padding: "11px 14px" }}>
-            <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} /></span>
+          <div role="alert" style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent)", borderRadius: 10, padding: "11px 14px" }}>
+            <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} aria-hidden /></span>
             <div style={{ fontSize: 13, fontWeight: 600, color: RED }}>{error}</div>
           </div>
         )}
@@ -352,8 +354,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               <div>
                 <div style={{ fontSize: 14.5, fontWeight: 600 }}>הפריט תקין?</div>
                 <div style={{ marginTop: 10 }}>{choiceBox(curWork.photos.ok, (v) => patchWork(cur.item_id, { photos: { ...curWork.photos, ok: v } }))}</div>
-                <div style={{ fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>הערות</div>
-                <textarea value={curWork.photos.note} onChange={(e) => patchWork(cur.item_id, { photos: { ...curWork.photos, note: e.target.value } })} placeholder="אופציונלי" style={{ width: "100%", maxWidth: 560, minHeight: 76, border: `1px solid ${HAIR}`, borderRadius: 11, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", fontFamily: "inherit" }} />
+                <label htmlFor={`${uid}-item-note`} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>הערות</label>
+                <textarea id={`${uid}-item-note`} value={curWork.photos.note} onChange={(e) => patchWork(cur.item_id, { photos: { ...curWork.photos, note: e.target.value } })} placeholder="אופציונלי" className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
               </div>
             </div>
           ) : (
@@ -361,17 +363,19 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap", maxWidth: 620 }}>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>משקל פריט ייחוס</div>
-                  <div style={{ height: 52, border: `1px solid ${HAIR}`, borderRadius: 11, background: "var(--color-canvas-parchment)", display: "flex", alignItems: "center", padding: "0 14px", fontSize: 17, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{curWork.refWeight != null ? `${curWork.refWeight} גר׳` : "לא מוגדר"}</div>
+                  <div className="pkg-field pkg-field--lg pkg-field--static" style={{ fontVariantNumeric: "tabular-nums" }}>{curWork.refWeight != null ? `${curWork.refWeight} גר׳` : "לא מוגדר"}</div>
                 </div>
                 <div style={{ flex: 1, minWidth: 180 }}>
-                  <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>משקל פריט נבדק</div>
-                  <input value={curWork.meas} onChange={(e) => patchWork(cur.item_id, { meas: e.target.value.replace(/[^0-9.]/g, "") })} placeholder="גר׳" inputMode="decimal"
-                    style={{ ...fieldInput, height: 52, borderRadius: 11, fontSize: 17, fontVariantNumeric: "tabular-nums", borderColor: curWork.meas !== "" ? FOCUS : HAIR }} />
+                  <label htmlFor={`${uid}-meas`} style={{ display: "block", fontSize: 12.5, color: MUTED, marginBottom: 7 }}>משקל פריט נבדק</label>
+                  {/* The focus ring, not the value, marks the field (A11-2); a weight reads left-to-right. */}
+                  <input id={`${uid}-meas`} dir="ltr" value={curWork.meas} onChange={(e) => patchWork(cur.item_id, { meas: e.target.value.replace(/[^0-9.]/g, "") })} placeholder="גר׳" inputMode="decimal"
+                    className="pkg-field pkg-field--lg pkg-field--code" />
                 </div>
               </div>
               {wr && (
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 11, background: wr.pass ? GREEN_BG : RED_BG, border: `1px solid ${wr.pass ? "color-mix(in srgb, var(--color-status-approved) 22%, transparent)" : "color-mix(in srgb, var(--color-destructive) 25%, transparent)"}`, borderRadius: 11, padding: "13px 15px", marginTop: 16, maxWidth: 620 }}>
-                  <span style={{ color: wr.pass ? GREEN : RED, marginTop: 1, display: "inline-flex" }}><Check size={18} strokeWidth={2} /></span>
+                  {/* ✓ only when it passes; out of tolerance gets the alert mark. */}
+                  <span style={{ color: wr.pass ? GREEN : RED, marginTop: 1, display: "inline-flex" }}>{wr.pass ? <Check size={18} strokeWidth={2} aria-hidden /> : <CircleAlert size={18} strokeWidth={2} aria-hidden />}</span>
                   <div>
                     <div style={{ fontSize: 14.5, fontWeight: 600, color: wr.pass ? GREEN : RED }}>{wr.pass ? "משקל תקין" : "משקל לא תקין"}</div>
                     <div style={{ fontSize: 13, color: INK_2, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>סטייה {wr.diff >= 0 ? "+" : "−"}{Math.abs(wr.diff).toFixed(0)} גר׳ ({wr.diffPct.toFixed(1)}% · סטייה תקנית ±{TOLERANCE_PCT}%)</div>
@@ -394,8 +398,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
             <div>
               <div style={{ fontSize: 14.5, fontWeight: 600 }}>האריזה תקינה?</div>
               <div style={{ marginTop: 10 }}>{choiceBox(boxPhotos.ok, (v) => setBoxPhotos((p) => ({ ...p, ok: v })))}</div>
-              <div style={{ fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>הערות</div>
-              <textarea value={boxPhotos.note} onChange={(e) => setBoxPhotos((p) => ({ ...p, note: e.target.value }))} placeholder="אופציונלי" style={{ width: "100%", maxWidth: 560, minHeight: 76, border: `1px solid ${HAIR}`, borderRadius: 11, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", fontFamily: "inherit" }} />
+              <label htmlFor={`${uid}-box-note`} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>הערות</label>
+              <textarea id={`${uid}-box-note`} value={boxPhotos.note} onChange={(e) => setBoxPhotos((p) => ({ ...p, note: e.target.value }))} placeholder="אופציונלי" className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
             </div>
           </div>
         ) : stepKey === "items" ? (
@@ -411,7 +415,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
                       <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{it.makat ?? "—"} · {it.serial_no ?? "ללא סריאלי"}{w.refWeight != null ? ` · ייחוס ${w.refWeight} גר׳` : ""}</div>
                     </div>
                     <div style={{ fontSize: 12.5, color: w.done ? GREEN : MUTED, fontWeight: 600, whiteSpace: "nowrap" }}>{w.done ? "צולם ונשקל" : "ממתין"}</div>
-                    <button type="button" onClick={() => startItem(i)} disabled={busy} style={{ minHeight: 44, background: w.done ? "var(--color-canvas)" : BLUE, color: w.done ? INK : "var(--color-canvas)", border: w.done ? `1px solid ${HAIR}` : 0, borderRadius: 9999, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>{w.done ? "פתח שוב" : "התחל"}</button>
+                    <button type="button" onClick={() => startItem(i)} disabled={busy} aria-label={`${w.done ? "פתח שוב" : "התחל"} · ${seq2(it.package_seq)} ${it.item_type_desc}`}
+                      className={w.done ? "pkg-pill pkg-pill--ghost pkg-pill--station" : "pkg-pill pkg-pill--primary pkg-pill--station"} style={{ padding: "10px 20px" }}>{w.done ? "פתח שוב" : "התחל"}</button>
                   </div>
                 );
               })}
@@ -428,28 +433,29 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
                   isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
                   placeholder="סוג פריט…"
                 />
-                <input placeholder="מספר סריאלי" value={add.serialNumber} onChange={(e) => setAdd({ ...add, serialNumber: e.target.value })} style={fieldInput} />
-                <input placeholder="מק״ט" value={add.makat} onChange={(e) => setAdd({ ...add, makat: e.target.value })} style={fieldInput} />
-                <input placeholder="דגם" value={add.model} onChange={(e) => setAdd({ ...add, model: e.target.value })} style={fieldInput} />
-                <input placeholder="יצרן" value={add.manufacturer} onChange={(e) => setAdd({ ...add, manufacturer: e.target.value })} style={fieldInput} />
+                <input placeholder="מספר סריאלי" aria-label="מספר סריאלי" dir="ltr" value={add.serialNumber} onChange={(e) => setAdd({ ...add, serialNumber: e.target.value })} className="pkg-field pkg-field--code" />
+                <input placeholder="מק״ט" aria-label="מק״ט" dir="ltr" value={add.makat} onChange={(e) => setAdd({ ...add, makat: e.target.value })} className="pkg-field pkg-field--code" />
+                <input placeholder="דגם" aria-label="דגם" value={add.model} onChange={(e) => setAdd({ ...add, model: e.target.value })} className="pkg-field" />
+                <input placeholder="יצרן" aria-label="יצרן" value={add.manufacturer} onChange={(e) => setAdd({ ...add, manufacturer: e.target.value })} className="pkg-field" />
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <button type="button" onClick={() => setAddOpen(false)} style={{ minHeight: 40, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK }}>ביטול</button>
-                  <button type="button" onClick={addMissing} disabled={busy} style={{ minHeight: 40, background: BLUE, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>הוסף</button>
+                  <button type="button" onClick={() => setAddOpen(false)} className="pkg-pill pkg-pill--ghost" style={{ minHeight: 40, padding: "9px 16px" }}>ביטול</button>
+                  <button type="button" onClick={addMissing} disabled={busy} aria-busy={busy || undefined} className="pkg-pill pkg-pill--primary" style={{ minHeight: 40, padding: "9px 18px" }}>הוסף</button>
                 </div>
               </div>
             ) : (
-              <button type="button" onClick={() => setAddOpen(true)} style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 16, fontSize: 14, fontWeight: 600, color: BLUE, background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
-                <Plus size={16} strokeWidth={2} />הוסף פריט שלא נרשם בקליטה
+              <button type="button" onClick={() => setAddOpen(true)} className="pkg-link pkg-link--hit" style={{ marginTop: 8, gap: 7, fontSize: 14 }}>
+                <Plus size={16} strokeWidth={2} aria-hidden />הוסף פריט שלא נרשם בקליטה
               </button>
             )}
           </div>
         ) : stepKey === "count" ? (
           <div style={{ marginTop: 20 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, maxWidth: 620 }}>
-              <div style={{ border: `1px solid ${counted != null && counted !== items.length ? AMBER_BORDER : HAIR}`, borderRadius: 14, padding: "16px 18px", background: counted != null && counted !== items.length ? AMBER_BG : "var(--color-canvas)" }}>
-                <input value={countInput} onChange={(e) => setCountInput(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" autoFocus placeholder="—"
-                  style={{ width: "100%", border: 0, outline: "none", background: "transparent", fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, color: INK, fontVariantNumeric: "tabular-nums", fontFamily: "inherit", padding: 0 }} />
-                <div style={{ fontSize: 12.5, color: MUTED, marginTop: 7 }}>נספר בעמדה</div>
+              {/* The number is typed straight into the card, so the card carries the focus ring. */}
+              <div className="pkg-focus-within" style={{ border: `1px solid ${counted != null && counted !== items.length ? AMBER_BORDER : HAIR}`, borderRadius: 14, padding: "16px 18px", background: counted != null && counted !== items.length ? AMBER_BG : "var(--color-canvas)" }}>
+                <input id={`${uid}-count`} value={countInput} onChange={(e) => setCountInput(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" autoFocus placeholder="—"
+                  className="pkg-bare-input" style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }} />
+                <label htmlFor={`${uid}-count`} style={{ display: "block", fontSize: 12.5, color: MUTED, marginTop: 7 }}>נספר בעמדה</label>
               </div>
               <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, padding: "16px 18px", background: "var(--color-canvas)" }}>
                 <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, color: INK, fontVariantNumeric: "tabular-nums" }}>{items.length}</div>
@@ -462,7 +468,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
             </div>
             {countMismatch && counted != null && (
               <div style={{ display: "flex", gap: 11, alignItems: "flex-start", background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 12, padding: "13px 15px", marginTop: 16, maxWidth: 620 }}>
-                <span style={{ color: AMBER_INK, marginTop: 1, display: "inline-flex" }}><CircleAlert size={18} strokeWidth={2} /></span>
+                <span style={{ color: AMBER_INK, marginTop: 1, display: "inline-flex" }}><CircleAlert size={18} strokeWidth={2} aria-hidden /></span>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: AMBER_INK }}>{counted !== items.length ? `נרשמו ${items.length} פריטים, בעמדה נספרו ${counted}` : `התבנית מצפה ל-${templateCount} פריטים, נרשמו ${items.length}`}</div>
                   <div style={{ fontSize: 13, color: INK_2, marginTop: 3, lineHeight: 1.5 }}>הוסף את הפריט החסר, או המשך והפער יירשם על המארז ויופיע בעמוד המארז.</div>
@@ -478,12 +484,12 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
                 <div key={`${l.id}-${i}`} style={{ width: 214, border: `1px solid ${BLUE}`, background: "var(--color-primary-tint)", borderRadius: 14, padding: "15px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ fontSize: 11.5, fontWeight: 600, color: MUTED }}>{l.kind}</div>
-                    <span style={{ width: 20, height: 20, borderRadius: 6, border: `1px solid ${BLUE}`, background: BLUE, color: "var(--color-on-primary)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={11} strokeWidth={2.5} /></span>
+                    <span aria-hidden style={{ width: 20, height: 20, borderRadius: 6, border: `1px solid ${BLUE}`, background: BLUE, color: "var(--color-on-primary)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={11} strokeWidth={2.5} /></span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 44, marginTop: 12 }}>
+                  <div aria-hidden style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 44, marginTop: 12 }}>
                     {Array.from({ length: 22 }, (_, b) => <div key={b} style={{ width: ((b + i) % 3) + 1, height: "100%", background: INK }} />)}
                   </div>
-                  <div style={{ fontFamily: "'Inter', monospace", fontSize: 12.5, letterSpacing: 1.5, marginTop: 9, fontVariantNumeric: "tabular-nums", direction: "ltr", unicodeBidi: "isolate", textAlign: "right", color: MUTED_LT }}>…{String(l.id).slice(-6)}</div>
+                  <div style={{ fontSize: 12.5, letterSpacing: 1.5, marginTop: 9, fontVariantNumeric: "tabular-nums", direction: "ltr", unicodeBidi: "isolate", textAlign: "right", color: MUTED }}>…{String(l.id).slice(-6)}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, marginTop: 7 }}>{l.title}</div>
                   <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{l.note}</div>
                 </div>
@@ -491,10 +497,10 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "36px 0 8px" }}>
-            <span style={{ width: 64, height: 64, borderRadius: "50%", background: "color-mix(in srgb, var(--color-status-approved) 9%, transparent)", color: GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={30} strokeWidth={2} /></span>
+            <span style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--color-success-bg)", color: GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={30} strokeWidth={2} aria-hidden /></span>
             <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.3px", marginTop: 16 }}>פתיחת המארז הושלמה</div>
             <div style={{ fontSize: 14.5, color: INK_2, marginTop: 7, maxWidth: 440, lineHeight: 1.55 }}>כל פריט קיבל תוצאה וממשיך לעמדה הראשונה במסלול שלו. המארז ממתין לסגירה עד שכל פריטיו יחזרו.</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 20 }}>
+            <div role="img" aria-label={items.map((it) => `${seq2(it.package_seq)} · ${it.item_type_desc} · ${itemPass(it) ? "תקין" : "לא תקין"}`).join("; ")} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 20 }}>
               {items.map((it) => <span key={it.item_id} title={`${seq2(it.package_seq)} · ${it.item_type_desc}`} style={{ width: 30, height: 10, borderRadius: 3, background: itemPass(it) ? BLUE : GREY }} />)}
             </div>
             <div style={{ fontSize: 12.5, color: MUTED, marginTop: 9, fontVariantNumeric: "tabular-nums" }}>{items.length} פריטים נפתחו · {pkg.item_type_desc}</div>
@@ -503,8 +509,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
       </PackageWizardShell>
 
       {labelsOpen && (
+        // Mounted after the wizard, so it stacks above it and owns Escape while open.
         <PackageLabelsDialog
-          zIndex={DIALOG_Z} // above the wizard shell (DIALOG_Z - 10)
           open
           // Closing commits the opening only once the labels went to print. Before
           // that, "ביטול" / × / the scrim just back out to the labels step.

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, KeyboardEvent } from "react";
 import type { PackageItemState, PackageStatusKey } from "@/app/lib/packages/read";
 
 /**
@@ -37,6 +37,16 @@ export const ITEM_STATES: Record<PackageItemState, { label: string; color: strin
   test: { label: "בבדיקה", color: BLUE },
   done: { label: "הושלם", color: GREEN },
   missing: { label: "חסר במארז", color: RED },
+};
+
+/** Item state → the colour its LABEL is written in. ITEM_STATES colours are
+ *  for dots and strips (amber is 3.2:1, the grey 1.4:1 — not text). */
+export const ITEM_STATE_INK: Record<PackageItemState, string> = {
+  new: MUTED,
+  queue: AMBER_INK,
+  test: BLUE,
+  done: GREEN,
+  missing: RED,
 };
 
 /** Box status → pill label + dot colour (design: PKG_STATUS, plus readyClose). */
@@ -101,30 +111,27 @@ export function barcodeOf(id: string | number | bigint, sourceId?: number | null
   return sourceId ? `${id}-${sourceId}` : String(id);
 }
 
-/** Pill button styles shared by the package dialogs. */
-export const pillPrimary: CSSProperties = {
-  background: BLUE, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "11px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-};
-export const pillGhost: CSSProperties = {
-  background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK,
-};
-export const pillDanger: CSSProperties = {
-  background: RED, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "11px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-};
-export const fieldInput: CSSProperties = {
-  width: "100%", height: 44, border: `1px solid ${HAIR}`, borderRadius: 10, padding: "0 13px", fontSize: 14, outline: "none", background: "var(--color-canvas)", fontFamily: "inherit", color: INK,
-};
-/**
- * Stacking for the package dialogs and wizards. AppShell puts the top bar at
- * 1100 and the navigation rail at 1200, the design-system dialogs sit at 1300
- * and the combobox / menu poppers at 1400+. Package overlays therefore live
- * between the chrome and the primitives; secondary dialogs that open on top
- * of a primary one (delete, the closing decision) add 10, the ones a wizard
- * or the list opens underneath another (edit, labels, the wizard shell)
- * subtract 10.
+/*
+ * Buttons, fields, rows and dialogs are CSS classes in
+ * src/app/packages/packages.css (.pkg-pill, .pkg-field, .pkg-row, …) — an
+ * inline style cannot carry hover / press / focus / disabled — and the
+ * dialogs sit in PackageDialog (ui/Dialog), which owns the stacking.
+ *
+ * `fieldInput` stays only for a field that cannot take the class: the 44px
+ * frame of .pkg-field. No `outline: none` here, so such a field still shows
+ * the browser's focus ring.
  */
-export const DIALOG_Z = 1250;
+/** Keyboard for a card that acts like a checkbox / button but holds block
+ *  content (role="checkbox" + tabIndex 0): Space and Enter press it, as on a
+ *  native control. Keys from a control inside the card are left alone. */
+export function pressKeys(onPress: () => void) {
+  return (e: KeyboardEvent) => {
+    if (e.target !== e.currentTarget || (e.key !== " " && e.key !== "Enter")) return;
+    e.preventDefault();
+    onPress();
+  };
+}
 
-export const overlay: CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: DIALOG_Z, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+export const fieldInput: CSSProperties = {
+  width: "100%", height: 44, border: "1px solid var(--color-field-border)", borderRadius: "var(--r-field)", padding: "0 13px", fontSize: 14, background: "var(--color-canvas)", fontFamily: "inherit", color: INK,
 };

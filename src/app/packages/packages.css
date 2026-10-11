@@ -3,21 +3,27 @@
    table body and the side panel do. Everything a media query has to override
    lives here, never inline on the element (inline styles beat stylesheet
    rules, so an inline `display` or `width` would silently win over the
-   breakpoints below). Colours are design tokens (src/styles/tokens.css). */
+   breakpoints below). Colours are design tokens (src/styles/tokens.css).
+
+   The second half of the file is the control vocabulary every package screen,
+   dialog and station wizard shares (.pkg-pill, .pkg-field, .pkg-row …): the
+   artboards' states that an inline style cannot express. Components that use
+   those classes import this file themselves (the wizards live under
+   /testing, so the list page's import does not reach them). */
 
 .pkg-page { box-sizing: border-box; height: 100%; overflow: hidden; display: flex; flex-direction: column; max-width: 1440px; margin: 0 auto; padding: 28px 24px 24px; container-type: inline-size; }
 .pkg-page > .pkg-fixed { flex-shrink: 0; }
 
 /* The four stat cards. */
 .pkg-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 24px; }
-.pkg-stat { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: 16px; padding: 16px 18px; }
-.pkg-stat-value { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; line-height: 1; font-variant-numeric: tabular-nums; }
-.pkg-stat-label { font-size: 13px; color: var(--color-ink-muted-48); margin-top: 6px; }
+.pkg-stat { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--r-card); padding: 16px 18px; }
+.pkg-stat-value { font-size: var(--text-kpi); font-weight: 700; letter-spacing: -0.5px; line-height: 1; font-variant-numeric: tabular-nums; }
+.pkg-stat-label { font-size: var(--text-small); color: var(--color-ink-muted-48); margin-top: 6px; }
 
 /* Table card + side panel. min-height:0 on the split, the card and the panel
    is what stops the scroll leaking back to the page. */
 .pkg-split { flex: 1; min-height: 0; display: flex; gap: 16px; margin-top: 18px; }
-.pkg-table-wrap { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; }
+.pkg-table-wrap { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-card); }
 .pkg-table-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .pkg-table-scroll thead tr { position: sticky; top: 0; z-index: 2; }
 /* The rule under the header is a box-shadow, not a border: a collapsed
@@ -58,4 +64,339 @@
 @media (max-width: 640px) {
   .pkg-page { height: auto; min-height: 100%; overflow: visible; }
   .pkg-split { overflow: visible; }
+}
+
+/* =========================================================================
+   Shared package controls — the states the artboards define
+   (claude-code-handoff/packages/design: Packages, Package Dialogs, Package
+   Stations, Testing Screen Packages .dc.html): primary hover
+   --color-primary-hover, red hover --color-destructive-hover, `.row-h:hover`
+   pearl rows, `.prs:active` press, input focus --color-primary-focus.
+   Hover only where a real pointer hovers (station touchscreens would keep it
+   stuck); one press scale (.97, like .sh-btn); one disabled look (the same as
+   .sh-btn:disabled), so a blocked action reads the same everywhere.
+   ========================================================================= */
+
+/* ---- Pill buttons ------------------------------------------------------- */
+.pkg-pill {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  font-family: inherit;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.pkg-pill--primary { background: var(--color-primary); color: var(--color-on-primary); }
+.pkg-pill--danger { background: var(--color-destructive); color: var(--color-on-primary); }
+.pkg-pill--ghost { background: var(--color-canvas); border-color: var(--color-hairline); color: var(--color-ink); }
+/* A secondary button whose action is destructive ("מחיקה", "מחיקת מארז"). */
+.pkg-pill--danger-text { color: var(--color-destructive); }
+/* Sizes: --sm in the side panel and the package page header, --lg for the
+   screen's main action, --station for the 44px station touch footers. */
+.pkg-pill--sm { padding: 9px 14px; font-size: 13.5px; }
+.pkg-pill--lg { padding: 12px 22px; font-size: var(--text-body); }
+.pkg-pill--station { min-height: 44px; padding: 11px 18px; }
+@media (hover: hover) and (pointer: fine) {
+  .pkg-pill--primary:hover:not(:disabled) { background: var(--color-primary-hover); }
+  .pkg-pill--danger:hover:not(:disabled) { background: var(--color-destructive-hover); }
+  .pkg-pill--ghost:hover:not(:disabled) { background: var(--color-surface-pearl); border-color: var(--color-border-strong); }
+}
+.pkg-pill:active:not(:disabled) { transform: scale(.97); }
+.pkg-pill:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.pkg-pill:disabled {
+  background: var(--color-canvas-parchment);
+  border-color: transparent;
+  color: var(--color-ink-muted-48);
+  cursor: not-allowed;
+}
+/* Saving: still the action, just working — it keeps its fill, dimmed. */
+.pkg-pill[aria-busy="true"] { cursor: progress; }
+.pkg-pill--primary[aria-busy="true"]:disabled { background: var(--color-primary); color: var(--color-on-primary); opacity: .7; }
+.pkg-pill--danger[aria-busy="true"]:disabled { background: var(--color-destructive); color: var(--color-on-primary); opacity: .7; }
+
+/* The start button on a station queue card (Testing Screen Packages.dc.html:
+   44px, radius 11, hover and press). */
+.pkg-cta {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-cta:hover:not(:disabled) { background: var(--color-primary-hover); } }
+.pkg-cta:active:not(:disabled) { transform: scale(.97); }
+.pkg-cta:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.pkg-cta:disabled { background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); cursor: not-allowed; }
+.pkg-cta[aria-busy="true"]:disabled { background: var(--color-primary); color: var(--color-on-primary); opacity: .7; cursor: progress; }
+
+/* ---- Text buttons ("פרטים", "בחר הכול", "חזרה למארזים") ------------------ */
+.pkg-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-primary);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-link:hover:not(:disabled) { color: var(--color-primary-hover); text-decoration: underline; } }
+.pkg-link:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.pkg-link:disabled { color: var(--color-ink-muted-48); cursor: not-allowed; }
+/* A one-line text control is ~18px tall; this gives it a 34px hit area
+   (station touchscreens) without moving anything around it. */
+.pkg-link--hit { padding-block: 8px; margin-block: -8px; }
+
+/* "הוסף פריט" — the full-width row under the intake table. */
+.pkg-addrow {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 16px;
+  border: 0;
+  border-top: 1px solid var(--color-divider-soft);
+  background: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-addrow:hover { background: var(--color-surface-pearl); } }
+.pkg-addrow:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+
+/* ---- Icon buttons ------------------------------------------------------- */
+/* Square parchment buttons (± steppers 32, row trash 30). The ::before
+   widens the hit area past the artboard's mark without changing it. */
+.pkg-iconbtn {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-48);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.pkg-iconbtn::before { content: ""; position: absolute; inset: -4px; }
+.pkg-iconbtn--ink { color: var(--color-ink); }
+.pkg-iconbtn--trash { width: 30px; height: 30px; }
+/* The last item's trash: it still answers (it explains why it can't), but
+   reads as unavailable. */
+.pkg-iconbtn--muted { color: var(--color-ink-muted-40); }
+@media (hover: hover) and (pointer: fine) {
+  .pkg-iconbtn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 6%, var(--color-canvas-parchment)); color: var(--color-ink); }
+  .pkg-iconbtn--trash:hover:not(:disabled) { color: var(--color-destructive); }
+}
+.pkg-iconbtn:active:not(:disabled) { transform: scale(.97); }
+.pkg-iconbtn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.pkg-iconbtn:disabled { color: var(--color-ink-muted-40); cursor: not-allowed; }
+
+/* ---- Fields ------------------------------------------------------------- */
+/* One field vocabulary with the dense combobox beside it (.sh-combo--dense:
+   44px, radius --r-field, the 3:1 field edge) and the system focus ring of
+   .sh-input:focus — the border, not the value, says where the cursor is. */
+.pkg-field {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: var(--text-body-sm);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.pkg-field::placeholder { color: var(--color-ink-muted-48); }
+.pkg-field:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
+.pkg-field:disabled { background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); cursor: not-allowed; }
+.pkg-field--sm { height: 38px; padding: 0 11px; }
+.pkg-field--xs { height: 36px; padding: 0 10px; font-size: 13.5px; }
+.pkg-field--lg { height: 52px; padding: 0 14px; font-size: var(--text-lead); }
+.pkg-field--search { padding-inline: 40px 14px; }
+/* Codes, serials, weights: typed left-to-right (dir="ltr" on the input),
+   kept on the RTL edge with the rest of the column. */
+.pkg-field--code { text-align: right; font-variant-numeric: tabular-nums; }
+.pkg-field--area { height: auto; min-height: 76px; padding: 11px 13px; line-height: var(--lh-body); resize: vertical; }
+/* A value shown in a field's frame that cannot be typed into. */
+.pkg-field--static { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); }
+/* A borderless number inside a card (the station count): the card shows
+   the focus instead. */
+.pkg-focus-within { transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.pkg-focus-within:focus-within { border-color: var(--color-primary-focus) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
+.pkg-bare-input { width: 100%; padding: 0; border: 0; outline: none; background: transparent; font-family: inherit; color: var(--color-ink); }
+.pkg-bare-input::placeholder { color: var(--color-ink-muted-40); }
+
+/* Read by screen readers, not drawn (a header over a column of icon buttons). */
+.pkg-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- Table headers ------------------------------------------------------ */
+.pkg-th { text-align: start; font-size: 11.5px; font-weight: 600; color: var(--color-ink-muted-48); padding: 11px 12px; white-space: nowrap; }
+.pkg-th--center { text-align: center; }
+
+/* ---- Rows and selectable cards ------------------------------------------ */
+/* A row that opens or selects something: pearl on hover (`.row-h`), a
+   keyboard stop with an inset ring (an outside one is clipped by the
+   scrolling frame), tint when selected. */
+.pkg-row { cursor: pointer; background: var(--color-canvas); color: inherit; text-decoration: none; transition: background-color var(--dur-fast) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .pkg-row:hover { background: var(--color-surface-pearl); } }
+.pkg-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+.pkg-row[aria-selected="true"], .pkg-row[aria-selected="true"]:hover,
+.pkg-row[aria-current="true"], .pkg-row[aria-current="true"]:hover { background: var(--color-primary-tint); }
+.pkg-row[aria-disabled="true"], .pkg-row[aria-disabled="true"]:hover { cursor: default; background: var(--color-canvas); }
+
+/* A card that toggles (label to print, packing check, decision option):
+   hairline edge, blue edge + tint once chosen. */
+.pkg-choice {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-choice:hover:not([aria-checked="true"]):not([aria-pressed="true"]):not(:disabled) { border-color: var(--color-border-strong); } }
+.pkg-choice[aria-checked="true"] { border-color: var(--color-primary); background: var(--color-primary-tint); }
+.pkg-choice:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+/* Softer selected fill where the artboard uses it (the "נארז" toggle, presets). */
+.pkg-choice--soft[aria-checked="true"], .pkg-choice--soft[aria-pressed="true"] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary); }
+/* The artboard's `.prs` on the choices it presses. */
+.pkg-press:active:not(:disabled) { transform: scale(.97); }
+
+/* The tick inside a checkbox-like card. */
+.pkg-tick { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--color-border-strong); background: var(--color-canvas); color: var(--color-on-primary); }
+[aria-checked="true"] > .pkg-tick, .pkg-tick--on { border-color: var(--color-primary); background: var(--color-primary); }
+
+/* ---- Rail steps (intake dialog, station wizards) ------------------------ */
+.pkg-step {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  margin: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-step:hover:not([aria-current]) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); } }
+.pkg-step[aria-current] { background: var(--color-primary-soft); }
+.pkg-step:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+
+/* ---- Dialogs (on ui/Dialog) --------------------------------------------- */
+/* The artboards' dialog: --shadow-modal over the shared scrim. Sizes are set
+   per dialog (inline, after ui/Dialog's own width). */
+.pkg-dlg { box-shadow: var(--shadow-modal); color: var(--color-ink); }
+.pkg-dlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--color-hairline); flex-shrink: 0; }
+.pkg-dlg-body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 24px; }
+.pkg-dlg-foot { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--color-hairline); }
+.pkg-dlg-foot-actions { margin-inline-start: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+/* The 34px round close (Package Dialogs.dc.html). */
+.pkg-dlg-x {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-dlg-x:hover { background: color-mix(in srgb, var(--color-ink) 6%, var(--color-canvas-parchment)); } }
+.pkg-dlg-x:active { transform: scale(.97); }
+.pkg-dlg-x:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+
+/* Rail + body dialogs (intake, station wizards). */
+.pkg-wiz { flex: 1; min-height: 0; display: flex; }
+.pkg-wiz-rail { flex-shrink: 0; display: flex; flex-direction: column; background: var(--color-canvas-parchment); border-inline-end: 1px solid var(--color-hairline); overflow-y: auto; }
+.pkg-wiz-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.pkg-wiz-body { flex: 1; min-height: 0; overflow-y: auto; padding: 24px 28px; }
+.pkg-wiz-steps { display: flex; flex-direction: column; gap: 2px; }
+.pkg-wiz-foot { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 14px 28px; border-top: 1px solid var(--color-hairline); }
+
+/* Tablet and under (Package Stations.dc.html / Testing Screen Packages.dc.html
+   @media 760): the dialog becomes the screen, the rail sits on top with the
+   steps in one scrolling row, and its secondary blocks drop out. !important
+   because ui/Dialog sizes and centres the box inline. */
+@media (max-width: 760px) {
+  .pkg-dlg--full {
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+  }
+  .pkg-wiz { flex-direction: column; }
+  .pkg-wiz-rail { width: auto !important; flex-shrink: 0; overflow: visible; border-inline-end: none; border-bottom: 1px solid var(--color-hairline); padding: 12px 16px !important; }
+  .pkg-wiz-steps { flex-direction: row; overflow-x: auto; gap: 6px; margin-top: 12px !important; }
+  .pkg-wiz-steps > .pkg-step { width: auto; flex-shrink: 0; }
+  .pkg-wiz-sub { display: none !important; }
+  .pkg-wiz-body { padding: 18px 16px; }
+  .pkg-wiz-foot { padding: 12px 16px; flex-wrap: wrap; }
+}
+
+/* Reduced motion: presses don't scale (ui.css does the same for .sh-btn). */
+@media (prefers-reduced-motion: reduce) {
+  .pkg-pill:active, .pkg-cta:active, .pkg-iconbtn:active, .pkg-dlg-x:active, .pkg-press:active { transform: none !important; }
 }

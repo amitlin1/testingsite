@@ -48,10 +48,13 @@ export function StatusPill({ label, dot, size = 12 }: { label: string; dot: stri
   );
 }
 
-/** The mini-items strip: one 20×9 block per item, coloured by state. */
+/** The mini-items strip: one 20×9 block per item, coloured by state. The
+ *  colours alone say nothing to a screen reader (or to someone who can't tell
+ *  amber from green), so the strip is one image named by every item's
+ *  "01 · type · state" line. */
 export function MiniItems({ items, width = 20, height = 9 }: { items: { color: string; title: string }[]; width?: number; height?: number }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+    <div role="img" aria-label={items.map((m) => m.title).join("; ")} style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
       {items.map((m, i) => (
         <span key={i} title={m.title} style={{ width, height, borderRadius: 3, background: m.color, display: "inline-block" }} />
       ))}
