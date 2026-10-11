@@ -363,8 +363,8 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-menu-item--danger { color: var(--color-destructive); }
 
 /* ------------------------------------------------------------- Dialog ----- */
-/* Plain grey, no blur: the same scrim as the package dialogs (packageUi
-   `overlay`), so every popup in the app sits on one backdrop. */
+/* Plain grey, no blur (--color-scrim): every popup in the app, the package
+   dialogs included, sits on this one backdrop. */
 .sh-dialog-overlay {
   position: fixed;
   inset: 0;

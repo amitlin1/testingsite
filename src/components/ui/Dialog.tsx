@@ -48,6 +48,12 @@ export function Dialog({
 }: DialogProps) {
   const paper = { ...slotProps?.paper, ...PaperProps };
   const { ref: dragRef, onPointerDown: onDragStart, offset: dragOffset, moved: dragMoved } = useDraggable(open, draggable && !fullScreen);
+  // Radix reports WHAT closed the dialog (Escape / a press outside) before it
+  // asks to close; remember it so onClose runs exactly once, with the reason.
+  // (It used to run twice on a backdrop press — once as "backdropClick", then
+  // again as "escapeKeyDown" — so a handler that commits ran twice and a
+  // caller ignoring backdrop presses closed anyway.)
+  const reasonRef = React.useRef<"backdropClick" | "escapeKeyDown">("escapeKeyDown");
   const contentStyle: React.CSSProperties = fullScreen
     ? { width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", borderRadius: 0, top: 0, left: 0, transform: "none" }
     : {
@@ -57,7 +63,12 @@ export function Dialog({
   return (
     <RDialog.Root
       open={open}
-      onOpenChange={(o) => { if (!o) onClose?.({}, "escapeKeyDown"); }}
+      onOpenChange={(o) => {
+        if (o) return;
+        const reason = reasonRef.current;
+        reasonRef.current = "escapeKeyDown";
+        onClose?.({}, reason);
+      }}
     >
       <RDialog.Portal>
         <RDialog.Overlay className="sh-dialog-overlay" />
@@ -71,8 +82,15 @@ export function Dialog({
             // Centred by translate(-50%, -50%) in ui.css; the drag adds to it.
             ...(dragMoved ? { transform: `translate(calc(-50% + ${dragOffset.x}px), calc(-50% + ${dragOffset.y}px))` } : {}),
           }}
-          onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); }}
-          onPointerDownOutside={(e) => { onClose?.(e, "backdropClick"); }}
+          onEscapeKeyDown={(e) => {
+            // An open combobox list owns Escape: it closes the list, not the
+            // dialog (Radix listens before the field's own handler).
+            const el = document.activeElement;
+            const listOpen = el instanceof HTMLElement && el.getAttribute("role") === "combobox" && el.getAttribute("aria-expanded") === "true";
+            if (disableEscapeKeyDown || listOpen) { e.preventDefault(); return; }
+            reasonRef.current = "escapeKeyDown";
+          }}
+          onPointerDownOutside={() => { reasonRef.current = "backdropClick"; }}
           aria-describedby={undefined}
         >
           <DraggableDialog.Provider value={draggable && !fullScreen}>{children}</DraggableDialog.Provider>

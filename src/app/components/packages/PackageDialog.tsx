@@ -31,27 +31,12 @@ export function PackageDialog({
   className?: string;
   children: React.ReactNode;
 }) {
-  // An open combobox list owns Escape (it closes only the list). Radix closes
-  // the top dialog from a document-level capture listener — before the
-  // field's own handler — so mark the key as handled one level up first.
-  React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const el = document.activeElement;
-      if (el instanceof HTMLElement && el.getAttribute("role") === "combobox" && el.getAttribute("aria-expanded") === "true") e.preventDefault();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open]);
-
   return (
     <Dialog
       open={open}
-      // ui/Dialog reports a backdrop press twice (pointer-down-outside, then
-      // the close itself); act on the close only, so a handler that commits
-      // or releases something (the wizard releases the box) runs once.
-      onClose={(_e, reason) => { if (reason === "backdropClick" || busy) return; onClose(); }}
+      // ui/Dialog calls onClose once per close (Escape or a press outside; an
+      // open combobox list keeps its Escape). Mid-save nothing closes it.
+      onClose={() => { if (busy) return; onClose(); }}
       maxWidth={false}
       draggable={draggable}
       slotProps={{
