@@ -1277,7 +1277,9 @@ function TestingPageView() {
                             icon={<AccessTimeIcon sx={{ fontSize: 21 }} />}
                             iconBg="var(--color-warning-bg)"
                             iconColor="var(--color-status-late)"
-                            value={!itemsStale && longestWait ? longestWait.slice(0, 5) : "—"}
+                            // H:MM without the seconds. (slice(0, 5) cut "964:24:12" to "964:2" once
+                            // the wait passed 99 hours — a wrong number on screen.)
+                            value={!itemsStale && longestWait ? longestWait.replace(/:d{2}$/, "") : "—"}
                             label="המתנה הארוכה ביותר"
                             valueColor="var(--color-warning-ink)"
                         />
