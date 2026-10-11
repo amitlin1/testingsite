@@ -394,11 +394,11 @@ export default function ShipmentSendPopup({
                             <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>חתימה</Typography>
                             <Button size="small" onClick={() => sigCanvas.current?.clear()}>נקה חתימה</Button>
                         </Box>
-                        <Box sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 2, overflow: 'hidden', bgcolor: '#fafafa' }}>
+                        <Box sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 2, overflow: 'hidden', bgcolor: 'var(--color-surface-pearl)' }}>
                             <SignatureCanvas
                                 ref={sigCanvas}
                                 canvasProps={{ width: 800, height: 120, className: 'sigCanvas' }}
-                                backgroundColor="#fafafa"
+                                backgroundColor="var(--color-surface-pearl)"
                                 onEnd={() => setIsSigned(!sigCanvas.current?.isEmpty())}
                             />
                         </Box>

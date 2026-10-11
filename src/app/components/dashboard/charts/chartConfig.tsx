@@ -24,7 +24,7 @@ export const GRID_STROKE = "var(--color-divider-soft)";
 export const AXIS_PROPS = {
   tickLine: false,
   axisLine: false,
-  tick: { fontSize: 11, fill: "#7a7a7a" },
+  tick: { fontSize: 11, fill: "var(--color-ink-muted-48)" },
 } as const;
 
 export interface TooltipRow {

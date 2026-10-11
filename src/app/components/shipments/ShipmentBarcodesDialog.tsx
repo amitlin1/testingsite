@@ -69,9 +69,9 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                             sx={{
                                 maxHeight: 360,
                                 overflowY: "auto",
-                                border: "1px solid #e0e0e0",
+                                border: "1px solid var(--color-hairline)",
                                 borderRadius: 2,
-                                bgcolor: "#fafafa",
+                                bgcolor: "var(--color-surface-pearl)",
                             }}
                         >
                             <div ref={printRef}>

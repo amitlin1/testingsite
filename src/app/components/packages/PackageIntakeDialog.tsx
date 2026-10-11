@@ -240,9 +240,9 @@ export default function PackageIntakeDialog({
   return (
     <>
       <div onClick={() => !saving && onClose()} style={overlay}>
-        <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: 1200, maxWidth: "100%", height: "min(760px, 92vh)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK }}>
+        <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: 1200, maxWidth: "100%", height: "min(760px, 92vh)", background: "var(--color-canvas)", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK }}>
           {/* Sidebar */}
-          <div style={{ width: 288, flexShrink: 0, background: "#f5f5f7", borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", padding: "22px 20px" }}>
+          <div style={{ width: 288, flexShrink: 0, background: "var(--color-canvas-parchment)", borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", padding: "22px 20px" }}>
             <div data-drag-handle="" style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.3px" }}>קליטת מארז</div>
             <div style={{ fontSize: 13, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>המארז והפריטים נוצרים יחד בשמירה אחת.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 22 }}>
@@ -252,8 +252,8 @@ export default function PackageIntakeDialog({
                 const note = s.key === "shipment" ? (shipment ? `${shipment.shipment_code} · ${packageTypeDesc || "בחר סוג מארז"}` : "בחר משלוח וסוג")
                   : s.key === "details" ? "מסלול, מק״ט, דגם" : s.key === "items" ? "סריאלי לכל פריט" : "קופסה + פריטים";
                 return (
-                  <div key={s.key} onClick={() => { if (i <= stepIdx || canNext) setStep(s.key); }} style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "10px 11px", borderRadius: 10, background: active ? "#e6efff" : "transparent", cursor: "pointer" }}>
-                    <span style={{ width: 24, height: 24, borderRadius: "50%", background: active ? BLUE : done ? "#eaf5ef" : "#fff", color: active ? "#fff" : done ? "#1f8a5b" : MUTED, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? BLUE : HAIR}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div key={s.key} onClick={() => { if (i <= stepIdx || canNext) setStep(s.key); }} style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "10px 11px", borderRadius: 10, background: active ? "var(--color-primary-soft)" : "transparent", cursor: "pointer" }}>
+                    <span style={{ width: 24, height: 24, borderRadius: "50%", background: active ? BLUE : done ? "var(--color-success-bg)" : "var(--color-canvas)", color: active ? "var(--color-canvas)" : done ? "var(--color-status-approved)" : MUTED, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? BLUE : HAIR}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {done ? <Check size={13} strokeWidth={2.5} /> : i + 1}
                     </span>
                     <div style={{ minWidth: 0 }}>
@@ -264,7 +264,7 @@ export default function PackageIntakeDialog({
                 );
               })}
             </div>
-            <div style={{ marginTop: "auto", background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "13px 14px" }}>
+            <div style={{ marginTop: "auto", background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "13px 14px" }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, letterSpacing: ".6px", textTransform: "uppercase" }}>המארז שייווצר</div>
               <div style={{ fontSize: 14, fontWeight: 600, marginTop: 7 }}>{packageTypeDesc || "—"}</div>
               <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{sidebarSummary}</div>
@@ -297,7 +297,7 @@ export default function PackageIntakeDialog({
                       <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, overflow: "hidden" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse" }}>
                           <thead>
-                            <tr style={{ background: "#f5f5f7" }}>
+                            <tr style={{ background: "var(--color-canvas-parchment)" }}>
                               <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 16px" }}>סוג מארז</th>
                               <th style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>הוצהר</th>
                               <th style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>נקלט</th>
@@ -314,7 +314,7 @@ export default function PackageIntakeDialog({
                               const picked = packageType === d.item_type_id;
                               const doneRow = left === 0;
                               return (
-                                <tr key={d.item_type_id} onClick={() => { if (!doneRow) setPackageType(d.item_type_id); }} style={{ borderTop: `1px solid ${HAIR_2}`, cursor: doneRow ? "default" : "pointer", background: picked ? "#f7fbff" : "#fff" }}>
+                                <tr key={d.item_type_id} onClick={() => { if (!doneRow) setPackageType(d.item_type_id); }} style={{ borderTop: `1px solid ${HAIR_2}`, cursor: doneRow ? "default" : "pointer", background: picked ? "var(--color-primary-tint)" : "var(--color-canvas)" }}>
                                   <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 600 }}>{d.item_type_desc}</td>
                                   <td style={{ padding: 12, fontSize: 14, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{d.total_quantity}</td>
                                   <td style={{ padding: 12, fontSize: 14, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{d.sample_count}</td>
@@ -367,7 +367,7 @@ export default function PackageIntakeDialog({
                     </div>
                     <div>
                       <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>מספר סריאלי</div>
-                      <div style={{ ...fieldInput, background: "#f5f5f7", color: MUTED_LT, display: "flex", alignItems: "center", justifyContent: "space-between" }}>אין סריאלי למארז<Lock size={14} strokeWidth={1.75} color={MUTED_LT} /></div>
+                      <div style={{ ...fieldInput, background: "var(--color-canvas-parchment)", color: MUTED_LT, display: "flex", alignItems: "center", justifyContent: "space-between" }}>אין סריאלי למארז<Lock size={14} strokeWidth={1.75} color={MUTED_LT} /></div>
                     </div>
                   </div>
                 </>
@@ -380,7 +380,7 @@ export default function PackageIntakeDialog({
                       <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>פריטים במארז</div>
                       <div style={{ fontSize: 13.5, color: MUTED, marginTop: 5 }}>השורות נפרשו מתכולת המארז. הקלד סריאלי ולחץ Enter למעבר לשורה הבאה.</div>
                     </div>
-                    <div style={{ textAlign: "center", background: "#f5f5f7", borderRadius: 12, padding: "10px 18px", flexShrink: 0 }}>
+                    <div style={{ textAlign: "center", background: "var(--color-canvas-parchment)", borderRadius: 12, padding: "10px 18px", flexShrink: 0 }}>
                       <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{rows.length}</div>
                       <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3 }}>פריטים במארז</div>
                     </div>
@@ -393,7 +393,7 @@ export default function PackageIntakeDialog({
                   <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, overflow: "hidden", marginTop: 16 }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
-                        <tr style={{ background: "#f5f5f7" }}>
+                        <tr style={{ background: "var(--color-canvas-parchment)" }}>
                           <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 16px", width: 48 }}>#</th>
                           <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>סוג פריט</th>
                           <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px", width: 210 }}>מספר סריאלי</th>
@@ -405,14 +405,14 @@ export default function PackageIntakeDialog({
                       <tbody>
                         {rows.map((r, i) => (
                           <React.Fragment key={r.key}>
-                            <tr style={{ borderTop: `1px solid ${HAIR_2}`, background: error?.rowIndex === i ? RED_BG : "#fff" }}>
+                            <tr style={{ borderTop: `1px solid ${HAIR_2}`, background: error?.rowIndex === i ? RED_BG : "var(--color-canvas)" }}>
                               <td style={{ padding: "10px 16px", fontSize: 13, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                               <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                   {r.fromTemplate ? (
                                     <>
                                       <span style={{ fontSize: 14, fontWeight: 600 }}>{r.typeDesc}</span>
-                                      <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, background: "#f5f5f7", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "2px 8px" }}>מהתבנית</span>
+                                      <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, background: "var(--color-canvas-parchment)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "2px 8px" }}>מהתבנית</span>
                                     </>
                                   ) : (
                                     <div style={{ minWidth: 186 }}>
@@ -455,13 +455,13 @@ export default function PackageIntakeDialog({
                                 <button type="button" onClick={() => patchRow(i, { open: !r.open })} style={{ fontSize: 13, fontWeight: 600, color: BLUE, background: "transparent", border: 0, cursor: "pointer", padding: 0, fontFamily: "inherit", whiteSpace: "nowrap" }}>{r.open ? "סגור" : "פרטים"}</button>
                               </td>
                               <td style={{ padding: "10px 16px", textAlign: "center" }}>
-                                <button type="button" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} style={{ width: 30, height: 30, borderRadius: 8, background: "#f5f5f7", color: MUTED, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                                <button type="button" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} style={{ width: 30, height: 30, borderRadius: 8, background: "var(--color-canvas-parchment)", color: MUTED, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                                   <Trash2 size={15} strokeWidth={1.75} />
                                 </button>
                               </td>
                             </tr>
                             {r.open && (
-                              <tr style={{ background: "#fafafc", borderTop: `1px solid ${HAIR_2}` }}>
+                              <tr style={{ background: "var(--color-surface-pearl)", borderTop: `1px solid ${HAIR_2}` }}>
                                 <td></td>
                                 <td colSpan={5} style={{ padding: "4px 12px 16px" }}>
                                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, maxWidth: 760 }}>
@@ -512,7 +512,7 @@ export default function PackageIntakeDialog({
                     <div style={{ flex: 1, minWidth: 280, display: "flex", flexDirection: "column", gap: 10 }}>
                       {rows.map((r, i) => (
                         <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 12, border: `1px solid ${HAIR}`, borderRadius: 12, padding: "12px 14px" }}>
-                          <span style={{ width: 30, height: 30, borderRadius: 8, background: "#e6efff", color: BLUE, fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(i + 1)}</span>
+                          <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--color-primary-soft)", color: BLUE, fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(i + 1)}</span>
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 13.5, fontWeight: 600 }}>{r.typeDesc || memberTypes.find((t) => t.item_type_id === r.itemType)?.item_type_desc || "פריט"}</div>
                             <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{r.makat || "—"} · {r.serial || "ללא סריאלי"}</div>

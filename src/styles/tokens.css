@@ -16,6 +16,7 @@
   --color-primary-on-dark:#2997ff;    /* links on dark tiles ONLY */
   --color-primary-tint:#f3f8ff;       /* selected row / soft primary wash on light */
   --color-primary-soft:#e6efff;       /* selected chip / step / pill fill; stronger than tint */
+  --color-primary-border:#cfe3fb;     /* the edge of a soft-blue chip / selected card */
   --color-on-primary:#ffffff;
   --color-destructive:#bf3535;
   --color-destructive-hover:#a82d2d;

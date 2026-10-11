@@ -33,7 +33,7 @@ import "./packages.css";
 
 type Option = { value: string; label: string };
 
-const chipBg = (s: PackageView["items"][number]["state"]) => (s === "done" ? "#eaf5ef" : s === "missing" ? "rgba(191,53,53,.08)" : "#f5f5f7");
+const chipBg = (s: PackageView["items"][number]["state"]) => (s === "done" ? "var(--color-success-bg)" : s === "missing" ? "rgba(191,53,53,.08)" : "var(--color-canvas-parchment)");
 const chipTone = (s: PackageView["items"][number]["state"]) => (s === "done" ? GREEN : s === "missing" ? RED : MUTED);
 const itemLine = (it: PackageView["items"][number]) => (it.serial_no ? `${it.serial_no} · ${it.makat ?? "—"}` : `${it.makat ?? "—"} · ללא סריאלי`);
 const blockedNote = (p: PackageView) =>
@@ -154,7 +154,7 @@ function PackagesPageInner() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1 }}>ניהול מארזים</h1>
-            <span style={{ fontSize: 13, color: MUTED, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "3px 11px", fontVariantNumeric: "tabular-nums" }}>{list.length} מארזים</span>
+            <span style={{ fontSize: 13, color: MUTED, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "3px 11px", fontVariantNumeric: "tabular-nums" }}>{list.length} מארזים</span>
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 16, color: INK_2, lineHeight: 1.5 }}>כל המארזים שנקלטו במערכת, תכולתם ומצב הבדיקה של כל פריט.</p>
         </div>
@@ -185,7 +185,7 @@ function PackagesPageInner() {
         <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 360 }}>
           <Search size={16} strokeWidth={1.75} color={MUTED} style={{ position: "absolute", insetInlineStart: 14, top: 13, pointerEvents: "none" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="חיפוש לפי מזהה, סריאלי, מק״ט או סוג מארז"
-            style={{ width: "100%", height: 42, border: `1px solid ${HAIR}`, borderRadius: 10, paddingInlineStart: 40, paddingInlineEnd: 14, fontSize: 14, background: "#fff", outline: "none", fontFamily: "inherit" }} />
+            style={{ width: "100%", height: 42, border: `1px solid ${HAIR}`, borderRadius: 10, paddingInlineStart: 40, paddingInlineEnd: 14, fontSize: 14, background: "var(--color-canvas)", outline: "none", fontFamily: "inherit" }} />
         </div>
         <FilterSelect value={customer} onChange={setCustomer} options={customers} allLabel="כל הלקוחות" />
         <FilterSelect value={shipment} onChange={setShipment} options={shipments} allLabel="כל המשלוחים" />
@@ -200,7 +200,7 @@ function PackagesPageInner() {
 
       {/* Table + panel */}
       <div className="pkg-split">
-        <div className="pkg-table-wrap" style={{ background: "#fff", border: `1px solid ${HAIR}` }}>
+        <div className="pkg-table-wrap" style={{ background: "var(--color-canvas)", border: `1px solid ${HAIR}` }}>
           <div className="pkg-table-scroll">
             <table style={{ width: "100%", minWidth: 680, borderCollapse: "collapse" }}>
               {/* The rule under the header is a box-shadow (in packages.css), not a
@@ -220,7 +220,7 @@ function PackagesPageInner() {
                   const st = PKG_STATUS[p.status];
                   const isSel = p.item_id === selectedId;
                   return (
-                    <tr key={p.item_id} onClick={() => setSelectedId(p.item_id)} style={{ cursor: "pointer", borderTop: `1px solid ${HAIR_2}`, background: isSel ? "#f7fbff" : "#fff" }}>
+                    <tr key={p.item_id} onClick={() => setSelectedId(p.item_id)} style={{ cursor: "pointer", borderTop: `1px solid ${HAIR_2}`, background: isSel ? "var(--color-primary-tint)" : "var(--color-canvas)" }}>
                       <td style={{ padding: "11px 16px", whiteSpace: "nowrap" }}>
                         <PackageIdText id={p.item_id} />
                         <div style={{ fontSize: 11.5, color: MUTED_LT, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>נקלט {fmtDate(p.created_at)}</div>
@@ -255,7 +255,7 @@ function PackagesPageInner() {
           </div>
         </div>
 
-        <div className="pkg-panel" style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16 }}>
+        <div className="pkg-panel" style={{ background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16 }}>
           {!sel ? (
             <div style={{ padding: "40px 24px", textAlign: "center" }}>
               <div style={{ fontSize: 15, fontWeight: 600 }}>בחר מארז</div>

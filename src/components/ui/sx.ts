@@ -45,7 +45,7 @@ const COLOR_TOKENS: Record<string, string> = {
   "action.hover": "var(--color-canvas-parchment)",
   "background.paper": "var(--color-canvas)",
   "background.default": "var(--color-canvas-parchment)",
-  "common.white": "#ffffff",
+  "common.white": "var(--color-canvas)",
   "common.black": "#000000",
 };
 

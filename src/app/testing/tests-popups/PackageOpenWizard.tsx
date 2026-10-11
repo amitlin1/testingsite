@@ -361,7 +361,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap", maxWidth: 620 }}>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>משקל פריט ייחוס</div>
-                  <div style={{ height: 52, border: `1px solid ${HAIR}`, borderRadius: 11, background: "#f5f5f7", display: "flex", alignItems: "center", padding: "0 14px", fontSize: 17, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{curWork.refWeight != null ? `${curWork.refWeight} גר׳` : "לא מוגדר"}</div>
+                  <div style={{ height: 52, border: `1px solid ${HAIR}`, borderRadius: 11, background: "var(--color-canvas-parchment)", display: "flex", alignItems: "center", padding: "0 14px", fontSize: 17, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{curWork.refWeight != null ? `${curWork.refWeight} גר׳` : "לא מוגדר"}</div>
                 </div>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>משקל פריט נבדק</div>
@@ -404,14 +404,14 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               {items.map((it, i) => {
                 const w = workOf(it.item_id);
                 return (
-                  <div key={it.item_id} style={{ border: `1px solid ${w.done ? "rgba(31,138,91,0.3)" : HAIR}`, borderRadius: 14, padding: "14px 16px", background: w.done ? "rgba(31,138,91,0.04)" : "#fff", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                    <span style={{ width: 34, height: 34, borderRadius: 9, background: w.done ? "rgba(31,138,91,0.1)" : "#f5f5f7", color: w.done ? GREEN : MUTED, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
+                  <div key={it.item_id} style={{ border: `1px solid ${w.done ? "rgba(31,138,91,0.3)" : HAIR}`, borderRadius: 14, padding: "14px 16px", background: w.done ? "rgba(31,138,91,0.04)" : "var(--color-canvas)", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                    <span style={{ width: 34, height: 34, borderRadius: 9, background: w.done ? "rgba(31,138,91,0.1)" : "var(--color-canvas-parchment)", color: w.done ? GREEN : MUTED, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 600 }}>{it.item_type_desc}</div>
                       <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{it.makat ?? "—"} · {it.serial_no ?? "ללא סריאלי"}{w.refWeight != null ? ` · ייחוס ${w.refWeight} גר׳` : ""}</div>
                     </div>
                     <div style={{ fontSize: 12.5, color: w.done ? GREEN : MUTED, fontWeight: 600, whiteSpace: "nowrap" }}>{w.done ? "צולם ונשקל" : "ממתין"}</div>
-                    <button type="button" onClick={() => startItem(i)} disabled={busy} style={{ minHeight: 44, background: w.done ? "#fff" : BLUE, color: w.done ? INK : "#fff", border: w.done ? `1px solid ${HAIR}` : 0, borderRadius: 9999, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>{w.done ? "פתח שוב" : "התחל"}</button>
+                    <button type="button" onClick={() => startItem(i)} disabled={busy} style={{ minHeight: 44, background: w.done ? "var(--color-canvas)" : BLUE, color: w.done ? INK : "var(--color-canvas)", border: w.done ? `1px solid ${HAIR}` : 0, borderRadius: 9999, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>{w.done ? "פתח שוב" : "התחל"}</button>
                   </div>
                 );
               })}
@@ -433,8 +433,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
                 <input placeholder="דגם" value={add.model} onChange={(e) => setAdd({ ...add, model: e.target.value })} style={fieldInput} />
                 <input placeholder="יצרן" value={add.manufacturer} onChange={(e) => setAdd({ ...add, manufacturer: e.target.value })} style={fieldInput} />
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <button type="button" onClick={() => setAddOpen(false)} style={{ minHeight: 40, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK }}>ביטול</button>
-                  <button type="button" onClick={addMissing} disabled={busy} style={{ minHeight: 40, background: BLUE, color: "#fff", border: 0, borderRadius: 9999, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>הוסף</button>
+                  <button type="button" onClick={() => setAddOpen(false)} style={{ minHeight: 40, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK }}>ביטול</button>
+                  <button type="button" onClick={addMissing} disabled={busy} style={{ minHeight: 40, background: BLUE, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>הוסף</button>
                 </div>
               </div>
             ) : (
@@ -446,16 +446,16 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         ) : stepKey === "count" ? (
           <div style={{ marginTop: 20 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, maxWidth: 620 }}>
-              <div style={{ border: `1px solid ${counted != null && counted !== items.length ? AMBER_BORDER : HAIR}`, borderRadius: 14, padding: "16px 18px", background: counted != null && counted !== items.length ? AMBER_BG : "#fff" }}>
+              <div style={{ border: `1px solid ${counted != null && counted !== items.length ? AMBER_BORDER : HAIR}`, borderRadius: 14, padding: "16px 18px", background: counted != null && counted !== items.length ? AMBER_BG : "var(--color-canvas)" }}>
                 <input value={countInput} onChange={(e) => setCountInput(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" autoFocus placeholder="—"
                   style={{ width: "100%", border: 0, outline: "none", background: "transparent", fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, color: INK, fontVariantNumeric: "tabular-nums", fontFamily: "inherit", padding: 0 }} />
                 <div style={{ fontSize: 12.5, color: MUTED, marginTop: 7 }}>נספר בעמדה</div>
               </div>
-              <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, padding: "16px 18px", background: "#fff" }}>
+              <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, padding: "16px 18px", background: "var(--color-canvas)" }}>
                 <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, color: INK, fontVariantNumeric: "tabular-nums" }}>{items.length}</div>
                 <div style={{ fontSize: 12.5, color: MUTED, marginTop: 7 }}>נרשם בקליטה</div>
               </div>
-              <div style={{ border: `1px solid ${items.length !== templateCount ? AMBER_BORDER : HAIR}`, borderRadius: 14, padding: "16px 18px", background: items.length !== templateCount ? AMBER_BG : "#fff" }}>
+              <div style={{ border: `1px solid ${items.length !== templateCount ? AMBER_BORDER : HAIR}`, borderRadius: 14, padding: "16px 18px", background: items.length !== templateCount ? AMBER_BG : "var(--color-canvas)" }}>
                 <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, color: items.length !== templateCount ? AMBER_INK : INK, fontVariantNumeric: "tabular-nums" }}>{templateCount}</div>
                 <div style={{ fontSize: 12.5, color: MUTED, marginTop: 7 }}>תכולת המארז (תבנית)</div>
               </div>
@@ -475,10 +475,10 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
             {[{ kind: "מדבקת קופסה", title: pkg.item_type_desc, note: `${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`, id: item.item_id }]
               .concat(items.map((it) => ({ kind: "מדבקת פריט", title: it.item_type_desc, note: `פריט ${seq2(it.package_seq)} מתוך ${seq2(items.length)}`, id: Number(it.item_id) })))
               .map((l, i) => (
-                <div key={`${l.id}-${i}`} style={{ width: 214, border: `1px solid ${BLUE}`, background: "#f7fbff", borderRadius: 14, padding: "15px 16px" }}>
+                <div key={`${l.id}-${i}`} style={{ width: 214, border: `1px solid ${BLUE}`, background: "var(--color-primary-tint)", borderRadius: 14, padding: "15px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ fontSize: 11.5, fontWeight: 600, color: MUTED }}>{l.kind}</div>
-                    <span style={{ width: 20, height: 20, borderRadius: 6, border: `1px solid ${BLUE}`, background: BLUE, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={11} strokeWidth={2.5} /></span>
+                    <span style={{ width: 20, height: 20, borderRadius: 6, border: `1px solid ${BLUE}`, background: BLUE, color: "var(--color-on-primary)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={11} strokeWidth={2.5} /></span>
                   </div>
                   <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 44, marginTop: 12 }}>
                     {Array.from({ length: 22 }, (_, b) => <div key={b} style={{ width: ((b + i) % 3) + 1, height: "100%", background: INK }} />)}

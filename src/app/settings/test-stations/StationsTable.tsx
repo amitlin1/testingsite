@@ -142,8 +142,8 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
     {
       key: "research", header: "מחקר", width: 90,
       cell: (r) => (r.is_research
-        ? <span style={{ fontSize: 11, fontWeight: 600, color: "#0066cc", background: "rgba(0,102,204,0.08)", borderRadius: 9999, padding: "4px 10px" }}>מחקר</span>
-        : <span style={{ fontSize: 13, color: "#c0c0c8" }}>—</span>),
+        ? <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-primary)", background: "rgba(0,102,204,0.08)", borderRadius: 9999, padding: "4px 10px" }}>מחקר</span>
+        : <span style={{ fontSize: 13, color: "var(--color-border-strong)" }}>—</span>),
     },
     {
       key: "__actions", header: "פעולות", align: "center", width: 120,
@@ -157,21 +157,21 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
   ];
 
   return (
-    <div dir="rtl" style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 16, overflow: "hidden" }}>
+    <div dir="rtl" style={{ background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: 16, overflow: "hidden" }}>
       {/* card header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid #e0e0e0", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#1d1d1f" }}>עמדות · {typeName}</span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--color-hairline)", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)" }}>עמדות · {typeName}</span>
         <button
           onClick={handleAdd}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#0066cc", color: "#fff", border: 0, borderRadius: 9999, padding: "8px 15px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--color-primary)", color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "8px 15px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
         >
           <Plus size={16} strokeWidth={2.1} />הוסף עמדה
         </button>
       </div>
 
       {/* search */}
-      <div style={{ position: "relative", padding: "10px 14px", borderBottom: "1px solid #f0f0f0", maxWidth: 360 }}>
-        <span style={{ position: "absolute", insetInlineStart: 26, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
+      <div style={{ position: "relative", padding: "10px 14px", borderBottom: "1px solid var(--color-divider-soft)", maxWidth: 360 }}>
+        <span style={{ position: "absolute", insetInlineStart: 26, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex" }}>
           <Search size={15} strokeWidth={1.75} />
         </span>
         <input

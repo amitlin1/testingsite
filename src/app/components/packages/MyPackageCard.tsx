@@ -17,7 +17,7 @@ export default function MyPackageCard({ pkg, currentItemId }: { pkg: PackageView
   const me = String(currentItemId);
   const isBox = me === String(pkg.item_id);
   return (
-    <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, background: "#fff", padding: "14px 16px", color: INK }}>
+    <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, background: "var(--color-canvas)", padding: "14px 16px", color: INK }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 11.5, fontWeight: 700, background: BLUE_SOFT, color: BLUE, borderRadius: 9999, padding: "3px 9px" }}>מארז</span>
         <PackageIdText id={pkg.item_id} size={15} headColor={INK} weight={600} />
@@ -35,8 +35,8 @@ export default function MyPackageCard({ pkg, currentItemId }: { pkg: PackageView
         {pkg.items.map((it) => {
           const mine = String(it.item_id) === me;
           return (
-            <NextLink key={it.item_id} href={`/items/${it.item_id}/history`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: `1px solid ${HAIR_2}`, background: mine ? "#f7fbff" : "#fff", color: "inherit", textDecoration: "none" }}>
-              <span style={{ width: 26, height: 26, borderRadius: 7, background: mine ? BLUE_SOFT : "#f5f5f7", color: mine ? BLUE : MUTED, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
+            <NextLink key={it.item_id} href={`/items/${it.item_id}/history`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: `1px solid ${HAIR_2}`, background: mine ? "var(--color-primary-tint)" : "var(--color-canvas)", color: "inherit", textDecoration: "none" }}>
+              <span style={{ width: 26, height: 26, borderRadius: 7, background: mine ? BLUE_SOFT : "var(--color-canvas-parchment)", color: mine ? BLUE : MUTED, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{it.item_type_desc}</div>
                 <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{[it.makat, it.serial_no].filter(Boolean).join(" · ") || "—"}</div>

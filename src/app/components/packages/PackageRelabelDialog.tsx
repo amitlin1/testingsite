@@ -75,7 +75,7 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
 
   return (
     <div onClick={onClose} style={{ ...overlay, zIndex: DIALOG_Z - 10 }}>
-      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(880px, 96vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
+      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(880px, 96vw)", maxHeight: "92vh", background: "var(--color-canvas)", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
         <div data-drag-handle="" className="no-print" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>מדבקות חדשות למארזים שהוסבו</div>
@@ -83,7 +83,7 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
               {packages.length} מארזים עדיין נושאים מדבקה עם המזהה הישן. הסריקה של המדבקה הישנה עדיין עובדת, אבל כל קופסה צריכה את המדבקה החדשה שלה.
             </div>
           </div>
-          <button type="button" onClick={onClose} style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "#f5f5f7", color: INK, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button type="button" onClick={onClose} style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "var(--color-canvas-parchment)", color: INK, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
@@ -97,7 +97,7 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
           </div>
           <div className="no-print" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 9 }}>
             {packages.map(({ pkg, legacyIds }, i) => (
-              <div key={pkg.item_id} onClick={() => setOn((v) => v.map((x, j) => (j === i ? !x : x)))} style={{ display: "flex", alignItems: "center", gap: 13, border: `1px solid ${on[i] ? BLUE : HAIR}`, background: on[i] ? "#f7fbff" : "#fff", borderRadius: 14, padding: "11px 14px", cursor: "pointer" }}>
+              <div key={pkg.item_id} onClick={() => setOn((v) => v.map((x, j) => (j === i ? !x : x)))} style={{ display: "flex", alignItems: "center", gap: 13, border: `1px solid ${on[i] ? BLUE : HAIR}`, background: on[i] ? "var(--color-primary-tint)" : "var(--color-canvas)", borderRadius: 14, padding: "11px 14px", cursor: "pointer" }}>
                 <Tick on={on[i]} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600 }}>{pkg.item_type_desc} · {pkg.customer_name ?? pkg.customer_code ?? ""}</div>
@@ -123,10 +123,10 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
           )}
 
           {askConfirm && (
-            <div className="no-print" role="alertdialog" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", fontSize: 13.5, color: INK, background: "#f7fbff", border: `1px solid ${BLUE}`, borderRadius: 10, padding: "12px 14px", marginTop: 18 }}>
+            <div className="no-print" role="alertdialog" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", fontSize: 13.5, color: INK, background: "var(--color-primary-tint)", border: `1px solid ${BLUE}`, borderRadius: 10, padding: "12px 14px", marginTop: 18 }}>
               <span style={{ flex: 1, minWidth: 220 }}>חלון ההדפסה נסגר. המדבקות של {printedRef.current.length} המארזים הודפסו? אישור מסמן אותם כמודבקים ומוריד אותם מהרשימה.</span>
               <button type="button" onClick={() => setAskConfirm(false)} style={{ ...pillGhost, padding: "9px 16px", fontSize: 13.5 }}>לא, עדיין לא</button>
-              <button type="button" onClick={() => { setAskConfirm(false); onPrinted?.(printedRef.current); }} style={{ background: BLUE, color: "#fff", border: 0, borderRadius: 9999, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>כן, הודפסו</button>
+              <button type="button" onClick={() => { setAskConfirm(false); onPrinted?.(printedRef.current); }} style={{ background: BLUE, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "9px 18px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>כן, הודפסו</button>
             </div>
           )}
 
@@ -140,7 +140,7 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
             <button type="button" onClick={() => setPreview((p) => !p)} style={{ ...pillGhost, padding: "11px 20px" }}>{preview ? "הסתר תצוגה מקדימה" : "תצוגה מקדימה"}</button>
             <button type="button" disabled={chosen.length === 0}
               onClick={() => { printedRef.current = chosen.map((c) => c.pkg.item_id); setPreview(true); setTimeout(() => handlePrint(), 50); }}
-              style={{ background: chosen.length === 0 ? HAIR : BLUE, color: chosen.length === 0 ? MUTED_LT : "#fff", border: 0, borderRadius: 9999, padding: "11px 24px", fontSize: 15, fontWeight: 600, cursor: chosen.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ background: chosen.length === 0 ? HAIR : BLUE, color: chosen.length === 0 ? MUTED_LT : "var(--color-canvas)", border: 0, borderRadius: 9999, padding: "11px 24px", fontSize: 15, fontWeight: 600, cursor: chosen.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {chosen.length === 0 ? "הדפס" : `הדפס ${sheets} מדבקות`}
             </button>
           </div>

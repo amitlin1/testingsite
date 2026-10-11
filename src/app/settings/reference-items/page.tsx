@@ -70,15 +70,15 @@ type FormImage =
 
 // ---- Design tokens (Shifthouse) --------------------------------------------
 const C = {
-  accent: "#0066cc",
-  accentHover: "#0058b3",
-  ink: "#1d1d1f",
-  muted: "#7a7a7a",
-  mutedSoft: "#9a9aa0",
-  hairline: "#e0e0e0",
-  card: "#fff",
-  subtle: "#fafafc",
-  danger: "#bf3535",
+  accent: "var(--color-primary)",
+  accentHover: "var(--color-primary-hover)",
+  ink: "var(--color-ink)",
+  muted: "var(--color-ink-muted-48)",
+  mutedSoft: "var(--color-ink-muted-40)",
+  hairline: "var(--color-hairline)",
+  card: "var(--color-canvas)",
+  subtle: "var(--color-surface-pearl)",
+  danger: "var(--color-destructive)",
 };
 
 let keySeq = 0;
@@ -415,7 +415,7 @@ export default function ReferenceItemsPage() {
                   </Box>
                 )}
               </Box>
-              <Typography sx={{ mt: 1, fontSize: 15, color: "#444", maxWidth: 620, lineHeight: 1.5 }}>
+              <Typography sx={{ mt: 1, fontSize: 15, color: "var(--color-ink-muted-70)", maxWidth: 620, lineHeight: 1.5 }}>
                 בחר סוג פריט, ואז סנן לפי מק״ט יצרן או יצרן. פריט הייחוס משמש להשוואה אוטומטית בבדיקות.
               </Typography>
             </Box>
@@ -632,14 +632,14 @@ export default function ReferenceItemsPage() {
               height: 34,
               border: 0,
               borderRadius: "9999px",
-              bgcolor: "#f5f5f7",
+              bgcolor: "var(--color-canvas-parchment)",
               color: C.ink,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
               flexShrink: 0,
-              "&:hover": { bgcolor: "#ececf0" },
+              "&:hover": { bgcolor: "var(--color-hairline)" },
             }}
           >
             <CloseIcon sx={{ fontSize: 18 }} />
@@ -742,9 +742,9 @@ export default function ReferenceItemsPage() {
                 addFiles([...(e.dataTransfer?.files ?? [])]);
               }}
               sx={{
-                border: `1.5px dashed ${dragOver ? C.accent : "#c7c7cf"}`,
+                border: `1.5px dashed ${dragOver ? C.accent : "var(--color-border-strong)"}`,
                 borderRadius: "12px",
-                bgcolor: dragOver ? "#f3f8ff" : C.subtle,
+                bgcolor: dragOver ? "var(--color-primary-tint)" : C.subtle,
                 p: 2.75,
                 textAlign: "center",
                 cursor: "pointer",
@@ -753,7 +753,7 @@ export default function ReferenceItemsPage() {
                 alignItems: "center",
                 gap: 1,
                 transition: "border-color 0.15s ease, background-color 0.15s ease",
-                "&:hover": { borderColor: C.accent, bgcolor: "#f3f8ff" },
+                "&:hover": { borderColor: C.accent, bgcolor: "var(--color-primary-tint)" },
               }}
             >
               <Box
@@ -816,7 +816,7 @@ export default function ReferenceItemsPage() {
                     <Typography sx={{ fontSize: 12, color: C.mutedSoft, fontVariantNumeric: "tabular-nums" }}>
                       {group.images.length} תמונות
                     </Typography>
-                    <Box sx={{ flex: 1, height: "1px", bgcolor: "#f0f0f0" }} />
+                    <Box sx={{ flex: 1, height: "1px", bgcolor: "var(--color-divider-soft)" }} />
                   </Box>
                   <Box
                     sx={{
@@ -836,7 +836,7 @@ export default function ReferenceItemsPage() {
                             borderRadius: "8px",
                             overflow: "hidden",
                             border: isPrimary ? `2px solid ${C.accent}` : `1px solid ${C.hairline}`,
-                            bgcolor: "#f5f5f7",
+                            bgcolor: "var(--color-canvas-parchment)",
                           }}
                         >
                           {/* contain so the full image is visible in the square preview */}
@@ -865,7 +865,7 @@ export default function ReferenceItemsPage() {
                                 bottom: 0,
                                 insetInline: 0,
                                 bgcolor: C.accent,
-                                color: "#fff",
+                                color: "var(--color-on-primary)",
                                 fontSize: 10,
                                 fontWeight: 600,
                                 textAlign: "center",
@@ -938,7 +938,7 @@ export default function ReferenceItemsPage() {
             onClick={closeForm}
             disabled={saving}
             variant="outlined"
-            sx={{ borderRadius: "9999px", px: 2.5, py: 1.25, fontSize: 15, fontWeight: 600, borderColor: "#d4d4dc", color: C.ink }}
+            sx={{ borderRadius: "9999px", px: 2.5, py: 1.25, fontSize: 15, fontWeight: 600, borderColor: "var(--color-border-strong)", color: C.ink }}
           >
             ביטול
           </Button>
@@ -985,7 +985,7 @@ function StepBadge({ n, label }: { n: number; label: string }) {
           height: 24,
           borderRadius: "9999px",
           bgcolor: C.accent,
-          color: "#fff",
+          color: "var(--color-on-primary)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1003,7 +1003,7 @@ function StepBadge({ n, label }: { n: number; label: string }) {
 
 function FieldCaption({ children, optional }: { children: React.ReactNode; optional?: boolean }) {
   return (
-    <Typography component="label" sx={{ display: "block", fontSize: 13, fontWeight: 600, color: "#333", mb: 1 }}>
+    <Typography component="label" sx={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-ink-muted-80)", mb: 1 }}>
       {children}
       {optional && (
         <Box component="span" sx={{ color: C.mutedSoft, fontWeight: 400 }}>
@@ -1083,7 +1083,7 @@ function MiniBtn({
         justifyContent: "center",
         cursor: "pointer",
         p: 0,
-        "&:hover": { bgcolor: "#fff" },
+        "&:hover": { bgcolor: "var(--color-canvas)" },
       }}
     >
       {children}
@@ -1104,11 +1104,11 @@ function ReferenceCard({ item, onEdit }: { item: ReferenceItem; onEdit: () => vo
         display: "flex",
         flexDirection: "column",
         transition: "border-color 0.15s ease",
-        "&:hover": { borderColor: "#c4c4cc" },
+        "&:hover": { borderColor: "var(--color-border-strong)" },
       }}
     >
       {item.cover_url ? (
-        <Box sx={{ position: "relative", bgcolor: "#f5f5f7" }}>
+        <Box sx={{ position: "relative", bgcolor: "var(--color-canvas-parchment)" }}>
           {/* contain (not cover) so the whole reference image is visible, not cropped */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -1123,7 +1123,7 @@ function ReferenceCard({ item, onEdit }: { item: ReferenceItem; onEdit: () => vo
                 top: 10,
                 insetInlineStart: 10,
                 bgcolor: "rgba(0,0,0,0.62)",
-                color: "#fff",
+                color: "var(--color-on-primary)",
                 fontSize: 11,
                 fontWeight: 600,
                 borderRadius: "9999px",
@@ -1145,8 +1145,8 @@ function ReferenceCard({ item, onEdit }: { item: ReferenceItem; onEdit: () => vo
             alignItems: "center",
             justifyContent: "center",
             gap: 1,
-            bgcolor: "#eef1f4",
-            color: "#5a6b7a",
+            bgcolor: "var(--color-hairline)",
+            color: "var(--color-ink-muted-80)",
           }}
         >
           <Inventory2OutlinedIcon sx={{ fontSize: 40 }} />
@@ -1162,7 +1162,7 @@ function ReferenceCard({ item, onEdit }: { item: ReferenceItem; onEdit: () => vo
               fontSize: 11,
               fontWeight: 600,
               color: C.ink,
-              bgcolor: "#f5f5f7",
+              bgcolor: "var(--color-canvas-parchment)",
               border: `1px solid ${C.hairline}`,
               borderRadius: "9999px",
               px: 1.25,

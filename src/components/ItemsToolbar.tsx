@@ -56,7 +56,7 @@ export default function ItemsToolbar({
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1 }}>ניהול פריטים</h1>
           </div>
-          <p style={{ margin: "8px 0 0", fontSize: 16, color: "#444", lineHeight: 1.5 }}>
+          <p style={{ margin: "8px 0 0", fontSize: 16, color: "var(--color-ink-muted-70)", lineHeight: 1.5 }}>
             כל הפריטים שנקלטו במערכת, הסטטוס וההתקדמות שלהם בתהליך הבדיקה.
           </p>
         </div>
@@ -70,7 +70,7 @@ export default function ItemsToolbar({
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
         {/* search */}
         <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 340 }}>
-          <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex", zIndex: 1 }}>
+          <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex", zIndex: 1 }}>
             <Search size={16} strokeWidth={1.75} />
           </span>
           <input

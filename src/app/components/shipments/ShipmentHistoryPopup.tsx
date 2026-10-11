@@ -182,7 +182,7 @@ export default function ShipmentHistoryPopup({
                 {loading ? <CircularProgress /> : (
                     <>
                         {/* Summary Section */}
-                        <Box sx={{ mb: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                        <Box sx={{ mb: 3, p: 2, bgcolor: 'var(--color-canvas-parchment)', borderRadius: 1 }}>
                             <Typography variant="h6" gutterBottom>סיכום</Typography>
                             <Typography variant="subtitle1" fontWeight="bold">
                                 כמות התקבלה:  {progressStats.totalReceived}

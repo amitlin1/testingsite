@@ -41,7 +41,7 @@ export default function PackageIdText({
 /** Status pill: neutral chip with a coloured dot (design: סטטוס המארז). */
 export function StatusPill({ label, dot, size = 12 }: { label: string; dot: string; size?: number }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, fontWeight: 600, background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap", color: INK }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, fontWeight: 600, background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap", color: INK }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />
       {label}
     </span>

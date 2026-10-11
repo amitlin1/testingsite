@@ -164,8 +164,8 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
                 const d = decisions[it.item_id];
                 const isPacked = packed[it.item_id] === true;
                 return (
-                  <div key={it.item_id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: `1px solid ${HAIR_2}`, background: isArr ? "#fff" : AMBER_BG, flexWrap: "wrap" }}>
-                    <span style={{ width: 34, height: 34, borderRadius: 9, background: isArr ? "#f5f5f7" : "rgba(168,106,26,0.1)", color: isArr ? MUTED : AMBER_INK, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
+                  <div key={it.item_id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: `1px solid ${HAIR_2}`, background: isArr ? "var(--color-canvas)" : AMBER_BG, flexWrap: "wrap" }}>
+                    <span style={{ width: 34, height: 34, borderRadius: 9, background: isArr ? "var(--color-canvas-parchment)" : "rgba(168,106,26,0.1)", color: isArr ? MUTED : AMBER_INK, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 600 }}>{it.item_type_desc}</div>
                       <div style={{ fontSize: 12.5, color: isArr ? MUTED : AMBER_INK, marginTop: 2 }}>
@@ -173,12 +173,12 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
                       </div>
                     </div>
                     {isArr ? (
-                      <div onClick={() => setPacked((p) => ({ ...p, [it.item_id]: !isPacked }))} style={{ display: "flex", alignItems: "center", gap: 9, minHeight: 44, padding: "8px 14px", border: `1px solid ${isPacked ? BLUE : HAIR}`, background: isPacked ? "#e6efff" : "#fff", borderRadius: 11, cursor: "pointer" }}>
-                        <span style={{ width: 20, height: 20, borderRadius: 6, border: `1px solid ${isPacked ? BLUE : GREY}`, background: isPacked ? BLUE : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{isPacked && <Check size={12} strokeWidth={2.5} />}</span>
+                      <div onClick={() => setPacked((p) => ({ ...p, [it.item_id]: !isPacked }))} style={{ display: "flex", alignItems: "center", gap: 9, minHeight: 44, padding: "8px 14px", border: `1px solid ${isPacked ? BLUE : HAIR}`, background: isPacked ? "var(--color-primary-soft)" : "var(--color-canvas)", borderRadius: 11, cursor: "pointer" }}>
+                        <span style={{ width: 20, height: 20, borderRadius: 6, border: `1px solid ${isPacked ? BLUE : GREY}`, background: isPacked ? BLUE : "var(--color-canvas)", color: "var(--color-on-primary)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{isPacked && <Check size={12} strokeWidth={2.5} />}</span>
                         <span style={{ fontSize: 14, fontWeight: 600, color: isPacked ? BLUE : INK }}>נארז</span>
                       </div>
                     ) : (
-                      <button type="button" onClick={() => setDecideFor(it)} style={{ minHeight: 44, background: d == null ? "#fff" : d.decision === "packed_anyway" ? "#e6efff" : RED_BG, color: d == null ? AMBER_INK : d.decision === "packed_anyway" ? BLUE : RED, border: `1px solid ${d == null ? AMBER_BORDER : d.decision === "packed_anyway" ? BLUE : "rgba(191,53,53,0.25)"}`, borderRadius: 9999, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+                      <button type="button" onClick={() => setDecideFor(it)} style={{ minHeight: 44, background: d == null ? "var(--color-canvas)" : d.decision === "packed_anyway" ? "var(--color-primary-soft)" : RED_BG, color: d == null ? AMBER_INK : d.decision === "packed_anyway" ? BLUE : RED, border: `1px solid ${d == null ? AMBER_BORDER : d.decision === "packed_anyway" ? BLUE : "rgba(191,53,53,0.25)"}`, borderRadius: 9999, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
                         {d == null ? "נדרשת החלטה" : d.decision === "packed_anyway" ? "נארז בכל זאת" : "חסר במארז"}
                       </button>
                     )}
@@ -198,8 +198,8 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
               {CHECKS.map((label, i) => {
                 const on = checks[i];
                 return (
-                  <div key={label} onClick={() => setChecks((c) => c.map((v, j) => (j === i ? !v : v)))} style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52, border: `1px solid ${on ? BLUE : HAIR}`, background: on ? "#f7fbff" : "#fff", borderRadius: 12, padding: "13px 15px", cursor: "pointer" }}>
-                    <span style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${on ? BLUE : GREY}`, background: on ? BLUE : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{on && <Check size={13} strokeWidth={2.5} />}</span>
+                  <div key={label} onClick={() => setChecks((c) => c.map((v, j) => (j === i ? !v : v)))} style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52, border: `1px solid ${on ? BLUE : HAIR}`, background: on ? "var(--color-primary-tint)" : "var(--color-canvas)", borderRadius: 12, padding: "13px 15px", cursor: "pointer" }}>
+                    <span style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${on ? BLUE : GREY}`, background: on ? BLUE : "var(--color-canvas)", color: "var(--color-on-primary)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{on && <Check size={13} strokeWidth={2.5} />}</span>
                     <span style={{ fontSize: 14.5, fontWeight: 600, color: on ? BLUE : INK }}>{label}</span>
                   </div>
                 );

@@ -20,7 +20,7 @@ const fieldLabel: React.CSSProperties = {
     display: "block",
     fontSize: 12,
     fontWeight: 600,
-    color: "#7a7a7a",
+    color: "var(--color-ink-muted-48)",
     marginBottom: 5,
 };
 
@@ -57,9 +57,9 @@ const KPI_LABELS: Record<KpiKey, string> = {
 /* Active-filter chip — soft blue pill with an ✕ that clears that one filter. */
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
     return (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "#e6efff", color: "#0a4a99", border: "1px solid #b9d4ff", borderRadius: 9999, padding: "5px 12px", fontSize: 13, fontWeight: 600 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "var(--color-primary-soft)", color: "var(--color-primary-hover)", border: "1px solid var(--color-primary-border)", borderRadius: 9999, padding: "5px 12px", fontSize: 13, fontWeight: 600 }}>
             {label}
-            <button onClick={onRemove} aria-label="הסר סינון" style={{ display: "flex", border: 0, background: "transparent", color: "#0a4a99", cursor: "pointer", padding: 0 }}>
+            <button onClick={onRemove} aria-label="הסר סינון" style={{ display: "flex", border: 0, background: "transparent", color: "var(--color-primary-hover)", cursor: "pointer", padding: 0 }}>
                 <X size={14} strokeWidth={2} />
             </button>
         </span>
@@ -279,19 +279,19 @@ export default function ShipmentTable() {
     };
 
     const columns: Column<Shipment>[] = [
-        { key: "source", header: "מקור", cell: (r) => <span style={{ color: "#444" }}>{r.source_desc || "—"}</span> },
+        { key: "source", header: "מקור", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.source_desc || "—"}</span> },
         { key: "code", header: "מס׳ משלוח", nums: true, bold: true, nowrap: true, cell: (r) => r.shipment_code },
         {
             key: "customer", header: "קוד לקוח", nowrap: true,
             cell: (r) => (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#444" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--color-ink-muted-70)" }}>
                     {r.customer_code}
                     {r.is_sent && <StatusPill label="נשלח" active />}
                 </span>
             ),
         },
-        { key: "date", header: "תאריך קבלה", nums: true, nowrap: true, cell: (r) => <span style={{ color: "#444" }}>{new Date(r.shipment_date).toLocaleDateString("he-IL")}</span> },
-        { key: "worker", header: "עובד מקבל", cell: (r) => <span style={{ color: "#444" }}>{r.recieving_worker_name || "—"}</span> },
+        { key: "date", header: "תאריך קבלה", nums: true, nowrap: true, cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{new Date(r.shipment_date).toLocaleDateString("he-IL")}</span> },
+        { key: "worker", header: "עובד מקבל", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.recieving_worker_name || "—"}</span> },
         // Package model (docs/packages/PLAN.md §9.10): every count is boxes.
         { key: "amount", header: "מארזים שהוצהרו", align: "center", nums: true, cell: (r) => <span style={{ fontWeight: 700 }}>{r.amount}</span> },
         { key: "sampled", header: "נקלטו", align: "center", nums: true, cell: (r) => r.sampled_amount || 0 },
@@ -301,7 +301,7 @@ export default function ShipmentTable() {
             key: "sent", header: "נשלחו", align: "center", nums: true,
             cell: (r) => {
                 const sent = r.sent_amount || 0;
-                return <span style={{ fontWeight: 600, color: sent > 0 ? "#1f8a5b" : "#1d1d1f" }}>{sent}</span>;
+                return <span style={{ fontWeight: 600, color: sent > 0 ? "var(--color-status-approved)" : "var(--color-ink)" }}>{sent}</span>;
             },
         },
         {
@@ -334,11 +334,11 @@ export default function ShipmentTable() {
                 <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1 }}>משלוחים נכנסים</h1>
-                        <span style={{ fontSize: 13, color: "#7a7a7a", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "3px 11px", fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ fontSize: 13, color: "var(--color-ink-muted-48)", background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "3px 11px", fontVariantNumeric: "tabular-nums" }}>
                             {filteredRows.length} משלוחים
                         </span>
                     </div>
-                    <p style={{ margin: "8px 0 0", fontSize: 16, color: "#444", lineHeight: 1.5 }}>
+                    <p style={{ margin: "8px 0 0", fontSize: 16, color: "var(--color-ink-muted-70)", lineHeight: 1.5 }}>
                         משלוחי מארזים שהתקבלו לבדיקה, מה הוצהר על כל משלוח וסטטוס הטיפול.
                     </p>
                 </div>
@@ -378,7 +378,7 @@ export default function ShipmentTable() {
                     <div style={{ flex: 1, minWidth: 220, maxWidth: 340 }}>
                         <label style={fieldLabel}>חיפוש</label>
                         <div style={{ position: "relative" }}>
-                            <span style={{ position: "absolute", insetInlineStart: 13, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
+                            <span style={{ position: "absolute", insetInlineStart: 13, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex" }}>
                                 <Search size={16} strokeWidth={1.75} />
                             </span>
                             <input
@@ -459,7 +459,7 @@ export default function ShipmentTable() {
                 loading={loading}
                 minWidth={1360}
                 maxHeight="calc(100vh - 240px)"
-                empty={<div style={{ fontSize: 16, color: "#1d1d1f", fontWeight: 600 }}>לא נמצאו משלוחים תואמים.</div>}
+                empty={<div style={{ fontSize: 16, color: "var(--color-ink)", fontWeight: 600 }}>לא נמצאו משלוחים תואמים.</div>}
             />
 
             <ShipmentInsertPopup

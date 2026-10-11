@@ -303,7 +303,7 @@ export default function OnlyOfficeEditorModal({
           display: "flex",
           alignItems: "center",
           bgcolor: "#2b2b2b",
-          color: "#fff",
+          color: "var(--color-on-primary)",
           py: 1,
           pr: 6,
         }}
@@ -315,7 +315,7 @@ export default function OnlyOfficeEditorModal({
         </Box>
         <IconButton
           onClick={handleClose}
-          sx={{ position: "absolute", left: 12, top: 8, color: "#fff" }}
+          sx={{ position: "absolute", left: 12, top: 8, color: "var(--color-on-primary)" }}
         >
           <CloseIcon />
         </IconButton>
@@ -334,7 +334,7 @@ export default function OnlyOfficeEditorModal({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#fff",
+              color: "var(--color-on-primary)",
               zIndex: 1,
             }}
           >

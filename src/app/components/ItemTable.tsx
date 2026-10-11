@@ -215,7 +215,7 @@ export default function ItemTable() {
       key: "progress", header: "התקדמות", width: 180,
       cell: (r) => {
         const p = progressOf(r);
-        return p.sub ? <span style={{ color: "#7a7a7a" }}>—</span> : <ProgressCell pct={p.pct} text={p.text} />;
+        return p.sub ? <span style={{ color: "var(--color-ink-muted-48)" }}>—</span> : <ProgressCell pct={p.pct} text={p.text} />;
       },
     },
     {
@@ -263,7 +263,7 @@ export default function ItemTable() {
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,#eee,#f5f5f7,#eee)", backgroundSize: "200% 100%", animation: "shx-shimmer 1.4s infinite" }} />
+            <div key={i} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,var(--color-divider-soft),var(--color-canvas-parchment),var(--color-divider-soft))", backgroundSize: "200% 100%", animation: "shx-shimmer 1.4s infinite" }} />
           ))}
           <style>{`@keyframes shx-shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }`}</style>
         </div>

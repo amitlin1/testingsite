@@ -68,10 +68,10 @@ function NavItem({ href, label, icon, active, onClose, isNested = false, collaps
         px: collapsed ? 0 : 1.5,
         mb: "3px",
         justifyContent: collapsed ? "center" : "flex-start",
-        color: active ? "#fff" : INACTIVE_TEXT,
+        color: active ? "var(--color-canvas)" : INACTIVE_TEXT,
         bgcolor: active ? ACTIVE_BG : "transparent",
         borderInlineStart: `3px solid ${active ? ACTIVE_BAR : "transparent"}`,
-        "&:hover": { bgcolor: alpha("#ffffff", 0.06), color: "#fff" },
+        "&:hover": { bgcolor: alpha("var(--color-canvas)", 0.06), color: "var(--color-on-primary)" },
         "& .MuiListItemIcon-root": {
           color: "inherit",
           minWidth: collapsed ? 0 : 34,
@@ -171,7 +171,7 @@ export default function NavBar({
         bottom: 0,
         width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
         bgcolor: SIDEBAR_BG,
-        color: "#fff",
+        color: "var(--color-on-primary)",
         display: "flex",
         flexDirection: "column",
         overflowX: "hidden",
@@ -187,7 +187,7 @@ export default function NavBar({
           justifyContent: collapsed ? "center" : "flex-start",
           gap: 1.25,
           px: collapsed ? 0 : 2.25,
-          borderBottom: `1px solid ${alpha("#ffffff", 0.08)}`,
+          borderBottom: `1px solid ${alpha("var(--color-canvas)", 0.08)}`,
           flexShrink: 0,
         }}
       >
@@ -206,7 +206,7 @@ export default function NavBar({
                 flexShrink: 0,
               }}
             >
-              <CheckIcon sx={{ fontSize: 16, color: "#fff" }} />
+              <CheckIcon sx={{ fontSize: 16, color: "var(--color-on-primary)" }} />
             </Box>
             <Typography sx={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-0.3px", whiteSpace: "nowrap" }}>
               מערכת בדיקות
@@ -219,12 +219,12 @@ export default function NavBar({
               onClick={onToggle}
               aria-label={collapsed ? "הרחב תפריט" : "כווץ תפריט"}
               sx={{
-                color: "#fff",
+                color: "var(--color-on-primary)",
                 width: 36,
                 height: 36,
                 borderRadius: "9px",
                 flexShrink: 0,
-                "&:hover": { bgcolor: alpha("#ffffff", 0.08) },
+                "&:hover": { bgcolor: alpha("var(--color-canvas)", 0.08) },
               }}
             >
               <MenuIcon sx={{ fontSize: 20 }} />
@@ -273,7 +273,7 @@ export default function NavBar({
             />
           ))}
 
-          <Box sx={{ height: "1px", bgcolor: alpha("#ffffff", 0.08), my: 1.25, mx: 0.5 }} />
+          <Box sx={{ height: "1px", bgcolor: alpha("var(--color-canvas)", 0.08), my: 1.25, mx: 0.5 }} />
 
           {/* Settings Toggle Button (לא מפעיל ניווט, רק פותח/סוגר את הרשימה).
               במצב מכווץ לחיצה עליו מרחיבה את הסרגל במקום לפתוח תת-רשימה. */}
@@ -287,10 +287,10 @@ export default function NavBar({
                   px: collapsed ? 0 : 1.5,
                   mb: "3px",
                   justifyContent: collapsed ? "center" : "flex-start",
-                  color: isSettingsActive ? "#fff" : INACTIVE_TEXT,
+                  color: isSettingsActive ? "var(--color-canvas)" : INACTIVE_TEXT,
                   bgcolor: isSettingsActive && (collapsed || !settingsOpen) ? ACTIVE_BG : "transparent",
                   borderInlineStart: `3px solid ${isSettingsActive ? ACTIVE_BAR : "transparent"}`,
-                  "&:hover": { bgcolor: alpha("#ffffff", 0.06), color: "#fff" },
+                  "&:hover": { bgcolor: alpha("var(--color-canvas)", 0.06), color: "var(--color-on-primary)" },
                   "& .MuiListItemIcon-root": {
                     color: "inherit",
                     minWidth: collapsed ? 0 : 34,
@@ -351,7 +351,7 @@ export default function NavBar({
           wire the name/role/logout up to the real auth/session later. */}
       <Box
         sx={{
-          borderTop: `1px solid ${alpha("#ffffff", 0.08)}`,
+          borderTop: `1px solid ${alpha("var(--color-canvas)", 0.08)}`,
           p: collapsed ? "12px 0" : "12px 16px",
           display: "flex",
           alignItems: "center",
@@ -367,7 +367,7 @@ export default function NavBar({
               height: 34,
               borderRadius: "9999px",
               bgcolor: theme.tokens?.accent || ACTIVE_BAR,
-              color: "#fff",
+              color: "var(--color-on-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -386,7 +386,7 @@ export default function NavBar({
                 sx={{
                   fontSize: 13.5,
                   fontWeight: 600,
-                  color: "#fff",
+                  color: "var(--color-on-primary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -394,7 +394,7 @@ export default function NavBar({
               >
                 {displayName}
               </Typography>
-              <Typography sx={{ fontSize: 11.5, color: "#9aa0a6" }}>{roleLabel}</Typography>
+              <Typography sx={{ fontSize: 11.5, color: "var(--color-nav-ink-muted)" }}>{roleLabel}</Typography>
             </Box>
             <IconButton
               title="התנתקות"
@@ -405,9 +405,9 @@ export default function NavBar({
                 width: 30,
                 height: 30,
                 borderRadius: "8px",
-                color: "#9aa0a6",
+                color: "var(--color-nav-ink-muted)",
                 flexShrink: 0,
-                "&:hover": { bgcolor: alpha("#ffffff", 0.08), color: "#fff" },
+                "&:hover": { bgcolor: alpha("var(--color-canvas)", 0.08), color: "var(--color-on-primary)" },
               }}
             >
               <LogoutIcon sx={{ fontSize: 17 }} />

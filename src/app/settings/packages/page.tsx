@@ -100,16 +100,16 @@ const eth = (align: "right" | "center", extra?: React.CSSProperties): React.CSSP
   textAlign: align, fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px", borderBottom: `1px solid ${HAIR}`, whiteSpace: "nowrap", ...extra,
 });
 const input: React.CSSProperties = {
-  width: "100%", height: 38, border: `1px solid ${HAIR}`, borderRadius: 9, padding: "0 10px", fontSize: 13.5, outline: "none", background: "#fff", fontFamily: "inherit", color: INK,
+  width: "100%", height: 38, border: `1px solid ${HAIR}`, borderRadius: 9, padding: "0 10px", fontSize: 13.5, outline: "none", background: "var(--color-canvas)", fontFamily: "inherit", color: INK,
 };
 const iconBtn: React.CSSProperties = {
-  width: 30, height: 30, borderRadius: 8, background: "#f5f5f7", color: INK, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", border: 0, padding: 0,
+  width: 30, height: 30, borderRadius: 8, background: "var(--color-canvas-parchment)", color: INK, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", border: 0, padding: 0,
 };
 const pill: React.CSSProperties = {
-  background: BLUE, color: "#fff", border: 0, borderRadius: 9999, padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  background: BLUE, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
 };
 const pillGhost: React.CSSProperties = {
-  background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK,
+  background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK,
 };
 
 export default function PackagesSettingsPage() {
@@ -304,7 +304,7 @@ export default function PackagesSettingsPage() {
     return {
       label: empty ? "אין תכולה" : bad ? "מסלול לא תקין" : "תקין",
       tone: empty ? MUTED : bad ? AMBER_INK : GREEN,
-      bg: empty ? "#f5f5f7" : bad ? AMBER_BG : "rgba(31,138,91,0.07)",
+      bg: empty ? "var(--color-canvas-parchment)" : bad ? AMBER_BG : "rgba(31,138,91,0.07)",
       border: empty ? HAIR : bad ? AMBER_BORDER : "rgba(31,138,91,0.22)",
       icon: empty ? <Minus size={13} strokeWidth={1.75} /> : bad ? <CircleAlert size={13} strokeWidth={1.75} /> : <CircleCheck size={13} strokeWidth={1.75} />,
     };
@@ -327,11 +327,11 @@ export default function PackagesSettingsPage() {
         </div>
 
         {/* Package types */}
-        <div style={{ marginTop: 22, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ marginTop: 22, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "#f5f5f7" }}>
+                <tr style={{ background: "var(--color-canvas-parchment)" }}>
                   <th style={th("right", { padding: "13px 18px" })}>סוג מארז</th>
                   <th style={th("center")}>סוגי פריטים בתכולה</th>
                   <th style={th("center")}>סה״כ פריטים</th>
@@ -354,11 +354,11 @@ export default function PackagesSettingsPage() {
                   const h = health(t);
                   const isSel = t.item_type_id === selectedId;
                   return (
-                    <tr key={t.item_type_id} onClick={() => setSelectedId(t.item_type_id)} style={{ borderTop: "1px solid #f0f0f0", cursor: "pointer", background: isSel ? "#f7fbff" : "#fff" }}>
+                    <tr key={t.item_type_id} onClick={() => setSelectedId(t.item_type_id)} style={{ borderTop: "1px solid var(--color-divider-soft)", cursor: "pointer", background: isSel ? "var(--color-primary-tint)" : "var(--color-canvas)" }}>
                       <td style={{ padding: "13px 18px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                           <span style={{ fontSize: 15, fontWeight: 600 }}>{t.item_type_desc}</span>
-                          <span style={{ fontSize: 10.5, fontWeight: 600, color: BLUE, background: "#e6efff", borderRadius: 9999, padding: "2px 8px" }}>מארז</span>
+                          <span style={{ fontSize: 10.5, fontWeight: 600, color: BLUE, background: "var(--color-primary-soft)", borderRadius: 9999, padding: "2px 8px" }}>מארז</span>
                         </div>
                         <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3 }}>מזהה סוג {t.item_type_id}</div>
                       </td>
@@ -390,7 +390,7 @@ export default function PackagesSettingsPage() {
 
         {/* Contents editor */}
         {selected && contents && (
-          <div style={{ marginTop: 26, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ marginTop: 26, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16, overflow: "hidden" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, padding: "18px 20px", borderBottom: `1px solid ${HAIR}`, flexWrap: "wrap" }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, letterSpacing: ".6px", textTransform: "uppercase" }}>תכולת מארז</div>
@@ -401,7 +401,7 @@ export default function PackagesSettingsPage() {
                 <div>
                   <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>מסלול ברירת מחדל למארז</div>
                   <input value={draftRoute} onChange={(e) => setDraftRoute(digits(e.target.value))} placeholder="1" inputMode="numeric"
-                    style={{ width: 110, height: 40, border: `1px solid ${HAIR}`, borderRadius: 10, padding: "0 12px", fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", textAlign: "center", background: "#fff", outline: "none", fontFamily: "inherit" }} />
+                    style={{ width: 110, height: 40, border: `1px solid ${HAIR}`, borderRadius: 10, padding: "0 12px", fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums", textAlign: "center", background: "var(--color-canvas)", outline: "none", fontFamily: "inherit" }} />
                 </div>
                 <div style={{ fontSize: 12, color: MUTED_LT, maxWidth: 210, lineHeight: 1.45, paddingBottom: 10 }}>ריק פירושו מסלול 1. המסלול עצמו נקבע במסך מסלולי הבדיקה.</div>
               </div>
@@ -410,7 +410,7 @@ export default function PackagesSettingsPage() {
             {warningTitle && (
               <div style={{ display: "flex", gap: 11, alignItems: "flex-start", background: AMBER_BG, borderBottom: `1px solid ${AMBER_BORDER}`, padding: "12px 20px" }}>
                 <span style={{ color: AMBER_INK, marginTop: 1, display: "inline-flex" }}><CircleAlert size={17} strokeWidth={2} /></span>
-                <div style={{ fontSize: 13, color: "#444", lineHeight: 1.5 }}>
+                <div style={{ fontSize: 13, color: "var(--color-ink-muted-70)", lineHeight: 1.5 }}>
                   <span style={{ fontWeight: 600, color: AMBER_INK }}>{warningTitle}</span> · <Link href="/settings/testing-routes" style={{ color: BLUE }}>פתח את מסלולי הבדיקה</Link>
                 </div>
               </div>
@@ -420,7 +420,7 @@ export default function PackagesSettingsPage() {
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", minWidth: 900, borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ background: "#f5f5f7" }}>
+                    <tr style={{ background: "var(--color-canvas-parchment)" }}>
                       <th style={eth("center", { width: 64 })}>סדר</th>
                       <th style={eth("right")}>סוג פריט</th>
                       <th style={eth("center", { width: 84 })}>כמות</th>
@@ -434,14 +434,14 @@ export default function PackagesSettingsPage() {
                   </thead>
                   <tbody>
                     {draft.map((r, i) => (
-                      <tr key={r.key} style={{ borderTop: "1px solid #f0f0f0", background: r.route_warning ? "#fffdf9" : "#fff" }}>
+                      <tr key={r.key} style={{ borderTop: "1px solid var(--color-divider-soft)", background: r.route_warning ? "#fffdf9" : "var(--color-canvas)" }}>
                         <td style={{ padding: "9px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
-                            <button type="button" title="העלה" onClick={() => moveRow(i, -1)} style={{ ...iconBtn, width: 24, height: 24, borderRadius: 7, background: "transparent", color: i === 0 ? "#d4d4dc" : MUTED }}>
+                            <button type="button" title="העלה" onClick={() => moveRow(i, -1)} style={{ ...iconBtn, width: 24, height: 24, borderRadius: 7, background: "transparent", color: i === 0 ? "var(--color-border-strong)" : MUTED }}>
                               <ChevronUp size={14} strokeWidth={2} />
                             </button>
                             <span style={{ fontSize: 12.5, color: MUTED, fontVariantNumeric: "tabular-nums", minWidth: 12, textAlign: "center" }}>{i + 1}</span>
-                            <button type="button" title="הורד" onClick={() => moveRow(i, 1)} style={{ ...iconBtn, width: 24, height: 24, borderRadius: 7, background: "transparent", color: i === draft.length - 1 ? "#d4d4dc" : MUTED }}>
+                            <button type="button" title="הורד" onClick={() => moveRow(i, 1)} style={{ ...iconBtn, width: 24, height: 24, borderRadius: 7, background: "transparent", color: i === draft.length - 1 ? "var(--color-border-strong)" : MUTED }}>
                               <ChevronDown size={14} strokeWidth={2} />
                             </button>
                           </div>
@@ -473,7 +473,7 @@ export default function PackagesSettingsPage() {
                         <td style={{ padding: "9px 12px" }}><input value={r.manufacturer_no} onChange={(e) => patchRow(i, { manufacturer_no: e.target.value })} style={{ ...input, fontVariantNumeric: "tabular-nums" }} /></td>
                         <td style={{ padding: "9px 12px" }}>
                           <input value={r.route_number} onChange={(e) => patchRow(i, { route_number: digits(e.target.value), route_warning: null })} placeholder="1" inputMode="numeric"
-                            style={{ ...input, minWidth: 76, fontSize: 14, fontWeight: 600, textAlign: "center", fontVariantNumeric: "tabular-nums", borderColor: r.route_number === "" ? HAIR : "#0071e3", color: r.route_number === "" ? MUTED_LT : BLUE }} />
+                            style={{ ...input, minWidth: 76, fontSize: 14, fontWeight: 600, textAlign: "center", fontVariantNumeric: "tabular-nums", borderColor: r.route_number === "" ? HAIR : "var(--color-primary-focus)", color: r.route_number === "" ? MUTED_LT : BLUE }} />
                           <div style={{ fontSize: 11, color: MUTED_LT, marginTop: 5, textAlign: "center" }}>{r.route_number === "" ? "ברירת מחדל 1" : `מסלול ${r.route_number}`}</div>
                         </td>
                         <td style={{ padding: "9px 16px", textAlign: "center" }}>
@@ -495,7 +495,7 @@ export default function PackagesSettingsPage() {
               </div>
             )}
 
-            <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "13px 20px", borderTop: "1px solid #f0f0f0", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "13px 20px", borderTop: "1px solid var(--color-divider-soft)", flexWrap: "wrap" }}>
               <button type="button" onClick={addRow} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 600, color: BLUE, background: "transparent", border: 0, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
                 <Plus size={16} strokeWidth={2} />הוסף סוג פריט לתכולה
               </button>
@@ -513,7 +513,7 @@ export default function PackagesSettingsPage() {
       {newOpen && (
         // Above the app bar (1100) and side nav (1200): moved to the top, it must not slide under them.
         <div onClick={() => !newBusy && setNewOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1250, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div ref={newDragRef} onPointerDown={onNewDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: "rgba(0,0,0,0.22) 3px 5px 30px 0", overflow: "hidden", ...newDragStyle }}>
+          <div ref={newDragRef} onPointerDown={onNewDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "var(--color-canvas)", borderRadius: 18, boxShadow: "rgba(0,0,0,0.22) 3px 5px 30px 0", overflow: "hidden", ...newDragStyle }}>
             <div data-drag-handle="" style={{ padding: "22px 24px 0" }}>
               <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>סוג מארז חדש</div>
               <div style={{ fontSize: 13.5, color: MUTED, marginTop: 6, lineHeight: 1.5 }}>נוצר סוג פריט חדש המסומן כמארז. אחרי היצירה אפשר להגדיר לו תכולה.</div>

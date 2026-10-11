@@ -137,12 +137,12 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
     // Above the app bar (1100) and side nav (1200), like the package dialogs:
     // a popup moved to the top must not slide under them.
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1250, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div ref={dragRef} onPointerDown={onDragStart} onClick={stop} dir="rtl" className="shx-scroll" style={{ ...dragStyle, width: "min(640px,94vw)", maxHeight: "88vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, boxShadow: "rgba(0,0,0,0.22) 3px 5px 30px 0", fontFamily: "var(--shx-font)", color: "#1d1d1f" }}>
+      <div ref={dragRef} onPointerDown={onDragStart} onClick={stop} dir="rtl" className="shx-scroll" style={{ ...dragStyle, width: "min(640px,94vw)", maxHeight: "88vh", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--color-canvas)", borderRadius: 18, boxShadow: "rgba(0,0,0,0.22) 3px 5px 30px 0", fontFamily: "var(--shx-font)", color: "var(--color-ink)" }}>
 
         {/* ---- header ---- */}
-        <div data-drag-handle="" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: "1px solid #e0e0e0" }}>
+        <div data-drag-handle="" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: "1px solid var(--color-hairline)" }}>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>עריכת פריט #{item.item_id}</div>
-          <button onClick={onClose} aria-label="סגור" style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "#f5f5f7", color: "#1d1d1f", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button onClick={onClose} aria-label="סגור" style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "var(--color-canvas-parchment)", color: "var(--color-ink)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
@@ -174,8 +174,8 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
               role="status"
               style={{
                 marginTop: 20, padding: "12px 16px", borderRadius: 8,
-                background: "#fff8e6", border: "1px solid #e6c65c",
-                fontSize: 14, lineHeight: 1.6, color: "#5c4a00",
+                background: "var(--color-warning-bg)", border: "1px solid var(--color-warning-border)",
+                fontSize: 14, lineHeight: 1.6, color: "var(--color-warning-ink)",
               }}
             >
               שינוי סוג הפריט יחזיר אותו לתחילת המסלול של הסוג החדש
@@ -186,11 +186,11 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
         </div>
 
         {/* ---- footer ---- */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 24px", borderTop: "1px solid #e0e0e0", background: "#fafafc" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 24px", borderTop: "1px solid var(--color-hairline)", background: "var(--color-surface-pearl)" }}>
           <button
             className="shx-btn shx-btn-secondary"
             onClick={() => { setConnectedItems(null); setConfirmOpen(true); }}
-            style={{ color: "#bf3535", borderColor: "#f0cccc" }}
+            style={{ color: "var(--color-destructive)", borderColor: "#f0cccc" }}
           >
             <Trash2 size={15} strokeWidth={2} />מחק פריט
           </button>
@@ -205,19 +205,19 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
       {/* ---- delete confirmation (stacked above) ---- */}
       {confirmOpen && (
         <div onClick={stop} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 1260, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div dir="rtl" style={{ width: "min(440px,92vw)", background: "#fff", borderRadius: 16, boxShadow: "rgba(0,0,0,0.25) 3px 5px 30px 0", fontFamily: "var(--shx-font)", color: "#1d1d1f", padding: 24 }}>
+          <div dir="rtl" style={{ width: "min(440px,92vw)", background: "var(--color-canvas)", borderRadius: 16, boxShadow: "rgba(0,0,0,0.25) 3px 5px 30px 0", fontFamily: "var(--shx-font)", color: "var(--color-ink)", padding: 24 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <AlertTriangle size={20} color="#bf3535" strokeWidth={2} />
+              <AlertTriangle size={20} color="var(--color-destructive)" strokeWidth={2} />
               <div style={{ fontSize: 17, fontWeight: 700 }}>מחיקת פריט #{item.item_id}</div>
             </div>
             {connectedItems ? (
               <>
-                <div style={{ fontSize: 14, lineHeight: 1.6, color: "#333" }}>
+                <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--color-ink-muted-80)" }}>
                   לפריט זה יש {connectedItems.length} פריטים מחוברים — לא ניתן למחוק אותו לבדו. מחיקה תמחק גם אותם, לצמיתות:
                 </div>
                 <ul style={{ margin: "10px 0 0", padding: "0 4px 0 0", listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
                   {connectedItems.map((c) => (
-                    <li key={c.item_id} style={{ fontSize: 13.5, background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 8, padding: "6px 10px" }}>
+                    <li key={c.item_id} style={{ fontSize: 13.5, background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 8, padding: "6px 10px" }}>
                       #{c.item_id}{c.model ? ` — ${c.model}` : ""}{c.serial_no ? ` (מס׳ סיריאלי ${c.serial_no})` : ""}
                     </li>
                   ))}
@@ -226,7 +226,7 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
                   <button className="shx-btn shx-btn-secondary" onClick={() => setConfirmOpen(false)} disabled={deleting}>ביטול</button>
                   <button
                     className="shx-btn shx-btn-primary"
-                    style={{ background: "#bf3535" }}
+                    style={{ background: "var(--color-destructive)" }}
                     onClick={() => handleDeleteConfirm(true)}
                     disabled={deleting}
                   >
@@ -236,7 +236,7 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
               </>
             ) : (
               <>
-                <div style={{ fontSize: 14, lineHeight: 1.6, color: "#333" }}>
+                <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--color-ink-muted-80)" }}>
                   {hasProgress
                     ? "פריט זה כבר נמצא בתהליך בדיקה (עבר שלב אחד או יותר). מחיקתו תמחק לצמיתות גם את היסטוריית הבדיקה ותוצאות הבדיקה שלו."
                     : "האם אתה בטוח שברצונך למחוק פריט זה?"}
@@ -246,7 +246,7 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
                   <button className="shx-btn shx-btn-secondary" onClick={() => setConfirmOpen(false)} disabled={deleting}>ביטול</button>
                   <button
                     className="shx-btn shx-btn-primary"
-                    style={{ background: "#bf3535" }}
+                    style={{ background: "var(--color-destructive)" }}
                     onClick={() => handleDeleteConfirm(false)}
                     disabled={deleting}
                   >
@@ -266,7 +266,7 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#333", marginBottom: 8 }}>{label}</label>
+      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-ink-muted-80)", marginBottom: 8 }}>{label}</label>
       {children}
     </div>
   );
@@ -274,8 +274,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function ReadOnlyPill({ label, value }: { label: string; value: string }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "#5a5a5f", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "6px 12px", whiteSpace: "nowrap" }}>
-      {label}: <span style={{ color: "#1d1d1f" }}>{value}</span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--color-ink-muted-70)", background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "6px 12px", whiteSpace: "nowrap" }}>
+      {label}: <span style={{ color: "var(--color-ink)" }}>{value}</span>
     </span>
   );
 }

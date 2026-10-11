@@ -33,7 +33,7 @@ export default function PackageQueueCard({
   const cta = inTest ? (kind === "open" ? "המשך פתיחת מארז" : "המשך סגירת מארז") : kind === "open" ? "התחל פתיחת מארז" : "התחל סגירת מארז";
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${inTest ? BLUE : HAIR}`, borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 13, color: INK }}>
+    <div style={{ background: "var(--color-canvas)", border: `1px solid ${inTest ? BLUE : HAIR}`, borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 13, color: INK }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>{pkg.item_type_desc}</div>
@@ -59,7 +59,7 @@ export default function PackageQueueCard({
         <div style={{ border: `1px solid ${HAIR}`, borderRadius: 12, overflow: "hidden" }}>
           {pkg.items.map((it) => (
             <div key={it.item_id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderBottom: `1px solid ${HAIR_2}` }}>
-              <span style={{ width: 26, height: 26, borderRadius: 7, background: "#f5f5f7", color: MUTED, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
+              <span style={{ width: 26, height: 26, borderRadius: 7, background: "var(--color-canvas-parchment)", color: MUTED, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{it.item_type_desc}</div>
                 <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{it.makat ?? "—"} · {it.serial_no ?? "ללא סריאלי"}</div>
@@ -70,7 +70,7 @@ export default function PackageQueueCard({
         </div>
       )}
       <div style={{ flex: 1 }} />
-      <button type="button" onClick={onStart} disabled={disabled} style={{ width: "100%", height: 44, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9, background: BLUE, color: "#fff", border: 0, borderRadius: 11, fontSize: 15, fontWeight: 600, cursor: disabled ? "wait" : "pointer", fontFamily: "inherit", opacity: disabled ? 0.7 : 1 }}>
+      <button type="button" onClick={onStart} disabled={disabled} style={{ width: "100%", height: 44, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9, background: BLUE, color: "var(--color-on-primary)", border: 0, borderRadius: 11, fontSize: 15, fontWeight: 600, cursor: disabled ? "wait" : "pointer", fontFamily: "inherit", opacity: disabled ? 0.7 : 1 }}>
         <Play size={20} strokeWidth={2} />{cta}
       </button>
     </div>

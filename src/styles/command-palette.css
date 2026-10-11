@@ -12,7 +12,7 @@
 :root {
   --cp-primary-soft: rgba(0, 102, 204, 0.08);
   --cp-primary-soft-2: rgba(0, 102, 204, 0.16);
-  /* Tickets hovers to a SOFT primary border (#cdd3f8), not the full brand
+  /* Tickets hovers to a SOFT primary border (var(--color-primary-border)), not the full brand
      colour — at full strength the outline reads as an error state. */
   --cp-primary-border: rgba(0, 102, 204, 0.28);
   --cp-shadow-pop: 0 10px 34px rgba(17, 21, 31, 0.14);
@@ -20,7 +20,7 @@
   /* Tickets separates the icon/kbd tint (--text-3) from the placeholder
      (--text-4, lighter). tokens.css has only one muted ink, so the lighter
      step is derived here. */
-  --cp-ink-placeholder: #a3a3ab;
+  --cp-ink-placeholder: var(--color-ink-muted-40);
 }
 
 /* ---- Top-bar trigger (a button that *looks* like an input) ---- */

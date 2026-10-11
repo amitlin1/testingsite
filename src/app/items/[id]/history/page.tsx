@@ -102,7 +102,7 @@ const BLUE = "#0066cc";
 const TINT = "rgba(0,102,204,0.09)";
 
 const card: React.CSSProperties = {
-  background: "#fff",
+  background: "var(--color-canvas)",
   borderWidth: 1,
   borderStyle: "solid",
   borderColor: HAIRLINE,
@@ -511,7 +511,7 @@ export default function ItemHistoryPage() {
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 600, background: "#fff", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "6px 13px" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 600, background: "var(--color-canvas)", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "6px 13px" }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusActive ? BLUE : MUTED }} />
             {statusLabel}
           </span>
@@ -556,9 +556,9 @@ export default function ItemHistoryPage() {
                     <div
                       style={{
                         width: 32, height: 32, borderRadius: 9999,
-                        background: done ? BLUE : "#fff",
-                        border: `2px solid ${done || current ? BLUE : "#d0d0d6"}`,
-                        color: done ? "#fff" : current ? BLUE : FAINT,
+                        background: done ? BLUE : "var(--color-canvas)",
+                        border: `2px solid ${done || current ? BLUE : "var(--color-border-strong)"}`,
+                        color: done ? "var(--color-canvas)" : current ? BLUE : FAINT,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 13, fontWeight: 700, flexShrink: 0,
                       }}
@@ -607,9 +607,9 @@ export default function ItemHistoryPage() {
                     <div
                       style={{
                         width: 34, height: 34, borderRadius: 9999,
-                        background: done ? BLUE : "#fff",
+                        background: done ? BLUE : "var(--color-canvas)",
                         border: `2px solid ${BLUE}`,
-                        color: done ? "#fff" : BLUE,
+                        color: done ? "var(--color-canvas)" : BLUE,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 13, fontWeight: 700, flexShrink: 0,
                       }}
@@ -622,10 +622,10 @@ export default function ItemHistoryPage() {
                   <div style={{ flex: 1, minWidth: 0, paddingBottom: 22 }}>
                     <div
                       style={{
-                        border: `1px solid ${inProgress ? "#cfe2fb" : HAIRLINE}`,
+                        border: `1px solid ${inProgress ? "var(--color-primary-border)" : HAIRLINE}`,
                         borderRadius: 14,
                         padding: "16px 18px",
-                        background: inProgress ? "#f5f9ff" : "#fff",
+                        background: inProgress ? "var(--color-primary-tint)" : "var(--color-canvas)",
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -633,8 +633,8 @@ export default function ItemHistoryPage() {
                           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.2px" }}>{stationNameOf(h)}</div>
                           <div style={{ fontSize: 12.5, color: FAINT, marginTop: 2 }}>שלב {h.current_route_step}</div>
                         </div>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, background: "#f5f5f7", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "4px 10px", flexShrink: 0 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: inProgress ? BLUE : "#c4c4cc" }} />
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, background: "var(--color-canvas-parchment)", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "4px 10px", flexShrink: 0 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: inProgress ? BLUE : "var(--color-border-strong)" }} />
                           {inProgress ? "בעיבוד" : done ? "הושלם" : "בתור"}
                         </span>
                       </div>
@@ -668,7 +668,7 @@ export default function ItemHistoryPage() {
                           value={inProgress ? "בתהליך" : fmtDT(h.processing_end_time)}
                           color={inProgress ? BLUE : INK}
                         />
-                        <Timing label="המתנה בתור" value={fmtDur(wait)} color="#5a5a5f" />
+                        <Timing label="המתנה בתור" value={fmtDur(wait)} color="var(--color-ink-muted-70)" />
                       </div>
 
                       <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${SOFT}` }}>
@@ -752,8 +752,8 @@ export default function ItemHistoryPage() {
                         className="shx-file-tab"
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 7,
-                          background: on ? BLUE : "#fff",
-                          color: on ? "#fff" : INK,
+                          background: on ? BLUE : "var(--color-canvas)",
+                          color: on ? "var(--color-canvas)" : INK,
                           border: `1px solid ${on ? BLUE : HAIRLINE}`,
                           borderRadius: 9999, padding: "6px 12px",
                           fontSize: 12.5, fontWeight: 600, font: "inherit",
@@ -761,7 +761,7 @@ export default function ItemHistoryPage() {
                         }}
                       >
                         {t.label}
-                        <span style={{ fontSize: 11, fontWeight: 600, color: on ? "#fff" : MUTED, background: on ? "rgba(255,255,255,0.22)" : SOFT, borderRadius: 9999, padding: "1px 7px", fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: on ? "var(--color-canvas)" : MUTED, background: on ? "rgba(255,255,255,0.22)" : SOFT, borderRadius: 9999, padding: "1px 7px", fontVariantNumeric: "tabular-nums" }}>
                           {t.count}
                         </span>
                       </button>
@@ -824,8 +824,8 @@ export default function ItemHistoryPage() {
       <style>{`
         @media (max-width: 900px) { .ir-cols { grid-template-columns: 1fr !important; } }
         .shx-file-tab:active { transform: scale(0.96); }
-        .shx-file-row:hover { background: #fafafc; }
-        .shx-connected-row:hover { background: #fafafc; }
+        .shx-file-row:hover { background: var(--color-surface-pearl); }
+        .shx-connected-row:hover { background: var(--color-surface-pearl); }
       `}</style>
     </div>
   );
@@ -867,7 +867,7 @@ function ConnectedRow({ c, relationLabel }: { c: ConnectedItem; relationLabel: s
       className="shx-connected-row"
       style={{ ...rowBase, gap: 10, padding: "11px 14px", color: "inherit", textDecoration: "none" }}
     >
-      <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, background: "#f5f5f7", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "3px 9px", whiteSpace: "nowrap", flexShrink: 0 }}>
+      <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, background: "var(--color-canvas-parchment)", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "3px 9px", whiteSpace: "nowrap", flexShrink: 0 }}>
         {relationLabel}
       </span>
       <div style={{ minWidth: 0, flex: 1 }}>

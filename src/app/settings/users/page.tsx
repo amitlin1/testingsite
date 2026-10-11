@@ -353,14 +353,14 @@ export default function UsersPage() {
       key: "username",
       header: "שם משתמש",
       nowrap: true,
-      cell: (u) => <span style={{ direction: "ltr", unicodeBidi: "plaintext", color: "#7a7a7a" }}>{u.username}</span>,
+      cell: (u) => <span style={{ direction: "ltr", unicodeBidi: "plaintext", color: "var(--color-ink-muted-48)" }}>{u.username}</span>,
     },
     { key: "employeeNumber", header: "מספר עובד", nums: true, muted: true, cell: (u) => u.employeeNumber ?? "—" },
     {
       key: "role",
       header: "תפקיד",
       cell: (u) =>
-        u.role ? <Chip size="small" color={ROLE_CHIP[u.role]} label={ROLE_LABEL[u.role]} /> : <span style={{ color: "#9a9aa0" }}>—</span>,
+        u.role ? <Chip size="small" color={ROLE_CHIP[u.role]} label={ROLE_LABEL[u.role]} /> : <span style={{ color: "var(--color-ink-muted-48)" }}>—</span>,
     },
     {
       key: "status",
@@ -456,12 +456,12 @@ export default function UsersPage() {
               sx={{
                 position: "relative",
                 cursor: "pointer",
-                background: "#fff",
-                border: `1px solid ${active ? "var(--color-primary)" : "#e0e0e0"}`,
+                background: "var(--color-canvas)",
+                border: `1px solid ${active ? "var(--color-primary)" : "var(--color-hairline)"}`,
                 borderRadius: "16px",
                 padding: "14px 16px",
                 overflow: "hidden",
-                "&:hover": { borderColor: active ? "var(--color-primary)" : "#c9ccd1" },
+                "&:hover": { borderColor: active ? "var(--color-primary)" : "var(--color-border-strong)" },
               }}
             >
               {active && (
@@ -469,12 +469,12 @@ export default function UsersPage() {
               )}
               <Stack direction="row" sx={{ alignItems: "center", gap: 0.75 }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.dot }} />
-                <Typography sx={{ fontSize: 13, color: "#7a7a7a" }}>{c.label}</Typography>
+                <Typography sx={{ fontSize: 13, color: "var(--color-ink-muted-48)" }}>{c.label}</Typography>
               </Stack>
               <Typography sx={{ fontSize: 30, fontWeight: 700, lineHeight: 1.15, mt: 0.5, fontVariantNumeric: "tabular-nums" }}>
                 {c.count}
               </Typography>
-              <Typography sx={{ fontSize: 12, color: "#9a9aa0" }}>{c.count === 1 ? "משתמש" : "משתמשים"}</Typography>
+              <Typography sx={{ fontSize: 12, color: "var(--color-ink-muted-48)" }}>{c.count === 1 ? "משתמש" : "משתמשים"}</Typography>
             </Box>
           );
         })}
@@ -483,7 +483,7 @@ export default function UsersPage() {
       {/* Table / error */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {phase === "error" ? (
-          <Box sx={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: "16px", p: 3 }}>
+          <Box sx={{ background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "16px", p: 3 }}>
             <Alert severity="error">טעינת המשתמשים נכשלה — לא ניתן להתחבר לשרת ההרשאות.</Alert>
             <Button variant="outlined" onClick={load} sx={{ mt: 2 }}>
               נסה שוב
@@ -499,7 +499,7 @@ export default function UsersPage() {
             maxHeight="100%"
             empty={
               <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "#1d1d1f", marginBottom: 6 }}>לא נמצאו משתמשים</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6 }}>לא נמצאו משתמשים</div>
                 <div style={{ fontSize: 14 }}>
                   {search || roleFilter !== "all"
                     ? "אין תוצאות התואמות את החיפוש או הסינון."
@@ -526,7 +526,7 @@ export default function UsersPage() {
                 required
               />
               {editing && (
-                <Typography sx={{ fontSize: 12, color: "#9a9aa0", mt: 0.5 }}>
+                <Typography sx={{ fontSize: 12, color: "var(--color-ink-muted-48)", mt: 0.5 }}>
                   שם המשתמש אינו ניתן לשינוי לאחר היצירה.
                 </Typography>
               )}
@@ -556,7 +556,7 @@ export default function UsersPage() {
                 <ToggleButton value="mashan">משאן</ToggleButton>
               </ToggleButtonGroup>
               {!!editing && editing.username === currentUsername && (
-                <Typography sx={{ fontSize: 12, color: "#9a9aa0", mt: 0.5 }}>
+                <Typography sx={{ fontSize: 12, color: "var(--color-ink-muted-48)", mt: 0.5 }}>
                   לא ניתן לשנות את התפקיד של החשבון שאיתו אתה מחובר.
                 </Typography>
               )}

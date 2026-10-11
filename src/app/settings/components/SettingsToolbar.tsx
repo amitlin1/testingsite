@@ -53,16 +53,16 @@ export default function SettingsToolbar({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1, color: "#1d1d1f" }}>
+            <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1, color: "var(--color-ink)" }}>
               {title}
             </h1>
             {count != null && (
               <span
                 style={{
                   fontSize: 13,
-                  color: "#7a7a7a",
-                  background: "#f5f5f7",
-                  border: "1px solid #e0e0e0",
+                  color: "var(--color-ink-muted-48)",
+                  background: "var(--color-canvas-parchment)",
+                  border: "1px solid var(--color-hairline)",
                   borderRadius: 9999,
                   padding: "4px 11px",
                   fontVariantNumeric: "tabular-nums",
@@ -75,7 +75,7 @@ export default function SettingsToolbar({
             )}
           </div>
           {subtitle && (
-            <p style={{ margin: "8px 0 0", fontSize: 16, color: "#444", lineHeight: 1.5 }}>{subtitle}</p>
+            <p style={{ margin: "8px 0 0", fontSize: 16, color: "var(--color-ink-muted-70)", lineHeight: 1.5 }}>{subtitle}</p>
           )}
         </div>
         {onAdd && (
@@ -91,7 +91,7 @@ export default function SettingsToolbar({
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
           {showSearch && (
             <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 340 }}>
-              <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex", zIndex: 1 }}>
+              <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex", zIndex: 1 }}>
                 <Search size={16} strokeWidth={1.75} />
               </span>
               <input

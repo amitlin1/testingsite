@@ -384,7 +384,7 @@ export default function ShipmentInsertPopup({
                             </Typography>
                         </Box>
                         {duplicate && (
-                            <Card variant="outlined" sx={{ p: 2, bgcolor: "#f8f9fa" }}>
+                            <Card variant="outlined" sx={{ p: 2, bgcolor: "var(--color-surface-pearl)" }}>
                                 <Stack spacing={1}>
                                     <Typography variant="body2" color="text.secondary">
                                         מס׳ משלוח: <strong>{duplicate.shipment_code}</strong>
@@ -664,12 +664,12 @@ export default function ShipmentInsertPopup({
                             border: `1px solid ${!isSigned ? theme.palette.error.main : theme.palette.divider}`,
                             borderRadius: 2,
                             overflow: 'hidden',
-                            bgcolor: '#fafafa'
+                            bgcolor: 'var(--color-surface-pearl)'
                         }}>
                             <SignatureCanvas
                                 ref={sigCanvas}
                                 canvasProps={{ width: 800, height: 120, className: 'sigCanvas' }}
-                                backgroundColor="#fafafa"
+                                backgroundColor="var(--color-surface-pearl)"
                                 // בכל סיום ציור בודקים אם הקנבס אינו ריק
                                 onEnd={() => setIsSigned(!sigCanvas.current?.isEmpty())}
                             />

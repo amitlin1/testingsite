@@ -139,7 +139,7 @@ export default function PopUpTestDialog({
                 <CloseIcon />
             </IconButton>
 
-            <Typography variant="h4" sx={{ fontWeight: 800, background: "linear-gradient(45deg, #1565C0, #42A5F5)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", mb: 1.5, textShadow: "0 10px 20px rgba(0,0,0,0.1)" }}>
+            <Typography variant="h4" sx={{ fontWeight: 800, background: "linear-gradient(45deg, var(--color-primary), var(--color-primary))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", mb: 1.5, textShadow: "0 10px 20px rgba(0,0,0,0.1)" }}>
                 סיום בדיקה
             </Typography>
             
@@ -192,7 +192,7 @@ export default function PopUpTestDialog({
                 sx={{
                     "& .MuiOutlinedInput-root": {
                         borderRadius: 3,
-                        bgcolor: "#f8f9fa",
+                        bgcolor: "var(--color-surface-pearl)",
                         transition: "all 0.2s",
                         "&:hover": { bgcolor: "white", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" },
                         "&.Mui-focused": { bgcolor: "white", boxShadow: `0 0 0 4px ${alpha(theme.palette.primary.main, 0.2)}` }
@@ -253,7 +253,7 @@ export default function PopUpTestDialog({
                 sx={{
                     "& .MuiOutlinedInput-root": {
                         borderRadius: 3,
-                        bgcolor: "#f8f9fa",
+                        bgcolor: "var(--color-surface-pearl)",
                         padding: '16px',
                         transition: "all 0.2s",
                         "&:hover": { bgcolor: "white", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" },
@@ -316,7 +316,7 @@ export default function PopUpTestDialog({
                 fontWeight: 700,
                 gap: 2.5,
                 boxShadow: "0 8px 16px rgba(46, 125, 50, 0.2)",
-                background: "linear-gradient(45deg, #43a047, #66bb6a)",
+                background: "linear-gradient(45deg, var(--color-status-approved), var(--color-status-approved))",
                 "&:hover": { transform: "translateY(-1px)", boxShadow: "0 12px 20px rgba(46, 125, 50, 0.3)" }
               }}
             >
@@ -356,7 +356,7 @@ export default function PopUpTestDialog({
                 fontWeight: 700,
                 gap: 2.5,
                 boxShadow: "0 8px 16px rgba(25, 118, 210, 0.2)",
-                background: "linear-gradient(45deg, #1976d2, #42a5f5)",
+                background: "linear-gradient(45deg, var(--color-primary), var(--color-primary))",
                 "&:hover": { transform: "translateY(-1px)", boxShadow: "0 12px 20px rgba(25, 118, 210, 0.3)" }
               }}
             >

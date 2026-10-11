@@ -37,7 +37,7 @@ export default function PackageDecisionDialog({
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: DIALOG_Z + 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, overflow: "hidden", color: INK }}>
+      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(520px, 94vw)", background: "var(--color-canvas)", borderRadius: 18, boxShadow: SHADOW, overflow: "hidden", color: INK }}>
         <div style={{ padding: "22px 24px 0" }}>
           <div data-drag-handle="" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>פריט שלא הגיע לסגירה</div>
           <div style={{ fontSize: 14, color: INK_2, marginTop: 9, lineHeight: 1.55 }}>
@@ -48,8 +48,8 @@ export default function PackageDecisionDialog({
           {choices.map((c) => {
             const on = choice === c.key;
             return (
-              <div key={c.key} onClick={() => setChoice(c.key)} style={{ display: "flex", alignItems: "flex-start", gap: 12, border: `1px solid ${on ? c.tone : HAIR}`, background: on ? (c.key === "missing" ? "rgba(191,53,53,0.06)" : "#e6efff") : "#fff", borderRadius: 12, padding: "12px 14px", cursor: "pointer" }}>
-                <span style={{ width: 18, height: 18, borderRadius: "50%", border: `1px solid ${on ? c.tone : "#d4d4dc"}`, background: "#fff", marginTop: 2, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <div key={c.key} onClick={() => setChoice(c.key)} style={{ display: "flex", alignItems: "flex-start", gap: 12, border: `1px solid ${on ? c.tone : HAIR}`, background: on ? (c.key === "missing" ? "rgba(191,53,53,0.06)" : "var(--color-primary-soft)") : "var(--color-canvas)", borderRadius: 12, padding: "12px 14px", cursor: "pointer" }}>
+                <span style={{ width: 18, height: 18, borderRadius: "50%", border: `1px solid ${on ? c.tone : "var(--color-border-strong)"}`, background: "var(--color-canvas)", marginTop: 2, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {on && <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.tone }} />}
                 </span>
                 <div>
@@ -65,8 +65,8 @@ export default function PackageDecisionDialog({
           <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="מה קרה לפריט?" style={{ width: "100%", minHeight: 76, border: `1px solid ${HAIR}`, borderRadius: 11, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", fontFamily: "inherit" }} />
         </div>
         <div style={{ padding: "18px 24px 22px", display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
-          <button type="button" onClick={onClose} style={{ minHeight: 44, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK }}>ביטול</button>
-          <button type="button" disabled={!can} onClick={() => choice && onSave(choice, note.trim())} style={{ minHeight: 44, background: can ? BLUE : HAIR, color: can ? "#fff" : "#9a9aa0", border: 0, borderRadius: 9999, padding: "11px 22px", fontSize: 14, fontWeight: 600, cursor: can ? "pointer" : "not-allowed", fontFamily: "inherit" }}>שמור החלטה</button>
+          <button type="button" onClick={onClose} style={{ minHeight: 44, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK }}>ביטול</button>
+          <button type="button" disabled={!can} onClick={() => choice && onSave(choice, note.trim())} style={{ minHeight: 44, background: can ? BLUE : HAIR, color: can ? "var(--color-canvas)" : "var(--color-ink-muted-40)", border: 0, borderRadius: 9999, padding: "11px 22px", fontSize: 14, fontWeight: 600, cursor: can ? "pointer" : "not-allowed", fontFamily: "inherit" }}>שמור החלטה</button>
         </div>
       </div>
     </div>

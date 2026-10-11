@@ -10,7 +10,7 @@ import { canSeeInNav } from "@/lib/routes";
  * Settings secondary navigation — a horizontal tab strip pinned to the top of
  * the settings content area (rendered once by settings/layout.tsx, so it shows
  * on every /settings/** route). Light/frosted surface per the Shifthouse design
- * system; Action Blue (#0066cc) active state because this is a light surface.
+ * system; Action Blue (var(--color-primary)) active state because this is a light surface.
  * Routes/labels/icons come from the shared `settingsLinks` single source.
  */
 export default function SettingsSubNav() {
@@ -36,14 +36,14 @@ export default function SettingsSubNav() {
         gap: 2,
         px: 2,
         height: 52,
-        borderBottom: "1px solid #e0e0e0",
+        borderBottom: "1px solid var(--color-hairline)",
         background: "rgba(245,245,247,0.8)",
         backdropFilter: "saturate(180%) blur(20px)",
         WebkitBackdropFilter: "saturate(180%) blur(20px)",
       }}
     >
       <Typography
-        sx={{ fontSize: 14, fontWeight: 700, color: "#1d1d1f", whiteSpace: "nowrap", flexShrink: 0 }}
+        sx={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)", whiteSpace: "nowrap", flexShrink: 0 }}
       >
         הגדרות מערכת
       </Typography>
@@ -84,7 +84,7 @@ export default function SettingsSubNav() {
                 borderRadius: "8px",
                 fontSize: 14,
                 fontWeight: active ? 600 : 400,
-                color: active ? "#0066cc" : "#5a5a5f",
+                color: active ? "var(--color-primary)" : "var(--color-ink-muted-70)",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
                 transition: "background-color 0.15s ease, color 0.15s ease",
@@ -97,7 +97,7 @@ export default function SettingsSubNav() {
                     bottom: 0,
                     height: 2,
                     borderRadius: "2px 2px 0 0",
-                    bgcolor: "#0066cc",
+                    bgcolor: "var(--color-primary)",
                   },
                 }),
               }}

@@ -154,8 +154,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           top: 0,
           insetInlineEnd: 0,
           height: TOPBAR_HEIGHT,
-          bgcolor: "#fff",
-          borderBottom: "1px solid #e0e0e0",
+          bgcolor: "var(--color-canvas)",
+          borderBottom: "1px solid var(--color-hairline)",
           display: "flex",
           alignItems: "center",
           gap: 2,
@@ -170,7 +170,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <IconButton
             onClick={handleToggle}
             aria-label="תפריט"
-            sx={{ border: "1px solid #e0e0e0", borderRadius: "9px", width: 36, height: 36, color: "#1d1d1f" }}
+            sx={{ border: "1px solid var(--color-hairline)", borderRadius: "9px", width: 36, height: 36, color: "var(--color-ink)" }}
           >
             <MenuIcon sx={{ fontSize: 20 }} />
           </IconButton>

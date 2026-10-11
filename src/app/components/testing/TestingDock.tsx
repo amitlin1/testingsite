@@ -99,8 +99,8 @@ export default function TestingDock({
               width: 30,
               height: 30,
               borderRadius: "8px",
-              bgcolor: "#1d1d1f",
-              color: "#fff",
+              bgcolor: "var(--color-ink)",
+              color: "var(--color-on-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -115,7 +115,7 @@ export default function TestingDock({
             >
               {hasStation ? stationName : "בחר עמדה לבדיקה"}
             </Typography>
-            <Typography sx={{ fontSize: 12, color: "#7a7a7a", whiteSpace: "nowrap", display: { xs: "none", sm: "inline" } }}>
+            <Typography sx={{ fontSize: 12, color: "var(--color-ink-muted-48)", whiteSpace: "nowrap", display: { xs: "none", sm: "inline" } }}>
               {hasStation ? `${stationTypeName ?? ""} · ${itemCount} ${countNoun}` : "רחף כאן לבחירת עמדה ועובד"}
             </Typography>
           </Box>
@@ -132,14 +132,14 @@ export default function TestingDock({
               whiteSpace: "nowrap",
               bgcolor: hasWorker ? "rgba(0,102,204,0.08)" : "rgba(217,118,6,0.10)",
               border: `1px solid ${hasWorker ? "rgba(0,102,204,0.22)" : "rgba(217,118,6,0.32)"}`,
-              color: hasWorker ? "#0066cc" : "#9a5b06",
+              color: hasWorker ? "var(--color-primary)" : "var(--color-warning-ink)",
             }}
           >
             <PersonIcon sx={{ fontSize: 14 }} />
             {hasWorker ? activeWorkerName || "עובד" : "בחר עובד"}
           </Box>
           <Box sx={{ flex: 1 }} />
-          <Box sx={{ display: { xs: "none", md: "inline-flex" }, alignItems: "center", gap: 0.75, fontSize: 12, color: "#9a9aa0", whiteSpace: "nowrap" }}>
+          <Box sx={{ display: { xs: "none", md: "inline-flex" }, alignItems: "center", gap: 0.75, fontSize: 12, color: "var(--color-ink-muted-48)", whiteSpace: "nowrap" }}>
             <KeyboardArrowDownIcon sx={{ fontSize: 15 }} />
             שינוי עמדה ועובד
           </Box>
@@ -192,7 +192,7 @@ export default function TestingDock({
                   <Typography sx={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {o.name}
                   </Typography>
-                  <Typography sx={{ fontSize: 12, color: "#9a9aa0" }}>{typeNameById(o.typeId)}</Typography>
+                  <Typography sx={{ fontSize: 12, color: "var(--color-ink-muted-48)" }}>{typeNameById(o.typeId)}</Typography>
                 </Box>
               )}
             />
@@ -221,7 +221,7 @@ export default function TestingDock({
             sx={{
               height: 44,
               borderRadius: "10px",
-              bgcolor: "#1d1d1f",
+              bgcolor: "var(--color-ink)",
               fontWeight: 600,
               px: 2.5,
               "&:hover": { bgcolor: "#000" },

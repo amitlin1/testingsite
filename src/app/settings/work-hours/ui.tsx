@@ -15,7 +15,7 @@ export const TINT = "rgba(0,102,204,0.09)";
 export const DANGER = "#bf3535";
 
 export const card: React.CSSProperties = {
-  background: "#fff",
+  background: "var(--color-canvas)",
   border: `1px solid ${HAIRLINE}`,
   borderRadius: 18,
 };

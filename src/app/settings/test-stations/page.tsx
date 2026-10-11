@@ -65,8 +65,8 @@ function TestStationsView() {
             ) : (
               <Box
                 sx={{
-                  background: "#fff",
-                  border: "1px solid #e0e0e0",
+                  background: "var(--color-canvas)",
+                  border: "1px solid var(--color-hairline)",
                   borderRadius: "16px",
                   minHeight: 240,
                   display: "flex",
@@ -76,11 +76,11 @@ function TestStationsView() {
                   gap: 1.25,
                   p: "64px 24px",
                   textAlign: "center",
-                  color: "#7a7a7a",
+                  color: "var(--color-ink-muted-48)",
                 }}
               >
-                <LayoutGrid size={34} strokeWidth={1.5} color="#0066cc" />
-                <Box sx={{ fontSize: 15, color: "#1d1d1f", fontWeight: 600 }}>בחר סוג עמדה מהרשימה</Box>
+                <LayoutGrid size={34} strokeWidth={1.5} color="var(--color-primary)" />
+                <Box sx={{ fontSize: 15, color: "var(--color-ink)", fontWeight: 600 }}>בחר סוג עמדה מהרשימה</Box>
                 <Box sx={{ fontSize: 13 }}>העמדות המשויכות יוצגו כאן.</Box>
               </Box>
             )}

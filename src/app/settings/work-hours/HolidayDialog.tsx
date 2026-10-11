@@ -170,7 +170,7 @@ export default function HolidayDialog({
           <button
             type="button"
             onClick={() => setAddingType(true)}
-            style={{ borderRadius: 9999, padding: "8px 15px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", background: "#fff", color: INK, border: `1px dashed ${HAIRLINE}` }}
+            style={{ borderRadius: 9999, padding: "8px 15px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", background: "var(--color-canvas)", color: INK, border: `1px dashed ${HAIRLINE}` }}
           >
             + סוג חדש
           </button>

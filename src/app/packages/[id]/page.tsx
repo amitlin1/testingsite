@@ -83,7 +83,7 @@ export default function PackagePage() {
         <ChevronRight size={15} strokeWidth={2} />חזרה למארזים
       </button>
 
-      <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 24, marginTop: 14 }}>
+      <div style={{ background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 24, marginTop: 14 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, color: MUTED, fontWeight: 600 }}>{pkg.item_type_desc}</div>
@@ -127,7 +127,7 @@ export default function PackagePage() {
       </div>
 
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginTop: 16, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 0, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ flex: 1, minWidth: 0, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 20px", borderBottom: `1px solid ${HAIR}` }}>
             <div style={{ fontSize: 16, fontWeight: 600 }}>פריטים במארז</div>
             <div style={{ fontSize: 12.5, color: MUTED }}>כל פריט מתקדם במסלול של הסוג שלו</div>
@@ -135,7 +135,7 @@ export default function PackagePage() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
-                <tr style={{ background: "#f5f5f7" }}>
+                <tr style={{ background: "var(--color-canvas-parchment)" }}>
                   <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 20px" }}>מזהה</th>
                   <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>סוג פריט</th>
                   <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>סריאלי</th>
@@ -172,7 +172,7 @@ export default function PackagePage() {
         </div>
 
         <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 20 }}>
+          <div style={{ background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 16, fontWeight: 600 }}>ציר זמן של המארז</div>
             <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3 }}>עמדות ברמת מארז בלבד</div>
             <div style={{ display: "flex", flexDirection: "column", marginTop: 16 }}>
@@ -192,7 +192,7 @@ export default function PackagePage() {
               ))}
             </div>
           </div>
-          <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 20 }}>
+          <div style={{ background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>קבצים</div>
             <ItemFilesPanel itemId={pkg.item_id} compact />
           </div>

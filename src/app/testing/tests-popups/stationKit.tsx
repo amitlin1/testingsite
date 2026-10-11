@@ -87,8 +87,8 @@ export function PassFail({ value, onChange }: { value: Photos["ok"]; onChange: (
           flex: 1, height: 56, borderRadius: "13px", fontWeight: 600, fontSize: 16,
           textTransform: "none", boxShadow: "none",
           border: `1.5px solid ${active ? color : HAIR}`,
-          bgcolor: active ? tint : "#fff", color: active ? color : INK,
-          "&:hover": { bgcolor: active ? tint : "#fafafc", borderColor: active ? color : "#c7c7cf" },
+          bgcolor: active ? tint : "var(--color-canvas)", color: active ? color : INK,
+          "&:hover": { bgcolor: active ? tint : "var(--color-surface-pearl)", borderColor: active ? color : "var(--color-border-strong)" },
           "&:active": { transform: "scale(0.98)" },
         }}>
         {v === "pass" ? "תקין" : "לא תקין"}
@@ -102,7 +102,7 @@ export function PassFail({ value, onChange }: { value: Photos["ok"]; onChange: (
 export function PhotoSection({ children }: { children: React.ReactNode }) {
   return (
     <Box>
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, pb: "12px", borderBottom: "1px solid #ececec", mb: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, pb: "12px", borderBottom: "1px solid var(--color-hairline)", mb: 2 }}>
         <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.2px", color: INK, whiteSpace: "nowrap" }}>תיעוד בתמונות</Typography>
       </Box>
       {children}
@@ -226,7 +226,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); takeFiles(e.dataTransfer.files); }}
-        sx={{ position: "relative", height: 420, borderRadius: "18px", overflow: "hidden", border: dragging ? `2px dashed ${BLUE}` : `1px solid ${HAIR}`, bgcolor: dragging ? "rgba(0,102,204,0.06)" : "#f0f0f2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        sx={{ position: "relative", height: 420, borderRadius: "18px", overflow: "hidden", border: dragging ? `2px dashed ${BLUE}` : `1px solid ${HAIR}`, bgcolor: dragging ? "rgba(0,102,204,0.06)" : "var(--color-canvas-parchment)", display: "flex", alignItems: "center", justifyContent: "center" }}>
         {bigSrc ? (
           <Box component="img" src={bigSrc} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
@@ -243,7 +243,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         )}
         {activeIsCaptured && (
           <IconButton size="small" onClick={() => onRemove(activeIdx)}
-            sx={{ position: "absolute", top: 8, insetInlineStart: 8, bgcolor: "rgba(0,0,0,0.5)", color: "#fff", p: "3px", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}>
+            sx={{ position: "absolute", top: 8, insetInlineStart: 8, bgcolor: "rgba(0,0,0,0.5)", color: "var(--color-on-primary)", p: "3px", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}>
             <CloseIcon sx={{ fontSize: 15 }} />
           </IconButton>
         )}
@@ -253,7 +253,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
       {/* Camera (one shot) + gallery picker (several images at once) */}
       <Box sx={{ display: "flex", gap: 1.25 }}>
         <Button onClick={openCamera} variant="contained" disableElevation startIcon={<AddAPhotoIcon />}
-          sx={{ flex: 2, height: 58, borderRadius: "14px", fontSize: 17, fontWeight: 600, textTransform: "none", boxShadow: "none", bgcolor: BLUE, "&:hover": { bgcolor: "#0058b3", boxShadow: "none" }, "&:active": { transform: "scale(0.98)" } }}>
+          sx={{ flex: 2, height: 58, borderRadius: "14px", fontSize: 17, fontWeight: 600, textTransform: "none", boxShadow: "none", bgcolor: BLUE, "&:hover": { bgcolor: "var(--color-primary-hover)", boxShadow: "none" }, "&:active": { transform: "scale(0.98)" } }}>
           {hasSlots && captured >= total ? "צלם מחדש" : "צלם"}
         </Button>
         <Button onClick={openGallery} variant="outlined" disableElevation startIcon={<PhotoLibraryIcon />}
@@ -280,11 +280,11 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
           return (
             <Box key={i} onClick={() => setActiveIdx(i)}
               sx={{ position: "relative", flex: "1 1 150px", minWidth: 130, maxWidth: 280, aspectRatio: "4 / 3", cursor: "pointer", borderRadius: "13px", overflow: "hidden",
-                border: shot?.failed ? `2.5px solid ${BAD}` : isActive ? `2.5px solid ${BLUE}` : isCap ? `1.5px solid ${OK}` : `1.5px solid ${HAIR}`, bgcolor: "#f0f0f2" }}>
+                border: shot?.failed ? `2.5px solid ${BAD}` : isActive ? `2.5px solid ${BLUE}` : isCap ? `1.5px solid ${OK}` : `1.5px solid ${HAIR}`, bgcolor: "var(--color-canvas-parchment)" }}>
               {src && <Box component="img" src={src} sx={{ width: "100%", height: "100%", objectFit: "cover", opacity: shot?.uploading ? 0.5 : 1 }} />}
-              {!isCap && <Box sx={{ position: "absolute", bottom: 5, insetInlineStart: 5, fontSize: 10, fontWeight: 600, color: "#fff", bgcolor: "rgba(0,0,0,0.45)", borderRadius: "6px", px: 0.75, py: "1px" }}>ייחוס</Box>}
+              {!isCap && <Box sx={{ position: "absolute", bottom: 5, insetInlineStart: 5, fontSize: 10, fontWeight: 600, color: "var(--color-on-primary)", bgcolor: "rgba(0,0,0,0.45)", borderRadius: "6px", px: 0.75, py: "1px" }}>ייחוס</Box>}
               {isCap && !shot?.uploading && (
-                <Box sx={{ position: "absolute", top: 4, insetInlineStart: 4, width: 20, height: 20, borderRadius: "9999px", bgcolor: shot?.failed ? BAD : OK, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Box sx={{ position: "absolute", top: 4, insetInlineStart: 4, width: 20, height: 20, borderRadius: "9999px", bgcolor: shot?.failed ? BAD : OK, color: "var(--color-on-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {shot?.failed ? <WarningIcon sx={{ fontSize: 12 }} /> : <CheckIcon sx={{ fontSize: 13 }} />}
                 </Box>
               )}
@@ -356,7 +356,7 @@ export function StationShell({
           <Typography sx={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", color: BLUE, textTransform: "uppercase", mb: 1.5 }}>{contextLabel}</Typography>
 
           {/* Item identity card */}
-          <Box sx={{ bgcolor: "#fff", border: `1px solid ${HAIR}`, borderRadius: "16px", p: 2, mb: 2.75 }}>
+          <Box sx={{ bgcolor: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: "16px", p: 2, mb: 2.75 }}>
             <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.3px", color: INK }}>{itemName}</Typography>
             <Typography sx={{ fontSize: 12.5, color: MUTED, mt: 0.5 }}>#{item.item_id}{item.makat != null ? ` · מק״ט ${item.makat}` : ""}</Typography>
             {(item.customer_code || item.serial_no) && (
@@ -379,7 +379,7 @@ export function StationShell({
               return (
                 <Box key={ph.key} onClick={() => onStep(i)} sx={{ display: "flex", alignItems: "center", gap: 1.5, p: "9px 10px", borderRadius: "12px", cursor: "pointer", bgcolor: on ? "rgba(0,102,204,0.07)" : "transparent" }}>
                   <Box sx={{ width: 28, height: 28, flexShrink: 0, borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                    ...(done ? { bgcolor: OK, color: "#fff" } : on ? { bgcolor: BLUE, color: "#fff" } : { bgcolor: "#fff", border: `1.5px solid ${HAIR}`, color: MUTED_LT }) }}>
+                    ...(done ? { bgcolor: OK, color: "var(--color-on-primary)" } : on ? { bgcolor: BLUE, color: "var(--color-on-primary)" } : { bgcolor: "var(--color-canvas)", border: `1.5px solid ${HAIR}`, color: MUTED_LT }) }}>
                     {done ? <CheckIcon sx={{ fontSize: 15 }} /> : i + 1}
                   </Box>
                   <Typography sx={{ fontSize: 14, fontWeight: on ? 700 : 600, color: on || done ? INK : MUTED_LT }}>{ph.title}</Typography>
@@ -400,7 +400,7 @@ export function StationShell({
             <Typography sx={{ fontSize: isWide ? 24 : 20, fontWeight: 700, letterSpacing: "-0.4px", mt: isWide ? 0 : "2px", color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.title}</Typography>
             {isWide && <Typography sx={{ fontSize: 14, color: MUTED, mt: "4px" }}>{phase.desc}</Typography>}
           </Box>
-          <IconButton onClick={onClose} sx={{ flexShrink: 0, alignSelf: "flex-start", width: 36, height: 36, bgcolor: CHIP_BG, color: MUTED, "&:hover": { bgcolor: "#e6e6ea" } }}>
+          <IconButton onClick={onClose} sx={{ flexShrink: 0, alignSelf: "flex-start", width: 36, height: 36, bgcolor: CHIP_BG, color: MUTED, "&:hover": { bgcolor: "var(--color-hairline)" } }}>
             <CloseIcon sx={{ fontSize: 19 }} />
           </IconButton>
         </Box>
@@ -412,7 +412,7 @@ export function StationShell({
               const on = i === currentIndex;
               const done = i < currentIndex;
               return (
-                <Box key={ph.key} onClick={() => onStep(i)} sx={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 600, borderRadius: "9999px", px: "14px", py: "6px", cursor: "pointer", bgcolor: on ? BLUE : done ? "rgba(31,138,91,0.1)" : CHIP_BG, color: on ? "#fff" : done ? OK : MUTED }}>
+                <Box key={ph.key} onClick={() => onStep(i)} sx={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 600, borderRadius: "9999px", px: "14px", py: "6px", cursor: "pointer", bgcolor: on ? BLUE : done ? "rgba(31,138,91,0.1)" : CHIP_BG, color: on ? "var(--color-canvas)" : done ? OK : MUTED }}>
                   {i + 1}. {ph.title}
                 </Box>
               );

@@ -107,9 +107,9 @@ function useElapsedTime(createdAt: string | null | undefined): string {
 
 // Shifthouse status tokens (waiting amber / in-test blue / done green).
 const STATUS_TOKENS = {
-  waiting: { color: "#d97706", bg: "rgba(217,118,6,0.10)", border: "rgba(217,118,6,0.28)", timerBg: "rgba(217,118,6,0.08)" },
-  inTest: { color: "#0066cc", bg: "rgba(0,102,204,0.10)", border: "rgba(0,102,204,0.25)", timerBg: "rgba(0,102,204,0.06)" },
-  done: { color: "#1f8a5b", bg: "rgba(31,138,91,0.10)", border: "rgba(31,138,91,0.25)", timerBg: "rgba(31,138,91,0.06)" },
+  waiting: { color: "var(--color-warning-ink)", bg: "rgba(217,118,6,0.10)", border: "rgba(217,118,6,0.28)", timerBg: "rgba(217,118,6,0.08)" },
+  inTest: { color: "var(--color-primary)", bg: "rgba(0,102,204,0.10)", border: "rgba(0,102,204,0.25)", timerBg: "rgba(0,102,204,0.06)" },
+  done: { color: "var(--color-success-ink)", bg: "rgba(31,138,91,0.10)", border: "rgba(31,138,91,0.25)", timerBg: "rgba(31,138,91,0.06)" },
 } as const;
 
 // --- Item Row Strip (option 3a: queue rank + step progress) ---
@@ -164,7 +164,7 @@ function ItemCard({
   // Steps come from the item's real testing route.
   const totalSteps = Math.max(item.route_steps?.length || 1, 1);
   const currentStep = item.current_route_step ?? 1;
-  const rankBg = priority ? "#d97706" : isActionable ? "#15171a" : "#c7c7cf";
+  const rankBg = priority ? "var(--color-status-late)" : isActionable ? "var(--color-nav-bg)" : "var(--color-border-strong)";
 
   return (
       <Box
@@ -173,14 +173,14 @@ function ItemCard({
           display: "flex",
           alignItems: "center",
           gap: "15px",
-          bgcolor: "#fff",
+          bgcolor: "var(--color-canvas)",
           borderRadius: "14px",
           padding: "14px 16px",
           border: highlighted
-            ? "1.5px solid #0066cc"
+            ? "1.5px solid var(--color-primary)"
             : priority
-              ? "1.5px solid #d97706"
-              : "1px solid #e0e0e0",
+              ? "1.5px solid var(--color-status-late)"
+              : "1px solid var(--color-hairline)",
           boxShadow: highlighted
             ? "0 0 0 3px rgba(0,102,204,0.18)"
             : priority
@@ -200,8 +200,8 @@ function ItemCard({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "5px",
-                    bgcolor: "#d97706",
-                    color: "#fff",
+                    bgcolor: "var(--color-status-late)",
+                    color: "var(--color-on-primary)",
                     fontSize: 11,
                     fontWeight: 700,
                     borderRadius: "9999px",
@@ -241,7 +241,7 @@ function ItemCard({
                 flexShrink: 0,
                 borderRadius: "9999px",
                 bgcolor: rankBg,
-                color: "#fff",
+                color: "var(--color-on-primary)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -256,22 +256,22 @@ function ItemCard({
         {/* ID + status, type · model line, package strip */}
         <Box sx={{ minWidth: 0, flex: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: "9px", flexWrap: "wrap" }}>
-                <PackageIdText id={item.item_id} size={18} headColor="#1d1d1f" weight={800} letterSpacing="-0.2px" />
+                <PackageIdText id={item.item_id} size={18} headColor="var(--color-ink)" weight={800} letterSpacing="-0.2px" />
                 <Box sx={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: 12, fontWeight: 700, color: statusColor, whiteSpace: "nowrap" }}>
                     <Box sx={{ width: 6, height: 6, borderRadius: "9999px", bgcolor: statusColor }} />
                     {item.item_status_desc || "סטטוס לא ידוע"}
                 </Box>
             </Box>
-            <Typography sx={{ fontSize: 13, color: "#7a7a7a", mt: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <Typography sx={{ fontSize: 13, color: "var(--color-ink-muted-48)", mt: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {[item.item_type_desc, item.model].filter(Boolean).join(" · ")} · מק״ט {item.makat}
             </Typography>
             {pkg && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mt: "6px", fontSize: 12, color: "#7a7a7a", whiteSpace: "nowrap", overflow: "hidden" }}>
-                    <InventoryIcon sx={{ fontSize: 14, color: "#0066cc" }} />
+                <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mt: "6px", fontSize: 12, color: "var(--color-ink-muted-48)", whiteSpace: "nowrap", overflow: "hidden" }}>
+                    <InventoryIcon sx={{ fontSize: 14, color: "var(--color-primary)" }} />
                     <span>פריט {seq2(item.package_seq)} מתוך {seq2(pkg.items.length)} · {pkg.item_type_desc}</span>
                     <Box sx={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
                         {pkg.items.map((s) => (
-                            <Box key={s.item_id} title={`${seq2(s.package_seq)} · ${s.item_type_desc} · ${s.state_label}`} sx={{ width: 16, height: 7, borderRadius: "3px", bgcolor: String(s.item_id) === String(item.item_id) ? "#0066cc" : ITEM_STATES[s.state].color }} />
+                            <Box key={s.item_id} title={`${seq2(s.package_seq)} · ${s.item_type_desc} · ${s.state_label}`} sx={{ width: 16, height: 7, borderRadius: "3px", bgcolor: String(s.item_id) === String(item.item_id) ? "var(--color-primary)" : ITEM_STATES[s.state].color }} />
                         ))}
                     </Box>
                 </Box>
@@ -280,12 +280,12 @@ function ItemCard({
 
         {/* Step progress */}
         <Box sx={{ flexShrink: 0, width: 150 }}>
-            <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: "#5a5a5f", mb: "5px" }}>
+            <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: "var(--color-ink-muted-70)", mb: "5px" }}>
                 שלב {currentStep} / {totalSteps}
             </Typography>
             <Box sx={{ display: "flex", gap: "4px" }}>
                 {Array.from({ length: totalSteps }, (_, i) => (
-                    <Box key={i} sx={{ flex: 1, height: 5, borderRadius: "9999px", bgcolor: i < currentStep ? statusColor : "#e6e6ea" }} />
+                    <Box key={i} sx={{ flex: 1, height: 5, borderRadius: "9999px", bgcolor: i < currentStep ? statusColor : "var(--color-hairline)" }} />
                 ))}
             </Box>
         </Box>
@@ -309,9 +309,9 @@ function ItemCard({
                     height: 40,
                     flexShrink: 0,
                     borderRadius: "10px",
-                    border: "1px solid #cfe3fb",
-                    bgcolor: "#f3f8ff",
-                    color: "#0066cc",
+                    border: "1px solid var(--color-primary-border)",
+                    bgcolor: "var(--color-primary-tint)",
+                    color: "var(--color-primary)",
                 }}
             >
                 <InventoryIcon sx={{ fontSize: 18 }} />
@@ -339,8 +339,8 @@ function ItemCard({
         >
            <MenuItem disabled dense sx={{ opacity: "1 !important" }}>
               <Box>
-                  <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: "#7a7a7a" }}>פריטים באותו מארז</Typography>
-                  {pkg && <Box sx={{ mt: "2px" }}><PackageIdText id={pkg.item_id} size={13} headColor="#1d1d1f" /></Box>}
+                  <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: "var(--color-ink-muted-48)" }}>פריטים באותו מארז</Typography>
+                  {pkg && <Box sx={{ mt: "2px" }}><PackageIdText id={pkg.item_id} size={13} headColor="var(--color-ink)" /></Box>}
               </Box>
            </MenuItem>
            {siblings.length === 0 ? (
@@ -349,7 +349,7 @@ function ItemCard({
                siblings.map((s) => (
                  <MenuItem key={s.item_id} onClick={handleMenuClose} dense>
                     <Stack direction="row" spacing={1.5} alignItems="center" sx={{ gap: 1 }}>
-                       <Box sx={{ width: 26, height: 26, borderRadius: "7px", bgcolor: "#f5f5f7", color: "#7a7a7a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{seq2(s.package_seq)}</Box>
+                       <Box sx={{ width: 26, height: 26, borderRadius: "7px", bgcolor: "var(--color-canvas-parchment)", color: "var(--color-ink-muted-48)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{seq2(s.package_seq)}</Box>
                        <Box>
                            <Typography variant="subtitle2">{s.item_type_desc}</Typography>
                            <Typography variant="caption" sx={{ color: ITEM_STATES[s.state].color, fontWeight: 600 }}>
@@ -422,7 +422,7 @@ function ItemCard({
                   justifyContent: "center",
                   border: "1px solid rgba(31,138,91,0.3)",
                   bgcolor: "rgba(31,138,91,0.07)",
-                  color: "#1f8a5b",
+                  color: "var(--color-success-ink)",
                   opacity: 1,
                 }}
             >
@@ -482,22 +482,22 @@ function PackageQueueEntry({
 // --- "ממתין לפריטי המארז" banner above a closing station's queue ---
 function BlockedPackagesBanner({ packages }: { packages: PackageView[] }) {
   return (
-    <Box sx={{ mb: "18px", border: "1px solid #f0e2cc", bgcolor: "#fdf3e6", borderRadius: "14px", padding: "14px 18px" }}>
-      <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: "#a86a1a" }}>
+    <Box sx={{ mb: "18px", border: "1px solid var(--color-warning-border)", bgcolor: "var(--color-warning-bg)", borderRadius: "14px", padding: "14px 18px" }}>
+      <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: "var(--color-warning-ink)" }}>
         {packages.length === 1 ? "מארז אחד ממתין לפריטים לפני הסגירה" : `${packages.length} מארזים ממתינים לפריטים לפני הסגירה`}
       </Typography>
-      <Typography sx={{ fontSize: 12.5, color: "#a86a1a", mt: "2px" }}>
+      <Typography sx={{ fontSize: 12.5, color: "var(--color-warning-ink)", mt: "2px" }}>
         המארז ייכנס לתור כשכל הפריטים שלו יסיימו את המסלול. הפריטים החסרים ומיקומם:
       </Typography>
       <Box sx={{ display: "flex", flexDirection: "column", gap: "8px", mt: "12px" }}>
         {packages.map((p) => (
-          <Box key={p.item_id} sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", bgcolor: "#fff", border: "1px solid #f0e2cc", borderRadius: "10px", padding: "9px 12px" }}>
-            <PackageIdText id={p.item_id} size={13.5} headColor="#1d1d1f" />
-            <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#1d1d1f" }}>{p.item_type_desc}</Typography>
-            <Typography sx={{ fontSize: 12.5, color: "#7a7a7a" }}>{p.customer_name ?? p.customer_code ?? ""}</Typography>
+          <Box key={p.item_id} sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", bgcolor: "var(--color-canvas)", border: "1px solid var(--color-warning-border)", borderRadius: "10px", padding: "9px 12px" }}>
+            <PackageIdText id={p.item_id} size={13.5} headColor="var(--color-ink)" />
+            <Typography sx={{ fontSize: 13, fontWeight: 600, color: "var(--color-ink)" }}>{p.item_type_desc}</Typography>
+            <Typography sx={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>{p.customer_name ?? p.customer_code ?? ""}</Typography>
             <Box sx={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginInlineStart: "auto" }}>
               {p.blocked_by.map((b) => (
-                <Box key={b.item_id} sx={{ fontSize: 12, color: "#a86a1a", bgcolor: "#fdf3e6", border: "1px solid #f0e2cc", borderRadius: "9999px", padding: "3px 10px", whiteSpace: "nowrap" }}>
+                <Box key={b.item_id} sx={{ fontSize: 12, color: "var(--color-warning-ink)", bgcolor: "var(--color-warning-bg)", border: "1px solid var(--color-warning-border)", borderRadius: "9999px", padding: "3px 10px", whiteSpace: "nowrap" }}>
                   {seq2(b.package_seq)} · {b.item_type_desc} · {b.station_name ?? "במסלול"}
                 </Box>
               ))}
@@ -524,7 +524,7 @@ function SummaryTile({
   iconColor,
   value,
   label,
-  valueColor = "#1d1d1f",
+  valueColor = "var(--color-ink)",
 }: {
   icon: React.ReactNode;
   iconBg: string;
@@ -534,7 +534,7 @@ function SummaryTile({
   valueColor?: string;
 }) {
   return (
-    <Box sx={{ bgcolor: "#fff", border: "1px solid #e0e0e0", borderRadius: "16px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px" }}>
+    <Box sx={{ bgcolor: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "16px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px" }}>
       <Box sx={{ width: 44, height: 44, flexShrink: 0, borderRadius: "12px", bgcolor: iconBg, color: iconColor, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {icon}
       </Box>
@@ -542,7 +542,7 @@ function SummaryTile({
         <Typography sx={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1, color: valueColor, fontVariantNumeric: "tabular-nums" }}>
           {value}
         </Typography>
-        <Typography sx={{ fontSize: 13, color: "#7a7a7a", mt: "5px" }}>{label}</Typography>
+        <Typography sx={{ fontSize: 13, color: "var(--color-ink-muted-48)", mt: "5px" }}>{label}</Typography>
       </Box>
     </Box>
   );
@@ -1164,7 +1164,7 @@ function TestingPageView() {
       sx={{
         width: "100%",
         minHeight: "100%",
-        bgcolor: "#f5f5f7",
+        bgcolor: "var(--color-canvas-parchment)",
         display: "flex",
         flexDirection: "column",
         overflowX: "hidden", // Prevent horizontal overflow
@@ -1190,7 +1190,7 @@ function TestingPageView() {
 
         {legacyNotice && (
           <Container maxWidth="xl" sx={{ mt: 2 }}>
-            <Box role="status" dir="rtl" sx={{ display: "flex", alignItems: "center", gap: 1.5, px: "14px", py: "10px", borderRadius: "10px", bgcolor: "#fff7e6", border: "1px solid #f3d9a4", color: "#8a5a00", fontSize: 14 }}>
+            <Box role="status" dir="rtl" sx={{ display: "flex", alignItems: "center", gap: 1.5, px: "14px", py: "10px", borderRadius: "10px", bgcolor: "var(--color-warning-bg)", border: "1px solid var(--color-warning-border)", color: "var(--color-warning-ink)", fontSize: 14 }}>
               <span style={{ flex: 1 }}>{legacyNotice}</span>
               <button type="button" onClick={() => setLegacyNotice(null)} aria-label="סגור" style={{ border: 0, background: "transparent", color: "inherit", fontSize: 18, lineHeight: 1, cursor: "pointer" }}>×</button>
             </Box>
@@ -1207,41 +1207,41 @@ function TestingPageView() {
                             <SummaryTile
                                 icon={<QueueIcon sx={{ fontSize: 21 }} />}
                                 iconBg="rgba(217,118,6,0.10)"
-                                iconColor="#d97706"
+                                iconColor="var(--color-status-late)"
                                 value={waitingCount}
                                 label="בתור"
                             />
                             <SummaryTile
                                 icon={<ScienceIcon sx={{ fontSize: 21 }} />}
                                 iconBg="rgba(0,102,204,0.10)"
-                                iconColor="#0066cc"
+                                iconColor="var(--color-primary)"
                                 value={inTestCount}
                                 label="בבדיקה"
                             />
                             <SummaryTile
                                 icon={<CheckIcon sx={{ fontSize: 21 }} />}
                                 iconBg="rgba(31,138,91,0.10)"
-                                iconColor="#1f8a5b"
+                                iconColor="var(--color-status-approved)"
                                 value={completedToday ?? "—"}
                                 label="הושלמו היום"
                             />
                             <SummaryTile
                                 icon={<AccessTimeIcon sx={{ fontSize: 21 }} />}
                                 iconBg="rgba(217,118,6,0.10)"
-                                iconColor="#d97706"
+                                iconColor="var(--color-status-late)"
                                 value={longestWait ? longestWait.slice(0, 5) : "—"}
                                 label="המתנה הארוכה ביותר"
-                                valueColor="#d97706"
+                                valueColor="var(--color-status-late)"
                             />
                         </Box>
 
                         {/* Toolbar */}
                         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", mb: "18px" }}>
                             <Box sx={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                                <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px", color: "#1d1d1f" }}>
+                                <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px", color: "var(--color-ink)" }}>
                                     {packageLevel ? "מארזים בתור" : "התור לבדיקה"}
                                 </Typography>
-                                <Typography sx={{ fontSize: 12.5, color: "#7a7a7a" }}>
+                                <Typography sx={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>
                                     ממוינים לפי זמן המתנה — הממתין ביותר קודם
                                 </Typography>
                             </Box>
@@ -1252,14 +1252,14 @@ function TestingPageView() {
                                     value={filterMakat}
                                     onChange={(e) => setFilterMakat(e.target.value)}
                                     InputProps={{
-                                        startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16, color: "#7a7a7a" }} /></InputAdornment>,
+                                        startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16, color: "var(--color-ink-muted-48)" }} /></InputAdornment>,
                                         endAdornment: filterMakat && (
                                            <InputAdornment position="end">
                                                <IconButton size="small" onClick={() => setFilterMakat("")}><ClearIcon fontSize="small"/></IconButton>
                                            </InputAdornment>
                                         )
                                     }}
-                                    sx={{ width: 300, maxWidth: "56vw", height: 44, borderRadius: "11px", bgcolor: "#fff" }}
+                                    sx={{ width: 300, maxWidth: "56vw", height: 44, borderRadius: "11px", bgcolor: "var(--color-canvas)" }}
                                 />
                                 <Button
                                    variant="outlined"
@@ -1269,8 +1269,8 @@ function TestingPageView() {
                                    sx={{
                                        height: 44,
                                        borderRadius: "11px",
-                                       borderColor: "#d4d4dc",
-                                       color: "#1d1d1f",
+                                       borderColor: "var(--color-border-strong)",
+                                       color: "var(--color-ink)",
                                        fontWeight: 600,
                                        gap: "7px",
                                        whiteSpace: "nowrap",
@@ -1305,11 +1305,11 @@ function TestingPageView() {
                                         ))}
                                     </Box>
                                 ) : (
-                                    <Box sx={{ textAlign: "center", py: "64px", color: "#7a7a7a" }}>
-                                        <Box sx={{ width: 64, height: 64, borderRadius: "9999px", bgcolor: "#fff", border: "1px solid #e0e0e0", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#0066cc", mb: "14px" }}>
+                                    <Box sx={{ textAlign: "center", py: "64px", color: "var(--color-ink-muted-48)" }}>
+                                        <Box sx={{ width: 64, height: 64, borderRadius: "9999px", bgcolor: "var(--color-canvas)", border: "1px solid var(--color-hairline)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)", mb: "14px" }}>
                                             <InventoryIcon sx={{ fontSize: 30 }} />
                                         </Box>
-                                        <Typography sx={{ fontSize: 17, color: "#1d1d1f", fontWeight: 600, mb: "6px" }}>
+                                        <Typography sx={{ fontSize: 17, color: "var(--color-ink)", fontWeight: 600, mb: "6px" }}>
                                             אין מארזים בתור לעמדה זו.
                                         </Typography>
                                         <Typography sx={{ fontSize: 14 }}>
@@ -1338,7 +1338,7 @@ function TestingPageView() {
                         ) : orderedItems.length > 0 ? (
                             <Box sx={{ pb: 4 }}>
                                 {/* Column headers */}
-                                <Box sx={{ display: "flex", alignItems: "center", gap: "15px", padding: "0 16px 12px", fontSize: 12, fontWeight: 700, color: "#9a9aa0" }}>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: "15px", padding: "0 16px 12px", fontSize: 12, fontWeight: 700, color: "var(--color-ink-muted-48)" }}>
                                     <Box sx={{ width: 5, flexShrink: 0 }} />
                                     <Box sx={{ width: 38, flexShrink: 0, textAlign: "center" }}>תור</Box>
                                     <Box sx={{ flex: 1 }}>מזהה · דגם</Box>
@@ -1364,11 +1364,11 @@ function TestingPageView() {
                                 </Box>
                             </Box>
                         ) : (
-                            <Box sx={{ textAlign: "center", py: "64px", color: "#7a7a7a" }}>
-                                <Box sx={{ width: 64, height: 64, borderRadius: "9999px", bgcolor: "#fff", border: "1px solid #e0e0e0", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#0066cc", mb: "14px" }}>
+                            <Box sx={{ textAlign: "center", py: "64px", color: "var(--color-ink-muted-48)" }}>
+                                <Box sx={{ width: 64, height: 64, borderRadius: "9999px", bgcolor: "var(--color-canvas)", border: "1px solid var(--color-hairline)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)", mb: "14px" }}>
                                     <InventoryIcon sx={{ fontSize: 30 }} />
                                 </Box>
-                                <Typography sx={{ fontSize: 17, color: "#1d1d1f", fontWeight: 600, mb: "6px" }}>
+                                <Typography sx={{ fontSize: 17, color: "var(--color-ink)", fontWeight: 600, mb: "6px" }}>
                                     אין פריטים תואמים בעמדה זו.
                                 </Typography>
                                 <Typography sx={{ fontSize: 14 }}>
@@ -1380,7 +1380,7 @@ function TestingPageView() {
                 </Fade>
             ) : (
                 <Stack alignItems="center" justifyContent="center" sx={{ minHeight: "60vh", opacity: 0.8 }}>
-                    <PrecisionManufacturingIcon sx={{ fontSize: 100, color: "#e0e0e0", mb: 3 }} />
+                    <PrecisionManufacturingIcon sx={{ fontSize: 100, color: "var(--color-hairline)", mb: 3 }} />
                     <Typography variant="h4" fontWeight="800" color="text.secondary" gutterBottom>
                         בחר עמדת בדיקה
                     </Typography>
@@ -1442,13 +1442,13 @@ function TestingPageView() {
             <DialogContent>
                 <Stack spacing={2} sx={{ mt: 1 }}>
                     {nextStationInfo?.finishedFromResearch ? (
-                         <Box sx={{ p: 2, bgcolor: alpha("#4caf50", 0.1), borderRadius: 2 }}>
+                         <Box sx={{ p: 2, bgcolor: alpha("var(--color-status-approved)", 0.1), borderRadius: 2 }}>
                              <Typography variant="body1" fontWeight="600" color="success.main">
                                  העובד סיים את המסלול בשלב {nextStationInfo?.finishedAtStep}
                              </Typography>
                          </Box>
                     ) : nextStationInfo?.isLastStation ? (
-                         <Box sx={{ p: 2, bgcolor: alpha("#4caf50", 0.1), borderRadius: 2 }}>
+                         <Box sx={{ p: 2, bgcolor: alpha("var(--color-status-approved)", 0.1), borderRadius: 2 }}>
                              <Typography variant="body1" fontWeight="600" color="success.main">
                                  זהו השלב האחרון בתהליך. הפריט סיים את כל הבדיקות.
                              </Typography>
@@ -1456,7 +1456,7 @@ function TestingPageView() {
                     ) : (
                         <Box>
                             <Typography variant="body1" gutterBottom>התחנה הבאה בתהליך:</Typography>
-                            <Card variant="outlined" sx={{ p: 2, bgcolor: "#f8f9fa", borderColor: "primary.main" }}>
+                            <Card variant="outlined" sx={{ p: 2, bgcolor: "var(--color-surface-pearl)", borderColor: "primary.main" }}>
                                 <Stack direction="row" alignItems="center" spacing={2}>
                                     <TrendingUpIcon color="primary" />
                                     <Box>
@@ -1494,8 +1494,8 @@ function TestingPageView() {
                 <Typography variant="body1" gutterBottom>
                      הפריט הועבר להמשך טיפול בעמדת חקר:
                 </Typography>
-                <Card variant="outlined" sx={{ p: 2, mt: 1, bgcolor: alpha("#ff9800", 0.05), borderColor: "#ff9800" }}>
-                     <Typography variant="subtitle1" fontWeight="bold" color="#e65100">
+                <Card variant="outlined" sx={{ p: 2, mt: 1, bgcolor: alpha("var(--color-status-late)", 0.05), borderColor: "var(--color-status-late)" }}>
+                     <Typography variant="subtitle1" fontWeight="bold" color="var(--color-warning-ink)">
                          {researchStationInfo?.stationDesc}
                      </Typography>
                 </Card>
@@ -1521,13 +1521,13 @@ function TestingPageView() {
             </DialogTitle>
             <DialogContent>
                 <Stack spacing={2} sx={{ mt: 1 }}>
-                    <Box sx={{ p: 2, bgcolor: alpha("#4caf50", 0.1), borderRadius: 2 }}>
+                    <Box sx={{ p: 2, bgcolor: alpha("var(--color-status-approved)", 0.1), borderRadius: 2 }}>
                         <Typography variant="body1" fontWeight="600" color="success.main">
                             פריט זה סיים את מסלול הבדיקות
                         </Typography>
                     </Box>
                     {finishedItemInfo && (
-                        <Card variant="outlined" sx={{ p: 2, bgcolor: "#f8f9fa" }}>
+                        <Card variant="outlined" sx={{ p: 2, bgcolor: "var(--color-surface-pearl)" }}>
                             <Stack spacing={1}>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <QrCodeIcon fontSize="small" color="action" />

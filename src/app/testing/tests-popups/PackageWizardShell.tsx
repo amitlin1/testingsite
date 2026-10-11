@@ -64,30 +64,30 @@ export default function PackageWizardShell({
       onMouseDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
       onClick={(e) => { if (pressedBackdrop.current && e.target === e.currentTarget && !busy) onClose(); }}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: DIALOG_Z - 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div ref={dragRef} onPointerDown={onDragStart} dir="rtl" style={{ width: "min(1040px, 96vw)", height: "min(720px, 92vh)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK, ...dragStyle }}>
+      <div ref={dragRef} onPointerDown={onDragStart} dir="rtl" style={{ width: "min(1040px, 96vw)", height: "min(720px, 92vh)", background: "var(--color-canvas)", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK, ...dragStyle }}>
         {/* Rail */}
-        <div style={{ width: 268, flexShrink: 0, background: "#f5f5f7", borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", padding: "20px 18px", overflowY: "auto" }}>
+        <div style={{ width: 268, flexShrink: 0, background: "var(--color-canvas-parchment)", borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", padding: "20px 18px", overflowY: "auto" }}>
           <div data-drag-handle="">
             <div style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>{stationName}</div>
             <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px", marginTop: 3 }}>{title}</div>
           </div>
 
-          <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "12px 13px", marginTop: 14 }}>
+          <div style={{ background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "12px 13px", marginTop: 14 }}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: MUTED }}>{pkg.item_type_desc}</div>
             <div style={{ marginTop: 4 }}><PackageIdText id={pkg.item_id} size={15} headColor={INK} /></div>
             <div style={{ fontSize: 12, color: MUTED, marginTop: 5 }}>{pkg.customer_name ?? pkg.customer_code ?? ""} · משלוח {pkg.shipment_code ?? "—"} · {pkg.items.length} פריטים</div>
           </div>
 
           {itemStepper && (
-            <div style={{ marginTop: 16, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "12px 13px" }}>
+            <div style={{ marginTop: 16, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "12px 13px" }}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, letterSpacing: ".5px", textTransform: "uppercase" }}>פריטי המארז</div>
                 <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{itemProgress}</div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 10 }}>
                 {itemStepper.map((it) => (
-                  <div key={it.key} onClick={it.onClick} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 9, background: it.active ? "#e6efff" : "transparent", cursor: "pointer" }}>
-                    <span style={{ width: 20, height: 20, borderRadius: "50%", background: it.done ? "rgba(31,138,91,0.1)" : it.active ? BLUE : "#fff", color: it.done ? GREEN : it.active ? "#fff" : MUTED, border: `1px solid ${it.active ? BLUE : HAIR}`, fontSize: 10.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{it.badge}</span>
+                  <div key={it.key} onClick={it.onClick} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 9, background: it.active ? "var(--color-primary-soft)" : "transparent", cursor: "pointer" }}>
+                    <span style={{ width: 20, height: 20, borderRadius: "50%", background: it.done ? "rgba(31,138,91,0.1)" : it.active ? BLUE : "var(--color-canvas)", color: it.done ? GREEN : it.active ? "var(--color-canvas)" : MUTED, border: `1px solid ${it.active ? BLUE : HAIR}`, fontSize: 10.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{it.badge}</span>
                     <div style={{ minWidth: 0, flex: 1, fontSize: 12.5, fontWeight: 600, color: it.active ? BLUE : INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.type}</div>
                     <span style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>{it.stateLabel}</span>
                   </div>
@@ -101,8 +101,8 @@ export default function PackageWizardShell({
               const active = i === stepIndex && !itemStepper?.some((x) => x.active);
               const past = i < stepIndex;
               return (
-                <div key={s.key} onClick={() => onStep(i)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 10px", borderRadius: 10, background: active ? "#e6efff" : "transparent", cursor: "pointer" }}>
-                  <span style={{ width: 23, height: 23, borderRadius: "50%", background: active ? BLUE : past ? "rgba(31,138,91,0.1)" : "#fff", color: active ? "#fff" : past ? GREEN : MUTED, border: `1px solid ${active ? BLUE : HAIR}`, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div key={s.key} onClick={() => onStep(i)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 10px", borderRadius: 10, background: active ? "var(--color-primary-soft)" : "transparent", cursor: "pointer" }}>
+                  <span style={{ width: 23, height: 23, borderRadius: "50%", background: active ? BLUE : past ? "rgba(31,138,91,0.1)" : "var(--color-canvas)", color: active ? "var(--color-canvas)" : past ? GREEN : MUTED, border: `1px solid ${active ? BLUE : HAIR}`, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     {past ? <Check size={12} strokeWidth={2.5} /> : i + 1}
                   </span>
                   <div style={{ minWidth: 0 }}>
@@ -141,9 +141,9 @@ export default function PackageWizardShell({
           <div style={{ flexShrink: 0, borderTop: `1px solid ${HAIR}`, padding: "14px 28px", display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontSize: 12.5, color: MUTED }}>{footNote}</div>
             <div style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-              <button type="button" onClick={onClose} disabled={busy} style={{ minHeight: 44, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK }}>יציאה</button>
-              <button type="button" onClick={onBack} disabled={busy || backDisabled} style={{ minHeight: 44, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 18px", fontSize: 14, fontWeight: 600, color: backDisabled ? MUTED_LT : INK, cursor: "pointer", fontFamily: "inherit" }}>הקודם</button>
-              <button type="button" onClick={onNext} disabled={!nextEnabled || busy} style={{ minHeight: 44, background: nextEnabled ? BLUE : HAIR, color: nextEnabled ? "#fff" : MUTED_LT, border: 0, borderRadius: 9999, padding: "11px 26px", fontSize: 15, fontWeight: 600, cursor: nextEnabled ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+              <button type="button" onClick={onClose} disabled={busy} style={{ minHeight: 44, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK }}>יציאה</button>
+              <button type="button" onClick={onBack} disabled={busy || backDisabled} style={{ minHeight: 44, background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 18px", fontSize: 14, fontWeight: 600, color: backDisabled ? MUTED_LT : INK, cursor: "pointer", fontFamily: "inherit" }}>הקודם</button>
+              <button type="button" onClick={onNext} disabled={!nextEnabled || busy} style={{ minHeight: 44, background: nextEnabled ? BLUE : HAIR, color: nextEnabled ? "var(--color-canvas)" : MUTED_LT, border: 0, borderRadius: 9999, padding: "11px 26px", fontSize: 15, fontWeight: 600, cursor: nextEnabled ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
                 {busy ? "שומר…" : nextLabel}
               </button>
             </div>

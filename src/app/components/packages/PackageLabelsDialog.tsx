@@ -69,7 +69,7 @@ export const LabelSheet = React.forwardRef<HTMLDivElement, { labels: LabelSpec[]
             .package-labels-print { display: block !important; }
             .package-label { page-break-after: always; break-after: page; }
           }
-          .package-label { width: 57mm; height: 32mm; box-sizing: border-box; padding: 2mm 3mm; border: 1px dashed #d4d4dc; border-radius: 4px; display: flex; flex-direction: column; justify-content: space-between; direction: rtl; background: #fff; }
+          .package-label { width: 57mm; height: 32mm; box-sizing: border-box; padding: 2mm 3mm; border: 1px dashed var(--color-border-strong); border-radius: 4px; display: flex; flex-direction: column; justify-content: space-between; direction: rtl; background: var(--color-canvas); }
         `}</style>
         <div className="no-print" style={{ fontSize: 11, fontWeight: 600, color: MUTED, letterSpacing: ".6px", textTransform: "uppercase", marginBottom: 10 }}>תצוגה מקדימה</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -96,11 +96,11 @@ export const LabelSheet = React.forwardRef<HTMLDivElement, { labels: LabelSpec[]
 /** Copies stepper (1–9), shared with the bulk reprint. */
 export function CopiesStepper({ copies, onChange }: { copies: number; onChange: (n: number) => void }) {
   return (
-    <div style={{ height: 44, border: `1px solid ${HAIR}`, borderRadius: 10, background: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 6px 0 13px" }}>
+    <div style={{ height: 44, border: `1px solid ${HAIR}`, borderRadius: 10, background: "var(--color-canvas)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 6px 0 13px" }}>
       <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{copies}</span>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <button type="button" onClick={() => onChange(Math.max(1, copies - 1))} style={{ width: 32, height: 32, borderRadius: 8, background: "#f5f5f7", color: INK, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Minus size={15} strokeWidth={2} /></button>
-        <button type="button" onClick={() => onChange(Math.min(9, copies + 1))} style={{ width: 32, height: 32, borderRadius: 8, background: "#f5f5f7", color: INK, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Plus size={15} strokeWidth={2} /></button>
+        <button type="button" onClick={() => onChange(Math.max(1, copies - 1))} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--color-canvas-parchment)", color: INK, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Minus size={15} strokeWidth={2} /></button>
+        <button type="button" onClick={() => onChange(Math.min(9, copies + 1))} style={{ width: 32, height: 32, borderRadius: 8, background: "var(--color-canvas-parchment)", color: INK, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Plus size={15} strokeWidth={2} /></button>
       </div>
     </div>
   );
@@ -108,7 +108,7 @@ export function CopiesStepper({ copies, onChange }: { copies: number; onChange: 
 
 export function Tick({ on }: { on: boolean }) {
   return (
-    <span style={{ width: 21, height: 21, borderRadius: 6, border: `1px solid ${on ? BLUE : GREY}`, background: on ? BLUE : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+    <span style={{ width: 21, height: 21, borderRadius: 6, border: `1px solid ${on ? BLUE : GREY}`, background: on ? BLUE : "var(--color-canvas)", color: "var(--color-on-primary)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
       {on && <Check size={13} strokeWidth={2.5} />}
     </span>
   );
@@ -182,7 +182,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
 
   return (
     <div onClick={onClose} style={{ ...overlay, zIndex }}>
-      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(880px, 96vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
+      <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(880px, 96vw)", maxHeight: "92vh", background: "var(--color-canvas)", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
         <div data-drag-handle="" className="no-print" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>הדפסת מדבקות</div>
@@ -191,7 +191,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
               <span style={{ fontVariantNumeric: "tabular-nums", direction: "ltr", unicodeBidi: "isolate" }}>{code}</span>
             </div>
           </div>
-          <button type="button" onClick={onClose} style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "#f5f5f7", color: INK, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button type="button" onClick={onClose} style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "var(--color-canvas-parchment)", color: INK, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
@@ -199,7 +199,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 24px" }}>
           <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {presets.map((p) => (
-              <button key={p.key} type="button" onClick={() => pick(p.key)} style={{ border: `1px solid ${p.active ? BLUE : HAIR}`, background: p.active ? "#e6efff" : "#fff", color: p.active ? BLUE : INK, borderRadius: 9999, padding: "7px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              <button key={p.key} type="button" onClick={() => pick(p.key)} style={{ border: `1px solid ${p.active ? BLUE : HAIR}`, background: p.active ? "var(--color-primary-soft)" : "var(--color-canvas)", color: p.active ? BLUE : INK, borderRadius: 9999, padding: "7px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                 {p.label}
               </button>
             ))}
@@ -207,7 +207,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
           </div>
 
           <div className="no-print" style={{ display: "flex", gap: 16, marginTop: 18, flexWrap: "wrap" }}>
-            <div onClick={() => setBoxOn((v) => !v)} style={{ width: 268, border: `1px solid ${boxOn ? BLUE : HAIR}`, background: boxOn ? "#f7fbff" : "#fff", borderRadius: 18, padding: 20, cursor: "pointer" }}>
+            <div onClick={() => setBoxOn((v) => !v)} style={{ width: 268, border: `1px solid ${boxOn ? BLUE : HAIR}`, background: boxOn ? "var(--color-primary-tint)" : "var(--color-canvas)", borderRadius: 18, padding: 20, cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, letterSpacing: ".6px", textTransform: "uppercase" }}>מדבקת קופסה</div>
                 <Tick on={boxOn} />
@@ -229,7 +229,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
               {items.map((it, i) => {
                 const on = itemsOn[i];
                 return (
-                  <div key={String(it.item_id)} onClick={() => setItemsOn((v) => v.map((x, j) => (j === i ? !x : x)))} style={{ display: "flex", alignItems: "center", gap: 13, border: `1px solid ${on ? BLUE : HAIR}`, background: on ? "#f7fbff" : "#fff", borderRadius: 14, padding: "12px 14px", cursor: "pointer" }}>
+                  <div key={String(it.item_id)} onClick={() => setItemsOn((v) => v.map((x, j) => (j === i ? !x : x)))} style={{ display: "flex", alignItems: "center", gap: 13, border: `1px solid ${on ? BLUE : HAIR}`, background: on ? "var(--color-primary-tint)" : "var(--color-canvas)", borderRadius: 14, padding: "12px 14px", cursor: "pointer" }}>
                     <Tick on={on} />
                     <div style={{ width: 74, flexShrink: 0 }}><Bars n={18} seed={i + 1} height={30} /></div>
                     <div style={{ minWidth: 0, flex: 1 }}>
@@ -274,7 +274,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
             <button type="button" onClick={onClose} style={{ ...pillGhost, padding: "11px 20px" }}>ביטול</button>
             <button type="button" onClick={() => setPreview((p) => !p)} style={{ ...pillGhost, padding: "11px 20px" }}>{preview ? "הסתר תצוגה מקדימה" : "תצוגה מקדימה"}</button>
             <button type="button" disabled={total === 0} onClick={() => { setPreview(true); setTimeout(() => handlePrint(), 50); }}
-              style={{ background: total === 0 ? HAIR : BLUE, color: total === 0 ? MUTED_LT : "#fff", border: 0, borderRadius: 9999, padding: "11px 24px", fontSize: 15, fontWeight: 600, cursor: total === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ background: total === 0 ? HAIR : BLUE, color: total === 0 ? MUTED_LT : "var(--color-canvas)", border: 0, borderRadius: 9999, padding: "11px 24px", fontSize: 15, fontWeight: 600, cursor: total === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {total === 0 ? "הדפס" : `הדפס ${sheets} מדבקות`}
             </button>
           </div>

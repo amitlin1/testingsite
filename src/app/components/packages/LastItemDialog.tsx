@@ -22,7 +22,7 @@ export default function LastItemDialog({
   ];
   return (
     <div onClick={onClose} style={overlay}>
-      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, color: INK }}>
+      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "var(--color-canvas)", borderRadius: 18, boxShadow: SHADOW, color: INK }}>
         <div style={{ padding: "22px 24px 0" }}>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>אי אפשר להסיר את הפריט האחרון</div>
           <div style={{ fontSize: 14, color: INK_2, marginTop: 9, lineHeight: 1.55 }}>

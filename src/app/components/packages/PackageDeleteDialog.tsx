@@ -41,7 +41,7 @@ export default function PackageDeleteDialog({
 
   return (
     <div onClick={() => !busy && onClose()} style={{ ...overlay, zIndex: DIALOG_Z + 10 }}>
-      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, overflow: "hidden", color: INK }}>
+      <div onClick={(e) => e.stopPropagation()} dir="rtl" style={{ width: "min(520px, 94vw)", background: "var(--color-canvas)", borderRadius: 18, boxShadow: SHADOW, overflow: "hidden", color: INK }}>
         <div style={{ padding: "22px 24px 0" }}>
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>מחיקת מארז</div>
           <div style={{ fontSize: 14, color: INK_2, marginTop: 8, lineHeight: 1.55 }}>
@@ -65,7 +65,7 @@ export default function PackageDeleteDialog({
         {error && <div style={{ margin: "0 24px 12px", fontSize: 13, color: RED }}>{error}</div>}
         <div style={{ padding: "0 24px 22px", display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
           <button type="button" onClick={onClose} disabled={busy} style={{ ...pillGhost, padding: "10px 18px" }}>ביטול</button>
-          <button type="button" onClick={run} disabled={busy} style={{ background: RED, color: "#fff", border: 0, borderRadius: 9999, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: busy ? "wait" : "pointer", fontFamily: "inherit", opacity: busy ? 0.7 : 1 }}>
+          <button type="button" onClick={run} disabled={busy} style={{ background: RED, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: busy ? "wait" : "pointer", fontFamily: "inherit", opacity: busy ? 0.7 : 1 }}>
             מחק מארז ו-{count} פריטים
           </button>
         </div>

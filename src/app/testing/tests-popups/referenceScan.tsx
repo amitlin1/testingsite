@@ -85,7 +85,7 @@ export function ScanField({ label, placeholder, value, onChange, lookup, found, 
         onKeyDown={(e) => { if (e.key === "Enter") { if (lookup.checking) setPending(true); else onSubmit(); } }}
         style={{ ...fieldInput, height: 52, borderRadius: 11, fontSize: 17, fontVariantNumeric: "tabular-nums", letterSpacing: 1, borderColor: value.trim() === "" ? HAIR : FOCUS }} />
       {value.trim() !== "" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 9, background: tone === "ok" ? GREEN_BG : tone === "warn" ? AMBER_BG : "#f5f5f7", border: `1px solid ${tone === "ok" ? "rgba(31,138,91,0.22)" : tone === "warn" ? AMBER_BORDER : HAIR}`, borderRadius: 11, padding: "12px 14px", marginTop: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, background: tone === "ok" ? GREEN_BG : tone === "warn" ? AMBER_BG : "var(--color-canvas-parchment)", border: `1px solid ${tone === "ok" ? "rgba(31,138,91,0.22)" : tone === "warn" ? AMBER_BORDER : HAIR}`, borderRadius: 11, padding: "12px 14px", marginTop: 12 }}>
           {tone !== "wait" && <span style={{ color: tone === "ok" ? GREEN : AMBER_INK, display: "inline-flex" }}>{tone === "ok" ? <Check size={18} strokeWidth={2} /> : <CircleAlert size={18} strokeWidth={2} />}</span>}
           <div style={{ fontSize: 14, fontWeight: 600, color: tone === "ok" ? GREEN : tone === "warn" ? AMBER_INK : MUTED }}>
             {ref == null ? "מחפש פריט ייחוס…" : ref.hasRU ? found(ref) : missing}

@@ -57,7 +57,7 @@ export function DialogShell({
           {footer}
         </div>
       </DialogContent>
-      <style>{`.wh-x:hover{background:#e6efff;color:${BLUE};}.wh-x:active{transform:scale(0.96);}`}</style>
+      <style>{`.wh-x:hover{background:var(--color-primary-soft);color:${BLUE};}.wh-x:active{transform:scale(0.96);}`}</style>
     </Dialog>
   );
 }
@@ -88,8 +88,8 @@ export function Chip({
         fontWeight: 600,
         fontFamily: "inherit",
         cursor: disabled ? "default" : "pointer",
-        background: active ? BLUE : "#fff",
-        color: active ? "#fff" : INK,
+        background: active ? BLUE : "var(--color-canvas)",
+        color: active ? "var(--color-canvas)" : INK,
         border: `1px solid ${active ? BLUE : HAIRLINE}`,
         opacity: disabled ? 0.5 : 1,
       }}
@@ -131,7 +131,7 @@ export function TimeField({
           fontFamily: "inherit",
           fontVariantNumeric: "tabular-nums",
           color: INK,
-          background: disabled ? SOFT : "#fff",
+          background: disabled ? SOFT : "var(--color-canvas)",
           outline: "none",
           boxShadow: error ? `0 0 0 1px ${DANGER}` : "none",
         }}

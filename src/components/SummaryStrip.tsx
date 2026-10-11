@@ -10,9 +10,9 @@ import React from "react";
 export type SummaryTone = "blue" | "amber" | "green";
 
 const TONES: Record<SummaryTone, { color: string; bg: string }> = {
-    blue: { color: "#0066cc", bg: "rgba(0,102,204,0.10)" },
-    amber: { color: "#d97706", bg: "rgba(217,118,6,0.10)" },
-    green: { color: "#1f8a5b", bg: "rgba(31,138,91,0.10)" },
+    blue: { color: "var(--color-primary)", bg: "rgba(0,102,204,0.10)" },
+    amber: { color: "var(--color-warning-ink)", bg: "rgba(217,118,6,0.10)" },
+    green: { color: "var(--color-success-ink)", bg: "rgba(31,138,91,0.10)" },
 };
 
 const gridStyle: React.CSSProperties = {
@@ -22,12 +22,12 @@ const gridStyle: React.CSSProperties = {
 };
 
 const cardStyle: React.CSSProperties = {
-    background: "#fff",
+    background: "var(--color-canvas)",
     // Longhand border props (not the `border` shorthand) — the active state
     // overrides borderColor, and React warns when shorthand + longhand mix.
     borderWidth: 1,
     borderStyle: "solid",
-    borderColor: "#e0e0e0",
+    borderColor: "var(--color-hairline)",
     borderRadius: 16,
     padding: "16px 18px",
     display: "flex",
@@ -90,10 +90,10 @@ export function SummaryTile({
                 {icon}
             </div>
             <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1, color: "#1d1d1f", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1, color: "var(--color-ink)", fontVariantNumeric: "tabular-nums" }}>
                     {value}
                 </div>
-                <div style={{ fontSize: 13, color: "#7a7a7a", marginTop: 5 }}>{label}</div>
+                <div style={{ fontSize: 13, color: "var(--color-ink-muted-48)", marginTop: 5 }}>{label}</div>
             </div>
         </Tag>
     );
@@ -102,7 +102,7 @@ export function SummaryTile({
 /* Skeleton state — same grid, shimmering placeholder tiles. */
 export function SummaryStripSkeleton({ count = 4, style }: { count?: number; style?: React.CSSProperties }) {
     const shimmer: React.CSSProperties = {
-        background: "linear-gradient(90deg,#eee,#f5f5f7,#eee)",
+        background: "linear-gradient(90deg,var(--color-divider-soft),var(--color-canvas-parchment),var(--color-divider-soft))",
         backgroundSize: "200% 100%",
         animation: "shx-strip-shimmer 1.4s infinite",
     };

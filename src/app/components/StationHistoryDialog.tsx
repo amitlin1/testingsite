@@ -176,7 +176,7 @@ export default function StationHistoryDialog({
             }}
           >
             <HistoryIcon
-              sx={{ fontSize: 48, color: alpha("#455A64", 0.3), mb: 1.5 }}
+              sx={{ fontSize: 48, color: alpha("var(--color-ink-muted-80)", 0.3), mb: 1.5 }}
             />
             <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 500 }}>
               לא נמצאו בדיקות קודמות לעמדה זו
@@ -237,8 +237,8 @@ export default function StationHistoryDialog({
                             label={`מס' סידורי: ${entry.serialNo}`}
                             size="small"
                             sx={{
-                              bgcolor: alpha("#455A64", 0.1),
-                              color: "#455A64",
+                              bgcolor: alpha("var(--color-ink-muted-80)", 0.1),
+                              color: "var(--color-ink-muted-80)",
                               fontSize: "0.7rem",
                               height: 20,
                             }}
@@ -247,8 +247,8 @@ export default function StationHistoryDialog({
                             label={`מקט: ${entry.makat}`}
                             size="small"
                             sx={{
-                              bgcolor: alpha("#455A64", 0.1),
-                              color: "#455A64",
+                              bgcolor: alpha("var(--color-ink-muted-80)", 0.1),
+                              color: "var(--color-ink-muted-80)",
                               fontSize: "0.7rem",
                               height: 20,
                             }}
@@ -259,8 +259,8 @@ export default function StationHistoryDialog({
                               size="small"
                               variant="outlined"
                               sx={{
-                                borderColor: alpha("#455A64", 0.3),
-                                color: "#455A64",
+                                borderColor: alpha("var(--color-ink-muted-80)", 0.3),
+                                color: "var(--color-ink-muted-80)",
                                 fontSize: "0.7rem",
                                 height: 20,
                               }}
@@ -273,8 +273,8 @@ export default function StationHistoryDialog({
                           label={`שלב ${entry.currentRouteStep}`}
                           size="small"
                           sx={{
-                            bgcolor: alpha("#1976d2", 0.1),
-                            color: "#1976d2",
+                            bgcolor: alpha("var(--color-primary)", 0.1),
+                            color: "var(--color-primary)",
                             fontWeight: 600,
                           }}
                         />
@@ -299,8 +299,8 @@ export default function StationHistoryDialog({
                           label={duration}
                           size="small"
                           sx={{
-                            bgcolor: alpha("#455A64", 0.1),
-                            color: "#455A64",
+                            bgcolor: alpha("var(--color-ink-muted-80)", 0.1),
+                            color: "var(--color-ink-muted-80)",
                             fontWeight: 600,
                             fontFamily: "monospace",
                           }}
@@ -312,8 +312,8 @@ export default function StationHistoryDialog({
                             label={`עובד #${entry.workerId}`}
                             size="small"
                             sx={{
-                              bgcolor: alpha("#455A64", 0.15),
-                              color: "#455A64",
+                              bgcolor: alpha("var(--color-ink-muted-80)", 0.15),
+                              color: "var(--color-ink-muted-80)",
                               fontWeight: 600,
                             }}
                           />

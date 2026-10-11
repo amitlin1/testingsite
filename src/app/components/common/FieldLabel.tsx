@@ -4,7 +4,7 @@ import { Typography } from "@/components/ui";
 import { useTheme } from "@/components/ui";
 
 /**
- * Above-field label matching the redesign spec (12-13px, weight 600, #555),
+ * Above-field label matching the redesign spec (12-13px, weight 600, var(--color-ink-muted-70)),
  * with an optional required asterisk. Pairs with a placeholder-style input or
  * with SearchableCombobox (which renders the same label internally).
  */

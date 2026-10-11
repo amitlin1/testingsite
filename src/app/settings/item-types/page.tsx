@@ -6,7 +6,7 @@ import CrudTable, { Column } from "../components/CrudTable";
  *  type flagged is_package; its contents are edited under /settings/packages. */
 function PackagePill() {
   return (
-    <span style={{ fontSize: 10.5, fontWeight: 600, color: "#0066cc", background: "#e6efff", borderRadius: 9999, padding: "2px 8px", whiteSpace: "nowrap" }}>
+    <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--color-primary)", background: "var(--color-primary-soft)", borderRadius: 9999, padding: "2px 8px", whiteSpace: "nowrap" }}>
       מארז
     </span>
   );

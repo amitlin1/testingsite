@@ -139,29 +139,29 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   return (
     <div dir="rtl">
       <style>{`
-        .stz-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 16px; border-top:1px solid #f0f0f0; cursor:pointer; border-inline-start:3px solid transparent; transition:background 0.12s ease; }
-        .stz-row:hover { background:#f5f5f7; }
-        .stz-row.stz-selected { background:#f3f8ff; border-inline-start-color:#0066cc; }
-        .stz-iconbtn { width:28px; height:28px; border:0; border-radius:7px; background:transparent; color:#9a9aa0; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.12s ease, color 0.12s ease; }
-        .stz-iconbtn:hover { background:#ececf0; color:#0066cc; }
-        .stz-iconbtn.stz-danger:hover { background:rgba(191,53,53,0.08); color:#bf3535; }
+        .stz-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 16px; border-top:1px solid var(--color-divider-soft); cursor:pointer; border-inline-start:3px solid transparent; transition:background 0.12s ease; }
+        .stz-row:hover { background:var(--color-canvas-parchment); }
+        .stz-row.stz-selected { background:var(--color-primary-tint); border-inline-start-color:var(--color-primary); }
+        .stz-iconbtn { width:28px; height:28px; border:0; border-radius:7px; background:transparent; color:var(--color-ink-muted-48); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.12s ease, color 0.12s ease; }
+        .stz-iconbtn:hover { background:var(--color-hairline); color:var(--color-primary); }
+        .stz-iconbtn.stz-danger:hover { background:rgba(191,53,53,0.08); color:var(--color-destructive); }
       `}</style>
 
-      <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 16, overflow: "hidden" }}>
+      <div style={{ background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: 16, overflow: "hidden" }}>
         {/* card header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #e0e0e0" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#1d1d1f" }}>סוגי עמדות</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid var(--color-hairline)" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)" }}>סוגי עמדות</span>
           <button
             onClick={() => { setEditingRow(null); setFormData({ stale_after_minutes: DEFAULT_STALE_AFTER_MINUTES }); setOpenDialog(true); }}
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#0066cc", color: "#fff", border: 0, borderRadius: 9999, padding: "7px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "var(--color-primary)", color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "7px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
             <Plus size={15} strokeWidth={2.2} />הוסף
           </button>
         </div>
 
         {/* search */}
-        <div style={{ position: "relative", padding: "10px 12px", borderBottom: "1px solid #f0f0f0" }}>
-          <span style={{ position: "absolute", insetInlineStart: 24, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
+        <div style={{ position: "relative", padding: "10px 12px", borderBottom: "1px solid var(--color-divider-soft)" }}>
+          <span style={{ position: "absolute", insetInlineStart: 24, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex" }}>
             <Search size={15} strokeWidth={1.75} />
           </span>
           <input
@@ -175,9 +175,9 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
 
         {/* rows */}
         {loading ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "#7a7a7a", fontSize: 14 }}>טוען…</div>
+          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--color-ink-muted-48)", fontSize: 14 }}>טוען…</div>
         ) : filteredRows.length === 0 ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "#7a7a7a", fontSize: 14 }}>לא נמצאו סוגי עמדות.</div>
+          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--color-ink-muted-48)", fontSize: 14 }}>לא נמצאו סוגי עמדות.</div>
         ) : (
           filteredRows.map((r) => {
             const selected = selectedId === r.test_station_type_id;
@@ -188,11 +188,11 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                 onClick={() => onSelect(r.test_station_type_id, r.test_type_desc)}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <span style={{ fontSize: 14, fontWeight: selected ? 600 : 400, color: "#1d1d1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 14, fontWeight: selected ? 600 : 400, color: "var(--color-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.test_type_desc}
                   </span>
                   {r.package_level && (
-                    <span title="עמדה ברמת מארז: בתור מופיעים מארזים בלבד, והפריטים שבתוכם נבדקים יחד איתם" style={{ fontSize: 11, color: "#0066cc", background: "#f3f8ff", border: "1px solid #cfe3fb", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}>
+                    <span title="עמדה ברמת מארז: בתור מופיעים מארזים בלבד, והפריטים שבתוכם נבדקים יחד איתם" style={{ fontSize: 11, color: "var(--color-primary)", background: "var(--color-primary-tint)", border: "1px solid var(--color-primary-border)", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}>
                       עמדה ברמת מארז
                     </span>
                   )}
@@ -201,13 +201,13 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                       title={r.stale_after_minutes === 0
                         ? "פריט בעמדה מסוג זה לא משוחרר אוטומטית לעולם"
                         : `פריט שיושב בבדיקה בעמדה מסוג זה ${r.stale_after_minutes} דקות ללא תוצאה משוחרר אוטומטית`}
-                      style={{ fontSize: 11, color: "#7a7a7a", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}
+                      style={{ fontSize: 11, color: "var(--color-ink-muted-48)", background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}
                     >
                       {r.stale_after_minutes === 0 ? "ללא שחרור אוטומטי" : `שחרור אחרי ${r.stale_after_minutes} דק׳`}
                     </span>
                   )}
                   {r.station_count != null && (
-                    <span style={{ fontSize: 11, color: "#9a9aa0", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "2px 8px", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: "var(--color-ink-muted-48)", background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "2px 8px", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
                       {r.station_count}
                     </span>
                   )}

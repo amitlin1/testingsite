@@ -127,13 +127,13 @@ export default function PackageEditDialog({
   return (
     <>
       <div onClick={() => !saving && onClose()} style={{ ...overlay, zIndex: DIALOG_Z - 10 }}>
-        <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(680px, 94vw)", maxHeight: "92vh", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
+        <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: "min(680px, 94vw)", maxHeight: "92vh", background: "var(--color-canvas)", borderRadius: 18, boxShadow: SHADOW, display: "flex", flexDirection: "column", overflow: "hidden", color: INK }}>
           <div data-drag-handle="" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, padding: "20px 24px", borderBottom: `1px solid ${HAIR}` }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>עריכת מארז</div>
               <div style={{ marginTop: 5 }}><PackageIdText id={pkg.item_id} size={14} /></div>
             </div>
-            <button type="button" onClick={onClose} style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "#f5f5f7", color: INK, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <button type="button" onClick={onClose} style={{ width: 34, height: 34, border: 0, borderRadius: 9999, background: "var(--color-canvas-parchment)", color: INK, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <X size={18} strokeWidth={1.75} />
             </button>
           </div>
@@ -149,7 +149,7 @@ export default function PackageEditDialog({
               <Field label="יצרן" value={manufacturer} onChange={setManufacturer} hint="אופציונלי" />
             </div>
 
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "#f5f5f7", borderRadius: 12, padding: "14px 16px", marginTop: 20 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "var(--color-canvas-parchment)", borderRadius: 12, padding: "14px 16px", marginTop: 20 }}>
               <span style={{ color: MUTED, marginTop: 1, display: "inline-flex" }}><Info size={18} strokeWidth={1.75} /></span>
               <div>
                 <div style={{ fontSize: 13.5, fontWeight: 600 }}>סוג המארז אינו ניתן לשינוי</div>
@@ -164,14 +164,14 @@ export default function PackageEditDialog({
                   const last = pkg.items.length === 1;
                   return (
                     <div key={it.item_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 15px", borderBottom: `1px solid ${HAIR_2}` }}>
-                      <span style={{ width: 28, height: 28, borderRadius: 8, background: "#f5f5f7", color: MUTED, fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
+                      <span style={{ width: 28, height: 28, borderRadius: 8, background: "var(--color-canvas-parchment)", color: MUTED, fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 600 }}>{it.item_type_desc}</div>
                         <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{it.makat ?? "—"} · {it.serial_no ?? "ללא סריאלי"}</div>
                       </div>
                       <div style={{ fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{it.state_label}</div>
                       <button type="button" title={last ? "לא ניתן להסיר את הפריט האחרון" : "הסר פריט"} disabled={removing === it.item_id} onClick={() => removeItem(it)}
-                        style={{ width: 30, height: 30, borderRadius: 8, background: "#f5f5f7", color: last ? "#c4c4cc" : MUTED, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                        style={{ width: 30, height: 30, borderRadius: 8, background: "var(--color-canvas-parchment)", color: last ? "var(--color-border-strong)" : MUTED, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                         <Trash2 size={15} strokeWidth={1.75} />
                       </button>
                     </div>

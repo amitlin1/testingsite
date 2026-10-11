@@ -6,7 +6,7 @@
 //     return (
 //         <Box sx={{
 //             minHeight: "100%",
-//             bgcolor: "#f5f5f7",
+//             bgcolor: "var(--color-canvas-parchment)",
 //             p: 3,
 //             direction: "rtl"
 //         }}>

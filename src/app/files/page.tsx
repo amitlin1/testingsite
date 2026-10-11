@@ -344,7 +344,7 @@ export default function FilesPage() {
     <Box
       sx={{
         minHeight: "100%",
-        bgcolor: "#f5f5f7",
+        bgcolor: "var(--color-canvas-parchment)",
         p: 3,
         direction: "rtl",
       }}
@@ -481,7 +481,7 @@ export default function FilesPage() {
             bgcolor: "white",
             position: "relative",
             outline: isDragging
-              ? "3px dashed #1976d2"
+              ? "3px dashed var(--color-primary)"
               : "3px dashed transparent",
             outlineOffset: "-3px",
             transition: "outline 0.15s ease",
@@ -502,7 +502,7 @@ export default function FilesPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 1,
-                bgcolor: alpha("#1976d2", 0.06),
+                bgcolor: alpha("var(--color-primary)", 0.06),
                 pointerEvents: "none",
               }}
             >
@@ -541,7 +541,7 @@ export default function FilesPage() {
             <TableContainer>
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ bgcolor: "#fafafa" }}>
+                  <TableRow sx={{ bgcolor: "var(--color-surface-pearl)" }}>
                     <TableCell sx={{ fontWeight: 700, width: "50%" }}>
                       שם
                     </TableCell>

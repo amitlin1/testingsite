@@ -103,16 +103,16 @@ export function barcodeOf(id: string | number | bigint, sourceId?: number | null
 
 /** Pill button styles shared by the package dialogs. */
 export const pillPrimary: CSSProperties = {
-  background: BLUE, color: "#fff", border: 0, borderRadius: 9999, padding: "11px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  background: BLUE, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "11px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
 };
 export const pillGhost: CSSProperties = {
-  background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK,
+  background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "11px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: INK,
 };
 export const pillDanger: CSSProperties = {
-  background: RED, color: "#fff", border: 0, borderRadius: 9999, padding: "11px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  background: RED, color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "11px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
 };
 export const fieldInput: CSSProperties = {
-  width: "100%", height: 44, border: `1px solid ${HAIR}`, borderRadius: 10, padding: "0 13px", fontSize: 14, outline: "none", background: "#fff", fontFamily: "inherit", color: INK,
+  width: "100%", height: 44, border: `1px solid ${HAIR}`, borderRadius: 10, padding: "0 13px", fontSize: 14, outline: "none", background: "var(--color-canvas)", fontFamily: "inherit", color: INK,
 };
 /**
  * Stacking for the package dialogs and wizards. AppShell puts the top bar at

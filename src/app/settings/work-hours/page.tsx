@@ -302,8 +302,8 @@ export default function WorkHoursPage() {
                 style={{
                   textAlign: "center", minHeight: 108, borderRadius: 8, padding: "14px 12px",
                   cursor: isSat ? "default" : "pointer",
-                  background: isSat ? SOFT : isFri && !working ? "#fafafa" : "#fff",
-                  border: isFri && !working ? `1px dashed #d4d4dc` : `1px solid ${HAIRLINE}`,
+                  background: isSat ? SOFT : isFri && !working ? "var(--color-surface-pearl)" : "var(--color-canvas)",
+                  border: isFri && !working ? `1px dashed var(--color-border-strong)` : `1px solid ${HAIRLINE}`,
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
                   font: "inherit", color: "inherit",
                 }}
@@ -363,7 +363,7 @@ export default function WorkHoursPage() {
           <div style={{ display: "flex", gap: 18, marginTop: 16, flexWrap: "wrap", fontSize: 11.5, color: MUTED }}>
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: SOFT, border: `1px solid ${HAIRLINE}` }} />יום ללא עבודה</span>
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: BLUE }} />שעות שהוזנו ידנית</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "#fafafa", border: `1px dashed #d4d4dc` }} />שישי / ערב חג — ניתן להזין עבודה</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--color-surface-pearl)", border: `1px dashed var(--color-border-strong)` }} />שישי / ערב חג — ניתן להזין עבודה</span>
           </div>
         </div>
 
@@ -400,7 +400,7 @@ export default function WorkHoursPage() {
             <div style={{ fontSize: 12.5, color: FAINT, marginTop: 4 }}>ניתן להוסיף סוג משלך.</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
               {holidayTypes.map((t) => (
-                <span key={t.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${HAIRLINE}`, borderRadius: 5, padding: "6px 11px", fontSize: 13, color: INK }}>
+                <span key={t.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--color-canvas)", border: `1px solid ${HAIRLINE}`, borderRadius: 5, padding: "6px 11px", fontSize: 13, color: INK }}>
                   {t.name}
                   {!t.isSystem && (t.usageCount ?? 0) === 0 && (
                     <button type="button" aria-label="מחק סוג" onClick={() => deleteType(t)} style={{ background: "none", border: "none", color: FAINT, cursor: "pointer", padding: 0, display: "flex" }}>
@@ -415,7 +415,7 @@ export default function WorkHoursPage() {
                   <button className="shx-btn shx-btn-primary" onClick={addType} style={{ height: 34 }}>הוסף</button>
                 </span>
               ) : (
-                <button type="button" onClick={() => setAddingType(true)} style={{ borderRadius: 5, padding: "6px 11px", fontSize: 13, fontWeight: 600, background: "#fff", color: BLUE, border: `1px dashed ${HAIRLINE}`, cursor: "pointer", fontFamily: "inherit" }}>+ סוג חדש</button>
+                <button type="button" onClick={() => setAddingType(true)} style={{ borderRadius: 5, padding: "6px 11px", fontSize: 13, fontWeight: 600, background: "var(--color-canvas)", color: BLUE, border: `1px dashed ${HAIRLINE}`, cursor: "pointer", fontFamily: "inherit" }}>+ סוג חדש</button>
               )}
             </div>
           </div>
@@ -498,12 +498,12 @@ export default function WorkHoursPage() {
 
       <style>{`
         @media (max-width: 900px){ .wh-cols{ grid-template-columns:1fr !important; } }
-        .wh-tile:hover{ border-color:#cfe0f5; }
+        .wh-tile:hover{ border-color:var(--color-primary-border); }
         .wh-tile:active{ transform:scale(0.98); }
         .wh-nav{ width:32px;height:32px;border-radius:8px;background:${SOFT};border:none;color:${INK};cursor:pointer;display:flex;align-items:center;justify-content:center; }
-        .wh-nav:hover{ background:#e6efff;color:${BLUE}; }
-        .wh-rec:hover{ background:#fafafc; }
-        .wh-cell:hover{ border-color:#cfe0f5 !important; }
+        .wh-nav:hover{ background:var(--color-primary-soft);color:${BLUE}; }
+        .wh-rec:hover{ background:var(--color-surface-pearl); }
+        .wh-cell:hover{ border-color:var(--color-primary-border) !important; }
       `}</style>
     </div>
   );
@@ -515,8 +515,8 @@ function CalendarCell({ d, onClick }: { d: ResolvedDay; onClick: () => void }) {
   const isOff = d.category === "full_off" || d.category === "vacation" || d.category === "shabbat";
   const manualWorking = d.isWorking && (d.source === "override" || (d.source === "holiday" && d.category === "half_day"));
 
-  const bg = isOff ? SOFT : isFriClosed ? "#fafafa" : "#fff";
-  const border = isFriClosed ? "1px dashed #d4d4dc" : `1px solid ${HAIRLINE}`;
+  const bg = isOff ? SOFT : isFriClosed ? "var(--color-surface-pearl)" : "var(--color-canvas)";
+  const border = isFriClosed ? "1px dashed var(--color-border-strong)" : `1px solid ${HAIRLINE}`;
   const muted = isOff || isFriClosed;
 
   return (
