@@ -1279,7 +1279,7 @@ function TestingPageView() {
                             iconColor="var(--color-status-late)"
                             // H:MM without the seconds. (slice(0, 5) cut "964:24:12" to "964:2" once
                             // the wait passed 99 hours — a wrong number on screen.)
-                            value={!itemsStale && longestWait ? longestWait.replace(/:d{2}$/, "") : "—"}
+                            value={!itemsStale && longestWait ? longestWait.replace(/:\d{2}$/, "") : "—"}
                             label="המתנה הארוכה ביותר"
                             valueColor="var(--color-warning-ink)"
                         />
