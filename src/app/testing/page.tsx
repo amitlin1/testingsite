@@ -22,6 +22,7 @@ import {
 } from "@/components/ui";
 import "./testing.css";
 import { toneOfStatus, TONE_DOT } from "@/app/lib/status-tones";
+import { useGlobalScanner } from "./useGlobalScanner";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
 import { apiFetch } from "@/lib/api/client";
 import { newActionId } from "@/app/lib/metrics/action-id";
@@ -1015,6 +1016,12 @@ function TestingPageView() {
       setScanLoading(false);
     }
   }, [stationTypes, selectedStationType, stations]);
+
+  // A scan with nothing focused (no field, no dialog) goes to the same handler
+  // as the scan dialog — the document-level keyboard-wedge listener in
+  // ./useGlobalScanner.ts. Off while a wizard is open (its overlay is not a
+  // role="dialog" the hook can see) and while the scan dialog itself is.
+  useGlobalScanner(handleBarcodeScan, !dialogOpen && !scannerOpen);
 
   // After a failed scan the field keeps focus with its text selected, so the
   // next hardware scan replaces it instead of typing into nothing (ST-4).
