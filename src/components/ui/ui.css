@@ -99,6 +99,12 @@
 .sh-btn--small.sh-btn--text { padding: 5px 10px; }
 .sh-btn--large { font-size: 18px; padding: 13px 26px; min-height: 44px; }
 
+/* ----------------------------------------------- Direction icons ------- */
+/* ArrowBack / ArrowForward mean a reading direction, and lucide draws them
+   for LTR. `:dir()` on the (HTML) parent reads its resolved direction, as the
+   Switch thumb below does, so they flip in RTL and stay put in an LTR island. */
+:dir(rtl) > .sh-icon-rtl-mirror { transform: scaleX(-1); }
+
 /* ---------------------------------------------------------- IconButton ---- */
 .sh-iconbtn {
   box-sizing: border-box;

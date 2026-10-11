@@ -25,7 +25,10 @@
   --shx-radius-input:8px;
   --shx-radius-pill:9999px;
   --shx-shadow-product:rgba(0,0,0,0.22) 3px 5px 30px 0;
-  --shx-font:'Heebo','Inter',system-ui,-apple-system,sans-serif;
+  /* The app's own bundled face (Rubik, tokens.css). Heebo/Inter are not
+     shipped (air-gapped), so naming them here rendered these controls in the
+     OS fallback (Segoe UI) next to Rubik. */
+  --shx-font:var(--font-text);
 }
 
 /* ---- table: header + row hover (the exact Items-screen look) ---- */

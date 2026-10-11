@@ -310,10 +310,7 @@ export default function OnlyOfficeEditorModal({
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
-            {viewOnly ? "צפייה" : "עריכה"} — {fileName}{" "}
-            <Typography component="span" variant="caption" sx={{ color: "#7cb342", ml: 1 }}>
-              [v7]
-            </Typography>
+            {viewOnly ? "צפייה" : "עריכה"} — {fileName}
           </Typography>
         </Box>
         <IconButton

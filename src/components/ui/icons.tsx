@@ -22,6 +22,7 @@ import {
   Images as _Images, ChevronRight as _ChevronRight, ChevronLeft as _ChevronLeft,
 } from "lucide-react";
 import { sxToStyle, type SxInput } from "./sx";
+import { cn } from "./utils";
 
 /**
  * MUI-icon-name → lucide adapter. Import from "@/components/ui/icons"; the
@@ -60,19 +61,35 @@ function sizeFor(fs: IconProps["fontSize"]): number | string {
   return 24;
 }
 
-function wrap(Icon: LucideIcon) {
+/** A CSS font-size set through `sx`/`style` (the MUI way to size an icon).
+ *  lucide sizes by width/height attributes, so font-size alone changed
+ *  nothing and every such icon rendered at 24px. px → that size; any other
+ *  unit → 1em, which then follows the font-size left in the style. */
+function sizeFromCss(fs: React.CSSProperties["fontSize"]): number | string | undefined {
+  if (typeof fs === "number") return fs;
+  if (typeof fs !== "string" || fs.trim() === "") return undefined;
+  const px = /^(\d+(?:\.\d+)?)px$/.exec(fs.trim());
+  return px ? Number(px[1]) : "1em";
+}
+
+/** `mirrorInRtl`: the icon means a reading direction (back / forward), not a
+ *  screen side, so it flips under dir="rtl" (ui.css `.sh-icon-rtl-mirror`). */
+function wrap(Icon: LucideIcon, { mirrorInRtl = false }: { mirrorInRtl?: boolean } = {}) {
   return React.forwardRef<SVGSVGElement, IconProps>(function Icn(
-    { fontSize = "medium", color, htmlColor, sx, style, ...rest },
+    { fontSize = "medium", color, htmlColor, sx, style, className, ...rest },
     ref,
   ) {
     const col = htmlColor ?? (color ? MUI_COLOR[color] ?? color : undefined);
+    const sxStyle = sxToStyle(sx);
+    const size = sizeFromCss(style?.fontSize ?? sxStyle.fontSize) ?? sizeFor(fontSize);
     return (
       <Icon
         ref={ref}
-        size={sizeFor(fontSize) as number}
+        size={size as number}
         strokeWidth={1.75}
         color={col}
-        style={{ verticalAlign: "middle", flexShrink: 0, ...sxToStyle(sx), ...style }}
+        className={cn(mirrorInRtl && "sh-icon-rtl-mirror", className)}
+        style={{ verticalAlign: "middle", flexShrink: 0, ...sxStyle, ...style }}
         {...(rest as React.SVGAttributes<SVGSVGElement>)}
       />
     );
@@ -84,10 +101,10 @@ export const AccountTree = wrap(_Network);
 export const Add = wrap(_Plus);
 export const AddAPhoto = wrap(_Camera);
 export const Analytics = wrap(_LineChart);
-export const ArrowBack = wrap(_ArrowLeft);
+export const ArrowBack = wrap(_ArrowLeft, { mirrorInRtl: true });
 export const ArrowDownward = wrap(_ArrowDown);
 export const ArrowDropDown = wrap(_ChevronDown);
-export const ArrowForward = wrap(_ArrowRight);
+export const ArrowForward = wrap(_ArrowRight, { mirrorInRtl: true });
 export const ArrowUpward = wrap(_ArrowUp);
 export const Assessment = wrap(_ClipboardCheck);
 export const Assignment = wrap(_ClipboardList);

@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { PackageView, PackageTimelineEntry } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
 import PackageIdText, { MiniItems, StatusPill } from "@/app/components/packages/PackageIdText";
@@ -80,7 +80,7 @@ export default function PackagePage() {
     <div dir="rtl" style={{ height: "100%", overflowY: "auto", overscrollBehavior: "contain", color: INK }}>
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "28px 24px 64px" }}>
       <button type="button" onClick={() => router.push("/packages")} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13.5, color: BLUE, fontWeight: 600, cursor: "pointer", background: "transparent", border: 0, padding: 0, fontFamily: "inherit" }}>
-        <ChevronLeft size={15} strokeWidth={2} />חזרה למארזים
+        <ChevronRight size={15} strokeWidth={2} />חזרה למארזים
       </button>
 
       <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 24, marginTop: 14 }}>

@@ -341,8 +341,10 @@ export default function WorkHoursPage() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
             <div style={{ fontSize: 17, fontWeight: 700 }}>{monthTitle(view.y, view.m)}</div>
             <div style={{ display: "flex", gap: 6 }}>
-              <button className="wh-nav" type="button" aria-label="חודש הבא" onClick={() => stepMonth(1)}><ChevronLeft size={18} /></button>
+              {/* RTL: the first button sits on the right. Previous points right
+                  (back in reading order), next points left, so they face outward. */}
               <button className="wh-nav" type="button" aria-label="חודש קודם" onClick={() => stepMonth(-1)}><ChevronRight size={18} /></button>
+              <button className="wh-nav" type="button" aria-label="חודש הבא" onClick={() => stepMonth(1)}><ChevronLeft size={18} /></button>
             </div>
           </div>
 

@@ -558,7 +558,9 @@ function NativeSelect({
         className="dash-icon"
         style={{
           position: "absolute",
-          insetInlineStart: 9,
+          // The select reserves its 28px at the inline END for this caret; at
+          // the start it sat on the first letters of the selected value.
+          insetInlineEnd: 9,
           top: 9,
           color: "var(--color-ink-muted-48)",
           pointerEvents: "none",

@@ -96,7 +96,8 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                                             <div style={{ fontSize: 13 }}>לקוח: {shipment?.customer_code}</div>
                                             <div style={{ fontSize: 13 }}>תאריך: {shipmentDate}</div>
                                             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
-                                                {n} / {total}
+                                                {/* <bdi>: RTL would print label 3 of 12 as "12 / 3" */}
+                                                <bdi dir="ltr">{n} / {total}</bdi>
                                             </div>
                                         </div>
                                     </div>

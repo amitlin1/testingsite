@@ -406,7 +406,8 @@ export default function ItemHistoryPage() {
 
     return [
       { icon: <Clock size={20} strokeWidth={1.75} />, value: fmtElapsedLong(totalMs), label: "זמן כולל במערכת" },
-      { icon: <Check size={20} strokeWidth={1.75} />, value: `${completedCount} / ${totalSteps}`, label: "תחנות שהושלמו" },
+      // <bdi>: a spaced "a / b" in an RTL run is shown reversed ("5 / 3").
+      { icon: <Check size={20} strokeWidth={1.75} />, value: <bdi dir="ltr">{completedCount} / {totalSteps}</bdi>, label: "תחנות שהושלמו" },
       { icon: <FlaskConical size={20} strokeWidth={1.75} />, value: measured.length ? fmtDur(cumNet) : EM_DASH, label: "זמן עיבוד מצטבר" },
       { icon: <BarChart3 size={20} strokeWidth={1.75} />, value: longest, label: "התחנה הארוכה ביותר" },
     ];

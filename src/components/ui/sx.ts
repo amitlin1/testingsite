@@ -39,6 +39,8 @@ const COLOR_TOKENS: Record<string, string> = {
   "text.secondary": "var(--color-ink-muted-48)",
   "text.disabled": "var(--color-ink-muted-48)",
   divider: "var(--color-hairline)",
+  // Same soft surface the system uses for hover/highlight (.sh-select-item).
+  "action.hover": "var(--color-canvas-parchment)",
   "background.paper": "var(--color-canvas)",
   "background.default": "var(--color-canvas-parchment)",
   "common.white": "#ffffff",

@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
 } from "@/components/ui";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
 import { apiFetch } from "@/lib/api/client";
@@ -1592,9 +1593,9 @@ function TestingPageView() {
             <DialogContent>
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, py: 3 }}>
                     {scanError && (
-                        <Box sx={{ width: "100%", p: 2, bgcolor: "error.light", color: "error.contrastText", borderRadius: 1 }}>
+                        <Alert severity="error" sx={{ width: "100%", boxSizing: "border-box" }}>
                             {scanError}
-                        </Box>
+                        </Alert>
                     )}
                     <QrCodeScannerIcon sx={{ fontSize: 80, color: "text.secondary", opacity: 0.5 }} />
                     <Typography variant="body1" color="text.secondary" textAlign="center">

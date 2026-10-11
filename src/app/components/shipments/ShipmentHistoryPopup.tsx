@@ -193,7 +193,7 @@ export default function ShipmentHistoryPopup({
                             <Box sx={{ mt: 1, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                                 {progressStats.items.map((stat, idx) => (
                                     <Typography key={idx} variant="body2">
-                                        {stat.desc} (מקט: {stat.makat || '-'}): {stat.sent} / {stat.received}
+                                        {stat.desc} (מקט: {stat.makat || '-'}): <bdi dir="ltr">{stat.sent} / {stat.received}</bdi>
                                     </Typography>
                                 ))}
                             </Box>
