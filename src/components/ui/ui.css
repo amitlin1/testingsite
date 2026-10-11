@@ -598,6 +598,31 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 }
 .sh-subnav-tab:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
 
+/* ------------------------------------------------------ Overlay motion -- */
+/* Occasional surfaces only (emil): a dialog / toast fades and scales in over
+   --dur-base and leaves faster; popovers grow from their trigger. Nothing
+   starts from scale(0). The `scale` / `translate` properties compose with the
+   dialog's inline centring (and drag) transform instead of replacing it.
+   Not animated on purpose: menus and the command palette (keyboard, many
+   times a day) and a tooltip opened while another was showing (instant). */
+@keyframes sh-fade-in { from { opacity: 0; } }
+@keyframes sh-fade-out { to { opacity: 0; } }
+@keyframes sh-scale-in { from { opacity: 0; scale: .97; } }
+@keyframes sh-scale-out { to { opacity: 0; scale: .97; } }
+@keyframes sh-toast-in { from { opacity: 0; translate: 0 8px; } }
+.sh-dialog-overlay[data-state="open"] { animation: sh-fade-in var(--dur-base) var(--ease-out); }
+.sh-dialog-overlay[data-state="closed"] { animation: sh-fade-out var(--dur-fast) var(--ease-out); }
+.sh-dialog-content[data-state="open"] { animation: sh-scale-in var(--dur-base) var(--ease-out); }
+.sh-dialog-content[data-state="closed"] { animation: sh-scale-out var(--dur-fast) var(--ease-out); }
+.sh-select-content[data-state="open"] { transform-origin: var(--radix-select-content-transform-origin); animation: sh-scale-in var(--dur-fast) var(--ease-out); }
+.sh-tooltip[data-state="delayed-open"] { transform-origin: var(--radix-tooltip-content-transform-origin); animation: sh-scale-in var(--dur-fast) var(--ease-out); }
+.sh-snackbar { animation: sh-toast-in var(--dur-base) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) {
+  .sh-dialog-content[data-state="open"], .sh-select-content[data-state="open"],
+  .sh-tooltip[data-state="delayed-open"], .sh-snackbar { animation-name: sh-fade-in; }
+  .sh-dialog-content[data-state="closed"] { animation-name: sh-fade-out; }
+}
+
 /* ------------------------------------------------------- Feedback ------ */
 .sh-alert-close { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -2px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; flex-shrink: 0; }
 @media (hover: hover) and (pointer: fine) { .sh-alert-close:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); } }

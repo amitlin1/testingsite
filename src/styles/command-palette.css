@@ -105,19 +105,8 @@
   border-radius: var(--r-lg);
   box-shadow: var(--cp-shadow-pop);
   overflow: hidden;
-  animation: cp-in 180ms var(--ease-page) both;
-}
-
-/* CRITICAL: animate transform ONLY — never opacity. Animating opacity from 0
-   leaves the palette invisible if the tab is backgrounded and the animation
-   freezes at frame 0. */
-@keyframes cp-in {
-  from { transform: translateY(-8px) scale(0.98); }
-  to   { transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cp-panel { animation: none; }
+  /* No open animation: Ctrl+K / "/" is a keyboard action repeated all day,
+     and motion there only reads as delay. */
 }
 
 /* ---- Input row ---- */
