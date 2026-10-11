@@ -1,5 +1,5 @@
 "use client";
-import React, { forwardRef, useEffect } from "react";
+import React, { forwardRef, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Info, CheckCircle2, AlertTriangle, XCircle, X } from "lucide-react";
 import { cn } from "./utils";
@@ -88,11 +88,17 @@ export interface SnackbarProps {
 }
 
 export function Snackbar({ open, autoHideDuration, onClose, anchorOrigin, message, action, children, sx }: SnackbarProps) {
+  // The timer must not restart when the parent re-renders with a new inline
+  // onClose (a page with a 1-second clock would then never auto-hide).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     if (!open || !autoHideDuration) return;
-    const t = setTimeout(() => onClose?.(undefined, "timeout"), autoHideDuration);
+    const t = setTimeout(() => onCloseRef.current?.(undefined, "timeout"), autoHideDuration);
     return () => clearTimeout(t);
-  }, [open, autoHideDuration, onClose]);
+  }, [open, autoHideDuration]);
 
   if (!open || typeof document === "undefined") return null;
   const vert = anchorOrigin?.vertical ?? "bottom";
