@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Stack, Chip } from "@/components/ui";
+import { Stack, Alert } from "@/components/ui";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
 import { uploadItemFiles } from "@/lib/api/direct-upload";
 import {
@@ -20,7 +20,7 @@ export type PhotoStationConfig = {
   stationKey: string;
   /** photo_types.code — reference-image group + capture tag. */
   photoType: string;
-  /** Eyebrow label on the rail/header (e.g. "פירוק" / "הרכבה"). */
+  /** The station kind — the wizard rail's title (e.g. "פירוק" / "הרכבה"). */
   contextLabel: string;
   /** Title of the photo phase (e.g. "צילום פירוק"). */
   photoTitle: string;
@@ -139,7 +139,7 @@ export default function PhotoStation({
   return (
     <StationShell
       open={open} onClose={onClose} item={item} workerId={workerId} workerName={workerName}
-      contextLabel={config.contextLabel} phases={phases} currentIndex={phaseIdx}
+      contextLabel={config.contextLabel} stationName={station.test_station_desc} phases={phases} currentIndex={phaseIdx}
       onStep={onStep} onBack={onBack} error={error} onClearError={() => setError(null)}
       busy={busy} submitting={submitting}
       canNext={skuScan.trim().length > 0} onNext={onNext}
@@ -150,8 +150,7 @@ export default function PhotoStation({
       ) : (
         <Stack spacing={3}>
           {hasRU === false && (
-            <Chip size="small" label="לא נמצא פריט ייחוס — נא להודיע לגורם אחראי"
-              sx={{ alignSelf: "flex-start", bgcolor: "color-mix(in srgb, var(--color-status-late) 10%, transparent)", color: "var(--color-warning-ink)", fontWeight: 600 }} />
+            <Alert severity="warning">לא נמצא פריט ייחוס — נא להודיע לגורם אחראי</Alert>
           )}
           <PhotoSection>
             <PhotoUploader photos={photo.photos} refImages={refImages} onPick={pickPhoto} onRemove={removePhoto} />

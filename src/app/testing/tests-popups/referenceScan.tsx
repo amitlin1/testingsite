@@ -4,7 +4,7 @@ import { Check, CircleAlert } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { RefImg } from "./stationKit";
 import {
-  AMBER_BG, AMBER_BORDER, AMBER_INK, FOCUS, GREEN, GREEN_BG, HAIR, MUTED, fieldInput,
+  AMBER_BG, AMBER_BORDER, AMBER_INK, GREEN, GREEN_BG, HAIR, MUTED,
 } from "@/app/components/packages/packageUi";
 
 /**
@@ -78,20 +78,25 @@ export function ScanField({ label, placeholder, value, onChange, lookup, found, 
 
   const ref = lookup.ref;
   const tone = ref == null ? "wait" : ref.hasRU ? "ok" : "warn";
+  const fieldId = React.useId();
   return (
     <div style={{ maxWidth: 420, marginTop: 20 }}>
-      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>{label}</div>
-      <input value={value} onChange={(e) => { setPending(false); onChange(e.target.value); }} autoFocus placeholder={placeholder}
-        onKeyDown={(e) => { if (e.key === "Enter") { if (lookup.checking) setPending(true); else onSubmit(); } }}
-        style={{ ...fieldInput, height: 52, borderRadius: 11, fontSize: 17, fontVariantNumeric: "tabular-nums", letterSpacing: 1, borderColor: value.trim() === "" ? HAIR : FOCUS }} />
-      {value.trim() !== "" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 9, background: tone === "ok" ? GREEN_BG : tone === "warn" ? AMBER_BG : "var(--color-canvas-parchment)", border: `1px solid ${tone === "ok" ? "color-mix(in srgb, var(--color-status-approved) 22%, transparent)" : tone === "warn" ? AMBER_BORDER : HAIR}`, borderRadius: 11, padding: "12px 14px", marginTop: 12 }}>
-          {tone !== "wait" && <span style={{ color: tone === "ok" ? GREEN : AMBER_INK, display: "inline-flex" }}>{tone === "ok" ? <Check size={18} strokeWidth={2} /> : <CircleAlert size={18} strokeWidth={2} />}</span>}
-          <div style={{ fontSize: 14, fontWeight: 600, color: tone === "ok" ? GREEN : tone === "warn" ? AMBER_INK : MUTED }}>
-            {ref == null ? "מחפש פריט ייחוס…" : ref.hasRU ? found(ref) : missing}
+      <label htmlFor={fieldId} style={{ display: "block", fontSize: "var(--text-small)", color: MUTED, marginBottom: 7 }}>{label}</label>
+      {/* A code: LTR, kept at the reading edge (testing.css .tst-ref-scan). The
+          edge follows focus (.sh-input ring), not whether the field has text. */}
+      <input id={fieldId} className="sh-input tst-ref-scan" dir="ltr" value={value} onChange={(e) => { setPending(false); onChange(e.target.value); }} autoFocus placeholder={placeholder}
+        onKeyDown={(e) => { if (e.key === "Enter") { if (lookup.checking) setPending(true); else onSubmit(); } }} />
+      {/* The lookup's answer for exactly this text, announced as it arrives. */}
+      <div role="status" aria-live="polite">
+        {value.trim() !== "" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 9, background: tone === "ok" ? GREEN_BG : tone === "warn" ? AMBER_BG : "var(--color-canvas-parchment)", border: `1px solid ${tone === "ok" ? "color-mix(in srgb, var(--color-status-approved) 22%, transparent)" : tone === "warn" ? AMBER_BORDER : HAIR}`, borderRadius: "var(--r-md)", padding: "12px 14px", marginTop: 12 }}>
+            {tone !== "wait" && <span aria-hidden style={{ color: tone === "ok" ? GREEN : AMBER_INK, display: "inline-flex" }}>{tone === "ok" ? <Check size={18} strokeWidth={2} /> : <CircleAlert size={18} strokeWidth={2} />}</span>}
+            <div style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, color: tone === "ok" ? GREEN : tone === "warn" ? AMBER_INK : MUTED }}>
+              {ref == null ? "מחפש פריט ייחוס…" : ref.hasRU ? found(ref) : missing}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

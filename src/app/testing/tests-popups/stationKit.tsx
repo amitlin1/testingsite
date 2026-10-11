@@ -1,18 +1,16 @@
 "use client";
 import * as React from "react";
 import {
-  Dialog, Box, Typography, Button, TextField, Stack, Alert, IconButton,
+  Dialog, DialogTitle, Box, Typography, Button, TextField, Stack, Alert, IconButton,
   CircularProgress, useMediaQuery,
 } from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
-import { ArrowForward as ArrowForwardIcon } from "@/components/ui/icons";
-import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";
 import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
 import { AddAPhoto as AddAPhotoIcon } from "@/components/ui/icons";
 import { PhotoLibrary as PhotoLibraryIcon } from "@/components/ui/icons";
 import { Warning as WarningIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
-import { Person as PersonIcon } from "@/components/ui/icons";
+import { Info as InfoIcon } from "@/components/ui/icons";
 import type { ItemRow } from "../../../types";
 import { apiFetch } from "@/lib/api/client";
 
@@ -22,6 +20,7 @@ import { apiFetch } from "@/lib/api/client";
  * header + footer), the SKU screen, the verdict card and the photo uploader, so
  * every station dialog reads as one system. Photo.tsx predates this kit and keeps
  * its own copies; new stations (PhotoStation / VerdictStation) build on it.
+ * Stateful styling (hover / focus / pressed) lives in ../testing.css (`tst-*`).
  */
 
 // ---- Design tokens ----
@@ -34,7 +33,7 @@ export const MUTED_LT = "var(--color-ink-muted-48)";
 export const HAIR = "var(--color-hairline)";
 export const PARCHMENT = "var(--color-canvas-parchment)";
 export const CHIP_BG = "var(--color-canvas-parchment)";
-export const PRODUCT_SHADOW = "rgba(0,0,0,0.22) 3px 5px 30px";
+export const PRODUCT_SHADOW = "var(--shadow-modal)";
 
 export type RefImg = { id: number; url: string };
 export type Shot = { previewUrl: string; objectKey?: string; uploading?: boolean; failed?: boolean };
@@ -66,44 +65,38 @@ export async function lookupRU(sku: string, itemTypeId: number | null) {
 }
 
 // ---- presentational helpers ----
+/** The system's instruction for this step — an info band (icon + message),
+ *  no kicker label above it. */
 export function SystemNote({ children }: { children: React.ReactNode }) {
   return (
-    <Box sx={{ bgcolor: "color-mix(in srgb, var(--color-primary) 5%, transparent)", border: "1px solid color-mix(in srgb, var(--color-primary) 14%, transparent)", borderRadius: "14px", p: "14px 16px" }}>
-      <Typography sx={{ fontSize: 11, fontWeight: 700, color: BLUE, letterSpacing: "0.02em", mb: 0.5 }}>הודעת מערכת</Typography>
-      <Typography sx={{ fontSize: 15, lineHeight: 1.5, color: INK }}>{children}</Typography>
+    <Box sx={{ display: "flex", alignItems: "flex-start", gap: "12px", bgcolor: "var(--color-primary-tint)", border: "1px solid var(--color-primary-border)", borderRadius: "var(--r-md)", p: "14px 16px" }}>
+      <InfoIcon sx={{ fontSize: 20, color: BLUE, flexShrink: 0, mt: "1px" }} aria-hidden />
+      <Typography sx={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)", color: INK }}>{children}</Typography>
     </Box>
   );
 }
 
-export function PassFail({ value, onChange }: { value: Photos["ok"]; onChange: (v: "pass" | "fail") => void }) {
-  const opt = (v: "pass" | "fail") => {
-    const active = value === v;
-    const color = v === "pass" ? OK : BAD;
-    const tint = v === "pass" ? "color-mix(in srgb, var(--color-status-approved) 8%, transparent)" : "color-mix(in srgb, var(--color-destructive) 8%, transparent)";
-    return (
-      <Button key={v} onClick={() => onChange(v)} disableElevation
-        startIcon={v === "pass" ? <CheckIcon /> : <CloseIcon />}
-        sx={{
-          flex: 1, height: 56, borderRadius: "13px", fontWeight: 600, fontSize: 16,
-          textTransform: "none", boxShadow: "none",
-          border: `1.5px solid ${active ? color : HAIR}`,
-          bgcolor: active ? tint : "var(--color-canvas)", color: active ? color : INK,
-          "&:hover": { bgcolor: active ? tint : "var(--color-surface-pearl)", borderColor: active ? color : "var(--color-border-strong)" },
-          "&:active": { transform: "scale(0.98)" },
-        }}>
-        {v === "pass" ? "תקין" : "לא תקין"}
-      </Button>
-    );
-  };
-  return <Stack direction="row" spacing={1.5}>{opt("pass")}{opt("fail")}</Stack>;
+/** Pass / fail toggle pair (aria-pressed). `labelledBy` names the group — the
+ *  question it answers. Also used by the package opening wizard. */
+export function PassFail({ value, onChange, labelledBy }: {
+  value: Photos["ok"]; onChange: (v: "pass" | "fail") => void; labelledBy?: string;
+}) {
+  const opt = (v: "pass" | "fail") => (
+    <button key={v} type="button" onClick={() => onChange(v)} aria-pressed={value === v}
+      className={`tst-passfail tst-passfail--${v} sh-press`}>
+      {v === "pass" ? <CheckIcon sx={{ fontSize: 20 }} aria-hidden /> : <CloseIcon sx={{ fontSize: 20 }} aria-hidden />}
+      {v === "pass" ? "תקין" : "לא תקין"}
+    </button>
+  );
+  return <div role="group" aria-labelledby={labelledBy} style={{ display: "flex", gap: 12 }}>{opt("pass")}{opt("fail")}</div>;
 }
 
 /** Section header for the photos block: "תיעוד בתמונות" + soft divider line. */
 export function PhotoSection({ children }: { children: React.ReactNode }) {
   return (
     <Box>
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, pb: "12px", borderBottom: "1px solid var(--color-hairline)", mb: 2 }}>
-        <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.2px", color: INK, whiteSpace: "nowrap" }}>תיעוד בתמונות</Typography>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, pb: "12px", borderBottom: `1px solid ${HAIR}`, mb: 2 }}>
+        <Typography component="h3" sx={{ m: 0, fontSize: "var(--text-lead)", fontWeight: 700, color: INK, whiteSpace: "nowrap" }}>תיעוד בתמונות</Typography>
       </Box>
       {children}
     </Box>
@@ -114,26 +107,30 @@ export function PhotoSection({ children }: { children: React.ReactNode }) {
 export function VerdictCard({ ok, note, onOk, onNote, rows = 3 }: {
   ok: Photos["ok"]; note: string; onOk: (v: "pass" | "fail") => void; onNote: (v: string) => void; rows?: number;
 }) {
+  const questionId = React.useId();
+  const noteId = React.useId();
   return (
-    <Box sx={{ border: `1px solid ${HAIR}`, borderRadius: "18px", p: "22px 24px", display: "flex", flexDirection: "column", gap: 2.25 }}>
+    <Box sx={{ border: `1px solid ${HAIR}`, borderRadius: "var(--r-card)", p: "20px 24px", display: "flex", flexDirection: "column", gap: "18px" }}>
       <Box>
-        <Typography sx={{ fontSize: 15, fontWeight: 600, color: INK, mb: 1.5 }}>בדיקה תקינה?</Typography>
-        <PassFail value={ok} onChange={onOk} />
+        <Typography id={questionId} sx={{ fontSize: "var(--text-body)", fontWeight: 600, color: INK, mb: 1.5 }}>בדיקה תקינה?</Typography>
+        <PassFail value={ok} onChange={onOk} labelledBy={questionId} />
       </Box>
       <Box>
-        <Typography sx={{ fontSize: 15, fontWeight: 600, color: INK, mb: 1.25 }}>הערות</Typography>
-        <TextField value={note} onChange={(e) => onNote(e.target.value)} placeholder="הוסף הערה…" multiline rows={rows} fullWidth />
+        <label htmlFor={noteId} style={{ display: "block", fontSize: "var(--text-body)", fontWeight: 600, color: INK, marginBottom: 10 }}>הערות</label>
+        <TextField id={noteId} value={note} onChange={(e) => onNote(e.target.value)} placeholder="הוסף הערה…" multiline rows={rows} fullWidth />
       </Box>
     </Box>
   );
 }
 
-/** The manufacturer-SKU scan screen body — shared by every station's first step. */
+/** The manufacturer-SKU scan screen body — shared by every station's first step.
+ *  A code, so the field is LTR, kept at the reading edge. */
 export function SkuScreen({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <Stack spacing={1.5}>
       <SystemNote>יש לסרוק את מק״ט היצרן של המוצר. פרטי הסריקה נשמרים במערכת ובדו״ח.</SystemNote>
-      <TextField autoFocus label="מק״ט יצרן" value={value} onChange={(e) => onChange(e.target.value)} placeholder="סרוק או הזן מק״ט…" fullWidth />
+      <TextField autoFocus label="מק״ט יצרן" value={value} onChange={(e) => onChange(e.target.value)} placeholder="סרוק או הזן מק״ט…" fullWidth
+        dir="ltr" inputProps={{ style: { textAlign: "right" } }} />
     </Stack>
   );
 }
@@ -198,26 +195,27 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
       : "";
   const alertMsg = [rejectedMsg, failedMsg].filter(Boolean).join(" · ");
   // Extra photos beyond the reference slots are legitimate now that a pick can
-  // bring in several at once, so they get their own tail on the counter.
+  // bring in several at once, so they get their own tail on the counter. The
+  // "a / b" ratio is isolated LTR, or RTL would show it as "b / a".
   const extra = hasSlots ? Math.max(0, captured - total) : 0;
-  const counterText = hasSlots
-    ? `${Math.min(captured, total)} / ${total} צולמו${extra ? ` (+${extra})` : ""}`
-    : `${captured} צילומים`;
+  const counter = hasSlots
+    ? <><bdi dir="ltr">{Math.min(captured, total)} / {total}</bdi> צולמו{extra ? ` (+${extra})` : ""}</>
+    : <>{captured} צילומים</>;
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-      {/* Progress: dots + counter */}
+      {/* Progress: dots + counter (the counter says it in words; the dots are decoration) */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
         {hasSlots && (
-          <Box sx={{ flex: 1, display: "flex", gap: "6px" }}>
+          <Box aria-hidden sx={{ flex: 1, display: "flex", gap: "6px" }}>
             {refImages.map((_, i) => (
-              <Box key={i} sx={{ flex: 1, height: 4, borderRadius: "9999px", bgcolor: photos[i]?.failed ? BAD : i < captured ? OK : i === activeIdx ? BLUE : HAIR }} />
+              <Box key={i} sx={{ flex: 1, height: 4, borderRadius: "var(--r-pill)", bgcolor: photos[i]?.failed ? BAD : i < captured ? OK : i === activeIdx ? BLUE : HAIR }} />
             ))}
           </Box>
         )}
         {!hasSlots && <Box sx={{ flex: 1 }} />}
-        <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: BLUE, whiteSpace: "nowrap", bgcolor: "color-mix(in srgb, var(--color-primary) 8%, transparent)", borderRadius: "9999px", px: 1.5, py: 0.5, fontVariantNumeric: "tabular-nums" }}>
-          {counterText}
+        <Typography role="status" sx={{ fontSize: "var(--text-small)", fontWeight: 700, color: BLUE, whiteSpace: "nowrap", bgcolor: "var(--color-primary-soft)", borderRadius: "var(--r-pill)", px: 1.5, py: 0.5, fontVariantNumeric: "tabular-nums" }}>
+          {counter}
         </Typography>
       </Box>
 
@@ -226,50 +224,43 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); takeFiles(e.dataTransfer.files); }}
-        sx={{ position: "relative", height: 420, borderRadius: "18px", overflow: "hidden", border: dragging ? `2px dashed ${BLUE}` : `1px solid ${HAIR}`, bgcolor: dragging ? "color-mix(in srgb, var(--color-primary) 6%, transparent)" : "var(--color-canvas-parchment)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        sx={{ position: "relative", height: 420, borderRadius: "var(--r-lg)", overflow: "hidden", border: dragging ? `2px dashed ${BLUE}` : `1px solid ${HAIR}`, bgcolor: dragging ? "var(--color-primary-tint)" : PARCHMENT, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {bigSrc ? (
-          <Box component="img" src={bigSrc} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <Box component="img" src={bigSrc} alt={activeIsCaptured ? `צילום ${activeIdx + 1}` : `תמונת ייחוס ${activeIdx + 1}`} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5, color: MUTED_LT }}>
-            <AddAPhotoIcon sx={{ fontSize: 52 }} />
-            <Typography sx={{ fontSize: 14 }}>תמונת ייחוס · צלם את הפריט</Typography>
-            <Typography sx={{ fontSize: 12.5 }}>או גרור תמונות לכאן · ניתן לבחור כמה</Typography>
+            <AddAPhotoIcon sx={{ fontSize: 52 }} aria-hidden />
+            <Typography sx={{ fontSize: "var(--text-body-sm)" }}>תמונת ייחוס · צלם את הפריט</Typography>
+            <Typography sx={{ fontSize: "var(--text-small)" }}>או גרור תמונות לכאן · ניתן לבחור כמה</Typography>
           </Box>
         )}
         {bigSrc && (
-          <Box sx={{ position: "absolute", top: 11, insetInlineEnd: 11, fontSize: 11, fontWeight: 600, color: activeShot?.failed ? BAD : activeIsCaptured ? OK : "#8a7c68", bgcolor: "rgba(255,255,255,0.82)", borderRadius: "9999px", px: 1.25, py: 0.5 }}>
+          <Box sx={{ position: "absolute", top: 11, insetInlineEnd: 11, fontSize: "var(--text-micro)", fontWeight: 600, color: activeShot?.failed ? BAD : activeIsCaptured ? OK : "var(--color-ink-muted-70)", bgcolor: "color-mix(in srgb, var(--color-canvas) 85%, transparent)", borderRadius: "var(--r-pill)", px: 1.25, py: 0.5 }}>
             {pillText}
           </Box>
         )}
         {activeIsCaptured && (
-          <IconButton size="small" onClick={() => onRemove(activeIdx)}
-            sx={{ position: "absolute", top: 8, insetInlineStart: 8, bgcolor: "rgba(0,0,0,0.5)", color: "var(--color-on-primary)", p: "3px", "&:hover": { bgcolor: "rgba(0,0,0,0.7)" } }}>
-            <CloseIcon sx={{ fontSize: 15 }} />
+          <IconButton size="small" round title="הסר תמונה" onClick={() => onRemove(activeIdx)}
+            sx={{ position: "absolute", top: 8, insetInlineStart: 8 }}>
+            <CloseIcon sx={{ fontSize: 16 }} aria-hidden />
           </IconButton>
         )}
-        {activeShot?.uploading && <CircularProgress size={26} sx={{ position: "absolute", color: BLUE }} />}
+        {activeShot?.uploading && <CircularProgress size={26} aria-label="מעלה תמונה" sx={{ position: "absolute", inset: 0, margin: "auto" }} />}
       </Box>
 
       {/* Camera (one shot) + gallery picker (several images at once) */}
       <Box sx={{ display: "flex", gap: 1.25 }}>
-        <Button onClick={openCamera} variant="contained" disableElevation startIcon={<AddAPhotoIcon />}
-          sx={{ flex: 2, height: 58, borderRadius: "14px", fontSize: 17, fontWeight: 600, textTransform: "none", boxShadow: "none", bgcolor: BLUE, "&:hover": { bgcolor: "var(--color-primary-hover)", boxShadow: "none" }, "&:active": { transform: "scale(0.98)" } }}>
+        <Button onClick={openCamera} size="large" className="tst-photo-btn" startIcon={<AddAPhotoIcon fontSize={20} aria-hidden />} sx={{ flex: 2 }}>
           {hasSlots && captured >= total ? "צלם מחדש" : "צלם"}
         </Button>
-        <Button onClick={openGallery} variant="outlined" disableElevation startIcon={<PhotoLibraryIcon />}
-          sx={{ flex: 1, height: 58, borderRadius: "14px", fontSize: 15.5, fontWeight: 600, textTransform: "none", color: BLUE, borderColor: HAIR, "&:hover": { borderColor: BLUE, bgcolor: "color-mix(in srgb, var(--color-primary) 4%, transparent)" }, "&:active": { transform: "scale(0.98)" } }}>
+        <Button onClick={openGallery} variant="outlined" size="large" className="tst-photo-btn" startIcon={<PhotoLibraryIcon fontSize={20} aria-hidden />} sx={{ flex: 1 }}>
           העלה תמונות
         </Button>
       </Box>
 
-      {alertMsg && (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, borderRadius: "12px", border: `1px solid ${BAD}`, bgcolor: "color-mix(in srgb, var(--color-destructive) 6%, transparent)", px: 1.5, py: 1 }}>
-          <WarningIcon sx={{ fontSize: 16, color: BAD, flexShrink: 0 }} />
-          <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: BAD }}>{alertMsg}</Typography>
-        </Box>
-      )}
+      {alertMsg && <Alert severity="error">{alertMsg}</Alert>}
 
-      {/* Filmstrip — flex-wrap row with even gaps */}
+      {/* Filmstrip — flex-wrap row with even gaps; each tile picks the frame shown large */}
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: "14px", pb: 0.5 }}>
         {Array.from({ length: Math.max(total, captured) }).map((_, i) => {
           const shot = photos[i];
@@ -277,19 +268,21 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
           const isCap = !!shot;
           const isActive = i === activeIdx;
           const src = shot?.previewUrl ?? ref?.url;
+          const label = `${isCap ? "צילום" : "תמונת ייחוס"} ${i + 1}${shot?.failed ? " — ההעלאה נכשלה" : shot?.uploading ? " — מעלה" : ""}`;
           return (
-            <Box key={i} onClick={() => setActiveIdx(i)}
-              sx={{ position: "relative", flex: "1 1 150px", minWidth: 130, maxWidth: 280, aspectRatio: "4 / 3", cursor: "pointer", borderRadius: "13px", overflow: "hidden",
-                border: shot?.failed ? `2.5px solid ${BAD}` : isActive ? `2.5px solid ${BLUE}` : isCap ? `1.5px solid ${OK}` : `1.5px solid ${HAIR}`, bgcolor: "var(--color-canvas-parchment)" }}>
-              {src && <Box component="img" src={src} sx={{ width: "100%", height: "100%", objectFit: "cover", opacity: shot?.uploading ? 0.5 : 1 }} />}
-              {!isCap && <Box sx={{ position: "absolute", bottom: 5, insetInlineStart: 5, fontSize: 10, fontWeight: 600, color: "var(--color-on-primary)", bgcolor: "rgba(0,0,0,0.45)", borderRadius: "6px", px: 0.75, py: "1px" }}>ייחוס</Box>}
+            <button key={i} type="button" className="tst-film" onClick={() => setActiveIdx(i)}
+              aria-label={label} aria-current={isActive ? "true" : undefined}
+              style={{ border: shot?.failed ? `2.5px solid ${BAD}` : isActive ? `2.5px solid ${BLUE}` : isCap ? `1.5px solid ${OK}` : `1.5px solid ${HAIR}` }}>
+              {src && <Box component="img" src={src} alt="" sx={{ display: "block", width: "100%", height: "100%", objectFit: "cover", opacity: shot?.uploading ? 0.5 : 1 }} />}
+              {!isCap && <Box component="span" sx={{ position: "absolute", bottom: 5, insetInlineStart: 5, fontSize: "var(--text-micro)", fontWeight: 600, color: "var(--color-on-primary)", bgcolor: "color-mix(in srgb, var(--color-ink) 55%, transparent)", borderRadius: "6px", px: 0.75, py: "1px" }}>ייחוס</Box>}
               {isCap && !shot?.uploading && (
-                <Box sx={{ position: "absolute", top: 4, insetInlineStart: 4, width: 20, height: 20, borderRadius: "9999px", bgcolor: shot?.failed ? BAD : OK, color: "var(--color-on-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {shot?.failed ? <WarningIcon sx={{ fontSize: 12 }} /> : <CheckIcon sx={{ fontSize: 13 }} />}
+                <Box component="span" sx={{ position: "absolute", top: 4, insetInlineStart: 4, width: 20, height: 20, borderRadius: "var(--r-pill)", bgcolor: shot?.failed ? BAD : OK, color: "var(--color-on-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {shot?.failed ? <WarningIcon sx={{ fontSize: 12 }} aria-hidden /> : <CheckIcon sx={{ fontSize: 13 }} aria-hidden />}
                 </Box>
               )}
-              {shot?.uploading && <CircularProgress size={18} sx={{ position: "absolute", top: "50%", left: "50%", mt: "-9px", ml: "-9px", color: BLUE }} />}
-            </Box>
+              {/* Centred by inset + auto margins (a physical left:50% with a logical margin drifted in RTL). */}
+              {shot?.uploading && <CircularProgress size={18} aria-hidden sx={{ position: "absolute", inset: 0, margin: "auto" }} />}
+            </button>
           );
         })}
       </Box>
@@ -306,14 +299,16 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
 export type ShellPhase = { key: string; title: string; desc: string };
 
 /**
- * StationShell — the exact Photo.tsx dialog chrome, extracted so every station
- * shares one implementation: left rail with item card + vertical stepper (desktop),
- * step chips (tablet/phone), header (phase title + description), and a footer whose
- * primary button is "המשך" mid-flow and the green finish button on the last phase.
+ * StationShell — the station wizards' dialog chrome, laid out like the package
+ * wizard shell (PackageWizardShell / design/Package Stations.dc.html) so both
+ * kinds of wizard on the station screen read as one: a 268px rail (station,
+ * item card, numbered steps, worker) on desktop, step chips on tablet/phone,
+ * the step title + counter at the top of the body, and a footer of
+ * יציאה / הקודם / המשך — the green finish button on the last phase.
  * The per-station flow supplies the phases, nav callbacks and the current body.
  */
 export function StationShell({
-  open, onClose, item, workerId, workerName, contextLabel,
+  open, onClose, item, workerId, workerName, contextLabel, stationName,
   phases, currentIndex, onStep, onBack,
   error, onClearError,
   busy, submitting, canNext, onNext, canFinish, onFinish, finishLabel,
@@ -321,7 +316,10 @@ export function StationShell({
 }: {
   open: boolean; onClose: () => void;
   item: ItemRow; workerId: number | null; workerName: string;
+  /** The station kind ("פירוק", "שיקוף"…): the rail's title. */
   contextLabel: string;
+  /** The concrete station, shown under the title. */
+  stationName?: string;
   phases: ShellPhase[]; currentIndex: number;
   onStep: (i: number) => void; onBack: () => void;
   error: string | null; onClearError: () => void;
@@ -331,120 +329,121 @@ export function StationShell({
   children: React.ReactNode;
 }) {
   // Real CSS media-query strings — the ui/ breakpoints helpers are stubs. See Photo.tsx.
-  const isWide = useMediaQuery("(min-width: 900px)");   // ≥ 900px → left rail
+  const isWide = useMediaQuery("(min-width: 900px)");   // ≥ 900px → rail
   const isMobile = useMediaQuery("(max-width: 599px)"); // < 600px → full-screen
 
   const itemName = item.model?.trim() || `פריט #${item.item_id}`;
   const phase = phases[currentIndex];
   const isLast = currentIndex === phases.length - 1;
+  const counter = `שלב ${currentIndex + 1} מתוך ${phases.length}`;
+  const workerLine = `עובד: ${workerId != null ? workerName || `#${workerId}` : "—"}`;
 
   return (
-    <Dialog open={open} onClose={onClose} dir="rtl" maxWidth={false} fullScreen={isMobile}
+    <Dialog open={open} onClose={onClose} maxWidth={false} fullScreen={isMobile}
       PaperProps={{
         sx: {
-          width: isMobile ? "100vw" : isWide ? "max(920px, 72vw)" : "94vw",
-          height: isMobile ? "100dvh" : isWide ? "min(900px, 92vh)" : "94vh",
+          width: isMobile ? "100vw" : isWide ? "min(1040px, 96vw)" : "94vw",
+          height: isMobile ? "100dvh" : isWide ? "min(720px, 92vh)" : "94vh",
           maxWidth: "none", maxHeight: "none",
-          borderRadius: isMobile ? 0 : "20px",
-          overflow: "hidden", boxShadow: PRODUCT_SHADOW,
+          boxShadow: isMobile ? "none" : "var(--shadow-modal)",
           display: "flex", flexDirection: isWide ? "row" : "column",
         },
       }}>
-      {/* Left rail (desktop) — item card + vertical stepper */}
+      {/* Rail (desktop) — station, item card, numbered steps, worker */}
       {isWide && (
-        <Box sx={{ width: 264, flexShrink: 0, bgcolor: PARCHMENT, borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", p: "24px 20px", minHeight: 0, overflowY: "auto" }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", color: BLUE, textTransform: "uppercase", mb: 1.5 }}>{contextLabel}</Typography>
+        <Box sx={{ width: 268, flexShrink: 0, bgcolor: PARCHMENT, borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", p: "20px 18px", minHeight: 0, overflowY: "auto" }}>
+          <div data-drag-handle="">
+            <Typography sx={{ fontSize: "var(--text-lead)", fontWeight: 700, color: INK, lineHeight: "var(--lh-snug)" }}>{contextLabel}</Typography>
+            {stationName && <Typography sx={{ fontSize: "var(--text-fine)", color: MUTED, mt: "3px" }}>{stationName}</Typography>}
+          </div>
 
           {/* Item identity card */}
-          <Box sx={{ bgcolor: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: "16px", p: 2, mb: 2.75 }}>
-            <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.3px", color: INK }}>{itemName}</Typography>
-            <Typography sx={{ fontSize: 12.5, color: MUTED, mt: 0.5 }}>#{item.item_id}{item.makat != null ? ` · מק״ט ${item.makat}` : ""}</Typography>
+          <Box sx={{ bgcolor: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: "var(--r-md)", p: "12px 14px", mt: "14px" }}>
+            <Typography sx={{ fontSize: "var(--text-body)", fontWeight: 700, color: INK }}>{itemName}</Typography>
+            <Typography sx={{ fontSize: "var(--text-fine)", color: MUTED, mt: "4px" }}>#{item.item_id}{item.makat != null ? ` · מק״ט ${item.makat}` : ""}</Typography>
             {(item.customer_code || item.serial_no) && (
-              <Typography sx={{ fontSize: 12.5, color: MUTED, mt: "2px" }}>
+              <Typography sx={{ fontSize: "var(--text-fine)", color: MUTED, mt: "2px" }}>
                 {item.customer_code ? `לקוח ${item.customer_code}` : ""}{item.customer_code && item.serial_no ? " · " : ""}{item.serial_no ? `S/N ${item.serial_no}` : ""}
               </Typography>
             )}
-            {workerId != null && (
-              <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, mt: 1.5, bgcolor: "color-mix(in srgb, var(--color-primary) 8%, transparent)", borderRadius: "9999px", px: "11px", py: "4px", fontSize: 12, fontWeight: 600, color: BLUE }}>
-                <PersonIcon sx={{ fontSize: 13 }} />{workerName || `#${workerId}`}
-              </Box>
-            )}
           </Box>
 
-          {/* Vertical numbered stepper */}
-          <Box sx={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          {/* Numbered steps */}
+          <ol style={{ listStyle: "none", margin: "16px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 2 }}>
             {phases.map((ph, i) => {
               const done = i < currentIndex;
               const on = i === currentIndex;
               return (
-                <Box key={ph.key} onClick={() => onStep(i)} sx={{ display: "flex", alignItems: "center", gap: 1.5, p: "9px 10px", borderRadius: "12px", cursor: "pointer", bgcolor: on ? "color-mix(in srgb, var(--color-primary) 7%, transparent)" : "transparent" }}>
-                  <Box sx={{ width: 28, height: 28, flexShrink: 0, borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                    ...(done ? { bgcolor: OK, color: "var(--color-on-primary)" } : on ? { bgcolor: BLUE, color: "var(--color-on-primary)" } : { bgcolor: "var(--color-canvas)", border: `1.5px solid ${HAIR}`, color: MUTED_LT }) }}>
-                    {done ? <CheckIcon sx={{ fontSize: 15 }} /> : i + 1}
-                  </Box>
-                  <Typography sx={{ fontSize: 14, fontWeight: on ? 700 : 600, color: on || done ? INK : MUTED_LT }}>{ph.title}</Typography>
-                </Box>
+                <li key={ph.key}>
+                  <button type="button" className="tst-wiz-step" onClick={() => onStep(i)}
+                    aria-current={on ? "step" : undefined} aria-label={`${i + 1}. ${ph.title}${done ? " — הושלם" : ""}`}>
+                    <span style={{ width: 24, height: 24, flexShrink: 0, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "var(--text-micro)", fontWeight: 700, fontVariantNumeric: "tabular-nums",
+                      background: on ? BLUE : done ? "var(--color-success-bg)" : "var(--color-canvas)", color: on ? "var(--color-on-primary)" : done ? OK : MUTED, border: `1px solid ${on ? BLUE : HAIR}` }}>
+                      {done ? <CheckIcon sx={{ fontSize: 12 }} aria-hidden /> : i + 1}
+                    </span>
+                    <span style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, color: on ? BLUE : INK }}>{ph.title}</span>
+                  </button>
+                </li>
               );
             })}
-          </Box>
-          <Box sx={{ flex: 1 }} />
-          <Typography sx={{ fontSize: 12, color: MUTED_LT }}>שלב {currentIndex + 1} מתוך {phases.length}</Typography>
+          </ol>
+
+          <Typography sx={{ mt: "auto", pt: "14px", fontSize: "var(--text-fine)", color: MUTED }}>{workerLine}</Typography>
         </Box>
       )}
 
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
-        {/* Header */}
-        <Box data-drag-handle="" sx={{ p: isMobile ? "16px 18px" : "24px 32px", borderBottom: `1px solid ${HAIR}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1.5, flexShrink: 0 }}>
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            {!isWide && <Typography sx={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", color: BLUE, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{contextLabel} · {itemName}</Typography>}
-            <Typography sx={{ fontSize: isWide ? 24 : 20, fontWeight: 700, letterSpacing: "-0.4px", mt: isWide ? 0 : "2px", color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.title}</Typography>
-            {isWide && <Typography sx={{ fontSize: 14, color: MUTED, mt: "4px" }}>{phase.desc}</Typography>}
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: isMobile ? "18px 18px 20px" : "24px 28px" }}>
+          {/* Step title + counter (the title is the dialog's accessible name) */}
+          <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
+            <Box sx={{ minWidth: 0 }}>
+              <DialogTitle style={{ display: "block", padding: 0, fontSize: "var(--text-title)", fontWeight: 700, color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {phase.title}
+              </DialogTitle>
+              <Typography sx={{ fontSize: "var(--text-body-sm)", color: MUTED, mt: "5px", lineHeight: 1.5 }}>
+                {isWide ? phase.desc : `${contextLabel} · ${itemName}`}
+              </Typography>
+            </Box>
+            <Typography sx={{ fontSize: "var(--text-small)", color: MUTED, whiteSpace: "nowrap", flexShrink: 0 }}>{counter}</Typography>
           </Box>
-          <IconButton onClick={onClose} sx={{ flexShrink: 0, alignSelf: "flex-start", width: 36, height: 36, bgcolor: CHIP_BG, color: MUTED, "&:hover": { bgcolor: "var(--color-hairline)" } }}>
-            <CloseIcon sx={{ fontSize: 19 }} />
-          </IconButton>
-        </Box>
 
-        {/* Step chips (tablet/phone) */}
-        {!isWide && (
-          <Box sx={{ display: "flex", gap: 1, overflowX: "auto", p: "12px 20px", borderBottom: `1px solid ${HAIR}` }}>
-            {phases.map((ph, i) => {
-              const on = i === currentIndex;
-              const done = i < currentIndex;
-              return (
-                <Box key={ph.key} onClick={() => onStep(i)} sx={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 600, borderRadius: "9999px", px: "14px", py: "6px", cursor: "pointer", bgcolor: on ? BLUE : done ? "color-mix(in srgb, var(--color-status-approved) 10%, transparent)" : CHIP_BG, color: on ? "var(--color-canvas)" : done ? OK : MUTED }}>
-                  {i + 1}. {ph.title}
-                </Box>
-              );
-            })}
-          </Box>
-        )}
+          {/* Step chips (tablet/phone) */}
+          {!isWide && (
+            <Box sx={{ display: "flex", gap: 1, overflowX: "auto", mt: "14px", pb: "2px" }}>
+              {phases.map((ph, i) => {
+                const on = i === currentIndex;
+                const done = i < currentIndex;
+                return (
+                  <button key={ph.key} type="button" className="tst-wiz-chip" onClick={() => onStep(i)}
+                    aria-current={on ? "step" : undefined} data-done={done ? "" : undefined}>
+                    {i + 1}. {ph.title}
+                  </button>
+                );
+              })}
+            </Box>
+          )}
 
-        {/* Body */}
-        <Box sx={{ flex: 1, minHeight: 0, p: isMobile ? "20px 18px" : "28px 32px", overflowY: "auto" }}>
-          <Box sx={{ maxWidth: 1000, mx: "auto" }}>
-            {error && <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }} onClose={onClearError}>{error}</Alert>}
+          <Box sx={{ mt: "20px" }}>
+            {error && <Alert severity="error" sx={{ mb: 2 }} onClose={onClearError}>{error}</Alert>}
             {children}
           </Box>
         </Box>
 
         {/* Footer */}
-        <Box sx={{ p: isMobile ? "14px 18px" : "18px 32px", borderTop: `1px solid ${HAIR}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexShrink: 0 }}>
-          <Button onClick={onBack} disabled={submitting || currentIndex === 0}
-            variant="text" startIcon={<ArrowBackIcon />}
-            sx={{ px: 2, color: MUTED, fontWeight: 600 }}>חזור</Button>
-
-          {isLast ? (
-            <Button onClick={onFinish} variant="contained" disableElevation disabled={submitting || !canFinish}
-              startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : <CheckCircleIcon />}
-              sx={{ borderRadius: "9999px", height: 46, minWidth: 120, fontSize: 15, fontWeight: 700, textTransform: "none", boxShadow: "none", bgcolor: OK }}>
-              {submitting ? "שומר..." : finishLabel}
-            </Button>
-          ) : (
-            <Button onClick={onNext} variant="contained" disableElevation disabled={!canNext || busy}
-              endIcon={busy ? <CircularProgress size={18} color="inherit" /> : <ArrowForwardIcon />}
-              sx={{ borderRadius: "9999px", height: 46, minWidth: 120, fontSize: 15, fontWeight: 600, textTransform: "none", boxShadow: "none", bgcolor: BLUE }}>המשך</Button>
-          )}
+        <Box sx={{ flexShrink: 0, borderTop: `1px solid ${HAIR}`, p: isMobile ? "12px 18px" : "14px 28px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {!isWide && <Typography sx={{ fontSize: "var(--text-small)", color: MUTED }}>{workerLine}</Typography>}
+          <Box sx={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+            <Button variant="outlined" color="inherit" className="tst-wiz-btn" onClick={onClose}>יציאה</Button>
+            <Button variant="outlined" color="inherit" className="tst-wiz-btn" onClick={onBack} disabled={submitting || currentIndex === 0}>הקודם</Button>
+            {isLast ? (
+              <Button color="success" className="tst-wiz-btn" onClick={onFinish} disabled={!canFinish} loading={submitting}
+                startIcon={<CheckCircleIcon fontSize={18} aria-hidden />}>
+                {submitting ? "שומר…" : finishLabel}
+              </Button>
+            ) : (
+              <Button className="tst-wiz-btn" onClick={onNext} disabled={!canNext} loading={busy}>המשך</Button>
+            )}
+          </Box>
         </Box>
       </Box>
     </Dialog>

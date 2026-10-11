@@ -16,7 +16,7 @@ import {
 export type VerdictStationConfig = {
   /** Stable station key echoed into the result Details payload. */
   stationKey: string;
-  /** Eyebrow label on the rail/header (e.g. "שיקוף" / "מראה שחורה"). */
+  /** The station kind — the wizard rail's title (e.g. "שיקוף" / "מראה שחורה"). */
   contextLabel: string;
   /** Title of the verdict phase (e.g. "שיקוף הפריט"). */
   phaseTitle: string;
@@ -81,7 +81,7 @@ export default function VerdictStation({
   return (
     <StationShell
       open={open} onClose={onClose} item={item} workerId={workerId} workerName={workerName}
-      contextLabel={config.contextLabel} phases={phases} currentIndex={phaseIdx}
+      contextLabel={config.contextLabel} stationName={station.test_station_desc} phases={phases} currentIndex={phaseIdx}
       onStep={onStep} onBack={onBack} error={error} onClearError={() => setError(null)}
       busy={false} submitting={submitting}
       canNext={skuScan.trim().length > 0} onNext={onNext}

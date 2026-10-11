@@ -7,22 +7,10 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Box,
-  CircularProgress,
-  Chip,
-  Stack,
-  alpha,
+  Alert,
 } from "@/components/ui";
-import { formatDateTime, formatTime } from "@/app/lib/datetime";
-import { History as HistoryIcon } from "@/components/ui/icons";
+import DataTable, { type Column } from "@/components/DataTable";
+import { formatDateTime } from "@/app/lib/datetime";
 
 type StationHistoryEntry = {
   logId: number;
@@ -56,7 +44,7 @@ function calculateDuration(
   endTime: string | null
 ): string {
   if (!startTime || !endTime) {
-    return "-";
+    return "—";
   }
 
   try {
@@ -64,7 +52,7 @@ function calculateDuration(
     const end = new Date(endTime).getTime();
 
     if (isNaN(start) || isNaN(end) || end < start) {
-      return "-";
+      return "—";
     }
 
     const diffSeconds = Math.floor((end - start) / 1000);
@@ -74,9 +62,35 @@ function calculateDuration(
 
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   } catch (error) {
-    return "-";
+    return "—";
   }
 }
+
+// formatDateTime prints "-" for a missing time; the app's blank is "—".
+const when = (t: string | null) => (t ? formatDateTime(t) : "—");
+
+// A muted secondary line under a cell's main value.
+const META: React.CSSProperties = { fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", marginTop: 2 };
+
+const COLUMNS: Column<StationHistoryEntry>[] = [
+  {
+    key: "item",
+    header: "פריט",
+    cell: (e) => (
+      <>
+        <div style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>#{e.itemId}</div>
+        <div style={META}>מס׳ סידורי {e.serialNo} · מק״ט {e.makat}</div>
+        {e.itemTypeDesc && <div style={META}>{e.itemTypeDesc}</div>}
+      </>
+    ),
+  },
+  { key: "step", header: "שלב", nums: true, nowrap: true, cell: (e) => e.currentRouteStep },
+  { key: "queue", header: "התחלת תור", nums: true, nowrap: true, cell: (e) => when(e.queueStartTime) },
+  { key: "start", header: "התחלת עיבוד", nums: true, nowrap: true, cell: (e) => when(e.processingStartTime) },
+  { key: "end", header: "סיום עיבוד", nums: true, nowrap: true, cell: (e) => when(e.processingEndTime) },
+  { key: "duration", header: "משך זמן", nums: true, nowrap: true, cell: (e) => calculateDuration(e.processingStartTime, e.processingEndTime) },
+  { key: "worker", header: "עובד", nowrap: true, cell: (e) => (e.workerId ? `עובד #${e.workerId}` : "—") },
+];
 
 export default function StationHistoryDialog({
   open,
@@ -87,6 +101,8 @@ export default function StationHistoryDialog({
   const [history, setHistory] = React.useState<StationHistoryEntry[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Bumped by "נסה שוב" to run the same load again.
+  const [attempt, setAttempt] = React.useState(0);
 
   // Fetch history when dialog opens and stationId is available
   React.useEffect(() => {
@@ -102,17 +118,16 @@ export default function StationHistoryDialog({
       setError(null);
       try {
         const res = await apiFetch(`/api/testing/station-history?stationId=${stationId}`);
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || "Failed to load history");
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled) {
           setHistory(Array.isArray(data) ? data : []);
         }
       } catch (err) {
+        // Whatever failed (server, network, a non-JSON reply), the worker
+        // gets one Hebrew line that says what happened and what to do.
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "שגיאה בטעינת ההיסטוריה");
+          setError("לא ניתן לטעון את היסטוריית העמדה. בדוק את החיבור ונסה שוב.");
         }
       } finally {
         if (!cancelled) {
@@ -124,219 +139,41 @@ export default function StationHistoryDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, stationId]);
+  }, [open, stationId, attempt]);
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      fullWidth
-      maxWidth="lg"
-      sx={{ direction: "rtl", "& .MuiDialog-paper": { width: "100%", maxWidth: { xs: "95%", sm: "90%", md: "900px" }, margin: { xs: 1 } } }}
-    >
-      <DialogTitle sx={{ direction: "rtl", textAlign: "right" }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexDirection: "row-reverse" }}>
-          <HistoryIcon sx={{ color: "primary.main" }} />
-          <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
-            היסטוריית בדיקות
-            {stationName && ` - ${stationName}`}
-          </Typography>
-        </Stack>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle onClose={onClose}>
+        {stationName ? `היסטוריית בדיקות — ${stationName}` : "היסטוריית בדיקות"}
       </DialogTitle>
-      <DialogContent dividers sx={{ direction: "rtl", p: 0 }}>
-        {loading ? (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              py: 4,
-            }}
+      <DialogContent sx={{ padding: 0 }}>
+        {error ? (
+          <Alert
+            severity="error"
+            sx={{ margin: "0 24px 24px" }}
+            action={<Button size="small" variant="text" onClick={() => setAttempt((n) => n + 1)}>נסה שוב</Button>}
           >
-            <CircularProgress />
-          </Box>
-        ) : error ? (
-          <Box
-            sx={{
-              textAlign: "center",
-              py: 4,
-              px: 2,
-            }}
-          >
-            <Typography color="error" sx={{ fontWeight: 500 }}>
-              {error}
-            </Typography>
-          </Box>
-        ) : history.length === 0 ? (
-          <Box
-            sx={{
-              textAlign: "center",
-              py: 4,
-              px: 2,
-            }}
-          >
-            <HistoryIcon
-              sx={{ fontSize: 48, color: alpha("var(--color-ink-muted-80)", 0.3), mb: 1.5 }}
-            />
-            <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 500 }}>
-              לא נמצאו בדיקות קודמות לעמדה זו
-            </Typography>
-          </Box>
+            {error}
+          </Alert>
         ) : (
-          <TableContainer
-            component={Paper}
-            sx={{
-              width: "100%",
-              maxWidth: "100%",
-              maxHeight: "60vh",
-              borderRadius: 0,
-              boxShadow: "none",
-              overflowX: "auto",
-            }}
-          >
-            <Table stickyHeader size="small" sx={{ width: "100%", minWidth: 800 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "right", direction: "rtl" }}>
-                    פריט
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "right", direction: "rtl" }}>
-                    שלב
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "right", direction: "rtl" }}>
-                    התחלת תור
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "right", direction: "rtl" }}>
-                    התחלת עיבוד
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "right", direction: "rtl" }}>
-                    סיום עיבוד
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "right", direction: "rtl" }}>
-                    משך זמן
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "right", direction: "rtl" }}>
-                    עובד
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {history.map((entry) => {
-                  const duration = calculateDuration(
-                    entry.processingStartTime,
-                    entry.processingEndTime
-                  );
-                  return (
-                    <TableRow key={entry.logId} hover>
-                      <TableCell sx={{ textAlign: "right", direction: "rtl" }}>
-                        <Stack spacing={0.5} sx={{ direction: "rtl" }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            #{entry.itemId}
-                          </Typography>
-                          <Chip
-                            label={`מס' סידורי: ${entry.serialNo}`}
-                            size="small"
-                            sx={{
-                              bgcolor: alpha("var(--color-ink-muted-80)", 0.1),
-                              color: "var(--color-ink-muted-80)",
-                              fontSize: "0.7rem",
-                              height: 20,
-                            }}
-                          />
-                          <Chip
-                            label={`מקט: ${entry.makat}`}
-                            size="small"
-                            sx={{
-                              bgcolor: alpha("var(--color-ink-muted-80)", 0.1),
-                              color: "var(--color-ink-muted-80)",
-                              fontSize: "0.7rem",
-                              height: 20,
-                            }}
-                          />
-                          {entry.itemTypeDesc && (
-                            <Chip
-                              label={`סוג: ${entry.itemTypeDesc}`}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                borderColor: alpha("var(--color-ink-muted-80)", 0.3),
-                                color: "var(--color-ink-muted-80)",
-                                fontSize: "0.7rem",
-                                height: 20,
-                              }}
-                            />
-                          )}
-                        </Stack>
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", direction: "rtl" }}>
-                        <Chip
-                          label={`שלב ${entry.currentRouteStep}`}
-                          size="small"
-                          sx={{
-                            bgcolor: alpha("var(--color-primary)", 0.1),
-                            color: "var(--color-primary)",
-                            fontWeight: 600,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", direction: "rtl" }}>
-                        <Typography variant="body2">
-                          {formatDateTime(entry.queueStartTime)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", direction: "rtl" }}>
-                        <Typography variant="body2">
-                          {formatDateTime(entry.processingStartTime)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", direction: "rtl" }}>
-                        <Typography variant="body2">
-                          {formatDateTime(entry.processingEndTime)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", direction: "rtl" }}>
-                        <Chip
-                          label={duration}
-                          size="small"
-                          sx={{
-                            bgcolor: alpha("var(--color-ink-muted-80)", 0.1),
-                            color: "var(--color-ink-muted-80)",
-                            fontWeight: 600,
-                            fontFamily: "monospace",
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", direction: "rtl" }}>
-                        {entry.workerId ? (
-                          <Chip
-                            label={`עובד #${entry.workerId}`}
-                            size="small"
-                            sx={{
-                              bgcolor: alpha("var(--color-ink-muted-80)", 0.15),
-                              color: "var(--color-ink-muted-80)",
-                              fontWeight: 600,
-                            }}
-                          />
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            -
-                          </Typography>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <DataTable
+            plain
+            rows={history}
+            columns={COLUMNS}
+            getRowKey={(e) => e.logId}
+            loading={loading}
+            loadingRows={6}
+            maxHeight="60vh"
+            minWidth={800}
+            empty={<div style={{ fontSize: "var(--text-body)" }}>לא נמצאו בדיקות קודמות לעמדה זו.</div>}
+          />
         )}
       </DialogContent>
-      <DialogActions sx={{ direction: "rtl", px: 2, py: 1.5 }}>
-        <Button onClick={onClose} variant="contained">
+      <DialogActions>
+        <Button onClick={onClose} variant="outlined" color="inherit">
           סגור
         </Button>
       </DialogActions>
     </Dialog>
   );
 }
-

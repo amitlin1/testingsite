@@ -5,24 +5,23 @@ import {
   Typography,
   TextField,
   Box,
-  Card,
   Button,
-  Chip,
   Stack,
   Skeleton,
-  alpha,
   MenuItem,
   Menu,
   InputAdornment,
-  Container,
   IconButton,
-  Fade,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Alert,
+  Snackbar,
+  CircularProgress,
 } from "@/components/ui";
+import "./testing.css";
+import { toneOfStatus, TONE_DOT } from "@/app/lib/status-tones";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
 import { apiFetch } from "@/lib/api/client";
 import { newActionId } from "@/app/lib/metrics/action-id";
@@ -38,10 +37,7 @@ import { Inventory as InventoryIcon } from "@/components/ui/icons";
 import { AccessTime as AccessTimeIcon } from "@/components/ui/icons";
 import { History as HistoryIcon } from "@/components/ui/icons";
 import { PlayArrowRounded as PlayArrowRoundedIcon } from "@/components/ui/icons";
-import { PrecisionManufacturing as PrecisionManufacturingIcon } from "@/components/ui/icons";
 import { QrCode as QrCodeIcon } from "@/components/ui/icons";
-import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
-import { Close as CloseIcon } from "@/components/ui/icons";
 import { TrendingUp as TrendingUpIcon } from "@/components/ui/icons";
 import { Star as StarIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
@@ -105,20 +101,38 @@ function useElapsedTime(createdAt: string | null | undefined): string {
   return elapsed;
 }
 
-// Shifthouse status tokens (waiting amber / in-test blue / done green).
-const STATUS_TOKENS = {
-  waiting: { color: "var(--color-warning-ink)", bg: "color-mix(in srgb, var(--color-status-late) 10%, transparent)", border: "color-mix(in srgb, var(--color-status-late) 28%, transparent)", timerBg: "color-mix(in srgb, var(--color-status-late) 8%, transparent)" },
-  inTest: { color: "var(--color-primary)", bg: "color-mix(in srgb, var(--color-primary) 10%, transparent)", border: "color-mix(in srgb, var(--color-primary) 25%, transparent)", timerBg: "color-mix(in srgb, var(--color-primary) 6%, transparent)" },
-  done: { color: "var(--color-success-ink)", bg: "color-mix(in srgb, var(--color-status-approved) 10%, transparent)", border: "color-mix(in srgb, var(--color-status-approved) 25%, transparent)", timerBg: "color-mix(in srgb, var(--color-status-approved) 6%, transparent)" },
-} as const;
+/** Start-test failed (someone else took the item, or the server refused). */
+const START_FAILED_ITEM = "לא ניתן להתחיל בדיקה — ייתכן שפריט זה כבר נתפס על ידי עובד אחר.";
+const START_FAILED_PACKAGE = "לא ניתן להתחיל את המארז — ייתכן שהוא כבר נתפס על ידי עובד אחר.";
+/** The station queue could not be loaded (network / server). */
+const QUEUE_LOAD_FAILED = "לא ניתן לטעון את התור של העמדה. בדוק את החיבור ונסה שוב.";
+/** Scanner fallback: auto-submit after this pause when the scan sends no Enter. */
+const SCAN_IDLE_SUBMIT_MS = 700;
+
+/** The page's one empty-state shape (artboard: 64px circle, 17/600 line, 14 hint). */
+function EmptyState({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
+  return (
+    <Box sx={{ textAlign: "center", py: "64px", color: "var(--color-ink-muted-48)" }}>
+      <Box sx={{ width: 64, height: 64, borderRadius: "var(--r-pill)", bgcolor: "var(--color-canvas)", border: "1px solid var(--color-hairline)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)", mb: "14px" }}>
+        {icon}
+      </Box>
+      <Typography sx={{ fontSize: "var(--text-lead)", color: "var(--color-ink)", fontWeight: 600, mb: "6px" }}>{title}</Typography>
+      <Typography sx={{ fontSize: "var(--text-body-sm)" }}>{hint}</Typography>
+    </Box>
+  );
+}
 
 // --- Item Row Strip (option 3a: queue rank + step progress) ---
+// The status reads once per row: a dot in the status tone (status-tones map)
+// beside its label in ink. Rank, steps and timer stay neutral (HI-5: the
+// artboard's item card has no coloured side stripe).
 function ItemCard({
   item,
   rank,
   onAddTestResult,
   onStartTest,
   onRefresh,
+  onStartError,
   highlighted = false,
   priority = false,
   hasWizard = false,
@@ -128,6 +142,8 @@ function ItemCard({
   onAddTestResult: (item: ItemRow) => void;
   onStartTest: (itemId: number) => Promise<void>;
   onRefresh: () => void;
+  /** Shows a start-test failure in the page's error toast. */
+  onStartError: (message: string) => void;
   highlighted?: boolean;
   priority?: boolean;
   hasWizard?: boolean;
@@ -156,15 +172,30 @@ function ItemCard({
     setAnchorEl(null);
   };
 
-  const tokens = isWaiting ? STATUS_TOKENS.waiting : isInTest ? STATUS_TOKENS.inTest : STATUS_TOKENS.done;
-  const statusColor = tokens.color;
+  const statusDot = TONE_DOT[toneOfStatus(item.current_status)];
 
   const isActionable = isWaiting || isInTest;
 
   // Steps come from the item's real testing route.
   const totalSteps = Math.max(item.route_steps?.length || 1, 1);
   const currentStep = item.current_route_step ?? 1;
-  const rankBg = priority ? "var(--color-status-late)" : isActionable ? "var(--color-nav-bg)" : "var(--color-border-strong)";
+  // White numerals need a dark fill: warning-ink for the priority row (the
+  // plain amber is 3.2:1), the rail ink for an actionable one; a finished row's
+  // rank recedes to muted on parchment.
+  const rankTone = priority
+    ? { bg: "var(--color-warning-ink)", fg: "var(--color-on-primary)" }
+    : isActionable
+      ? { bg: "var(--color-nav-bg)", fg: "var(--color-on-primary)" }
+      : { bg: "var(--color-canvas-parchment)", fg: "var(--color-ink-muted-48)" };
+
+  // The mini-strip says each box item's state by colour; its name carries the
+  // same in words (e.g. "2 בבדיקה, 1 ממתין") for anyone who can't tell them apart.
+  const pkgSummary = React.useMemo(() => {
+    if (!pkg) return "";
+    const counts = new Map<string, number>();
+    for (const s of pkg.items) counts.set(s.state_label, (counts.get(s.state_label) ?? 0) + 1);
+    return `מצב פריטי המארז: ${[...counts].map(([label, n]) => `${n} ${label}`).join(", ")}`;
+  }, [pkg]);
 
   return (
       <Box
@@ -186,7 +217,7 @@ function ItemCard({
             : priority
               ? "0 0 0 3px color-mix(in srgb, var(--color-status-late) 10%, transparent)"
               : "none",
-          transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+          transition: "border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease",
         }}
       >
         {/* Priority ribbon — the longest-waiting item */}
@@ -200,38 +231,45 @@ function ItemCard({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "5px",
-                    bgcolor: "var(--color-status-late)",
+                    bgcolor: "var(--color-warning-ink)",
                     color: "var(--color-on-primary)",
-                    fontSize: 11,
+                    fontSize: "var(--text-micro)",
                     fontWeight: 700,
-                    borderRadius: "9999px",
+                    borderRadius: "var(--r-pill)",
                     padding: "3px 10px",
                     whiteSpace: "nowrap",
                 }}
             >
-                <StarIcon sx={{ fontSize: 12 }} />
+                <StarIcon sx={{ fontSize: 12 }} aria-hidden />
                 ממתין הכי הרבה
             </Box>
         )}
 
+        {/* "נסרק" — the artboard's solid action-blue pill, like the ribbon above. */}
         {highlighted && (
-            <Chip
-                size="small"
-                icon={<QrCodeIcon sx={{ fontSize: "16px !important" }} />}
-                label="נסרק"
-                color="primary"
+            <Box
+                role="status"
                 sx={{
                     position: "absolute",
                     top: -10,
-                    insetInlineEnd: 14,
-                    fontWeight: 600,
+                    insetInlineEnd: 18,
                     zIndex: 3,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    bgcolor: "var(--color-primary)",
+                    color: "var(--color-on-primary)",
+                    fontSize: "var(--text-micro)",
+                    fontWeight: 600,
+                    borderRadius: "var(--r-pill)",
+                    padding: "4px 10px",
+                    whiteSpace: "nowrap",
                 }}
-            />
+            >
+                <QrCodeIcon sx={{ fontSize: 13 }} aria-hidden />
+                נסרק
+            </Box>
         )}
-
-        {/* Status color bar */}
-        <Box sx={{ width: 5, alignSelf: "stretch", borderRadius: "9999px", bgcolor: statusColor, flexShrink: 0 }} />
 
         {/* Queue rank circle */}
         <Box
@@ -239,14 +277,14 @@ function ItemCard({
                 width: 38,
                 height: 38,
                 flexShrink: 0,
-                borderRadius: "9999px",
-                bgcolor: rankBg,
-                color: "var(--color-on-primary)",
+                borderRadius: "var(--r-pill)",
+                bgcolor: rankTone.bg,
+                color: rankTone.fg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 16,
-                fontWeight: 800,
+                fontSize: "var(--text-body)",
+                fontWeight: 700,
                 fontVariantNumeric: "tabular-nums",
             }}
         >
@@ -256,20 +294,20 @@ function ItemCard({
         {/* ID + status, type · model line, package strip */}
         <Box sx={{ minWidth: 0, flex: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: "9px", flexWrap: "wrap" }}>
-                <PackageIdText id={item.item_id} size={18} headColor="var(--color-ink)" weight={800} letterSpacing="-0.2px" />
-                <Box sx={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: 12, fontWeight: 700, color: statusColor, whiteSpace: "nowrap" }}>
-                    <Box sx={{ width: 6, height: 6, borderRadius: "9999px", bgcolor: statusColor }} />
+                <PackageIdText id={item.item_id} size={17} headColor="var(--color-ink)" weight={700} letterSpacing="var(--ls-caption)" />
+                <Box sx={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "var(--text-fine)", fontWeight: 600, color: "var(--color-ink)", whiteSpace: "nowrap" }}>
+                    <Box aria-hidden sx={{ width: 7, height: 7, borderRadius: "var(--r-pill)", bgcolor: statusDot }} />
                     {item.item_status_desc || "סטטוס לא ידוע"}
                 </Box>
             </Box>
-            <Typography sx={{ fontSize: 13, color: "var(--color-ink-muted-48)", mt: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", mt: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {[item.item_type_desc, item.model].filter(Boolean).join(" · ")} · מק״ט {item.makat}
             </Typography>
             {pkg && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mt: "6px", fontSize: 12, color: "var(--color-ink-muted-48)", whiteSpace: "nowrap", overflow: "hidden" }}>
-                    <InventoryIcon sx={{ fontSize: 14, color: "var(--color-primary)" }} />
+                <Box sx={{ display: "flex", alignItems: "center", gap: "8px", mt: "6px", fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", whiteSpace: "nowrap", overflow: "hidden" }}>
+                    <InventoryIcon sx={{ fontSize: 14 }} aria-hidden />
                     <span>פריט {seq2(item.package_seq)} מתוך {seq2(pkg.items.length)} · {pkg.item_type_desc}</span>
-                    <Box sx={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                    <Box role="img" aria-label={pkgSummary} title={pkgSummary} sx={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
                         {pkg.items.map((s) => (
                             <Box key={s.item_id} title={`${seq2(s.package_seq)} · ${s.item_type_desc} · ${s.state_label}`} sx={{ width: 16, height: 7, borderRadius: "3px", bgcolor: String(s.item_id) === String(item.item_id) ? "var(--color-primary)" : ITEM_STATES[s.state].color }} />
                         ))}
@@ -280,18 +318,19 @@ function ItemCard({
 
         {/* Step progress */}
         <Box sx={{ flexShrink: 0, width: 150 }}>
-            <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: "var(--color-ink-muted-70)", mb: "5px" }}>
-                שלב {currentStep} / {totalSteps}
+            <Typography sx={{ fontSize: "var(--text-fine)", fontWeight: 700, color: "var(--color-ink-muted-70)", mb: "5px" }}>
+                {/* "a / b" isolated LTR — in RTL it would read "b / a". */}
+                שלב <bdi dir="ltr">{currentStep} / {totalSteps}</bdi>
             </Typography>
-            <Box sx={{ display: "flex", gap: "4px" }}>
+            <Box aria-hidden sx={{ display: "flex", gap: "4px" }}>
                 {Array.from({ length: totalSteps }, (_, i) => (
-                    <Box key={i} sx={{ flex: 1, height: 5, borderRadius: "9999px", bgcolor: i < currentStep ? statusColor : "var(--color-hairline)" }} />
+                    <Box key={i} sx={{ flex: 1, height: 5, borderRadius: "var(--r-pill)", bgcolor: i < currentStep ? "var(--color-ink-muted-48)" : "var(--color-hairline)" }} />
                 ))}
             </Box>
         </Box>
 
-        {/* Timer in the status color */}
-        <Box sx={{ flexShrink: 0, fontSize: 14.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: statusColor, minWidth: 82, textAlign: "center" }}>
+        {/* Timer — neutral; the status already reads in the dot */}
+        <Box sx={{ flexShrink: 0, fontSize: "var(--text-body)", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "var(--color-ink)", minWidth: 82, textAlign: "center" }}>
             {elapsedTime || "—"}
         </Box>
 
@@ -302,19 +341,12 @@ function ItemCard({
         {pkg ? (
             <IconButton
                 onClick={handleMenuClick}
-                aria-label="פריטים באותו מארז"
                 title="פריטים באותו מארז"
-                sx={{
-                    width: 40,
-                    height: 40,
-                    flexShrink: 0,
-                    borderRadius: "10px",
-                    border: "1px solid var(--color-primary-border)",
-                    bgcolor: "var(--color-primary-tint)",
-                    color: "var(--color-primary)",
-                }}
+                aria-haspopup="menu"
+                aria-expanded={Boolean(anchorEl)}
+                className="tst-pkg-btn"
             >
-                <InventoryIcon sx={{ fontSize: 18 }} />
+                <InventoryIcon sx={{ fontSize: 18 }} aria-hidden />
             </IconButton>
         ) : (
             <Box sx={{ width: 40, flexShrink: 0 }} />
@@ -328,18 +360,11 @@ function ItemCard({
              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
              marginThreshold={0}
-             PaperProps={{
-                 sx: {
-                     mt: 1,
-                     borderRadius: 3,
-                     boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-                     minWidth: 260
-                 }
-             }}
+             PaperProps={{ sx: { minWidth: 260 } }}
         >
            <MenuItem disabled dense sx={{ opacity: "1 !important" }}>
               <Box>
-                  <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: "var(--color-ink-muted-48)" }}>פריטים באותו מארז</Typography>
+                  <Typography sx={{ fontSize: "var(--text-fine)", fontWeight: 700, color: "var(--color-ink-muted-48)" }}>פריטים באותו מארז</Typography>
                   {pkg && <Box sx={{ mt: "2px" }}><PackageIdText id={pkg.item_id} size={13} headColor="var(--color-ink)" /></Box>}
               </Box>
            </MenuItem>
@@ -349,10 +374,12 @@ function ItemCard({
                siblings.map((s) => (
                  <MenuItem key={s.item_id} onClick={handleMenuClose} dense>
                     <Stack direction="row" spacing={1.5} alignItems="center" sx={{ gap: 1 }}>
-                       <Box sx={{ width: 26, height: 26, borderRadius: "7px", bgcolor: "var(--color-canvas-parchment)", color: "var(--color-ink-muted-48)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{seq2(s.package_seq)}</Box>
+                       <Box sx={{ width: 26, height: 26, borderRadius: "7px", bgcolor: "var(--color-canvas-parchment)", color: "var(--color-ink-muted-48)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "var(--text-fine)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{seq2(s.package_seq)}</Box>
                        <Box>
                            <Typography variant="subtitle2">{s.item_type_desc}</Typography>
-                           <Typography variant="caption" sx={{ color: ITEM_STATES[s.state].color, fontWeight: 600 }}>
+                           {/* State in words, its colour on a dot (amber text would fail contrast). */}
+                           <Typography variant="caption" sx={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                               <Box component="span" aria-hidden sx={{ width: 6, height: 6, borderRadius: "var(--r-pill)", bgcolor: ITEM_STATES[s.state].color }} />
                                {s.state_label}{s.station_name ? ` · ${s.station_name}` : ""}
                            </Typography>
                        </Box>
@@ -362,11 +389,10 @@ function ItemCard({
            )}
         </Menu>
 
-        {/* Action Button — always visible; ghost green when done */}
+        {/* Action — the row's CTA; a finished row shows its status instead */}
         {isActionable ? (
             <Button
-                className="action-button"
-                variant="contained"
+                className="tst-cta"
                 onClick={async () => {
                   if (isWaiting) {
                     // start-test is the only call that flips the item to "in
@@ -377,7 +403,7 @@ function ItemCard({
                       await onStartTest(item.item_id);
                     } catch (err) {
                       onRefresh();
-                      alert(err instanceof Error ? err.message : "לא ניתן להתחיל בדיקה — ייתכן שפריט זה כבר נתפס על ידי עובד אחר.");
+                      onStartError(err instanceof Error ? err.message : START_FAILED_ITEM);
                       return;
                     }
                     if (hasWizard) {
@@ -390,44 +416,15 @@ function ItemCard({
                     onAddTestResult(item);
                   }
                 }}
-                startIcon={<PlayArrowRoundedIcon sx={{ fontSize: 16 }} />}
-                sx={{
-                  height: 44,
-                  width: 120,
-                  flexShrink: 0,
-                  borderRadius: "11px",
-                  fontWeight: 600,
-                  fontSize: 14.5,
-                  gap: "7px",
-                  padding: 0,
-                  justifyContent: "center",
-                  whiteSpace: "nowrap",
-                }}
+                startIcon={<PlayArrowRoundedIcon sx={{ fontSize: 16 }} aria-hidden />}
             >
               {isWaiting ? (item.current_status === 4 ? "התחל מחקר" : "התחל בדיקה") : "המשך בדיקה"}
             </Button>
         ) : (
-            <Button
-                className="action-button"
-                variant="outlined"
-                disabled
-                sx={{
-                  height: 44,
-                  width: 120,
-                  flexShrink: 0,
-                  borderRadius: "11px",
-                  fontWeight: 600,
-                  fontSize: 14.5,
-                  padding: 0,
-                  justifyContent: "center",
-                  border: "1px solid color-mix(in srgb, var(--color-status-approved) 30%, transparent)",
-                  bgcolor: "color-mix(in srgb, var(--color-status-approved) 7%, transparent)",
-                  color: "var(--color-success-ink)",
-                  opacity: 1,
-                }}
-            >
+            <Box className="tst-cta-done">
+              <CheckCircleOutlineIcon sx={{ fontSize: 18 }} aria-hidden />
               הושלם
-            </Button>
+            </Box>
         )}
       </Box>
   );
@@ -443,12 +440,15 @@ function PackageQueueEntry({
   onAddTestResult,
   onStartTest,
   onRefresh,
+  onStartError,
 }: {
   item: ItemRow;
   kind: "open" | "close";
   onAddTestResult: (item: ItemRow) => void;
   onStartTest: (itemId: number) => Promise<void>;
   onRefresh: () => void;
+  /** Shows a start-test failure in the page's error toast. */
+  onStartError: (message: string) => void;
 }) {
   const isInTest = item.current_status === 1;
   const elapsed = useElapsedTime(isInTest ? item.processing_start_time : item.queue_start_time);
@@ -468,7 +468,7 @@ function PackageQueueEntry({
           await onStartTest(item.item_id);
         } catch (err) {
           onRefresh();
-          alert(err instanceof Error ? err.message : "לא ניתן להתחיל את המארז — ייתכן שהוא כבר נתפס על ידי עובד אחר.");
+          onStartError(err instanceof Error ? err.message : START_FAILED_PACKAGE);
           return;
         } finally {
           setStarting(false);
@@ -482,22 +482,22 @@ function PackageQueueEntry({
 // --- "ממתין לפריטי המארז" banner above a closing station's queue ---
 function BlockedPackagesBanner({ packages }: { packages: PackageView[] }) {
   return (
-    <Box sx={{ mb: "18px", border: "1px solid var(--color-warning-border)", bgcolor: "var(--color-warning-bg)", borderRadius: "14px", padding: "14px 18px" }}>
-      <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: "var(--color-warning-ink)" }}>
+    <Box role="status" sx={{ mb: "18px", border: "1px solid var(--color-warning-border)", bgcolor: "var(--color-warning-bg)", borderRadius: "var(--r-md)", padding: "14px 18px" }}>
+      <Typography sx={{ fontSize: "var(--text-body)", fontWeight: 700, color: "var(--color-warning-ink)" }}>
         {packages.length === 1 ? "מארז אחד ממתין לפריטים לפני הסגירה" : `${packages.length} מארזים ממתינים לפריטים לפני הסגירה`}
       </Typography>
-      <Typography sx={{ fontSize: 12.5, color: "var(--color-warning-ink)", mt: "2px" }}>
+      <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-warning-ink)", mt: "2px" }}>
         המארז ייכנס לתור כשכל הפריטים שלו יסיימו את המסלול. הפריטים החסרים ומיקומם:
       </Typography>
       <Box sx={{ display: "flex", flexDirection: "column", gap: "8px", mt: "12px" }}>
         {packages.map((p) => (
-          <Box key={p.item_id} sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", bgcolor: "var(--color-canvas)", border: "1px solid var(--color-warning-border)", borderRadius: "10px", padding: "9px 12px" }}>
-            <PackageIdText id={p.item_id} size={13.5} headColor="var(--color-ink)" />
-            <Typography sx={{ fontSize: 13, fontWeight: 600, color: "var(--color-ink)" }}>{p.item_type_desc}</Typography>
-            <Typography sx={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>{p.customer_name ?? p.customer_code ?? ""}</Typography>
+          <Box key={p.item_id} sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", bgcolor: "var(--color-canvas)", border: "1px solid var(--color-warning-border)", borderRadius: "var(--r-sm)", padding: "9px 12px" }}>
+            <PackageIdText id={p.item_id} size={14} headColor="var(--color-ink)" />
+            <Typography sx={{ fontSize: "var(--text-small)", fontWeight: 600, color: "var(--color-ink)" }}>{p.item_type_desc}</Typography>
+            <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>{p.customer_name ?? p.customer_code ?? ""}</Typography>
             <Box sx={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginInlineStart: "auto" }}>
               {p.blocked_by.map((b) => (
-                <Box key={b.item_id} sx={{ fontSize: 12, color: "var(--color-warning-ink)", bgcolor: "var(--color-warning-bg)", border: "1px solid var(--color-warning-border)", borderRadius: "9999px", padding: "3px 10px", whiteSpace: "nowrap" }}>
+                <Box key={b.item_id} sx={{ fontSize: "var(--text-fine)", color: "var(--color-warning-ink)", bgcolor: "var(--color-warning-bg)", border: "1px solid var(--color-warning-border)", borderRadius: "var(--r-pill)", padding: "3px 10px", whiteSpace: "nowrap" }}>
                   {seq2(b.package_seq)} · {b.item_type_desc} · {b.station_name ?? "במסלול"}
                 </Box>
               ))}
@@ -534,15 +534,15 @@ function SummaryTile({
   valueColor?: string;
 }) {
   return (
-    <Box sx={{ bgcolor: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "16px", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px" }}>
-      <Box sx={{ width: 44, height: 44, flexShrink: 0, borderRadius: "12px", bgcolor: iconBg, color: iconColor, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <Box sx={{ bgcolor: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "var(--r-card)", padding: "16px 18px", display: "flex", alignItems: "center", gap: "14px" }}>
+      <Box aria-hidden sx={{ width: 44, height: 44, flexShrink: 0, borderRadius: "var(--r-md)", bgcolor: iconBg, color: iconColor, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1, color: valueColor, fontVariantNumeric: "tabular-nums" }}>
+        <Typography sx={{ fontSize: "var(--text-kpi)", fontWeight: 700, letterSpacing: "var(--ls-display)", lineHeight: 1, color: valueColor, fontVariantNumeric: "tabular-nums" }}>
           {value}
         </Typography>
-        <Typography sx={{ fontSize: 13, color: "var(--color-ink-muted-48)", mt: "5px" }}>{label}</Typography>
+        <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", mt: "5px" }}>{label}</Typography>
       </Box>
     </Box>
   );
@@ -577,6 +577,15 @@ function TestingPageView() {
   const [stationTypesLoading, setStationTypesLoading] = React.useState(false);
   const [stationsLoading, setStationsLoading] = React.useState(false);
   const [itemsLoading, setItemsLoading] = React.useState(false);
+  // Which station the `items` on screen belong to (null = none yet). While a
+  // newly picked station's queue is on its way the board shows skeletons and
+  // the counts "—", not the previous station's list; a refresh of the SAME
+  // station keeps its list on screen (ST-7: no flash, no lost scroll).
+  const [itemsFor, setItemsFor] = React.useState<number | null>(null);
+  // A failed queue load is an error with "נסה שוב", never an empty queue (ST-1).
+  const [itemsError, setItemsError] = React.useState<string | null>(null);
+  // Start-test failures go to the page's error toast, not alert() (ST-13).
+  const [startError, setStartError] = React.useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [selectedItem, setSelectedItem] = React.useState<ItemRow | null>(null);
   // Tracks whether the currently-open test dialog actually submitted a result.
@@ -725,6 +734,7 @@ function TestingPageView() {
     model?: string | null;
   } | null>(null);
   const scanTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanInputRef = React.useRef<HTMLInputElement>(null);
   // When a scan flow changes stationType, we hold the pending station here so the
   // stationType effect doesn't blow it away with setSelectedStation(null).
   const pendingScanStationRef = React.useRef<TestStation | null>(null);
@@ -891,7 +901,7 @@ function TestingPageView() {
   }, [selectedStationType]);
 
   React.useEffect(() => {
-    if (!selectedStation) { setItems([]); return; }
+    if (!selectedStation) { setItems([]); setItemsFor(null); setItemsError(null); return; }
     // Switching stations drops a now-meaningless filter — unless this is the
     // station a ?item= deep link targeted, whose filter is the whole point.
     const pendingItem = pendingLinkItemRef.current;
@@ -900,15 +910,16 @@ function TestingPageView() {
       pendingItem && selectedStation.test_station_id === pendingLinkStationRef.current ? pendingItem : "",
     );
     let cancelled = false;
+    const stationId = selectedStation.test_station_id;
     (async () => {
       setItemsLoading(true);
       try {
         const res = await apiFetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
-        if (!cancelled) setItems(Array.isArray(data) ? data : []);
+        if (!cancelled) { setItems(Array.isArray(data) ? data : []); setItemsFor(stationId); setItemsError(null); }
       } catch (error) {
-        if (!cancelled) setItems([]);
+        if (!cancelled) { setItems([]); setItemsFor(stationId); setItemsError(QUEUE_LOAD_FAILED); }
       } finally {
         if (!cancelled) setItemsLoading(false);
       }
@@ -1005,6 +1016,24 @@ function TestingPageView() {
     }
   }, [stationTypes, selectedStationType, stations]);
 
+  // After a failed scan the field keeps focus with its text selected, so the
+  // next hardware scan replaces it instead of typing into nothing (ST-4).
+  React.useEffect(() => {
+    if (!scannerOpen || scanLoading || !scanError) return;
+    const el = scanInputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [scannerOpen, scanLoading, scanError]);
+
+  // One error toast for the page: a start-test failure, or a scan that failed
+  // while the scan dialog was closed (a scan from the global listener).
+  const toastMessage = startError ?? (!scannerOpen ? scanError : null);
+  // Stable, so the toast's auto-hide timer isn't reset by the page's 1s clock.
+  const closeToast = React.useCallback(() => {
+    setStartError(null);
+    if (!scannerOpen) setScanError(null);
+  }, [scannerOpen]);
 
   const handleStartTest = async (itemId: number) => {
     if (!selectedStation) throw new Error("Station not selected");
@@ -1048,6 +1077,7 @@ function TestingPageView() {
 
   const handleRefreshItems = async () => {
     if (!selectedStation) return;
+    const stationId = selectedStation.test_station_id;
     setItemsLoading(true);
     fetchCompletedToday(selectedStation.test_station_id);
     fetchBlockedPackages(selectedStation.test_station_id, packageLevel);
@@ -1056,9 +1086,13 @@ function TestingPageView() {
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
+      setItemsFor(stationId);
+      setItemsError(null);
     } catch (error) {
       console.error("Error loading items:", error);
       setItems([]);
+      setItemsFor(stationId);
+      setItemsError(QUEUE_LOAD_FAILED);
     } finally {
       setItemsLoading(false);
     }
@@ -1159,6 +1193,11 @@ function TestingPageView() {
     [stationTypes]
   );
 
+  // The queue on screen belongs to another (or no) station yet: skeletons and
+  // "—" until the selected station's queue answers.
+  const itemsStale = selectedStation != null && itemsFor !== selectedStation.test_station_id;
+  const hasWizard = selectedStationType != null && hasStartTestDialog(selectedStationType.id);
+
   return (
     <Box
       sx={{
@@ -1175,7 +1214,7 @@ function TestingPageView() {
           hasStation={!!selectedStation}
           stationName={selectedStation?.test_station_desc ?? null}
           stationTypeName={selectedStationType?.name ?? null}
-          itemCount={filteredItems.length}
+          itemCount={itemsStale ? null : filteredItems.length}
           countNoun={packageLevel ? "מארזים" : "פריטים"}
           allStations={allStations}
           typeNameById={typeNameById}
@@ -1189,166 +1228,145 @@ function TestingPageView() {
         />
 
         {legacyNotice && (
-          <Container maxWidth="xl" sx={{ mt: 2 }}>
-            <Box role="status" dir="rtl" sx={{ display: "flex", alignItems: "center", gap: 1.5, px: "14px", py: "10px", borderRadius: "10px", bgcolor: "var(--color-warning-bg)", border: "1px solid var(--color-warning-border)", color: "var(--color-warning-ink)", fontSize: 14 }}>
-              <span style={{ flex: 1 }}>{legacyNotice}</span>
-              <button type="button" onClick={() => setLegacyNotice(null)} aria-label="סגור" style={{ border: 0, background: "transparent", color: "inherit", fontSize: 18, lineHeight: 1, cursor: "pointer" }}>×</button>
-            </Box>
-          </Container>
+          <div className="tst-frame" style={{ marginTop: 16 }}>
+            {/* Dismiss as a 32px IconButton: the Alert's own × is 24px, small for a station touchscreen. */}
+            <Alert
+              severity="warning"
+              action={<IconButton size="small" title="סגירת ההודעה" onClick={() => setLegacyNotice(null)} sx={{ marginBlock: "-6px", marginInlineEnd: "-6px" }}><ClearIcon fontSize={16} aria-hidden /></IconButton>}
+            >
+              {legacyNotice}
+            </Alert>
+          </div>
         )}
 
-        {/* Main Content Area */}
-        <Container maxWidth="xl" sx={{ mt: 3, mb: 5, flex: 1 }}>
+        {/* Main Content Area — same 1280 frame as the dock */}
+        <div className="tst-frame" style={{ marginTop: 24, marginBottom: 40, flex: 1 }}>
             {selectedStation ? (
-                <Fade in={true}>
-                    <Box>
-                        {/* Summary strip — station overview KPIs */}
-                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", mb: "22px" }}>
-                            <SummaryTile
-                                icon={<QueueIcon sx={{ fontSize: 21 }} />}
-                                iconBg="color-mix(in srgb, var(--color-status-late) 10%, transparent)"
-                                iconColor="var(--color-status-late)"
-                                value={waitingCount}
-                                label="בתור"
-                            />
-                            <SummaryTile
-                                icon={<ScienceIcon sx={{ fontSize: 21 }} />}
-                                iconBg="color-mix(in srgb, var(--color-primary) 10%, transparent)"
-                                iconColor="var(--color-primary)"
-                                value={inTestCount}
-                                label="בבדיקה"
-                            />
-                            <SummaryTile
-                                icon={<CheckIcon sx={{ fontSize: 21 }} />}
-                                iconBg="color-mix(in srgb, var(--color-status-approved) 10%, transparent)"
-                                iconColor="var(--color-status-approved)"
-                                value={completedToday ?? "—"}
-                                label="הושלמו היום"
-                            />
-                            <SummaryTile
-                                icon={<AccessTimeIcon sx={{ fontSize: 21 }} />}
-                                iconBg="color-mix(in srgb, var(--color-status-late) 10%, transparent)"
-                                iconColor="var(--color-status-late)"
-                                value={longestWait ? longestWait.slice(0, 5) : "—"}
-                                label="המתנה הארוכה ביותר"
-                                valueColor="var(--color-status-late)"
-                            />
-                        </Box>
+                <Box>
+                    {/* Summary strip — station overview KPIs */}
+                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", mb: "22px" }}>
+                        <SummaryTile
+                            icon={<QueueIcon sx={{ fontSize: 21 }} />}
+                            iconBg="var(--color-warning-bg)"
+                            iconColor="var(--color-status-late)"
+                            value={itemsStale ? "—" : waitingCount}
+                            label="בתור"
+                        />
+                        <SummaryTile
+                            icon={<ScienceIcon sx={{ fontSize: 21 }} />}
+                            iconBg="var(--color-primary-soft)"
+                            iconColor="var(--color-primary)"
+                            value={itemsStale ? "—" : inTestCount}
+                            label="בבדיקה"
+                        />
+                        <SummaryTile
+                            icon={<CheckIcon sx={{ fontSize: 21 }} />}
+                            iconBg="var(--color-success-bg)"
+                            iconColor="var(--color-status-approved)"
+                            value={completedToday ?? "—"}
+                            label="הושלמו היום"
+                        />
+                        <SummaryTile
+                            icon={<AccessTimeIcon sx={{ fontSize: 21 }} />}
+                            iconBg="var(--color-warning-bg)"
+                            iconColor="var(--color-status-late)"
+                            value={!itemsStale && longestWait ? longestWait.slice(0, 5) : "—"}
+                            label="המתנה הארוכה ביותר"
+                            valueColor="var(--color-warning-ink)"
+                        />
+                    </Box>
 
-                        {/* Toolbar */}
-                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", mb: "18px" }}>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                                <Typography sx={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.3px", color: "var(--color-ink)" }}>
-                                    {packageLevel ? "מארזים בתור" : "התור לבדיקה"}
-                                </Typography>
-                                <Typography sx={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>
-                                    ממוינים לפי זמן המתנה — הממתין ביותר קודם
-                                </Typography>
-                            </Box>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                <TextField
-                                    placeholder={packageLevel ? "סינון לפי מק״ט, מזהה או לקוח" : "סינון לפי מק״ט, סריאלי או מזהה"}
-                                    size="small"
-                                    value={filterMakat}
-                                    onChange={(e) => setFilterMakat(e.target.value)}
-                                    InputProps={{
-                                        startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16, color: "var(--color-ink-muted-48)" }} /></InputAdornment>,
-                                        endAdornment: filterMakat && (
-                                           <InputAdornment position="end">
-                                               <IconButton size="small" onClick={() => setFilterMakat("")}><ClearIcon fontSize="small"/></IconButton>
-                                           </InputAdornment>
-                                        )
-                                    }}
-                                    sx={{ width: 300, maxWidth: "56vw", height: 44, borderRadius: "11px", bgcolor: "var(--color-canvas)" }}
-                                />
-                                <Button
-                                   variant="outlined"
-                                   color="inherit"
-                                   startIcon={<HistoryIcon sx={{ fontSize: 17 }} />}
-                                   onClick={() => setHistoryDialogOpen(true)}
-                                   sx={{
-                                       height: 44,
-                                       borderRadius: "11px",
-                                       borderColor: "var(--color-border-strong)",
-                                       color: "var(--color-ink)",
-                                       fontWeight: 600,
-                                       gap: "7px",
-                                       whiteSpace: "nowrap",
-                                   }}
-                                >
-                                   היסטוריה
-                                </Button>
-                            </Box>
+                    {/* Toolbar */}
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", mb: "18px" }}>
+                        <Box sx={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
+                            <Typography component="h2" sx={{ m: 0, fontSize: "var(--text-lead)", fontWeight: 700, letterSpacing: "var(--ls-caption)", color: "var(--color-ink)" }}>
+                                {packageLevel ? "מארזים בתור" : "התור לבדיקה"}
+                            </Typography>
+                            <Typography component="span" sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
+                                ממוינים לפי זמן המתנה — הממתין ביותר קודם
+                            </Typography>
+                            {/* A refresh over a list already on screen: a quiet note, not skeletons. */}
+                            <span role="status" className="tst-refreshing">
+                                {itemsLoading && !itemsStale && (
+                                    <>
+                                        <CircularProgress size={12} aria-hidden />
+                                        מתעדכן…
+                                    </>
+                                )}
+                            </span>
                         </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <TextField
+                                aria-label={packageLevel ? "סינון המארזים בתור" : "סינון הפריטים בתור"}
+                                placeholder={packageLevel ? "סינון לפי מק״ט, מזהה או לקוח" : "סינון לפי מק״ט, סריאלי או מזהה"}
+                                size="small"
+                                value={filterMakat}
+                                onChange={(e) => setFilterMakat(e.target.value)}
+                                wrapClassName="tst-filter"
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16 }} aria-hidden /></InputAdornment>,
+                                    endAdornment: filterMakat && (
+                                       <InputAdornment position="end">
+                                           <IconButton size="small" title="ניקוי הסינון" onClick={() => setFilterMakat("")}><ClearIcon fontSize={18} aria-hidden /></IconButton>
+                                       </InputAdornment>
+                                    )
+                                }}
+                            />
+                            <Button
+                               variant="outlined"
+                               color="inherit"
+                               className="tst-toolbar-btn"
+                               startIcon={<HistoryIcon sx={{ fontSize: 17 }} aria-hidden />}
+                               onClick={() => setHistoryDialogOpen(true)}
+                            >
+                               היסטוריה
+                            </Button>
+                        </Box>
+                    </Box>
 
-                        {/* Items — row strips (queue rank + step progress) */}
-                        {itemsLoading ? (
-                            <Box sx={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                {[1, 2, 3, 4].map((i) => (
-                                    <Skeleton key={i} variant="rectangular" height={70} sx={{ borderRadius: "14px" }} />
-                                ))}
-                            </Box>
-                        ) : packageLevel ? (
-                            <Box sx={{ pb: 4 }}>
-                                {blockedPackages.length > 0 && <BlockedPackagesBanner packages={blockedPackages} />}
-                                {orderedItems.some((it) => it.is_package && it.package) ? (
-                                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
-                                        {orderedItems.filter((it) => it.is_package && it.package).map((item) => (
-                                            <PackageQueueEntry
-                                                key={item.item_id}
-                                                item={item}
-                                                kind={packageKindOf(item)}
-                                                onAddTestResult={handleAddTestResult}
-                                                onStartTest={handleStartTest}
-                                                onRefresh={handleRefreshItems}
-                                            />
-                                        ))}
-                                    </Box>
-                                ) : (
-                                    <Box sx={{ textAlign: "center", py: "64px", color: "var(--color-ink-muted-48)" }}>
-                                        <Box sx={{ width: 64, height: 64, borderRadius: "9999px", bgcolor: "var(--color-canvas)", border: "1px solid var(--color-hairline)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)", mb: "14px" }}>
-                                            <InventoryIcon sx={{ fontSize: 30 }} />
-                                        </Box>
-                                        <Typography sx={{ fontSize: 17, color: "var(--color-ink)", fontWeight: 600, mb: "6px" }}>
-                                            אין מארזים בתור לעמדה זו.
-                                        </Typography>
-                                        <Typography sx={{ fontSize: 14 }}>
-                                            סרוק מדבקת קופסה לאיתור מארז.
-                                        </Typography>
-                                    </Box>
-                                )}
-                                {/* Loose (pre-package) items that still route through this
-                                    station type keep the row layout underneath the boxes. */}
-                                {orderedItems.some((it) => !it.is_package) && (
-                                    <Box sx={{ display: "flex", flexDirection: "column", gap: "10px", mt: "18px" }}>
-                                        {orderedItems.filter((it) => !it.is_package).map((item, index) => (
-                                            <ItemCard
-                                                key={`${item.item_id}-${index}`}
-                                                item={item}
-                                                rank={index + 1}
-                                                onAddTestResult={handleAddTestResult}
-                                                onStartTest={handleStartTest}
-                                                onRefresh={handleRefreshItems}
-                                                highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
-                                            />
-                                        ))}
-                                    </Box>
-                                )}
-                            </Box>
-                        ) : orderedItems.length > 0 ? (
-                            <Box sx={{ pb: 4 }}>
-                                {/* Column headers */}
-                                <Box sx={{ display: "flex", alignItems: "center", gap: "15px", padding: "0 16px 12px", fontSize: 12, fontWeight: 700, color: "var(--color-ink-muted-48)" }}>
-                                    <Box sx={{ width: 5, flexShrink: 0 }} />
-                                    <Box sx={{ width: 38, flexShrink: 0, textAlign: "center" }}>תור</Box>
-                                    <Box sx={{ flex: 1 }}>מזהה · דגם</Box>
-                                    <Box sx={{ width: 150, flexShrink: 0 }}>שלב</Box>
-                                    <Box sx={{ minWidth: 82, flexShrink: 0, textAlign: "center" }}>זמן</Box>
-                                    <Box sx={{ width: 40, flexShrink: 0 }} />
-                                    <Box sx={{ width: 120, flexShrink: 0 }} />
+                    {/* Items — row strips (queue rank + step progress) */}
+                    {itemsStale ? (
+                        <Box aria-hidden sx={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                            {[1, 2, 3, 4].map((i) => (
+                                <Skeleton key={i} variant="rectangular" height={70} sx={{ borderRadius: "14px" }} />
+                            ))}
+                        </Box>
+                    ) : itemsError ? (
+                        <Alert
+                            severity="error"
+                            action={<Button size="small" variant="text" onClick={handleRefreshItems} disabled={itemsLoading}>נסה שוב</Button>}
+                        >
+                            {itemsError}
+                        </Alert>
+                    ) : packageLevel ? (
+                        <Box sx={{ pb: 4 }}>
+                            {blockedPackages.length > 0 && <BlockedPackagesBanner packages={blockedPackages} />}
+                            {orderedItems.some((it) => it.is_package && it.package) ? (
+                                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
+                                    {orderedItems.filter((it) => it.is_package && it.package).map((item) => (
+                                        <PackageQueueEntry
+                                            key={item.item_id}
+                                            item={item}
+                                            kind={packageKindOf(item)}
+                                            onAddTestResult={handleAddTestResult}
+                                            onStartTest={handleStartTest}
+                                            onRefresh={handleRefreshItems}
+                                            onStartError={setStartError}
+                                        />
+                                    ))}
                                 </Box>
-                                <Box sx={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                    {orderedItems.map((item, index) => (
+                            ) : (
+                                <EmptyState
+                                    icon={<InventoryIcon sx={{ fontSize: 30 }} aria-hidden />}
+                                    title="אין מארזים בתור לעמדה זו."
+                                    hint="סרוק מדבקת קופסה לאיתור מארז."
+                                />
+                            )}
+                            {/* Loose (pre-package) items that still route through this
+                                station type keep the row layout underneath the boxes. */}
+                            {orderedItems.some((it) => !it.is_package) && (
+                                <Box sx={{ display: "flex", flexDirection: "column", gap: "10px", mt: "18px" }}>
+                                    {orderedItems.filter((it) => !it.is_package).map((item, index) => (
                                         <ItemCard
                                             key={`${item.item_id}-${index}`}
                                             item={item}
@@ -1356,40 +1374,59 @@ function TestingPageView() {
                                             onAddTestResult={handleAddTestResult}
                                             onStartTest={handleStartTest}
                                             onRefresh={handleRefreshItems}
+                                            onStartError={setStartError}
                                             highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
-                                            priority={priorityItemId != null && Number(item.item_id) === Number(priorityItemId)}
-                                            hasWizard={selectedStationType != null && hasStartTestDialog(selectedStationType.id)}
                                         />
                                     ))}
                                 </Box>
+                            )}
+                        </Box>
+                    ) : orderedItems.length > 0 ? (
+                        <Box sx={{ pb: 4 }}>
+                            {/* Column headers */}
+                            <Box aria-hidden sx={{ display: "flex", alignItems: "center", gap: "15px", padding: "0 16px 12px", fontSize: "var(--text-fine)", fontWeight: 700, color: "var(--color-ink-muted-48)" }}>
+                                <Box sx={{ width: 38, flexShrink: 0, textAlign: "center" }}>תור</Box>
+                                <Box sx={{ flex: 1 }}>מזהה · דגם</Box>
+                                <Box sx={{ width: 150, flexShrink: 0 }}>שלב</Box>
+                                <Box sx={{ minWidth: 82, flexShrink: 0, textAlign: "center" }}>זמן</Box>
+                                <Box sx={{ width: 40, flexShrink: 0 }} />
+                                <Box sx={{ width: 120, flexShrink: 0 }} />
                             </Box>
-                        ) : (
-                            <Box sx={{ textAlign: "center", py: "64px", color: "var(--color-ink-muted-48)" }}>
-                                <Box sx={{ width: 64, height: 64, borderRadius: "9999px", bgcolor: "var(--color-canvas)", border: "1px solid var(--color-hairline)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)", mb: "14px" }}>
-                                    <InventoryIcon sx={{ fontSize: 30 }} />
-                                </Box>
-                                <Typography sx={{ fontSize: 17, color: "var(--color-ink)", fontWeight: 600, mb: "6px" }}>
-                                    אין פריטים תואמים בעמדה זו.
-                                </Typography>
-                                <Typography sx={{ fontSize: 14 }}>
-                                    נסה לשנות את הסינון, או המתן לפריט הבא.
-                                </Typography>
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                {orderedItems.map((item, index) => (
+                                    <ItemCard
+                                        key={`${item.item_id}-${index}`}
+                                        item={item}
+                                        rank={index + 1}
+                                        onAddTestResult={handleAddTestResult}
+                                        onStartTest={handleStartTest}
+                                        onRefresh={handleRefreshItems}
+                                        onStartError={setStartError}
+                                        highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
+                                        priority={priorityItemId != null && Number(item.item_id) === Number(priorityItemId)}
+                                        hasWizard={hasWizard}
+                                    />
+                                ))}
                             </Box>
-                        )}
-                    </Box>
-                </Fade>
+                        </Box>
+                    ) : (
+                        <EmptyState
+                            icon={<InventoryIcon sx={{ fontSize: 30 }} aria-hidden />}
+                            title="אין פריטים תואמים בעמדה זו."
+                            hint="נסה לנקות את הסינון, או סרוק ברקוד לאיתור פריט."
+                        />
+                    )}
+                </Box>
             ) : (
-                <Stack alignItems="center" justifyContent="center" sx={{ minHeight: "60vh", opacity: 0.8 }}>
-                    <PrecisionManufacturingIcon sx={{ fontSize: 100, color: "var(--color-hairline)", mb: 3 }} />
-                    <Typography variant="h4" fontWeight="800" color="text.secondary" gutterBottom>
-                        בחר עמדת בדיקה
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary">
-                        יש לבחור סוג עמדה ולאחר מכן עמדה ספציפית כדי לראות את הפריטים
-                    </Typography>
-                </Stack>
+                // No station yet (artboard "no station"). The dock panel above
+                // stays open in this state, so "למעלה" points at real controls.
+                <EmptyState
+                    icon={<ScienceIcon sx={{ fontSize: 30 }} aria-hidden />}
+                    title="בחר עמדה כדי להתחיל"
+                    hint="בחר עמדה ועובד למעלה, או סרוק ברקוד של פריט."
+                />
             )}
-        </Container>
+        </div>
 
         {/* Dialogs — the per-type finish/report dialog, resolved from the registry. */}
         {(() => {
@@ -1431,50 +1468,43 @@ function TestingPageView() {
         <Dialog
             open={nextStationDialogOpen}
             onClose={() => setNextStationDialogOpen(false)}
-            PaperProps={{ sx: { borderRadius: 3, p: 2, minWidth: 400 } }}
+            maxWidth="xs"
+            fullWidth
         >
-            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CheckCircleOutlineIcon color="success" fontSize="large" />
-                <Typography variant="h6" component="span" fontWeight="bold">
+            <DialogTitle onClose={() => setNextStationDialogOpen(false)}>
+                <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                    <CheckCircleOutlineIcon fontSize={24} color="success" aria-hidden />
                     {nextStationInfo?.finishedFromResearch ? "המסלול הסתיים" : "הבדיקה הושלמה בהצלחה!"}
-                </Typography>
+                </Box>
             </DialogTitle>
             <DialogContent>
-                <Stack spacing={2} sx={{ mt: 1 }}>
-                    {nextStationInfo?.finishedFromResearch ? (
-                         <Box sx={{ p: 2, bgcolor: alpha("var(--color-status-approved)", 0.1), borderRadius: 2 }}>
-                             <Typography variant="body1" fontWeight="600" color="success.main">
-                                 העובד סיים את המסלול בשלב {nextStationInfo?.finishedAtStep}
-                             </Typography>
-                         </Box>
-                    ) : nextStationInfo?.isLastStation ? (
-                         <Box sx={{ p: 2, bgcolor: alpha("var(--color-status-approved)", 0.1), borderRadius: 2 }}>
-                             <Typography variant="body1" fontWeight="600" color="success.main">
-                                 זהו השלב האחרון בתהליך. הפריט סיים את כל הבדיקות.
-                             </Typography>
-                         </Box>
-                    ) : (
-                        <Box>
-                            <Typography variant="body1" gutterBottom>התחנה הבאה בתהליך:</Typography>
-                            <Card variant="outlined" sx={{ p: 2, bgcolor: "var(--color-surface-pearl)", borderColor: "primary.main" }}>
-                                <Stack direction="row" alignItems="center" spacing={2}>
-                                    <TrendingUpIcon color="primary" />
-                                    <Box>
-                                        <Typography variant="subtitle1" fontWeight="bold">
-                                            {nextStationInfo?.nextStation?.testStationDesc || "לא ידוע"}
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            שלב {nextStationInfo?.nextStation?.routeStep}
-                                        </Typography>
-                                    </Box>
-                                </Stack>
-                            </Card>
+                {nextStationInfo?.finishedFromResearch ? (
+                    <Typography sx={{ fontSize: "var(--text-body)" }}>
+                        העובד סיים את המסלול בשלב {nextStationInfo?.finishedAtStep}
+                    </Typography>
+                ) : nextStationInfo?.isLastStation ? (
+                    <Typography sx={{ fontSize: "var(--text-body)" }}>
+                        זהו השלב האחרון בתהליך. הפריט סיים את כל הבדיקות.
+                    </Typography>
+                ) : (
+                    <>
+                        <Typography sx={{ fontSize: "var(--text-body)", color: "var(--color-ink-muted-48)" }}>התחנה הבאה בתהליך:</Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: "12px", mt: "10px" }}>
+                            <TrendingUpIcon fontSize={22} htmlColor="var(--color-ink-muted-48)" aria-hidden />
+                            <Box>
+                                <Typography sx={{ fontSize: "var(--text-lead)", fontWeight: 600 }}>
+                                    {nextStationInfo?.nextStation?.testStationDesc || "לא ידוע"}
+                                </Typography>
+                                <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
+                                    שלב {nextStationInfo?.nextStation?.routeStep}
+                                </Typography>
+                            </Box>
                         </Box>
-                    )}
-                </Stack>
+                    </>
+                )}
             </DialogContent>
             <DialogActions>
-                <Button onClick={() => setNextStationDialogOpen(false)} variant="contained" size="large" sx={{ borderRadius: 2, px: 4 }}>
+                <Button onClick={() => setNextStationDialogOpen(false)}>
                     אישור
                 </Button>
             </DialogActions>
@@ -1484,24 +1514,25 @@ function TestingPageView() {
         <Dialog
             open={researchDialogOpen}
             onClose={() => setResearchDialogOpen(false)}
-             PaperProps={{ sx: { borderRadius: 3, p: 2, minWidth: 400 } }}
+            maxWidth="xs"
+            fullWidth
         >
-             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ScienceIcon color="warning" fontSize="large" />
-                <Typography variant="h6" component="span" fontWeight="bold">הועבר לחקר</Typography>
+            <DialogTitle onClose={() => setResearchDialogOpen(false)}>
+                <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                    <ScienceIcon fontSize={24} color="warning" aria-hidden />
+                    הועבר לחקר
+                </Box>
             </DialogTitle>
             <DialogContent>
-                <Typography variant="body1" gutterBottom>
-                     הפריט הועבר להמשך טיפול בעמדת חקר:
+                <Typography sx={{ fontSize: "var(--text-body)", color: "var(--color-ink-muted-48)" }}>
+                    הפריט הועבר להמשך טיפול בעמדת חקר:
                 </Typography>
-                <Card variant="outlined" sx={{ p: 2, mt: 1, bgcolor: alpha("var(--color-status-late)", 0.05), borderColor: "var(--color-status-late)" }}>
-                     <Typography variant="subtitle1" fontWeight="bold" color="var(--color-warning-ink)">
-                         {researchStationInfo?.stationDesc}
-                     </Typography>
-                </Card>
+                <Typography sx={{ fontSize: "var(--text-lead)", fontWeight: 600, mt: "10px" }}>
+                    {researchStationInfo?.stationDesc}
+                </Typography>
             </DialogContent>
             <DialogActions>
-                <Button onClick={() => setResearchDialogOpen(false)} variant="contained" color="warning" size="large" sx={{ borderRadius: 2, px: 4 }}>
+                <Button onClick={() => setResearchDialogOpen(false)} color="warning">
                     אישור
                 </Button>
             </DialogActions>
@@ -1511,53 +1542,40 @@ function TestingPageView() {
         <Dialog
             open={finishedDialogOpen}
             onClose={() => setFinishedDialogOpen(false)}
-            PaperProps={{ sx: { borderRadius: 3, p: 2, minWidth: 400 } }}
+            maxWidth="xs"
+            fullWidth
         >
-            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CheckCircleOutlineIcon color="success" fontSize="large" />
-                <Typography variant="h6" component="span" fontWeight="bold">
+            <DialogTitle onClose={() => setFinishedDialogOpen(false)}>
+                <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                    <CheckCircleOutlineIcon fontSize={24} color="success" aria-hidden />
                     המסלול הסתיים
-                </Typography>
+                </Box>
             </DialogTitle>
             <DialogContent>
-                <Stack spacing={2} sx={{ mt: 1 }}>
-                    <Box sx={{ p: 2, bgcolor: alpha("var(--color-status-approved)", 0.1), borderRadius: 2 }}>
-                        <Typography variant="body1" fontWeight="600" color="success.main">
-                            פריט זה סיים את מסלול הבדיקות
+                <Typography sx={{ fontSize: "var(--text-body)" }}>
+                    פריט זה סיים את מסלול הבדיקות.
+                </Typography>
+                {finishedItemInfo && (
+                    // The scanned item's identity, as plain lines (no card in the dialog).
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", mt: "14px", pt: "14px", borderTop: "1px solid var(--color-hairline)" }}>
+                        <Typography sx={{ fontSize: "var(--text-lead)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                            #{finishedItemInfo.itemId}
                         </Typography>
+                        {finishedItemInfo.model && (
+                            <Typography sx={{ fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-48)" }}>
+                                מודל: {finishedItemInfo.model}
+                            </Typography>
+                        )}
+                        {finishedItemInfo.serialNo && (
+                            <Typography sx={{ fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-48)" }}>
+                                סריאלי: <bdi dir="ltr">{finishedItemInfo.serialNo}</bdi>
+                            </Typography>
+                        )}
                     </Box>
-                    {finishedItemInfo && (
-                        <Card variant="outlined" sx={{ p: 2, bgcolor: "var(--color-surface-pearl)" }}>
-                            <Stack spacing={1}>
-                                <Stack direction="row" alignItems="center" spacing={1}>
-                                    <QrCodeIcon fontSize="small" color="action" />
-                                    <Typography variant="subtitle1" fontWeight="bold">
-                                        #{finishedItemInfo.itemId}
-                                    </Typography>
-                                </Stack>
-                                {finishedItemInfo.model && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        מודל: {finishedItemInfo.model}
-                                    </Typography>
-                                )}
-                                {finishedItemInfo.serialNo && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        סריאלי: {finishedItemInfo.serialNo}
-                                    </Typography>
-                                )}
-                            </Stack>
-                        </Card>
-                    )}
-                </Stack>
+                )}
             </DialogContent>
             <DialogActions>
-                <Button
-                    onClick={() => setFinishedDialogOpen(false)}
-                    variant="contained"
-                    color="success"
-                    size="large"
-                    sx={{ borderRadius: 2, px: 4 }}
-                >
+                <Button onClick={() => setFinishedDialogOpen(false)} color="success">
                     אישור
                 </Button>
             </DialogActions>
@@ -1574,70 +1592,72 @@ function TestingPageView() {
             }}
             maxWidth="sm"
             fullWidth
-            PaperProps={{ sx: { borderRadius: 3 } }}
         >
-            <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <QrCodeScannerIcon color="primary" />
-                    <Typography variant="h6" component="span" fontWeight="bold">סריקת ברקוד פריט</Typography>
-                </Box>
-                <IconButton onClick={() => {
-                    if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-                    setScannerOpen(false);
-                    setScanError(null);
-                    setScanInput("");
-                }}>
-                    <CloseIcon />
-                </IconButton>
+            <DialogTitle onClose={() => {
+                if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+                setScannerOpen(false);
+                setScanError(null);
+                setScanInput("");
+            }}>
+                סריקת ברקוד פריט
             </DialogTitle>
             <DialogContent>
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, py: 3 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "16px", pt: "4px" }}>
                     {scanError && (
-                        <Alert severity="error" sx={{ width: "100%", boxSizing: "border-box" }}>
+                        <Alert severity="error">
                             {scanError}
                         </Alert>
                     )}
-                    <QrCodeScannerIcon sx={{ fontSize: 80, color: "text.secondary", opacity: 0.5 }} />
-                    <Typography variant="body1" color="text.secondary" textAlign="center">
-                        סרוק את הברקוד של הפריט או הזן את המזהה ידנית
+                    <Typography sx={{ fontSize: "var(--text-body)", color: "var(--color-ink-muted-48)" }}>
+                        סרוק את הברקוד של הפריט או הזן את המזהה ידנית ולחץ Enter.
                     </Typography>
+                    {/* Never disabled: a disabled field drops focus, and the next
+                        hardware scan would type into nothing. While a lookup runs
+                        it is read-only instead (ST-4). */}
                     <TextField
                         autoFocus
                         fullWidth
-                        size="medium"
-                        placeholder="המתנה לסריקה..."
+                        aria-label="ברקוד פריט"
+                        placeholder="ממתין לסריקה…"
                         value={scanInput}
-                        disabled={scanLoading}
+                        inputRef={scanInputRef}
+                        dir="ltr"
+                        wrapClassName="tst-scan-field"
+                        aria-busy={scanLoading || undefined}
+                        InputProps={{
+                            readOnly: scanLoading,
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <QrCodeIcon fontSize={20} aria-hidden />
+                                </InputAdornment>
+                            ),
+                        }}
                         onChange={(e) => {
                             const val = e.target.value;
                             setScanInput(val);
-                            // Hardware scanners type quickly then stop — debounce and auto-submit.
+                            // Enter submits. Fallback for a scanner set up without
+                            // an Enter suffix: submit after a pause long enough
+                            // that a person still typing isn't cut off.
                             if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
                             if (val.trim().length >= 1) {
                                 scanTimeoutRef.current = setTimeout(() => {
                                     handleBarcodeScan(val);
-                                }, 300);
+                                }, SCAN_IDLE_SUBMIT_MS);
                             }
                         }}
                         onKeyDown={(e) => {
-                            if (e.key === "Enter" && scanInput.trim()) {
+                            if (e.key === "Enter" && scanInput.trim() && !scanLoading) {
                                 if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
                                 handleBarcodeScan(scanInput);
                             }
-                        }}
-                        InputProps={{
-                            sx: { textAlign: "center", fontSize: "1.2rem" },
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <QrCodeIcon color="action" />
-                                </InputAdornment>
-                            ),
                         }}
                     />
                 </Box>
             </DialogContent>
             <DialogActions>
                 <Button
+                    variant="text"
+                    color="inherit"
                     onClick={() => {
                         if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
                         setScannerOpen(false);
@@ -1649,13 +1669,24 @@ function TestingPageView() {
                 </Button>
                 <Button
                     onClick={() => handleBarcodeScan(scanInput)}
-                    variant="contained"
-                    disabled={!scanInput.trim() || scanLoading}
+                    disabled={!scanInput.trim()}
+                    loading={scanLoading}
                 >
-                    {scanLoading ? "מאתר..." : "אישור"}
+                    {scanLoading ? "מאתר…" : "אישור"}
                 </Button>
             </DialogActions>
         </Dialog>
+
+        {/* The page's error toast (start-test failures, scans from the global listener). */}
+        <Snackbar open={!!toastMessage} autoHideDuration={8000} onClose={closeToast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+            <Alert
+                severity="error"
+                sx={{ minWidth: 320, maxWidth: 560, boxShadow: "var(--shadow-pop)" }}
+                action={<IconButton size="small" title="סגירת ההודעה" onClick={closeToast} sx={{ marginBlock: "-6px", marginInlineEnd: "-6px" }}><ClearIcon fontSize={16} aria-hidden /></IconButton>}
+            >
+                {toastMessage}
+            </Alert>
+        </Snackbar>
 
     </Box>
   );
