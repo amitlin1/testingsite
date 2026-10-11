@@ -7,11 +7,13 @@ import { sxToStyle, type SxInput } from "./sx";
 
 type Severity = "info" | "success" | "warning" | "error";
 
-const SEVERITY: Record<Severity, { color: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }> }> = {
-  info: { color: "var(--color-primary)", Icon: Info },
-  success: { color: "var(--color-status-approved)", Icon: CheckCircle2 },
-  warning: { color: "var(--color-status-late)", Icon: AlertTriangle },
-  error: { color: "var(--color-destructive)", Icon: XCircle },
+// A tinted band per severity: the icon carries the colour, the text stays ink.
+// (No coloured side stripe — the tint and the icon already say the severity.)
+const SEVERITY: Record<Severity, { color: string; bg: string; border: string; role: "alert" | "status"; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }> }> = {
+  info: { color: "var(--color-primary)", bg: "var(--color-primary-tint)", border: "var(--color-primary-border)", role: "status", Icon: Info },
+  success: { color: "var(--color-success-ink)", bg: "var(--color-success-bg)", border: "color-mix(in srgb, var(--color-success-ink) 22%, transparent)", role: "status", Icon: CheckCircle2 },
+  warning: { color: "var(--color-warning-ink)", bg: "var(--color-warning-bg)", border: "var(--color-warning-border)", role: "alert", Icon: AlertTriangle },
+  error: { color: "var(--color-destructive)", bg: "var(--color-danger-bg)", border: "color-mix(in srgb, var(--color-destructive) 22%, transparent)", role: "alert", Icon: XCircle },
 };
 
 export interface AlertProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
@@ -27,23 +29,22 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(function Alert(
   { severity = "info", variant: _v, icon, onClose, action, sx, style, className, children, ...rest },
   ref,
 ) {
-  const { color, Icon } = SEVERITY[severity];
+  const { color, bg, border, role, Icon } = SEVERITY[severity];
   return (
     <div
       ref={ref}
-      role="alert"
+      role={role}
       className={className}
       style={{
         display: "flex",
         alignItems: "flex-start",
-        gap: 12,
-        background: "var(--color-canvas)",
-        border: "1px solid var(--color-hairline)",
-        borderInlineStart: `3px solid ${color}`,
-        borderRadius: "var(--r-sm)",
-        padding: "14px 18px",
-        fontSize: 15,
-        lineHeight: 1.47,
+        gap: 10,
+        background: bg,
+        border: `1px solid ${border}`,
+        borderRadius: "var(--r-md)",
+        padding: "12px 14px",
+        fontSize: "var(--text-body-sm)",
+        lineHeight: "var(--lh-body)",
         color: "var(--color-ink)",
         ...sxToStyle(sx),
         ...style,
@@ -52,19 +53,14 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(function Alert(
     >
       {icon !== false && (
         <span style={{ flexShrink: 0, display: "inline-flex", color }}>
-          {icon ?? <Icon size={20} strokeWidth={1.75} />}
+          {icon ?? <Icon size={18} strokeWidth={1.75} />}
         </span>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
       {action}
       {onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="close"
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-ink-muted-48)", display: "inline-flex", padding: 0, flexShrink: 0 }}
-        >
-          <X size={18} strokeWidth={1.75} />
+        <button type="button" onClick={onClose} aria-label="סגירה" className="sh-alert-close">
+          <X size={16} strokeWidth={1.75} aria-hidden />
         </button>
       )}
     </div>
@@ -110,9 +106,9 @@ export function Snackbar({ open, autoHideDuration, onClose, anchorOrigin, messag
       : { [horiz === "right" ? "insetInlineEnd" : "insetInlineStart"]: 24 }),
   };
   return createPortal(
-    <div style={{ ...pos, ...sxToStyle(sx) }}>
+    <div role="status" aria-live="polite" className="sh-snackbar" style={{ ...pos, ...sxToStyle(sx) }}>
       {children ?? (
-        <div style={{ background: "var(--color-ink)", color: "var(--color-on-dark)", padding: "12px 18px", borderRadius: "var(--r-sm)", fontSize: 15, display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ background: "var(--color-ink)", color: "var(--color-on-dark)", padding: "12px 18px", borderRadius: "var(--r-md)", fontSize: "var(--text-body-sm)", display: "flex", alignItems: "center", gap: 12 }}>
           {message}
           {action}
         </div>

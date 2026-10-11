@@ -32,14 +32,19 @@ export const LinearProgress = forwardRef<HTMLDivElement, LinearProgressProps>(fu
     <div
       ref={ref}
       role="progressbar"
+      aria-valuemin={variant === "determinate" ? 0 : undefined}
+      aria-valuemax={variant === "determinate" ? 100 : undefined}
+      aria-valuenow={variant === "determinate" ? Math.round(Math.min(100, Math.max(0, value))) : undefined}
       style={{ height: 6, width: "100%", background: "var(--color-canvas-parchment)", borderRadius: "var(--r-pill)", overflow: "hidden", ...sxToStyle(sx), ...style }}
       {...rest}
     >
       <div
-        className={variant === "determinate" ? undefined : "sh-progress-indeterminate"}
+        className={variant === "determinate" ? "sh-progress-fill" : "sh-progress-indeterminate"}
         style={
           variant === "determinate"
-            ? { width: `${Math.min(100, Math.max(0, value))}%`, height: "100%", background: progressColor(color), transition: "width .3s ease" }
+            // Scaled, not resized: transform animates off the layout path. The
+            // origin is the reading edge (ui.css .sh-progress-fill).
+            ? { width: "100%", height: "100%", background: progressColor(color), transform: `scaleX(${Math.min(100, Math.max(0, value)) / 100})`, transition: "transform var(--dur-slow) var(--ease-out)" }
             : { width: "40%", height: "100%", background: progressColor(color), borderRadius: "var(--r-pill)", animation: "sh-indeterminate 1.4s ease-in-out infinite" }
         }
       />
@@ -67,6 +72,7 @@ export const CircularProgress = forwardRef<HTMLSpanElement, CircularProgressProp
     <span
       ref={ref}
       role="progressbar"
+      aria-label={rest["aria-hidden"] ? undefined : rest["aria-label"] ?? "טוען"}
       style={{
         display: "inline-block",
         width: dim,

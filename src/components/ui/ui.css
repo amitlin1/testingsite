@@ -523,6 +523,13 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-card-action { transition: background-color .12s ease; }
 .sh-card-action:hover { background: color-mix(in srgb, var(--color-ink) 2%, transparent); }
 
+/* ------------------------------------------------------- Feedback ------ */
+.sh-alert-close { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -2px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; flex-shrink: 0; }
+.sh-alert-close:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); }
+.sh-alert-close:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
+.sh-progress-fill { transform-origin: left; }
+:dir(rtl) > .sh-progress-fill { transform-origin: right; }
+
 /* ------------------------------------------------------------ Chip / Tag --- */
 .sh-chip-delete { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-inline-end: -4px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; }
 .sh-chip-delete:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); }
