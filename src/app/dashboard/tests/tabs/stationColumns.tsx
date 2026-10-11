@@ -17,7 +17,7 @@
 //                   running tests. The cell shows the OLDEST of them, because a
 //                   mean is diluted by whoever just joined the queue and hides
 //                   the one item that has been rotting there since Thursday; the
-//                   p95 and the mean are one hover away, which is what answers
+//                   p95 and the mean are one hover or focus away, which answers
 //                   "is that one stale row or a real backlog".
 
 import * as React from "react";
@@ -25,8 +25,16 @@ import * as React from "react";
 import type { Column } from "@/app/components/dashboard/DenseTable";
 import { LoadBar } from "@/app/components/dashboard/LoadBar";
 import TrendCell from "@/app/components/dashboard/TrendCell";
+import TwinDuration from "@/app/components/dashboard/TwinDuration";
 import type { StationWire } from "@/app/lib/dashboard/api-types";
-import { EM_DASH, formatCount, formatHours, formatQueueAge, queueAgeTone } from "@/app/lib/dashboard/format";
+import {
+  EM_DASH,
+  formatCount,
+  formatHours,
+  formatQueueAge,
+  isNil,
+  queueAgeTone,
+} from "@/app/lib/dashboard/format";
 
 export const SHARED_QUEUE_NOTE =
   "התור שייך לסוג העמדה ולא לעמדה — הוא חוזר בכל שורות אותו סוג ואין לסכם את העמודה. בריכת המחקר נספרת בנפרד.";
@@ -70,7 +78,7 @@ export function stationColumns({
       secondary: true,
       sortValue: (r) => r.stationTypeName ?? "",
       render: (r) => (
-        <span style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>
+        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
           {r.stationTypeName ?? EM_DASH}
         </span>
       ),
@@ -125,17 +133,23 @@ export function stationColumns({
       header: "הוותיק בתור",
       numeric: true,
       sortValue: (r) => r._new_oldestQueueAgeWallMinutes,
+      // The work twin is printed under the wall figure (§16.1); p95 and the
+      // mean stay one focus away.
       render: (r) => (
-        <span
-          style={{ fontWeight: 600, color: queueAgeTone(r._new_oldestQueueAgeWallMinutes) }}
-          title={[
-            `נטו ${formatQueueAge(r._new_oldestQueueAgeWorkMinutes)}`,
+        <TwinDuration
+          value={formatQueueAge(r._new_oldestQueueAgeWallMinutes)}
+          tone={queueAgeTone(r._new_oldestQueueAgeWallMinutes)}
+          bold
+          twin={
+            isNil(r._new_oldestQueueAgeWallMinutes)
+              ? null
+              : `נטו ${formatQueueAge(r._new_oldestQueueAgeWorkMinutes)}`
+          }
+          more={[
             `p95 ${formatQueueAge(r._new_p95QueueAgeWallMinutes)}`,
             `ממוצע ${formatQueueAge(r.averageCurrentQueueTimeMinutes)}`,
           ].join(" · ")}
-        >
-          {formatQueueAge(r._new_oldestQueueAgeWallMinutes)}
-        </span>
+        />
       ),
     },
     {
@@ -169,7 +183,7 @@ export function stationColumns({
               borderRadius: 3,
               overflow: "hidden",
               display: "flex",
-              flexDirection: "row-reverse",
+              flexDirection: "row",
             }}
           >
             <div
@@ -204,7 +218,7 @@ export function stationColumns({
 /** The work-hours cell prints the real figure beside its relative bar. */
 export function WorkHoursCell({ hours }: { hours: number | null }) {
   return (
-    <span style={{ fontSize: 12, color: "var(--color-ink-muted-48)", fontVariantNumeric: "tabular-nums" }}>
+    <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", fontVariantNumeric: "tabular-nums" }}>
       {formatHours(hours)}
     </span>
   );

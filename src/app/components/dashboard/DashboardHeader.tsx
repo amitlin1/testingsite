@@ -6,15 +6,16 @@
 // The chips are the point. From any tab a manager can see the whole filter
 // scope in one line and drop any of it with one click — on the eight old pages
 // the scope was invisible unless you scrolled back to the filter bar of the
-// page you happened to be standing on.
+// page you happened to be standing on. They are the app's one filter chip
+// (ui Chip with its named × button), the same as on the shipments screen.
 //
 // `עודכן לפני X שניות` ticks off `lastUpdatedAt` every 5 seconds; it is not a
 // second timer against the 60s refresh, just a readout of the same clock.
 
 import * as React from "react";
 
+import { Chip } from "@/components/ui";
 import { Download, Refresh } from "@/components/ui/icons";
-import { Clear } from "@/components/ui/icons";
 import type { DashboardFilters } from "@/types/dashboard";
 
 export interface DashboardHeaderProps {
@@ -59,37 +60,29 @@ export default function DashboardHeader({
       }}
     >
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 23, fontWeight: 700, letterSpacing: "-0.5px", whiteSpace: "nowrap" }}>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: "var(--text-heading)",
+            fontWeight: 700,
+            letterSpacing: "var(--ls-display)",
+            whiteSpace: "nowrap",
+          }}
+        >
           {title}
-        </div>
-        <div style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)", whiteSpace: "nowrap" }}>
+        </h1>
+        <div style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", whiteSpace: "nowrap" }}>
           {subtitle}
         </div>
         {chips.map((chip) => (
-          <button
+          <Chip
             key={String(chip.key)}
-            type="button"
-            onClick={() => onRemoveChip(chip.key)}
-            className="dash-press"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              background: "var(--dash-tint)",
-              color: "var(--color-primary)",
-              border: "none",
-              fontSize: 11.5,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              borderRadius: 9999,
-              padding: "3px 10px",
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-            }}
-          >
-            {chip.text}
-            <Clear fontSize={11} />
-          </button>
+            size="small"
+            color="primary"
+            label={chip.text}
+            onDelete={() => onRemoveChip(chip.key)}
+            style={{ alignSelf: "center" }}
+          />
         ))}
       </div>
 
@@ -99,16 +92,17 @@ export default function DashboardHeader({
             display: "flex",
             alignItems: "center",
             gap: 6,
-            fontSize: 11.5,
+            fontSize: "var(--text-fine)",
             color: "var(--color-ink-muted-48)",
             whiteSpace: "nowrap",
           }}
         >
           <span
+            aria-hidden
             style={{
               width: 6,
               height: 6,
-              borderRadius: 9999,
+              borderRadius: "var(--r-pill)",
               background: "var(--color-status-approved)",
             }}
           />
@@ -116,28 +110,11 @@ export default function DashboardHeader({
         </div>
 
         {/* §17 — no table export util exists in the repo yet, so the button
-            states that rather than pretending to be wired. */}
-        <button
-          type="button"
-          disabled
-          title="בקרוב"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "var(--color-canvas)",
-            border: "1px solid var(--color-hairline)",
-            borderRadius: 8,
-            padding: "6px 11px",
-            fontSize: 12.5,
-            fontWeight: 600,
-            fontFamily: "inherit",
-            color: "var(--color-ink-muted-48)",
-            cursor: "not-allowed",
-          }}
-        >
+            states that rather than pretending to be wired. Same shape as
+            רענן beside it: one button vocabulary per row. */}
+        <button type="button" disabled title="ייצוא — בקרוב" className="dash-btn">
           <span className="dash-icon">
-            <Download fontSize={14} />
+            <Download fontSize={14} aria-hidden />
           </span>
           ייצוא
         </button>
@@ -146,25 +123,11 @@ export default function DashboardHeader({
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          className="dash-press"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            background: "var(--color-primary)",
-            color: "var(--color-on-primary)",
-            border: "none",
-            borderRadius: 9999,
-            padding: "7px 15px",
-            fontSize: 12.5,
-            fontWeight: 600,
-            fontFamily: "inherit",
-            cursor: refreshing ? "default" : "pointer",
-            opacity: refreshing ? 0.7 : 1,
-          }}
+          aria-busy={refreshing || undefined}
+          className="dash-btn dash-btn--primary"
         >
           <span className="dash-icon">
-            <Refresh fontSize={14} />
+            <Refresh fontSize={14} aria-hidden />
           </span>
           רענן
         </button>

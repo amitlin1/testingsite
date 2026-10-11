@@ -49,7 +49,7 @@ export default function JobHealthStrip({
     return (
       <div
         className="dash-card"
-        style={{ flexShrink: 0, height: 39, borderRadius: 10, opacity: 0.6 }}
+        style={{ flexShrink: 0, height: 39, borderRadius: "var(--r-md)", opacity: 0.6 }}
         aria-hidden
       />
     );
@@ -58,7 +58,8 @@ export default function JobHealthStrip({
   // A failed fetch is itself a red state — the app cannot reach its own health
   // endpoint — so it is surfaced, never swallowed into a stale green strip.
   const red = Boolean(error) || payload?.healthy === false;
-  const colour = red ? "var(--color-destructive)" : "var(--color-status-approved)";
+  // The verdict is TEXT, so the green is the success ink (AA), not the fill.
+  const colour = red ? "var(--color-destructive)" : "var(--color-success-ink)";
 
   const chips: Chip[] = [];
   if (error) {
@@ -114,8 +115,8 @@ export default function JobHealthStrip({
         display: "flex",
         alignItems: "center",
         gap: 12,
-        borderRadius: 10,
-        borderInlineStart: `3px solid ${colour}`,
+        borderRadius: "var(--r-md)",
+        // No coloured side stripe: the icon and the verdict text carry the state.
         padding: "8px 14px",
       }}
     >
@@ -125,13 +126,13 @@ export default function JobHealthStrip({
           alignItems: "center",
           gap: 7,
           color: colour,
-          fontSize: 13,
+          fontSize: "var(--text-small)",
           fontWeight: 600,
           whiteSpace: "nowrap",
         }}
       >
         <span className="dash-icon">
-          {red ? <ErrorIcon fontSize={15} strokeWidth={2} /> : <CheckCircle fontSize={15} strokeWidth={2} />}
+          {red ? <ErrorIcon fontSize={15} strokeWidth={2} aria-hidden /> : <CheckCircle fontSize={15} strokeWidth={2} aria-hidden />}
         </span>
         {red ? "נדרשת התערבות" : "כל המשימות תקינות"}
       </div>
@@ -143,10 +144,10 @@ export default function JobHealthStrip({
           <span
             key={chip.text}
             style={{
-              fontSize: 11.5,
+              fontSize: "var(--text-fine)",
               color: chip.tone,
               background: "var(--color-canvas-parchment)",
-              borderRadius: 9999,
+              borderRadius: "var(--r-pill)",
               padding: "3px 10px",
               whiteSpace: "nowrap",
             }}
@@ -157,7 +158,7 @@ export default function JobHealthStrip({
       </div>
       <div style={{ flex: 1 }} />
       {payload && (
-        <div style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", whiteSpace: "nowrap" }}>
           נבדק {formatClock(payload.generatedAt)}
         </div>
       )}

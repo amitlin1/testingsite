@@ -1,6 +1,6 @@
 "use client";
 
-// The one table every tab uses (§9): 11.5px header on the parchment, 13px
+// The one table every tab uses (§9): 12px header on the parchment, 13px
 // cells, tabular numerals in every numeric column, a hairline between rows and
 // the scroll on the body — never on the page.
 //
@@ -8,6 +8,10 @@
 // ROWS underneath a sort that stays put (§12.10). Column dropping below 1300px
 // is the `col-2nd` class on both the th and the td, never a filtered column
 // array — that would renumber the sort indices as the window resized.
+//
+// Keyboard: a sortable header is a <button> inside a th that carries
+// `aria-sort`, and a row that opens something is a Tab stop that Enter / Space
+// activate — the history overlay is reachable without a mouse.
 
 import * as React from "react";
 
@@ -93,39 +97,47 @@ export default function DenseTable<T>({
       <table className="dash-table">
         <thead>
           <tr>
-            {columns.map((column) => (
-              <th
-                key={column.key}
-                className={[
-                  column.secondary ? "col-2nd" : "",
-                  column.sortValue ? "dash-sortable" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                style={{
-                  textAlign: column.numeric ? "center" : "right",
-                  ...(column.width ? { width: column.width } : null),
-                }}
-                onClick={() => toggle(column)}
-              >
-                <span
+            {columns.map((column) => {
+              const active = sort?.key === column.key;
+              return (
+                <th
+                  key={column.key}
+                  className={column.secondary ? "col-2nd" : undefined}
+                  aria-sort={
+                    column.sortValue
+                      ? active
+                        ? sort!.dir === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : "none"
+                      : undefined
+                  }
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 2,
-                    justifyContent: column.numeric ? "center" : "flex-start",
+                    textAlign: column.numeric ? "center" : "start",
+                    ...(column.width ? { width: column.width } : null),
                   }}
                 >
-                  {column.header}
-                  {sort?.key === column.key && (
-                    <ArrowDropDown
-                      fontSize={12}
-                      style={{ transform: sort.dir === "asc" ? "rotate(180deg)" : undefined }}
-                    />
+                  {column.sortValue ? (
+                    <button
+                      type="button"
+                      className="dash-sort"
+                      data-active={active ? "" : undefined}
+                      onClick={() => toggle(column)}
+                    >
+                      {column.header}
+                      <span className="dash-sort__chevron" aria-hidden>
+                        <ArrowDropDown
+                          fontSize={12}
+                          style={{ transform: active && sort!.dir === "asc" ? "rotate(180deg)" : undefined }}
+                        />
+                      </span>
+                    </button>
+                  ) : (
+                    column.header
                   )}
-                </span>
-              </th>
-            ))}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -133,7 +145,7 @@ export default function DenseTable<T>({
               never jumps when the numbers land (§11). */}
           {loading &&
             Array.from({ length: skeletonRows }).map((_, i) => (
-              <tr key={`sk-${i}`}>
+              <tr key={`sk-${i}`} aria-hidden>
                 {columns.map((column) => (
                   <td key={column.key} className={column.secondary ? "col-2nd" : undefined}>
                     <Skeleton variant="text" height={15} width={column.numeric ? "50%" : "80%"} />
@@ -147,14 +159,28 @@ export default function DenseTable<T>({
               <tr
                 key={rowKey(row)}
                 className={onRowClick ? "dash-row-click" : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (event) => {
+                        // Only the row itself: a link or tooltip trigger inside
+                        // the row keeps its own keys.
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onRowClick(row);
+                        }
+                      }
+                    : undefined
+                }
               >
                 {columns.map((column) => (
                   <td
                     key={column.key}
                     className={[column.secondary ? "col-2nd" : "", column.numeric ? "dash-num" : ""]
                       .filter(Boolean)
-                      .join(" ")}
+                      .join(" ") || undefined}
                     style={column.cellStyle?.(row)}
                   >
                     {column.render(row)}
@@ -166,22 +192,13 @@ export default function DenseTable<T>({
           {!loading && sorted && sorted.length === 0 && empty && (
             <tr>
               <td colSpan={columns.length} style={{ padding: "36px 16px", textAlign: "center" }}>
-                <div style={{ fontSize: 13, color: "var(--color-ink-muted-48)" }}>{empty.text}</div>
+                <div style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>{empty.text}</div>
                 {empty.action && (
                   <button
                     type="button"
+                    className="dash-link"
                     onClick={empty.action.onClick}
-                    style={{
-                      marginTop: 8,
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      fontFamily: "inherit",
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      color: "var(--color-primary)",
-                      cursor: "pointer",
-                    }}
+                    style={{ marginTop: 4 }}
                   >
                     {empty.action.label}
                   </button>

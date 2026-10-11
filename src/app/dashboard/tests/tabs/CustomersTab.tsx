@@ -25,8 +25,10 @@ import DataCard, { IgnoredFiltersPill } from "@/app/components/dashboard/DataCar
 import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
 import { ProgressCell } from "@/app/components/dashboard/LoadBar";
 import TrendCell from "@/app/components/dashboard/TrendCell";
+import TwinDuration from "@/app/components/dashboard/TwinDuration";
 import type { CustomerWire } from "@/app/lib/dashboard/api-types";
 import {
+  EM_DASH,
   completionTone,
   describeIgnoredFilters,
   formatCount,
@@ -59,7 +61,7 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
       render: (r) => (
         <span
           style={{
-            fontSize: 12.5,
+            fontSize: "var(--text-small)",
             color: "var(--color-ink-muted-48)",
             fontVariantNumeric: "tabular-nums",
           }}
@@ -107,16 +109,12 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
       header: "זמן ממוצע · ברוטו",
       numeric: true,
       sortValue: (r) => r.averageTimeMinutes,
+      // The work twin is printed under the wall figure (§16.1).
       render: (r) => (
-        <span
-          title={
-            r._new_averageTimeWorkMinutes === null
-              ? undefined
-              : `נטו ${formatMinutes(r._new_averageTimeWorkMinutes)}`
-          }
-        >
-          {formatMinutes(r.averageTimeMinutes)}
-        </span>
+        <TwinDuration
+          value={formatMinutes(r.averageTimeMinutes)}
+          twin={r.averageTimeMinutes === null ? null : `נטו ${formatMinutes(r._new_averageTimeWorkMinutes)}`}
+        />
       ),
     },
     {
@@ -139,8 +137,8 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
       title="ביצועים לפי לקוח"
       right={
         <>
-          <span style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>
-            ״השלמה״ = מסלולים שנסגרו מתוך מה שנפתח לו מסלול · לקוח בלי מסלולים מוצג כ־־־ ולא כאפס
+          <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
+            ״השלמה״ = מסלולים שנסגרו מתוך מה שנפתח לו מסלול · לקוח בלי מסלולים מוצג כ״{EM_DASH}״ ולא כאפס
           </span>
           {ignored && <IgnoredFiltersPill text={ignored.text} />}
         </>

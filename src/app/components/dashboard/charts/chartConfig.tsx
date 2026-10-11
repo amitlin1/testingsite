@@ -61,9 +61,9 @@ export function RtlTooltip({
       style={{
         background: "var(--color-canvas)",
         border: "1px solid var(--color-hairline)",
-        borderRadius: 8,
+        borderRadius: "var(--r-sm)",
         padding: "8px 10px",
-        fontSize: 12.5,
+        fontSize: "var(--text-small)",
         fontFamily: "var(--font-text)",
         color: "var(--color-ink)",
         boxShadow: "none",

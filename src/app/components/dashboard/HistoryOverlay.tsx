@@ -24,15 +24,15 @@
 // thing about it. The station dialog gets four cells because its endpoint really
 // does carry the clock pair; the other three get two.
 //
-// Closes on the scrim, on the ×, and on Escape. It owns no filters of its own
-// beyond the preset — the footer's one blue pill hands the entity to the
-// dashboard's filter state and gets out of the way.
+// It is the app's Dialog: it closes on the scrim, on the ×, and on Escape,
+// keeps focus inside while open and hands it back on close. It owns no filters
+// of its own beyond the preset — the footer's one blue pill hands the entity
+// to the dashboard's filter state and gets out of the way.
 
 import * as React from "react";
 
 import { apiFetch } from "@/lib/api/client";
-import { useDraggable } from "@/components/ui/useDraggable";
-import { Skeleton } from "@/components/ui";
+import { Dialog, DialogTitle, IconButton, Skeleton } from "@/components/ui";
 import { Close, FilterList, Info } from "@/components/ui/icons";
 import {
   entityHistoryPoints,
@@ -44,7 +44,6 @@ import {
   type StationHistoryWire,
 } from "@/app/lib/dashboard/api-types";
 import {
-  DASH_COLORS,
   EM_DASH,
   formatCount,
   formatDayTick,
@@ -58,6 +57,7 @@ import { ChartBody } from "./charts/chartConfig";
 import HistoryDurationChart from "./charts/HistoryDurationChart";
 import HistoryStateChart from "./charts/HistoryStateChart";
 import ShipmentCompletionChart from "./charts/ShipmentCompletionChart";
+import { STATE_COLOR } from "./charts/palette";
 
 export type HistoryKind = "station" | "shipment" | "customer" | "type";
 
@@ -208,14 +208,6 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
   );
 
   React.useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  React.useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
     setLoading(true);
@@ -331,362 +323,288 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
   );
 
   const stats = useStatCells(target, points);
-  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable();
 
   return (
-    <div
-      dir="rtl"
-      onClick={onClose}
-      role="presentation"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1300,
-        background: "rgba(0,0,0,0.4)", // the app-wide popup scrim
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 26,
-        fontFamily: "var(--font-text)",
-        color: "var(--color-ink)",
-      }}
+    // The app's Dialog: focus moves in and comes back, Tab stays inside,
+    // Escape and the scrim close it, the page behind does not scroll, and the
+    // header still drags it.
+    // `dash-overlay` carries the dashboard palette into the portal.
+    <Dialog
+      open
+      onClose={onClose}
+      fullWidth
+      maxWidth="lg"
+      PaperProps={{ className: "dash-overlay", style: { maxWidth: 1120 } }}
     >
+      {/* header — the drag handle. The kind (עמדה / משלוח …) is part of the
+          meta line under the title, not an eyebrow above it. */}
       <div
-        ref={dragRef}
-        onPointerDown={onDragStart}
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${config.label} ${target.title}`}
+        data-drag-handle=""
         style={{
-          width: "min(1120px, 100%)",
-          maxHeight: "100%",
-          background: "var(--color-canvas)",
-          border: "1px solid var(--color-hairline)",
-          borderRadius: 18,
-          boxShadow: "none",
           display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          ...dragStyle,
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 20,
+          padding: "16px 20px 13px",
+          borderBottom: "1px solid var(--color-hairline)",
+          flexShrink: 0,
         }}
       >
-        {/* header */}
-        <div
-          data-drag-handle=""
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 20,
-            padding: "16px 20px 13px",
-            borderBottom: "1px solid var(--color-hairline)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)", fontWeight: 600 }}>
-              {config.label}
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.5px", marginTop: 1 }}>
-              {target.title}
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)", marginTop: 2 }}>
-              {[target.meta, "תמונת מצב יומית", "אזור זמן ירושלים"].filter(Boolean).join(" · ")}
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <Segmented
-              options={PRESETS.map((p) => ({ value: p.key, label: p.label }))}
-              value={preset}
-              onChange={(value) => setPreset(value as HistoryPreset)}
-              padding="5px 13px"
-            />
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="סגירה"
-              className="dash-press dash-icon"
-              style={{
-                width: 32,
-                height: 32,
-                border: "1px solid var(--color-hairline)",
-                borderRadius: 9999,
-                background: "var(--color-canvas)",
-                color: "var(--color-ink)",
-                cursor: "pointer",
-              }}
-            >
-              <Close fontSize={15} />
-            </button>
+        <div style={{ minWidth: 0 }}>
+          <DialogTitle style={{ padding: 0 }}>{target.title}</DialogTitle>
+          <div style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", marginTop: 2 }}>
+            {[config.label, target.meta, "תמונת מצב יומית", "אזור זמן ירושלים"].filter(Boolean).join(" · ")}
           </div>
         </div>
-
-        {/* §16.5: the cap is shown as the window ACTUALLY served. */}
-        {served.capped && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              padding: "8px 20px",
-              background: "var(--dash-amber-tint)",
-              borderBottom: "1px solid var(--dash-amber-hairline)",
-              fontSize: 11.5,
-              color: "var(--dash-amber-ink)",
-              flexShrink: 0,
-            }}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <Segmented
+            options={PRESETS.map((p) => ({ value: p.key, label: p.label }))}
+            value={preset}
+            onChange={(value) => setPreset(value as HistoryPreset)}
+            padding="5px 13px"
+            ariaLabel="תקופת ההיסטוריה"
+          />
+          <IconButton
+            size="small"
+            aria-label="סגירה"
+            onClick={onClose}
+            style={{ color: "var(--color-ink-muted-48)" }}
           >
-            <span className="dash-icon">
-              <Info fontSize={13} strokeWidth={2} />
-            </span>
-            התקופה קוצרה ל-13 חודשים · הוצג {formatDayTick(served.from ?? "")} –{" "}
-            {formatDayTick(served.to ?? "")} במקום הטווח שהתבקש
-          </div>
-        )}
-
-        {error && (
-          <div
-            role="alert"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "10px 20px",
-              background: "color-mix(in srgb, var(--color-destructive) 6%, transparent)",
-              borderBottom: "1px solid var(--color-hairline)",
-              fontSize: 12.5,
-              color: "var(--color-destructive)",
-              flexShrink: 0,
-            }}
-          >
-            <span style={{ flex: 1 }}>{error}</span>
-            <button
-              type="button"
-              onClick={() => setAttempt((a) => a + 1)}
-              className="dash-press"
-              style={{
-                border: "1px solid var(--color-destructive)",
-                background: "transparent",
-                color: "var(--color-destructive)",
-                borderRadius: 8,
-                padding: "4px 12px",
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
-              נסה שוב
-            </button>
-          </div>
-        )}
-
-        {/* body — the only scrolling element in the panel */}
-        <div
-          className="dash-scroll"
-          style={{ padding: "14px 20px 16px", display: "flex", flexDirection: "column", gap: 12 }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${stats.length}, 1fr)`,
-              gap: 10,
-              flexShrink: 0,
-            }}
-          >
-            {stats.map((cell) => (
-              <div
-                key={cell.label}
-                style={{
-                  border: "1px solid var(--color-hairline)",
-                  borderRadius: 14,
-                  padding: "11px 14px",
-                }}
-              >
-                <div style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)", fontWeight: 600 }}>
-                  {cell.label}
-                </div>
-                <div
-                  style={{
-                    fontSize: 24,
-                    fontWeight: 700,
-                    letterSpacing: "-0.6px",
-                    lineHeight: 1.15,
-                    marginTop: 2,
-                  }}
-                >
-                  {loading ? <Skeleton variant="text" width="60%" height={24} /> : cell.value}
-                  {cell.unit && (
-                    <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--color-ink-muted-48)" }}>
-                      {" "}
-                      {cell.unit}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 11.5, color: cell.tone ?? "var(--color-ink-muted-48)", marginTop: 1 }}>
-                  {cell.note}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div
-            style={{
-              border: "1px solid var(--color-hairline)",
-              borderRadius: 14,
-              padding: "12px 14px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{config.stateTitle}</div>
-              <Legend
-                items={[
-                  { color: "var(--dash-ramp-4)", label: config.queueLabel },
-                  { color: "var(--dash-ramp-1)", label: "בבדיקה" },
-                  { color: "var(--dash-ramp-5)", label: "במחקר" },
-                  { color: "var(--color-ink)", label: config.lineLabel, line: true },
-                ]}
-              />
-            </div>
-            <ChartBody height={196}>
-              {loading || !folded ? (
-                <Skeleton variant="rectangular" height={196} />
-              ) : folded.length === 0 ? (
-                <EmptyHistory />
-              ) : (
-                <HistoryStateChart
-                  points={folded}
-                  queueLabel={config.queueLabel}
-                  lineLabel={config.lineLabel}
-                />
-              )}
-            </ChartBody>
-          </div>
-
-          {target.kind === "station" && (
-            <div
-              style={{
-                border: "1px solid var(--color-hairline)",
-                borderRadius: 14,
-                padding: "12px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>זמנים שנסגרו באותו יום · שני שעונים</div>
-                <Legend
-                  items={[
-                    { color: "var(--dash-ramp-1)", label: "המתנה · ברוטו", line: true },
-                    { color: "var(--dash-ramp-1)", label: "המתנה · נטו", line: true, dashed: true },
-                    { color: "var(--color-ink-muted-48)", label: "ביצוע · ברוטו", line: true },
-                    { color: "var(--color-ink-muted-48)", label: "ביצוע · נטו", line: true, dashed: true },
-                  ]}
-                />
-              </div>
-              <ChartBody height={132}>
-                {loading || !folded ? (
-                  <Skeleton variant="rectangular" height={132} />
-                ) : folded.length === 0 ? (
-                  <EmptyHistory />
-                ) : (
-                  <HistoryDurationChart points={folded} />
-                )}
-              </ChartBody>
-            </div>
-          )}
-
-          {target.kind === "shipment" && (
-            <div
-              style={{
-                border: "1px solid var(--color-hairline)",
-                borderRadius: 14,
-                padding: "12px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 9, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>אחוז השלמה לאורך זמן</div>
-                  {/* The denominator MOVES with the day, so a dip is a real
-                      event and not a glitch — it is said next to the chart and
-                      not only in the footnote, because the footnote is a screen
-                      away at the bottom of the dialog. */}
-                  <div style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>
-                    מסלול שנפתח מאוחר יותר מוריד את האחוז
-                  </div>
-                </div>
-                <Legend
-                  items={[
-                    { color: "var(--dash-ramp-1)", label: "השלמה", line: true },
-                    { color: "var(--color-ink-muted-48)", label: "מסלולים שנפתחו · מצטבר", line: true },
-                  ]}
-                />
-              </div>
-              <ChartBody height={132}>
-                {completion === null ? (
-                  <Skeleton variant="rectangular" height={132} />
-                ) : (
-                  <ShipmentCompletionChart points={completion} />
-                )}
-              </ChartBody>
-            </div>
-          )}
+            <Close fontSize={18} aria-hidden />
+          </IconButton>
         </div>
+      </div>
 
-        {/* footer */}
+      {/* §16.5: the cap is shown as the window ACTUALLY served. */}
+      {served.capped && (
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            padding: "11px 20px",
-            borderTop: "1px solid var(--color-hairline)",
+            gap: 7,
+            padding: "8px 20px",
+            background: "var(--dash-amber-tint)",
+            borderBottom: "1px solid var(--dash-amber-hairline)",
+            fontSize: "var(--text-fine)",
+            color: "var(--dash-amber-ink)",
             flexShrink: 0,
           }}
         >
-          <div style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>{config.footnote}</div>
-          <button
-            type="button"
-            className="dash-press"
-            onClick={() => {
-              onApplyFilter(target);
-              onClose();
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              background: "var(--color-primary)",
-              color: "var(--color-on-primary)",
-              border: "none",
-              borderRadius: 9999,
-              padding: "7px 16px",
-              fontSize: 12.5,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <span className="dash-icon">
-              <FilterList fontSize={14} />
-            </span>
-            {config.cta}
+          <span className="dash-icon">
+            <Info fontSize={13} strokeWidth={2} aria-hidden />
+          </span>
+          התקופה קוצרה ל-13 חודשים · הוצג {formatDayTick(served.from ?? "")} –{" "}
+          {formatDayTick(served.to ?? "")} במקום הטווח שהתבקש
+        </div>
+      )}
+
+      {error && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "8px 20px",
+            background: "var(--color-danger-bg)",
+            borderBottom: "1px solid var(--color-hairline)",
+            fontSize: "var(--text-small)",
+            color: "var(--color-destructive)",
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ flex: 1 }}>{error}</span>
+          <button type="button" onClick={() => setAttempt((a) => a + 1)} className="dash-btn dash-btn--danger">
+            נסה שוב
           </button>
         </div>
+      )}
+
+      {/* body — the only scrolling element in the panel. One surface: the
+          stat cells are split by hairlines and the charts by dividers, not
+          boxed inside the dialog's own box. */}
+      <div
+        className="dash-scroll"
+        style={{ padding: "14px 20px 16px", display: "flex", flexDirection: "column", gap: 14 }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${stats.length}, 1fr)`,
+            flexShrink: 0,
+          }}
+        >
+          {stats.map((cell, index) => (
+            <div
+              key={cell.label}
+              style={{
+                padding: "2px 16px",
+                paddingInlineStart: index === 0 ? 0 : 16,
+                borderInlineStart: index === 0 ? undefined : "1px solid var(--color-hairline)",
+              }}
+            >
+              <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", fontWeight: 600 }}>
+                {cell.label}
+              </div>
+              <div
+                style={{
+                  fontSize: "var(--text-kpi)",
+                  fontWeight: 700,
+                  letterSpacing: "var(--ls-display)",
+                  lineHeight: 1.15,
+                  marginTop: 2,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {loading ? <Skeleton variant="text" width="60%" height={26} /> : cell.value}
+                {cell.unit && (
+                  <span style={{ fontSize: "var(--text-small)", fontWeight: 400, color: "var(--color-ink-muted-48)" }}>
+                    {" "}
+                    {cell.unit}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "var(--text-fine)", color: cell.tone ?? "var(--color-ink-muted-48)", marginTop: 1 }}>
+                {cell.note}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <section style={sectionStyle}>
+          <div style={sectionHeadStyle}>
+            <h3 style={sectionTitleStyle}>{config.stateTitle}</h3>
+            <Legend
+              items={[
+                { color: STATE_COLOR.queued, label: config.queueLabel },
+                { color: STATE_COLOR.testing, label: "בבדיקה" },
+                { color: STATE_COLOR.in_research, label: "במחקר" },
+                { color: "var(--color-ink)", label: config.lineLabel, line: true },
+              ]}
+            />
+          </div>
+          <ChartBody height={196}>
+            {loading || !folded ? (
+              <Skeleton variant="rectangular" height={196} />
+            ) : folded.length === 0 ? (
+              <EmptyHistory />
+            ) : (
+              <HistoryStateChart
+                points={folded}
+                queueLabel={config.queueLabel}
+                lineLabel={config.lineLabel}
+              />
+            )}
+          </ChartBody>
+        </section>
+
+        {target.kind === "station" && (
+          <section style={sectionStyle}>
+            <div style={sectionHeadStyle}>
+              <h3 style={sectionTitleStyle}>זמנים שנסגרו באותו יום · שני שעונים</h3>
+              <Legend
+                items={[
+                  { color: "var(--dash-ramp-1)", label: "המתנה · ברוטו", line: true },
+                  { color: "var(--dash-ramp-1)", label: "המתנה · נטו", line: true, dashed: true },
+                  { color: "var(--color-ink-muted-48)", label: "ביצוע · ברוטו", line: true },
+                  { color: "var(--color-ink-muted-48)", label: "ביצוע · נטו", line: true, dashed: true },
+                ]}
+              />
+            </div>
+            <ChartBody height={132}>
+              {loading || !folded ? (
+                <Skeleton variant="rectangular" height={132} />
+              ) : folded.length === 0 ? (
+                <EmptyHistory />
+              ) : (
+                <HistoryDurationChart points={folded} />
+              )}
+            </ChartBody>
+          </section>
+        )}
+
+        {target.kind === "shipment" && (
+          <section style={sectionStyle}>
+            <div style={sectionHeadStyle}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 9, minWidth: 0 }}>
+                <h3 style={sectionTitleStyle}>אחוז השלמה לאורך זמן</h3>
+                {/* The denominator MOVES with the day, so a dip is a real
+                    event and not a glitch — it is said next to the chart and
+                    not only in the footnote, because the footnote is a screen
+                    away at the bottom of the dialog. */}
+                <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
+                  מסלול שנפתח מאוחר יותר מוריד את האחוז
+                </div>
+              </div>
+              <Legend
+                items={[
+                  { color: "var(--dash-ramp-1)", label: "השלמה", line: true },
+                  { color: "var(--color-ink-muted-48)", label: "מסלולים שנפתחו · מצטבר", line: true },
+                ]}
+              />
+            </div>
+            <ChartBody height={132}>
+              {completion === null ? (
+                <Skeleton variant="rectangular" height={132} />
+              ) : (
+                <ShipmentCompletionChart points={completion} />
+              )}
+            </ChartBody>
+          </section>
+        )}
       </div>
-    </div>
+
+      {/* footer */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+          padding: "11px 20px",
+          borderTop: "1px solid var(--color-hairline)",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>{config.footnote}</div>
+        <button
+          type="button"
+          className="dash-btn dash-btn--primary"
+          onClick={() => {
+            onApplyFilter(target);
+            onClose();
+          }}
+        >
+          <span className="dash-icon">
+            <FilterList fontSize={14} aria-hidden />
+          </span>
+          {config.cta}
+        </button>
+      </div>
+    </Dialog>
   );
 }
+
+const sectionStyle: React.CSSProperties = {
+  borderTop: "1px solid var(--color-hairline)",
+  paddingTop: 12,
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const sectionHeadStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 16,
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "var(--text-body-sm)",
+  fontWeight: 600,
+};
 
 // ---------------------------------------------------------------------------
 
@@ -699,7 +617,7 @@ function EmptyHistory() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: 12.5,
+        fontSize: "var(--text-small)",
         color: "var(--color-ink-muted-48)",
       }}
     >
@@ -791,7 +709,7 @@ function useStatCells(target: HistoryTarget, points: HistoryPoint[] | null): Sta
         label: "פתוחים ביום האחרון",
         value: formatCount(open),
         note: `${formatCount(last?.queue ?? 0)} ממתינים · תמונה ב-12:00`,
-        tone: DASH_COLORS.amber,
+        // Neutral: no threshold says this many open items is a warning.
       },
     ];
   }, [target, points]);

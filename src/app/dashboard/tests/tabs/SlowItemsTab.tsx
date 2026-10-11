@@ -29,6 +29,7 @@ import * as React from "react";
 import DataCard from "@/app/components/dashboard/DataCard";
 import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
 import Segmented from "@/app/components/dashboard/Segmented";
+import TwinDuration from "@/app/components/dashboard/TwinDuration";
 import type { SlowItemWire } from "@/app/lib/dashboard/api-types";
 import {
   DASH_COLORS,
@@ -82,7 +83,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       header: "מק״ט",
       secondary: true,
       render: (r) => (
-        <span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ fontSize: "var(--text-small)", fontVariantNumeric: "tabular-nums" }}>
           {r.makat ?? EM_DASH}
         </span>
       ),
@@ -90,14 +91,14 @@ export default function SlowItemsTab({ api, data }: TabProps) {
     {
       key: "model",
       header: "דגם",
-      render: (r) => <span style={{ fontSize: 12.5 }}>{r.model || EM_DASH}</span>,
+      render: (r) => <span style={{ fontSize: "var(--text-small)" }}>{r.model || EM_DASH}</span>,
     },
     {
       key: "customer",
       header: "לקוח",
       sortValue: (r) => r._new_customerName ?? "",
       render: (r) => (
-        <span style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>
+        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
           {r._new_customerName ?? EM_DASH}
         </span>
       ),
@@ -105,14 +106,14 @@ export default function SlowItemsTab({ api, data }: TabProps) {
     {
       key: "station",
       header: "עמדה בשלב",
-      render: (r) => <span style={{ fontSize: 12.5 }}>{r.stationName ?? EM_DASH}</span>,
+      render: (r) => <span style={{ fontSize: "var(--text-small)" }}>{r.stationName ?? EM_DASH}</span>,
     },
     {
       key: "step",
       header: "שלב",
       numeric: true,
       render: (r) => (
-        <span style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>{r.routeStep}</span>
+        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>{r.routeStep}</span>
       ),
     },
     {
@@ -122,7 +123,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       secondary: true,
       render: (r) => {
         const attempt = formatAttempt(r._new_attemptNo, r._new_entryReason);
-        return <span style={{ fontSize: 12, color: attempt.tone }}>{attempt.text}</span>;
+        return <span style={{ fontSize: "var(--text-fine)", color: attempt.tone }}>{attempt.text}</span>;
       },
     },
     {
@@ -130,17 +131,14 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       header: "בהמתנה · ברוטו",
       numeric: true,
       sortValue: (r) => r.queueTimeMinutes,
+      // The work twin is printed under the wall figure (§16.1).
       render: (r) => (
-        <span
-          style={{ fontWeight: 600, color: stuckTone(r.queueTimeMinutes) }}
-          title={
-            r._new_queueWorkMinutes === null
-              ? undefined
-              : `נטו ${formatMinutes(r._new_queueWorkMinutes)}`
-          }
-        >
-          {formatMinutes(r.queueTimeMinutes)}
-        </span>
+        <TwinDuration
+          value={formatMinutes(r.queueTimeMinutes)}
+          tone={stuckTone(r.queueTimeMinutes)}
+          bold
+          twin={r.queueTimeMinutes === null ? null : `נטו ${formatMinutes(r._new_queueWorkMinutes)}`}
+        />
       ),
     },
     {
@@ -149,16 +147,15 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       numeric: true,
       sortValue: (r) => r._new_processingWorkMinutes,
       render: (r) => (
-        <span
-          style={{ color: DASH_COLORS.muted }}
-          title={
-            r.processingTimeMinutes === null
-              ? undefined
+        <TwinDuration
+          value={formatMinutes(r._new_processingWorkMinutes)}
+          tone={DASH_COLORS.muted}
+          twin={
+            r._new_processingWorkMinutes === null && r.processingTimeMinutes === null
+              ? null
               : `ברוטו ${formatMinutes(r.processingTimeMinutes)}`
           }
-        >
-          {formatMinutes(r._new_processingWorkMinutes)}
-        </span>
+        />
       ),
     },
     {
@@ -173,7 +170,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       header: "עובד אחרון",
       numeric: true,
       render: (r) => (
-        <span style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>
+        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
           {r._new_workerName ?? EM_DASH}
         </span>
       ),
@@ -187,10 +184,11 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       subtitle="מסודר לפי שעון העבודה — מה המעבדה באמת בילתה בו"
       right={
         <>
-          <span style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>סף השהיה</span>
+          <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>סף השהיה</span>
           <Segmented
             options={THRESHOLDS.map((t) => ({ value: t.value, label: t.label }))}
             value={stuckHours === null ? "all" : String(stuckHours)}
+            ariaLabel="סף השהיה"
             onChange={(value) =>
               api.setStuckHours(THRESHOLDS.find((t) => t.value === value)?.hours ?? null)
             }

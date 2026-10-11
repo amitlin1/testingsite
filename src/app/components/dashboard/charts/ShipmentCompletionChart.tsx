@@ -43,7 +43,7 @@ export default function ShipmentCompletionChart({ points }: { points: Completion
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 12.5,
+          fontSize: "var(--text-small)",
           color: "var(--color-ink-muted-48)",
           direction: "rtl",
         }}

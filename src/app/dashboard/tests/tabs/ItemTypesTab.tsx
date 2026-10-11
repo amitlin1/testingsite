@@ -22,6 +22,7 @@ import * as React from "react";
 import DataCard, { IgnoredFiltersPill, NeutralPill } from "@/app/components/dashboard/DataCard";
 import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
 import { ProgressCell } from "@/app/components/dashboard/LoadBar";
+import TwinDuration from "@/app/components/dashboard/TwinDuration";
 import type { ItemTypeWire } from "@/app/lib/dashboard/api-types";
 import {
   completionTone,
@@ -56,7 +57,7 @@ export default function ItemTypesTab({ api, data, openHistory }: TabProps) {
       secondary: true,
       sortValue: (r) => r._new_declaredAmount,
       render: (r) => (
-        <span style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>
+        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
           {formatCount(r._new_declaredAmount)}
         </span>
       ),
@@ -96,16 +97,16 @@ export default function ItemTypesTab({ api, data, openHistory }: TabProps) {
       header: "זמן ממוצע · ברוטו",
       numeric: true,
       sortValue: (r) => r._new_routeTurnaroundWallMinutes,
+      // The work twin is printed under the wall figure (§16.1).
       render: (r) => (
-        <span
-          title={
-            r._new_routeTurnaroundWorkMinutes === null
-              ? undefined
+        <TwinDuration
+          value={formatMinutes(r._new_routeTurnaroundWallMinutes)}
+          twin={
+            r._new_routeTurnaroundWallMinutes === null
+              ? null
               : `נטו ${formatMinutes(r._new_routeTurnaroundWorkMinutes)}`
           }
-        >
-          {formatMinutes(r._new_routeTurnaroundWallMinutes)}
-        </span>
+        />
       ),
     },
   ];
@@ -116,7 +117,7 @@ export default function ItemTypesTab({ api, data, openHistory }: TabProps) {
       title="ביצועים לפי סוג פריט"
       right={
         <>
-          <span style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>
+          <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
             מזהה איזה דגם מייצר את רוב התור
           </span>
           <NeutralPill text="המסך אינו תלוי בטווח התאריכים" />
