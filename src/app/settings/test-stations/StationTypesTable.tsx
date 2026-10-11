@@ -144,7 +144,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         .stz-row.stz-selected { background:var(--color-primary-tint); border-inline-start-color:var(--color-primary); }
         .stz-iconbtn { width:28px; height:28px; border:0; border-radius:7px; background:transparent; color:var(--color-ink-muted-48); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.12s ease, color 0.12s ease; }
         .stz-iconbtn:hover { background:var(--color-hairline); color:var(--color-primary); }
-        .stz-iconbtn.stz-danger:hover { background:rgba(191,53,53,0.08); color:var(--color-destructive); }
+        .stz-iconbtn.stz-danger:hover { background:color-mix(in srgb, var(--color-destructive) 8%, transparent); color:var(--color-destructive); }
       `}</style>
 
       <div style={{ background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: 16, overflow: "hidden" }}>

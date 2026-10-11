@@ -635,7 +635,7 @@ export default function FilesPage() {
                     transition: "all 0.2s ease",
                     "&:hover": {
                       borderColor: "primary.main",
-                      boxShadow: "0 4px 16px rgba(25,118,210,0.15)",
+                      boxShadow: "0 4px 16px color-mix(in srgb, var(--color-primary) 15%, transparent)",
                       transform: "translateY(-2px)",
                     },
                   }}

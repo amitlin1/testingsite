@@ -107,9 +107,9 @@ function useElapsedTime(createdAt: string | null | undefined): string {
 
 // Shifthouse status tokens (waiting amber / in-test blue / done green).
 const STATUS_TOKENS = {
-  waiting: { color: "var(--color-warning-ink)", bg: "rgba(217,118,6,0.10)", border: "rgba(217,118,6,0.28)", timerBg: "rgba(217,118,6,0.08)" },
-  inTest: { color: "var(--color-primary)", bg: "rgba(0,102,204,0.10)", border: "rgba(0,102,204,0.25)", timerBg: "rgba(0,102,204,0.06)" },
-  done: { color: "var(--color-success-ink)", bg: "rgba(31,138,91,0.10)", border: "rgba(31,138,91,0.25)", timerBg: "rgba(31,138,91,0.06)" },
+  waiting: { color: "var(--color-warning-ink)", bg: "color-mix(in srgb, var(--color-status-late) 10%, transparent)", border: "color-mix(in srgb, var(--color-status-late) 28%, transparent)", timerBg: "color-mix(in srgb, var(--color-status-late) 8%, transparent)" },
+  inTest: { color: "var(--color-primary)", bg: "color-mix(in srgb, var(--color-primary) 10%, transparent)", border: "color-mix(in srgb, var(--color-primary) 25%, transparent)", timerBg: "color-mix(in srgb, var(--color-primary) 6%, transparent)" },
+  done: { color: "var(--color-success-ink)", bg: "color-mix(in srgb, var(--color-status-approved) 10%, transparent)", border: "color-mix(in srgb, var(--color-status-approved) 25%, transparent)", timerBg: "color-mix(in srgb, var(--color-status-approved) 6%, transparent)" },
 } as const;
 
 // --- Item Row Strip (option 3a: queue rank + step progress) ---
@@ -182,9 +182,9 @@ function ItemCard({
               ? "1.5px solid var(--color-status-late)"
               : "1px solid var(--color-hairline)",
           boxShadow: highlighted
-            ? "0 0 0 3px rgba(0,102,204,0.18)"
+            ? "0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent)"
             : priority
-              ? "0 0 0 3px rgba(217,118,6,0.10)"
+              ? "0 0 0 3px color-mix(in srgb, var(--color-status-late) 10%, transparent)"
               : "none",
           transition: "border-color 0.15s ease, box-shadow 0.15s ease",
         }}
@@ -420,8 +420,8 @@ function ItemCard({
                   fontSize: 14.5,
                   padding: 0,
                   justifyContent: "center",
-                  border: "1px solid rgba(31,138,91,0.3)",
-                  bgcolor: "rgba(31,138,91,0.07)",
+                  border: "1px solid color-mix(in srgb, var(--color-status-approved) 30%, transparent)",
+                  bgcolor: "color-mix(in srgb, var(--color-status-approved) 7%, transparent)",
                   color: "var(--color-success-ink)",
                   opacity: 1,
                 }}
@@ -1206,28 +1206,28 @@ function TestingPageView() {
                         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", mb: "22px" }}>
                             <SummaryTile
                                 icon={<QueueIcon sx={{ fontSize: 21 }} />}
-                                iconBg="rgba(217,118,6,0.10)"
+                                iconBg="color-mix(in srgb, var(--color-status-late) 10%, transparent)"
                                 iconColor="var(--color-status-late)"
                                 value={waitingCount}
                                 label="בתור"
                             />
                             <SummaryTile
                                 icon={<ScienceIcon sx={{ fontSize: 21 }} />}
-                                iconBg="rgba(0,102,204,0.10)"
+                                iconBg="color-mix(in srgb, var(--color-primary) 10%, transparent)"
                                 iconColor="var(--color-primary)"
                                 value={inTestCount}
                                 label="בבדיקה"
                             />
                             <SummaryTile
                                 icon={<CheckIcon sx={{ fontSize: 21 }} />}
-                                iconBg="rgba(31,138,91,0.10)"
+                                iconBg="color-mix(in srgb, var(--color-status-approved) 10%, transparent)"
                                 iconColor="var(--color-status-approved)"
                                 value={completedToday ?? "—"}
                                 label="הושלמו היום"
                             />
                             <SummaryTile
                                 icon={<AccessTimeIcon sx={{ fontSize: 21 }} />}
-                                iconBg="rgba(217,118,6,0.10)"
+                                iconBg="color-mix(in srgb, var(--color-status-late) 10%, transparent)"
                                 iconColor="var(--color-status-late)"
                                 value={longestWait ? longestWait.slice(0, 5) : "—"}
                                 label="המתנה הארוכה ביותר"

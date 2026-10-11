@@ -48,7 +48,7 @@ export default function PackageDecisionDialog({
           {choices.map((c) => {
             const on = choice === c.key;
             return (
-              <div key={c.key} onClick={() => setChoice(c.key)} style={{ display: "flex", alignItems: "flex-start", gap: 12, border: `1px solid ${on ? c.tone : HAIR}`, background: on ? (c.key === "missing" ? "rgba(191,53,53,0.06)" : "var(--color-primary-soft)") : "var(--color-canvas)", borderRadius: 12, padding: "12px 14px", cursor: "pointer" }}>
+              <div key={c.key} onClick={() => setChoice(c.key)} style={{ display: "flex", alignItems: "flex-start", gap: 12, border: `1px solid ${on ? c.tone : HAIR}`, background: on ? (c.key === "missing" ? "color-mix(in srgb, var(--color-destructive) 6%, transparent)" : "var(--color-primary-soft)") : "var(--color-canvas)", borderRadius: 12, padding: "12px 14px", cursor: "pointer" }}>
                 <span style={{ width: 18, height: 18, borderRadius: "50%", border: `1px solid ${on ? c.tone : "var(--color-border-strong)"}`, background: "var(--color-canvas)", marginTop: 2, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {on && <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.tone }} />}
                 </span>

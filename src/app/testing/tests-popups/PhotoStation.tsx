@@ -151,7 +151,7 @@ export default function PhotoStation({
         <Stack spacing={3}>
           {hasRU === false && (
             <Chip size="small" label="לא נמצא פריט ייחוס — נא להודיע לגורם אחראי"
-              sx={{ alignSelf: "flex-start", bgcolor: "rgba(217,118,6,0.10)", color: "var(--color-warning-ink)", fontWeight: 600 }} />
+              sx={{ alignSelf: "flex-start", bgcolor: "color-mix(in srgb, var(--color-status-late) 10%, transparent)", color: "var(--color-warning-ink)", fontWeight: 600 }} />
           )}
           <PhotoSection>
             <PhotoUploader photos={photo.photos} refImages={refImages} onPick={pickPhoto} onRemove={removePhoto} />

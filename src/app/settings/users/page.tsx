@@ -342,7 +342,7 @@ export default function UsersPage() {
       nowrap: true,
       cell: (u) => (
         <Stack direction="row" sx={{ alignItems: "center", gap: 1.25 }}>
-          <Avatar sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 600, bgcolor: "rgba(0,102,204,.10)", color: "var(--color-primary)" }}>
+          <Avatar sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 600, bgcolor: "color-mix(in srgb, var(--color-primary) 10%, transparent)", color: "var(--color-primary)" }}>
             {initials(u)}
           </Avatar>
           <span style={{ fontWeight: 600 }}>{u.fullName}</span>

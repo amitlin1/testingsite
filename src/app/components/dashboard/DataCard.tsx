@@ -122,7 +122,7 @@ export default function DataCard({
             alignItems: "center",
             gap: 10,
             padding: "8px 16px",
-            background: "rgba(191,53,53,.06)",
+            background: "color-mix(in srgb, var(--color-destructive) 6%, transparent)",
             borderBottom: "1px solid var(--color-hairline)",
             fontSize: 12.5,
             color: "var(--color-destructive)",

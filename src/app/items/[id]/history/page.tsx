@@ -92,14 +92,14 @@ type StationType = { test_station_type_id: number; test_type_desc: string };
 type PhotoType = { code: string; photo_type_desc: string };
 
 /* ---------- tokens (design-system palette, single action blue) ---------- */
-const INK = "#1d1d1f";
-const BODY = "#444";
-const MUTED = "#7a7a7a";
-const FAINT = "#9a9aa0";
-const HAIRLINE = "#e0e0e0";
-const SOFT = "#f0f0f0";
-const BLUE = "#0066cc";
-const TINT = "rgba(0,102,204,0.09)";
+const INK = "var(--color-ink)";
+const BODY = "var(--color-ink-muted-70)";
+const MUTED = "var(--color-ink-muted-48)";
+const FAINT = "var(--color-ink-muted-48)";  // was #9a9aa0 (2.8:1) on real data
+const HAIRLINE = "var(--color-hairline)";
+const SOFT = "var(--color-divider-soft)";
+const BLUE = "var(--color-primary)";
+const TINT = "color-mix(in srgb, var(--color-primary) 9%, transparent)";
 
 const card: React.CSSProperties = {
   background: "var(--color-canvas)",
@@ -644,7 +644,7 @@ export default function ItemHistoryPage() {
                         <span
                           style={{
                             width: 28, height: 28, borderRadius: 9999,
-                            background: worker ? "rgba(0,102,204,0.1)" : SOFT,
+                            background: worker ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : SOFT,
                             color: worker ? BLUE : FAINT,
                             display: "flex", alignItems: "center", justifyContent: "center",
                             fontSize: 12, fontWeight: 700, flexShrink: 0,
@@ -798,7 +798,7 @@ export default function ItemHistoryPage() {
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 3, minWidth: 0 }}>
                               {fileTab === "all" && (
-                                <span style={{ fontSize: 10.5, fontWeight: 600, color: BLUE, background: "rgba(0,102,204,0.08)", borderRadius: 9999, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 600, color: BLUE, background: "color-mix(in srgb, var(--color-primary) 8%, transparent)", borderRadius: 9999, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
                                   {f.groupLabel}
                                 </span>
                               )}

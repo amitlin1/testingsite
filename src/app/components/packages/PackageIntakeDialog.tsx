@@ -484,7 +484,7 @@ export default function PackageIntakeDialog({
                     </button>
                   </div>
                   {error && (
-                    <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid rgba(191,53,53,0.25)", borderRadius: 10, padding: "11px 14px" }}>
+                    <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent)", borderRadius: 10, padding: "11px 14px" }}>
                       <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} /></span>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: RED }}>{error.text}</div>

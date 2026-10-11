@@ -355,9 +355,9 @@ export default function PopUpTestDialog({
                 py: 1.5,
                 fontWeight: 700,
                 gap: 2.5,
-                boxShadow: "0 8px 16px rgba(25, 118, 210, 0.2)",
+                boxShadow: "0 8px 16px color-mix(in srgb, var(--color-primary) 20%, transparent)",
                 background: "linear-gradient(45deg, var(--color-primary), var(--color-primary))",
-                "&:hover": { transform: "translateY(-1px)", boxShadow: "0 12px 20px rgba(25, 118, 210, 0.3)" }
+                "&:hover": { transform: "translateY(-1px)", boxShadow: "0 12px 20px color-mix(in srgb, var(--color-primary) 30%, transparent)" }
               }}
             >
               {loading ? "שומר..." : "שמור וסיים"}

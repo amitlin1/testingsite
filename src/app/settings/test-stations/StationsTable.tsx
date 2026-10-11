@@ -142,7 +142,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
     {
       key: "research", header: "מחקר", width: 90,
       cell: (r) => (r.is_research
-        ? <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-primary)", background: "rgba(0,102,204,0.08)", borderRadius: 9999, padding: "4px 10px" }}>מחקר</span>
+        ? <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-primary)", background: "color-mix(in srgb, var(--color-primary) 8%, transparent)", borderRadius: 9999, padding: "4px 10px" }}>מחקר</span>
         : <span style={{ fontSize: 13, color: "var(--color-border-strong)" }}>—</span>),
     },
     {

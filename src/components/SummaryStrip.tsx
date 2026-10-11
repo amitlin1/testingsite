@@ -10,9 +10,9 @@ import React from "react";
 export type SummaryTone = "blue" | "amber" | "green";
 
 const TONES: Record<SummaryTone, { color: string; bg: string }> = {
-    blue: { color: "var(--color-primary)", bg: "rgba(0,102,204,0.10)" },
-    amber: { color: "var(--color-warning-ink)", bg: "rgba(217,118,6,0.10)" },
-    green: { color: "var(--color-success-ink)", bg: "rgba(31,138,91,0.10)" },
+    blue: { color: "var(--color-primary)", bg: "color-mix(in srgb, var(--color-primary) 10%, transparent)" },
+    amber: { color: "var(--color-warning-ink)", bg: "color-mix(in srgb, var(--color-status-late) 10%, transparent)" },
+    green: { color: "var(--color-success-ink)", bg: "color-mix(in srgb, var(--color-status-approved) 10%, transparent)" },
 };
 
 const gridStyle: React.CSSProperties = {

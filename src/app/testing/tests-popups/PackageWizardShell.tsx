@@ -87,7 +87,7 @@ export default function PackageWizardShell({
               <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 10 }}>
                 {itemStepper.map((it) => (
                   <div key={it.key} onClick={it.onClick} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 9, background: it.active ? "var(--color-primary-soft)" : "transparent", cursor: "pointer" }}>
-                    <span style={{ width: 20, height: 20, borderRadius: "50%", background: it.done ? "rgba(31,138,91,0.1)" : it.active ? BLUE : "var(--color-canvas)", color: it.done ? GREEN : it.active ? "var(--color-canvas)" : MUTED, border: `1px solid ${it.active ? BLUE : HAIR}`, fontSize: 10.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{it.badge}</span>
+                    <span style={{ width: 20, height: 20, borderRadius: "50%", background: it.done ? "color-mix(in srgb, var(--color-status-approved) 10%, transparent)" : it.active ? BLUE : "var(--color-canvas)", color: it.done ? GREEN : it.active ? "var(--color-canvas)" : MUTED, border: `1px solid ${it.active ? BLUE : HAIR}`, fontSize: 10.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{it.badge}</span>
                     <div style={{ minWidth: 0, flex: 1, fontSize: 12.5, fontWeight: 600, color: it.active ? BLUE : INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.type}</div>
                     <span style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>{it.stateLabel}</span>
                   </div>
@@ -102,7 +102,7 @@ export default function PackageWizardShell({
               const past = i < stepIndex;
               return (
                 <div key={s.key} onClick={() => onStep(i)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 10px", borderRadius: 10, background: active ? "var(--color-primary-soft)" : "transparent", cursor: "pointer" }}>
-                  <span style={{ width: 23, height: 23, borderRadius: "50%", background: active ? BLUE : past ? "rgba(31,138,91,0.1)" : "var(--color-canvas)", color: active ? "var(--color-canvas)" : past ? GREEN : MUTED, border: `1px solid ${active ? BLUE : HAIR}`, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ width: 23, height: 23, borderRadius: "50%", background: active ? BLUE : past ? "color-mix(in srgb, var(--color-status-approved) 10%, transparent)" : "var(--color-canvas)", color: active ? "var(--color-canvas)" : past ? GREEN : MUTED, border: `1px solid ${active ? BLUE : HAIR}`, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     {past ? <Check size={12} strokeWidth={2.5} /> : i + 1}
                   </span>
                   <div style={{ minWidth: 0 }}>
@@ -128,7 +128,7 @@ export default function PackageWizardShell({
               <div style={{ fontSize: 12.5, color: MUTED_LT, whiteSpace: "nowrap", flexShrink: 0 }}>{stepCounter}</div>
             </div>
             {systemMsg && (
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "rgba(0,102,204,0.05)", border: "1px solid rgba(0,102,204,0.15)", borderRadius: 12, padding: "14px 16px", marginTop: 18 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "color-mix(in srgb, var(--color-primary) 5%, transparent)", border: "1px solid color-mix(in srgb, var(--color-primary) 15%, transparent)", borderRadius: 12, padding: "14px 16px", marginTop: 18 }}>
                 <span style={{ color: BLUE, marginTop: 1, display: "inline-flex" }}><Info size={20} strokeWidth={1.75} /></span>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: BLUE, marginBottom: 2 }}>הודעת מערכת</div>

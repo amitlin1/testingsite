@@ -7,28 +7,28 @@ import type { PackageItemState, PackageStatusKey } from "@/app/lib/packages/read
  * Package Stations.dc.html). One place, so every screen agrees.
  */
 
-export const BLUE = "#0066cc";
-export const BLUE_HOVER = "#0058b3";
-export const BLUE_SOFT = "#e6efff";
-export const FOCUS = "#0071e3";
-export const INK = "#1d1d1f";
-export const INK_2 = "#444";
-export const MUTED = "#7a7a7a";
-export const MUTED_LT = "#9a9aa0";
-export const HAIR = "#e0e0e0";
-export const HAIR_2 = "#f0f0f0";
-export const PAGE_BG = "#f5f5f7";
-export const AMBER = "#d97706";
-export const AMBER_INK = "#a86a1a";
-export const AMBER_BG = "#fdf3e6";
-export const AMBER_BORDER = "#f0e2cc";
-export const GREEN = "#1f8a5b";
-export const GREEN_BG = "rgba(31,138,91,0.07)";
-export const RED = "#bf3535";
-export const RED_HOVER = "#a82d2d";
-export const RED_BG = "rgba(191,53,53,0.06)";
-export const GREY = "#d4d4dc";
-export const SHADOW = "rgba(0,0,0,0.22) 3px 5px 30px 0";
+export const BLUE = "var(--color-primary)";
+export const BLUE_HOVER = "var(--color-primary-hover)";
+export const BLUE_SOFT = "var(--color-primary-soft)";
+export const FOCUS = "var(--color-primary-focus)";
+export const INK = "var(--color-ink)";
+export const INK_2 = "var(--color-ink-muted-70)";
+export const MUTED = "var(--color-ink-muted-48)";
+export const MUTED_LT = "var(--color-ink-muted-48)";
+export const HAIR = "var(--color-hairline)";
+export const HAIR_2 = "var(--color-divider-soft)";
+export const PAGE_BG = "var(--color-canvas-parchment)";
+export const AMBER = "var(--color-status-late)";  // dots and fills; text uses AMBER_INK
+export const AMBER_INK = "var(--color-warning-ink)";
+export const AMBER_BG = "var(--color-warning-bg)";
+export const AMBER_BORDER = "var(--color-warning-border)";
+export const GREEN = "var(--color-success-ink)";
+export const GREEN_BG = "var(--color-success-bg)";
+export const RED = "var(--color-destructive)";
+export const RED_HOVER = "var(--color-destructive-hover)";
+export const RED_BG = "var(--color-danger-bg)";
+export const GREY = "var(--color-border-strong)";
+export const SHADOW = "var(--shadow-modal)";
 
 /** Item state → legend colour + label (design: STATES). */
 export const ITEM_STATES: Record<PackageItemState, { label: string; color: string }> = {

@@ -227,8 +227,8 @@ export default function TestingRoutesPage() {
                     fontWeight: 600,
                     borderRadius: "9999px",
                     color: isNew ? "var(--color-ink-muted-48)" : "var(--color-primary)",
-                    background: isNew ? "var(--color-canvas-parchment)" : "rgba(0,102,204,0.08)",
-                    border: `1px solid ${isNew ? "var(--color-hairline)" : "rgba(0,102,204,0.2)"}`,
+                    background: isNew ? "var(--color-canvas-parchment)" : "color-mix(in srgb, var(--color-primary) 8%, transparent)",
+                    border: `1px solid ${isNew ? "var(--color-hairline)" : "color-mix(in srgb, var(--color-primary) 20%, transparent)"}`,
                   }}
                 >
                   {loadingRoute ? "טוען…" : isNew ? "מסלול חדש — ייווצר בשמירה" : "מסלול קיים נטען"}

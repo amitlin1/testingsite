@@ -717,7 +717,7 @@ export default function ReferenceItemsPage() {
                         fontSize: 13,
                         fontWeight: 600,
                         cursor: "pointer",
-                        bgcolor: active ? "rgba(0,102,204,0.08)" : C.card,
+                        bgcolor: active ? "color-mix(in srgb, var(--color-primary) 8%, transparent)" : C.card,
                         color: active ? C.accent : C.ink,
                         "&:hover": { borderColor: C.accent },
                       }}

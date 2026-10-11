@@ -3,16 +3,16 @@ import * as React from "react";
 import type { ResolvedDay } from "@/lib/workHours/types";
 
 /* ---------- Shifthouse tokens (single action blue, no shadows) ---------- */
-export const INK = "#1d1d1f";
-export const BODY = "#444";
-export const MUTED = "#7a7a7a";
-export const FAINT = "#9a9aa0";
-export const HAIRLINE = "#e0e0e0";
-export const SOFT = "#f5f5f7";
-export const DIVIDER = "#f0f0f0";
-export const BLUE = "#0066cc";
-export const TINT = "rgba(0,102,204,0.09)";
-export const DANGER = "#bf3535";
+export const INK = "var(--color-ink)";
+export const BODY = "var(--color-ink-muted-70)";
+export const MUTED = "var(--color-ink-muted-48)";
+export const FAINT = "var(--color-ink-muted-48)";  // was #9a9aa0 (2.8:1) on real data
+export const HAIRLINE = "var(--color-hairline)";
+export const SOFT = "var(--color-canvas-parchment)";
+export const DIVIDER = "var(--color-divider-soft)";
+export const BLUE = "var(--color-primary)";
+export const TINT = "var(--color-primary-soft)";
+export const DANGER = "var(--color-destructive)";
 
 export const card: React.CSSProperties = {
   background: "var(--color-canvas)",

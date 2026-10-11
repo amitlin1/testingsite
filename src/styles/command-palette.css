@@ -10,13 +10,13 @@
    ========================================================================= */
 
 :root {
-  --cp-primary-soft: rgba(0, 102, 204, 0.08);
-  --cp-primary-soft-2: rgba(0, 102, 204, 0.16);
+  --cp-primary-soft: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  --cp-primary-soft-2: color-mix(in srgb, var(--color-primary) 16%, transparent);
   /* Tickets hovers to a SOFT primary border (var(--color-primary-border)), not the full brand
      colour — at full strength the outline reads as an error state. */
-  --cp-primary-border: rgba(0, 102, 204, 0.28);
+  --cp-primary-border: color-mix(in srgb, var(--color-primary) 28%, transparent);
   --cp-shadow-pop: 0 10px 34px rgba(17, 21, 31, 0.14);
-  --cp-ring: 0 0 0 3px rgba(0, 113, 227, 0.15);
+  --cp-ring: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
   /* Tickets separates the icon/kbd tint (--text-3) from the placeholder
      (--text-4, lighter). tokens.css has only one muted ink, so the lighter
      step is derived here. */

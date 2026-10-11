@@ -25,15 +25,15 @@ import { apiFetch } from "@/lib/api/client";
  */
 
 // ---- Design tokens ----
-export const BLUE = "#0066cc";
-export const OK = "#1f8a5b";
-export const BAD = "#bf3535";
-export const INK = "#1d1d1f";
-export const MUTED = "#7a7a7a";
-export const MUTED_LT = "#9a9aa0";
-export const HAIR = "#e0e0e0";
-export const PARCHMENT = "#f5f5f7";
-export const CHIP_BG = "#f0f0f2";
+export const BLUE = "var(--color-primary)";
+export const OK = "var(--color-success-ink)";
+export const BAD = "var(--color-destructive)";
+export const INK = "var(--color-ink)";
+export const MUTED = "var(--color-ink-muted-48)";
+export const MUTED_LT = "var(--color-ink-muted-48)";
+export const HAIR = "var(--color-hairline)";
+export const PARCHMENT = "var(--color-canvas-parchment)";
+export const CHIP_BG = "var(--color-canvas-parchment)";
 export const PRODUCT_SHADOW = "rgba(0,0,0,0.22) 3px 5px 30px";
 
 export type RefImg = { id: number; url: string };
@@ -68,7 +68,7 @@ export async function lookupRU(sku: string, itemTypeId: number | null) {
 // ---- presentational helpers ----
 export function SystemNote({ children }: { children: React.ReactNode }) {
   return (
-    <Box sx={{ bgcolor: "rgba(0,102,204,0.05)", border: "1px solid rgba(0,102,204,0.14)", borderRadius: "14px", p: "14px 16px" }}>
+    <Box sx={{ bgcolor: "color-mix(in srgb, var(--color-primary) 5%, transparent)", border: "1px solid color-mix(in srgb, var(--color-primary) 14%, transparent)", borderRadius: "14px", p: "14px 16px" }}>
       <Typography sx={{ fontSize: 11, fontWeight: 700, color: BLUE, letterSpacing: "0.02em", mb: 0.5 }}>הודעת מערכת</Typography>
       <Typography sx={{ fontSize: 15, lineHeight: 1.5, color: INK }}>{children}</Typography>
     </Box>
@@ -79,7 +79,7 @@ export function PassFail({ value, onChange }: { value: Photos["ok"]; onChange: (
   const opt = (v: "pass" | "fail") => {
     const active = value === v;
     const color = v === "pass" ? OK : BAD;
-    const tint = v === "pass" ? "rgba(31,138,91,0.08)" : "rgba(191,53,53,0.08)";
+    const tint = v === "pass" ? "color-mix(in srgb, var(--color-status-approved) 8%, transparent)" : "color-mix(in srgb, var(--color-destructive) 8%, transparent)";
     return (
       <Button key={v} onClick={() => onChange(v)} disableElevation
         startIcon={v === "pass" ? <CheckIcon /> : <CloseIcon />}
@@ -216,7 +216,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
           </Box>
         )}
         {!hasSlots && <Box sx={{ flex: 1 }} />}
-        <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: BLUE, whiteSpace: "nowrap", bgcolor: "rgba(0,102,204,0.08)", borderRadius: "9999px", px: 1.5, py: 0.5, fontVariantNumeric: "tabular-nums" }}>
+        <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: BLUE, whiteSpace: "nowrap", bgcolor: "color-mix(in srgb, var(--color-primary) 8%, transparent)", borderRadius: "9999px", px: 1.5, py: 0.5, fontVariantNumeric: "tabular-nums" }}>
           {counterText}
         </Typography>
       </Box>
@@ -226,7 +226,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); takeFiles(e.dataTransfer.files); }}
-        sx={{ position: "relative", height: 420, borderRadius: "18px", overflow: "hidden", border: dragging ? `2px dashed ${BLUE}` : `1px solid ${HAIR}`, bgcolor: dragging ? "rgba(0,102,204,0.06)" : "var(--color-canvas-parchment)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        sx={{ position: "relative", height: 420, borderRadius: "18px", overflow: "hidden", border: dragging ? `2px dashed ${BLUE}` : `1px solid ${HAIR}`, bgcolor: dragging ? "color-mix(in srgb, var(--color-primary) 6%, transparent)" : "var(--color-canvas-parchment)", display: "flex", alignItems: "center", justifyContent: "center" }}>
         {bigSrc ? (
           <Box component="img" src={bigSrc} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
@@ -257,13 +257,13 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
           {hasSlots && captured >= total ? "צלם מחדש" : "צלם"}
         </Button>
         <Button onClick={openGallery} variant="outlined" disableElevation startIcon={<PhotoLibraryIcon />}
-          sx={{ flex: 1, height: 58, borderRadius: "14px", fontSize: 15.5, fontWeight: 600, textTransform: "none", color: BLUE, borderColor: HAIR, "&:hover": { borderColor: BLUE, bgcolor: "rgba(0,102,204,0.04)" }, "&:active": { transform: "scale(0.98)" } }}>
+          sx={{ flex: 1, height: 58, borderRadius: "14px", fontSize: 15.5, fontWeight: 600, textTransform: "none", color: BLUE, borderColor: HAIR, "&:hover": { borderColor: BLUE, bgcolor: "color-mix(in srgb, var(--color-primary) 4%, transparent)" }, "&:active": { transform: "scale(0.98)" } }}>
           העלה תמונות
         </Button>
       </Box>
 
       {alertMsg && (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, borderRadius: "12px", border: `1px solid ${BAD}`, bgcolor: "rgba(191,53,53,0.06)", px: 1.5, py: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, borderRadius: "12px", border: `1px solid ${BAD}`, bgcolor: "color-mix(in srgb, var(--color-destructive) 6%, transparent)", px: 1.5, py: 1 }}>
           <WarningIcon sx={{ fontSize: 16, color: BAD, flexShrink: 0 }} />
           <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: BAD }}>{alertMsg}</Typography>
         </Box>
@@ -365,7 +365,7 @@ export function StationShell({
               </Typography>
             )}
             {workerId != null && (
-              <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, mt: 1.5, bgcolor: "rgba(0,102,204,0.08)", borderRadius: "9999px", px: "11px", py: "4px", fontSize: 12, fontWeight: 600, color: BLUE }}>
+              <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, mt: 1.5, bgcolor: "color-mix(in srgb, var(--color-primary) 8%, transparent)", borderRadius: "9999px", px: "11px", py: "4px", fontSize: 12, fontWeight: 600, color: BLUE }}>
                 <PersonIcon sx={{ fontSize: 13 }} />{workerName || `#${workerId}`}
               </Box>
             )}
@@ -377,7 +377,7 @@ export function StationShell({
               const done = i < currentIndex;
               const on = i === currentIndex;
               return (
-                <Box key={ph.key} onClick={() => onStep(i)} sx={{ display: "flex", alignItems: "center", gap: 1.5, p: "9px 10px", borderRadius: "12px", cursor: "pointer", bgcolor: on ? "rgba(0,102,204,0.07)" : "transparent" }}>
+                <Box key={ph.key} onClick={() => onStep(i)} sx={{ display: "flex", alignItems: "center", gap: 1.5, p: "9px 10px", borderRadius: "12px", cursor: "pointer", bgcolor: on ? "color-mix(in srgb, var(--color-primary) 7%, transparent)" : "transparent" }}>
                   <Box sx={{ width: 28, height: 28, flexShrink: 0, borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums",
                     ...(done ? { bgcolor: OK, color: "var(--color-on-primary)" } : on ? { bgcolor: BLUE, color: "var(--color-on-primary)" } : { bgcolor: "var(--color-canvas)", border: `1.5px solid ${HAIR}`, color: MUTED_LT }) }}>
                     {done ? <CheckIcon sx={{ fontSize: 15 }} /> : i + 1}
@@ -412,7 +412,7 @@ export function StationShell({
               const on = i === currentIndex;
               const done = i < currentIndex;
               return (
-                <Box key={ph.key} onClick={() => onStep(i)} sx={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 600, borderRadius: "9999px", px: "14px", py: "6px", cursor: "pointer", bgcolor: on ? BLUE : done ? "rgba(31,138,91,0.1)" : CHIP_BG, color: on ? "var(--color-canvas)" : done ? OK : MUTED }}>
+                <Box key={ph.key} onClick={() => onStep(i)} sx={{ whiteSpace: "nowrap", fontSize: 13, fontWeight: 600, borderRadius: "9999px", px: "14px", py: "6px", cursor: "pointer", bgcolor: on ? BLUE : done ? "color-mix(in srgb, var(--color-status-approved) 10%, transparent)" : CHIP_BG, color: on ? "var(--color-canvas)" : done ? OK : MUTED }}>
                   {i + 1}. {ph.title}
                 </Box>
               );

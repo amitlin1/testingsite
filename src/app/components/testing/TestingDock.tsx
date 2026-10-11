@@ -130,8 +130,8 @@ export default function TestingDock({
               fontSize: 12,
               fontWeight: 600,
               whiteSpace: "nowrap",
-              bgcolor: hasWorker ? "rgba(0,102,204,0.08)" : "rgba(217,118,6,0.10)",
-              border: `1px solid ${hasWorker ? "rgba(0,102,204,0.22)" : "rgba(217,118,6,0.32)"}`,
+              bgcolor: hasWorker ? "color-mix(in srgb, var(--color-primary) 8%, transparent)" : "color-mix(in srgb, var(--color-status-late) 10%, transparent)",
+              border: `1px solid ${hasWorker ? "color-mix(in srgb, var(--color-primary) 22%, transparent)" : "color-mix(in srgb, var(--color-status-late) 32%, transparent)"}`,
               color: hasWorker ? "var(--color-primary)" : "var(--color-warning-ink)",
             }}
           >

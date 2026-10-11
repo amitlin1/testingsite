@@ -5,13 +5,13 @@ import { sxToStyle, type SxInput } from "./sx";
 type TColor = "standard" | "primary" | "secondary" | "success" | "error" | "warning" | "info";
 
 const TINT: Record<TColor, { bg: string; fg: string }> = {
-  standard: { bg: "rgba(0,102,204,.08)", fg: "var(--color-primary)" },
-  primary: { bg: "rgba(0,102,204,.10)", fg: "var(--color-primary)" },
+  standard: { bg: "color-mix(in srgb, var(--color-primary) 8%, transparent)", fg: "var(--color-primary)" },
+  primary: { bg: "color-mix(in srgb, var(--color-primary) 10%, transparent)", fg: "var(--color-primary)" },
   secondary: { bg: "rgba(0,0,0,.06)", fg: "var(--color-ink)" },
-  success: { bg: "rgba(31,138,91,.10)", fg: "var(--color-status-approved)" },
-  error: { bg: "rgba(191,53,53,.10)", fg: "var(--color-destructive)" },
-  warning: { bg: "rgba(217,119,6,.10)", fg: "var(--color-status-late)" },
-  info: { bg: "rgba(0,102,204,.08)", fg: "var(--color-primary)" },
+  success: { bg: "color-mix(in srgb, var(--color-status-approved) 10%, transparent)", fg: "var(--color-status-approved)" },
+  error: { bg: "color-mix(in srgb, var(--color-destructive) 10%, transparent)", fg: "var(--color-destructive)" },
+  warning: { bg: "color-mix(in srgb, var(--color-status-late) 10%, transparent)", fg: "var(--color-status-late)" },
+  info: { bg: "color-mix(in srgb, var(--color-primary) 8%, transparent)", fg: "var(--color-primary)" },
 };
 
 interface GroupCtx {

@@ -331,7 +331,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         onBack={onBack} nextLabel={nextLabel} nextEnabled={nextEnabled && !busy} onNext={onNext} busy={submitting}
       >
         {error && (
-          <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid rgba(191,53,53,0.25)", borderRadius: 10, padding: "11px 14px" }}>
+          <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent)", borderRadius: 10, padding: "11px 14px" }}>
             <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} /></span>
             <div style={{ fontSize: 13, fontWeight: 600, color: RED }}>{error}</div>
           </div>
@@ -370,7 +370,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
                 </div>
               </div>
               {wr && (
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 11, background: wr.pass ? GREEN_BG : RED_BG, border: `1px solid ${wr.pass ? "rgba(31,138,91,0.22)" : "rgba(191,53,53,0.25)"}`, borderRadius: 11, padding: "13px 15px", marginTop: 16, maxWidth: 620 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 11, background: wr.pass ? GREEN_BG : RED_BG, border: `1px solid ${wr.pass ? "color-mix(in srgb, var(--color-status-approved) 22%, transparent)" : "color-mix(in srgb, var(--color-destructive) 25%, transparent)"}`, borderRadius: 11, padding: "13px 15px", marginTop: 16, maxWidth: 620 }}>
                   <span style={{ color: wr.pass ? GREEN : RED, marginTop: 1, display: "inline-flex" }}><Check size={18} strokeWidth={2} /></span>
                   <div>
                     <div style={{ fontSize: 14.5, fontWeight: 600, color: wr.pass ? GREEN : RED }}>{wr.pass ? "משקל תקין" : "משקל לא תקין"}</div>
@@ -404,8 +404,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               {items.map((it, i) => {
                 const w = workOf(it.item_id);
                 return (
-                  <div key={it.item_id} style={{ border: `1px solid ${w.done ? "rgba(31,138,91,0.3)" : HAIR}`, borderRadius: 14, padding: "14px 16px", background: w.done ? "rgba(31,138,91,0.04)" : "var(--color-canvas)", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                    <span style={{ width: 34, height: 34, borderRadius: 9, background: w.done ? "rgba(31,138,91,0.1)" : "var(--color-canvas-parchment)", color: w.done ? GREEN : MUTED, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
+                  <div key={it.item_id} style={{ border: `1px solid ${w.done ? "color-mix(in srgb, var(--color-status-approved) 30%, transparent)" : HAIR}`, borderRadius: 14, padding: "14px 16px", background: w.done ? "color-mix(in srgb, var(--color-status-approved) 4%, transparent)" : "var(--color-canvas)", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                    <span style={{ width: 34, height: 34, borderRadius: 9, background: w.done ? "color-mix(in srgb, var(--color-status-approved) 10%, transparent)" : "var(--color-canvas-parchment)", color: w.done ? GREEN : MUTED, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 600 }}>{it.item_type_desc}</div>
                       <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{it.makat ?? "—"} · {it.serial_no ?? "ללא סריאלי"}{w.refWeight != null ? ` · ייחוס ${w.refWeight} גר׳` : ""}</div>
@@ -491,7 +491,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "36px 0 8px" }}>
-            <span style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(31,138,91,0.09)", color: GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={30} strokeWidth={2} /></span>
+            <span style={{ width: 64, height: 64, borderRadius: "50%", background: "color-mix(in srgb, var(--color-status-approved) 9%, transparent)", color: GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={30} strokeWidth={2} /></span>
             <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.3px", marginTop: 16 }}>פתיחת המארז הושלמה</div>
             <div style={{ fontSize: 14.5, color: INK_2, marginTop: 7, maxWidth: 440, lineHeight: 1.55 }}>כל פריט קיבל תוצאה וממשיך לעמדה הראשונה במסלול שלו. המארז ממתין לסגירה עד שכל פריטיו יחזרו.</div>
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 20 }}>

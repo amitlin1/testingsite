@@ -68,15 +68,15 @@ type DraftLine = {
   route_warning: string | null;
 };
 
-const BLUE = "#0066cc";
-const INK = "#1d1d1f";
-const MUTED = "#7a7a7a";
-const MUTED_LT = "#9a9aa0";
-const HAIR = "#e0e0e0";
-const AMBER_INK = "#a86a1a";
-const AMBER_BG = "#fdf3e6";
-const AMBER_BORDER = "#f0e2cc";
-const GREEN = "#1f8a5b";
+const BLUE = "var(--color-primary)";
+const INK = "var(--color-ink)";
+const MUTED = "var(--color-ink-muted-48)";
+const MUTED_LT = "var(--color-ink-muted-48)";
+const HAIR = "var(--color-hairline)";
+const AMBER_INK = "var(--color-warning-ink)";
+const AMBER_BG = "var(--color-warning-bg)";
+const AMBER_BORDER = "var(--color-warning-border)";
+const GREEN = "var(--color-success-ink)";
 
 let keySeq = 1;
 const toDraft = (l: ServerLine): DraftLine => ({
@@ -304,8 +304,8 @@ export default function PackagesSettingsPage() {
     return {
       label: empty ? "אין תכולה" : bad ? "מסלול לא תקין" : "תקין",
       tone: empty ? MUTED : bad ? AMBER_INK : GREEN,
-      bg: empty ? "var(--color-canvas-parchment)" : bad ? AMBER_BG : "rgba(31,138,91,0.07)",
-      border: empty ? HAIR : bad ? AMBER_BORDER : "rgba(31,138,91,0.22)",
+      bg: empty ? "var(--color-canvas-parchment)" : bad ? AMBER_BG : "color-mix(in srgb, var(--color-status-approved) 7%, transparent)",
+      border: empty ? HAIR : bad ? AMBER_BORDER : "color-mix(in srgb, var(--color-status-approved) 22%, transparent)",
       icon: empty ? <Minus size={13} strokeWidth={1.75} /> : bad ? <CircleAlert size={13} strokeWidth={1.75} /> : <CircleCheck size={13} strokeWidth={1.75} />,
     };
   };

@@ -453,7 +453,7 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
               alignItems: "center",
               gap: 10,
               padding: "10px 20px",
-              background: "rgba(191,53,53,.06)",
+              background: "color-mix(in srgb, var(--color-destructive) 6%, transparent)",
               borderBottom: "1px solid var(--color-hairline)",
               fontSize: 12.5,
               color: "var(--color-destructive)",

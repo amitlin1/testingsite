@@ -139,7 +139,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
         nextLabel={nextLabel} nextEnabled={nextEnabled} onNext={onNext} busy={submitting}
       >
         {error && (
-          <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid rgba(191,53,53,0.25)", borderRadius: 10, padding: "11px 14px" }}>
+          <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent)", borderRadius: 10, padding: "11px 14px" }}>
             <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} /></span>
             <div style={{ fontSize: 13, fontWeight: 600, color: RED }}>{error}</div>
           </div>
@@ -178,7 +178,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
                         <span style={{ fontSize: 14, fontWeight: 600, color: isPacked ? BLUE : INK }}>נארז</span>
                       </div>
                     ) : (
-                      <button type="button" onClick={() => setDecideFor(it)} style={{ minHeight: 44, background: d == null ? "var(--color-canvas)" : d.decision === "packed_anyway" ? "var(--color-primary-soft)" : RED_BG, color: d == null ? AMBER_INK : d.decision === "packed_anyway" ? BLUE : RED, border: `1px solid ${d == null ? AMBER_BORDER : d.decision === "packed_anyway" ? BLUE : "rgba(191,53,53,0.25)"}`, borderRadius: 9999, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+                      <button type="button" onClick={() => setDecideFor(it)} style={{ minHeight: 44, background: d == null ? "var(--color-canvas)" : d.decision === "packed_anyway" ? "var(--color-primary-soft)" : RED_BG, color: d == null ? AMBER_INK : d.decision === "packed_anyway" ? BLUE : RED, border: `1px solid ${d == null ? AMBER_BORDER : d.decision === "packed_anyway" ? BLUE : "color-mix(in srgb, var(--color-destructive) 25%, transparent)"}`, borderRadius: 9999, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
                         {d == null ? "נדרשת החלטה" : d.decision === "packed_anyway" ? "נארז בכל זאת" : "חסר במארז"}
                       </button>
                     )}
@@ -212,7 +212,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
 
         {stepKey === "done" && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "36px 0 8px" }}>
-            <span style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(31,138,91,0.09)", color: GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={30} strokeWidth={2} /></span>
+            <span style={{ width: 64, height: 64, borderRadius: "50%", background: "color-mix(in srgb, var(--color-status-approved) 9%, transparent)", color: GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={30} strokeWidth={2} /></span>
             <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.3px", marginTop: 16 }}>המארז נסגר</div>
             <div style={{ fontSize: 14.5, color: INK_2, marginTop: 7, maxWidth: 440, lineHeight: 1.55 }}>המארז והפריטים שבו סומנו כנארזו. המארז עובר לסטטוס הושלם ומופיע במשלוח כמארז שסיים.</div>
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 20 }}>

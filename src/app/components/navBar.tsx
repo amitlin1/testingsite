@@ -38,10 +38,10 @@ import { settingsLinks } from "../settings/settingsNav";
 export const SIDEBAR_WIDTH = 240;
 export const SIDEBAR_COLLAPSED_WIDTH = 56;
 
-const SIDEBAR_BG = "#15171a";
-const ACTIVE_BG = "rgba(41,151,255,0.14)";
-const ACTIVE_BAR = "#2997ff";
-const INACTIVE_TEXT = "#b8bcc2";
+const SIDEBAR_BG = "var(--color-nav-bg)";
+const ACTIVE_BG = "color-mix(in srgb, var(--color-primary-on-dark) 14%, transparent)";
+const ACTIVE_BAR = "var(--color-primary-on-dark)";
+const INACTIVE_TEXT = "var(--color-nav-ink)";
 
 // ==========================================
 // 1. קומפוננטת טמפלט (DRY) לפריט ניווט בתפריט

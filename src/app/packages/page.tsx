@@ -33,7 +33,7 @@ import "./packages.css";
 
 type Option = { value: string; label: string };
 
-const chipBg = (s: PackageView["items"][number]["state"]) => (s === "done" ? "var(--color-success-bg)" : s === "missing" ? "rgba(191,53,53,.08)" : "var(--color-canvas-parchment)");
+const chipBg = (s: PackageView["items"][number]["state"]) => (s === "done" ? "var(--color-success-bg)" : s === "missing" ? "color-mix(in srgb, var(--color-destructive) 8%, transparent)" : "var(--color-canvas-parchment)");
 const chipTone = (s: PackageView["items"][number]["state"]) => (s === "done" ? GREEN : s === "missing" ? RED : MUTED);
 const itemLine = (it: PackageView["items"][number]) => (it.serial_no ? `${it.serial_no} · ${it.makat ?? "—"}` : `${it.makat ?? "—"} · ללא סריאלי`);
 const blockedNote = (p: PackageView) =>

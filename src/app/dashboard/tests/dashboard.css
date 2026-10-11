@@ -18,16 +18,16 @@
   /* Dashboard-local palette. Every value is from §9 / the build guide's table;
      nothing here invents a colour, it only gives the ramp and the two amber
      roles a name so no component carries a raw hex. */
-  --dash-ramp-1: #0066cc;
+  --dash-ramp-1: var(--color-primary);
   --dash-ramp-2: #4d94dd;
   --dash-ramp-3: #86b7e8;
   --dash-ramp-4: #b8d4f0;
   --dash-ramp-5: #dcdce2;
-  --dash-tint: #e6efff;
-  --dash-amber-ink: #a86a1a;
+  --dash-tint: var(--color-primary-soft);
+  --dash-amber-ink: var(--color-warning-ink);   /* was #a86a1a: 4.04:1 on its tint */
   --dash-amber-on-dark: #f0b366;
-  --dash-amber-tint: #fdf3e6;
-  --dash-amber-hairline: #f0e2cc;
+  --dash-amber-tint: var(--color-warning-bg);
+  --dash-amber-hairline: var(--color-warning-border);
   --dash-green-on-dark: #7fd1a8;
   --dash-strip-divider: rgba(255, 255, 255, 0.1);
   --dash-row-hover: rgba(0, 0, 0, 0.02);
@@ -73,7 +73,7 @@
   height: 10px;
 }
 .dash-scroll::-webkit-scrollbar-thumb {
-  background: #d4d4dc;
+  background: var(--color-border-strong);
   border-radius: 9999px;
   border: 3px solid transparent;
   background-clip: content-box;
