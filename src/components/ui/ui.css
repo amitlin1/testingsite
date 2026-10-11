@@ -174,7 +174,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: inherit;
-  font-size: 17px;
+  font-size: var(--text-body);
   border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
   padding: 10px 14px;
@@ -196,10 +196,10 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 /* Field wrapper (used by TextField, supports adornments) */
 .sh-field-label {
   display: block;
-  font-size: 14px;
+  font-size: var(--text-small);
   font-weight: var(--fw-semibold);
   margin-bottom: 8px;
-  color: var(--color-ink);
+  color: var(--color-ink-muted-80);
 }
 .sh-field-label--error { color: var(--color-destructive); }
 .sh-input-wrap {
@@ -229,7 +229,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   outline: none;
   background: transparent;
   font-family: inherit;
-  font-size: 17px;
+  font-size: var(--text-body);
   color: var(--color-ink);
   padding: 10px 0;
 }
@@ -260,7 +260,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   gap: 8px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 17px;
+  font-size: var(--text-body);
   color: var(--color-ink);
   background: var(--color-canvas);
   border: 1px solid var(--color-field-border);
@@ -290,7 +290,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 17px;
+  font-size: var(--text-body);
   color: var(--color-ink);
   padding: 9px 12px;
   border-radius: var(--r-xs);
@@ -330,8 +330,8 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-combo-option[data-highlighted] { background: var(--color-canvas-parchment); }
 .sh-combo-check { width: 15px; display: inline-flex; flex-shrink: 0; color: var(--color-primary); }
 .sh-combo-text { min-width: 0; }
-.sh-combo-sub { display: block; margin-top: 1px; font-size: 12px; color: var(--color-ink-muted-40); }
-.sh-combo-empty { font-size: 14px; color: var(--color-ink-muted-40); }
+.sh-combo-sub { display: block; margin-top: 1px; font-size: 12px; color: var(--color-ink-muted-48); }
+.sh-combo-empty { font-size: 14px; color: var(--color-ink-muted-48); }
 
 /* --------------------------------------------------------------- Menu ----- */
 .sh-menu-content {
@@ -346,7 +346,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 15px;
+  font-size: var(--text-body);
   color: var(--color-ink);
   padding: 9px 12px;
   border-radius: var(--r-xs);
@@ -401,7 +401,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   [data-drag-handle] :is(button, a, input, textarea, select, [role="button"], [data-no-drag]) { cursor: auto; }
   [data-drag-handle] :is(button, a, [role="button"]) { cursor: pointer; }
 }
-.sh-dialog-body { padding: 0 28px 24px; overflow-y: auto; font-size: 17px; line-height: 1.47; }
+.sh-dialog-body { padding: 0 28px 24px; overflow-y: auto; font-size: var(--text-body); line-height: var(--lh-body); }
 .sh-dialog-actions {
   display: flex;
   justify-content: flex-start;
