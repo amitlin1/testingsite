@@ -36,6 +36,7 @@ export const LinearProgress = forwardRef<HTMLDivElement, LinearProgressProps>(fu
       {...rest}
     >
       <div
+        className={variant === "determinate" ? undefined : "sh-progress-indeterminate"}
         style={
           variant === "determinate"
             ? { width: `${Math.min(100, Math.max(0, value))}%`, height: "100%", background: progressColor(color), transition: "width .3s ease" }

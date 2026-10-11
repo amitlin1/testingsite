@@ -11,7 +11,7 @@ export interface SkeletonProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 export const Skeleton = forwardRef<HTMLSpanElement, SkeletonProps>(function Skeleton(
-  { variant = "text", width, height, animation = "wave", sx, style, ...rest },
+  { variant = "text", width, height, animation = "wave", sx, style, className, ...rest },
   ref,
 ) {
   const radius =
@@ -28,5 +28,6 @@ export const Skeleton = forwardRef<HTMLSpanElement, SkeletonProps>(function Skel
     backgroundSize: animation === "wave" ? "200% 100%" : undefined,
     animation: animation === "wave" ? "sh-shimmer 1.4s infinite" : animation === "pulse" ? "sh-pulse 1.5s ease-in-out infinite" : undefined,
   };
-  return <span ref={ref} style={{ ...base, ...sxToStyle(sx), ...style }} {...rest} />;
+  // .sh-skeleton: the reduced-motion rule in ui.css holds it still.
+  return <span ref={ref} className={className ? `sh-skeleton ${className}` : "sh-skeleton"} style={{ ...base, ...sxToStyle(sx), ...style }} {...rest} />;
 });
