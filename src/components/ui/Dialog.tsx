@@ -4,6 +4,8 @@ import * as RDialog from "@radix-ui/react-dialog";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
 import { useDraggable } from "./useDraggable";
+import { IconButton } from "./IconButton";
+import { X } from "lucide-react";
 
 /** Whether the surrounding Dialog moves; its DialogTitle is the handle only then
  *  (a fixed delete confirmation shows no move cursor). */
@@ -82,15 +84,22 @@ export function Dialog({
 
 export interface DialogTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
   sx?: SxInput;
+  /** Renders the one close button every dialog shares, at the inline end. */
+  onClose?: () => void;
 }
 export const DialogTitle = forwardRef<HTMLHeadingElement, DialogTitleProps>(function DialogTitle(
-  { sx, style, className, children, ...rest },
+  { sx, style, className, children, onClose, ...rest },
   ref,
 ) {
   const draggable = React.useContext(DraggableDialog);
   return (
     <RDialog.Title ref={ref} data-drag-handle={draggable ? "" : undefined} className={cn("sh-dialog-title", className)} style={{ ...sxToStyle(sx), ...style }} {...rest}>
       {children}
+      {onClose && (
+        <IconButton className="sh-dialog-close" size="small" aria-label="סגירה" onClick={onClose}>
+          <X size={18} strokeWidth={1.75} aria-hidden />
+        </IconButton>
+      )}
     </RDialog.Title>
   );
 });
@@ -122,7 +131,7 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
 
 export function DialogContentText({ sx, style, children, ...rest }: React.HTMLAttributes<HTMLParagraphElement> & { sx?: SxInput }) {
   return (
-    <p style={{ margin: 0, fontSize: 17, lineHeight: 1.47, color: "var(--color-ink-muted-80)", ...sxToStyle(sx), ...style }} {...rest}>
+    <p style={{ margin: 0, fontSize: "var(--text-body)", lineHeight: "var(--lh-body)", color: "var(--color-ink-muted-80)", ...sxToStyle(sx), ...style }} {...rest}>
       {children}
     </p>
   );

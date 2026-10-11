@@ -386,9 +386,9 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   margin: 0;
   font-family: var(--font-display);
   font-weight: var(--fw-semibold);
-  font-size: 24px;
-  letter-spacing: -0.374px;
-  padding: 24px 28px 16px;
+  font-size: var(--text-title);
+  line-height: 1.25;
+  padding: 22px 24px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -401,15 +401,21 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   [data-drag-handle] :is(button, a, input, textarea, select, [role="button"], [data-no-drag]) { cursor: auto; }
   [data-drag-handle] :is(button, a, [role="button"]) { cursor: pointer; }
 }
-.sh-dialog-body { padding: 0 28px 24px; overflow-y: auto; font-size: var(--text-body); line-height: var(--lh-body); }
+.sh-dialog-body { padding: 0 24px 24px; overflow-y: auto; font-size: var(--text-body); line-height: var(--lh-body); }
+/* Actions sit at the inline END and the primary (filled) action is always
+   last in reading order — the artboards’ footer, made a rule so every dialog
+   agrees whatever order its buttons are written in. */
 .sh-dialog-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
+  align-items: center;
   gap: 12px;
-  padding: 16px 28px;
-  background: var(--color-canvas-parchment);
+  padding: 16px 24px;
+  background: var(--color-surface-pearl);
   border-top: 1px solid var(--color-hairline);
 }
+.sh-dialog-actions > .sh-btn--contained { order: 1; }
+.sh-dialog-close { margin-inline-start: auto; margin-inline-end: -8px; color: var(--color-ink-muted-48); }
 
 /* ---------------------------------------------------------- Switch etc. --- */
 .sh-switch {
