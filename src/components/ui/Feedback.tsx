@@ -112,7 +112,7 @@ export function Snackbar({ open, autoHideDuration, onClose, anchorOrigin, messag
   return createPortal(
     <div style={{ ...pos, ...sxToStyle(sx) }}>
       {children ?? (
-        <div style={{ background: "var(--color-ink)", color: "#fff", padding: "12px 18px", borderRadius: "var(--r-sm)", fontSize: 15, display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ background: "var(--color-ink)", color: "var(--color-on-dark)", padding: "12px 18px", borderRadius: "var(--r-sm)", fontSize: 15, display: "flex", alignItems: "center", gap: 12 }}>
           {message}
           {action}
         </div>

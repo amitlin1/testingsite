@@ -37,8 +37,8 @@ const LEGACY_COLOR: Record<string, string> = {
   primary: "var(--color-primary)",
   secondary: "var(--color-ink-muted-80)",
   error: "var(--color-destructive)",
-  success: "var(--color-status-approved)",
-  warning: "var(--color-status-late)",
+  success: "var(--color-success-ink)",
+  warning: "var(--color-warning-ink)",
   inherit: "inherit",
 };
 

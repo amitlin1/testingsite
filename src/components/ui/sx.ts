@@ -29,15 +29,17 @@ const COLOR_TOKENS: Record<string, string> = {
   "secondary.main": "var(--color-ink-muted-80)",
   error: "var(--color-destructive)",
   "error.main": "var(--color-destructive)",
-  success: "var(--color-status-approved)",
-  "success.main": "var(--color-status-approved)",
-  warning: "var(--color-status-late)",
-  "warning.main": "var(--color-status-late)",
+  // These names are used for text and for fills under white text, so they map
+  // to the AA-safe *-ink shades, not the bare status colours.
+  success: "var(--color-success-ink)",
+  "success.main": "var(--color-success-ink)",
+  warning: "var(--color-warning-ink)",
+  "warning.main": "var(--color-warning-ink)",
   info: "var(--color-primary)",
   "info.main": "var(--color-primary)",
   "text.primary": "var(--color-ink)",
   "text.secondary": "var(--color-ink-muted-48)",
-  "text.disabled": "var(--color-ink-muted-48)",
+  "text.disabled": "var(--color-ink-muted-40)",
   divider: "var(--color-hairline)",
   // Same soft surface the system uses for hover/highlight (.sh-select-item).
   "action.hover": "var(--color-canvas-parchment)",

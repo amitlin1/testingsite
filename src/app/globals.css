@@ -25,10 +25,21 @@
   --color-on-dark: var(--color-on-dark);
   --color-body-muted: var(--color-body-muted);
   --color-ink-muted-80: var(--color-ink-muted-80);
+  --color-ink-muted-70: var(--color-ink-muted-70);
   --color-ink-muted-48: var(--color-ink-muted-48);
+  --color-ink-muted-40: var(--color-ink-muted-40);
 
   --color-divider-soft: var(--color-divider-soft);
   --color-hairline: var(--color-hairline);
+  --color-border-strong: var(--color-border-strong);
+  --color-field-border: var(--color-field-border);
+  --color-primary-tint: var(--color-primary-tint);
+  --color-primary-soft: var(--color-primary-soft);
+  --color-warning-ink: var(--color-warning-ink);
+  --color-warning-bg: var(--color-warning-bg);
+  --color-success-ink: var(--color-success-ink);
+  --color-success-bg: var(--color-success-bg);
+  --color-danger-bg: var(--color-danger-bg);
 
   --color-status-on: var(--color-status-on);
   --color-status-late: var(--color-status-late);

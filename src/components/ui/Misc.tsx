@@ -19,7 +19,7 @@ export const Fab = forwardRef<HTMLButtonElement, FabProps>(function Fab(
 ) {
   const dim = size === "small" ? 40 : size === "medium" ? 48 : 56;
   const bg = color === "primary" ? "var(--color-primary)" : color === "error" ? "var(--color-destructive)" : color === "inherit" ? "var(--color-ink)" : "var(--color-canvas)";
-  const fg = color === "default" ? "var(--color-ink)" : "#fff";
+  const fg = color === "default" ? "var(--color-ink)" : "var(--color-on-primary)";
   const Component = (component || (href ? "a" : "button")) as React.ElementType;
   return (
     <Component
@@ -257,7 +257,7 @@ export const StepLabel = forwardRef<HTMLDivElement, StepLabelProps>(function Ste
   const on = active || completed;
   return (
     <div ref={ref} style={{ display: "inline-flex", alignItems: "center", gap: 8, ...sxToStyle(sx), ...style }} {...rest}>
-      <span style={{ width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, background: on ? "var(--color-primary)" : "var(--color-canvas-parchment)", color: on ? "#fff" : "var(--color-ink-muted-48)", border: on ? "none" : "1px solid var(--color-hairline)", flexShrink: 0 }}>
+      <span style={{ width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, background: on ? "var(--color-primary)" : "var(--color-canvas-parchment)", color: on ? "var(--color-on-primary)" : "var(--color-ink-muted-48)", border: on ? "none" : "1px solid var(--color-hairline)", flexShrink: 0 }}>
         {icon ?? (completed ? "✓" : index + 1)}
       </span>
       <span style={{ display: "flex", flexDirection: "column" }}>

@@ -36,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           margin: 0,
           minHeight: "100vh",
           overflowX: "hidden",
-          backgroundColor: "#f5f5f7",
+          backgroundColor: "var(--color-canvas-parchment)",
         }}
       >
         <Providers isDev={process.env.IS_DEV === "1"}>

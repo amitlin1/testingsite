@@ -23,7 +23,7 @@ export const Skeleton = forwardRef<HTMLSpanElement, SkeletonProps>(function Skel
     borderRadius: radius,
     background:
       animation === "wave"
-        ? "linear-gradient(90deg,#eee,#f5f5f7,#eee)"
+        ? "linear-gradient(90deg,var(--color-divider-soft),var(--color-canvas-parchment),var(--color-divider-soft))"
         : "var(--color-canvas-parchment)",
     backgroundSize: animation === "wave" ? "200% 100%" : undefined,
     animation: animation === "wave" ? "sh-shimmer 1.4s infinite" : animation === "pulse" ? "sh-pulse 1.5s ease-in-out infinite" : undefined,

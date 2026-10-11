@@ -5,26 +5,28 @@
    what inline styles cannot express: hover, focus, placeholder, scrollbar.
    ========================================================================= */
 
+/* Aliases only: every value comes from tokens.css, so this layer can no longer
+   drift from the system palette. */
 :root {
-  --shx-primary:#0066cc;
-  --shx-primary-hover:#0058b3;
-  --shx-primary-focus:#0071e3;
-  --shx-ink:#1d1d1f;
-  --shx-ink-70:#444444;
-  --shx-muted:#7a7a7a;
-  --shx-muted-48:#9a9aa0;
-  --shx-canvas:#ffffff;
-  --shx-parchment:#f5f5f7;
-  --shx-pearl:#fafafc;
-  --shx-hairline:#e0e0e0;
-  --shx-divider:#f0f0f0;
-  --shx-destructive:#bf3535;
-  --shx-status-approved:#1f8a5b;
+  --shx-primary:var(--color-primary);
+  --shx-primary-hover:var(--color-primary-hover);
+  --shx-primary-focus:var(--color-primary-focus);
+  --shx-ink:var(--color-ink);
+  --shx-ink-70:var(--color-ink-muted-70);
+  --shx-muted:var(--color-ink-muted-48);
+  --shx-muted-48:var(--color-ink-muted-40);
+  --shx-canvas:var(--color-canvas);
+  --shx-parchment:var(--color-canvas-parchment);
+  --shx-pearl:var(--color-surface-pearl);
+  --shx-hairline:var(--color-hairline);
+  --shx-divider:var(--color-divider-soft);
+  --shx-destructive:var(--color-destructive);
+  --shx-status-approved:var(--color-status-approved);
   --shx-radius-card:16px;
-  --shx-radius-modal:18px;
-  --shx-radius-input:8px;
-  --shx-radius-pill:9999px;
-  --shx-shadow-product:rgba(0,0,0,0.22) 3px 5px 30px 0;
+  --shx-radius-modal:var(--r-lg);
+  --shx-radius-input:var(--r-sm);
+  --shx-radius-pill:var(--r-pill);
+  --shx-shadow-product:var(--shadow-product);
   /* The app's own bundled face (Rubik, tokens.css). Heebo/Inter are not
      shipped (air-gapped), so naming them here rendered these controls in the
      OS fallback (Segoe UI) next to Rubik. */
@@ -48,13 +50,13 @@
 
 /* ---- inputs: focus ring ---- */
 .shx-input, .shx-textarea {
-  width:100%; border:1px solid var(--shx-hairline); border-radius:var(--shx-radius-input);
+  width:100%; border:1px solid var(--color-field-border); border-radius:var(--shx-radius-input);
   background:var(--shx-canvas); color:var(--shx-ink); font-family:var(--shx-font);
-  font-size:15px; outline:none; transition:border-color 0.12s ease;
+  font-size:15px; outline:none; transition:border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .shx-input { height:44px; padding:0 12px; }
 .shx-textarea { padding:10px 12px; line-height:1.47; resize:vertical; }
-.shx-input:focus, .shx-textarea:focus { border-color:var(--shx-primary-focus); }
+.shx-input:focus, .shx-textarea:focus { border-color:var(--shx-primary-focus); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
 .shx-input--error { border-color:var(--shx-destructive); }
 .shx-input::placeholder, .shx-textarea::placeholder { color:var(--shx-muted-48); }
 
@@ -62,19 +64,19 @@
 .shx-btn { font-family:var(--shx-font); cursor:pointer; border:0; display:inline-flex;
   align-items:center; gap:7px; white-space:nowrap; transition:background 0.12s ease, transform 0.06s ease; }
 .shx-btn:active { transform:scale(0.97); }
-.shx-btn-primary { background:var(--shx-primary); color:#fff; border-radius:var(--shx-radius-pill);
+.shx-btn-primary { background:var(--shx-primary); color:var(--color-on-primary); border-radius:var(--shx-radius-pill);
   padding:12px 22px; font-size:15px; font-weight:600; }
 .shx-btn-primary:hover { background:var(--shx-primary-hover); }
 .shx-btn-primary:disabled { background:var(--shx-parchment); color:var(--shx-muted); cursor:not-allowed; transform:none; }
-.shx-btn-secondary { background:transparent; color:var(--shx-ink); border:1px solid #d4d4dc;
+.shx-btn-secondary { background:transparent; color:var(--shx-ink); border:1px solid var(--color-border-strong);
   border-radius:var(--shx-radius-pill); padding:10px 20px; font-size:15px; font-weight:600; }
 .shx-btn-secondary:hover { background:rgba(0,0,0,0.03); }
 .shx-btn-ghost-link { background:transparent; color:var(--shx-primary); border:0; font-size:14px; font-weight:600; padding:0 6px; cursor:pointer; }
 .shx-btn-ghost-link:hover { text-decoration:underline; }
 .shx-icon-btn { width:36px; height:36px; border-radius:var(--shx-radius-input); background:var(--shx-parchment);
   color:var(--shx-ink); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; border:0; transition:background 0.12s ease; }
-.shx-icon-btn:hover { background:#e6efff; color:var(--shx-primary); }
+.shx-icon-btn:hover { background:var(--color-primary-soft); color:var(--shx-primary); }
 
 /* ---- scrollbar (matches the app) ---- */
 .shx-scroll::-webkit-scrollbar { width:10px; height:10px; }
-.shx-scroll::-webkit-scrollbar-thumb { background:#d4d4dc; border-radius:9999px; border:3px solid transparent; background-clip:content-box; }
+.shx-scroll::-webkit-scrollbar-thumb { background:var(--color-border-strong); border-radius:9999px; border:3px solid transparent; background-clip:content-box; }

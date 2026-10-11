@@ -47,8 +47,8 @@
 .sh-btn--contained:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-primary-hover); }
 .sh-btn--contained.sh-btn--error { background: var(--color-destructive); }
 .sh-btn--contained.sh-btn--error:hover:not(:disabled) { background: var(--color-destructive-hover); }
-.sh-btn--contained.sh-btn--success { background: var(--color-status-approved); }
-.sh-btn--contained.sh-btn--success:hover:not(:disabled) { background: #1a7a4f; }
+.sh-btn--contained.sh-btn--success { background: var(--color-success-ink); }
+.sh-btn--contained.sh-btn--success:hover:not(:disabled) { background: var(--color-success-ink-hover); }
 .sh-btn--contained.sh-btn--inherit { background: var(--color-ink); color: var(--color-on-dark); }
 
 /* outlined (secondary) */
@@ -61,11 +61,11 @@
   color: var(--color-primary);
   border: 1px solid var(--color-primary);
 }
-.sh-btn--outlined:hover:not(:disabled) { background: rgba(0,102,204,.06); }
+.sh-btn--outlined:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
 .sh-btn--outlined.sh-btn--error { color: var(--color-destructive); border-color: var(--color-destructive); }
-.sh-btn--outlined.sh-btn--error:hover:not(:disabled) { background: rgba(191,53,53,.06); }
+.sh-btn--outlined.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); }
 .sh-btn--outlined.sh-btn--inherit { color: var(--color-ink); border-color: var(--color-hairline); }
-.sh-btn--outlined.sh-btn--inherit:hover:not(:disabled) { background: rgba(0,0,0,.04); }
+.sh-btn--outlined.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
 
 /* text */
 .sh-btn--text {
@@ -76,11 +76,11 @@
   color: var(--color-primary);
   border-color: transparent;
 }
-.sh-btn--text:hover:not(:disabled) { background: rgba(0,102,204,.06); }
+.sh-btn--text:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
 .sh-btn--text.sh-btn--error { color: var(--color-destructive); }
-.sh-btn--text.sh-btn--error:hover:not(:disabled) { background: rgba(191,53,53,.06); }
+.sh-btn--text.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); }
 .sh-btn--text.sh-btn--inherit { color: var(--color-ink); }
-.sh-btn--text.sh-btn--inherit:hover:not(:disabled) { background: rgba(0,0,0,.04); }
+.sh-btn--text.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
 
 /* dark utility */
 .sh-btn--dark {
@@ -92,7 +92,7 @@
   color: var(--color-on-dark);
   border-color: transparent;
 }
-.sh-btn--dark:hover:not(:disabled) { background: #000; }
+.sh-btn--dark:hover:not(:disabled) { background: var(--color-surface-black); }
 
 /* sizes (override padding/height) */
 .sh-btn--small { font-size: 14px; padding: 7px 14px; min-height: 32px; }
@@ -120,7 +120,7 @@
   color: var(--color-ink);
   transition: background-color .15s ease, color .15s ease, transform var(--t-press) var(--ease-press);
 }
-.sh-iconbtn:hover:not(:disabled) { background: rgba(0,0,0,.05); }
+.sh-iconbtn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 5%, transparent); }
 .sh-iconbtn:active:not(:disabled) { transform: scale(.92); }
 .sh-iconbtn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
 .sh-iconbtn:disabled { color: var(--color-ink-muted-48); cursor: not-allowed; }
@@ -140,17 +140,17 @@
   color: var(--color-ink);
   font-family: inherit;
   font-size: 17px;
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
   padding: 10px 14px;
   outline: none;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .sh-input::placeholder { color: var(--color-ink-muted-48); }
-.sh-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px rgba(0,113,227,.15); }
+.sh-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
 .sh-input:disabled { background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); cursor: not-allowed; }
 .sh-input--error { border-color: var(--color-destructive); }
-.sh-input--error:focus { border-color: var(--color-destructive); box-shadow: 0 0 0 3px rgba(191,53,53,.15); }
+.sh-input--error:focus { border-color: var(--color-destructive); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
 .sh-input--textarea { height: auto; line-height: 1.47; resize: vertical; }
 .sh-input--search { height: 44px; border-radius: var(--r-pill); padding-inline: 46px 16px; }
 /* hide number spinners */
@@ -175,14 +175,14 @@
   width: 100%;
   min-height: 40px;
   background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
   padding-inline: 14px;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.sh-input-wrap:focus-within { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px rgba(0,113,227,.15); }
+.sh-input-wrap:focus-within { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
 .sh-input-wrap.sh-input--error { border-color: var(--color-destructive); }
-.sh-input-wrap.sh-input--error:focus-within { box-shadow: 0 0 0 3px rgba(191,53,53,.15); }
+.sh-input-wrap.sh-input--error:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
 .sh-input-wrap.sh-input--disabled { background: var(--color-canvas-parchment); }
 .sh-input-wrap.sh-input--search { min-height: 44px; border-radius: var(--r-pill); }
 .sh-input-wrap.sh-input--multiline { align-items: stretch; }
@@ -228,7 +228,7 @@
   font-size: 17px;
   color: var(--color-ink);
   background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
   padding: 10px 14px;
   outline: none;
@@ -236,7 +236,7 @@
 }
 .sh-select-trigger:focus, .sh-select-trigger[data-state="open"] {
   border-color: var(--color-primary-focus);
-  box-shadow: 0 0 0 3px rgba(0,113,227,.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
 }
 .sh-select-trigger[data-placeholder] { color: var(--color-ink-muted-48); }
 .sh-select-trigger:disabled { background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); cursor: not-allowed; }
@@ -271,7 +271,7 @@
 /* Locked: read-only value, lock instead of the arrow (the component never
    opens it), no focus ring. */
 .sh-input-wrap.sh-combo--locked { background: var(--color-canvas-parchment); }
-.sh-input-wrap.sh-combo--locked:focus-within { border-color: var(--color-hairline); box-shadow: none; }
+.sh-input-wrap.sh-combo--locked:focus-within { border-color: var(--color-field-border); box-shadow: none; }
 .sh-input-wrap.sh-combo--locked > input { color: var(--color-ink-muted-48); cursor: default; }
 
 /* Dense: the package screens' field metrics. The primitive's × (.sh-ac-clear) and
@@ -329,7 +329,7 @@
 .sh-dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: var(--color-scrim);
   z-index: 1300;
 }
 .sh-dialog-content {
@@ -382,7 +382,7 @@
   width: 44px;
   height: 26px;
   border-radius: var(--r-pill);
-  background: #d2d2d7;
+  background: var(--color-field-border);  /* off track: 3:1 against the surface */
   border: none;
   cursor: pointer;
   flex-shrink: 0;
@@ -396,7 +396,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--color-canvas);
   transform: translateX(3px);
   transition: transform .2s ease;
 }
@@ -413,10 +413,10 @@
   align-items: center;
   justify-content: center;
   background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   cursor: pointer;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--color-on-primary);
   padding: 0;
 }
 .sh-checkbox[data-state="checked"], .sh-checkbox[data-state="indeterminate"] {
@@ -435,7 +435,7 @@
   align-items: center;
   justify-content: center;
   background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   cursor: pointer;
   flex-shrink: 0;
   padding: 0;
@@ -469,8 +469,8 @@
 /* ------------------------------------------------------- ListItemButton -- */
 .sh-list-button { transition: background-color .12s ease, color .12s ease; text-decoration: none; color: inherit; }
 .sh-list-button:hover { background: var(--color-canvas-parchment); }
-.sh-list-button--selected { background: rgba(0,102,204,.08); color: var(--color-primary); font-weight: var(--fw-semibold); }
-.sh-list-button--selected:hover { background: rgba(0,102,204,.12); }
+.sh-list-button--selected { background: color-mix(in srgb, var(--color-primary) 8%, transparent); color: var(--color-primary); font-weight: var(--fw-semibold); }
+.sh-list-button--selected:hover { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
 
 /* ---------------------------------------------------------- Link ---------- */
 .sh-link:hover { color: var(--color-primary-hover); }
@@ -480,7 +480,7 @@
 
 /* --------------------------------------------------- CardActionArea ------- */
 .sh-card-action { transition: background-color .12s ease; }
-.sh-card-action:hover { background: rgba(0,0,0,.02); }
+.sh-card-action:hover { background: color-mix(in srgb, var(--color-ink) 2%, transparent); }
 
 /* --------------------------------------------------------- Tooltip -------- */
 .sh-tooltip {

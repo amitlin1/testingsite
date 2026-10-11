@@ -22,12 +22,14 @@ export interface ChipProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "c
 
 const CHIP_COLORS: Record<ChipColor, { bg: string; fg: string; border?: string }> = {
   default: { bg: "var(--color-canvas-parchment)", fg: "var(--color-ink)" },
-  primary: { bg: "rgba(0,102,204,.08)", fg: "var(--color-primary)" },
+  primary: { bg: "var(--color-primary-soft)", fg: "var(--color-primary)" },
   secondary: { bg: "var(--color-canvas-parchment)", fg: "var(--color-ink-muted-80)" },
-  error: { bg: "rgba(191,53,53,.10)", fg: "var(--color-destructive)" },
-  success: { bg: "rgba(31,138,91,.12)", fg: "var(--color-status-approved)" },
-  warning: { bg: "rgba(217,119,6,.12)", fg: "var(--color-status-late)" },
-  info: { bg: "rgba(0,102,204,.08)", fg: "var(--color-primary)" },
+  error: { bg: "var(--color-danger-bg)", fg: "var(--color-destructive)" },
+  // Text in a status colour uses its *-ink token (AA); the plain status
+  // colours are for dots and fills.
+  success: { bg: "var(--color-success-bg)", fg: "var(--color-success-ink)" },
+  warning: { bg: "var(--color-warning-bg)", fg: "var(--color-warning-ink)" },
+  info: { bg: "var(--color-primary-soft)", fg: "var(--color-primary)" },
 };
 
 export const Chip = forwardRef<HTMLDivElement, ChipProps>(function Chip(
@@ -83,8 +85,9 @@ const BADGE_BG: Record<string, string> = {
   default: "var(--color-ink-muted-48)",
   primary: "var(--color-primary)",
   error: "var(--color-destructive)",
-  success: "var(--color-status-approved)",
-  warning: "var(--color-status-late)",
+  // White count text: the *-ink fills keep it at AA.
+  success: "var(--color-success-ink)",
+  warning: "var(--color-warning-ink)",
   secondary: "var(--color-ink-muted-80)",
 };
 
@@ -111,7 +114,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
             padding: "0 5px",
             borderRadius: 9,
             background: BADGE_BG[color],
-            color: "#fff",
+            color: "var(--color-on-primary)",
             fontSize: 11,
             fontWeight: 600,
             display: "flex",
