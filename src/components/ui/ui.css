@@ -201,7 +201,7 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
   display: block;
   font-size: var(--text-small);
   font-weight: var(--fw-semibold);
-  margin-bottom: 8px;
+  margin-bottom: 6px;   /* same as FieldLabel and the combobox label, so a row lines up */
   color: var(--color-ink-muted-80);
 }
 .sh-field-label--error { color: var(--color-destructive); }
@@ -636,7 +636,8 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 :dir(rtl) > .sh-progress-fill { transform-origin: right; }
 
 /* ------------------------------------------------------------ Chip / Tag --- */
-.sh-chip-delete { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-inline-end: -4px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; }
+/* 24px hit area around the 14px ×; the negative margins keep the chip's size. */
+.sh-chip-delete { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-block: -4px; margin-inline-end: -7px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .sh-chip-delete:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); } }
 .sh-chip-delete:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
 .sh-tag { display: inline-flex; align-items: center; gap: 5px; font-weight: var(--fw-semibold); line-height: 1.3; border-radius: var(--r-pill); white-space: nowrap; }
