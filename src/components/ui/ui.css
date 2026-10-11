@@ -523,6 +523,80 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-card-action { transition: background-color .12s ease; }
 .sh-card-action:hover { background: color-mix(in srgb, var(--color-ink) 2%, transparent); }
 
+/* ------------------------------------------------- App rail (navBar) ---- */
+/* The dark side navigation. Inline styles cannot express its states, so they
+   live here: hover (pointer devices only), the current page, keyboard focus. */
+.sh-nav-item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding-inline: 12px;
+  margin-bottom: 3px;
+  border-radius: var(--r-sm);
+  color: var(--color-nav-ink);
+  font-size: var(--text-body-sm);
+  line-height: 1.3;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.sh-nav-item[data-nested] { min-height: 38px; font-size: var(--text-small); }
+.sh-nav-item[data-collapsed] { justify-content: center; padding-inline: 0; }
+.sh-nav-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; flex-shrink: 0; color: inherit; }
+.sh-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) {
+  .sh-nav-item:hover { background: var(--color-nav-hover); color: var(--color-on-dark); }
+}
+.sh-nav-item[aria-current="page"], .sh-nav-item[data-section-active] {
+  background: color-mix(in srgb, var(--color-primary-on-dark) 16%, transparent);
+  color: var(--color-on-dark);
+  font-weight: var(--fw-semibold);
+}
+/* On the dark rail the focus ring is the on-dark blue (the light one fails 3:1 there). */
+.sh-nav-item:focus-visible, .sh-nav-iconbtn:focus-visible { outline: 2px solid var(--color-primary-on-dark); outline-offset: -2px; }
+.sh-nav-chevron { transition: transform var(--dur-base) var(--ease-out); }
+.sh-nav-chevron[data-open] { transform: rotate(180deg); }
+.sh-nav-iconbtn { color: var(--color-on-dark); width: 36px; height: 36px; flex-shrink: 0; }
+.sh-nav-iconbtn--muted { color: var(--color-nav-ink-muted); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-nav-iconbtn:hover:not(:disabled) { background: var(--color-nav-hover); color: var(--color-on-dark); }
+}
+.sh-nav-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
+
+/* ------------------------------------------- Settings sub-navigation ---- */
+.sh-subnav-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-inline: 12px;
+  border-radius: var(--r-sm);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-70);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sh-subnav-tab:hover { background: color-mix(in srgb, var(--color-ink) 4%, transparent); color: var(--color-ink); }
+}
+.sh-subnav-tab[aria-current="page"] { color: var(--color-primary); font-weight: var(--fw-semibold); }
+.sh-subnav-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-primary);
+}
+.sh-subnav-tab:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+
 /* ------------------------------------------------------- Feedback ------ */
 .sh-alert-close { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -2px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; flex-shrink: 0; }
 .sh-alert-close:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); }

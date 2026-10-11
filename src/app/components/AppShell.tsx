@@ -13,6 +13,7 @@ import { LocalShipping as LocalShippingIcon } from "@/components/ui/icons";
 import { FolderCopy as FolderCopyIcon } from "@/components/ui/icons";
 import { Settings as SettingsIcon } from "@/components/ui/icons";
 import { History as HistoryIcon } from "@/components/ui/icons";
+import { Inventory as InventoryIcon } from "@/components/ui/icons";
 import Sidebar, { SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "./navBar";
 import CommandPaletteTrigger from "@/components/CommandPaletteTrigger";
 
@@ -22,21 +23,24 @@ const COLLAPSED_STORAGE_KEY = "sidebarCollapsed";
 
 /** Page title + icon resolved from the current route, shown in the top bar. */
 function usePageMeta(pathname: string | null) {
-  if (pathname?.startsWith("/testing")) return { title: "מסך בדיקה", icon: <ScienceIcon sx={{ fontSize: 20 }} /> };
-  if (pathname?.startsWith("/dashboard")) return { title: "לוח ניהול", icon: <AnalyticsIcon sx={{ fontSize: 20 }} /> };
-  if (pathname?.startsWith("/shipments")) return { title: "משלוחים נכנסים", icon: <LocalShippingIcon sx={{ fontSize: 20 }} /> };
-  if (pathname?.startsWith("/files")) return { title: "ניהול קבצים", icon: <FolderCopyIcon sx={{ fontSize: 20 }} /> };
-  if (pathname?.startsWith("/settings")) return { title: "הגדרות מערכת", icon: <SettingsIcon sx={{ fontSize: 20 }} /> };
-  if (pathname?.startsWith("/items")) return { title: "היסטוריית פריט", icon: <HistoryIcon sx={{ fontSize: 20 }} /> };
-  return { title: "דוחות וניהול פריטים", icon: <DashboardIcon sx={{ fontSize: 20 }} /> };
+  if (pathname?.startsWith("/testing")) return { title: "מסך בדיקה", icon: <ScienceIcon fontSize={20} /> };
+  if (pathname?.startsWith("/packages")) return { title: "מארזים", icon: <InventoryIcon fontSize={20} /> };
+  if (pathname?.startsWith("/dashboard")) return { title: "לוח ניהול", icon: <AnalyticsIcon fontSize={20} /> };
+  if (pathname?.startsWith("/shipments")) return { title: "משלוחים נכנסים", icon: <LocalShippingIcon fontSize={20} /> };
+  if (pathname?.startsWith("/files")) return { title: "ניהול קבצים", icon: <FolderCopyIcon fontSize={20} /> };
+  if (pathname?.startsWith("/settings")) return { title: "הגדרות מערכת", icon: <SettingsIcon fontSize={20} /> };
+  if (pathname?.startsWith("/items")) return { title: "היסטוריית פריט", icon: <HistoryIcon fontSize={20} /> };
+  return { title: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> };
 }
 
 /**
  * Responsive app shell: fixed sidebar rail + slim top bar + scrollable content.
  * Below 980px the rail collapses to an off-canvas drawer toggled by the top-bar
  * hamburger, with a dimming backdrop. The content's inline-start offset (rail
- * width) and the drawer transform are driven from JS state — applied via inline
- * `style` because MUI `sx` drops logical props like `marginInlineStart`.
+ * width) and the drawer transform are driven from JS state, applied via inline
+ * `style`. Neither offset is animated: animating a margin re-lays out the whole
+ * page on every frame, and the rail would visibly slide shut on every load for
+ * users who keep it collapsed (the preference is read after the first paint).
  */
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -85,6 +89,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     setNavOpen(false);
   }, [pathname]);
+
+  // Escape closes the open drawer, like every other overlay.
+  React.useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setNavOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
 
   // §14.1 — the ONE change the dashboard needs from the shell.
   //
@@ -141,7 +153,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {isMobile && navOpen && (
         <Box
           onClick={() => setNavOpen(false)}
-          sx={{ position: "fixed", inset: 0, bgcolor: "rgba(0,0,0,0.45)", zIndex: 1150 }}
+          sx={{ position: "fixed", inset: 0, bgcolor: "var(--color-scrim)", zIndex: 1150 }}
         />
       )}
 
@@ -161,7 +173,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           gap: 2,
           px: 2,
           zIndex: 1100,
-          transition: "inset-inline-start 0.2s ease",
         }}
       >
         {/* On desktop the toggle lives inside the rail's header (replacing the brand
@@ -170,21 +181,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <IconButton
             onClick={handleToggle}
             aria-label="תפריט"
-            sx={{ border: "1px solid var(--color-hairline)", borderRadius: "9px", width: 36, height: 36, color: "var(--color-ink)" }}
+            sx={{ border: "1px solid var(--color-border-strong)", borderRadius: "var(--r-sm)", width: 36, height: 36, color: "var(--color-ink)" }}
           >
-            <MenuIcon sx={{ fontSize: 20 }} />
+            <MenuIcon fontSize={20} />
           </IconButton>
         )}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-          <Box sx={{ display: "flex", color: "primary.main" }}>{icon}</Box>
-          <Typography sx={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.2px", whiteSpace: "nowrap" }}>
+          {/* Decorative: muted, so blue stays the colour of things you can press. */}
+          <Box sx={{ display: "flex", color: "var(--color-ink-muted-48)" }} aria-hidden>{icon}</Box>
+          <Typography sx={{ fontSize: "var(--text-body)", fontWeight: 600, whiteSpace: "nowrap" }}>
             {title}
           </Typography>
         </Box>
 
-        {/* Search sits at the far end of the bar, away from the page title.
-            `marginInlineStart` goes through `style`, not `sx` — sxToStyle drops
-            logical properties (same reason as the rail offsets above). */}
+        {/* Search sits at the far end of the bar, away from the page title. */}
         <Box style={{ marginInlineStart: "auto" }} sx={{ display: "flex", alignItems: "center" }}>
           <CommandPaletteTrigger />
         </Box>
@@ -198,7 +208,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           height: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
           overflowY: "auto",
           overflowX: "hidden",
-          transition: "margin-inline-start 0.2s ease",
         }}
       >
         {children}
