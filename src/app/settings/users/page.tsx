@@ -3,19 +3,17 @@
 // ניהול משתמשים והרשאות — manager-only (guarded by layout.tsx + middleware + the
 // manager-gated /api/users route handlers). All Keycloak work happens server-side;
 // this page only talks to /api/users via apiFetch. Every element maps to a real
-// Shifthouse primitive (SettingsToolbar · DataTable + RowActions/IconAction · Chip
-// · StatusPill · Dialog · ToggleButtonGroup · Snackbar/Alert).
+// Shifthouse primitive (SettingsToolbar · DataTable + RowActions/IconAction · Tag
+// · StatusPill · Dialog / ConfirmDialog · ToggleButtonGroup · Snackbar/Alert).
 
 import * as React from "react";
 import {
-  Box,
   Stack,
-  Typography,
   Button,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Chip,
+  Tag,
   StatusPill,
   Checkbox,
   FormControlLabel,
@@ -24,6 +22,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  ConfirmDialog,
   Alert,
   Snackbar,
   Avatar,
@@ -52,12 +51,6 @@ interface AdminUser {
 
 // ---- display maps ----
 const ROLE_LABEL: Record<Role, string> = { manager: "מנהל", tester: "בודק", storekeeper: "מחסנאי", mashan: "משאן" };
-const ROLE_CHIP: Record<Role, "primary" | "success" | "warning" | "info"> = {
-  manager: "primary",
-  tester: "success",
-  storekeeper: "warning",
-  mashan: "info",
-};
 const STATUS_META: Record<UserStatus, { label: string; dot: string }> = {
   active: { label: "פעיל", dot: "var(--color-status-approved)" },
   disabled: { label: "מושבת", dot: "var(--color-ink-muted-48)" },
@@ -65,12 +58,28 @@ const STATUS_META: Record<UserStatus, { label: string; dot: string }> = {
   pending: { label: "ממתין לשינוי סיסמה", dot: "var(--color-status-late)" },
 };
 
+// A role is a category, not a state: one neutral tag and one dot colour per
+// role, the same in the KPI card and in the table. Never the status colours
+// (green / amber read as "ok" / "waiting" next to the status column).
 const ROLE_DOT: Record<Role, string> = {
-  manager: "var(--color-primary)",
-  tester: "var(--color-status-approved)",
-  storekeeper: "var(--color-status-late)",
-  mashan: "var(--color-ink-muted-48)",
+  manager: "var(--color-ink)",
+  tester: "var(--color-primary)",
+  storekeeper: "var(--color-ink-muted-48)",
+  mashan: "color-mix(in srgb, var(--color-primary) 45%, var(--color-canvas))",
 };
+
+function RoleTag({ role }: { role: Role }) {
+  return (
+    <Tag tone="neutral" size="md" icon={<span className="role-dot" style={{ background: ROLE_DOT[role] }} aria-hidden />}>
+      {ROLE_LABEL[role]}
+    </Tag>
+  );
+}
+
+// Codes typed left-to-right but aligned with the Hebrew labels; the password
+// in a monospace face so 0/O and l/I read apart.
+const LTR_INPUT = { dir: "ltr", style: { textAlign: "right" as const } };
+const PASSWORD_INPUT = { dir: "ltr", style: { textAlign: "right" as const, fontFamily: "var(--font-mono)" } };
 
 function initials(u: AdminUser): string {
   const two = (u.firstName?.[0] ?? "") + (u.lastName?.[0] ?? "");
@@ -150,10 +159,13 @@ export default function UsersPage() {
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<AdminUser | null>(null);
   const [form, setForm] = React.useState<FormState>(emptyForm);
+  // Validation is shown on the field, not in a toast.
+  const [formErrors, setFormErrors] = React.useState<{ username?: string; temporaryPassword?: string }>({});
   const [saving, setSaving] = React.useState(false);
 
   const [resetTarget, setResetTarget] = React.useState<AdminUser | null>(null);
   const [resetPwd, setResetPwd] = React.useState("");
+  const [resetError, setResetError] = React.useState("");
   const [toggleTarget, setToggleTarget] = React.useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<AdminUser | null>(null);
   // Shared in-flight guard for the reset/toggle/delete dialogs (prevents a
@@ -202,6 +214,7 @@ export default function UsersPage() {
   const openCreate = () => {
     setEditing(null);
     setForm({ ...emptyForm, temporaryPassword: generatePassword() });
+    setFormErrors({});
     setFormOpen(true);
   };
   const openEdit = (u: AdminUser) => {
@@ -215,12 +228,16 @@ export default function UsersPage() {
       temporaryPassword: "",
       mustChange: true,
     });
+    setFormErrors({});
     setFormOpen(true);
   };
 
   const submitForm = async () => {
-    if (!form.username.trim()) return notify("יש להזין שם משתמש", "error");
-    if (!editing && !form.temporaryPassword) return notify("יש להזין סיסמה זמנית", "error");
+    const errors: { username?: string; temporaryPassword?: string } = {};
+    if (!form.username.trim()) errors.username = "יש להזין שם משתמש";
+    if (!editing && !form.temporaryPassword) errors.temporaryPassword = "יש להזין סיסמה זמנית";
+    setFormErrors(errors);
+    if (errors.username || errors.temporaryPassword) return;
     setSaving(true);
     try {
       const res = editing
@@ -266,7 +283,7 @@ export default function UsersPage() {
 
   const submitReset = async () => {
     if (!resetTarget) return;
-    if (!resetPwd) return notify("יש להזין סיסמה זמנית", "error");
+    if (!resetPwd) { setResetError("יש להזין סיסמה זמנית"); return; }
     setBusy(true);
     try {
       const res = await apiFetch(`/api/users/${resetTarget.id}/reset-password`, {
@@ -342,7 +359,8 @@ export default function UsersPage() {
       nowrap: true,
       cell: (u) => (
         <Stack direction="row" sx={{ alignItems: "center", gap: 1.25 }}>
-          <Avatar sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 600, bgcolor: "color-mix(in srgb, var(--color-primary) 10%, transparent)", color: "var(--color-primary)" }}>
+          {/* Neutral initials: blue is for actions and selection, not decoration. */}
+          <Avatar aria-hidden sx={{ width: 32, height: 32, fontSize: "var(--text-small)", fontWeight: 600, bgcolor: "var(--color-canvas-parchment)", color: "var(--color-ink-muted-70)" }}>
             {initials(u)}
           </Avatar>
           <span style={{ fontWeight: 600 }}>{u.fullName}</span>
@@ -353,14 +371,14 @@ export default function UsersPage() {
       key: "username",
       header: "שם משתמש",
       nowrap: true,
-      cell: (u) => <span style={{ direction: "ltr", unicodeBidi: "plaintext", color: "var(--color-ink-muted-48)" }}>{u.username}</span>,
+      cell: (u) => <bdi dir="ltr" style={{ color: "var(--color-ink-muted-48)" }}>{u.username}</bdi>,
     },
     { key: "employeeNumber", header: "מספר עובד", nums: true, muted: true, cell: (u) => u.employeeNumber ?? "—" },
     {
       key: "role",
       header: "תפקיד",
       cell: (u) =>
-        u.role ? <Chip size="small" color={ROLE_CHIP[u.role]} label={ROLE_LABEL[u.role]} /> : <span style={{ color: "var(--color-ink-muted-48)" }}>—</span>,
+        u.role ? <RoleTag role={u.role} /> : <span style={{ color: "var(--color-ink-muted-48)" }}>—</span>,
     },
     {
       key: "status",
@@ -375,10 +393,10 @@ export default function UsersPage() {
       width: 170,
       cell: (u) => (
         <RowActions>
-          <IconAction title="ערוך" onClick={() => openEdit(u)}>
+          <IconAction title={`ערוך את ${u.fullName || u.username}`} onClick={() => openEdit(u)}>
             <Pencil size={16} strokeWidth={1.75} />
           </IconAction>
-          <IconAction title="איפוס סיסמה" onClick={() => { setResetTarget(u); setResetPwd(generatePassword()); }}>
+          <IconAction title={`איפוס סיסמה ל${u.fullName || u.username}`} onClick={() => { setResetTarget(u); setResetPwd(generatePassword()); setResetError(""); }}>
             <KeyRound size={16} strokeWidth={1.75} />
           </IconAction>
           <IconAction
@@ -415,20 +433,25 @@ export default function UsersPage() {
     },
   ];
 
-  const kpiCards: { key: "all" | Role; label: string; dot: string; count: number }[] = [
-    { key: "all", label: "סה״כ משתמשים", dot: "var(--color-ink)", count: counts.all },
+  // Static counts: the role filter is the toggle group above (one control for
+  // one job), so the cards only report.
+  const kpiCards: { key: "all" | Role; label: string; dot: string | null; count: number }[] = [
+    { key: "all", label: "סה״כ משתמשים", dot: null, count: counts.all },
     { key: "manager", label: "מנהל", dot: ROLE_DOT.manager, count: counts.manager },
     { key: "tester", label: "בודק", dot: ROLE_DOT.tester, count: counts.tester },
     { key: "storekeeper", label: "מחסנאי", dot: ROLE_DOT.storekeeper, count: counts.storekeeper },
     { key: "mashan", label: "משאן", dot: ROLE_DOT.mashan, count: counts.mashan },
   ];
+  const ready = phase === "ready";
 
+  // A table page: it fills the settings frame and scrolls its table inside.
   return (
-    <div dir="rtl" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 24, padding: 24 }}>
+    <div dir="rtl" className="settings-fill">
       <SettingsToolbar
         title="ניהול משתמשים"
         subtitle="ניהול חשבונות, תפקידים והרשאות. מנוהל מול Keycloak."
-        count={users.length}
+        // No count while it is unknown — never a "0" that is not true.
+        count={ready ? users.length : undefined}
         countLabel="משתמשים"
         onAdd={openCreate}
         addLabel="משתמש חדש"
@@ -436,7 +459,14 @@ export default function UsersPage() {
         onSearch={setSearch}
         searchPlaceholder="חיפוש לפי שם או שם משתמש"
       >
-        <ToggleButtonGroup value={roleFilter} exclusive color="primary" onChange={(_e, v) => v && setRoleFilter(v as "all" | Role)}>
+        <ToggleButtonGroup
+          value={roleFilter}
+          exclusive
+          color="primary"
+          role="group"
+          aria-label="סינון לפי תפקיד"
+          onChange={(_e, v) => v && setRoleFilter(v as "all" | Role)}
+        >
           <ToggleButton value="all">הכל</ToggleButton>
           <ToggleButton value="manager">מנהל</ToggleButton>
           <ToggleButton value="tester">בודק</ToggleButton>
@@ -445,50 +475,29 @@ export default function UsersPage() {
         </ToggleButtonGroup>
       </SettingsToolbar>
 
-      {/* KPI strip — clickable role filters */}
-      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 1.5 }}>
-        {kpiCards.map((c) => {
-          const active = roleFilter === c.key;
-          return (
-            <Box
-              key={c.key}
-              onClick={() => setRoleFilter(c.key)}
-              sx={{
-                position: "relative",
-                cursor: "pointer",
-                background: "var(--color-canvas)",
-                border: `1px solid ${active ? "var(--color-primary)" : "var(--color-hairline)"}`,
-                borderRadius: "16px",
-                padding: "14px 16px",
-                overflow: "hidden",
-                "&:hover": { borderColor: active ? "var(--color-primary)" : "var(--color-border-strong)" },
-              }}
-            >
-              {active && (
-                <span style={{ position: "absolute", insetInlineStart: 0, top: 0, bottom: 0, width: 3, background: "var(--color-primary)" }} />
-              )}
-              <Stack direction="row" sx={{ alignItems: "center", gap: 0.75 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.dot }} />
-                <Typography sx={{ fontSize: 13, color: "var(--color-ink-muted-48)" }}>{c.label}</Typography>
-              </Stack>
-              <Typography sx={{ fontSize: 30, fontWeight: 700, lineHeight: 1.15, mt: 0.5, fontVariantNumeric: "tabular-nums" }}>
-                {c.count}
-              </Typography>
-              <Typography sx={{ fontSize: 12, color: "var(--color-ink-muted-48)" }}>{c.count === 1 ? "משתמש" : "משתמשים"}</Typography>
-            </Box>
-          );
-        })}
-      </Box>
+      {/* KPI strip — counts per role ("—" until they are known) */}
+      <div className="users-kpis">
+        {kpiCards.map((c) => (
+          <div key={c.key} className="users-kpi">
+            <Stack direction="row" sx={{ alignItems: "center", gap: 0.75 }}>
+              {c.dot && <span className="role-dot" style={{ background: c.dot }} aria-hidden />}
+              <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>{c.label}</span>
+            </Stack>
+            <div className="users-kpi__value">{ready ? c.count : "—"}</div>
+            <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>{ready && c.count === 1 ? "משתמש" : "משתמשים"}</div>
+          </div>
+        ))}
+      </div>
 
       {/* Table / error */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {phase === "error" ? (
-          <Box sx={{ background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "16px", p: 3 }}>
+          <div className="settings-card settings-error">
             <Alert severity="error">טעינת המשתמשים נכשלה — לא ניתן להתחבר לשרת ההרשאות.</Alert>
-            <Button variant="outlined" onClick={load} sx={{ mt: 2 }}>
+            <Button variant="outlined" color="inherit" onClick={load}>
               נסה שוב
             </Button>
-          </Box>
+          </div>
         ) : (
           <DataTable<AdminUser>
             columns={columns}
@@ -498,14 +507,20 @@ export default function UsersPage() {
             minWidth={960}
             maxHeight="100%"
             empty={
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6 }}>לא נמצאו משתמשים</div>
-                <div style={{ fontSize: 14 }}>
-                  {search || roleFilter !== "all"
-                    ? "אין תוצאות התואמות את החיפוש או הסינון."
-                    : "התחל בהוספת המשתמש הראשון."}
+              search || roleFilter !== "all" ? (
+                <div className="settings-empty settings-empty--bare">
+                  <div className="settings-empty__title">לא נמצאו משתמשים</div>
+                  <div>אין תוצאות התואמות את החיפוש או הסינון.</div>
+                  <Button variant="outlined" color="inherit" size="small" onClick={() => { setSearch(""); setRoleFilter("all"); }}>
+                    נקה חיפוש וסינון
+                  </Button>
                 </div>
-              </div>
+              ) : (
+                <div className="settings-empty settings-empty--bare">
+                  <div className="settings-empty__title">עדיין אין משתמשים</div>
+                  <div>התחל בהוספת המשתמש הראשון.</div>
+                </div>
+              )
             }
           />
         )}
@@ -515,38 +530,38 @@ export default function UsersPage() {
       <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editing ? "עריכת משתמש" : "משתמש חדש"}</DialogTitle>
         <DialogContent dir="rtl">
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-            <div>
-              <TextField
-                label="שם משתמש"
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                fullWidth
-                disabled={!!editing}
-                required
-              />
-              {editing && (
-                <Typography sx={{ fontSize: 12, color: "var(--color-ink-muted-48)", mt: 0.5 }}>
-                  שם המשתמש אינו ניתן לשינוי לאחר היצירה.
-                </Typography>
-              )}
-            </div>
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+            <TextField
+              label="שם משתמש"
+              value={form.username}
+              onChange={(e) => { setForm({ ...form, username: e.target.value }); if (formErrors.username) setFormErrors((x) => ({ ...x, username: undefined })); }}
+              fullWidth
+              disabled={!!editing}
+              required
+              error={!!formErrors.username}
+              helperText={formErrors.username ?? (editing ? "שם המשתמש אינו ניתן לשינוי לאחר היצירה." : undefined)}
+              inputProps={LTR_INPUT}
+              autoComplete="off"
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-md)" }}>
               <TextField label="שם פרטי" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} fullWidth />
               <TextField label="שם משפחה" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} fullWidth />
-            </Box>
+            </div>
             <TextField
               label="מספר עובד"
               value={form.employeeNumber}
               onChange={(e) => setForm({ ...form, employeeNumber: e.target.value })}
               fullWidth
+              inputProps={LTR_INPUT}
             />
             <div>
-              <Typography sx={{ fontSize: 13.5, fontWeight: 600, mb: 0.75 }}>תפקיד</Typography>
+              <div id="user-role-label" className="sh-field-label">תפקיד</div>
               <ToggleButtonGroup
                 value={form.role}
                 exclusive
                 color="primary"
+                role="group"
+                aria-labelledby="user-role-label"
                 disabled={!!editing && editing.username === currentUsername}
                 onChange={(_e, v) => v && setForm({ ...form, role: v as Role })}
               >
@@ -556,25 +571,31 @@ export default function UsersPage() {
                 <ToggleButton value="mashan">משאן</ToggleButton>
               </ToggleButtonGroup>
               {!!editing && editing.username === currentUsername && (
-                <Typography sx={{ fontSize: 12, color: "var(--color-ink-muted-48)", mt: 0.5 }}>
-                  לא ניתן לשנות את התפקיד של החשבון שאיתו אתה מחובר.
-                </Typography>
+                <div className="sh-field-helper">לא ניתן לשנות את התפקיד של החשבון שאיתו אתה מחובר.</div>
               )}
             </div>
             {!editing && (
               <>
                 <div>
-                  <Typography sx={{ fontSize: 13.5, fontWeight: 600, mb: 0.75 }}>סיסמה זמנית</Typography>
-                  <Stack direction="row" sx={{ gap: 1, alignItems: "center" }}>
+                <label htmlFor="user-temp-password" className="sh-field-label">סיסמה זמנית *</label>
+                <Stack direction="row" sx={{ gap: 1, alignItems: "flex-start" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <TextField
+                      id="user-temp-password"
+                      required
                       value={form.temporaryPassword}
-                      onChange={(e) => setForm({ ...form, temporaryPassword: e.target.value })}
+                      onChange={(e) => { setForm({ ...form, temporaryPassword: e.target.value }); if (formErrors.temporaryPassword) setFormErrors((x) => ({ ...x, temporaryPassword: undefined })); }}
                       fullWidth
+                      error={!!formErrors.temporaryPassword}
+                      helperText={formErrors.temporaryPassword}
+                      inputProps={PASSWORD_INPUT}
+                      autoComplete="off"
                     />
-                    <Button variant="outlined" onClick={() => setForm({ ...form, temporaryPassword: generatePassword() })}>
-                      חולל
-                    </Button>
-                  </Stack>
+                  </div>
+                  <Button variant="outlined" color="inherit" onClick={() => setForm({ ...form, temporaryPassword: generatePassword() })}>
+                    חולל
+                  </Button>
+                </Stack>
                 </div>
                 <FormControlLabel
                   control={
@@ -584,14 +605,15 @@ export default function UsersPage() {
                 />
               </>
             )}
-          </Box>
+          </div>
         </DialogContent>
+        {/* Cancel first, the action last (DialogActions puts it at the end). */}
         <DialogActions>
-          <Button variant="contained" onClick={submitForm} disabled={saving}>
-            {saving ? "שומר…" : editing ? "שמור" : "צור משתמש"}
-          </Button>
-          <Button variant="outlined" onClick={() => setFormOpen(false)}>
+          <Button variant="outlined" color="inherit" onClick={() => setFormOpen(false)}>
             ביטול
+          </Button>
+          <Button variant="contained" onClick={submitForm} loading={saving}>
+            {editing ? "שמור" : "צור משתמש"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -603,9 +625,21 @@ export default function UsersPage() {
           <DialogContentText>
             הגדרת סיסמה זמנית ל<strong>{resetTarget?.fullName}</strong>.
           </DialogContentText>
-          <Stack direction="row" sx={{ gap: 1, alignItems: "center", mt: 2 }}>
-            <TextField label="סיסמה זמנית" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} fullWidth />
-            <Button variant="outlined" onClick={() => setResetPwd(generatePassword())}>
+          <label htmlFor="user-reset-password" className="sh-field-label" style={{ marginTop: "var(--space-md)" }}>סיסמה זמנית</label>
+          <Stack direction="row" sx={{ gap: 1, alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TextField
+                id="user-reset-password"
+                value={resetPwd}
+                onChange={(e) => { setResetPwd(e.target.value); if (resetError) setResetError(""); }}
+                fullWidth
+                error={!!resetError}
+                helperText={resetError}
+                inputProps={PASSWORD_INPUT}
+                autoComplete="off"
+              />
+            </div>
+            <Button variant="outlined" color="inherit" onClick={() => { setResetPwd(generatePassword()); setResetError(""); }}>
               חולל
             </Button>
           </Stack>
@@ -614,67 +648,56 @@ export default function UsersPage() {
           </Alert>
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" onClick={submitReset} disabled={busy}>
-            אפס סיסמה
-          </Button>
-          <Button variant="outlined" onClick={() => setResetTarget(null)}>
+          <Button variant="outlined" color="inherit" onClick={() => setResetTarget(null)}>
             ביטול
+          </Button>
+          <Button variant="contained" onClick={submitReset} loading={busy}>
+            אפס סיסמה
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ---- Toggle active dialog ---- */}
-      <Dialog open={!!toggleTarget} onClose={() => setToggleTarget(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {toggleTarget?.status === "disabled"
+      <ConfirmDialog
+        open={!!toggleTarget}
+        title={
+          toggleTarget?.status === "disabled"
             ? "הפעלת משתמש"
             : toggleTarget?.status === "locked"
               ? "שחרור נעילה"
-              : "השבתת משתמש"}
-        </DialogTitle>
-        <DialogContent dir="rtl">
-          <DialogContentText>
-            {toggleTarget?.status === "disabled"
-              ? `להפעיל מחדש את "${toggleTarget?.fullName}"? המשתמש יוכל להתחבר.`
-              : toggleTarget?.status === "locked"
-                ? `לשחרר את הנעילה של "${toggleTarget?.fullName}"? המשתמש יוכל להתחבר שוב.`
-                : `להשבית את "${toggleTarget?.fullName}"? המשתמש לא יוכל להתחבר עד להפעלה מחדש.`}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="contained" onClick={submitToggle} disabled={busy}>
-            {toggleTarget?.status === "disabled"
-              ? "הפעל"
-              : toggleTarget?.status === "locked"
-                ? "שחרר נעילה"
-                : "השבת"}
-          </Button>
-          <Button variant="outlined" onClick={() => setToggleTarget(null)}>
-            ביטול
-          </Button>
-        </DialogActions>
-      </Dialog>
+              : "השבתת משתמש"
+        }
+        message={
+          toggleTarget?.status === "disabled"
+            ? `להפעיל מחדש את "${toggleTarget?.fullName}"? המשתמש יוכל להתחבר.`
+            : toggleTarget?.status === "locked"
+              ? `לשחרר את הנעילה של "${toggleTarget?.fullName}"? המשתמש יוכל להתחבר שוב.`
+              : `להשבית את "${toggleTarget?.fullName}"? המשתמש לא יוכל להתחבר עד להפעלה מחדש.`
+        }
+        confirmText={
+          toggleTarget?.status === "disabled"
+            ? "הפעל"
+            : toggleTarget?.status === "locked"
+              ? "שחרר נעילה"
+              : "השבת"
+        }
+        busy={busy}
+        onConfirm={submitToggle}
+        onCancel={() => setToggleTarget(null)}
+      />
 
       {/* ---- Delete dialog ---- */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth draggable={false}>
-        <DialogTitle>מחיקת משתמש</DialogTitle>
-        <DialogContent dir="rtl">
-          <DialogContentText>
-            האם למחוק את &quot;{deleteTarget?.fullName}&quot;?
-          </DialogContentText>
-          <Typography variant="caption" sx={{ color: "var(--color-destructive)", display: "block", mt: 1 }}>
-            פעולה זו אינה ניתנת לביטול.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="contained" color="error" onClick={submitDelete} disabled={busy}>
-            מחק משתמש
-          </Button>
-          <Button variant="outlined" onClick={() => setDeleteTarget(null)}>
-            ביטול
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        draggable={false}
+        open={!!deleteTarget}
+        title="מחיקת משתמש"
+        message={deleteTarget ? `למחוק את המשתמש "${deleteTarget.fullName || deleteTarget.username}"? פעולה זו אינה ניתנת לביטול.` : ""}
+        confirmText="מחק משתמש"
+        destructive
+        busy={busy}
+        onConfirm={submitDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       <Snackbar
         open={toast.open}

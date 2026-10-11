@@ -2,24 +2,26 @@
 
 import * as React from "react";
 import {
-  Box,
-  Typography,
+  Alert,
   Button,
-  Dialog,
-  TextField,
-  CircularProgress,
   ConfirmDialog,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Skeleton,
+  Tag,
+  TextField,
 } from "@/components/ui";
 import { Add as AddIcon } from "@/components/ui/icons";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { EditOutlined as EditOutlinedIcon } from "@/components/ui/icons";
-import { DeleteOutline as DeleteOutlineIcon } from "@/components/ui/icons";
 import { CloudUploadOutlined as CloudUploadOutlinedIcon } from "@/components/ui/icons";
 import { Star as StarIcon } from "@/components/ui/icons";
-import { StarBorder as StarBorderIcon } from "@/components/ui/icons";
 import { Inventory2Outlined as Inventory2OutlinedIcon } from "@/components/ui/icons";
-import { ErrorOutline as ErrorOutlineIcon } from "@/components/ui/icons";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
+import SettingsToolbar from "../components/SettingsToolbar";
 import { apiFetch } from "@/lib/api/client";
 import { uploadReferenceImages } from "@/lib/api/direct-upload";
 
@@ -68,17 +70,24 @@ type FormImage =
   | { key: string; kind: "existing"; id: number; url: string; fileName: string; photoType: string }
   | { key: string; kind: "new"; url: string; file: File; fileName: string; photoType: string };
 
+/** The form fields a save checks; each error is shown on its field. */
+type FieldKey = "type" | "sku" | "manu" | "weight" | "name";
+
 // ---- Design tokens (Shifthouse) --------------------------------------------
+// States (hover / focus / drag) live in settings.css (.ri-*): inline styles
+// cannot express them.
 const C = {
   accent: "var(--color-primary)",
-  accentHover: "var(--color-primary-hover)",
   ink: "var(--color-ink)",
   muted: "var(--color-ink-muted-48)",
-  mutedSoft: "var(--color-ink-muted-40)",
   hairline: "var(--color-hairline)",
   card: "var(--color-canvas)",
-  subtle: "var(--color-surface-pearl)",
-  danger: "var(--color-destructive)",
+};
+
+// A non-OK reply counts as a failure (it used to read as an empty list).
+const okJson = (r: Response) => {
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
 };
 
 let keySeq = 0;
@@ -91,6 +100,9 @@ export default function ReferenceItemsPage() {
 
   const [items, setItems] = React.useState<ReferenceItem[]>([]);
   const [loadingItems, setLoadingItems] = React.useState(false);
+  // A failed load is not "no items": each gets an error band and a retry.
+  const [itemsError, setItemsError] = React.useState(false);
+  const [optionsError, setOptionsError] = React.useState(false);
 
   const [skuFilter, setSkuFilter] = React.useState<string | null>(null);
   const [manuFilter, setManuFilter] = React.useState<string | null>(null);
@@ -109,33 +121,38 @@ export default function ReferenceItemsPage() {
   // Which photo group newly-added files go to (photo_types.code).
   const [uploadType, setUploadType] = React.useState<string>("");
   const [formError, setFormError] = React.useState("");
+  const [fieldErrors, setFieldErrors] = React.useState<Partial<Record<FieldKey, string>>>({});
   const [saving, setSaving] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [dragOver, setDragOver] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   // ---- data loading --------------------------------------------------------
-  React.useEffect(() => {
+  const loadOptions = React.useCallback(() => {
+    setOptionsError(false);
     apiFetch("/api/settings/item-types")
-      .then((r) => r.json())
+      .then(okJson)
       .then((data: ItemType[]) => setItemTypes(Array.isArray(data) ? data : []))
-      .catch(() => setItemTypes([]));
+      .catch(() => { setItemTypes([]); setOptionsError(true); });
     apiFetch("/api/settings/photo-types")
-      .then((r) => r.json())
+      .then(okJson)
       .then((data: PhotoType[]) => {
         const rows = Array.isArray(data) ? data : [];
         setPhotoTypes(rows);
         setUploadType((cur) => cur || rows[0]?.code || "");
       })
-      .catch(() => setPhotoTypes([]));
+      .catch(() => { setPhotoTypes([]); setOptionsError(true); });
   }, []);
+
+  React.useEffect(() => { loadOptions(); }, [loadOptions]);
 
   const loadItems = React.useCallback((typeId: number) => {
     setLoadingItems(true);
+    setItemsError(false);
     apiFetch(`/api/settings/reference-items?itemTypeId=${typeId}`)
-      .then((r) => r.json())
+      .then(okJson)
       .then((data: ReferenceItem[]) => setItems(Array.isArray(data) ? data : []))
-      .catch(() => setItems([]))
+      .catch(() => { setItems([]); setItemsError(true); })
       .finally(() => setLoadingItems(false));
   }, []);
 
@@ -175,6 +192,10 @@ export default function ReferenceItemsPage() {
   );
 
   const anyFilter = !!(skuFilter || manuFilter);
+  const clearFilters = () => {
+    setSkuFilter(null);
+    setManuFilter(null);
+  };
   const headerCount = anyFilter
     ? `${filtered.length} מתוך ${items.length}`
     : `${items.length} פריטים`;
@@ -198,6 +219,7 @@ export default function ReferenceItemsPage() {
     setPrimaryKey(null);
     setUploadType(photoTypes[0]?.code ?? "");
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
@@ -222,8 +244,12 @@ export default function ReferenceItemsPage() {
     setPrimaryKey(primary ? `e_${primary.id}` : null);
     setUploadType(photoTypes[0]?.code ?? "");
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
+
+  const clearFieldError = (key: FieldKey) =>
+    setFieldErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
 
   const closeForm = () => {
     revokeNewUrls(formImages);
@@ -266,11 +292,15 @@ export default function ReferenceItemsPage() {
   };
 
   const save = async () => {
-    if (!formType) return setFormError("יש לבחור סוג פריט.");
-    if (!formSku.trim()) return setFormError("יש להזין מק״ט יצרן.");
-    if (!formManu.trim()) return setFormError("יש להזין יצרן.");
-    if (!formreference_weight.trim()) return setFormError("יש להזין משקל.");
-    if (!formName.trim()) return setFormError("יש להזין שם.");
+    // Every missing field is marked on itself, all at once.
+    const missing: Partial<Record<FieldKey, string>> = {};
+    if (!formType) missing.type = "יש לבחור סוג פריט";
+    if (!formSku.trim()) missing.sku = "יש להזין מק״ט יצרן";
+    if (!formManu.trim()) missing.manu = "יש להזין יצרן";
+    if (!formreference_weight.trim()) missing.weight = "יש להזין משקל";
+    if (!formName.trim()) missing.name = "יש להזין שם";
+    setFieldErrors(missing);
+    if (!formType || Object.keys(missing).length > 0) return;
 
     // New files, in display order — the server appends them in this same order.
     const newImages = formImages.filter((i) => i.kind === "new") as Extract<
@@ -367,828 +397,552 @@ export default function ReferenceItemsPage() {
   };
 
   // ---- render --------------------------------------------------------------
+  const typeName = selectedType?.item_type_desc ?? "";
+
+  // The settings layout owns the frame (scroll, padding, 1180 column).
   return (
-    <Box
-      sx={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        direction: "rtl",
-        color: C.ink,
-      }}
-    >
-      {/* Scroll region */}
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        <Box sx={{ maxWidth: 1180, mx: "auto", px: 3, py: 3, pb: 9 }}>
-          {/* Title row */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: 2.5,
-              flexWrap: "wrap",
-            }}
-          >
-            <Box>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                <Typography
-                  component="h1"
-                  sx={{ m: 0, fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1 }}
-                >
-                  פריטי ייחוס
-                </Typography>
-                {selectedType && (
-                  <Box
-                    sx={{
-                      fontSize: 13,
-                      color: C.muted,
-                      bgcolor: C.card,
-                      border: `1px solid ${C.hairline}`,
-                      borderRadius: "9999px",
-                      px: 1.4,
-                      py: 0.4,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {headerCount}
-                  </Box>
-                )}
-              </Box>
-              <Typography sx={{ mt: 1, fontSize: 15, color: "var(--color-ink-muted-70)", maxWidth: 620, lineHeight: 1.5 }}>
-                בחר סוג פריט, ואז סנן לפי מק״ט יצרן או יצרן. פריט הייחוס משמש להשוואה אוטומטית בבדיקות.
-              </Typography>
-            </Box>
-            <Button
-              onClick={openNew}
-              startIcon={<AddIcon />}
-              variant="contained"
-              sx={{
-                borderRadius: "9999px",
-                px: 2.75,
-                py: 1.4,
-                fontSize: 15,
-                fontWeight: 600,
-                bgcolor: C.accent,
-                "&:hover": { bgcolor: C.accentHover },
-                whiteSpace: "nowrap",
-              }}
-            >
-              פריט ייחוס חדש
-            </Button>
-          </Box>
+    <div dir="rtl" style={{ color: C.ink }}>
+      <SettingsToolbar
+        title="פריטי ייחוס"
+        subtitle="בחר סוג פריט, ואז סנן לפי מק״ט יצרן או יצרן. פריט הייחוס משמש להשוואה אוטומטית בבדיקות."
+        countText={selectedType && !loadingItems && !itemsError ? headerCount : undefined}
+        onAdd={openNew}
+        addLabel="פריט ייחוס חדש"
+      />
 
-          {/* Step 1: choose type */}
-          <Box
-            sx={{
-              bgcolor: C.card,
-              border: `1px solid ${C.hairline}`,
-              borderRadius: "18px",
-              p: 3,
-              mt: 3,
-            }}
-          >
-            <StepBadge n={1} label="בחר סוג פריט" />
-            <Box sx={{ display: "flex", gap: 2.5, alignItems: "center", flexWrap: "wrap", mt: 1.75 }}>
-              <Box sx={{ flex: 1, minWidth: 260, maxWidth: 480 }}>
-                <SearchableCombobox<ItemType>
-                  value={selectedType}
-                  onChange={setSelectedType}
-                  options={itemTypes}
-                  getOptionLabel={(o) => o.item_type_desc}
-                  isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
-                  placeholder="הקלד או בחר סוג פריט…"
+      {optionsError && (
+        <div className="settings-card settings-error" style={{ marginTop: "var(--space-lg)" }}>
+          <Alert severity="error">טעינת סוגי הפריטים או סוגי התמונות נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
+          <Button variant="outlined" color="inherit" size="small" onClick={loadOptions}>נסה שוב</Button>
+        </div>
+      )}
+
+      {/* Step 1: choose type */}
+      <div className="settings-card ri-step-card">
+        <StepBadge n={1} label="בחר סוג פריט" />
+        <div style={{ display: "flex", gap: "var(--space-ml)", alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
+          <div style={{ flex: 1, minWidth: 260, maxWidth: 480 }}>
+            <SearchableCombobox<ItemType>
+              value={selectedType}
+              onChange={setSelectedType}
+              options={itemTypes}
+              getOptionLabel={(o) => o.item_type_desc}
+              isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
+              placeholder="הקלד או בחר סוג פריט…"
+            />
+          </div>
+          <p style={{ margin: 0, fontSize: "var(--text-small)", color: C.muted, maxWidth: 240, lineHeight: 1.45 }}>
+            בחירת הסוג תציג את פריטי הייחוס המתאימים בלבד.
+          </p>
+        </div>
+      </div>
+
+      {/* Step 2 + grid */}
+      {selectedType && (
+        <>
+          <div style={{ marginTop: "var(--space-lg)" }}>
+            <StepBadge n={2} label="סנן לפי מק״ט יצרן או יצרן" />
+            <div style={{ display: "flex", gap: "var(--space-md)", alignItems: "flex-end", flexWrap: "wrap", marginTop: 14 }}>
+              <div style={{ minWidth: 240, flex: 1, maxWidth: 320 }}>
+                <SearchableCombobox<string>
+                  label="מק״ט יצרן"
+                  value={skuFilter}
+                  onChange={setSkuFilter}
+                  options={skuOptions}
+                  getOptionLabel={(o) => o}
+                  placeholder="כל המק״טים"
                 />
-              </Box>
-              <Typography sx={{ fontSize: 13, color: C.muted, maxWidth: 240, lineHeight: 1.45 }}>
-                בחירת הסוג תציג את פריטי הייחוס המתאימים בלבד.
-              </Typography>
-            </Box>
-          </Box>
-
-          {/* Step 2 + grid */}
-          {selectedType && (
-            <>
-              <Box sx={{ mt: 3 }}>
-                <StepBadge n={2} label="סנן לפי מק״ט יצרן או יצרן" />
-                <Box
-                  sx={{
-                    display: "flex",
-                    gap: 2,
-                    alignItems: "flex-end",
-                    flexWrap: "wrap",
-                    mt: 1.75,
-                  }}
-                >
-                  <Box sx={{ minWidth: 240, flex: 1, maxWidth: 320 }}>
-                    <SearchableCombobox<string>
-                      label="מק״ט יצרן"
-                      value={skuFilter}
-                      onChange={setSkuFilter}
-                      options={skuOptions}
-                      getOptionLabel={(o) => o}
-                      placeholder="כל המק״טים"
-                    />
-                  </Box>
-                  <Box sx={{ minWidth: 240, flex: 1, maxWidth: 320 }}>
-                    <SearchableCombobox<string>
-                      label="יצרן"
-                      value={manuFilter}
-                      onChange={setManuFilter}
-                      options={manuOptions}
-                      getOptionLabel={(o) => o}
-                      placeholder="כל היצרנים"
-                    />
-                  </Box>
-                  {anyFilter && (
-                    <Button
-                      onClick={() => {
-                        setSkuFilter(null);
-                        setManuFilter(null);
-                      }}
-                      variant="text"
-                      sx={{
-                        height: 46,
-                        color: C.accent,
-                        fontSize: 14,
-                        fontWeight: 600,
-                        "&:hover": { bgcolor: "transparent", textDecoration: "underline" },
-                      }}
-                    >
-                      נקה סינון
-                    </Button>
-                  )}
-                </Box>
-              </Box>
-
-              {loadingItems ? (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-                  <CircularProgress size={30} />
-                </Box>
-              ) : filtered.length === 0 ? (
-                <Box sx={{ textAlign: "center", py: 8 }}>
-                  <Typography sx={{ fontSize: 18, fontWeight: 600, mb: 0.75 }}>
-                    אין פריטי ייחוס תואמים.
-                  </Typography>
-                  <Typography sx={{ fontSize: 14, color: C.muted, mb: 2.5 }}>
-                    נסה לשנות את הסינון, או צור פריט ייחוס חדש לסוג זה.
-                  </Typography>
-                  <Button
-                    onClick={openNew}
-                    variant="outlined"
-                    sx={{
-                      borderRadius: "9999px",
-                      px: 2.5,
-                      py: 1.25,
-                      fontSize: 15,
-                      fontWeight: 600,
-                      borderColor: C.accent,
-                      color: C.accent,
-                    }}
-                  >
-                    פריט ייחוס חדש
-                  </Button>
-                </Box>
-              ) : (
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))",
-                    gap: 2.5,
-                    mt: 3,
-                  }}
-                >
-                  {filtered.map((it) => (
-                    <ReferenceCard key={it.reference_item_id} item={it} onEdit={() => openEdit(it)} />
-                  ))}
-                </Box>
+              </div>
+              <div style={{ minWidth: 240, flex: 1, maxWidth: 320 }}>
+                <SearchableCombobox<string>
+                  label="יצרן"
+                  value={manuFilter}
+                  onChange={setManuFilter}
+                  options={manuOptions}
+                  getOptionLabel={(o) => o}
+                  placeholder="כל היצרנים"
+                />
+              </div>
+              {anyFilter && (
+                <Button variant="text" onClick={clearFilters}>נקה סינון</Button>
               )}
-            </>
-          )}
+            </div>
+          </div>
 
-          {/* No type chosen */}
-          {!selectedType && (
-            <Box sx={{ textAlign: "center", pt: 7, pb: 2.5, color: C.muted }}>
-              <Box
-                sx={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: "9999px",
-                  bgcolor: C.card,
-                  border: `1px solid ${C.hairline}`,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: C.accent,
-                }}
-              >
-                <Inventory2OutlinedIcon sx={{ fontSize: 30 }} />
-              </Box>
-              <Typography sx={{ fontSize: 17, color: C.ink, fontWeight: 600, mt: 1.75 }}>
-                בחר סוג פריט כדי להתחיל
-              </Typography>
-              <Typography sx={{ fontSize: 14, mt: 0.75 }}>
-                פריטי הייחוס יוצגו לפי הסוג שתבחר למעלה.
-              </Typography>
-            </Box>
+          {itemsError ? (
+            <div className="settings-card settings-error" style={{ marginTop: "var(--space-lg)" }}>
+              <Alert severity="error">טעינת פריטי הייחוס של {typeName} נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
+              <Button variant="outlined" color="inherit" size="small" onClick={() => loadItems(selectedType.item_type_id)}>נסה שוב</Button>
+            </div>
+          ) : loadingItems ? (
+            // Skeleton cards in the grid's own shape, not a centred spinner.
+            <div className="ri-grid" aria-busy="true" aria-label="טוען פריטי ייחוס">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="settings-card" aria-hidden>
+                  <Skeleton variant="rectangular" width="100%" height={172} />
+                  <div style={{ padding: "16px 18px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <Skeleton width={70} height={18} />
+                    <Skeleton width="80%" height={16} />
+                    <Skeleton width="60%" height={13} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            anyFilter ? (
+              <div className="settings-empty" style={{ padding: "64px 0" }}>
+                <div className="settings-empty__title">אין פריטי ייחוס שתואמים לסינון.</div>
+                <div>נקה את הסינון כדי לראות את כל פריטי הייחוס של {typeName}.</div>
+                <Button variant="outlined" color="inherit" onClick={clearFilters}>נקה סינון</Button>
+              </div>
+            ) : (
+              <div className="settings-empty" style={{ padding: "64px 0" }}>
+                <div className="settings-empty__title">עדיין אין פריטי ייחוס ל{typeName}.</div>
+                <div>צור פריט ייחוס כדי שהבדיקות של סוג זה יושוו אליו אוטומטית.</div>
+                <Button onClick={openNew} startIcon={<AddIcon fontSize={18} aria-hidden />}>פריט ייחוס חדש</Button>
+              </div>
+            )
+          ) : (
+            <div className="ri-grid">
+              {filtered.map((it) => (
+                <ReferenceCard key={it.reference_item_id} item={it} onEdit={() => openEdit(it)} />
+              ))}
+            </div>
           )}
-        </Box>
-      </Box>
+        </>
+      )}
+
+      {/* No type chosen */}
+      {!selectedType && (
+        <div className="settings-empty" style={{ paddingTop: 56, paddingBottom: 20 }}>
+          <span
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: "var(--r-pill)",
+              background: C.card,
+              border: `1px solid ${C.hairline}`,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: C.muted,
+            }}
+          >
+            <Inventory2OutlinedIcon fontSize={30} aria-hidden />
+          </span>
+          <div className="settings-empty__title" style={{ fontSize: "var(--text-lead)", marginTop: 6 }}>בחר סוג פריט כדי להתחיל</div>
+          <div style={{ fontSize: "var(--text-body-sm)" }}>פריטי הייחוס יוצגו לפי הסוג שתבחר למעלה.</div>
+        </div>
+      )}
 
       {/* Add / Edit dialog */}
       <Dialog
         open={formOpen}
         onClose={closeForm}
-        maxWidth="sm"
+        maxWidth={false}
         fullWidth
         dir="rtl"
-        slotProps={{ paper: { sx: { borderRadius: "18px", width: "min(720px, 94vw)", maxWidth: "94vw" } } }}
+        PaperProps={{ style: { maxWidth: 720 } }}
       >
-        {/* header */}
-        <Box
-          data-drag-handle=""
-          sx={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 2,
-            p: 3,
-            borderBottom: `1px solid ${C.hairline}`,
-          }}
-        >
-          <Box>
-            <Typography sx={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>
-              {editingId == null ? "פריט ייחוס חדש" : "עריכת פריט ייחוס"}
-            </Typography>
-            <Typography sx={{ fontSize: 13, color: C.muted, mt: 0.4 }}>
+        <DialogTitle onClose={closeForm}>
+          <span style={{ minWidth: 0 }}>
+            {editingId == null ? "פריט ייחוס חדש" : "עריכת פריט ייחוס"}
+            <span style={{ display: "block", fontSize: "var(--text-small)", fontWeight: 400, color: C.muted, marginTop: 4, fontFamily: "var(--font-text)" }}>
               פריט הייחוס ישמש להשוואה אוטומטית בבדיקות.
-            </Typography>
-          </Box>
-          <Box
-            component="button"
-            onClick={closeForm}
-            sx={{
-              width: 34,
-              height: 34,
-              border: 0,
-              borderRadius: "9999px",
-              bgcolor: "var(--color-canvas-parchment)",
-              color: C.ink,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              flexShrink: 0,
-              "&:hover": { bgcolor: "var(--color-hairline)" },
-            }}
-          >
-            <CloseIcon sx={{ fontSize: 18 }} />
-          </Box>
-        </Box>
+            </span>
+          </span>
+        </DialogTitle>
 
-        {/* body */}
-        <Box sx={{ p: 3, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2.5 }}>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
-            <SearchableCombobox<ItemType>
-              label="סוג פריט"
-              required
-              value={formType}
-              onChange={setFormType}
-              options={itemTypes}
-              getOptionLabel={(o) => o.item_type_desc}
-              isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
-              placeholder="בחר סוג פריט…"
-            />
-            <FieldText
-              label="מק״ט יצרן"
-              required
-              value={formSku}
-              onChange={setFormSku}
-              placeholder="לדוגמה: 745781-4"
-            />
-            <FieldText
-              label="משקל"
-              required
-              value={formreference_weight}
-              onChange={setFormreference_weight}
-              placeholder="לדוגמה: 0.5kg"
-            />
-          </Box>
+        <DialogContent>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-ml)" }}>
+            <div className="ri-form-grid">
+              <SearchableCombobox<ItemType>
+                label="סוג פריט"
+                required
+                value={formType}
+                onChange={(v) => { setFormType(v); clearFieldError("type"); }}
+                options={itemTypes}
+                getOptionLabel={(o) => o.item_type_desc}
+                isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
+                placeholder="בחר סוג פריט…"
+                error={!!fieldErrors.type}
+                helperText={fieldErrors.type}
+              />
+              <TextField
+                label="מק״ט יצרן"
+                required
+                fullWidth
+                value={formSku}
+                onChange={(e) => { setFormSku(e.target.value); clearFieldError("sku"); }}
+                placeholder="לדוגמה: 745781-4"
+                error={!!fieldErrors.sku}
+                helperText={fieldErrors.sku}
+                // A code: typed left-to-right, aligned with the Hebrew labels.
+                inputProps={{ dir: "ltr", style: { textAlign: "right", fontVariantNumeric: "tabular-nums" } }}
+              />
+              <TextField
+                label="משקל"
+                required
+                fullWidth
+                value={formreference_weight}
+                onChange={(e) => { setFormreference_weight(e.target.value); clearFieldError("weight"); }}
+                placeholder="לדוגמה: 0.5kg"
+                error={!!fieldErrors.weight}
+                helperText={fieldErrors.weight}
+                inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
+              />
+            </div>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
-            <FieldText
-              label="יצרן"
-              required
-              value={formManu}
-              onChange={setFormManu}
-              placeholder="לדוגמה: TE Connectivity"
-            />
-            <FieldText
-              label="שם הפריט"
-              required
-              value={formName}
-              onChange={setFormName}
-              placeholder="תיאור קצר"
-            />
-          </Box>
+            <div className="ri-form-grid">
+              <TextField
+                label="יצרן"
+                required
+                fullWidth
+                value={formManu}
+                onChange={(e) => { setFormManu(e.target.value); clearFieldError("manu"); }}
+                placeholder="לדוגמה: TE Connectivity"
+                error={!!fieldErrors.manu}
+                helperText={fieldErrors.manu}
+              />
+              <TextField
+                label="שם הפריט"
+                required
+                fullWidth
+                value={formName}
+                onChange={(e) => { setFormName(e.target.value); clearFieldError("name"); }}
+                placeholder="תיאור קצר"
+                error={!!fieldErrors.name}
+                helperText={fieldErrors.name}
+              />
+            </div>
 
-          {/* images */}
-          <Box>
-            <FieldCaption>תמונות ייחוס</FieldCaption>
+            {/* images */}
+            <div role="group" aria-labelledby="ri-images-label">
+              <div id="ri-images-label" className="sh-field-label">תמונות ייחוס</div>
 
-            {/* Photo-group selector: newly-added files are tagged with the
-                active group ("צילום אריזה" / "צילום פריט" / ...). */}
-            {photoTypes.length > 0 && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.25, flexWrap: "wrap" }}>
-                <Typography sx={{ fontSize: 13, color: C.muted }}>העלאה אל:</Typography>
-                {photoTypes.map((pt) => {
-                  const active = pt.code === uploadType;
-                  return (
-                    <Box
+              {/* Photo-group selector: newly-added files are tagged with the
+                  active group ("צילום אריזה" / "צילום פריט" / ...). */}
+              {photoTypes.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", marginBottom: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "var(--text-small)", color: C.muted }}>העלאה אל:</span>
+                  {photoTypes.map((pt) => (
+                    <button
                       key={pt.code}
-                      component="button"
                       type="button"
+                      className="ri-chip"
+                      aria-pressed={pt.code === uploadType}
                       onClick={() => setUploadType(pt.code)}
-                      sx={{
-                        border: `1.5px solid ${active ? C.accent : C.hairline}`,
-                        borderRadius: "9999px",
-                        px: 1.75,
-                        py: 0.6,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        bgcolor: active ? "color-mix(in srgb, var(--color-primary) 8%, transparent)" : C.card,
-                        color: active ? C.accent : C.ink,
-                        "&:hover": { borderColor: C.accent },
-                      }}
                     >
                       {pt.photo_type_desc}
-                    </Box>
-                  );
-                })}
-              </Box>
-            )}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            <Box
-              onClick={() => fileRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                addFiles([...(e.dataTransfer?.files ?? [])]);
-              }}
-              sx={{
-                border: `1.5px dashed ${dragOver ? C.accent : "var(--color-border-strong)"}`,
-                borderRadius: "12px",
-                bgcolor: dragOver ? "var(--color-primary-tint)" : C.subtle,
-                p: 2.75,
-                textAlign: "center",
-                cursor: "pointer",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 1,
-                transition: "border-color 0.15s ease, background-color 0.15s ease",
-                "&:hover": { borderColor: C.accent, bgcolor: "var(--color-primary-tint)" },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "9999px",
-                  bgcolor: C.card,
-                  border: `1px solid ${C.hairline}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: C.accent,
+              {/* Drop zone: a click or Enter / Space opens the file picker. */}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="הוספת תמונות ייחוס: גרור תמונות לכאן או לחץ לבחירה"
+                className={"ri-drop" + (dragOver ? " ri-drop--over" : "")}
+                onClick={() => fileRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileRef.current?.click(); }
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  addFiles([...(e.dataTransfer?.files ?? [])]);
                 }}
               >
-                <CloudUploadOutlinedIcon sx={{ fontSize: 20 }} />
-              </Box>
-              <Typography sx={{ fontSize: 14, color: C.ink }}>
-                גרור תמונות לכאן, או{" "}
-                <Box component="span" sx={{ color: C.accent, fontWeight: 600 }}>
-                  לחץ לבחירה
-                </Box>
-              </Typography>
-              <Typography sx={{ fontSize: 12, color: C.mutedSoft }}>
-                PNG או JPG · עד 50MB לתמונה · ניתן לבחור כמה
-              </Typography>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => {
-                  addFiles([...(e.target.files ?? [])]);
-                  e.target.value = "";
-                }}
-                style={{ display: "none" }}
-              />
-            </Box>
+                <span
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "var(--r-pill)",
+                    background: C.card,
+                    border: `1px solid ${C.hairline}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: C.muted,
+                  }}
+                >
+                  <CloudUploadOutlinedIcon fontSize={20} aria-hidden />
+                </span>
+                <span style={{ fontSize: "var(--text-body-sm)", color: C.ink }}>
+                  גרור תמונות לכאן, או{" "}
+                  <span style={{ color: C.accent, fontWeight: 600 }}>לחץ לבחירה</span>
+                </span>
+                <span style={{ fontSize: "var(--text-fine)", color: C.muted }}>
+                  PNG או JPG · עד 50MB לתמונה · ניתן לבחור כמה
+                </span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  tabIndex={-1}
+                  aria-hidden
+                  onChange={(e) => {
+                    addFiles([...(e.target.files ?? [])]);
+                    e.target.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+              </div>
 
-            {/* Thumbnails grouped by photo type — one section per group so it's
-                obvious which reference set each image belongs to. */}
-            {formImages.length > 0 && (() => {
-              const knownCodes = photoTypes.map((pt) => pt.code);
-              const groups: Array<{ code: string; label: string; images: FormImage[] }> = [
-                ...photoTypes.map((pt) => ({
-                  code: pt.code,
-                  label: pt.photo_type_desc,
-                  images: formImages.filter((i) => i.photoType === pt.code),
-                })),
-                // Safety net: images whose code isn't in the active list (e.g. a
-                // type deactivated after upload) still render, under their code.
-                ...[...new Set(formImages.map((i) => i.photoType).filter((c) => !knownCodes.includes(c)))]
-                  .map((code) => ({ code, label: code, images: formImages.filter((i) => i.photoType === code) })),
-              ].filter((g) => g.images.length > 0);
+              {/* Thumbnails grouped by photo type — one section per group so it's
+                  obvious which reference set each image belongs to. */}
+              {formImages.length > 0 && (() => {
+                const knownCodes = photoTypes.map((pt) => pt.code);
+                const groups: Array<{ code: string; label: string; images: FormImage[] }> = [
+                  ...photoTypes.map((pt) => ({
+                    code: pt.code,
+                    label: pt.photo_type_desc,
+                    images: formImages.filter((i) => i.photoType === pt.code),
+                  })),
+                  // Safety net: images whose code isn't in the active list (e.g. a
+                  // type deactivated after upload) still render, under their code.
+                  ...[...new Set(formImages.map((i) => i.photoType).filter((c) => !knownCodes.includes(c)))]
+                    .map((code) => ({ code, label: code, images: formImages.filter((i) => i.photoType === code) })),
+                ].filter((g) => g.images.length > 0);
 
-              return groups.map((group) => (
-                <Box key={group.code} sx={{ mt: 1.75 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                    <Typography sx={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{group.label}</Typography>
-                    <Typography sx={{ fontSize: 12, color: C.mutedSoft, fontVariantNumeric: "tabular-nums" }}>
-                      {group.images.length} תמונות
-                    </Typography>
-                    <Box sx={{ flex: 1, height: "1px", bgcolor: "var(--color-divider-soft)" }} />
-                  </Box>
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))",
-                      gap: 1.5,
-                    }}
-                  >
-                    {group.images.map((img) => {
-                      const isPrimary = img.key === primaryKey;
-                      return (
-                        <Box
-                          key={img.key}
-                          sx={{
-                            position: "relative",
-                            aspectRatio: "1 / 1",
-                            borderRadius: "8px",
-                            overflow: "hidden",
-                            border: isPrimary ? `2px solid ${C.accent}` : `1px solid ${C.hairline}`,
-                            bgcolor: "var(--color-canvas-parchment)",
-                          }}
-                        >
-                          {/* contain so the full image is visible in the square preview */}
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={img.url}
-                            alt={img.fileName}
-                            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                          />
-                          <Box sx={{ position: "absolute", top: 5, insetInlineStart: 5, display: "flex", gap: 0.5 }}>
-                            <MiniBtn title="הגדר כתמונת כריכה" onClick={() => setPrimaryKey(img.key)}>
-                              {isPrimary ? (
-                                <StarIcon sx={{ fontSize: 14, color: C.accent }} />
-                              ) : (
-                                <StarBorderIcon sx={{ fontSize: 14 }} />
-                              )}
-                            </MiniBtn>
-                            <MiniBtn title="הסר" danger onClick={() => removeImage(img.key)}>
-                              <CloseIcon sx={{ fontSize: 14 }} />
-                            </MiniBtn>
-                          </Box>
-                          {isPrimary && (
-                            <Box
-                              sx={{
-                                position: "absolute",
-                                bottom: 0,
-                                insetInline: 0,
-                                bgcolor: C.accent,
-                                color: "var(--color-on-primary)",
-                                fontSize: 10,
-                                fontWeight: 600,
-                                textAlign: "center",
-                                py: 0.25,
-                              }}
-                            >
-                              כריכה
-                            </Box>
-                          )}
-                        </Box>
-                      );
-                    })}
-                  </Box>
-                </Box>
-              ));
-            })()}
-          </Box>
+                return groups.map((group) => (
+                  <div key={group.code} style={{ marginTop: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", marginBottom: "var(--space-xs)" }}>
+                      <span style={{ fontSize: "var(--text-small)", fontWeight: 600, color: C.ink }}>{group.label}</span>
+                      <span style={{ fontSize: "var(--text-fine)", color: C.muted, fontVariantNumeric: "tabular-nums" }}>
+                        {group.images.length} תמונות
+                      </span>
+                      <span style={{ flex: 1, height: 1, background: "var(--color-divider-soft)" }} />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: "var(--space-sm)" }}>
+                      {group.images.map((img) => {
+                        const isPrimary = img.key === primaryKey;
+                        return (
+                          <div
+                            key={img.key}
+                            style={{
+                              position: "relative",
+                              aspectRatio: "1 / 1",
+                              borderRadius: "var(--r-sm)",
+                              overflow: "hidden",
+                              border: isPrimary ? `2px solid ${C.accent}` : `1px solid ${C.hairline}`,
+                              background: "var(--color-canvas-parchment)",
+                            }}
+                          >
+                            {/* contain so the full image is visible in the square preview */}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={img.url}
+                              alt={img.fileName}
+                              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                            />
+                            <div style={{ position: "absolute", top: 4, insetInlineStart: 4, display: "flex", gap: 4 }}>
+                              <IconButton
+                                size="small"
+                                round
+                                color={isPrimary ? "primary" : "default"}
+                                title={isPrimary ? "תמונת הכריכה" : `הגדר את ${img.fileName} כתמונת כריכה`}
+                                aria-pressed={isPrimary}
+                                onClick={(e) => { e.stopPropagation(); setPrimaryKey(img.key); }}
+                              >
+                                <StarIcon fontSize={14} fill={isPrimary ? "currentColor" : "none"} aria-hidden />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                round
+                                color="error"
+                                title={`הסר את ${img.fileName}`}
+                                onClick={(e) => { e.stopPropagation(); removeImage(img.key); }}
+                              >
+                                <CloseIcon fontSize={14} aria-hidden />
+                              </IconButton>
+                            </div>
+                            {isPrimary && (
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  bottom: 0,
+                                  insetInline: 0,
+                                  background: C.accent,
+                                  color: "var(--color-on-primary)",
+                                  fontSize: "var(--text-micro)",
+                                  fontWeight: 600,
+                                  textAlign: "center",
+                                  padding: "2px 0",
+                                }}
+                              >
+                                כריכה
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
 
-          {/* notes */}
-          <Box>
-            <FieldCaption optional>הערות</FieldCaption>
+            {/* notes */}
             <TextField
+              label={<>הערות <span style={{ color: C.muted, fontWeight: 400 }}>· לא חובה</span></>}
               value={formNotes}
               onChange={(e) => setFormNotes(e.target.value)}
               placeholder="נקודות לבדיקה, מאפיינים מיוחדים, או סטיות מותרות…"
               multiline
               minRows={3}
               fullWidth
-              size="small"
             />
-          </Box>
 
-          {formError && (
-            <Box sx={{ fontSize: 13, color: C.danger, display: "flex", alignItems: "center", gap: 0.75 }}>
-              <ErrorOutlineIcon sx={{ fontSize: 16 }} />
-              {formError}
-            </Box>
-          )}
-        </Box>
+            {formError && <Alert severity="error">{formError}</Alert>}
+          </div>
+        </DialogContent>
 
-        {/* footer */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-            p: "16px 24px",
-            borderTop: `1px solid ${C.hairline}`,
-            background: "rgba(245,245,247,0.85)",
-            backdropFilter: "saturate(180%) blur(20px)",
-            WebkitBackdropFilter: "saturate(180%) blur(20px)",
-          }}
-        >
+        {/* Standard footer: delete at the start, Cancel then Save at the end. */}
+        <DialogActions>
           {editingId != null && (
             <Button
+              variant="text"
+              color="error"
               onClick={() => setConfirmDelete(true)}
               disabled={saving}
-              sx={{
-                color: C.danger,
-                fontSize: 14,
-                fontWeight: 600,
-                "&:hover": { bgcolor: "transparent", textDecoration: "underline" },
-              }}
+              style={{ order: -1, marginInlineEnd: "auto" }}
             >
               מחק פריט
             </Button>
           )}
-          <Box sx={{ flex: 1 }} />
-          <Button
-            onClick={closeForm}
-            disabled={saving}
-            variant="outlined"
-            sx={{ borderRadius: "9999px", px: 2.5, py: 1.25, fontSize: 15, fontWeight: 600, borderColor: "var(--color-border-strong)", color: C.ink }}
-          >
+          <Button variant="outlined" color="inherit" onClick={closeForm} disabled={saving}>
             ביטול
           </Button>
-          <Button
-            onClick={save}
-            disabled={saving}
-            variant="contained"
-            sx={{
-              borderRadius: "9999px",
-              px: 3,
-              py: 1.4,
-              fontSize: 15,
-              fontWeight: 600,
-              bgcolor: C.accent,
-              "&:hover": { bgcolor: C.accentHover },
-            }}
-          >
-            {saving ? <CircularProgress size={20} color="inherit" /> : "שמירה"}
+          <Button onClick={save} loading={saving}>
+            שמירה
           </Button>
-        </Box>
+        </DialogActions>
       </Dialog>
 
       <ConfirmDialog
         draggable={false}
         open={confirmDelete}
         title="מחיקת פריט ייחוס"
-        message="למחוק את פריט הייחוס? פעולה זו אינה ניתנת לביטול."
+        message={`למחוק את פריט הייחוס "${formName.trim() || formSku.trim() || "ללא שם"}"? פעולה זו אינה ניתנת לביטול.`}
         confirmText="מחק"
         destructive
         onConfirm={deleteItem}
         onCancel={() => setConfirmDelete(false)}
       />
-    </Box>
+    </div>
   );
 }
 
 // ---- small presentational helpers ------------------------------------------
 function StepBadge({ n, label }: { n: number; label: string }) {
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-      <Box
-        sx={{
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span
+        aria-hidden
+        style={{
           width: 24,
           height: 24,
-          borderRadius: "9999px",
-          bgcolor: C.accent,
+          borderRadius: "var(--r-pill)",
+          background: C.accent,
           color: "var(--color-on-primary)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 13,
+          fontSize: "var(--text-small)",
           fontWeight: 700,
           flexShrink: 0,
         }}
       >
         {n}
-      </Box>
-      <Typography sx={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{label}</Typography>
-    </Box>
-  );
-}
-
-function FieldCaption({ children, optional }: { children: React.ReactNode; optional?: boolean }) {
-  return (
-    <Typography component="label" sx={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-ink-muted-80)", mb: 1 }}>
-      {children}
-      {optional && (
-        <Box component="span" sx={{ color: C.mutedSoft, fontWeight: 400 }}>
-          {" "}
-          · לא חובה
-        </Box>
-      )}
-    </Typography>
-  );
-}
-
-function FieldText({
-  label,
-  value,
-  onChange,
-  placeholder,
-  required,
-  optional,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  required?: boolean;
-  optional?: boolean;
-}) {
-  return (
-    <Box>
-      <FieldCaption optional={optional}>
+      </span>
+      <h2 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 600, color: C.ink }}>
         {label}
-        {required && (
-          <Box component="span" sx={{ color: C.danger, fontWeight: 700 }}>
-            {" *"}
-          </Box>
-        )}
-      </FieldCaption>
-      <TextField
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        fullWidth
-        size="small"
-      />
-    </Box>
-  );
-}
-
-function MiniBtn({
-  children,
-  onClick,
-  title,
-  danger,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  title: string;
-  danger?: boolean;
-}) {
-  return (
-    <Box
-      component="button"
-      type="button"
-      title={title}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      sx={{
-        width: 24,
-        height: 24,
-        border: 0,
-        borderRadius: "9999px",
-        bgcolor: "rgba(255,255,255,0.92)",
-        color: danger ? C.danger : C.ink,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        p: 0,
-        "&:hover": { bgcolor: "var(--color-canvas)" },
-      }}
-    >
-      {children}
-    </Box>
+      </h2>
+    </div>
   );
 }
 
 function ReferenceCard({ item, onEdit }: { item: ReferenceItem; onEdit: () => void }) {
+  const title = item.name || item.item_type_desc || "פריט ייחוס";
   return (
-    <Box
-      onClick={onEdit}
-      sx={{
-        bgcolor: C.card,
-        border: `1px solid ${C.hairline}`,
-        borderRadius: "18px",
-        overflow: "hidden",
-        cursor: "pointer",
-        display: "flex",
-        flexDirection: "column",
-        transition: "border-color 0.15s ease",
-        "&:hover": { borderColor: "var(--color-border-strong)" },
-      }}
-    >
+    // The whole card opens the item for editing: a real button (Tab, Enter /
+    // Space), hover and focus in settings.css (.ri-card).
+    <button type="button" className="ri-card" onClick={onEdit} aria-label={`עריכת ${title}`}>
       {item.cover_url ? (
-        <Box sx={{ position: "relative", bgcolor: "var(--color-canvas-parchment)" }}>
+        <span style={{ display: "block", position: "relative", background: "var(--color-canvas-parchment)" }}>
           {/* contain (not cover) so the whole reference image is visible, not cropped */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={item.cover_url}
-            alt={item.name ?? ""}
+            alt=""
             style={{ width: "100%", height: 172, objectFit: "contain", display: "block" }}
           />
           {item.image_count > 1 && (
-            <Box
-              sx={{
+            <span
+              style={{
                 position: "absolute",
                 top: 10,
                 insetInlineStart: 10,
-                bgcolor: "rgba(0,0,0,0.62)",
-                color: "var(--color-on-primary)",
-                fontSize: 11,
+                background: "color-mix(in srgb, var(--color-ink) 72%, transparent)",
+                color: "var(--color-on-dark)",
+                fontSize: "var(--text-micro)",
                 fontWeight: 600,
-                borderRadius: "9999px",
-                px: 1.1,
-                py: 0.4,
-                backdropFilter: "blur(4px)",
+                borderRadius: "var(--r-pill)",
+                padding: "3px 9px",
+                fontVariantNumeric: "tabular-nums",
               }}
             >
               {item.image_count} תמונות
-            </Box>
+            </span>
           )}
-        </Box>
+        </span>
       ) : (
-        <Box
-          sx={{
+        <span
+          style={{
             height: 172,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            gap: 1,
-            bgcolor: "var(--color-hairline)",
-            color: "var(--color-ink-muted-80)",
+            gap: 8,
+            background: "var(--color-canvas-parchment)",
+            color: C.muted,
           }}
         >
-          <Inventory2OutlinedIcon sx={{ fontSize: 40 }} />
-          <Typography sx={{ fontSize: 12, opacity: 0.8 }}>ממתין לתמונה</Typography>
-        </Box>
+          <Inventory2OutlinedIcon fontSize={40} aria-hidden />
+          <span style={{ fontSize: "var(--text-fine)" }}>ממתין לתמונה</span>
+        </span>
       )}
-      <Box sx={{ p: "16px 18px 18px", display: "flex", flexDirection: "column", gap: 1.25 }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-          <Box
-            sx={{
-              display: "inline-flex",
-              alignItems: "center",
-              fontSize: 11,
-              fontWeight: 600,
-              color: C.ink,
-              bgcolor: "var(--color-canvas-parchment)",
-              border: `1px solid ${C.hairline}`,
-              borderRadius: "9999px",
-              px: 1.25,
-              py: 0.5,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {item.item_type_desc ?? "—"}
-          </Box>
-          <EditOutlinedIcon sx={{ fontSize: 16, color: C.mutedSoft }} />
-        </Box>
-        <Typography sx={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.2px", lineHeight: 1.25 }}>
-          {item.name || item.item_type_desc || "פריט ייחוס"}
-        </Typography>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.4, fontSize: 13, color: C.muted }}>
-          <Box>
+      <span style={{ padding: "16px 18px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <Tag tone="neutral">{item.item_type_desc ?? "—"}</Tag>
+          <EditOutlinedIcon fontSize={16} color="var(--color-ink-muted-48)" aria-hidden />
+        </span>
+        <span style={{ fontSize: "var(--text-body)", fontWeight: 600, lineHeight: 1.25, color: C.ink }}>
+          {title}
+        </span>
+        <span style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: "var(--text-small)", color: C.muted }}>
+          <span>
             מק״ט יצרן ·{" "}
-            <Box component="span" sx={{ color: C.ink, fontVariantNumeric: "tabular-nums" }}>
+            <bdi dir="ltr" style={{ color: C.ink, fontVariantNumeric: "tabular-nums" }}>
               {item.manufacturer_sku}
-            </Box>
-          </Box>
-          <Box>
-            יצרן · <Box component="span" sx={{ color: C.ink }}>{item.manufacturer}</Box>
-          </Box>
-        </Box>
-      </Box>
-    </Box>
+            </bdi>
+          </span>
+          <span>
+            יצרן · <bdi style={{ color: C.ink }}>{item.manufacturer}</bdi>
+          </span>
+        </span>
+      </span>
+    </button>
   );
 }

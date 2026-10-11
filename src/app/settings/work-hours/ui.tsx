@@ -14,11 +14,7 @@ export const BLUE = "var(--color-primary)";
 export const TINT = "var(--color-primary-soft)";
 export const DANGER = "var(--color-destructive)";
 
-export const card: React.CSSProperties = {
-  background: "var(--color-canvas)",
-  border: `1px solid ${HAIRLINE}`,
-  borderRadius: 18,
-};
+// The card surface is settings.css `.wh-card` (r-card, hairline edge).
 
 export const WEEKDAY_HEADERS = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
 export const EM_DASH = "—";

@@ -2,11 +2,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Snackbar, Alert, Box, Switch, FormControlLabel,
+  TextField, SearchInput, Snackbar, Alert, Switch, FormControlLabel,
+  ConfirmDialog, Tag,
 } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import DataTable, { StatusPill, RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
-import { Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { TestStation, TestStationStatus } from "@/types";
 import { apiFetch } from "@/lib/api/client";
 
@@ -21,15 +22,19 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
   const [rows, setRows] = useState<TestStation[]>([]);
   const [statuses, setStatuses] = useState<TestStationStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed load is not "no stations": it gets its own band and a retry.
+  const [loadError, setLoadError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRow, setEditingRow] = useState<TestStation | null>(null);
   const [formData, setFormData] = useState<Partial<TestStation>>({});
+  // Validation is shown on the field, not in a toast.
+  const [descError, setDescError] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
 
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState<TestStation | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
     open: false, message: "", severity: "success",
@@ -47,6 +52,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
   const fetchData = useCallback(async () => {
     if (!typeId) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await apiFetch(`${apiUrl}?typeId=${typeId}`);
       if (!res.ok) throw new Error("Failed to fetch");
@@ -54,7 +60,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
       setRows(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
-      setSnackbar({ open: true, message: "שגיאה בטעינת עמדות", severity: "error" });
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -78,13 +84,14 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
   const handleAdd = () => {
     setEditingRow(null);
     setFormData({ test_station_type_id: typeId, status: 1, is_research: false });
+    setDescError("");
     setOpenDialog(true);
   };
-  const handleEdit = (row: TestStation) => { setEditingRow(row); setFormData({ ...row }); setOpenDialog(true); };
+  const handleEdit = (row: TestStation) => { setEditingRow(row); setFormData({ ...row }); setDescError(""); setOpenDialog(true); };
 
   const handleSave = async () => {
     if (!formData.test_station_desc?.trim()) {
-      setSnackbar({ open: true, message: "תיאור חובה", severity: "error" });
+      setDescError("יש להזין תיאור לעמדה");
       return;
     }
     setSaveLoading(true);
@@ -92,7 +99,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow.test_station_id}` : apiUrl;
       const res = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
-      if (!res.ok) throw new Error("Failed to save");
+      if (!res.ok) throw new Error("שמירת העמדה נכשלה");
       const savedRow = await res.json();
       if (editingRow && savedRow) {
         setRows(rows.map((r) => (r.test_station_id === savedRow.test_station_id ? savedRow : r)));
@@ -100,10 +107,10 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
         setRows([...rows, savedRow]);
       }
       setOpenDialog(false);
-      setSnackbar({ open: true, message: "נשמר בהצלחה", severity: "success" });
+      setSnackbar({ open: true, message: "העמדה נשמרה", severity: "success" });
     } catch (err) {
       console.error(err);
-      setSnackbar({ open: true, message: "שגיאה בשמירה", severity: "error" });
+      setSnackbar({ open: true, message: "שמירת העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.", severity: "error" });
     } finally {
       setSaveLoading(false);
     }
@@ -111,19 +118,20 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
 
   const handleDeleteConfirm = async () => {
     if (!rowToDelete) return;
+    setDeleting(true);
     try {
       const res = await apiFetch(`${apiUrl}/${rowToDelete.test_station_id}`, { method: "DELETE" });
       if (!res.ok) {
-        if (res.status === 409) throw new Error("לא ניתן למחוק כי העמדה בשימוש");
-        throw new Error("Failed to delete");
+        if (res.status === 409) throw new Error("לא ניתן למחוק כי העמדה בשימוש. שחרר אותה מבדיקות ומסלולים קודם.");
+        throw new Error("מחיקת העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
       }
       setRows(rows.filter((r) => r.test_station_id !== rowToDelete.test_station_id));
-      setSnackbar({ open: true, message: "נמחק בהצלחה", severity: "success" });
+      setSnackbar({ open: true, message: "העמדה נמחקה", severity: "success" });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "שגיאה במחיקה";
+      const message = err instanceof Error ? err.message : "מחיקת העמדה נכשלה. נסה שוב.";
       setSnackbar({ open: true, message, severity: "error" });
     } finally {
-      setDeleteConfirmOpen(false);
+      setDeleting(false);
       setRowToDelete(null);
     }
   };
@@ -142,56 +150,85 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
     {
       key: "research", header: "מחקר", width: 90,
       cell: (r) => (r.is_research
-        ? <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-primary)", background: "color-mix(in srgb, var(--color-primary) 8%, transparent)", borderRadius: 9999, padding: "4px 10px" }}>מחקר</span>
-        : <span style={{ fontSize: 13, color: "var(--color-border-strong)" }}>—</span>),
+        ? <Tag tone="primary">מחקר</Tag>
+        : <span style={{ color: "var(--color-ink-muted-48)" }} aria-label="לא">—</span>),
     },
     {
       key: "__actions", header: "פעולות", align: "center", width: 120,
       cell: (r) => (
         <RowActions>
-          <IconAction title="ערוך" onClick={() => handleEdit(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
-          <IconAction title="מחק" danger onClick={() => { setRowToDelete(r); setDeleteConfirmOpen(true); }}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
+          <IconAction title={`ערוך את ${r.test_station_desc}`} onClick={() => handleEdit(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
+          <IconAction title={`מחק את ${r.test_station_desc}`} danger onClick={() => setRowToDelete(r)}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
         </RowActions>
       ),
     },
   ];
 
   return (
-    <div dir="rtl" style={{ background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: 16, overflow: "hidden" }}>
-      {/* card header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--color-hairline)", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)" }}>עמדות · {typeName}</span>
-        <button
-          onClick={handleAdd}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--color-primary)", color: "var(--color-on-primary)", border: 0, borderRadius: 9999, padding: "8px 15px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-        >
-          <Plus size={16} strokeWidth={2.1} />הוסף עמדה
-        </button>
+    <div dir="rtl" className="settings-card">
+      {/* card header — the compact add pill of Settings.dc.html */}
+      <div className="settings-card__head" style={{ paddingInline: 18 }}>
+        <span className="settings-card__title">עמדות · {typeName}</span>
+        <Button size="small" onClick={handleAdd} startIcon={<Plus size={16} strokeWidth={2} aria-hidden />}>
+          הוסף עמדה
+        </Button>
       </div>
 
-      {/* search */}
-      <div style={{ position: "relative", padding: "10px 14px", borderBottom: "1px solid var(--color-divider-soft)", maxWidth: 360 }}>
-        <span style={{ position: "absolute", insetInlineStart: 26, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex" }}>
-          <Search size={15} strokeWidth={1.75} />
-        </span>
-        <input
-          className="shx-input"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="חיפוש עמדה..."
-          style={{ height: 38, borderRadius: 9, paddingInlineStart: 36, paddingInlineEnd: 12, fontSize: 14 }}
-        />
+      <div className="settings-card__search">
+        <div style={{ maxWidth: 340 }}>
+          <SearchInput
+            fullWidth
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="חיפוש עמדה…"
+            aria-label="חיפוש עמדה"
+          />
+        </div>
       </div>
 
       {/* table (embedded — no double card chrome) */}
-      <DataTable columns={dtColumns} rows={filteredRows} getRowKey={(r) => r.test_station_id} loading={loading} minWidth={520} plain empty={<div style={{ fontSize: 14 }}>אין עמדות. הוסף עמדה לסוג זה.</div>} />
+      {loadError ? (
+        <div className="settings-error">
+          <Alert severity="error">טעינת העמדות נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
+          <Button variant="outlined" color="inherit" size="small" onClick={fetchData}>נסה שוב</Button>
+        </div>
+      ) : (
+        <DataTable
+          columns={dtColumns}
+          rows={filteredRows}
+          getRowKey={(r) => r.test_station_id}
+          loading={loading}
+          loadingRows={4}
+          minWidth={520}
+          plain
+          empty={searchTerm ? (
+            <div className="settings-empty settings-empty--bare">
+              <div className="settings-empty__title">אין עמדות שתואמות לחיפוש</div>
+              <div>נסה מילה אחרת, או נקה את החיפוש.</div>
+            </div>
+          ) : (
+            <div className="settings-empty settings-empty--bare">
+              <div className="settings-empty__title">אין עמדות לסוג זה</div>
+              <div>הוסף עמדה כדי שתופיע בתור הבדיקות.</div>
+            </div>
+          )}
+        />
+      )}
 
       {/* Dialogs */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingRow ? "ערוך עמדה" : "הוסף עמדה"}</DialogTitle>
+        <DialogTitle>{editingRow ? "עריכת עמדה" : "עמדה חדשה"}</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-            <TextField label="תיאור עמדה" fullWidth value={formData.test_station_desc || ""} onChange={(e) => setFormData({ ...formData, test_station_desc: e.target.value })} />
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+            <TextField
+              label="תיאור עמדה"
+              required
+              fullWidth
+              value={formData.test_station_desc || ""}
+              onChange={(e) => { setFormData({ ...formData, test_station_desc: e.target.value }); if (descError) setDescError(""); }}
+              error={!!descError}
+              helperText={descError}
+            />
             <SearchableCombobox<TestStationStatus>
               options={statuses}
               value={statuses.find((s) => s.test_station_status_id === formData.status) ?? null}
@@ -199,28 +236,32 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
               getOptionLabel={(s) => s.test_station_status_desc}
               isOptionEqualToValue={(a, b) => a.test_station_status_id === b.test_station_status_id}
               disableClearable
-              floatingLabel="סטטוס"
+              label="סטטוס"
             />
             <FormControlLabel
               control={<Switch checked={formData.is_research || false} onChange={(e) => setFormData({ ...formData, is_research: e.target.checked })} />}
               label="עמדת מחקר"
             />
-          </Box>
+          </div>
         </DialogContent>
+        {/* Cancel first, the action last (DialogActions puts it at the end). */}
         <DialogActions>
-          <Button onClick={handleSave} variant="contained" disabled={saveLoading}>שמור</Button>
-          <Button variant="outlined" onClick={() => setOpenDialog(false)}>ביטול</Button>
+          <Button variant="outlined" color="inherit" onClick={() => setOpenDialog(false)}>ביטול</Button>
+          <Button onClick={handleSave} variant="contained" loading={saveLoading}>שמור</Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} draggable={false}>
-        <DialogTitle>מחיקה</DialogTitle>
-        <DialogContent>בטוח שברצונך למחוק את העמדה &quot;{rowToDelete?.test_station_desc}&quot;?</DialogContent>
-        <DialogActions>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">מחק</Button>
-          <Button variant="outlined" onClick={() => setDeleteConfirmOpen(false)}>ביטול</Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        draggable={false}
+        open={rowToDelete != null}
+        title="מחיקת עמדה"
+        message={rowToDelete ? `למחוק את העמדה "${rowToDelete.test_station_desc}"? פעולה זו אינה ניתנת לביטול.` : ""}
+        confirmText="מחק"
+        destructive
+        busy={deleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setRowToDelete(null)}
+      />
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>

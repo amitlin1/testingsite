@@ -1,18 +1,19 @@
 "use client";
 import * as React from "react";
-import { Search, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { Button, SearchInput } from "@/components/ui";
+import "../settings.css";
 
 /* =========================================================================
-   SettingsToolbar — the Items/Shipments-style page header for /settings/*.
+   SettingsToolbar — THE page header for /settings/* (and /files).
 
-   One header row: large left-aligned (RTL: right) title + optional neutral
-   count pill, with the blue primary "add" pill on the opposite end. Then an
-   optional inline filters/search row beneath it.
+   Settings.dc.html: a 30/700 <h1> (--text-page) with a 15px muted subtitle,
+   an optional neutral count pill beside the title, and the blue primary
+   "add" pill at the inline end. Then an optional filters row (SearchInput +
+   the page's own filter controls) beneath it.
 
-   Replaces the old centered PageHeader across the settings pages so they use
-   the exact same visual language as the Items and Shipments pages.
-
-   Requires: import "@/styles/shifthouse.css" once in the app (done in layout).
+   One header for every settings page, so the title, its size and the action
+   look the same wherever you are. Styles: settings.css `.settings-header*`.
    ========================================================================= */
 
 type Props = {
@@ -22,9 +23,13 @@ type Props = {
   count?: number;
   /** Plural noun for the count pill, e.g. "לקוחות". Pill shows "{count} {countLabel}". */
   countLabel?: string;
+  /** Free-form pill text instead of `count` (e.g. "3 מתוך 12"). */
+  countText?: string;
   onAdd?: () => void;
   addLabel?: string;
-  /** Search field — omit both to hide the whole filters row. */
+  /** Extra header actions, placed before the add pill. */
+  actions?: React.ReactNode;
+  /** Search field — omit both to hide the search. */
   search?: string;
   onSearch?: (value: string) => void;
   searchPlaceholder?: string;
@@ -37,69 +42,51 @@ export default function SettingsToolbar({
   subtitle,
   count,
   countLabel,
+  countText,
   onAdd,
   addLabel = "הוסף",
+  actions,
   search,
   onSearch,
-  searchPlaceholder = "חיפוש...",
+  searchPlaceholder = "חיפוש…",
   children,
 }: Props) {
   const showSearch = onSearch != null;
   const showFilters = showSearch || children != null;
+  const pill = countText ?? (count != null ? `${count}${countLabel ? ` ${countLabel}` : ""}` : null);
 
   return (
     <div dir="rtl" style={{ flexShrink: 0 }}>
-      {/* header row: title (+ count pill) on one side, add pill on the other */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1, color: "var(--color-ink)" }}>
-              {title}
-            </h1>
-            {count != null && (
-              <span
-                style={{
-                  fontSize: 13,
-                  color: "var(--color-ink-muted-48)",
-                  background: "var(--color-canvas-parchment)",
-                  border: "1px solid var(--color-hairline)",
-                  borderRadius: 9999,
-                  padding: "4px 11px",
-                  fontVariantNumeric: "tabular-nums",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {count}
-                {countLabel ? ` ${countLabel}` : ""}
-              </span>
+      <div className="settings-header">
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
+            <h1 className="settings-header__title">{title}</h1>
+            {pill != null && <span className="settings-count">{pill}</span>}
+          </div>
+          {subtitle && <p className="settings-header__subtitle">{subtitle}</p>}
+        </div>
+        {(onAdd || actions) && (
+          <div className="settings-header__actions">
+            {actions}
+            {onAdd && (
+              <Button onClick={onAdd} startIcon={<Plus size={18} strokeWidth={2} aria-hidden />}>
+                {addLabel}
+              </Button>
             )}
           </div>
-          {subtitle && (
-            <p style={{ margin: "8px 0 0", fontSize: 16, color: "var(--color-ink-muted-70)", lineHeight: 1.5 }}>{subtitle}</p>
-          )}
-        </div>
-        {onAdd && (
-          <button className="shx-btn shx-btn-primary" onClick={onAdd}>
-            <Plus size={18} strokeWidth={2} />
-            {addLabel}
-          </button>
         )}
       </div>
 
-      {/* filters row */}
       {showFilters && (
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
+        <div className="settings-filters">
           {showSearch && (
-            <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 340 }}>
-              <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex", zIndex: 1 }}>
-                <Search size={16} strokeWidth={1.75} />
-              </span>
-              <input
-                className="shx-input"
+            <div className="settings-filters__search">
+              <SearchInput
+                fullWidth
                 value={search ?? ""}
                 onChange={(e) => onSearch?.(e.target.value)}
                 placeholder={searchPlaceholder}
-                style={{ height: 42, borderRadius: 10, paddingInlineStart: 40, paddingInlineEnd: 14, fontSize: 14 }}
+                aria-label={searchPlaceholder}
               />
             </div>
           )}

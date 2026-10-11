@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { Box, Snackbar, Alert } from "@/components/ui";
+import { Snackbar, Alert, Button, IconButton, TextField, Skeleton, Tag } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { ArrowUp, ArrowDown, X, Plus, Save, Route } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
@@ -25,6 +25,8 @@ export default function TestingRoutesPage() {
   // Options
   const [itemTypes, setItemTypes] = useState<Option[]>([]);
   const [stationTypes, setStationTypes] = useState<Option[]>([]);
+  // A failed options load is not "no item types": it gets a band and a retry.
+  const [optionsError, setOptionsError] = useState(false);
 
   // Selection
   const [selectedItemType, setSelectedItemType] = useState<Option | null>(null);
@@ -32,9 +34,11 @@ export default function TestingRoutesPage() {
 
   // Route Data
   const [loadingRoute, setLoadingRoute] = useState(false);
+  const [routeError, setRouteError] = useState(false);
   const [currentRoute, setCurrentRoute] = useState<RouteData | null>(null);
   const [steps, setSteps] = useState<number[]>([]);
   const [isNew, setIsNew] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Add Step
   const [stepToAdd, setStepToAdd] = useState<Option | null>(null);
@@ -45,7 +49,8 @@ export default function TestingRoutesPage() {
   });
 
   // Load Options
-  useEffect(() => {
+  const loadOptions = useCallback(() => {
+    setOptionsError(false);
     Promise.all([
       apiFetch("/api/settings/item-types").then(async res => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -62,14 +67,18 @@ export default function TestingRoutesPage() {
       console.error("Failed to load options", err);
       setItemTypes([]);
       setStationTypes([]);
+      setOptionsError(true);
     });
   }, []);
+
+  useEffect(() => { loadOptions(); }, [loadOptions]);
 
   // Load Route
   const loadRoute = useCallback(async () => {
     if (!selectedItemType || routeNumber === null || routeNumber === undefined) return;
 
     setLoadingRoute(true);
+    setRouteError(false);
     setSteps([]);
     setCurrentRoute(null);
     setIsNew(false);
@@ -91,8 +100,8 @@ export default function TestingRoutesPage() {
         setSteps([]);
         setIsNew(true);
       }
-    } catch (err) {
-      setSnackbar({ open: true, message: "שגיאה בטעינת מסלול", severity: "error" });
+    } catch {
+      setRouteError(true);
     } finally {
       setLoadingRoute(false);
     }
@@ -131,6 +140,7 @@ export default function TestingRoutesPage() {
   const handleSave = async () => {
     if (!selectedItemType || routeNumber === null || routeNumber === undefined) return;
 
+    setSaving(true);
     try {
       const body = {
         item_type_id: selectedItemType.id,
@@ -153,8 +163,8 @@ export default function TestingRoutesPage() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to save");
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "שמירת המסלול נכשלה. בדוק את החיבור לשרת ונסה שוב.");
       }
 
       const saved = await res.json();
@@ -162,7 +172,9 @@ export default function TestingRoutesPage() {
       setIsNew(false);
       setSnackbar({ open: true, message: "מסלול נשמר בהצלחה", severity: "success" });
     } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || "שגיאה בשמירה", severity: "error" });
+      setSnackbar({ open: true, message: err.message || "שמירת המסלול נכשלה. נסה שוב.", severity: "error" });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -172,186 +184,168 @@ export default function TestingRoutesPage() {
 
   const hasSelection = !!selectedItemType && routeNumber !== null && routeNumber !== undefined;
 
+  // The settings layout owns the frame (scroll, padding, 1180 column).
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", direction: "rtl" }}>
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        <Box sx={{ maxWidth: 1180, mx: "auto", px: 1, py: 1 }}>
-          <SettingsToolbar
-            title="מסלולי בדיקה"
-            subtitle="הגדרת סדר העמדות לפי סוג פריט ומספר מסלול."
-          />
+    <div dir="rtl">
+      <SettingsToolbar
+        title="מסלולי בדיקה"
+        subtitle="הגדרת סדר העמדות לפי סוג פריט ומספר מסלול."
+      />
 
-          {/* selection card */}
-          <Box sx={{ background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "16px", mt: 3, overflow: "hidden" }}>
-            <Box sx={{ px: 2.25, py: 1.75, borderBottom: "1px solid var(--color-hairline)", fontSize: 16, fontWeight: 700, color: "var(--color-ink)" }}>
-              בחירת מסלול
-            </Box>
-            <Box sx={{ p: 2.25, display: "flex", gap: 2, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <Box sx={{ minWidth: 240, flex: 1, maxWidth: 360 }}>
-                <SearchableCombobox<Option>
-                  options={itemTypes}
-                  getOptionLabel={(option) => option.label}
-                  isOptionEqualToValue={(option, value) => option.id === value.id}
-                  value={selectedItemType}
-                  onChange={(newValue) => {
-                    setSelectedItemType(newValue);
-                    if (!newValue) setRouteNumber(null);
-                  }}
-                  floatingLabel="סוג פריט"
-                />
-              </Box>
-              <Box sx={{ width: 180 }}>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-ink-muted-80)", marginBottom: 8 }}>מספר מסלול</label>
-                <input
-                  className="shx-input"
-                  type="number"
-                  min={1}
-                  value={routeNumber ?? ""}
-                  onChange={(e) => {
-                    const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
-                    setRouteNumber(isNaN(val as number) ? null : val);
-                  }}
-                  placeholder="מספר מסלול"
-                  style={{ height: 42, borderRadius: 8, fontSize: 15 }}
-                />
-              </Box>
-              {hasSelection && (
-                <Box
-                  sx={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 0.75,
-                    height: 42,
-                    px: 1.5,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    borderRadius: "9999px",
-                    color: isNew ? "var(--color-ink-muted-48)" : "var(--color-primary)",
-                    background: isNew ? "var(--color-canvas-parchment)" : "color-mix(in srgb, var(--color-primary) 8%, transparent)",
-                    border: `1px solid ${isNew ? "var(--color-hairline)" : "color-mix(in srgb, var(--color-primary) 20%, transparent)"}`,
-                  }}
-                >
-                  {loadingRoute ? "טוען…" : isNew ? "מסלול חדש — ייווצר בשמירה" : "מסלול קיים נטען"}
-                </Box>
+      {optionsError && (
+        <div className="settings-card settings-error" style={{ marginTop: "var(--space-lg)" }}>
+          <Alert severity="error">טעינת סוגי הפריטים והעמדות נכשלה, ולכן אי אפשר לבחור מסלול. בדוק את החיבור לשרת ונסה שוב.</Alert>
+          <Button variant="outlined" color="inherit" size="small" onClick={loadOptions}>נסה שוב</Button>
+        </div>
+      )}
+
+      {/* selection card */}
+      <div className="settings-card" style={{ marginTop: "var(--space-lg)", overflow: "visible" }}>
+        <div className="settings-card__head" style={{ paddingInline: 18 }}>
+          <span className="settings-card__title">בחירת מסלול</span>
+        </div>
+        <div style={{ padding: 18, display: "flex", gap: "var(--space-md)", alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div style={{ minWidth: 240, flex: 1, maxWidth: 360 }}>
+            <SearchableCombobox<Option>
+              options={itemTypes}
+              getOptionLabel={(option) => option.label}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              value={selectedItemType}
+              onChange={(newValue) => {
+                setSelectedItemType(newValue);
+                if (!newValue) setRouteNumber(null);
+              }}
+              label="סוג פריט"
+              placeholder="בחר סוג פריט…"
+            />
+          </div>
+          <div style={{ width: 180 }}>
+            <TextField
+              label="מספר מסלול"
+              type="number"
+              fullWidth
+              value={routeNumber ?? ""}
+              onChange={(e) => {
+                const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
+                setRouteNumber(isNaN(val as number) ? null : val);
+              }}
+              placeholder="לדוגמה: 1"
+              inputProps={{ min: 1, dir: "ltr", style: { textAlign: "right" } }}
+            />
+          </div>
+          {hasSelection && (
+            <div style={{ minHeight: 40, display: "flex", alignItems: "center" }} aria-live="polite">
+              {loadingRoute ? (
+                <Skeleton variant="rounded" width={150} height={24} aria-label="טוען מסלול" />
+              ) : routeError ? null : (
+                <Tag tone={isNew ? "neutral" : "primary"} size="md">
+                  {isNew ? "מסלול חדש — ייווצר בשמירה" : "מסלול קיים נטען"}
+                </Tag>
               )}
-            </Box>
-          </Box>
+            </div>
+          )}
+        </div>
+      </div>
 
-          {/* editor card */}
-          <Box sx={{ background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "16px", mt: 2.5, overflow: "hidden" }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap", px: 2.25, py: 1.75, borderBottom: "1px solid var(--color-hairline)" }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                <Box component="span" sx={{ display: "flex", color: "var(--color-primary)" }}><Route size={20} strokeWidth={1.75} /></Box>
-                <Box component="span" sx={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)" }}>עריכת שלבים</Box>
-              </Box>
-              <button
-                className="shx-btn shx-btn-primary"
-                onClick={handleSave}
-                disabled={!hasSelection || loadingRoute}
-              >
-                <Save size={18} strokeWidth={2} />שמור
-              </button>
-            </Box>
+      {/* editor card */}
+      <div className="settings-card" style={{ marginTop: "var(--space-ml)", overflow: "visible" }}>
+        <div className="settings-card__head" style={{ paddingInline: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ display: "flex", color: "var(--color-ink-muted-48)" }}><Route size={20} strokeWidth={1.75} aria-hidden /></span>
+            <span className="settings-card__title">עריכת שלבים</span>
+          </div>
+          <Button
+            onClick={handleSave}
+            disabled={!hasSelection || loadingRoute || routeError}
+            loading={saving}
+            startIcon={<Save size={18} strokeWidth={2} aria-hidden />}
+          >
+            שמור
+          </Button>
+        </div>
 
-            <Box sx={{ p: 2.25 }}>
-              {!hasSelection ? (
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1.25, py: 8, color: "var(--color-ink-muted-48)", textAlign: "center" }}>
-                  <Route size={34} strokeWidth={1.5} color="var(--color-primary)" />
-                  <Box sx={{ fontSize: 15, color: "var(--color-ink)", fontWeight: 600 }}>בחר סוג פריט ומספר מסלול</Box>
-                  <Box sx={{ fontSize: 13 }}>שלבי המסלול יופיעו כאן לעריכה.</Box>
-                </Box>
-              ) : (
-                <>
-                  <Box sx={{ fontSize: 13, fontWeight: 600, color: "var(--color-ink-muted-80)", mb: 1.25 }}>שלבי המסלול · לפי הסדר</Box>
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxWidth: 560 }}>
-                    {steps.map((stepId, index) => (
-                      <Box
-                        key={index}
-                        sx={{ display: "flex", alignItems: "center", gap: 1.5, background: "var(--color-surface-pearl)", border: "1px solid var(--color-hairline)", borderRadius: "10px", p: "10px 12px" }}
-                      >
-                        <Box sx={{ width: 26, height: 26, borderRadius: "9999px", background: "var(--color-primary)", color: "var(--color-on-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                          {index + 1}
-                        </Box>
-                        <Box sx={{ flex: 1, fontSize: 14, fontWeight: 600, color: "var(--color-ink)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 1 }}>
-                          {getStationName(stepId)}
-                          {stationTypes.find((t) => t.id === stepId)?.packageLevel && (
-                            // design/Settings.dc.html — a package-level step (opening / closing) is marked on the route.
-                            <Box component="span" sx={{ fontSize: 10.5, fontWeight: 600, color: "var(--color-primary)", background: "var(--color-primary-soft)", borderRadius: "9999px", px: 1, py: "2px", whiteSpace: "nowrap" }}>
-                              עמדה ברמת מארז
-                            </Box>
-                          )}
-                        </Box>
-                        <StepBtn title="הקדם" disabled={index === 0} onClick={() => handleMoveStep(index, "up")}>
-                          <ArrowUp size={15} strokeWidth={1.9} />
-                        </StepBtn>
-                        <StepBtn title="אחר" disabled={index === steps.length - 1} onClick={() => handleMoveStep(index, "down")}>
-                          <ArrowDown size={15} strokeWidth={1.9} />
-                        </StepBtn>
-                        <StepBtn title="הסר" danger onClick={() => handleRemoveStep(index)}>
-                          <X size={15} strokeWidth={1.9} />
-                        </StepBtn>
-                      </Box>
+        <div style={{ padding: 18 }}>
+          {!hasSelection ? (
+            <div className="settings-empty" style={{ padding: "48px 0" }}>
+              <Route size={34} strokeWidth={1.5} color="var(--color-ink-muted-48)" aria-hidden />
+              <div className="settings-empty__title">בחר סוג פריט ומספר מסלול</div>
+              <div>שלבי המסלול יופיעו כאן לעריכה.</div>
+            </div>
+          ) : routeError ? (
+            <div className="settings-error" style={{ padding: 0 }}>
+              <Alert severity="error">טעינת המסלול נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
+              <Button variant="outlined" color="inherit" size="small" onClick={loadRoute}>נסה שוב</Button>
+            </div>
+          ) : (
+            <>
+              <div className="sh-field-label" style={{ marginBottom: 10 }}>שלבי המסלול · לפי הסדר</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", maxWidth: 560 }}>
+                {loadingRoute ? (
+                  // While the route loads its steps are unknown — never "no steps".
+                  <div aria-busy="true" aria-label="טוען שלבים" style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
+                    {[0, 1, 2].map((i) => (
+                      <Skeleton key={i} variant="rounded" height={48} />
                     ))}
+                  </div>
+                ) : (
+                  <>
+                    {steps.map((stepId, index) => {
+                      const name = getStationName(stepId);
+                      return (
+                        <div key={index} className="route-step">
+                          <span className="route-step__num">{index + 1}</span>
+                          <span style={{ flex: 1, fontSize: "var(--text-body-sm)", fontWeight: 600, color: "var(--color-ink)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
+                            {name}
+                            {stationTypes.find((t) => t.id === stepId)?.packageLevel && (
+                              // design/Settings.dc.html — a package-level step (opening / closing) is marked on the route.
+                              <Tag tone="primary">עמדה ברמת מארז</Tag>
+                            )}
+                          </span>
+                          <IconButton size="small" className="route-step__btn" title={`הקדם את ${name}`} disabled={index === 0} onClick={() => handleMoveStep(index, "up")}>
+                            <ArrowUp size={15} strokeWidth={1.9} aria-hidden />
+                          </IconButton>
+                          <IconButton size="small" className="route-step__btn" title={`אחר את ${name}`} disabled={index === steps.length - 1} onClick={() => handleMoveStep(index, "down")}>
+                            <ArrowDown size={15} strokeWidth={1.9} aria-hidden />
+                          </IconButton>
+                          <IconButton size="small" className="route-step__btn route-step__btn--danger" title={`הסר את ${name} מהמסלול`} onClick={() => handleRemoveStep(index)}>
+                            <X size={15} strokeWidth={1.9} aria-hidden />
+                          </IconButton>
+                        </div>
+                      );
+                    })}
                     {steps.length === 0 && (
-                      <Box sx={{ fontSize: 13, color: "var(--color-ink-muted-48)", py: 1 }}>אין שלבים. הוסף עמדה למסלול.</Box>
+                      <div style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", padding: "var(--space-xs) 0" }}>אין שלבים. הוסף עמדה למסלול.</div>
                     )}
+                  </>
+                )}
 
-                    {/* add-step row */}
-                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-end", mt: 0.75, flexWrap: "wrap" }}>
-                      <Box sx={{ flex: 1, minWidth: 220, maxWidth: 340 }}>
-                        <SearchableCombobox<Option>
-                          options={stationTypes}
-                          getOptionLabel={(option) => option.label}
-                          isOptionEqualToValue={(option, value) => option.id === value.id}
-                          value={stepToAdd}
-                          onChange={(newValue) => setStepToAdd(newValue)}
-                          floatingLabel="הוסף שלב (סוג עמדה)"
-                        />
-                      </Box>
-                      <button
-                        onClick={handleAddStep}
-                        disabled={!stepToAdd}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 6, height: 42,
-                          background: "var(--color-canvas)", border: "1.5px dashed var(--color-border-strong)", borderRadius: 10,
-                          padding: "0 16px", fontSize: 14, fontWeight: 600,
-                          color: stepToAdd ? "var(--color-primary)" : "var(--color-ink-muted-40)",
-                          cursor: stepToAdd ? "pointer" : "not-allowed",
-                        }}
-                      >
-                        <Plus size={16} strokeWidth={2} />הוסף שלב
-                      </button>
-                    </Box>
-                  </Box>
-                </>
-              )}
-            </Box>
-          </Box>
-        </Box>
-      </Box>
+                {/* add-step row */}
+                <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "flex-end", marginTop: 6, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 220, maxWidth: 340 }}>
+                    <SearchableCombobox<Option>
+                      options={stationTypes}
+                      getOptionLabel={(option) => option.label}
+                      isOptionEqualToValue={(option, value) => option.id === value.id}
+                      value={stepToAdd}
+                      onChange={(newValue) => setStepToAdd(newValue)}
+                      label="הוסף שלב (סוג עמדה)"
+                      placeholder="בחר סוג עמדה…"
+                      disabled={loadingRoute}
+                    />
+                  </div>
+                  <button type="button" className="route-add" onClick={handleAddStep} disabled={!stepToAdd || loadingRoute}>
+                    <Plus size={16} strokeWidth={2} aria-hidden />הוסף שלב
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
-    </Box>
-  );
-}
-
-function StepBtn({ children, onClick, title, disabled, danger }: { children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean; danger?: boolean }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        width: 28, height: 28, border: "1px solid var(--color-hairline)", borderRadius: 7,
-        background: "var(--color-canvas)", color: danger ? "var(--color-destructive)" : "var(--color-ink-muted-48)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, flexShrink: 0,
-      }}
-    >
-      {children}
-    </button>
+    </div>
   );
 }

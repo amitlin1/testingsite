@@ -16,6 +16,9 @@ import { isEndBeforeStart, netMinutes, toMinutes } from "@/lib/workHours/time";
 import { DialogShell, Chip, TimeField, NetRow } from "./fields";
 import { DANGER, MUTED, SOFT, INK } from "./ui";
 
+/** The read-only explanation box of a locked / holiday-managed day. */
+const infoBox: React.CSSProperties = { background: SOFT, borderRadius: "var(--r-md)", padding: "14px 16px", fontSize: "var(--text-body-sm)", color: INK, lineHeight: 1.6 };
+
 const HALF_CAP = toMinutes("12:00");
 type Selection = "default" | OverrideKind;
 
@@ -154,9 +157,9 @@ export default function DayEditorDialog({
         onClose={onClose}
         title={title}
         subtitle={day.label ?? undefined}
-        footer={<Button variant="outlined" onClick={onClose}>סגור</Button>}
+        footer={<Button variant="outlined" color="inherit" onClick={onClose}>סגור</Button>}
       >
-        <div style={{ background: SOFT, borderRadius: 10, padding: "14px 16px", fontSize: 13.5, color: INK, lineHeight: 1.6 }}>
+        <div style={infoBox}>
           {day.category === "shabbat"
             ? "שבת — יום קבוע שאינו יום עבודה."
             : `${day.label ?? "חג"} — יום זה מנוהל אוטומטית לפי לוח החגים ואינו ניתן לעריכה.`}
@@ -176,12 +179,12 @@ export default function DayEditorDialog({
         subtitle={day.label ?? undefined}
         footer={
           <>
+            <Button variant="outlined" color="inherit" onClick={onClose}>סגור</Button>
             <Button variant="contained" onClick={() => onEditHoliday(day.holidayId!)}>ערוך חופשה</Button>
-            <Button variant="outlined" onClick={onClose}>סגור</Button>
           </>
         }
       >
-        <div style={{ background: SOFT, borderRadius: 10, padding: "14px 16px", fontSize: 13.5, color: INK, lineHeight: 1.6 }}>
+        <div style={infoBox}>
           {day.label ? `${day.label} — ` : ""}יום זה מנוהל דרך רשומת חופשה. כדי לשנות אותו ערוך את החופשה.
         </div>
         <NetRow minutes={day.netMinutes} />
@@ -205,23 +208,26 @@ export default function DayEditorDialog({
       }
       footer={
         <>
-          <Button variant="contained" onClick={() => void save()} disabled={!canSave || saving}>שמור</Button>
-          <Button variant="outlined" onClick={onClose}>ביטול</Button>
           {override ? (
-            <button
-              type="button"
+            // The secondary destructive action sits apart, at the start.
+            <Button
+              variant="text"
+              color="error"
+              size="small"
               onClick={() => { setSel("default"); void save("default"); }}
               disabled={saving}
-              style={{ marginInlineStart: "auto", background: "none", border: "none", color: DANGER, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+              style={{ order: -1, marginInlineEnd: "auto" }}
             >
               אפס לברירת מחדל
-            </button>
+            </Button>
           ) : null}
+          <Button variant="outlined" color="inherit" onClick={onClose}>ביטול</Button>
+          <Button variant="contained" onClick={() => void save()} disabled={!canSave} loading={saving}>שמור</Button>
         </>
       }
     >
-      <div style={{ fontSize: 12, color: MUTED, marginBottom: 8 }}>סוג היום</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: needsHours ? 18 : 4 }}>
+      <div id="day-kind-label" className="sh-field-label">סוג היום</div>
+      <div role="group" aria-labelledby="day-kind-label" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: needsHours ? 18 : 4 }}>
         {kinds.map((k) => (
           <Chip key={k} active={sel === k} onClick={() => setSel(k)}>{chipLabel(k)}</Chip>
         ))}
@@ -229,19 +235,19 @@ export default function DayEditorDialog({
 
       {needsHours && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
             <TimeField label="שעת התחלה" value={start} onChange={setStart} />
             <TimeField label="שעת סיום" value={end} onChange={setEnd} error={endErr || capErr} />
             {!noBreak && <TimeField label="תחילת הפסקה" value={bStart} onChange={setBStart} />}
             {!noBreak && <TimeField label="סיום הפסקה" value={bEnd} onChange={setBEnd} />}
           </div>
           {(endErr || capErr) && (
-            <div style={{ color: DANGER, fontSize: 12.5, marginTop: 8 }}>
+            <div role="alert" style={{ color: DANGER, fontSize: "var(--text-fine)", marginTop: 8 }}>
               {endErr ? ERR_END_BEFORE_START : ERR_HALF_DAY_MAX}
             </div>
           )}
           {halfKind && !endErr && !capErr && (
-            <div style={{ color: MUTED, fontSize: 12, marginTop: 8 }}>ניתן לעבוד עד השעה 12:00.</div>
+            <div style={{ color: MUTED, fontSize: "var(--text-fine)", marginTop: 8 }}>ניתן לעבוד עד השעה 12:00.</div>
           )}
         </>
       )}

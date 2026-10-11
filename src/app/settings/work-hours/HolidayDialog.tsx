@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Button } from "@/components/ui";
+import { Button, TextField } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import {
   ERR_HOLIDAY_RANGE,
@@ -8,7 +8,7 @@ import {
   type HolidayType,
 } from "@/lib/workHours/types";
 import { DialogShell, Chip, TimeField } from "./fields";
-import { DANGER, HAIRLINE, INK, MUTED } from "./ui";
+
 
 export default function HolidayDialog({
   open,
@@ -107,11 +107,6 @@ export default function HolidayDialog({
     }
   }
 
-  const fieldLabel = { fontSize: 12, color: MUTED, marginBottom: 6 } as React.CSSProperties;
-  const textInput: React.CSSProperties = {
-    width: "100%", height: 44, borderRadius: 8, border: `1px solid ${HAIRLINE}`,
-    padding: "0 12px", fontSize: 15, fontFamily: "inherit", color: INK, outline: "none",
-  };
 
   return (
     <DialogShell
@@ -121,64 +116,58 @@ export default function HolidayDialog({
       subtitle="חופשה פנימית של המחלקה (חגי ישראל נוספים אוטומטית)."
       footer={
         <>
-          <Button variant="contained" onClick={save} disabled={!canSave || saving}>שמור</Button>
-          <Button variant="outlined" onClick={onClose}>ביטול</Button>
+          <Button variant="outlined" color="inherit" onClick={onClose}>ביטול</Button>
+          <Button variant="contained" onClick={save} disabled={!canSave} loading={saving}>שמור</Button>
         </>
       }
     >
-      <label style={{ display: "block", marginBottom: 14 }}>
-        <div style={fieldLabel}>שם</div>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={200} style={textInput} />
-      </label>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-        <label style={{ display: "block" }}>
-          <div style={fieldLabel}>מתאריך</div>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={textInput} />
-        </label>
-        <label style={{ display: "block" }}>
-          <div style={fieldLabel}>עד תאריך</div>
-          <input
-            type="date"
-            value={endDate}
-            min={startDate || undefined}
-            onChange={(e) => setEndDate(e.target.value)}
-            style={{ ...textInput, borderColor: rangeErr ? DANGER : HAIRLINE }}
-          />
-        </label>
+      <div style={{ marginBottom: 14 }}>
+        <TextField label="שם" required fullWidth value={name} onChange={(e) => setName(e.target.value)} inputProps={{ maxLength: 200 }} />
       </div>
-      {rangeErr && <div style={{ color: DANGER, fontSize: 12.5, marginTop: -6, marginBottom: 12 }}>{ERR_HOLIDAY_RANGE}</div>}
 
-      <div style={fieldLabel}>סוג</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14, marginBottom: 14 }}>
+        <TextField label="מתאריך" type="date" required fullWidth value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        <TextField
+          label="עד תאריך"
+          type="date"
+          required
+          fullWidth
+          value={endDate}
+          inputProps={{ min: startDate || undefined }}
+          onChange={(e) => setEndDate(e.target.value)}
+          error={rangeErr}
+          helperText={rangeErr ? ERR_HOLIDAY_RANGE : undefined}
+        />
+      </div>
+
+      <div id="holiday-type-label" className="sh-field-label">סוג</div>
+      <div role="group" aria-labelledby="holiday-type-label" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
         {holidayTypes.map((t) => (
           <Chip key={t.id} active={typeId === t.id} onClick={() => setTypeId(t.id)}>{t.name}</Chip>
         ))}
         {addingType ? (
-          <span style={{ display: "inline-flex", gap: 6 }}>
+          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
             <input
               autoFocus
+              className="sh-input"
+              aria-label="שם סוג החופשה החדש"
               value={newType}
               onChange={(e) => setNewType(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") void createType(); }}
               placeholder="שם הסוג"
-              style={{ height: 36, borderRadius: 8, border: `1px solid ${HAIRLINE}`, padding: "0 10px", fontSize: 13, fontFamily: "inherit" }}
+              style={{ height: 34, width: 160, fontSize: "var(--text-small)", padding: "0 10px" }}
             />
-            <Button variant="contained" onClick={createType}>הוסף</Button>
+            <Button size="small" onClick={createType}>הוסף</Button>
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={() => setAddingType(true)}
-            style={{ borderRadius: 9999, padding: "8px 15px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", background: "var(--color-canvas)", color: INK, border: `1px dashed ${HAIRLINE}` }}
-          >
+          <button type="button" className="wh-add-type" onClick={() => setAddingType(true)}>
             + סוג חדש
           </button>
         )}
       </div>
 
-      <div style={fieldLabel}>היקף</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: isHalf ? 16 : 4 }}>
+      <div id="holiday-scope-label" className="sh-field-label">היקף</div>
+      <div role="group" aria-labelledby="holiday-scope-label" style={{ display: "flex", gap: 8, marginBottom: isHalf ? 16 : 4 }}>
         <Chip active={!isHalf} onClick={() => setIsHalf(false)}>יום מלא</Chip>
         <Chip active={isHalf} onClick={() => setIsHalf(true)}>חצי יום</Chip>
       </div>

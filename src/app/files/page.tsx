@@ -2,40 +2,27 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Box,
-  Typography,
   Button,
   IconButton,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Breadcrumbs,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  ConfirmDialog,
   TextField,
   Snackbar,
   Alert,
   LinearProgress,
   Tooltip,
-  Card,
-  CardActionArea,
-  CardContent,
   Menu,
   MenuItem,
   ListItemIcon,
-  CircularProgress,
+  Skeleton,
   Stack,
   Divider,
-  Link as MuiLink,
 } from "@/components/ui";
-import { alpha } from "@/components/ui";
-import { FolderCopy as FolderCopyIcon } from "@/components/ui/icons";
+import DataTable, { type Column } from "@/components/DataTable";
 import { UploadFile as UploadFileIcon } from "@/components/ui/icons";
 import { CreateNewFolder as CreateNewFolderIcon } from "@/components/ui/icons";
 import { Refresh as RefreshIcon } from "@/components/ui/icons";
@@ -50,10 +37,12 @@ import { Inbox as InboxIcon } from "@/components/ui/icons";
 import { CloudUpload as CloudUploadIcon } from "@/components/ui/icons";
 import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
 import { Error as ErrorIcon } from "@/components/ui/icons";
+import SettingsToolbar from "@/app/settings/components/SettingsToolbar";
 import { FileIcon } from "@/app/components/files/FileIcon";
 import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
 import { apiFetch } from "@/lib/api/client";
 import { uploadFileManagerFile, mapWithConcurrency } from "@/lib/api/direct-upload";
+import "./files.css";
 
 interface FileItem {
   name: string;
@@ -75,6 +64,8 @@ export default function FilesPage() {
   const [currentPath, setCurrentPath] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
+  // A failed load is not an empty folder: it gets its own band and a retry.
+  const [loadError, setLoadError] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [isDragging, setIsDragging] = useState(false);
 
@@ -108,6 +99,7 @@ export default function FilesPage() {
   // ── Data fetching ────────────────────────────────────────────────────────────
   const fetchFiles = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await apiFetch(
         `/api/files?prefix=${encodeURIComponent(currentPath)}`
@@ -116,7 +108,7 @@ export default function FilesPage() {
       const data = await res.json();
       setFiles(Array.isArray(data) ? data : []);
     } catch {
-      setSnack({ open: true, msg: "שגיאה בטעינת קבצים", severity: "error" });
+      setLoadError(true);
       setFiles([]);
     } finally {
       setLoading(false);
@@ -179,7 +171,15 @@ export default function FilesPage() {
     [currentPath]
   );
 
-  // Auto-close upload dialog when all done
+  const closeUpload = useCallback(() => {
+    setUploadOpen(false);
+    setUploadFileStates([]);
+    fetchFiles();
+  }, [fetchFiles]);
+
+  // When every file has an outcome: a clean run closes the dialog by itself
+  // after 1.5s with a success toast. If any file failed, the dialog stays open
+  // (each failed file shows its error) with a summary toast; the user closes it.
   useEffect(() => {
     if (
       uploadFileStates.length > 0 &&
@@ -187,22 +187,26 @@ export default function FilesPage() {
         (f) => f.status === "done" || f.status === "error"
       )
     ) {
+      const failed = uploadFileStates.filter((f) => f.status === "error").length;
       const timer = setTimeout(() => {
-        setUploadOpen(false);
-        setUploadFileStates([]);
-        fetchFiles();
-        const anyDone = uploadFileStates.some((f) => f.status === "done");
-        if (anyDone) {
+        if (failed > 0) {
           setSnack({
             open: true,
-            msg: "הקבצים הועלו בהצלחה",
-            severity: "success",
+            msg: `${failed} מתוך ${uploadFileStates.length} קבצים נכשלו בהעלאה`,
+            severity: "error",
           });
+          return;
         }
-      }, 1500);
+        closeUpload();
+        setSnack({
+          open: true,
+          msg: "הקבצים הועלו בהצלחה",
+          severity: "success",
+        });
+      }, failed > 0 ? 0 : 1500);
       return () => clearTimeout(timer);
     }
-  }, [uploadFileStates, fetchFiles]);
+  }, [uploadFileStates, closeUpload]);
 
   // ── Drag & Drop ──────────────────────────────────────────────────────────────
   const handleDragOver = (e: React.DragEvent) => {
@@ -339,370 +343,218 @@ export default function FilesPage() {
     handleMenuClose();
   };
 
+  // ── List columns ─────────────────────────────────────────────────────────────
+  const openItem = (item: FileItem) => {
+    if (item.isFolder) {
+      setCurrentPath(item.fullPath);
+    } else {
+      handleDownload(item);
+    }
+  };
+
+  const columns: Column<FileItem>[] = [
+    {
+      key: "name",
+      header: "שם",
+      cell: (item) => (
+        <span style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <FileIcon name={item.name} isFolder={item.isFolder} sx={{ fontSize: 22 }} />
+          <span style={{ fontWeight: item.isFolder ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis" }}>
+            {item.name}
+          </span>
+        </span>
+      ),
+    },
+    { key: "size", header: "גודל", muted: true, nums: true, nowrap: true, cell: (item) => (item.isFolder ? "—" : formatFileSize(item.size)) },
+    { key: "date", header: "תאריך שינוי", muted: true, nums: true, nowrap: true, cell: (item) => (item.isFolder ? "—" : formatDate(item.lastModified)) },
+    {
+      key: "actions",
+      header: "פעולות",
+      align: "center",
+      width: 80,
+      cell: (item) => (
+        <IconButton size="small" aria-label={`פעולות עבור ${item.name}`} aria-haspopup="menu" onClick={(e) => handleMenuOpen(e, item)}>
+          <MoreVertIcon fontSize={18} aria-hidden />
+        </IconButton>
+      ),
+    },
+  ];
+
+  const uploadFinished =
+    uploadFileStates.length > 0 &&
+    uploadFileStates.every((f) => f.status === "done" || f.status === "error");
+  const uploadFailed = uploadFileStates.filter((f) => f.status === "error").length;
+  // Closing is offered once every file has an outcome and some failed (a
+  // clean run closes by itself).
+  const canCloseUpload = uploadFinished && uploadFailed > 0;
+  const lastSegment = pathSegments.length - 1;
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <Box
-      sx={{
-        minHeight: "100%",
-        bgcolor: "var(--color-canvas-parchment)",
-        p: 3,
-        direction: "rtl",
-      }}
-    >
-      {/* Page Header */}
-      <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2 }}>
-        <FolderCopyIcon sx={{ fontSize: 40, color: "primary.main" }} />
-        <Typography
-          variant="h4"
-          fontWeight={700}
-          sx={{ color: "text.primary", letterSpacing: "-0.3px" }}
-        >
-          ניהול קבצים
-        </Typography>
-      </Box>
+    <div className="files-page">
+      <SettingsToolbar
+        title="ניהול קבצים"
+        subtitle="מאגר הקבצים המשותף: תיקיות, העלאה, הורדה ושינוי שם. אפשר גם לגרור קבצים אל הרשימה."
+      />
 
-      {/* Main Container */}
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 3,
-          overflow: "hidden",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-        }}
-      >
+      {/* Main Container — one flat card */}
+      <div className="files-card">
         {/* Toolbar */}
-        <Box
-          sx={{
-            px: 2,
-            py: 1.5,
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            borderBottom: "1px solid",
-            borderColor: "divider",
-            bgcolor: "white",
-            flexWrap: "wrap",
-          }}
-        >
+        <div className="files-toolbar">
           {/* Breadcrumb */}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Breadcrumbs separator="/" maxItems={6}>
-              <MuiLink
-                component="button"
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Breadcrumbs separator="/" aria-label="מיקום בתיקיות">
+              <button
+                type="button"
+                className="files-crumb"
+                aria-current={currentPath === "" ? "page" : undefined}
                 onClick={() => setCurrentPath("")}
-                underline="hover"
-                color={currentPath === "" ? "text.primary" : "inherit"}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                  cursor: "pointer",
-                  border: "none",
-                  background: "none",
-                  p: 0,
-                  fontFamily: "inherit",
-                }}
               >
-                <HomeIcon sx={{ fontSize: 16 }} />
-                <Typography variant="body2" fontWeight={currentPath === "" ? 700 : 400}>
-                  ראשי
-                </Typography>
-              </MuiLink>
+                <HomeIcon fontSize={16} aria-hidden />
+                ראשי
+              </button>
               {pathSegments.map((seg, i) => (
-                <MuiLink
+                <button
                   key={i}
-                  component="button"
+                  type="button"
+                  className="files-crumb"
+                  aria-current={i === lastSegment ? "page" : undefined}
                   onClick={() => navigateTo(i)}
-                  underline="hover"
-                  color={
-                    i === pathSegments.length - 1 ? "text.primary" : "inherit"
-                  }
-                  sx={{
-                    cursor: "pointer",
-                    border: "none",
-                    background: "none",
-                    p: 0,
-                    fontFamily: "inherit",
-                  }}
                 >
-                  <Typography
-                    variant="body2"
-                    fontWeight={i === pathSegments.length - 1 ? 700 : 400}
-                  >
-                    {seg}
-                  </Typography>
-                </MuiLink>
+                  {seg}
+                </button>
               ))}
             </Breadcrumbs>
-          </Box>
+          </div>
 
           {/* Action buttons */}
-          <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "center" }}>
             <Button
-              variant="contained"
               size="small"
               onClick={() => fileInputRef.current?.click()}
-              sx={{ borderRadius: 2, textTransform: "none", display: "flex", gap: 1, px: 2 }}
+              startIcon={<UploadFileIcon fontSize={18} aria-hidden />}
             >
-              <UploadFileIcon fontSize="small" />
               העלאת קבצים
             </Button>
             <Button
               variant="outlined"
               size="small"
               onClick={() => setNewFolderOpen(true)}
-              sx={{ borderRadius: 2, textTransform: "none", display: "flex", gap: 1, px: 2 }}
+              startIcon={<CreateNewFolderIcon fontSize={18} aria-hidden />}
             >
-              <CreateNewFolderIcon fontSize="small" />
               תיקייה חדשה
             </Button>
             <Tooltip title="רענון">
-              <IconButton size="small" onClick={fetchFiles} disabled={loading}>
-                <RefreshIcon />
+              <IconButton size="small" aria-label="רענון" onClick={fetchFiles} disabled={loading}>
+                <RefreshIcon fontSize={20} aria-hidden />
               </IconButton>
             </Tooltip>
             <Tooltip title={viewMode === "list" ? "תצוגת רשת" : "תצוגת רשימה"}>
               <IconButton
                 size="small"
+                aria-label={viewMode === "list" ? "תצוגת רשת" : "תצוגת רשימה"}
                 onClick={() =>
                   setViewMode((v) => (v === "list" ? "grid" : "list"))
                 }
               >
-                {viewMode === "list" ? <ViewModuleIcon /> : <ViewListIcon />}
+                {viewMode === "list" ? <ViewModuleIcon fontSize={20} aria-hidden /> : <ViewListIcon fontSize={20} aria-hidden />}
               </IconButton>
             </Tooltip>
-          </Box>
-        </Box>
+          </div>
+        </div>
 
         {/* Content area with drag-and-drop */}
-        <Box
-          sx={{
-            minHeight: 420,
-            bgcolor: "white",
-            position: "relative",
-            outline: isDragging
-              ? "3px dashed var(--color-primary)"
-              : "3px dashed transparent",
-            outlineOffset: "-3px",
-            transition: "outline 0.15s ease",
-          }}
+        <div
+          className={"files-drop" + (isDragging ? " files-drop--over" : "")}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          {/* Drag overlay */}
-          {isDragging && (
-            <Box
-              sx={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 10,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 1,
-                bgcolor: alpha("var(--color-primary)", 0.06),
-                pointerEvents: "none",
-              }}
-            >
-              <CloudUploadIcon sx={{ fontSize: 56, color: "primary.main" }} />
-              <Typography variant="h6" color="primary" fontWeight={700}>
-                שחרר קבצים כאן להעלאה
-              </Typography>
-            </Box>
-          )}
+          {/* Drag cue: fades in (opacity), never moves the layout */}
+          <div className="files-drop__overlay" aria-hidden>
+            <CloudUploadIcon fontSize={56} />
+            <span style={{ fontSize: "var(--text-lead)", fontWeight: 600 }}>שחרר קבצים כאן להעלאה</span>
+          </div>
 
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 10 }}>
-              <CircularProgress />
-            </Box>
-          ) : files.length === 0 ? (
+          {loadError ? (
+            <div style={{ padding: "var(--space-md)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "var(--space-sm)" }}>
+              <Alert severity="error">טעינת הקבצים נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
+              <Button variant="outlined" color="inherit" size="small" onClick={fetchFiles}>נסה שוב</Button>
+            </div>
+          ) : !loading && files.length === 0 ? (
             /* Empty state */
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                py: 10,
-                gap: 2,
-              }}
-            >
-              <InboxIcon sx={{ fontSize: 64, color: "text.disabled" }} />
-              <Typography variant="h6" color="text.secondary">
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px var(--space-lg)", gap: "var(--space-xs)", textAlign: "center" }}>
+              <InboxIcon fontSize={56} color="var(--color-ink-muted-48)" aria-hidden />
+              <div style={{ fontSize: "var(--text-lead)", fontWeight: 600, color: "var(--color-ink)", marginTop: "var(--space-xs)" }}>
                 התיקייה ריקה
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
+              </div>
+              <div style={{ fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-48)" }}>
                 גרור קבצים לכאן או לחץ על &quot;העלאת קבצים&quot;
-              </Typography>
-            </Box>
+              </div>
+            </div>
           ) : viewMode === "list" ? (
-            /* ── List view ── */
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ bgcolor: "var(--color-surface-pearl)" }}>
-                    <TableCell sx={{ fontWeight: 700, width: "50%" }}>
-                      שם
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>גודל</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>תאריך שינוי</TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, width: 60 }}>
-                      פעולות
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {files.map((item) => (
-                    <TableRow
-                      key={item.fullPath}
-                      hover
-                      sx={{ cursor: "pointer" }}
-                      onClick={() => {
-                        if (item.isFolder) {
-                          setCurrentPath(item.fullPath);
-                        } else {
-                          handleDownload(item);
-                        }
-                      }}
-                    >
-                      <TableCell>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1.5,
-                          }}
-                        >
-                          <FileIcon
-                            name={item.name}
-                            isFolder={item.isFolder}
-                            sx={{ fontSize: 22 }}
-                          />
-                          <Typography
-                            variant="body2"
-                            fontWeight={item.isFolder ? 600 : 400}
-                          >
-                            {item.name}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.isFolder ? "—" : formatFileSize(item.size)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.isFolder ? "—" : formatDate(item.lastModified)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell
-                        align="center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <IconButton
-                          size="small"
-                          onClick={(e) => handleMenuOpen(e, item)}
-                        >
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            /* ── List view: a row opens (Enter / Space too) ── */
+            <DataTable<FileItem>
+              columns={columns}
+              rows={files}
+              getRowKey={(item) => item.fullPath}
+              onRowClick={openItem}
+              loading={loading}
+              loadingRows={6}
+              minWidth={560}
+              plain
+            />
+          ) : loading ? (
+            <div className="files-grid" aria-busy="true" aria-label="טוען קבצים">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} variant="rounded" height={132} />
+              ))}
+            </div>
           ) : (
             /* ── Grid view ── */
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fill, minmax(140px, 1fr))",
-                gap: 2,
-                p: 2,
-              }}
-            >
+            <div className="files-grid">
               {files.map((item) => (
-                <Card
-                  key={item.fullPath}
-                  elevation={0}
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 2,
-                    transition: "all 0.2s ease",
-                    "&:hover": {
-                      borderColor: "primary.main",
-                      boxShadow: "0 4px 16px color-mix(in srgb, var(--color-primary) 15%, transparent)",
-                      transform: "translateY(-2px)",
-                    },
-                  }}
-                >
-                  <CardActionArea
-                    onClick={() => {
-                      if (item.isFolder) {
-                        setCurrentPath(item.fullPath);
-                      } else {
-                        handleDownload(item);
-                      }
-                    }}
-                    sx={{ p: 2, textAlign: "center" }}
+                <div key={item.fullPath} className="files-tile">
+                  <button
+                    type="button"
+                    className="files-tile__open"
+                    onClick={() => openItem(item)}
+                    title={item.name}
                   >
-                    <FileIcon
-                      name={item.name}
-                      isFolder={item.isFolder}
-                      sx={{ fontSize: 48 }}
-                    />
-                    <Typography
-                      variant="caption"
-                      display="block"
-                      noWrap
-                      title={item.name}
-                      mt={1}
-                      fontWeight={item.isFolder ? 600 : 400}
-                    >
+                    <FileIcon name={item.name} isFolder={item.isFolder} sx={{ fontSize: 48 }} />
+                    <span className="files-tile__name" style={{ fontWeight: item.isFolder ? 600 : 400 }}>
                       {item.name}
-                    </Typography>
+                    </span>
                     {!item.isFolder && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        display="block"
-                      >
+                      <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", fontVariantNumeric: "tabular-nums" }}>
                         {formatFileSize(item.size)}
-                      </Typography>
+                      </span>
                     )}
-                  </CardActionArea>
-                  <Box
-                    sx={{
-                      px: 1,
-                      pb: 0.5,
-                      display: "flex",
-                      justifyContent: "flex-end",
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  </button>
+                  <div style={{ padding: "0 4px 4px", display: "flex", justifyContent: "flex-end" }}>
                     <IconButton
                       size="small"
+                      aria-label={`פעולות עבור ${item.name}`}
+                      aria-haspopup="menu"
                       onClick={(e) => handleMenuOpen(e, item)}
                     >
-                      <MoreVertIcon fontSize="small" />
+                      <MoreVertIcon fontSize={18} aria-hidden />
                     </IconButton>
-                  </Box>
-                </Card>
+                  </div>
+                </div>
               ))}
-            </Box>
+            </div>
           )}
-        </Box>
-      </Paper>
+        </div>
+      </div>
 
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
         multiple
+        tabIndex={-1}
+        aria-hidden
         style={{ display: "none" }}
         onChange={(e) => {
           const selected = Array.from(e.target.files || []);
@@ -716,7 +568,7 @@ export default function FilesPage() {
         anchorEl={menuAnchor}
         open={Boolean(menuAnchor)}
         onClose={handleMenuClose}
-        PaperProps={{ sx: { minWidth: 160, borderRadius: 2 } }}
+        PaperProps={{ style: { minWidth: 160 } }}
       >
         {menuItem && !menuItem.isFolder && (
           <MenuItem
@@ -726,91 +578,74 @@ export default function FilesPage() {
             }}
           >
             <ListItemIcon>
-              <DownloadIcon fontSize="small" />
+              <DownloadIcon fontSize={18} aria-hidden />
             </ListItemIcon>
             הורדה
           </MenuItem>
         )}
         <MenuItem onClick={() => menuItem && openRename(menuItem)}>
           <ListItemIcon>
-            <DriveFileRenameOutlineIcon fontSize="small" />
+            <DriveFileRenameOutlineIcon fontSize={18} aria-hidden />
           </ListItemIcon>
           שינוי שם
         </MenuItem>
         <Divider />
-        <MenuItem
-          onClick={() => menuItem && openDelete(menuItem)}
-          sx={{ color: "error.main" }}
-        >
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" color="error" />
+        <MenuItem danger onClick={() => menuItem && openDelete(menuItem)}>
+          <ListItemIcon style={{ color: "inherit" }}>
+            <DeleteIcon fontSize={18} aria-hidden />
           </ListItemIcon>
           מחיקה
         </MenuItem>
       </Menu>
 
-      {/* ── Upload Progress Dialog ── */}
-      <Dialog open={uploadOpen} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <CloudUploadIcon color="primary" />
-          העלאת קבצים
-        </DialogTitle>
+      {/* ── Upload Progress Dialog ──
+          A clean run closes by itself; if any file failed it stays open with
+          each file's error, and closes when the user says so. */}
+      <Dialog open={uploadOpen} onClose={canCloseUpload ? closeUpload : undefined} maxWidth="sm" fullWidth>
+        <DialogTitle onClose={canCloseUpload ? closeUpload : undefined}>העלאת קבצים</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
+          <Stack spacing={2}>
+            {canCloseUpload && (
+              <Alert severity="error">
+                {uploadFailed} מתוך {uploadFileStates.length} קבצים נכשלו בהעלאה. הקבצים שהצליחו כבר נשמרו; את הכושלים אפשר להעלות שוב.
+              </Alert>
+            )}
             {uploadFileStates.map((f, i) => (
-              <Box key={i}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 0.5,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 0.75,
-                      minWidth: 0,
-                    }}
-                  >
+              <div key={i}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-xs)", marginBottom: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                     <FileIcon name={f.file.name} sx={{ fontSize: 18 }} />
-                    <Typography variant="body2" noWrap>
+                    <span style={{ fontSize: "var(--text-body-sm)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {f.file.name}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
-                    {f.status === "done" && (
-                      <CheckCircleIcon
-                        fontSize="small"
-                        sx={{ color: "success.main" }}
-                      />
-                    )}
-                    {f.status === "error" && (
-                      <ErrorIcon fontSize="small" color="error" />
-                    )}
-                    <Typography
-                      variant="caption"
-                      color={
-                        f.status === "error"
-                          ? "error"
-                          : f.status === "done"
-                          ? "success.main"
-                          : "text.secondary"
-                      }
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    {f.status === "done" && <CheckCircleIcon fontSize={18} color="var(--color-success-ink)" aria-hidden />}
+                    {f.status === "error" && <ErrorIcon fontSize={18} color="error" aria-hidden />}
+                    <span
+                      style={{
+                        fontSize: "var(--text-fine)",
+                        fontVariantNumeric: "tabular-nums",
+                        color:
+                          f.status === "error"
+                            ? "var(--color-destructive)"
+                            : f.status === "done"
+                            ? "var(--color-success-ink)"
+                            : "var(--color-ink-muted-48)",
+                      }}
                     >
                       {f.status === "error"
-                        ? f.error
+                        ? "נכשל"
                         : f.status === "done"
                         ? "הושלם"
                         : `${f.progress}%`}
-                    </Typography>
-                  </Box>
-                </Box>
+                    </span>
+                  </div>
+                </div>
                 <LinearProgress
                   variant="determinate"
                   value={f.progress}
+                  aria-label={`התקדמות ההעלאה של ${f.file.name}`}
                   color={
                     f.status === "error"
                       ? "error"
@@ -818,12 +653,21 @@ export default function FilesPage() {
                       ? "success"
                       : "primary"
                   }
-                  sx={{ borderRadius: 1 }}
                 />
-              </Box>
+                {f.status === "error" && (
+                  <div style={{ fontSize: "var(--text-fine)", color: "var(--color-destructive)", marginTop: 4 }}>
+                    {f.error}
+                  </div>
+                )}
+              </div>
             ))}
           </Stack>
         </DialogContent>
+        {canCloseUpload && (
+          <DialogActions>
+            <Button onClick={closeUpload}>סגור</Button>
+          </DialogActions>
+        )}
       </Dialog>
 
       {/* ── New Folder Dialog ── */}
@@ -844,17 +688,18 @@ export default function FilesPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleCreateFolder();
             }}
-            sx={{ mt: 1 }}
           />
         </DialogContent>
+        {/* Cancel first, the action last (DialogActions puts it at the end). */}
         <DialogActions>
-          <Button onClick={() => setNewFolderOpen(false)}>ביטול</Button>
+          <Button variant="outlined" color="inherit" onClick={() => setNewFolderOpen(false)}>ביטול</Button>
           <Button
             variant="contained"
             onClick={handleCreateFolder}
-            disabled={!newFolderName.trim() || actionLoading}
+            disabled={!newFolderName.trim()}
+            loading={actionLoading}
           >
-            {actionLoading ? <CircularProgress size={18} /> : "יצירה"}
+            יצירה
           </Button>
         </DialogActions>
       </Dialog>
@@ -877,48 +722,37 @@ export default function FilesPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleRename();
             }}
-            sx={{ mt: 1 }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRenameOpen(false)}>ביטול</Button>
+          <Button variant="outlined" color="inherit" onClick={() => setRenameOpen(false)}>ביטול</Button>
           <Button
             variant="contained"
             onClick={handleRename}
-            disabled={!renameName.trim() || actionLoading}
+            disabled={!renameName.trim()}
+            loading={actionLoading}
           >
-            {actionLoading ? <CircularProgress size={18} /> : "שמירה"}
+            שמירה
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* ── Delete Confirmation Dialog ── */}
-      <Dialog
-        open={deleteOpen}
-        onClose={() => setDeleteOpen(false)}
-        maxWidth="xs"
-        fullWidth
+      {/* ── Delete Confirmation ── */}
+      <ConfirmDialog
         draggable={false}
-      >
-        <DialogTitle>אישור מחיקה</DialogTitle>
-        <DialogContent>
-          <Typography>
-            האם למחוק את &quot;{deleteTarget?.name}&quot;?
-            {deleteTarget?.isFolder && " כל תוכן התיקייה יימחק לצמיתות."}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteOpen(false)}>ביטול</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDelete}
-            disabled={actionLoading}
-          >
-            {actionLoading ? <CircularProgress size={18} /> : "מחיקה"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        open={deleteOpen}
+        title={deleteTarget?.isFolder ? "מחיקת תיקייה" : "מחיקת קובץ"}
+        message={
+          deleteTarget
+            ? `למחוק את ${deleteTarget.isFolder ? "התיקייה" : "הקובץ"} "${deleteTarget.name}"?${deleteTarget.isFolder ? " כל תוכן התיקייה יימחק." : ""} פעולה זו אינה ניתנת לביטול.`
+            : ""
+        }
+        confirmText="מחק"
+        destructive
+        busy={actionLoading}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
 
       {/* ── Snackbar ── */}
       <Snackbar
@@ -930,11 +764,10 @@ export default function FilesPage() {
         <Alert
           severity={snack.severity}
           onClose={() => setSnack((s) => ({ ...s, open: false }))}
-          sx={{ borderRadius: 2 }}
         >
           {snack.msg}
         </Alert>
       </Snackbar>
-    </Box>
+    </div>
   );
 }

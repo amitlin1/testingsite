@@ -1,6 +1,6 @@
 "use client";
-import { Box } from "@/components/ui";
 import SettingsSubNav from "./components/SettingsSubNav";
+import "./settings.css";
 
 /**
  * Settings section wrapper.
@@ -8,10 +8,12 @@ import SettingsSubNav from "./components/SettingsSubNav";
  * The shared AppShell already owns the viewport, margins and the single
  * scroll container (its content box is `height: calc(100vh - 56px);
  * overflow-y: auto`). This layout must NOT reset html/body or force a
- * full-viewport height — it just fills the shell's content box and
- * establishes a definite-height flex column with padding, so the settings
- * pages can use their `height:100%` / `flex:1` internal scroll regions the
- * same way the other sections (e.g. /shipments) do.
+ * full-viewport height — it fills the shell's content box with a
+ * definite-height column: the sub-nav, then the ONE page frame every settings
+ * page shares (settings.css `.settings-content` / `.settings-page`): its
+ * scroll, its padding and the 1180 column live here, so no page adds a frame
+ * of its own. A table page marks its root `.settings-fill` to fill the frame
+ * and scroll the table inside instead.
  */
 export default function SettingsLayout({
   children,
@@ -19,19 +21,13 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Box
-      sx={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        direction: "rtl",
-      }}
-    >
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", direction: "rtl" }}>
       <SettingsSubNav />
-      {/* Page content: fills the remaining height and owns its own internal
-          scroll (min-height:0 lets it shrink instead of pushing the sub-nav
-          out). Padding lives here so the sub-nav bar stays full-bleed. */}
-      <Box sx={{ flex: 1, minHeight: 0, p: 2 }}>{children}</Box>
-    </Box>
+      {/* min-height:0 lets the frame shrink instead of pushing the sub-nav
+          out; the sub-nav stays full-bleed above it. */}
+      <div className="settings-content">
+        <div className="settings-page">{children}</div>
+      </div>
+    </div>
   );
 }
