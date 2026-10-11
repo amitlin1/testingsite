@@ -1,8 +1,8 @@
 "use client";
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
-import { Snackbar, Alert } from "@/components/ui";
-import { QrCode, Package, FlaskConical, List, Check, Pencil } from "lucide-react";
+import { Snackbar, Alert, Button } from "@/components/ui";
+import { QrCode, Package, FlaskConical, List, Check, Pencil, Plus, RefreshCw } from "lucide-react";
 import ItemsToolbar from "@/components/ItemsToolbar";
 import DataTable, { StatusPill, ProgressCell, RowActions, IconAction, type Column } from "@/components/DataTable";
 import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
@@ -12,6 +12,12 @@ import EditItemDialog from "@/components/EditItemDialog";
 import BarcodeDialog from "./BarcodeDialog";
 import { ItemRow, StatusOption, ItemTypeOption, Customers, Shipment } from "@/types";
 import { apiFetch } from "@/lib/api/client";
+import { toneOfStatus } from "@/app/lib/status-tones";
+import { formatDay } from "@/app/items/format";
+import "@/components/items.css";
+
+/** current_status of a finished item — hidden from the default view. */
+const FINISHED_STATUS = 3;
 
 export default function ItemTable() {
   // Command-palette deep links: ?q=<serial|מק״ט|דגם> seeds the search box, and
@@ -29,6 +35,10 @@ export default function ItemTable() {
   const [shipments, setShipments] = React.useState<Shipment[]>([]);
 
   const [loading, setLoading] = React.useState(true);
+  // A failed load is not an empty result: the table shows an error with a
+  // retry instead of "no items". reloadKey re-runs the initial load as is.
+  const [loadError, setLoadError] = React.useState(false);
+  const [reloadKey, setReloadKey] = React.useState(0);
   const [selected, setSelected] = React.useState<ItemRow | null>(null);
   const [editingItem, setEditingItem] = React.useState<ItemRow | null>(null);
   // ?new=1 opens the package intake directly. Items are only ever created
@@ -64,9 +74,11 @@ export default function ItemTable() {
       if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
       const items = await r.json();
       setRows(Array.isArray(items) ? items : []);
+      setLoadError(false);
     } catch (e) {
       console.error("Failed to load items", e);
       setRows([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -94,14 +106,23 @@ export default function ItemTable() {
         setCustomers(Array.isArray(custs) ? custs : []);
         setItemTypes(Array.isArray(types) ? types : []);
         setShipments(Array.isArray(ships) ? ships : []);
+        // The lookups degrade quietly; the item list failing is what makes
+        // the screen wrong, so only that one is surfaced.
+        setLoadError(!r1.ok);
         setLoading(false);
       } catch (error) {
         console.error("Error loading data:", error);
-        if (!cancelled) { setRows([]); setStatuses([]); setCustomers([]); setItemTypes([]); setShipments([]); setLoading(false); }
+        if (!cancelled) { setRows([]); setStatuses([]); setCustomers([]); setItemTypes([]); setShipments([]); setLoadError(true); setLoading(false); }
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadKey]);
+
+  const retryLoad = () => {
+    setLoadError(false);
+    setLoading(true);
+    setReloadKey((k) => k + 1);
+  };
 
   // filter option lists for the toolbar
   const statusOpts = React.useMemo(() => statuses.map((s) => ({ value: String(s.id), label: s.label })), [statuses]);
@@ -124,27 +145,41 @@ export default function ItemTable() {
     () => itemTypes.map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })),
     [itemTypes]
   );
-  const filteredRows = React.useMemo(() => {
-    if (!Array.isArray(rows)) return [];
-    const q = search.trim().toLowerCase();
-    return rows.filter((row) => {
+
+  // Every filter except status: search, item type, shipment. Shared by the
+  // table and by the "finished items hidden" count, so the two never disagree.
+  const matchesNonStatus = React.useCallback(
+    (row: ItemRow) => {
+      const q = search.trim().toLowerCase();
       if (q) {
         const name = `${row.model ?? ""} ${row.customer_code ?? ""} ${row.makat ?? ""}`.toLowerCase();
         const serial = (row.serial_no ?? "").toString().toLowerCase();
         if (!name.includes(q) && !serial.includes(q)) return false;
       }
-      if (statusFilter) {
-        if (row.current_status !== Number(statusFilter)) return false;
-      } else if (row.current_status === 3) {
-        // Default: hide finished items unless explicitly filtered.
-        return false;
-      }
       if (typeFilter && row.item_type_id !== Number(typeFilter)) return false;
       // /api/items serializes shipment_id as a string (BigInt-safe) — compare as strings
       if (shipFilter && String(row.shipment_id) !== shipFilter) return false;
       return true;
+    },
+    [search, typeFilter, shipFilter]
+  );
+
+  const filteredRows = React.useMemo(() => {
+    if (!Array.isArray(rows)) return [];
+    return rows.filter((row) => {
+      if (!matchesNonStatus(row)) return false;
+      if (statusFilter) return row.current_status === Number(statusFilter);
+      // Default: hide finished items unless explicitly filtered.
+      return row.current_status !== FINISHED_STATUS;
     });
-  }, [rows, search, statusFilter, typeFilter, shipFilter]);
+  }, [rows, matchesNonStatus, statusFilter]);
+
+  // Finished items the default view is hiding right now (they still count in
+  // the KPI totals above, so the screen says where they went).
+  const hiddenFinished = React.useMemo(() => {
+    if (statusFilter || !Array.isArray(rows)) return 0;
+    return rows.filter((r) => r.current_status === FINISHED_STATUS && matchesNonStatus(r)).length;
+  }, [rows, matchesNonStatus, statusFilter]);
 
   // KPI counters — derived from the full list (not filtered), by current_status:
   // 1 = בבדיקה, 2 = בתור, 3 (or is_finished) = הושלם.
@@ -157,6 +192,18 @@ export default function ItemTable() {
     }
     return { total: rows.length, inTest, inQueue, done };
   }, [rows]);
+
+  const anyFilter = search.trim() !== "" || statusFilter !== "" || typeFilter !== "" || shipFilter !== "";
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setTypeFilter("");
+    setShipFilter("");
+  };
+  // "Show finished" is the status filter the command palette already uses
+  // for a finished item (?status=3) — no second mechanism.
+  const showFinished = () => setStatusFilter(String(FINISHED_STATUS));
+  const hideFinished = () => setStatusFilter("");
 
   const onPackageCreated = () => {
     setSnackbarMessage("המארז נקלט בהצלחה");
@@ -193,10 +240,11 @@ export default function ItemTable() {
   const columns: Column<ItemRow>[] = [
     {
       key: "barcode", header: "ברקוד", align: "center", width: 56,
+      // A quiet ghost icon button: the row itself is the primary target.
       cell: (r) => (
-        <button className="shx-icon-btn" onClick={(e) => openBarcode(e, r)} aria-label="ברקוד" title="הצג ברקוד">
-          <QrCode size={18} strokeWidth={1.75} />
-        </button>
+        <IconAction title="הצג ברקוד" onClick={(e) => openBarcode(e, r)}>
+          <QrCode size={18} strokeWidth={1.75} aria-hidden />
+        </IconAction>
       ),
     },
     { key: "type", header: "סוג", nowrap: true, muted: true, cell: (r) => r.item_type_desc ?? "—" },
@@ -209,7 +257,8 @@ export default function ItemTable() {
     { key: "customer", header: "לקוח", nowrap: true, cell: (r) => r.customer_code ?? "—" },
     {
       key: "status", header: "סטטוס",
-      cell: (r) => (r.item_status_desc ? <StatusPill label={r.item_status_desc} active={r.current_status === 2} /> : "—"),
+      // One status palette for every screen (status-tones).
+      cell: (r) => (r.item_status_desc ? <StatusPill label={r.item_status_desc} tone={toneOfStatus(r.current_status)} /> : "—"),
     },
     {
       key: "progress", header: "התקדמות", width: 180,
@@ -220,63 +269,133 @@ export default function ItemTable() {
     },
     {
       key: "date", header: "תאריך קליטה", width: 140, muted: true, nums: true, nowrap: true,
-      cell: (r) => (r.created_at ? new Date(r.created_at).toLocaleDateString("he-IL") : "—"),
+      cell: (r) => formatDay(r.created_at),
     },
     {
       key: "actions", header: "פעולות", align: "center", width: 70,
       cell: (r) => (
         <RowActions>
           <IconAction title="ערוך פריט" onClick={() => setEditingItem(r)}>
-            <Pencil size={16} strokeWidth={1.75} />
+            <Pencil size={16} strokeWidth={1.75} aria-hidden />
           </IconAction>
         </RowActions>
       ),
     },
   ];
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* KPI summary strip — sits above the toolbar/filters */}
-      {loading ? (
-        <SummaryStripSkeleton count={4} />
-      ) : (
-        <SummaryStrip>
-          <SummaryTile icon={<Package size={22} strokeWidth={1.85} />} tone="blue" value={kpis.total} label="סה״כ פריטים" />
-          <SummaryTile icon={<FlaskConical size={22} strokeWidth={1.85} />} tone="blue" value={kpis.inTest} label="בבדיקה" />
-          <SummaryTile icon={<List size={22} strokeWidth={1.85} />} tone="amber" value={kpis.inQueue} label="בתור" />
-          <SummaryTile icon={<Check size={22} strokeWidth={1.85} />} tone="green" value={kpis.done} label="הושלמו" />
-        </SummaryStrip>
-      )}
-
-      <ItemsToolbar
-        search={search}
-        onSearch={setSearch}
-        onAdd={() => setInsertOpen(true)}
-        addLabel="קליטת מארז"
-        filters={[
-          { key: "status", placeholder: "סטטוס", value: statusFilter, options: statusOpts, onChange: setStatusFilter },
-          { key: "type", placeholder: "סוג פריט", value: typeFilter, options: typeOpts, onChange: setTypeFilter, width: 190 },
-          { key: "ship", placeholder: "משלוח", value: shipFilter, options: shipOpts, onChange: setShipFilter, width: 220 },
-        ]}
+  // Empty states say why the table is empty and offer the way out.
+  let empty: React.ReactNode;
+  if (rows.length === 0) {
+    empty = (
+      <EmptyState
+        title="עדיין אין פריטים במערכת"
+        body="פריטים נוצרים בקליטת מארז."
+        action={
+          <Button variant="outlined" onClick={() => setInsertOpen(true)} startIcon={<Plus size={18} strokeWidth={2} aria-hidden />}>
+            קליטת מארז
+          </Button>
+        }
       />
+    );
+  } else if (hiddenFinished > 0) {
+    empty = (
+      <EmptyState
+        title={anyFilter ? "כל הפריטים שתואמים לסינון כבר הושלמו" : "כל הפריטים במערכת כבר הושלמו"}
+        body="פריטים שהושלמו מוסתרים כברירת מחדל."
+        action={<Button variant="outlined" onClick={showFinished}>הצג פריטים שהושלמו</Button>}
+      />
+    );
+  } else {
+    empty = (
+      <EmptyState
+        title="אין פריטים שתואמים לסינון"
+        body="נסה חיפוש אחר, או נקה את הסינון כדי לראות את כל הפריטים."
+        action={anyFilter ? <Button variant="outlined" onClick={clearFilters}>נקה סינון</Button> : undefined}
+      />
+    );
+  }
 
-      {loading ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} style={{ height: 48, borderRadius: 10, background: "linear-gradient(90deg,var(--color-divider-soft),var(--color-canvas-parchment),var(--color-divider-soft))", backgroundSize: "200% 100%", animation: "shx-shimmer 1.4s infinite" }} />
-          ))}
-          <style>{`@keyframes shx-shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }`}</style>
-        </div>
-      ) : (
-        <DataTable<ItemRow>
-          columns={columns}
-          rows={filteredRows}
-          getRowKey={(r) => r.item_id}
-          onRowClick={setSelected}
-          minWidth={1100}
-          empty={<div style={{ fontSize: 15 }}>לא נמצאו פריטים תואמים.</div>}
+  // KPI values: "—" when the list failed to load — never a fake 0.
+  const kpi = (n: number) => (loadError ? "—" : n);
+
+  const summary = loading ? (
+    <SummaryStripSkeleton count={4} />
+  ) : (
+    <SummaryStrip>
+      <SummaryTile icon={<Package size={20} strokeWidth={1.75} />} tone="neutral" value={kpi(kpis.total)} label="סה״כ פריטים" />
+      <SummaryTile icon={<FlaskConical size={20} strokeWidth={1.75} />} tone={toneOfStatus(1)} value={kpi(kpis.inTest)} label="בבדיקה" />
+      <SummaryTile icon={<List size={20} strokeWidth={1.75} />} tone={toneOfStatus(2)} value={kpi(kpis.inQueue)} label="בתור" />
+      <SummaryTile icon={<Check size={20} strokeWidth={1.75} />} tone={toneOfStatus(FINISHED_STATUS)} value={kpi(kpis.done)} label="הושלמו" />
+    </SummaryStrip>
+  );
+
+  // The quiet "where did the finished items go" line (only when the table
+  // has rows — an empty table says it in its own empty state).
+  const showHint = !loading && !loadError && filteredRows.length > 0 && (hiddenFinished > 0 || statusFilter === String(FINISHED_STATUS));
+
+  return (
+    <>
+      <div className="items-page">
+        <ItemsToolbar
+          search={search}
+          onSearch={setSearch}
+          onAdd={() => setInsertOpen(true)}
+          addLabel="קליטת מארז"
+          summary={summary}
+          filters={[
+            { key: "status", placeholder: "סטטוס", value: statusFilter, options: statusOpts, onChange: setStatusFilter },
+            { key: "type", placeholder: "סוג פריט", value: typeFilter, options: typeOpts, onChange: setTypeFilter, width: 190 },
+            { key: "ship", placeholder: "משלוח", value: shipFilter, options: shipOpts, onChange: setShipFilter, width: 220 },
+          ]}
         />
-      )}
+
+        {showHint && (
+          // Tucked toward its neighbours (the link button is 32px tall for
+          // touch) so a one-line note doesn't open a 64px gap above the table.
+          <div style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", marginBlock: "calc(-1 * var(--space-xs))" }}>
+            {hiddenFinished > 0 ? (
+              <>
+                {hiddenFinished === 1 ? "פריט אחד שהושלם מוסתר" : `${hiddenFinished} פריטים שהושלמו מוסתרים`}
+                {" · "}
+                <button type="button" className="items-link-btn" onClick={showFinished}>הצג</button>
+              </>
+            ) : (
+              <>
+                מוצגים רק פריטים שהושלמו
+                {" · "}
+                <button type="button" className="items-link-btn" onClick={hideFinished}>הסתר</button>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="items-table-slot">
+          {loadError && !loading ? (
+            <Alert
+              severity="error"
+              action={
+                <Button size="small" variant="outlined" color="inherit" onClick={retryLoad} startIcon={<RefreshCw size={16} strokeWidth={1.75} aria-hidden />}>
+                  נסה שוב
+                </Button>
+              }
+            >
+              טעינת הפריטים נכשלה. ייתכן שהשרת אינו זמין כרגע — נסה שוב בעוד רגע.
+            </Alert>
+          ) : (
+            <DataTable<ItemRow>
+              columns={columns}
+              rows={filteredRows}
+              getRowKey={(r) => r.item_id}
+              onRowClick={setSelected}
+              minWidth={1100}
+              // Fills the slot and scrolls inside it, so the header stays pinned.
+              maxHeight="100%"
+              loading={loading}
+              empty={empty}
+            />
+          )}
+        </div>
+      </div>
 
       {selected && (
         <ItemDialog
@@ -318,6 +437,16 @@ export default function ItemTable() {
           {snackbarMessage}
         </Alert>
       </Snackbar>
+    </>
+  );
+}
+
+function EmptyState({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-xxs)", paddingInline: "var(--space-md)" }}>
+      <div style={{ fontSize: "var(--text-lead)", fontWeight: 600, color: "var(--color-ink)" }}>{title}</div>
+      <div style={{ fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-48)" }}>{body}</div>
+      {action && <div style={{ marginTop: "var(--space-sm)" }}>{action}</div>}
     </div>
   );
 }

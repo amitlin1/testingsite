@@ -1,17 +1,22 @@
 "use client";
 import * as React from "react";
 import { Search, Plus } from "lucide-react";
+import { Button, TextField } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
+import "./items.css";
 
 /* =========================================================================
-   ItemsToolbar — the search bar + filter dropdowns + "הוסף פריט" pill.
-   Shifthouse-styled, RTL, flat (no MUI elevation). Drop-in replacement for
-   the toolbar Paper in ItemTable.tsx.
+   ItemsToolbar — the ניהול פריטים header: the page title and its one primary
+   action first, then an optional summary (the KPI strip) under them, then
+   the search + filter row.
+
+   The filter row is one field vocabulary: the search box is the same
+   TextField the comboboxes are built from (40px, --r-field, 15px), so every
+   control in the row has one height, one radius and one type size. Each
+   control has an accessible name — their visible cue is only a placeholder.
 
    Filters use the unified <SearchableCombobox> (searchable) per the app-wide
-   "one combobox" decision — the flat inline dropdown was a visual fallback.
-
-   Requires: import "@/styles/shifthouse.css" once in the app.
+   "one combobox" decision.
    ========================================================================= */
 
 export type FilterOption = { value: string; label: string };
@@ -31,6 +36,8 @@ type Props = {
   filters: FilterDef[];
   onAdd: () => void;
   addLabel?: string;
+  /** Rendered between the title row and the filters (the KPI strip). */
+  summary?: React.ReactNode;
 };
 
 export default function ItemsToolbar({
@@ -40,8 +47,10 @@ export default function ItemsToolbar({
   filters,
   onAdd,
   addLabel = "הוסף פריט",
+  summary,
 }: Props) {
   const anyFilter = search.trim() !== "" || filters.some((f) => f.value !== "");
+  const idBase = React.useId();
 
   const clearAll = () => {
     onSearch("");
@@ -49,55 +58,60 @@ export default function ItemsToolbar({
   };
 
   return (
-    <div dir="rtl" style={{ position: "relative" }}>
-      {/* header row: title + add button */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1 }}>ניהול פריטים</h1>
-          </div>
-          <p style={{ margin: "8px 0 0", fontSize: 16, color: "var(--color-ink-muted-70)", lineHeight: 1.5 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+      {/* header row: title + the page's primary action */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-ml)", flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "var(--text-page)", fontWeight: 700, letterSpacing: "var(--ls-display)", lineHeight: 1.1 }}>
+            ניהול פריטים
+          </h1>
+          <p style={{ margin: "var(--space-xs) 0 0", fontSize: "var(--text-body)", color: "var(--color-ink-muted-70)", lineHeight: "var(--lh-body)" }}>
             כל הפריטים שנקלטו במערכת, הסטטוס וההתקדמות שלהם בתהליך הבדיקה.
           </p>
         </div>
-        <button className="shx-btn shx-btn-primary" onClick={onAdd}>
-          <Plus size={18} strokeWidth={2} />
+        <Button onClick={onAdd} startIcon={<Plus size={18} strokeWidth={2} aria-hidden />}>
           {addLabel}
-        </button>
+        </Button>
       </div>
 
-      {/* filters row */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
-        {/* search */}
-        <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 340 }}>
-          <span style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex", zIndex: 1 }}>
-            <Search size={16} strokeWidth={1.75} />
-          </span>
-          <input
-            className="shx-input"
+      {summary}
+
+      {/* filters row — one height (40), one radius (--r-field), one type size */}
+      <div role="search" aria-label="סינון פריטים" style={{ display: "flex", gap: "var(--space-sm)", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 240px", minWidth: 240, maxWidth: 340 }}>
+          <TextField
+            fullWidth
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             placeholder={searchPlaceholder}
-            style={{ height: 42, borderRadius: 10, paddingInlineStart: 40, paddingInlineEnd: 14, fontSize: 14 }}
+            aria-label="חיפוש פריטים"
+            InputProps={{ startAdornment: <Search size={16} strokeWidth={1.75} aria-hidden /> }}
           />
         </div>
 
-        {/* filter comboboxes (unified SearchableCombobox) */}
-        {filters.map((f) => (
-          <SearchableCombobox<FilterOption>
-            key={f.key}
-            options={f.options}
-            value={f.options.find((o) => o.value === f.value) ?? null}
-            onChange={(opt) => f.onChange(opt?.value ?? "")}
-            getOptionLabel={(o) => o.label}
-            isOptionEqualToValue={(a, b) => a.value === b.value}
-            placeholder={f.placeholder}
-            width={f.width ?? 175}
-          />
-        ))}
+        {/* filter comboboxes (unified SearchableCombobox); the hidden label
+            names each one, since the placeholder vanishes once a value is set */}
+        {filters.map((f) => {
+          const id = `${idBase}-${f.key}`;
+          return (
+            <div key={f.key}>
+              <label htmlFor={id} className="items-vh">{`סינון לפי ${f.placeholder}`}</label>
+              <SearchableCombobox<FilterOption>
+                id={id}
+                options={f.options}
+                value={f.options.find((o) => o.value === f.value) ?? null}
+                onChange={(opt) => f.onChange(opt?.value ?? "")}
+                getOptionLabel={(o) => o.label}
+                isOptionEqualToValue={(a, b) => a.value === b.value}
+                placeholder={f.placeholder}
+                width={f.width ?? 175}
+              />
+            </div>
+          );
+        })}
 
         {anyFilter && (
-          <button className="shx-btn-ghost-link" onClick={clearAll} style={{ height: 42 }}>נקה הכל</button>
+          <Button variant="text" onClick={clearAll}>נקה הכל</Button>
         )}
       </div>
     </div>

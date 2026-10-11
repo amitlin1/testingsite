@@ -2,16 +2,19 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { BarChart3, Check, ChevronRight, Clock, FileText, FlaskConical } from "lucide-react";
-import {
-  formatDuration,
-  formatUtcToLocal,
-} from "@/app/lib/datetime";
+import { BarChart3, Check, ChevronRight, Clock, FileText, FlaskConical, RefreshCw } from "lucide-react";
+import { Alert, Button, Skeleton, Tag } from "@/components/ui";
+import { formatDuration } from "@/app/lib/datetime";
 import { STATUS_NAMES } from "@/app/lib/status-names";
+import { toneOfStatus, type StatusTone } from "@/app/lib/status-tones";
 import { formatFileSize } from "@/lib/minioFileUtils";
 import { apiFetch } from "@/lib/api/client";
+import { StatusPill } from "@/components/DataTable";
+import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import MyPackageCard from "@/app/components/packages/MyPackageCard";
 import type { PackageView } from "@/app/lib/packages/read";
+import { formatDay, formatMoment } from "../../format";
+import "@/components/items.css";
 
 /*
  * היסטוריית פריט — the full-page reconstruction of a single item's path through
@@ -22,6 +25,10 @@ import type { PackageView } from "@/app/lib/packages/read";
  * Read-only. Every value on screen is derived from live tables via the existing
  * endpoints (items / item_routes / item_route_history / test_stations /
  * file_objects) — deliberately no *_snapshots tables, which are being retired.
+ *
+ * One surface per section: the timeline entries, the item facts and the file
+ * and connected-item lists are rows divided by hairlines inside their card,
+ * never cards inside a card.
  */
 
 type RouteStation = { id: number; desc: string };
@@ -95,50 +102,24 @@ type PhotoType = { code: string; photo_type_desc: string };
 const INK = "var(--color-ink)";
 const BODY = "var(--color-ink-muted-70)";
 const MUTED = "var(--color-ink-muted-48)";
-const FAINT = "var(--color-ink-muted-48)";  // was #9a9aa0 (2.8:1) on real data
 const HAIRLINE = "var(--color-hairline)";
 const SOFT = "var(--color-divider-soft)";
 const BLUE = "var(--color-primary)";
-const TINT = "color-mix(in srgb, var(--color-primary) 9%, transparent)";
 
 const card: React.CSSProperties = {
   background: "var(--color-canvas)",
   borderWidth: 1,
   borderStyle: "solid",
   borderColor: HAIRLINE,
-  borderRadius: 18,
+  borderRadius: "var(--r-card)",
 };
+
+/** A card's inline padding — rows that are links bleed by the same amount. */
+const CARD_PAD_INLINE = "var(--space-lg)";
 
 const EM_DASH = "—";
 
-/* ---------- formatting ---------- */
-
-/** Date + time without seconds — the timeline compares moments, not ticks. */
-const fmtDT = (iso: string | null | undefined) =>
-  iso
-    ? formatUtcToLocal(iso, {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: undefined,
-        hour12: false,
-      })
-    : EM_DASH;
-
-/** Date only — used under the route stepper, where there's no room for a time. */
-const fmtDate = (iso: string | null | undefined) =>
-  iso
-    ? formatUtcToLocal(iso, {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: undefined,
-        minute: undefined,
-        second: undefined,
-      })
-    : EM_DASH;
+/* ---------- formatting (dates: the item screens' shared presets) ---------- */
 
 const fmtDur = (ms: number | null) =>
   ms == null ? EM_DASH : formatDuration(ms, "short");
@@ -172,47 +153,43 @@ const trim = (v: string | null | undefined) => (v ? v.trim() : "");
 
 /* ---------- small building blocks ---------- */
 
+/** One section role on this page: 17/600 title, 13 muted subtitle. */
 function SectionCard({
   title,
   subtitle,
   children,
-  titleSize = 13,
-  padding = "22px 24px",
 }: {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
-  titleSize?: number;
-  padding?: string;
 }) {
   return (
-    <div style={{ ...card, padding }}>
-      <div style={{ fontSize: titleSize, fontWeight: 700, color: INK }}>{title}</div>
+    <section style={{ ...card, padding: `var(--space-ml) ${CARD_PAD_INLINE}` }}>
+      <h2 style={{ margin: 0, fontSize: "var(--text-lead)", fontWeight: 600, lineHeight: "var(--lh-snug)", color: INK }}>{title}</h2>
       {subtitle ? (
-        <p style={{ margin: "6px 0 0", fontSize: titleSize > 14 ? 13.5 : 12, color: titleSize > 14 ? MUTED : FAINT, lineHeight: 1.5 }}>
+        <p style={{ margin: "var(--space-xxs) 0 0", fontSize: "var(--text-small)", color: MUTED, lineHeight: 1.5 }}>
           {subtitle}
         </p>
       ) : null}
-      <div style={{ marginTop: 14 }}>{children}</div>
-    </div>
+      <div style={{ marginTop: "var(--space-sm)" }}>{children}</div>
+    </section>
   );
 }
 
-/** Bordered vertical list — the aside's shared container look. */
-function BorderedList({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: 12, overflow: "hidden" }}>
-      {children}
-    </div>
-  );
-}
-
+/** A row inside a card: divided from the one above by a hairline. */
 const rowBase: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 12,
-  padding: "10px 14px",
+  gap: "var(--space-sm)",
+  padding: "var(--space-sm) 0",
   borderTop: `1px solid ${SOFT}`,
+};
+
+/** A row that is a link: bleeds to the card edge so its hover is the row. */
+const linkRow: React.CSSProperties = {
+  ...rowBase,
+  marginInline: `calc(-1 * ${CARD_PAD_INLINE})`,
+  paddingInline: CARD_PAD_INLINE,
 };
 
 /* ---------- page ---------- */
@@ -231,6 +208,10 @@ export default function ItemHistoryPage() {
   const [photoTypes, setPhotoTypes] = React.useState<PhotoType[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  // "Not found" is an answer, not a failure — it gets no retry.
+  const [notFound, setNotFound] = React.useState(false);
+  // Bumped by "נסה שוב" to re-run the same load.
+  const [reloadKey, setReloadKey] = React.useState(0);
   // "Now" reference for the still-running total, captured once data lands so the
   // number is stable while reading the page (and never differs across renders).
   const [nowRef, setNowRef] = React.useState<string | null>(null);
@@ -244,6 +225,7 @@ export default function ItemHistoryPage() {
     (async () => {
       setLoading(true);
       setError(null);
+      setNotFound(false);
       try {
         const [itemRes, filesRes, workersRes, typesRes, photoRes] = await Promise.all([
           apiFetch(`/api/items/${encodeURIComponent(itemId)}`),
@@ -258,7 +240,7 @@ export default function ItemHistoryPage() {
         if (cancelled) return;
 
         if (!itemJson?.item) {
-          setError("הפריט לא נמצא");
+          setNotFound(true);
           setItem(null);
           setHistory([]);
           return;
@@ -297,7 +279,7 @@ export default function ItemHistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [itemId]);
+  }, [itemId, reloadKey]);
 
   /* ----- derived ----- */
 
@@ -376,7 +358,6 @@ export default function ItemHistoryPage() {
   const statusLabel =
     trim(item?.item_status_desc) ||
     (statusId != null ? STATUS_NAMES[statusId] ?? `סטטוס ${statusId}` : EM_DASH);
-  const statusActive = statusId === 1 || statusId === 5;
 
   /** Station name for a history row: the actual station, else its type. */
   const stationNameOf = (h: HistoryRow) =>
@@ -399,17 +380,19 @@ export default function ItemHistoryPage() {
     nets.forEach((n, i) => {
       if (n != null && (longestIdx === -1 || (nets[longestIdx] ?? 0) < n)) longestIdx = i;
     });
-    const longest =
-      longestIdx === -1
-        ? EM_DASH
-        : `${stationNameOf(chron[longestIdx])} · ${fmtDur(nets[longestIdx])}`;
 
     return [
       { icon: <Clock size={20} strokeWidth={1.75} />, value: fmtElapsedLong(totalMs), label: "זמן כולל במערכת" },
       // <bdi>: a spaced "a / b" in an RTL run is shown reversed ("5 / 3").
       { icon: <Check size={20} strokeWidth={1.75} />, value: <bdi dir="ltr">{completedCount} / {totalSteps}</bdi>, label: "תחנות שהושלמו" },
       { icon: <FlaskConical size={20} strokeWidth={1.75} />, value: measured.length ? fmtDur(cumNet) : EM_DASH, label: "זמן עיבוד מצטבר" },
-      { icon: <BarChart3 size={20} strokeWidth={1.75} />, value: longest, label: "התחנה הארוכה ביותר" },
+      // The duration is the KPI; the station it belongs to rides in the label
+      // so a long station name never wraps the value line.
+      {
+        icon: <BarChart3 size={20} strokeWidth={1.75} />,
+        value: longestIdx === -1 ? EM_DASH : fmtDur(nets[longestIdx]),
+        label: longestIdx === -1 ? "התחנה הארוכה ביותר" : `התחנה הארוכה ביותר · ${stationNameOf(chron[longestIdx])}`,
+      },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, nowRef, chron, nets, totalSteps]);
@@ -479,255 +462,277 @@ export default function ItemHistoryPage() {
 
   /* ----- render ----- */
 
+  const shell: React.CSSProperties = {
+    maxWidth: 1240,
+    margin: "0 auto",
+    padding: "var(--space-lg) var(--space-lg) var(--space-xxl)",
+    color: INK,
+  };
+
   if (loading) {
     return (
-      <div style={{ padding: "28px 24px", fontSize: 15, color: MUTED }}>טוען…</div>
+      <div style={shell}>
+        <BackLink />
+        <HistorySkeleton />
+      </div>
     );
   }
 
-  if (error || !item) {
+  if (error) {
     return (
-      <div style={{ padding: "28px 24px" }}>
+      <div style={shell}>
         <BackLink />
-        <div style={{ ...card, padding: 24, marginTop: 16, fontSize: 15, color: BODY }}>
-          {error ?? "הפריט לא נמצא"}
+        <Alert
+          severity="error"
+          action={
+            <Button size="small" variant="outlined" color="inherit" onClick={() => setReloadKey((k) => k + 1)} startIcon={<RefreshCw size={16} strokeWidth={1.75} aria-hidden />}>
+              נסה שוב
+            </Button>
+          }
+        >
+          {/* Fixed Hebrew copy: the thrown message can be a browser's English
+              network error. */}
+          טעינת היסטוריית הפריט נכשלה. ייתכן שהשרת אינו זמין כרגע — נסה שוב בעוד רגע.
+        </Alert>
+      </div>
+    );
+  }
+
+  if (notFound || !item) {
+    return (
+      <div style={shell}>
+        <BackLink />
+        <div style={{ ...card, padding: "var(--space-lg)", fontSize: "var(--text-body)", color: BODY }}>
+          פריט #{itemId} לא נמצא. ייתכן שנמחק — חזור לרשימת הפריטים וחפש אותו שם.
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "28px 24px 72px", color: INK }}>
+    <div style={shell}>
       <BackLink />
 
       {/* header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-ml)", flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1 }}>
+          <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "var(--text-page)", fontWeight: 700, letterSpacing: "var(--ls-display)", lineHeight: 1.1 }}>
             היסטוריית פריט #{item.item_id}
           </h1>
-          <p style={{ margin: "8px 0 0", fontSize: 16, color: BODY, lineHeight: 1.5, maxWidth: 640 }}>
+          <p style={{ margin: "var(--space-xs) 0 0", fontSize: "var(--text-body)", color: BODY, lineHeight: "var(--lh-body)", maxWidth: 640 }}>
             מעקב אחר כל שלב שהפריט עבר במערכת — מי ביצע, מתי וכמה זמן ארכה כל תחנה, לאיתור היכן נוצרה התקלה.
           </p>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 600, background: "var(--color-canvas)", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "6px 13px" }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusActive ? BLUE : MUTED }} />
-            {statusLabel}
-          </span>
-          <span style={{ fontSize: 13, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--space-xs)", flexShrink: 0 }}>
+          {/* The one status palette (status-tones), as in the items table. */}
+          <StatusPill label={statusLabel} tone={toneOfStatus(statusId)} />
+          <span style={{ fontSize: "var(--text-small)", color: MUTED, fontVariantNumeric: "tabular-nums" }}>
             {totalSteps > 0 ? `שלב ${currentStep} מתוך ${totalSteps}` : "ללא מסלול בדיקה"}
             {item.item_type_desc ? ` · ${trim(item.item_type_desc)}` : ""}
           </span>
         </div>
       </div>
 
-      {/* summary strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginTop: 22 }}>
+      {/* summary strip — the shared KPI tiles */}
+      <SummaryStrip style={{ marginTop: "var(--space-lg)" }}>
         {summary.map((s) => (
-          <div key={s.label} style={{ ...card, borderRadius: 16, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
-            <span style={{ width: 42, height: 42, flexShrink: 0, borderRadius: 11, background: TINT, color: BLUE, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {s.icon}
-            </span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.4px", lineHeight: 1.15, fontVariantNumeric: "tabular-nums" }}>
-                {s.value}
-              </div>
-              <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3 }}>{s.label}</div>
-            </div>
-          </div>
+          <SummaryTile key={s.label} icon={s.icon} tone="neutral" value={s.value} label={s.label} />
         ))}
-      </div>
+      </SummaryStrip>
 
       {/* route stepper */}
       {totalSteps > 0 && (
-        <div style={{ ...card, marginTop: 16, padding: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 20 }}>מסלול בדיקה</div>
-          <div className="shx-scroll" style={{ display: "flex", alignItems: "flex-start", overflowX: "auto", paddingBottom: 4 }}>
-            {routeStations.map((st, i) => {
-              const done = !!item.is_finished || i < currentStep - 1;
-              const current = !item.is_finished && i === currentStep - 1;
-              return (
-                <React.Fragment key={`${st.id}-${i}`}>
-                  {i > 0 && (
-                    <div style={{ flex: 1, minWidth: 24, height: 2, background: i <= currentStep - 1 ? BLUE : HAIRLINE, marginTop: 15 }} />
-                  )}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 92 }}>
-                    <div
-                      style={{
-                        width: 32, height: 32, borderRadius: 9999,
-                        background: done ? BLUE : "var(--color-canvas)",
-                        border: `2px solid ${done || current ? BLUE : "var(--color-border-strong)"}`,
-                        color: done ? "var(--color-canvas)" : current ? BLUE : FAINT,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 13, fontWeight: 700, flexShrink: 0,
-                      }}
+        <div style={{ marginTop: "var(--space-md)" }}>
+          <SectionCard title="מסלול בדיקה">
+            <ol style={{ display: "flex", alignItems: "flex-start", overflowX: "auto", margin: 0, padding: "var(--space-xs) 0 var(--space-xxs)", listStyle: "none" }}>
+              {routeStations.map((st, i) => {
+                const done = !!item.is_finished || i < currentStep - 1;
+                const current = !item.is_finished && i === currentStep - 1;
+                return (
+                  <React.Fragment key={`${st.id}-${i}`}>
+                    {i > 0 && (
+                      <li aria-hidden style={{ flex: 1, minWidth: 24, height: 2, background: i <= currentStep - 1 ? BLUE : HAIRLINE, marginTop: 15 }} />
+                    )}
+                    <li
+                      aria-current={current ? "step" : undefined}
+                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-xs)", minWidth: 92 }}
                     >
-                      {done ? <Check size={15} strokeWidth={2.4} /> : i + 1}
-                    </div>
-                    <div style={{ fontSize: 12, color: done || current ? INK : FAINT, textAlign: "center", lineHeight: 1.3, maxWidth: 96, fontWeight: current ? 700 : 400 }}>
-                      {st.desc}
-                    </div>
-                    {/* Date the item was at this step. A step it hasn't reached
-                        has none — the dash keeps the row heights even. */}
-                    <div style={{ fontSize: 11, color: FAINT, textAlign: "center", lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>
-                      {fmtDate(stepDates.get(i + 1))}
-                    </div>
-                  </div>
-                </React.Fragment>
-              );
-            })}
-          </div>
+                      <div
+                        style={{
+                          width: 32, height: 32, borderRadius: "var(--r-pill)",
+                          background: done ? BLUE : "var(--color-canvas)",
+                          border: `2px solid ${done || current ? BLUE : "var(--color-border-strong)"}`,
+                          color: done ? "var(--color-on-primary)" : current ? BLUE : MUTED,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: "var(--text-small)", fontWeight: 700, flexShrink: 0,
+                        }}
+                      >
+                        {done ? <Check size={15} strokeWidth={2.4} aria-label="הושלם" /> : i + 1}
+                      </div>
+                      <div style={{ fontSize: "var(--text-fine)", color: done || current ? INK : MUTED, textAlign: "center", lineHeight: 1.3, maxWidth: 96, fontWeight: current ? 700 : 400 }}>
+                        {st.desc}
+                      </div>
+                      {/* Date the item was at this step. A step it hasn't reached
+                          has none — the dash keeps the row heights even. */}
+                      <div style={{ fontSize: "var(--text-micro)", color: MUTED, textAlign: "center", lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>
+                        {formatDay(stepDates.get(i + 1))}
+                      </div>
+                    </li>
+                  </React.Fragment>
+                );
+              })}
+            </ol>
+          </SectionCard>
         </div>
       )}
 
       {/* two columns */}
-      <div className="ir-cols" style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 18, marginTop: 18, alignItems: "start" }}>
-        {/* station history timeline */}
-        <div style={{ ...card, padding: "24px 26px" }}>
-          <div style={{ marginBottom: 6, fontSize: 17, fontWeight: 700 }}>היסטוריית תחנות</div>
-          <p style={{ margin: "0 0 22px", fontSize: 13.5, color: MUTED, lineHeight: 1.5 }}>
-            לפי סדר כרונולוגי. משך העיבוד נטו של כל תחנה מוצג כפס להשוואה מהירה בין התחנות.
-          </p>
-
+      <div className="items-history-cols" style={{ marginTop: "var(--space-ml)" }}>
+        {/* station history timeline — one surface, entries divided by hairlines */}
+        <SectionCard
+          title="היסטוריית תחנות"
+          subtitle="לפי סדר כרונולוגי. משך העיבוד נטו של כל תחנה מוצג כפס להשוואה מהירה בין התחנות."
+        >
           {chron.length === 0 ? (
-            <div style={{ fontSize: 13.5, color: FAINT }}>אין היסטוריה עדיין.</div>
+            <div style={{ fontSize: "var(--text-small)", color: MUTED, paddingTop: "var(--space-xs)" }}>אין היסטוריה עדיין.</div>
           ) : (
-            chron.map((h, i) => {
-              const net = nets[i];
-              const wait = diff(h.queue_start_time, h.processing_start_time);
-              const inProgress = !!h.processing_start_time && !h.processing_end_time;
-              const done = !!h.processing_end_time;
-              const worker = trim(h.worker_name);
-              const pct = net != null && maxNet > 0 ? Math.max(6, Math.round((net / maxNet) * 100)) : 0;
+            <ol style={{ margin: 0, padding: "var(--space-sm) 0 0", listStyle: "none" }}>
+              {chron.map((h, i) => {
+                const net = nets[i];
+                const wait = diff(h.queue_start_time, h.processing_start_time);
+                const inProgress = !!h.processing_start_time && !h.processing_end_time;
+                const done = !!h.processing_end_time;
+                const worker = trim(h.worker_name);
+                const pct = net != null && maxNet > 0 ? Math.max(6, Math.round((net / maxNet) * 100)) : 0;
+                const last = i === chron.length - 1;
+                // The entry's state in the one status palette: waiting / in
+                // test / done, the same tones as the items table.
+                const tone: StatusTone = inProgress ? "active" : done ? "done" : "waiting";
 
-              return (
-                <div key={h.log_id} style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
-                  <div style={{ flexShrink: 0, width: 34, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <div
-                      style={{
-                        width: 34, height: 34, borderRadius: 9999,
-                        background: done ? BLUE : "var(--color-canvas)",
-                        border: `2px solid ${BLUE}`,
-                        color: done ? "var(--color-canvas)" : BLUE,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 13, fontWeight: 700, flexShrink: 0,
-                      }}
-                    >
-                      {done ? <Check size={15} strokeWidth={2.4} /> : h.current_route_step}
+                return (
+                  <li key={h.log_id} style={{ display: "flex", gap: "var(--space-md)", alignItems: "stretch" }}>
+                    <div style={{ flexShrink: 0, width: 32, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <div
+                        style={{
+                          width: 32, height: 32, borderRadius: "var(--r-pill)",
+                          background: done ? BLUE : "var(--color-canvas)",
+                          border: `2px solid ${BLUE}`,
+                          color: done ? "var(--color-on-primary)" : BLUE,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: "var(--text-small)", fontWeight: 700, flexShrink: 0,
+                        }}
+                      >
+                        {done ? <Check size={15} strokeWidth={2.4} aria-label="הושלם" /> : h.current_route_step}
+                      </div>
+                      {!last && <div aria-hidden style={{ flex: 1, width: 2, background: HAIRLINE, margin: "var(--space-xxs) 0" }} />}
                     </div>
-                    {i < chron.length - 1 && <div style={{ flex: 1, width: 2, background: HAIRLINE, margin: "4px 0" }} />}
-                  </div>
 
-                  <div style={{ flex: 1, minWidth: 0, paddingBottom: 22 }}>
                     <div
                       style={{
-                        border: `1px solid ${inProgress ? "var(--color-primary-border)" : HAIRLINE}`,
-                        borderRadius: 14,
-                        padding: "16px 18px",
-                        background: inProgress ? "var(--color-primary-tint)" : "var(--color-canvas)",
+                        flex: 1,
+                        minWidth: 0,
+                        paddingBottom: last ? 0 : "var(--space-lg)",
+                        marginBottom: last ? 0 : "var(--space-lg)",
+                        borderBottom: last ? undefined : `1px solid ${SOFT}`,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-sm)", flexWrap: "wrap" }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.2px" }}>{stationNameOf(h)}</div>
-                          <div style={{ fontSize: 12.5, color: FAINT, marginTop: 2 }}>שלב {h.current_route_step}</div>
+                          <h3 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 600, lineHeight: "var(--lh-snug)" }}>{stationNameOf(h)}</h3>
+                          <div style={{ fontSize: "var(--text-fine)", color: MUTED, marginTop: 2 }}>שלב {h.current_route_step}</div>
                         </div>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, background: "var(--color-canvas-parchment)", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "4px 10px", flexShrink: 0 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: inProgress ? BLUE : "var(--color-border-strong)" }} />
-                          {inProgress ? "בעיבוד" : done ? "הושלם" : "בתור"}
-                        </span>
+                        <StatusPill label={inProgress ? "בעיבוד" : done ? "הושלם" : "בתור"} tone={tone} />
                       </div>
 
                       {/* who ran it — the accountability signal */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", marginTop: "var(--space-sm)" }}>
                         <span
+                          aria-hidden
                           style={{
-                            width: 28, height: 28, borderRadius: 9999,
-                            background: worker ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : SOFT,
-                            color: worker ? BLUE : FAINT,
+                            width: 28, height: 28, borderRadius: "var(--r-pill)",
+                            background: "var(--color-canvas-parchment)",
+                            color: worker ? "var(--color-ink-muted-80)" : MUTED,
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 12, fontWeight: 700, flexShrink: 0,
+                            fontSize: "var(--text-fine)", fontWeight: 700, flexShrink: 0,
                           }}
                         >
                           {worker ? worker.charAt(0) : "?"}
                         </span>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 11, color: FAINT, lineHeight: 1 }}>בוצע על ידי</div>
-                          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2, color: worker ? INK : FAINT }}>
+                          <div style={{ fontSize: "var(--text-micro)", color: MUTED, lineHeight: 1.2 }}>בוצע על ידי</div>
+                          <div style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, marginTop: 2, color: worker ? INK : MUTED }}>
                             {worker || "לא תועד"}
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 26, flexWrap: "wrap", marginTop: 16 }}>
-                        <Timing label="התחלת תור" value={fmtDT(h.queue_start_time)} />
-                        <Timing label="התחלת עיבוד" value={fmtDT(h.processing_start_time)} />
+                      <div style={{ display: "flex", gap: "var(--space-lg)", flexWrap: "wrap", marginTop: "var(--space-md)" }}>
+                        <Timing label="התחלת תור" value={formatMoment(h.queue_start_time)} />
+                        <Timing label="התחלת עיבוד" value={formatMoment(h.processing_start_time)} />
                         <Timing
                           label="סיום עיבוד"
-                          value={inProgress ? "בתהליך" : fmtDT(h.processing_end_time)}
+                          value={inProgress ? "בתהליך" : formatMoment(h.processing_end_time)}
                           color={inProgress ? BLUE : INK}
                         />
-                        <Timing label="המתנה בתור" value={fmtDur(wait)} color="var(--color-ink-muted-70)" />
+                        <Timing label="המתנה בתור" value={fmtDur(wait)} color={BODY} />
                       </div>
 
-                      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${SOFT}` }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
-                          <span style={{ fontSize: 12, color: MUTED }}>משך עיבוד נטו</span>
-                          <span style={{ fontSize: 13.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDur(net)}</span>
+                      <div style={{ marginTop: "var(--space-md)" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                          <span style={{ fontSize: "var(--text-fine)", color: MUTED }}>משך עיבוד נטו</span>
+                          <span style={{ fontSize: "var(--text-small)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDur(net)}</span>
                         </div>
-                        <div style={{ height: 6, borderRadius: 9999, background: SOFT, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${pct}%`, background: BLUE, borderRadius: 9999 }} />
+                        <div aria-hidden style={{ height: 6, borderRadius: "var(--r-pill)", background: SOFT, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: BLUE, borderRadius: "var(--r-pill)" }} />
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })
+                  </li>
+                );
+              })}
+            </ol>
           )}
-        </div>
+        </SectionCard>
 
         {/* aside */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-ml)", minWidth: 0 }}>
           <SectionCard title="פרטי הפריט">
-            <BorderedList>
+            <dl style={{ margin: 0 }}>
               {[
                 { k: "מספר סריאלי", v: trim(item.serial_no) || EM_DASH },
                 { k: "מק״ט", v: item.makat != null ? String(item.makat) : EM_DASH },
                 { k: "סוג פריט", v: trim(item.item_type_desc) || EM_DASH },
                 { k: "סטטוס", v: statusLabel },
                 { k: "עמדה נוכחית", v: trim(item.test_station_desc) || EM_DASH },
-                { k: "תאריך קליטה", v: fmtDT(item.created_at) },
-                ...(item.finished_at ? [{ k: "תאריך סיום", v: fmtDT(item.finished_at) }] : []),
+                { k: "תאריך קליטה", v: formatMoment(item.created_at) },
+                ...(item.finished_at ? [{ k: "תאריך סיום", v: formatMoment(item.finished_at) }] : []),
                 { k: "מארז", v: pkg ? `${pkg.item_type_desc} · ${pkg.item_id}` : EM_DASH },
               ].map((r) => (
                 <div key={r.k} style={rowBase}>
-                  <span style={{ fontSize: 12.5, color: MUTED, flexShrink: 0 }}>{r.k}</span>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, fontVariantNumeric: "tabular-nums", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginInlineStart: "auto" }}>
+                  <dt style={{ fontSize: "var(--text-small)", color: MUTED, flexShrink: 0 }}>{r.k}</dt>
+                  <dd style={{ margin: 0, marginInlineStart: "auto", fontSize: "var(--text-body-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums", textAlign: "end", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.v}
-                  </span>
+                  </dd>
                 </div>
               ))}
-            </BorderedList>
+            </dl>
           </SectionCard>
 
-          {/* Package model: the box this item is in (or is). A loose legacy
-              item keeps the connected-items list. */}
+          {/* Package model: the box this item is in (or is). It is its own
+              card, so it sits here directly — not wrapped in a second card.
+              A loose legacy item keeps the connected-items list. */}
           {pkg ? (
-            <SectionCard title="המארז שלי">
-              <MyPackageCard pkg={pkg} currentItemId={item.item_id} />
-            </SectionCard>
+            <MyPackageCard pkg={pkg} currentItemId={item.item_id} />
           ) : (
             <SectionCard title="פריטים מחוברים">
               {accessories.length > 0 ? (
-                <BorderedList>
+                <div>
                   {accessories.map((c) => (
                     <ConnectedRow key={c.item_id} c={c} relationLabel="אביזר" />
                   ))}
-                </BorderedList>
+                </div>
               ) : (
-                <div style={{ fontSize: 13, color: FAINT }}>אין פריטים מחוברים.</div>
+                <div style={{ fontSize: "var(--text-small)", color: MUTED }}>אין פריטים מחוברים.</div>
               )}
             </SectionCard>
           )}
@@ -737,47 +742,33 @@ export default function ItemHistoryPage() {
             subtitle="הקבצים מקובצים לפי העמדה שבה נשמרו. בחר עמדה לצפייה בקבצים שלה."
           >
             {taggedFiles.length === 0 ? (
-              <div style={{ fontSize: 13, color: FAINT }}>אין קבצים מצורפים.</div>
+              <div style={{ fontSize: "var(--text-small)", color: MUTED }}>אין קבצים מצורפים.</div>
             ) : (
               <>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-                  {fileTabs.map((t) => {
-                    const on = fileTab === t.key;
-                    return (
-                      <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => setFileTab(t.key)}
-                        aria-pressed={on}
-                        className="shx-file-tab"
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 7,
-                          background: on ? BLUE : "var(--color-canvas)",
-                          color: on ? "var(--color-canvas)" : INK,
-                          border: `1px solid ${on ? BLUE : HAIRLINE}`,
-                          borderRadius: 9999, padding: "6px 12px",
-                          fontSize: 12.5, fontWeight: 600, font: "inherit",
-                          fontFamily: "inherit", cursor: "pointer",
-                        }}
-                      >
-                        {t.label}
-                        <span style={{ fontSize: 11, fontWeight: 600, color: on ? "var(--color-canvas)" : MUTED, background: on ? "rgba(255,255,255,0.22)" : SOFT, borderRadius: 9999, padding: "1px 7px", fontVariantNumeric: "tabular-nums" }}>
-                          {t.count}
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div role="group" aria-label="סינון קבצים לפי עמדה" style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-xs)", marginBottom: "var(--space-sm)" }}>
+                  {fileTabs.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setFileTab(t.key)}
+                      aria-pressed={fileTab === t.key}
+                      className="items-file-tab"
+                    >
+                      {t.label}
+                      <span className="items-file-tab-count">{t.count}</span>
+                    </button>
+                  ))}
                 </div>
 
                 {visibleFiles.length === 0 ? (
-                  <div style={{ fontSize: 13, color: FAINT }}>אין קבצים בעמדה זו.</div>
+                  <div style={{ fontSize: "var(--text-small)", color: MUTED }}>אין קבצים בעמדה זו.</div>
                 ) : (
-                  <BorderedList>
+                  <div>
                     {visibleFiles.map((f) => {
                       // created_by stores the worker id; resolve it to a name and
                       // fall back to the raw value rather than inventing one.
                       const by = f.createdBy ? workerNameById.get(String(f.createdBy)) ?? f.createdBy : null;
-                      const meta = [fmtDT(f.createdAt), by ?? EM_DASH];
+                      const meta = [formatMoment(f.createdAt), by ?? EM_DASH];
                       const pt = f.photoType ? photoTypeLabel.get(f.photoType) : null;
                       if (pt) meta.push(pt);
                       return (
@@ -786,47 +777,38 @@ export default function ItemHistoryPage() {
                           href={downloadUrl(f.objectKey)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="shx-file-row"
-                          style={{ ...rowBase, gap: 11, padding: "11px 14px", color: "inherit", textDecoration: "none" }}
+                          className="items-row-link"
+                          style={linkRow}
                         >
-                          <span style={{ display: "flex", color: MUTED, flexShrink: 0 }}>
-                            <FileText size={18} strokeWidth={1.6} />
+                          <span aria-hidden style={{ display: "flex", color: MUTED, flexShrink: 0 }}>
+                            <FileText size={18} strokeWidth={1.75} />
                           </span>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.fileName}>
+                            <div style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.fileName}>
                               {f.fileName}
                             </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 3, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, minWidth: 0 }}>
                               {fileTab === "all" && (
-                                <span style={{ fontSize: 10.5, fontWeight: 600, color: BLUE, background: "color-mix(in srgb, var(--color-primary) 8%, transparent)", borderRadius: 9999, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
-                                  {f.groupLabel}
-                                </span>
+                                <Tag tone="neutral" style={{ flexShrink: 0 }}>{f.groupLabel}</Tag>
                               )}
-                              <span style={{ fontSize: 11.5, color: FAINT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <span style={{ fontSize: "var(--text-fine)", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {meta.join(" · ")}
                               </span>
                             </div>
                           </div>
-                          <div style={{ fontSize: 11.5, color: FAINT, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                          <div style={{ fontSize: "var(--text-fine)", color: MUTED, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
                             {formatFileSize(f.size)}
                           </div>
                         </a>
                       );
                     })}
-                  </BorderedList>
+                  </div>
                 )}
               </>
             )}
           </SectionCard>
         </div>
       </div>
-
-      <style>{`
-        @media (max-width: 900px) { .ir-cols { grid-template-columns: 1fr !important; } }
-        .shx-file-tab:active { transform: scale(0.96); }
-        .shx-file-row:hover { background: var(--color-surface-pearl); }
-        .shx-connected-row:hover { background: var(--color-surface-pearl); }
-      `}</style>
     </div>
   );
 }
@@ -837,9 +819,9 @@ function BackLink() {
   return (
     <Link
       href="/"
-      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: BLUE, textDecoration: "none", marginBottom: 16 }}
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 32, fontSize: "var(--text-body-sm)", fontWeight: 600, color: BLUE, textDecoration: "none", marginBottom: "var(--space-sm)" }}
     >
-      <ChevronRight size={16} strokeWidth={1.9} />
+      <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
       חזרה לרשימת הפריטים
     </Link>
   );
@@ -848,8 +830,8 @@ function BackLink() {
 function Timing({ label, value, color = INK }: { label: string; value: string; color?: string }) {
   return (
     <div>
-      <div style={{ fontSize: 11, color: FAINT }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 600, marginTop: 3, fontVariantNumeric: "tabular-nums", color }}>
+      <div style={{ fontSize: "var(--text-fine)", color: MUTED }}>{label}</div>
+      <div style={{ fontSize: "var(--text-small)", fontWeight: 600, marginTop: 2, fontVariantNumeric: "tabular-nums", color }}>
         {value}
       </div>
     </div>
@@ -862,25 +844,51 @@ function ConnectedRow({ c, relationLabel }: { c: ConnectedItem; relationLabel: s
     (c.current_status != null ? STATUS_NAMES[c.current_status] ?? "" : "") ||
     EM_DASH;
   return (
-    <Link
-      href={`/items/${c.item_id}/history`}
-      className="shx-connected-row"
-      style={{ ...rowBase, gap: 10, padding: "11px 14px", color: "inherit", textDecoration: "none" }}
-    >
-      <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, background: "var(--color-canvas-parchment)", border: `1px solid ${HAIRLINE}`, borderRadius: 9999, padding: "3px 9px", whiteSpace: "nowrap", flexShrink: 0 }}>
-        {relationLabel}
-      </span>
+    <Link href={`/items/${c.item_id}/history`} className="items-row-link" style={linkRow}>
+      <Tag tone="neutral" style={{ flexShrink: 0 }}>{relationLabel}</Tag>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>#{c.item_id}</div>
-        <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>#{c.item_id}</div>
+        <div style={{ fontSize: "var(--text-fine)", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {trim(c.item_type_desc) || EM_DASH}
         </div>
       </div>
-      <div style={{ textAlign: "left", flexShrink: 0 }}>
-        <div style={{ fontSize: 12, color: FAINT, fontVariantNumeric: "tabular-nums" }}>{trim(c.serial_no) || EM_DASH}</div>
-        <div style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>{status}</div>
+      <div style={{ textAlign: "end", flexShrink: 0 }}>
+        <div style={{ fontSize: "var(--text-fine)", color: MUTED, fontVariantNumeric: "tabular-nums" }}>{trim(c.serial_no) || EM_DASH}</div>
+        <div style={{ fontSize: "var(--text-fine)", color: MUTED, marginTop: 1 }}>{status}</div>
       </div>
     </Link>
+  );
+}
+
+/** The page's shape while it loads: header, KPI strip, timeline and aside. */
+function HistorySkeleton() {
+  return (
+    <div aria-busy="true" aria-label="טוען את היסטוריית הפריט">
+      <Skeleton width={320} height={30} />
+      <Skeleton width="min(560px, 80%)" height={14} style={{ marginTop: "var(--space-sm)" }} />
+      <SummaryStripSkeleton count={4} style={{ marginTop: "var(--space-lg)" }} />
+      <div className="items-history-cols" style={{ marginTop: "var(--space-ml)" }}>
+        <div style={{ ...card, padding: `var(--space-ml) ${CARD_PAD_INLINE}` }}>
+          <Skeleton width={160} height={16} />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} style={{ display: "flex", gap: "var(--space-md)", marginTop: "var(--space-lg)" }}>
+              <Skeleton variant="circular" width={32} height={32} style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Skeleton width="40%" height={14} />
+                <Skeleton width="25%" height={11} style={{ marginTop: 6 }} />
+                <Skeleton width="85%" height={11} style={{ marginTop: "var(--space-md)" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ ...card, padding: `var(--space-ml) ${CARD_PAD_INLINE}` }}>
+          <Skeleton width={120} height={16} />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} height={12} style={{ marginTop: "var(--space-md)" }} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

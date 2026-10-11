@@ -7,17 +7,12 @@ import {
   DialogActions,
   Button,
   TextField,
-  IconButton,
   Stack,
   Alert,
-  CircularProgress,
-  Typography,
-  Box,
+  Skeleton,
   ConfirmDialog,
 } from "@/components/ui";
-import { Close as CloseIcon } from "@/components/ui/icons";
 import { Save as SaveIcon } from "@/components/ui/icons";
-import { Description as DescriptionIcon } from "@/components/ui/icons";
 
 type TextEditorModalProps = {
   open: boolean;
@@ -137,23 +132,24 @@ export default function TextEditorModal({
         onClose={handleClose}
         fullWidth
         maxWidth="md"
-        PaperProps={{ sx: { borderRadius: 3, height: "calc(100vh - 48px)" } }}
+        PaperProps={{ style: { height: "calc(100vh - 48px)" } }}
       >
-        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pr: 6 }}>
-          <DescriptionIcon color="primary" />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h6" component="span" sx={{ fontWeight: 700 }} noWrap>
-              עריכת קובץ
-            </Typography>
-            <Typography variant="body2" color="text.secondary" noWrap>
+        {/* The shared title (one size) with its one named × at the inline
+            end; the file name is the quiet second line. */}
+        <DialogTitle onClose={handleClose}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            עריכת קובץ
+            <span
+              dir="auto"
+              style={{ display: "block", fontFamily: "var(--font-text)", fontSize: "var(--text-small)", fontWeight: 400, color: "var(--color-ink-muted-48)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+              title={fileName}
+            >
               {fileName}
-            </Typography>
-          </Box>
-          <IconButton onClick={handleClose} sx={{ position: "absolute", left: 12, top: 12 }}>
-            <CloseIcon />
-          </IconButton>
+            </span>
+          </span>
         </DialogTitle>
-        <DialogContent dividers sx={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden", py: 2 }}>
+        {/* Top divider only — DialogActions draws the line above the footer. */}
+        <DialogContent style={{ borderTop: "1px solid var(--color-hairline)" }} sx={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden", py: 2 }}>
           <Stack spacing={2} sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>
             {error && (
               <Alert severity="error" onClose={() => setError(null)}>
@@ -161,9 +157,16 @@ export default function TextEditorModal({
               </Alert>
             )}
             {loading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-                <CircularProgress />
-              </Box>
+              // The editor's shape while the file loads: a field of text lines.
+              <div
+                aria-busy="true"
+                aria-label="טוען את הקובץ"
+                style={{ flex: 1, minHeight: 0, border: "1px solid var(--color-hairline)", borderRadius: "var(--r-sm)", padding: "var(--space-sm) var(--space-md)", display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}
+              >
+                {[62, 48, 74, 36, 58, 70, 42, 54].map((w, i) => (
+                  <Skeleton key={i} width={`${w}%`} height={12} />
+                ))}
+              </div>
             ) : (
               <TextField
                 value={content}
@@ -175,9 +178,8 @@ export default function TextEditorModal({
                 dir="ltr"
                 InputProps={{
                   sx: {
-                    fontFamily:
-                      'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-                    fontSize: 14,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-body-sm)",
                     lineHeight: 1.55,
                   },
                 }}
@@ -185,15 +187,16 @@ export default function TextEditorModal({
             )}
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={handleClose} disabled={saving}>
+        <DialogActions>
+          <Button variant="outlined" color="inherit" onClick={handleClose} disabled={saving}>
             ביטול
           </Button>
           <Button
             onClick={handleSave}
-            disabled={saving || loading || !dirty}
+            disabled={loading || !dirty}
+            loading={saving}
             variant="contained"
-            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+            startIcon={<SaveIcon fontSize={18} />}
           >
             {saving ? "שומר..." : "שמור"}
           </Button>

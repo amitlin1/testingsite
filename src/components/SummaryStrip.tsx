@@ -1,38 +1,51 @@
 "use client";
 import React from "react";
+import { Skeleton } from "@/components/ui";
+import { TONE_DOT, type StatusTone } from "@/app/lib/status-tones";
+import "./items.css";
 
 /*
- * SummaryStrip — shared KPI strip used above tables (Items / Shipments),
- * matching the summary tiles on the Testing screen.
- * Design-system palette only: blue / amber / green tints, ink values.
+ * SummaryStrip — shared KPI strip used under the page title (Items /
+ * Shipments / item history). Quiet on purpose: the page title outranks it.
+ * Values are ink at the KPI size with tabular figures; the icon is a neutral
+ * glyph (blue is for things you can press); a status is shown the way every
+ * other screen shows one — a small dot in the one status palette
+ * (status-tones), never a tinted tile.
  */
 
-export type SummaryTone = "blue" | "amber" | "green";
+/**
+ * A tile's status tone. The status-tones names are preferred ("waiting" /
+ * "active" / "done" / "neutral" — no dot). The older colour names still work
+ * and map onto them: blue → active, amber → waiting, green → done.
+ */
+export type SummaryTone = StatusTone | "blue" | "amber" | "green";
 
-const TONES: Record<SummaryTone, { color: string; bg: string }> = {
-    blue: { color: "var(--color-primary)", bg: "color-mix(in srgb, var(--color-primary) 10%, transparent)" },
-    amber: { color: "var(--color-warning-ink)", bg: "color-mix(in srgb, var(--color-status-late) 10%, transparent)" },
-    green: { color: "var(--color-success-ink)", bg: "color-mix(in srgb, var(--color-status-approved) 10%, transparent)" },
+const LEGACY_TONE: Record<"blue" | "amber" | "green", StatusTone> = {
+    blue: "active",
+    amber: "waiting",
+    green: "done",
 };
+
+function statusToneOf(tone: SummaryTone): StatusTone {
+    return tone === "blue" || tone === "amber" || tone === "green" ? LEGACY_TONE[tone] : tone;
+}
 
 const gridStyle: React.CSSProperties = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-    gap: 14,
+    gap: "var(--space-sm)",
 };
 
-const cardStyle: React.CSSProperties = {
-    background: "var(--color-canvas)",
-    // Longhand border props (not the `border` shorthand) — the active state
-    // overrides borderColor, and React warns when shorthand + longhand mix.
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: "var(--color-hairline)",
-    borderRadius: 16,
-    padding: "16px 18px",
+const iconBox: React.CSSProperties = {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: "var(--r-md)",
+    background: "var(--color-canvas-parchment)",
+    color: "var(--color-ink-muted-48)",
     display: "flex",
     alignItems: "center",
-    gap: 14,
+    justifyContent: "center",
 };
 
 export function SummaryStrip({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
@@ -55,69 +68,66 @@ export function SummaryTile({
     onClick?: () => void;
     active?: boolean;
 }) {
-    const t = TONES[tone];
-    const interactive: React.CSSProperties = onClick
-        ? {
-              cursor: "pointer",
-              font: "inherit",
-              textAlign: "start",
-              width: "100%",
-              transition: "border-color 120ms ease, box-shadow 120ms ease",
-              ...(active ? { borderColor: t.color, boxShadow: `0 0 0 1px ${t.color}` } : undefined),
-          }
-        : {};
-    const Tag: any = onClick ? "button" : "div";
-    return (
-        <Tag
-            type={onClick ? "button" : undefined}
-            onClick={onClick}
-            aria-pressed={onClick ? active : undefined}
-            style={{ ...cardStyle, ...interactive }}
-        >
-            <div
-                style={{
-                    width: 44,
-                    height: 44,
-                    flexShrink: 0,
-                    borderRadius: 12,
-                    background: t.bg,
-                    color: t.color,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                }}
-            >
+    const st = statusToneOf(tone);
+    const content = (
+        <>
+            <span style={iconBox} aria-hidden>
                 {icon}
-            </div>
-            <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1, color: "var(--color-ink)", fontVariantNumeric: "tabular-nums" }}>
+            </span>
+            <span style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
+                <span
+                    style={{
+                        fontSize: "var(--text-kpi)",
+                        fontWeight: 700,
+                        letterSpacing: "var(--ls-display)",
+                        lineHeight: 1.1,
+                        color: "var(--color-ink)",
+                        fontVariantNumeric: "tabular-nums",
+                    }}
+                >
                     {value}
-                </div>
-                <div style={{ fontSize: 13, color: "var(--color-ink-muted-48)", marginTop: 5 }}>{label}</div>
-            </div>
-        </Tag>
+                </span>
+                <span
+                    style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        marginTop: "var(--space-xxs)",
+                        fontSize: "var(--text-small)",
+                        color: "var(--color-ink-muted-48)",
+                    }}
+                >
+                    {st !== "neutral" && (
+                        <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: TONE_DOT[st], flexShrink: 0 }} />
+                    )}
+                    {label}
+                </span>
+            </span>
+        </>
     );
+    if (onClick) {
+        return (
+            <button type="button" className="summary-tile" onClick={onClick} aria-pressed={active}>
+                {content}
+            </button>
+        );
+    }
+    return <div className="summary-tile">{content}</div>;
 }
 
-/* Skeleton state — same grid, shimmering placeholder tiles. */
+/* Loading state — same grid and tile frame, skeleton bars (never a fake "0"). */
 export function SummaryStripSkeleton({ count = 4, style }: { count?: number; style?: React.CSSProperties }) {
-    const shimmer: React.CSSProperties = {
-        background: "linear-gradient(90deg,var(--color-divider-soft),var(--color-canvas-parchment),var(--color-divider-soft))",
-        backgroundSize: "200% 100%",
-        animation: "shx-strip-shimmer 1.4s infinite",
-    };
     return (
-        <div style={{ ...gridStyle, ...style }}>
+        <div style={{ ...gridStyle, ...style }} aria-hidden>
             {Array.from({ length: count }).map((_, i) => (
-                <div key={i} style={cardStyle}>
-                    <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 12, ...shimmer }} />
+                <div key={i} className="summary-tile">
+                    <Skeleton variant="rounded" width={40} height={40} style={{ flexShrink: 0, borderRadius: "var(--r-md)" }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ height: 22, width: "55%", borderRadius: 6, ...shimmer }} />
-                        <div style={{ height: 12, width: "75%", borderRadius: 6, marginTop: 8, ...shimmer }} />
+                        <Skeleton width="55%" height={22} />
+                        <Skeleton width="75%" height={12} style={{ marginTop: "var(--space-xs)" }} />
                     </div>
                 </div>
             ))}
-            <style>{`@keyframes shx-strip-shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }`}</style>
         </div>
     );
 }

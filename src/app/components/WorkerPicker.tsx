@@ -1,9 +1,10 @@
 "use client";
 import * as React from "react";
-import { Box, Typography } from "@/components/ui";
+import { Box } from "@/components/ui";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import SearchableCombobox from "./common/SearchableCombobox";
 import { apiFetch } from "@/lib/api/client";
+import "@/components/items.css";
 
 export type Worker = {
   worker_id: number;
@@ -64,6 +65,8 @@ export default function WorkerPicker({
 }: WorkerPickerProps) {
   const [workers, setWorkers] = React.useState<Worker[]>(workersProp ?? []);
   const [loading, setLoading] = React.useState(false);
+  // The header (or, when hidden, a visually-hidden label) names the input.
+  const inputId = React.useId();
 
   React.useEffect(() => {
     if (workersProp) {
@@ -90,21 +93,25 @@ export default function WorkerPicker({
 
   return (
     <Box>
-      {!hideHeader && (
+      {hideHeader ? (
+        <label htmlFor={inputId} className="items-vh">{label}</label>
+      ) : (
         <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-          <PersonIcon color="primary" fontSize="small" />
-          <Typography variant="subtitle2" fontWeight={700} color="text.primary">
+          {/* Decorative glyph: muted — blue stays the colour of what you can press. */}
+          <PersonIcon fontSize={18} style={{ color: "var(--color-ink-muted-48)" }} aria-hidden />
+          <label htmlFor={inputId} style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, lineHeight: 1.4, color: "var(--color-ink)" }}>
             {label}
             {required && (
-              <Typography component="span" color="error" fontWeight={700}>
+              <span style={{ color: "var(--color-destructive)", fontWeight: 700 }}>
                 {" "}
                 *
-              </Typography>
+              </span>
             )}
-          </Typography>
+          </label>
         </Box>
       )}
       <SearchableCombobox<Worker>
+        id={inputId}
         size={size}
         disabled={disabled}
         options={roles ? workers.filter((w) => w.roles?.some((r) => roles.includes(r))) : workers}

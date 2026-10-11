@@ -5,7 +5,6 @@ import {
   DialogTitle,
   IconButton,
   Box,
-  Typography,
   Alert,
   CircularProgress,
 } from "@/components/ui";
@@ -296,33 +295,38 @@ export default function OnlyOfficeEditorModal({
       // keepMounted={false} (the default) — when open flips to false, React
       // unmounts this whole subtree, our effect cleanup runs first, the
       // container is empty again, and React removes it without complaint.
-      PaperProps={{ sx: { bgcolor: "#1e1e1e" } }}
+      // A dark frame around the editor (OnlyOffice's own chrome is dark);
+      // the tile token, not a raw hex.
+      PaperProps={{ style: { background: "var(--color-surface-tile-1)" } }}
     >
+      {/* Slim 56px bar so the editor below keeps calc(100vh - 56px). The ×
+          is laid out at the inline end (no physical offsets) and named; it
+          stays on-dark white because the shared muted × would fall under
+          3:1 on this bar. */}
       <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          bgcolor: "#2b2b2b",
-          color: "var(--color-on-primary)",
-          py: 1,
-          pr: 6,
+        style={{
+          boxSizing: "border-box",
+          minHeight: 56,
+          padding: "var(--space-xs) var(--space-md)",
+          color: "var(--color-on-dark)",
+          // An inset line, not a border, so the bar stays exactly 56px.
+          boxShadow: "inset 0 -1px 0 color-mix(in srgb, var(--color-on-dark) 12%, transparent)",
         }}
       >
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
-            {viewOnly ? "צפייה" : "עריכה"} — {fileName}
-          </Typography>
-        </Box>
+        <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {viewOnly ? "צפייה" : "עריכה"} — <bdi>{fileName}</bdi>
+        </span>
         <IconButton
           onClick={handleClose}
-          sx={{ position: "absolute", left: 12, top: 8, color: "var(--color-on-primary)" }}
+          aria-label="סגירת העורך"
+          style={{ color: "var(--color-on-dark)", flexShrink: 0 }}
         >
           <CloseIcon />
         </IconButton>
       </DialogTitle>
       <Box sx={{ position: "relative", flex: 1, minHeight: 0, height: "calc(100vh - 56px)" }}>
         {error && (
-          <Alert severity="error" sx={{ position: "absolute", top: 12, left: 12, right: 12, zIndex: 2 }}>
+          <Alert severity="error" style={{ position: "absolute", top: 12, insetInline: 12, zIndex: 2 }}>
             {error}
           </Alert>
         )}

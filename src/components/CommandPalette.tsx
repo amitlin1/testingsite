@@ -29,6 +29,7 @@ import type {
 import type { SearchItem } from "@/app/api/search/items/route";
 import { apiFetch } from "@/lib/api/client";
 import PackageIdText from "@/app/components/packages/PackageIdText";
+import { Skeleton } from "@/components/ui";
 
 /* =========================================================================
    Command palette (Ctrl+K) — one search box for עמדות, פריטים, סוגי עמדות
@@ -457,6 +458,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
+  // The input is a combobox over the result list: arrow keys move a virtual
+  // cursor (aria-activedescendant), focus never leaves the input.
+  const idBase = React.useId();
+  const listId = `${idBase}-list`;
+  const optionId = (i: number) => `${idBase}-opt-${i}`;
 
   // On every open: reset, refresh recents, focus the input, load the index.
   React.useEffect(() => {
@@ -588,7 +594,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="cp-input-row">
-          <Search size={18} strokeWidth={1.9} />
+          <Search size={18} strokeWidth={1.9} aria-hidden />
           <input
             ref={inputRef}
             className="cp-input"
@@ -599,24 +605,49 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               setActive(0);
             }}
             onKeyDown={onKeyDown}
-            aria-label="שדה חיפוש"
+            aria-label="חיפוש כללי"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="true"
+            aria-controls={listId}
+            aria-activedescendant={flat.length ? optionId(active) : undefined}
           />
-          <button className="cp-esc" onClick={onClose} type="button">
+          {/* The name keeps the visible "Esc" (label-in-name) and says what it does. */}
+          <button className="cp-esc" onClick={onClose} type="button" aria-label="סגירה (Esc)">
             Esc
           </button>
         </div>
 
-        <div className="cp-list" ref={listRef} role="listbox">
-          {!index ? (
-            <div className="cp-empty">טוען…</div>
+        <div
+          className="cp-list"
+          ref={listRef}
+          id={listId}
+          role="listbox"
+          aria-label="תוצאות חיפוש"
+          aria-busy={!index || (itemsLoading && flat.length === 0) || undefined}
+        >
+          {!index || (itemsLoading && flat.length === 0) ? (
+            // Results load in the list's own shape (icon tile + two lines),
+            // not as a "טוען…" line.
+            <div aria-hidden>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="cp-item" style={{ cursor: "default" }}>
+                  <Skeleton variant="rounded" width={30} height={30} style={{ flexShrink: 0 }} />
+                  <span className="cp-item-main">
+                    <Skeleton width={`${[46, 60, 38, 54, 42][i]}%`} height={12} />
+                    <Skeleton width={`${[68, 52, 74, 60, 64][i]}%`} height={10} style={{ marginTop: 4 }} />
+                  </span>
+                </div>
+              ))}
+            </div>
           ) : flat.length === 0 ? (
-            <div className="cp-empty">
-              {itemsLoading ? "מחפש…" : <>לא נמצאו תוצאות עבור <strong>{query.trim()}</strong></>}
+            <div className="cp-empty" role="status">
+              לא נמצאו תוצאות עבור <strong>{query.trim()}</strong>
             </div>
           ) : (
             groups.map((g) => (
-              <div key={g.label}>
-                <div className="cp-group-label">{g.label}</div>
+              <div key={g.label} role="group" aria-label={g.label}>
+                <div className="cp-group-label" aria-hidden>{g.label}</div>
                 {g.items.map((it) => {
                   cursor += 1;
                   const isActive = cursor === active;
@@ -626,6 +657,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                   return (
                     <div
                       key={it.key}
+                      id={optionId(cursor)}
                       role="option"
                       aria-selected={isActive}
                       className={`cp-item${isActive ? " is-active" : ""}`}
@@ -633,7 +665,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       onMouseMove={() => setActive(hoverIndex)}
                       onClick={() => runItem(it)}
                     >
-                      <span className="cp-item-ico">
+                      <span className="cp-item-ico" aria-hidden>
                         <Ico size={16} strokeWidth={1.8} />
                       </span>
                       <span className="cp-item-main">
@@ -649,12 +681,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       </span>
                       {it.tag && <span className="cp-item-tag">{it.tag}</span>}
                       {Trail ? (
-                        <span className="cp-item-enter">
+                        <span className="cp-item-enter" aria-hidden>
                           <Trail size={14} strokeWidth={1.8} />
                         </span>
                       ) : (
                         isActive && (
-                          <span className="cp-item-enter">
+                          <span className="cp-item-enter" aria-hidden>
                             <CornerDownLeft size={14} strokeWidth={1.8} />
                           </span>
                         )
@@ -667,7 +699,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           )}
         </div>
 
-        <div className="cp-foot">
+        <div className="cp-foot" aria-hidden>
           <span>
             <kbd>↑</kbd>
             <kbd>↓</kbd> ניווט
