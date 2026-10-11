@@ -506,7 +506,9 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         <PackageLabelsDialog
           zIndex={DIALOG_Z} // above the wizard shell (DIALOG_Z - 10)
           open
-          onClose={() => { setLabelsOpen(false); finish(); }}
+          // Closing commits the opening only once the labels went to print. Before
+          // that, "ביטול" / × / the scrim just back out to the labels step.
+          onClose={() => { setLabelsOpen(false); if (labelsPrinted) finish(); }}
           onPrinted={() => setLabelsPrinted(true)}
           packageId={item.item_id}
           packageType={pkg.item_type_desc}

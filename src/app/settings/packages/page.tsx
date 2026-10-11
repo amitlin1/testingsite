@@ -139,10 +139,18 @@ export default function PackagesSettingsPage() {
     return list;
   }, []);
 
+  // The type whose contents the editor is meant to show. A response for any
+  // other type (the user switched while it was in flight) is dropped, so a
+  // late reply can never land under the wrong selection and be saved to it.
+  const requestedTypeRef = React.useRef<number | null>(null);
+
   const loadContents = React.useCallback(async (typeId: number) => {
+    requestedTypeRef.current = typeId;
     const res = await apiFetch(`/api/settings/item-types/${typeId}/contents`);
+    if (requestedTypeRef.current !== typeId) return;
     if (!res.ok) { setContents(null); setDraft([]); setDraftRoute(""); return; }
     const c: Contents = await res.json();
+    if (requestedTypeRef.current !== typeId) return;
     setContents(c);
     setDraft(c.lines.map(toDraft));
     setDraftRoute(c.default_route_number == null ? "" : String(c.default_route_number));
@@ -165,7 +173,12 @@ export default function PackagesSettingsPage() {
   }, [loadTypes]);
 
   React.useEffect(() => {
-    if (selectedId == null) { setContents(null); setDraft([]); return; }
+    // Drop the previous type's contents straight away: the editor (and its
+    // Save) only renders with `contents`, so nothing of the old type can be
+    // edited or PUT to the newly selected one while its own contents load.
+    setContents(null);
+    setDraft([]);
+    if (selectedId == null) { requestedTypeRef.current = null; return; }
     loadContents(selectedId);
   }, [selectedId, loadContents]);
 
