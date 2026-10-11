@@ -22,8 +22,16 @@ export interface MenuItemProps extends Omit<React.LiHTMLAttributes<HTMLLIElement
 
 /** Dual purpose: read as an option by Select, or rendered standalone in a Menu. */
 export function MenuItem({ value: _v, danger, dense: _d, selected, divider, sx, style, className, children, ...rest }: MenuItemProps) {
+  const disabled = (rest as { disabled?: boolean }).disabled;
   return (
     <li
+      // Focusable by the menu's arrow keys (Menu.tsx); Enter / Space activate.
+      role="menuitem"
+      tabIndex={-1}
+      aria-disabled={disabled || undefined}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && !disabled) { e.preventDefault(); (e.currentTarget as HTMLLIElement).click(); }
+      }}
       className={cn("sh-menu-item", danger && "sh-menu-item--danger", className)}
       style={{
         background: selected ? "var(--color-canvas-parchment)" : undefined,

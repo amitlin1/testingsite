@@ -1,5 +1,5 @@
 "use client";
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
@@ -70,7 +70,32 @@ export function Menu({ anchorEl, open, onClose, children, anchorOrigin, sx, Menu
     };
   }, [open, anchorEl, anchorOrigin]);
 
+  // Keyboard: focus the first item once placed; arrows / Home / End move
+  // between items; Escape or Tab closes and hands focus back to the anchor.
+  const placed = pos !== null;
+  useEffect(() => {
+    if (!open || !placed) return;
+    const first = listRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])');
+    first?.focus({ preventScroll: true });
+  }, [open, placed]);
+
   if (!open || typeof document === "undefined") return null;
+
+  const items = () => Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? []);
+  const close = (e: unknown, reason: "escapeKeyDown" | "tabKeyDown") => {
+    onClose?.(e, reason);
+    anchorEl?.focus?.({ preventScroll: true });
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const list = items();
+    const i = list.indexOf(document.activeElement as HTMLElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); list[(i + 1) % list.length]?.focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); list[(i - 1 + list.length) % list.length]?.focus(); }
+    else if (e.key === "Home") { e.preventDefault(); list[0]?.focus(); }
+    else if (e.key === "End") { e.preventDefault(); list[list.length - 1]?.focus(); }
+    else if (e.key === "Escape") close(e, "escapeKeyDown");
+    else if (e.key === "Tab") close(e, "tabKeyDown");
+  };
 
   return createPortal(
     <>
@@ -96,7 +121,7 @@ export function Menu({ anchorEl, open, onClose, children, anchorOrigin, sx, Menu
           ...sxToStyle(PaperProps?.sx),
           ...PaperProps?.style,
         }}
-        onKeyDown={(e) => { if (e.key === "Escape") onClose?.(e, "escapeKeyDown"); }}
+        onKeyDown={onKeyDown}
       >
         {children}
       </ul>

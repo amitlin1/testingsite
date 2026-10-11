@@ -34,15 +34,36 @@ export const Tabs = forwardRef<HTMLDivElement, TabsProps>(function Tabs(
   ref,
 ) {
   const vertical = orientation === "vertical";
+  // Roving tab stop: only the active tab is in the Tab order; arrows move and
+  // select (left/right follow the screen, so RTL "next" is to the left).
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'));
+    const i = tabs.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    const rtl = getComputedStyle(e.currentTarget).direction === "rtl";
+    const nextKey = vertical ? "ArrowDown" : rtl ? "ArrowLeft" : "ArrowRight";
+    const prevKey = vertical ? "ArrowUp" : rtl ? "ArrowRight" : "ArrowLeft";
+    let to = -1;
+    if (e.key === nextKey) to = (i + 1) % tabs.length;
+    else if (e.key === prevKey) to = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === "Home") to = 0;
+    else if (e.key === "End") to = tabs.length - 1;
+    if (to < 0) return;
+    e.preventDefault();
+    tabs[to].focus();
+    tabs[to].click();
+  };
   return (
     <div
       ref={ref}
       role="tablist"
+      aria-orientation={vertical ? "vertical" : undefined}
+      onKeyDown={onKeyDown}
       className={className}
       style={{
         display: "flex",
         flexDirection: vertical ? "column" : "row",
-        gap: 28,
+        gap: "var(--space-lg)",
         borderBottom: vertical ? undefined : "1px solid var(--color-hairline)",
         borderInlineEnd: vertical ? "1px solid var(--color-hairline)" : undefined,
         justifyContent: centered ? "center" : variant === "fullWidth" ? "stretch" : undefined,
@@ -61,6 +82,7 @@ export const Tabs = forwardRef<HTMLDivElement, TabsProps>(function Tabs(
             type="button"
             role="tab"
             aria-selected={active}
+            tabIndex={active ? 0 : -1}
             disabled={p.disabled}
             data-state={active ? "active" : "inactive"}
             className={cn("sh-tab")}
