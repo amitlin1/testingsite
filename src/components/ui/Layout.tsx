@@ -255,7 +255,7 @@ export const Breadcrumbs = forwardRef<HTMLElement, BreadcrumbsProps>(function Br
 ) {
   const items = React.Children.toArray(children).filter(Boolean);
   return (
-    <nav ref={ref} aria-label="breadcrumb" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--color-ink-muted-48)", ...sxToStyle(sx), ...style }} {...rest}>
+    <nav ref={ref} aria-label="נתיב ניווט" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--color-ink-muted-48)", ...sxToStyle(sx), ...style }} {...rest}>
       {items.map((child, i) => (
         <React.Fragment key={i}>
           {i > 0 && <span style={{ color: "var(--color-ink-muted-48)" }}>{separator}</span>}
