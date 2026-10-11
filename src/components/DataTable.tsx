@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { Skeleton } from "@/components/ui";
+import { TONE_DOT, type StatusTone } from "@/app/lib/status-tones";
 
 /* =========================================================================
    DataTable — THE standard table for the app (Shifthouse look).
@@ -141,12 +142,14 @@ export default function DataTable<T>({
   );
 }
 
-/* Neutral status pill — dot is Action Blue for the active state, muted ink
-   otherwise. Never green/orange (Shifthouse: one blue, status is cased). */
-export function StatusPill({ label, active = false }: { label: React.ReactNode; active?: boolean }) {
+/* Neutral status pill: ink text, the status shown by its dot. Pass `tone`
+   (toneOfStatus) so every screen colours a status the same way; `active`
+   is the older blue-or-grey switch. */
+export function StatusPill({ label, active = false, tone }: { label: React.ReactNode; active?: boolean; tone?: StatusTone }) {
+  const dot = tone ? TONE_DOT[tone] : active ? "var(--color-primary)" : "var(--color-ink-muted-48)";
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--color-ink)", background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap" }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "var(--color-primary)" : "var(--color-ink-muted-48)" }} />
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }} />
       {label}
     </span>
   );

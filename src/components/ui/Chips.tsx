@@ -53,17 +53,36 @@ export const Chip = forwardRef<HTMLDivElement, ChipProps>(function Chip(
     opacity: disabled ? 0.5 : 1,
     whiteSpace: "nowrap",
   };
+  // A clickable chip is a button for the keyboard too; its × is its own
+  // named button, so removing never needs a mouse.
+  const interactive = !!onClick && !disabled;
   return (
-    <div ref={ref} className={className} style={{ ...base, ...sxToStyle(sx), ...style }} onClick={onClick} {...rest}>
+    <div
+      ref={ref}
+      className={className}
+      style={{ ...base, ...sxToStyle(sx), ...style }}
+      onClick={interactive ? onClick : undefined}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-disabled={disabled || undefined}
+      onKeyDown={interactive ? (e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick!(e as unknown as React.MouseEvent); }
+      } : undefined}
+      {...rest}
+    >
       {icon}
       {label ?? children}
       {onDelete && (
-        <X
-          size={14}
-          strokeWidth={1.75}
-          style={{ color: "var(--color-ink-muted-48)", cursor: "pointer", flexShrink: 0 }}
+        <button
+          type="button"
+          className="sh-chip-delete"
+          aria-label={typeof label === "string" ? `הסר ${label}` : "הסר"}
+          disabled={disabled}
           onClick={(e) => { e.stopPropagation(); onDelete(e); }}
-        />
+        >
+          <X size={14} strokeWidth={1.75} aria-hidden />
+        </button>
       )}
     </div>
   );
@@ -154,10 +173,8 @@ export function StatusPill({ label, status = "on", dotColor, sx, style, classNam
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        fontSize: 10,
+        fontSize: "var(--text-fine)",
         fontWeight: 600,
-        letterSpacing: "0.6px",
-        textTransform: "uppercase",
         color: "var(--color-ink)",
         background: "var(--color-canvas-parchment)",
         border: "1px solid var(--color-hairline)",
@@ -172,6 +189,27 @@ export function StatusPill({ label, status = "on", dotColor, sx, style, classNam
     >
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor ?? STATUS_DOT[status] }} />
       {label}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ Tag ---- */
+export type TagTone = "primary" | "neutral" | "success" | "warning" | "danger";
+
+export interface TagProps extends React.HTMLAttributes<HTMLSpanElement> {
+  tone?: TagTone;
+  /** sm = the artboard badge (11px, 3px 10px); md = 12px for denser lists. */
+  size?: "sm" | "md";
+  icon?: React.ReactNode;
+}
+
+/** The one small label pill (package / package-level-station / role badges):
+ *  one shape and size per tone instead of a hand-rolled pill on every screen. */
+export function Tag({ tone = "primary", size = "sm", icon, className, children, ...rest }: TagProps) {
+  return (
+    <span className={cn("sh-tag", `sh-tag--${size}`, `sh-tag--${tone}`, className)} {...rest}>
+      {icon}
+      {children}
     </span>
   );
 }
