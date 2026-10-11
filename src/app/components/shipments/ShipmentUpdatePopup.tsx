@@ -7,11 +7,10 @@ import {
     DialogActions,
     Button,
     TextField,
-    Box,
-    Typography,
-    useTheme,
+    IconButton,
     Alert
 } from "@/components/ui";
+import { Add as AddIcon, Delete as DeleteIcon } from "@/components/ui/icons";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
@@ -19,6 +18,7 @@ import { Shipment, NewShipment, Customers } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
 import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
+import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
 
 type ShipmentUpdatePopupProps = {
     open: boolean;
@@ -33,12 +33,16 @@ export default function ShipmentUpdatePopup({
     onUpdate,
     shipment,
 }: ShipmentUpdatePopupProps) {
-    const theme = useTheme();
     const [customers, setCustomers] = useState<Customers[]>([]);
     const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; roles: string[] }[]>([]);
     // Package types only (docs/packages/PLAN.md §9.10) — a shipment declares boxes.
     const [itemTypes, setItemTypes] = useState<{ id: number; name: string; is_package?: boolean }[]>([]);
     const [sources, setSources] = useState<{ id: number; desc: string }[]>([]);
+    const fieldId = React.useId();
+
+    // A refused save (or a form with no package line) keeps the dialog open
+    // with the reason above the buttons; nothing typed is lost.
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     // "עובד מקבל" — same rule as ShipmentInsertPopup (useShipmentWorker): only
     // a manager may change it; the server applies the same rule.
@@ -50,7 +54,7 @@ export default function ShipmentUpdatePopup({
         reset,
         watch,
         setValue,
-        formState: { errors, isValid },
+        formState: { errors, isValid, isSubmitting },
     } = useForm<NewShipment>({
         mode: "onChange",
     });
@@ -123,6 +127,7 @@ export default function ShipmentUpdatePopup({
                 recieving_worker_id: shipment.recieving_worker_id,
                 recieving_worker_name: shipment.recieving_worker_name,
             });
+            setSubmitError(null);
         }
     }, [open, shipment, reset]);
 
@@ -139,12 +144,16 @@ export default function ShipmentUpdatePopup({
 
     const onSubmit = async (data: NewShipment) => {
         if (!shipment) return;
+        setSubmitError(null);
+        // The dialog closes only once the server has accepted the change; a
+        // refusal (or a form with no package line) keeps everything typed.
+        let saved = false;
         try {
             // Filter out empty rows
             const validItems = data.shipment_items?.filter(i => i.item_type_id && i.quantity > 0) || [];
 
             if (validItems.length === 0) {
-                alert("Must add at least one item with valid type and quantity");
+                setSubmitError("יש להוסיף לפחות סוג מארז אחד עם כמות.");
                 return;
             }
 
@@ -167,15 +176,18 @@ export default function ShipmentUpdatePopup({
             });
 
             if (res.ok) {
-                onUpdate(true);
+                saved = true;
             } else {
-                onUpdate(false);
+                setSubmitError(await serverErrorMessage(res, "השינויים לא נשמרו. בדוק את הפרטים ונסה שוב."));
             }
         } catch (error) {
             console.error(error);
-            onUpdate(false);
+            setSubmitError(NETWORK_ERROR);
         } finally {
-            onClose();
+            if (saved) {
+                onUpdate(true);
+                onClose();
+            }
         }
     };
 
@@ -186,24 +198,19 @@ export default function ShipmentUpdatePopup({
             fullWidth
             maxWidth="md"
         >
-            <DialogTitle sx={{
-                fontWeight: 700,
-                color: "text.primary",
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                pb: 2
-            }}>
+            <DialogTitle onClose={onClose}>
                 עדכון משלוח
             </DialogTitle>
             <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
                     {receiverBlocked && (
-                        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                        <Alert severity="error" sx={{ mb: 2 }}>
                             לא ניתן לזהות אותך — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
                         </Alert>
                     )}
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
-                        <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
-                            <FieldLabel required>מס' משלוח</FieldLabel>
+                    <div className="shp-form-grid">
+                        <div>
+                            <FieldLabel required htmlFor={`${fieldId}-code`}>מס&apos; משלוח</FieldLabel>
                             <Controller
                                 name="shipment_code"
                                 control={control}
@@ -214,24 +221,27 @@ export default function ShipmentUpdatePopup({
                                 render={({ field }) => (
                                     <TextField
                                         {...field}
+                                        id={`${fieldId}-code`}
                                         placeholder="מס' משלוח"
                                         fullWidth
                                         size="small"
                                         error={!!errors.shipment_code}
                                         helperText={errors.shipment_code?.message}
-                                        inputProps={{ maxLength: 20 }}
+                                        // A code reads left to right; aligned with the Hebrew fields.
+                                        inputProps={{ maxLength: 20, dir: "ltr", style: { textAlign: "right" } }}
                                     />
                                 )}
                             />
-                        </Box>
-                        <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
-                            <FieldLabel required>קוד לקוח</FieldLabel>
+                        </div>
+                        <div>
                             <Controller
                                 name="customer_id"
                                 control={control}
                                 rules={{ required: "שדה חובה" }}
                                 render={({ field: { onChange, value } }) => (
                                     <SearchableCombobox<Customers>
+                                        label="קוד לקוח"
+                                        required
                                         options={customers}
                                         getOptionLabel={(option) => option.customer_code}
                                         isOptionEqualToValue={(o, v) => o.id === v.id}
@@ -243,14 +253,14 @@ export default function ShipmentUpdatePopup({
                                     />
                                 )}
                             />
-                        </Box>
-                        <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
-                            <FieldLabel>עובד מקבל</FieldLabel>
+                        </div>
+                        <div>
                             <Controller
                                 name="recieving_worker_id"
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
                                     <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
+                                        label="עובד מקבל"
                                         options={receiver.options}
                                         getOptionLabel={(option) => option.worker_name}
                                         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
@@ -266,15 +276,15 @@ export default function ShipmentUpdatePopup({
                                     />
                                 )}
                             />
-                            {receiver.locked && !receiverBlocked && <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 0.5 }}>{receiverAlreadySet ? "רק מנהל יכול לשנות" : "מזוהה מההתחברות"}</Typography>}
-                        </Box>
-                        <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
-                            <FieldLabel>מקור</FieldLabel>
+                            {receiver.locked && !receiverBlocked && <div className="sh-field-helper">{receiverAlreadySet ? "רק מנהל יכול לשנות" : "מזוהה מההתחברות"}</div>}
+                        </div>
+                        <div>
                             <Controller
                                 name="source_id"
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
                                     <SearchableCombobox<{ id: number; desc: string }>
+                                        label="מקור"
                                         options={sources}
                                         getOptionLabel={(option) => option.desc}
                                         isOptionEqualToValue={(o, v) => o.id === v.id}
@@ -286,9 +296,9 @@ export default function ShipmentUpdatePopup({
                                     />
                                 )}
                             />
-                        </Box>
-                        <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
-                            <FieldLabel required>תאריך משלוח</FieldLabel>
+                        </div>
+                        <div>
+                            <FieldLabel required htmlFor={`${fieldId}-date`}>תאריך משלוח</FieldLabel>
                             <Controller
                                 name="shipment_date"
                                 control={control}
@@ -297,6 +307,7 @@ export default function ShipmentUpdatePopup({
                                 }}
                                 render={({ field: { onChange, value } }) => (
                                     <TextField
+                                        id={`${fieldId}-date`}
                                         type="date"
                                         fullWidth
                                         size="small"
@@ -307,36 +318,41 @@ export default function ShipmentUpdatePopup({
                                     />
                                 )}
                             />
-                        </Box>
+                        </div>
 
-                    </Box>
+                    </div>
 
                     {/* Dynamic Items Section */}
-                    <Box sx={{ mt: 3, borderTop: `1px solid ${theme.palette.divider}`, pt: 2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>מארזים במשלוח</Typography>
-                        <Button variant="outlined" onClick={() => append({ item_type_id: 0, quantity: 0 })} sx={{ mb: 2 }}>
-                            הוסף סוג מארז
-                        </Button>
+                    <div style={{ marginTop: "var(--space-lg)", borderTop: "1px solid var(--color-hairline)", paddingTop: "var(--space-md)" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                            <div style={{ fontSize: "var(--text-body)", fontWeight: 600 }}>מארזים במשלוח</div>
+                            <Button variant="outlined" size="small" startIcon={<AddIcon fontSize={16} aria-hidden />} onClick={() => append({ item_type_id: 0, quantity: 0 })}>
+                                הוסף סוג מארז
+                            </Button>
+                        </div>
+                        <div className="shp-items-head" aria-hidden>
+                            <span>סוג מארז</span>
+                            <span>כמות</span>
+                            <span />
+                        </div>
                         {fields.map((item, index) => (
-                            <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
-                                <Box sx={{ width: 300 }}>
-                                    <Controller
-                                        name={`shipment_items.${index}.item_type_id` as const}
-                                        control={control}
-                                        rules={{ required: true }}
-                                        render={({ field: { onChange, value } }) => (
-                                            <SearchableCombobox<{ id: number; name: string }>
-                                                options={itemTypes}
-                                                getOptionLabel={(option) => option.name}
-                                                isOptionEqualToValue={(o, v) => o.id === v.id}
-                                                value={itemTypes.find((t) => t.id === value) || null}
-                                                onChange={(newValue) => onChange(newValue?.id ?? null)}
-                                                placeholder="סוג מארז"
-                                                error={!!errors.shipment_items?.[index]?.item_type_id}
-                                            />
-                                        )}
-                                    />
-                                </Box>
+                            <div key={item.id} className="shp-items-row">
+                                <Controller
+                                    name={`shipment_items.${index}.item_type_id` as const}
+                                    control={control}
+                                    rules={{ required: true }}
+                                    render={({ field: { onChange, value } }) => (
+                                        <SearchableCombobox<{ id: number; name: string }>
+                                            options={itemTypes}
+                                            getOptionLabel={(option) => option.name}
+                                            isOptionEqualToValue={(o, v) => o.id === v.id}
+                                            value={itemTypes.find((t) => t.id === value) || null}
+                                            onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                            placeholder="סוג מארז"
+                                            error={!!errors.shipment_items?.[index]?.item_type_id}
+                                        />
+                                    )}
+                                />
 
                                 <Controller
                                     name={`shipment_items.${index}.quantity` as const}
@@ -349,41 +365,43 @@ export default function ShipmentUpdatePopup({
                                             type="number"
                                             required
                                             size="small"
-                                            sx={{ width: 100 }}
+                                            fullWidth
+                                            inputProps={{ "aria-label": `כמות, שורה ${index + 1}`, style: { fontVariantNumeric: "tabular-nums" } }}
                                             onChange={(e) => field.onChange(Number(e.target.value))}
                                             error={!!errors.shipment_items?.[index]?.quantity}
                                         />
                                     )}
                                 />
-                                {fields.length > 1 && (
-                                    <Button color="error" onClick={() => remove(index)}>
-                                        מחק
-                                    </Button>
-                                )}
-                            </Box>
+                                {fields.length > 1 ? (
+                                    <IconButton size="small" color="error" title="הסר שורה" onClick={() => remove(index)}>
+                                        <DeleteIcon fontSize={16} aria-hidden />
+                                    </IconButton>
+                                ) : <span />}
+                            </div>
                         ))}
-                    </Box>
+                    </div>
 
                     {/* Auto-calculated total = Σ quantities */}
-                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                            סה״כ מארזים (מחושב): <Box component="span" sx={{ color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>{watch("amount") || 0}</Box>
-                        </Typography>
-                    </Box>
+                    <div style={{ marginTop: "var(--space-md)", display: 'flex', justifyContent: 'flex-end', fontSize: "var(--text-body-sm)", fontWeight: 600 }}>
+                        <span>
+                            סה״כ מארזים (מחושב): <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{watch("amount") || 0}</span>
+                        </span>
+                    </div>
                 </DialogContent>
-                <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-                    <Button
-                        onClick={onClose}
-                        variant="outlined"
-                        sx={{ borderRadius: 9999, px: 3, borderColor: 'rgba(0,0,0,0.12)', color: 'text.primary' }}
-                    >
+                {submitError && (
+                    <div style={{ padding: "0 var(--space-lg) var(--space-sm)" }}>
+                        <Alert severity="error">{submitError}</Alert>
+                    </div>
+                )}
+                <DialogActions>
+                    <Button onClick={onClose} variant="outlined" color="inherit">
                         ביטול
                     </Button>
                     <Button
                         type="submit"
                         disabled={!isValid || receiverBlocked}
+                        loading={isSubmitting}
                         variant="contained"
-                        sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >
                         עדכן
                     </Button>

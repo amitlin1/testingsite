@@ -1,11 +1,12 @@
 "use client";
 import React, { useEffect, useState, useMemo } from "react";
-import { Snackbar, Alert, ConfirmDialog } from "@/components/ui";
-import { Search, Plus, X, Pencil, Trash2, Send, History, FileText, Barcode, Truck, Hourglass, Layers, PackageCheck, Percent, Inbox, FlaskConical } from "lucide-react";
+import { Snackbar, Alert, ConfirmDialog, Button, Chip, TextField } from "@/components/ui";
+import { Search, Plus, X, Pencil, Trash2, Send, History, FileText, Barcode } from "lucide-react";
 import DataTable, { StatusPill, RowActions, IconAction, ProgressCell, type Column } from "@/components/DataTable";
-import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import SearchableCombobox from "../common/SearchableCombobox";
+import FieldLabel from "../common/FieldLabel";
 import { Shipment } from "@/types";
+import { formatDate } from "@/app/lib/datetime";
 import ShipmentInsertPopup from "./ShipmentInsertPopup";
 import ShipmentUpdatePopup from "./ShipmentUpdatePopup";
 import ShipmentSendPopup from "./ShipmentSendPopup";
@@ -15,14 +16,7 @@ import { ShipmentPDFDocument } from "./ShipmentPDFDocument";
 import ShipmentBarcodesDialog from "./ShipmentBarcodesDialog";
 import { apiFetch } from "@/lib/api/client";
 
-/* Shifthouse field label — sits above each filter control (matches Items). */
-const fieldLabel: React.CSSProperties = {
-    display: "block",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "var(--color-ink-muted-48)",
-    marginBottom: 5,
-};
+const EM_DASH = "—";
 
 /* --- KPI filters ---------------------------------------------------------
  * Testing "started" for a shipment = at least one sampled item is past the
@@ -54,22 +48,19 @@ const KPI_LABELS: Record<KpiKey, string> = {
     readyToSend: "סיימו מסלול — מוכנים לשליחה",
 };
 
-/* Active-filter chip — soft blue pill with an ✕ that clears that one filter. */
-function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
-    return (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "var(--color-primary-soft)", color: "var(--color-primary-hover)", border: "1px solid var(--color-primary-border)", borderRadius: 9999, padding: "5px 12px", fontSize: 13, fontWeight: 600 }}>
-            {label}
-            <button onClick={onRemove} aria-label="הסר סינון" style={{ display: "flex", border: 0, background: "transparent", color: "var(--color-primary-hover)", cursor: "pointer", padding: 0 }}>
-                <X size={14} strokeWidth={2} />
-            </button>
-        </span>
-    );
-}
+/* The order of the filter row: the lifecycle, start to end. */
+const KPI_ORDER: KpiKey[] = ["total", "pending", "waitingStart", "inProcess", "readyToSend", "sent"];
+
+/* A date filter is a `YYYY-MM-DD` input value; its chip reads like every other
+   date on the screen. */
+const chipDate = (value: string) => formatDate(value);
 
 export default function ShipmentTable() {
     const [rows, setRows] = useState<Shipment[]>([]);
     const [customers, setCustomers] = useState<{ id: number; customer_code: string }[]>([]);
     const [loading, setLoading] = useState(true);
+    // A failed load is not an empty list: it gets its own message and a retry.
+    const [loadError, setLoadError] = useState(false);
 
     // Filtering
     const [search, setSearch] = useState("");
@@ -109,11 +100,16 @@ export default function ShipmentTable() {
     const loadShipments = async () => {
         try {
             setLoading(true);
+            setLoadError(false);
             const res = await apiFetch("/api/shipments");
             const data = await res.json();
+            // A 4xx/5xx answers with an error object, not a list — say so
+            // instead of drawing "no shipments".
+            if (!res.ok || !Array.isArray(data)) setLoadError(true);
             setRows(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error("Failed to load shipments", error);
+            setLoadError(true);
         } finally {
             setLoading(false);
         }
@@ -197,9 +193,21 @@ export default function ShipmentTable() {
             finishedTotal += s.finished_sampled_amount || 0;
             if (isSampleDone(s)) sampleDone++;
         }
-        const donePct = sampledTotal > 0 ? Math.round((finishedTotal / sampledTotal) * 100) : 0;
+        // No boxes received → no share to report: "—", never "0%".
+        const donePct = sampledTotal > 0 ? Math.round((finishedTotal / sampledTotal) * 100) : null;
         return { total: baseFilteredRows.length, pending, sent, inProcess, waitingStart, sampledTotal, sampleDone, donePct };
     }, [baseFilteredRows]);
+
+    const kpiCount: Record<KpiKey, number> = {
+        total: kpis.total,
+        pending: kpis.pending,
+        waitingStart: kpis.waitingStart,
+        inProcess: kpis.inProcess,
+        readyToSend: kpis.sampleDone,
+        sent: kpis.sent,
+    };
+    // While loading (or after a failed load) the counts are unknown, not zero.
+    const countsKnown = !loading && !loadError;
 
     const toggleKpi = (key: KpiKey) => setKpiFilter((cur) => (cur === key ? null : key));
 
@@ -279,7 +287,7 @@ export default function ShipmentTable() {
     };
 
     const columns: Column<Shipment>[] = [
-        { key: "source", header: "מקור", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.source_desc || "—"}</span> },
+        { key: "source", header: "מקור", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.source_desc || EM_DASH}</span> },
         { key: "code", header: "מס׳ משלוח", nums: true, bold: true, nowrap: true, cell: (r) => r.shipment_code },
         {
             key: "customer", header: "קוד לקוח", nowrap: true,
@@ -290,8 +298,8 @@ export default function ShipmentTable() {
                 </span>
             ),
         },
-        { key: "date", header: "תאריך קבלה", nums: true, nowrap: true, cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{new Date(r.shipment_date).toLocaleDateString("he-IL")}</span> },
-        { key: "worker", header: "עובד מקבל", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.recieving_worker_name || "—"}</span> },
+        { key: "date", header: "תאריך קבלה", nums: true, nowrap: true, cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{formatDate(r.shipment_date)}</span> },
+        { key: "worker", header: "עובד מקבל", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.recieving_worker_name || EM_DASH}</span> },
         // Package model (docs/packages/PLAN.md §9.10): every count is boxes.
         { key: "amount", header: "מארזים שהוצהרו", align: "center", nums: true, cell: (r) => <span style={{ fontWeight: 700 }}>{r.amount}</span> },
         { key: "sampled", header: "נקלטו", align: "center", nums: true, cell: (r) => r.sampled_amount || 0 },
@@ -301,19 +309,23 @@ export default function ShipmentTable() {
             key: "sent", header: "נשלחו", align: "center", nums: true,
             cell: (r) => {
                 const sent = r.sent_amount || 0;
-                return <span style={{ fontWeight: 600, color: sent > 0 ? "var(--color-status-approved)" : "var(--color-ink)" }}>{sent}</span>;
+                // Text in a status colour uses its *-ink token (AA).
+                return <span style={{ fontWeight: 600, color: sent > 0 ? "var(--color-success-ink)" : "var(--color-ink)" }}>{sent}</span>;
             },
         },
         {
             key: "routeDone", header: "התקדמות המארזים", width: 170,
             cell: (r) => {
                 const sampled = r.sampled_amount || 0;
-                const pct = sampled > 0 ? Math.round(((r.finished_sampled_amount || 0) / sampled) * 100) : 0;
+                // Nothing received yet → no percentage: an empty bar and "—".
+                if (sampled === 0) return <ProgressCell pct={null} text={EM_DASH} />;
+                const pct = Math.round(((r.finished_sampled_amount || 0) / sampled) * 100);
                 return <ProgressCell pct={pct} text={`${pct}%`} />;
             },
         },
         {
-            key: "actions", header: "פעולות", align: "center", width: 230,
+            // Six 32px actions and their gaps — the artboard's actions column.
+            key: "actions", header: "פעולות", align: "center", width: 212,
             cell: (r) => (
                 <RowActions>
                     <IconAction title={r.is_sent ? "המשלוח נשלח — לא ניתן לערוך" : "עריכת משלוח"} disabled={!!r.is_sent} onClick={() => handleRowClick(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
@@ -327,140 +339,160 @@ export default function ShipmentTable() {
         },
     ];
 
+    // Empty means two different things: the filters exclude everything, or
+    // there is nothing yet. Each says what to do next.
+    const emptyState = anyFilter ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <div style={{ fontSize: "var(--text-body)", color: "var(--color-ink)", fontWeight: 600 }}>לא נמצאו משלוחים תואמים.</div>
+            <Button variant="outlined" color="inherit" size="small" onClick={clearFilters}>נקה סינון</Button>
+        </div>
+    ) : (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <div style={{ fontSize: "var(--text-body)", color: "var(--color-ink)", fontWeight: 600 }}>עדיין אין משלוחים במערכת.</div>
+            <Button size="small" startIcon={<Plus size={16} strokeWidth={2} />} onClick={() => setInsertOpen(true)}>משלוח חדש</Button>
+        </div>
+    );
+
     return (
-        <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
             {/* header: title + count pill + subtitle + primary action */}
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-ml)", flexWrap: "wrap" }}>
                 <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.1 }}>משלוחים נכנסים</h1>
-                        <span style={{ fontSize: 13, color: "var(--color-ink-muted-48)", background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "3px 11px", fontVariantNumeric: "tabular-nums" }}>
-                            {filteredRows.length} משלוחים
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                        <h1 style={{ margin: 0, fontSize: "var(--text-page)", fontWeight: 700, letterSpacing: "var(--ls-display)", lineHeight: 1.1 }}>משלוחים נכנסים</h1>
+                        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "var(--r-pill)", padding: "3px 11px", fontVariantNumeric: "tabular-nums" }}>
+                            {countsKnown ? `${filteredRows.length} משלוחים` : `${EM_DASH} משלוחים`}
                         </span>
                     </div>
-                    <p style={{ margin: "8px 0 0", fontSize: 16, color: "var(--color-ink-muted-70)", lineHeight: 1.5 }}>
+                    <p style={{ margin: "var(--space-xs) 0 0", fontSize: "var(--text-body)", color: "var(--color-ink-muted-70)", lineHeight: 1.5 }}>
                         משלוחי מארזים שהתקבלו לבדיקה, מה הוצהר על כל משלוח וסטטוס הטיפול.
                     </p>
                 </div>
-                <button className="shx-btn shx-btn-primary" onClick={() => setInsertOpen(true)}>
-                    <Plus size={18} strokeWidth={2} />
+                <Button startIcon={<Plus size={18} strokeWidth={2} />} onClick={() => setInsertOpen(true)}>
                     משלוח חדש
-                </button>
+                </Button>
             </div>
 
-            {/* KPI summary strip — sits above the toolbar/filters.
-                Shipment-count tiles are clickable and filter the table. */}
-            {loading ? (
-                <SummaryStripSkeleton count={8} />
-            ) : (
-                <SummaryStrip>
-                    <SummaryTile icon={<Truck size={22} strokeWidth={1.85} />} tone="blue" value={kpis.total} label={KPI_LABELS.total}
-                        onClick={() => toggleKpi("total")} active={kpiFilter === "total"} />
-                    <SummaryTile icon={<Inbox size={22} strokeWidth={1.85} />} tone="blue" value={kpis.pending} label={KPI_LABELS.pending}
-                        onClick={() => toggleKpi("pending")} active={kpiFilter === "pending"} />
-                    <SummaryTile icon={<Hourglass size={22} strokeWidth={1.85} />} tone="amber" value={kpis.waitingStart} label={KPI_LABELS.waitingStart}
-                        onClick={() => toggleKpi("waitingStart")} active={kpiFilter === "waitingStart"} />
-                    <SummaryTile icon={<FlaskConical size={22} strokeWidth={1.85} />} tone="blue" value={kpis.inProcess} label={KPI_LABELS.inProcess}
-                        onClick={() => toggleKpi("inProcess")} active={kpiFilter === "inProcess"} />
-                    <SummaryTile icon={<PackageCheck size={22} strokeWidth={1.85} />} tone="amber" value={kpis.sampleDone} label={KPI_LABELS.readyToSend}
-                        onClick={() => toggleKpi("readyToSend")} active={kpiFilter === "readyToSend"} />
-                    <SummaryTile icon={<Send size={22} strokeWidth={1.85} />} tone="green" value={kpis.sent} label={KPI_LABELS.sent}
-                        onClick={() => toggleKpi("sent")} active={kpiFilter === "sent"} />
-                    <SummaryTile icon={<Layers size={22} strokeWidth={1.85} />} tone="blue" value={kpis.sampledTotal} label="מארזים שנקלטו" />
-                    <SummaryTile icon={<Percent size={22} strokeWidth={1.85} />} tone="green" value={`${kpis.donePct}%`} label="מארזים שסיימו מתוך שנקלטו" />
-                </SummaryStrip>
-            )}
+            {/* Status filters: six counts that narrow the table (toggles), then
+                the two figures that only summarise. Counts follow the toolbar
+                filters below. */}
+            <div className="shp-kpis">
+                <div className="shp-kpis" role="group" aria-label="סינון לפי מצב המשלוח">
+                    {KPI_ORDER.map((key) => (
+                        <button
+                            key={key}
+                            type="button"
+                            className="shp-kpi"
+                            aria-pressed={kpiFilter === key}
+                            onClick={() => toggleKpi(key)}
+                        >
+                            {KPI_LABELS[key]}
+                            <span className="shp-kpi__count">{countsKnown ? kpiCount[key] : EM_DASH}</span>
+                        </button>
+                    ))}
+                </div>
+                <div className="shp-stats">
+                    <span>מארזים שנקלטו <strong>{countsKnown ? kpis.sampledTotal : EM_DASH}</strong></span>
+                    <span>מארזים שסיימו מתוך שנקלטו <strong>{countsKnown && kpis.donePct !== null ? `${kpis.donePct}%` : EM_DASH}</strong></span>
+                </div>
+            </div>
 
             {/* filters + active chips */}
             <div>
-                <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "flex-end", flexWrap: "wrap" }}>
                     {/* search */}
                     <div style={{ flex: 1, minWidth: 220, maxWidth: 340 }}>
-                        <label style={fieldLabel}>חיפוש</label>
-                        <div style={{ position: "relative" }}>
-                            <span style={{ position: "absolute", insetInlineStart: 13, top: "50%", transform: "translateY(-50%)", color: "var(--color-ink-muted-48)", pointerEvents: "none", display: "flex" }}>
-                                <Search size={16} strokeWidth={1.75} />
-                            </span>
-                            <input
-                                className="shx-input"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="קוד, לקוח, מקור או מק״ט"
-                                style={{ height: 40, borderRadius: 9, paddingInlineStart: 38, paddingInlineEnd: 12, fontSize: 14 }}
-                            />
-                        </div>
+                        <FieldLabel htmlFor="shipments-search">חיפוש</FieldLabel>
+                        <TextField
+                            id="shipments-search"
+                            fullWidth
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="קוד, לקוח, מקור או מק״ט"
+                            InputProps={{ startAdornment: <Search size={16} strokeWidth={1.75} aria-hidden /> }}
+                        />
                     </div>
 
-                    {/* customer */}
+                    {/* customer — the combobox names its input from its label */}
                     <div style={{ minWidth: 170 }}>
-                        <label style={fieldLabel}>לקוח</label>
                         <SearchableCombobox<string>
+                            label="לקוח"
                             options={customerOptions}
                             getOptionLabel={(o) => o}
                             value={customerFilter}
                             onChange={(v) => setCustomerFilter(v)}
                             placeholder="כל הלקוחות"
                             width={170}
-                            inputSx={{ height: 42 }}
                         />
                     </div>
 
                     {/* date range */}
                     <div style={{ minWidth: 150 }}>
-                        <label style={fieldLabel}>מתאריך</label>
-                        <input
+                        <FieldLabel htmlFor="shipments-from">מתאריך</FieldLabel>
+                        <TextField
+                            id="shipments-from"
                             type="date"
-                            className="shx-input"
+                            fullWidth
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
-                            style={{ height: 40, borderRadius: 9, fontSize: 14, fontVariantNumeric: "tabular-nums" }}
+                            inputProps={{ style: { fontVariantNumeric: "tabular-nums" } }}
                         />
                     </div>
                     <div style={{ minWidth: 150 }}>
-                        <label style={fieldLabel}>עד תאריך</label>
-                        <input
+                        <FieldLabel htmlFor="shipments-to">עד תאריך</FieldLabel>
+                        <TextField
+                            id="shipments-to"
                             type="date"
-                            className="shx-input"
+                            fullWidth
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
-                            style={{ height: 40, borderRadius: 9, fontSize: 14, fontVariantNumeric: "tabular-nums" }}
+                            inputProps={{ style: { fontVariantNumeric: "tabular-nums" } }}
                         />
                     </div>
 
                     {anyFilter && (
-                        <button
-                            className="shx-btn shx-btn-secondary"
-                            onClick={clearFilters}
-                            style={{ height: 40, padding: "0 14px", fontSize: 14, borderRadius: 9 }}
-                        >
-                            <X size={15} strokeWidth={1.85} />
+                        <Button variant="outlined" color="inherit" startIcon={<X size={15} strokeWidth={1.85} />} onClick={clearFilters}>
                             נקה
-                        </button>
+                        </Button>
                     )}
                 </div>
 
+                {/* One removable chip per active filter — the same Chip the
+                    dashboard header uses, with its own named × button. */}
                 {anyFilter && (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
-                        {search.trim() && <FilterChip label={`חיפוש: ${search}`} onRemove={() => setSearch("")} />}
-                        {customerFilter && <FilterChip label={`לקוח: ${customerFilter}`} onRemove={() => setCustomerFilter(null)} />}
-                        {startDate && <FilterChip label={`מתאריך: ${startDate}`} onRemove={() => setStartDate("")} />}
-                        {endDate && <FilterChip label={`עד תאריך: ${endDate}`} onRemove={() => setEndDate("")} />}
-                        {kpiFilter && <FilterChip label={KPI_LABELS[kpiFilter]} onRemove={() => setKpiFilter(null)} />}
+                    <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap", alignItems: "center", marginTop: "var(--space-sm)" }}>
+                        {search.trim() && <Chip size="small" color="primary" label={`חיפוש: ${search}`} onDelete={() => setSearch("")} />}
+                        {customerFilter && <Chip size="small" color="primary" label={`לקוח: ${customerFilter}`} onDelete={() => setCustomerFilter(null)} />}
+                        {startDate && <Chip size="small" color="primary" label={`מתאריך: ${chipDate(startDate)}`} onDelete={() => setStartDate("")} />}
+                        {endDate && <Chip size="small" color="primary" label={`עד תאריך: ${chipDate(endDate)}`} onDelete={() => setEndDate("")} />}
+                        {kpiFilter && <Chip size="small" color="primary" label={KPI_LABELS[kpiFilter]} onDelete={() => setKpiFilter(null)} />}
                     </div>
                 )}
             </div>
 
-            {/* table — contained scroll, sticky header */}
-            <DataTable<Shipment>
-                columns={columns}
-                rows={filteredRows}
-                getRowKey={(r) => r.id}
-                onRowClick={handleRowClick}
-                loading={loading}
-                minWidth={1360}
-                maxHeight="calc(100vh - 240px)"
-                empty={<div style={{ fontSize: 16, color: "var(--color-ink)", fontWeight: 600 }}>לא נמצאו משלוחים תואמים.</div>}
-            />
+            {/* table — contained scroll, sticky header. A failed load replaces
+                it with the error and a retry; it is never shown as "no rows". */}
+            {loadError && !loading ? (
+                <Alert
+                    severity="error"
+                    action={<Button variant="text" size="small" onClick={loadShipments}>נסה שוב</Button>}
+                >
+                    לא הצלחנו לטעון את רשימת המשלוחים. בדוק את החיבור ונסה שוב.
+                </Alert>
+            ) : (
+                <DataTable<Shipment>
+                    columns={columns}
+                    rows={filteredRows}
+                    getRowKey={(r) => r.id}
+                    onRowClick={handleRowClick}
+                    // A sent shipment has nothing to open: no pointer, no focus stop.
+                    rowClickable={(r) => !r.is_sent}
+                    loading={loading}
+                    minWidth={1180}
+                    maxHeight="calc(100vh - 240px)"
+                    empty={emptyState}
+                />
+            )}
 
             <ShipmentInsertPopup
                 open={insertOpen}
