@@ -1,12 +1,13 @@
 "use client";
 import * as React from "react";
+import { Skeleton } from "@/components/ui";
 
 /* =========================================================================
    DataTable — THE standard table for the app (Shifthouse look).
    Flat white card, parchment header, hairline dividers, row hover (var(--color-surface-pearl)),
    one Action Blue. Use this for every table so they all look identical.
 
-   Requires: import "@/styles/shifthouse.css" once in the app (done in layout).
+   Styles: the shared .sh-table rules in components/ui/ui.css.
 
    How to make your table match the rest of the system:
      <DataTable
@@ -47,7 +48,10 @@ type Props<T> = {
   rows: T[];
   getRowKey: (row: T, i: number) => React.Key;
   onRowClick?: (row: T) => void;
-  /** Highlight a row as selected (master-detail tables) — blue tint + edge. */
+  /** Rows that have nothing to open (e.g. a sent shipment) — no pointer, no
+      focus stop, no click. Defaults to every row when onRowClick is set. */
+  rowClickable?: (row: T) => boolean;
+  /** Highlight a row as selected (master-detail tables) — blue tint. */
   rowSelected?: (row: T) => boolean;
   minWidth?: number;
   /** Cap the body height and keep the header pinned (for long lists). */
@@ -61,28 +65,22 @@ type Props<T> = {
   plain?: boolean;
 };
 
-const alignMap = { start: "right", center: "center", end: "left" } as const;
-
 export default function DataTable<T>({
-  columns, rows, getRowKey, onRowClick, rowSelected, minWidth = 960,
+  columns, rows, getRowKey, onRowClick, rowClickable, rowSelected, minWidth = 960,
   maxHeight, stickyHeader = maxHeight != null, loading = false, loadingRows = 8, empty, plain = false,
 }: Props<T>) {
   const fill = maxHeight != null;
   const cardStyle: React.CSSProperties = plain
     ? { display: "flex", flexDirection: "column", height: maxHeight != null ? "100%" : undefined, maxHeight, overflow: "hidden" }
-    : { background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight };
+    : { background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "var(--r-card)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight };
   return (
     <div style={cardStyle}>
       <div className="shx-scroll" style={{ overflowX: "auto", overflowY: fill ? "auto" : undefined, flex: fill ? 1 : undefined, minHeight: fill ? 0 : undefined }}>
-        <table className={"shx-table" + (stickyHeader ? " shx-table--sticky" : "")} style={{ minWidth }}>
+        <table className={"sh-table" + (stickyHeader ? " sh-table--sticky" : "")} style={{ minWidth }}>
           <thead>
             <tr>
               {columns.map((c) => (
-                <th
-                  key={c.key}
-                  className={"shx-th" + (c.align === "center" ? " shx-th--center" : "")}
-                  style={{ width: c.width, textAlign: c.align ? alignMap[c.align] : "right" }}
-                >
+                <th key={c.key} style={{ width: c.width, textAlign: c.align ?? "start" }}>
                   {c.header}
                 </th>
               ))}
@@ -91,27 +89,34 @@ export default function DataTable<T>({
           <tbody>
             {loading
               ? Array.from({ length: loadingRows }).map((_, i) => (
-                  <tr key={`sk-${i}`} className="shx-row">
+                  <tr key={`sk-${i}`} aria-hidden>
                     {columns.map((c) => (
-                      <td key={c.key} className="shx-td">
-                        <span style={{ display: "block", height: 14, borderRadius: 5, background: "linear-gradient(90deg,var(--color-divider-soft),var(--color-canvas-parchment),var(--color-divider-soft))", backgroundSize: "200% 100%", animation: "shx-shimmer 1.4s infinite" }} />
+                      <td key={c.key}>
+                        <Skeleton height={14} />
                       </td>
                     ))}
                   </tr>
                 ))
-              : rows.map((row, i) => (
+              : rows.map((row, i) => {
+                  // A clickable row is also a keyboard stop: Enter / Space opens it.
+                  const clickable = !!onRowClick && (rowClickable ? rowClickable(row) : true);
+                  return (
                   <tr
                     key={getRowKey(row, i)}
-                    className={"shx-row" + (onRowClick ? " shx-row--clickable" : "")}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    style={rowSelected?.(row) ? { background: "var(--color-primary-tint)", borderInlineStart: "3px solid var(--color-primary)" } : undefined}
+                    className={clickable ? "sh-row--clickable" : undefined}
+                    aria-selected={rowSelected ? rowSelected(row) : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    onClick={clickable ? () => onRowClick!(row) : undefined}
+                    onKeyDown={clickable ? (e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowClick!(row); }
+                    } : undefined}
                   >
                     {columns.map((c) => (
                       <td
                         key={c.key}
-                        className="shx-td"
                         style={{
-                          textAlign: c.align ? alignMap[c.align] : "right",
+                          textAlign: c.align ?? "start",
                           fontWeight: c.bold ? 600 : 400,
                           color: c.muted ? "var(--color-ink-muted-48)" : "var(--color-ink)",
                           fontVariantNumeric: c.nums ? "tabular-nums" : undefined,
@@ -122,7 +127,8 @@ export default function DataTable<T>({
                       </td>
                     ))}
                   </tr>
-                ))}
+                  );
+                })}
           </tbody>
         </table>
       </div>
@@ -131,7 +137,6 @@ export default function DataTable<T>({
           {empty ?? <div style={{ fontSize: 15 }}>לא נמצאו נתונים.</div>}
         </div>
       )}
-      <style>{`@keyframes shx-shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }`}</style>
     </div>
   );
 }
@@ -176,8 +181,7 @@ export function IconAction({ title, danger, disabled, onClick, children }: { tit
       aria-label={title}
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); if (!disabled) onClick?.(e); }}
-      className="shx-icon-btn"
-      style={{ ...(danger ? { color: "var(--color-destructive)" } : {}), ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : {}) }}
+      className={"sh-iconbtn sh-iconbtn--small" + (danger ? " sh-iconbtn--error" : "")}
     >
       {children}
     </button>
