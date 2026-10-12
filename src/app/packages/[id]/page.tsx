@@ -1,21 +1,25 @@
 "use client";
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { PackageView, PackageTimelineEntry } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
+import { Alert, Skeleton } from "@/components/ui";
 import PackageIdText, { MiniItems, StatusPill } from "@/app/components/packages/PackageIdText";
 import PackageDeleteDialog from "@/app/components/packages/PackageDeleteDialog";
 import PackageEditDialog from "@/app/components/packages/PackageEditDialog";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import ItemFilesPanel from "@/app/components/ItemFilesPanel";
 import {
-  AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, ITEM_STATES, MUTED, MUTED_LT, PKG_STATUS,
-  fmtDate, fmtDateTime, pillGhost, pillPrimary, seq2,
+  AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, ITEM_STATES, MUTED, PKG_STATUS,
+  fmtDate, fmtDateTime, seq2,
 } from "@/app/components/packages/packageUi";
+import "../packages.css";
 
 /** עמוד מארז — design/Packages.dc.html (isPage). */
 type Timeline = (PackageTimelineEntry & { worker_name: string | null })[];
+
+const card: React.CSSProperties = { background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16 };
 
 export default function PackagePage() {
   const params = useParams<{ id: string }>();
@@ -24,6 +28,8 @@ export default function PackagePage() {
   const [timeline, setTimeline] = React.useState<Timeline>([]);
   const [loading, setLoading] = React.useState(true);
   const [notFound, setNotFound] = React.useState(false);
+  // Any failure but a 404 is an error with a retry — not "the package doesn't exist".
+  const [loadError, setLoadError] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [labelsOpen, setLabelsOpen] = React.useState(false);
@@ -32,9 +38,11 @@ export default function PackagePage() {
   const load = React.useCallback(async () => {
     if (!params?.id) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await apiFetch(`/api/packages/${params.id}`);
       if (res.status === 404) { setNotFound(true); setPkg(null); return; }
+      if (!res.ok) { setLoadError(true); return; }
       const data = await res.json();
       setPkg(data.package ?? null);
       setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
@@ -44,6 +52,8 @@ export default function PackagePage() {
           setSourceId(s?.source_id ?? null);
         }).catch(() => {});
       }
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -51,12 +61,48 @@ export default function PackagePage() {
 
   React.useEffect(() => { load(); }, [load]);
 
-  if (loading && !pkg) return <div dir="rtl" style={{ height: "100%", overflowY: "auto", padding: 32, color: MUTED, boxSizing: "border-box" }}>טוען…</div>;
+  const back = (
+    <button type="button" onClick={() => router.push("/packages")} className="pkg-link" style={{ fontSize: 13.5 }}>
+      <ChevronRight size={15} strokeWidth={2} aria-hidden />חזרה למארזים
+    </button>
+  );
+  const retry = <button type="button" onClick={load} className="pkg-pill pkg-pill--ghost pkg-pill--sm">נסה שוב</button>;
+
+  // First load: the page's own shape (header card, items table, timeline).
+  if (loading && !pkg && !notFound) {
+    return (
+      <div dir="rtl" aria-busy="true" style={{ height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
+        <div style={{ maxWidth: 1320, margin: "0 auto", padding: "28px 24px 64px" }}>
+          {back}
+          <div style={{ ...card, padding: 24, marginTop: 14 }}>
+            <Skeleton width={110} height={13} />
+            <Skeleton width={320} height={30} style={{ marginTop: 10 }} />
+            <Skeleton width={260} height={13} style={{ marginTop: 12 }} />
+            <Skeleton height={5} style={{ marginTop: 30, borderRadius: 9999 }} />
+          </div>
+          <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginTop: 16, flexWrap: "wrap" }}>
+            <div style={{ ...card, flex: 1, minWidth: 0, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              <Skeleton width={120} height={16} />
+              {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} height={14} />)}
+            </div>
+            <div style={{ ...card, width: 380, flexShrink: 0, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              <Skeleton width={140} height={16} />
+              {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} height={13} />)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (notFound || !pkg) {
     return (
       <div dir="rtl" style={{ height: "100%", overflowY: "auto", padding: 32, boxSizing: "border-box" }}>
-        <div style={{ fontSize: 16, fontWeight: 600 }}>המארז לא נמצא.</div>
-        <button type="button" onClick={() => router.push("/packages")} style={{ ...pillGhost, marginTop: 14 }}>חזרה למארזים</button>
+        {loadError && !notFound ? (
+          <Alert severity="error" action={retry} style={{ maxWidth: 560 }}>טעינת המארז נכשלה. בדוק את החיבור ונסה שוב.</Alert>
+        ) : (
+          <div style={{ fontSize: 16, fontWeight: 600 }}>המארז לא נמצא.</div>
+        )}
+        <button type="button" onClick={() => router.push("/packages")} className="pkg-pill pkg-pill--ghost" style={{ marginTop: 14 }}>חזרה למארזים</button>
       </div>
     );
   }
@@ -73,32 +119,36 @@ export default function PackagePage() {
     return { pct: steps > 0 ? Math.round((step / steps) * 100) : 0, text: `${step}/${steps}` };
   };
   const dotOf = (t: Timeline[number]) => (t.state === "done" ? GREEN : t.state === "pending" || t.state === "queued" || t.state === "blocked" ? (t.state === "blocked" || t.state === "queued" ? AMBER : BLUE) : GREY);
+  const openItem = (id: string) => router.push(`/items/${id}/history`);
 
   // The page scrolls its own wrapper, inside the fixed frame (same principle
   // as /packages), never the shell's content box.
   return (
     <div dir="rtl" style={{ height: "100%", overflowY: "auto", overscrollBehavior: "contain", color: INK }}>
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "28px 24px 64px" }}>
-      <button type="button" onClick={() => router.push("/packages")} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13.5, color: BLUE, fontWeight: 600, cursor: "pointer", background: "transparent", border: 0, padding: 0, fontFamily: "inherit" }}>
-        <ChevronLeft size={15} strokeWidth={2} />חזרה למארזים
-      </button>
+      {back}
 
-      <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 24, marginTop: 14 }}>
+      {loadError && (
+        <Alert severity="error" action={retry} style={{ marginTop: 14 }}>רענון המארז נכשל — מוצגים הנתונים האחרונים שנטענו.</Alert>
+      )}
+
+      <div style={{ ...card, padding: 24, marginTop: 14 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, color: MUTED, fontWeight: 600 }}>{pkg.item_type_desc}</div>
-            <div style={{ marginTop: 6 }}><PackageIdText id={pkg.item_id} size={30} headColor={INK} weight={700} letterSpacing="-0.4px" /></div>
+            {/* The id is the page's heading (the artboard's h1). */}
+            <h1 style={{ margin: "6px 0 0", fontSize: "inherit", fontWeight: "inherit" }}><PackageIdText id={pkg.item_id} size={30} headColor={INK} weight={700} letterSpacing="-0.4px" /></h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap", fontSize: 13.5, color: INK_2 }}>
-              <span>{pkg.customer_name ?? pkg.customer_code ?? "—"}</span><span style={{ color: MUTED_LT }}>·</span>
-              <span>משלוח {pkg.shipment_code ?? "—"}</span><span style={{ color: MUTED_LT }}>·</span>
-              <span>נקלט {fmtDate(pkg.created_at)}</span><span style={{ color: MUTED_LT }}>·</span>
+              <span>{pkg.customer_name ?? pkg.customer_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
+              <span>משלוח {pkg.shipment_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
+              <span>נקלט {fmtDate(pkg.created_at)}</span><span aria-hidden style={{ color: MUTED }}>·</span>
               <span>{pkg.items.length} פריטים</span>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <StatusPill label={st.label} dot={st.dot} size={13} />
-            <button type="button" onClick={() => setLabelsOpen(true)} style={{ ...pillGhost, padding: "9px 16px", fontSize: 13.5 }}>מדבקות</button>
-            <button type="button" onClick={() => setEditOpen(true)} style={{ ...pillPrimary, padding: "9px 18px", fontSize: 13.5 }}>עריכת מארז</button>
+            <button type="button" onClick={() => setLabelsOpen(true)} className="pkg-pill pkg-pill--ghost pkg-pill--sm" style={{ paddingInline: 16 }}>מדבקות</button>
+            <button type="button" onClick={() => setEditOpen(true)} className="pkg-pill pkg-pill--primary pkg-pill--sm" style={{ paddingInline: 18 }}>עריכת מארז</button>
           </div>
         </div>
 
@@ -127,22 +177,22 @@ export default function PackagePage() {
       </div>
 
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginTop: 16, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 0, background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ ...card, flex: 1, minWidth: 0, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 20px", borderBottom: `1px solid ${HAIR}` }}>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>פריטים במארז</div>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>פריטים במארז</h2>
             <div style={{ fontSize: 12.5, color: MUTED }}>כל פריט מתקדם במסלול של הסוג שלו</div>
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
-                <tr style={{ background: "#f5f5f7" }}>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 20px" }}>מזהה</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>סוג פריט</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>סריאלי</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>מק״ט</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>סטטוס</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px", width: 150 }}>התקדמות במסלול</th>
-                  <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 20px" }}>עמדה נוכחית</th>
+                <tr style={{ background: "var(--color-canvas-parchment)" }}>
+                  <th className="pkg-th" style={{ paddingInline: 20 }}>מזהה</th>
+                  <th className="pkg-th">סוג פריט</th>
+                  <th className="pkg-th">סריאלי</th>
+                  <th className="pkg-th">מק״ט</th>
+                  <th className="pkg-th">סטטוס</th>
+                  <th className="pkg-th" style={{ width: 150 }}>התקדמות במסלול</th>
+                  <th className="pkg-th" style={{ paddingInline: 20 }}>עמדה נוכחית</th>
                 </tr>
               </thead>
               <tbody>
@@ -150,7 +200,11 @@ export default function PackagePage() {
                   const pr = progress(it);
                   const color = ITEM_STATES[it.state].color;
                   return (
-                    <tr key={it.item_id} onClick={() => router.push(`/items/${it.item_id}/history`)} style={{ borderTop: `1px solid ${HAIR_2}`, cursor: "pointer" }}>
+                    // Opens the item's history; a keyboard stop like a link (Enter / Space).
+                    <tr key={it.item_id} className="pkg-row" tabIndex={0} aria-label={`${seq2(it.package_seq)} · ${it.item_type_desc} — היסטוריית הפריט`}
+                      onClick={() => openItem(it.item_id)}
+                      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openItem(it.item_id); } }}
+                      style={{ borderTop: `1px solid ${HAIR_2}` }}>
                       <td style={{ padding: "12px 20px", whiteSpace: "nowrap" }}><PackageIdText id={it.item_id} size={13} /></td>
                       <td style={{ padding: 12, fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>{it.item_type_desc}</td>
                       <td style={{ padding: 12, fontSize: 14, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{it.serial_no ?? "—"}</td>
@@ -172,8 +226,8 @@ export default function PackagePage() {
         </div>
 
         <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 20 }}>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>ציר זמן של המארז</div>
+          <div style={{ ...card, padding: 20 }}>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>ציר זמן של המארז</h2>
             <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3 }}>עמדות ברמת מארז בלבד</div>
             <div style={{ display: "flex", flexDirection: "column", marginTop: 16 }}>
               {timeline.map((t, i) => (
@@ -192,8 +246,8 @@ export default function PackagePage() {
               ))}
             </div>
           </div>
-          <div style={{ background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 16, padding: 20 }}>
-            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>קבצים</div>
+          <div style={{ ...card, padding: 20 }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600 }}>קבצים</h2>
             <ItemFilesPanel itemId={pkg.item_id} compact />
           </div>
         </div>

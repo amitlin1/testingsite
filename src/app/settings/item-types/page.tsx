@@ -1,16 +1,7 @@
 "use client";
 import Link from "next/link";
+import { Tag } from "@/components/ui";
 import CrudTable, { Column } from "../components/CrudTable";
-
-/** The "מארז" pill from design/Settings.dc.html — a package type is an item
- *  type flagged is_package; its contents are edited under /settings/packages. */
-function PackagePill() {
-  return (
-    <span style={{ fontSize: 10.5, fontWeight: 600, color: "#0066cc", background: "#e6efff", borderRadius: 9999, padding: "2px 8px", whiteSpace: "nowrap" }}>
-      מארז
-    </span>
-  );
-}
 
 export default function ItemTypesPage() {
   const columns: Column[] = [
@@ -23,8 +14,10 @@ export default function ItemTypesPage() {
       readOnly: true,
       renderCell: (row) =>
         row.is_package ? (
-          <Link href="/settings/packages" title="תכולת המארז מוגדרת במסך מארזים" style={{ textDecoration: "none" }}>
-            <PackagePill />
+          // The "מארז" tag (design/Settings.dc.html): a package type is an item
+          // type flagged is_package; its contents are edited under /settings/packages.
+          <Link href="/settings/packages" title="תכולת המארז מוגדרת במסך מארזים" aria-label="מארז: פתח את תכולת המארז במסך מארזים" style={{ textDecoration: "none" }}>
+            <Tag tone="primary">מארז</Tag>
           </Link>
         ) : null,
     },

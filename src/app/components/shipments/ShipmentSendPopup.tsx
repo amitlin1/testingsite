@@ -7,11 +7,10 @@ import {
     DialogActions,
     Button,
     TextField,
-    Box,
-    Typography,
-    useTheme,
+    IconButton,
     Alert,
 } from "@/components/ui";
+import { Add as AddIcon, Delete as DeleteIcon } from "@/components/ui/icons";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
@@ -20,6 +19,8 @@ import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import SignatureCanvas from 'react-signature-canvas';
 import { apiFetch } from "@/lib/api/client";
 import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
+import ShipmentSignatureField from "./ShipmentSignatureField";
+import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
 
 type ShipmentSendPopupProps = {
     open: boolean;
@@ -48,11 +49,15 @@ export default function ShipmentSendPopup({
     onSend,
     shipment,
 }: ShipmentSendPopupProps) {
-    const theme = useTheme();
     const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; roles: string[] }[]>([]);
     const [history, setHistory] = useState<{ item_type_id: number; makat: number | null; total_sent: number }[]>([]);
+    const fieldId = React.useId();
 
     const [isSigned, setIsSigned] = useState(false);
+
+    // A refused send keeps the dialog — the typed lines and the signature —
+    // open, with the reason above the buttons.
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     // "עובד מוציא" is the logged-in worker; only a manager may pick someone
     // else (useShipmentWorker — POST /api/shipment-history applies the same rule).
@@ -64,7 +69,7 @@ export default function ShipmentSendPopup({
         reset,
         watch,
         setValue,
-        formState: { errors, isValid },
+        formState: { errors, isValid, isSubmitting },
     } = useForm<SendFormValues>({
         mode: "onChange",
         defaultValues: {
@@ -125,6 +130,10 @@ export default function ShipmentSendPopup({
                 sending_worker_name: null,
                 items: [{ item_type_id: null, makat: null, amount: '' }],
             });
+            setSubmitError(null);
+            // The pad mounts empty with the dialog, so the form starts unsigned
+            // (as the receiving form does) — never "signed" from the last return.
+            setIsSigned(false);
         }
     }, [open, shipment, reset]);
 
@@ -137,12 +146,16 @@ export default function ShipmentSendPopup({
 
     const onSubmit = async (data: SendFormValues) => {
         if (!shipment) return;
+        setSubmitError(null);
+        // The dialog closes only once the server has accepted the return; a
+        // refusal keeps the typed lines and the signature, with the reason shown.
+        let saved = false;
 
         try {
             // Filter valid items
             const validItems = data.items.filter(i => i.item_type_id && Number(i.amount) > 0);
             if (validItems.length === 0) {
-                alert("יש להוסיף לפחות סוג מארז אחד לשליחה.");
+                setSubmitError("יש להוסיף לפחות סוג מארז אחד לשליחה.");
                 return;
             }
 
@@ -167,16 +180,19 @@ export default function ShipmentSendPopup({
             });
 
             if (res.ok) {
-                onSend(true);
+                saved = true;
             } else {
                 console.error("Failed to send shipment items");
-                onSend(false);
+                setSubmitError(await serverErrorMessage(res, "המשלוח לא נשלח. בדוק את הכמויות ונסה שוב."));
             }
         } catch (error) {
             console.error(error);
-            onSend(false);
+            setSubmitError(NETWORK_ERROR);
         } finally {
-            onClose();
+            if (saved) {
+                onSend(true);
+                onClose();
+            }
         }
     };
 
@@ -192,33 +208,27 @@ export default function ShipmentSendPopup({
             fullWidth
             maxWidth="md"
         >
-            <DialogTitle sx={{
-                fontWeight: 700,
-                color: "text.primary",
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                pb: 2
-            }}>
+            <DialogTitle onClose={onClose}>
                 החזרת משלוח
             </DialogTitle>
             <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
                     {sender.blocked && (
-                        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                        <Alert severity="error" sx={{ mb: 2 }}>
                             לא ניתן לזהות אותך — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
                         </Alert>
                     )}
                     <Alert severity="info" sx={{ mb: 2 }}>
                         הכמויות הן מספר מארזים. לכל סוג מארז אפשר לשלוח עד הכמות שהוצהרה פחות מה שכבר נשלח.
                     </Alert>
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
-                        <Box sx={{ width: "100%" }}>
-                            <Typography variant="subtitle1">
-                                משלוח מקור: {shipment.shipment_code} | לקוח: {shipment.customer_code}
-                            </Typography>
-                        </Box>
-
-                        <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
-                            <FieldLabel required>קוד משלוח יוצא</FieldLabel>
+                    <p style={{ margin: "0 0 var(--space-md)", fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-70)" }}>
+                        משלוח מקור: <strong style={{ color: "var(--color-ink)", fontVariantNumeric: "tabular-nums" }}>{shipment.shipment_code}</strong>
+                        {" · "}
+                        לקוח: <strong style={{ color: "var(--color-ink)" }}>{shipment.customer_code}</strong>
+                    </p>
+                    <div className="shp-form-grid shp-form-grid--3">
+                        <div>
+                            <FieldLabel required htmlFor={`${fieldId}-code`}>קוד משלוח יוצא</FieldLabel>
                             <Controller
                                 name="sent_shipment_code"
                                 control={control}
@@ -226,18 +236,21 @@ export default function ShipmentSendPopup({
                                 render={({ field }) => (
                                     <TextField
                                         {...field}
+                                        id={`${fieldId}-code`}
                                         placeholder="קוד משלוח יוצא"
                                         fullWidth
                                         size="small"
                                         error={!!errors.sent_shipment_code}
                                         helperText={errors.sent_shipment_code?.message}
+                                        // A code reads left to right; aligned with the Hebrew fields.
+                                        inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
                                     />
                                 )}
                             />
-                        </Box>
+                        </div>
 
-                        <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
-                            <FieldLabel required>תאריך שליחה</FieldLabel>
+                        <div>
+                            <FieldLabel required htmlFor={`${fieldId}-date`}>תאריך שליחה</FieldLabel>
                             <Controller
                                 name="sent_date"
                                 control={control}
@@ -245,6 +258,7 @@ export default function ShipmentSendPopup({
                                 render={({ field }) => (
                                     <TextField
                                         {...field}
+                                        id={`${fieldId}-date`}
                                         type="date"
                                         fullWidth
                                         size="small"
@@ -253,15 +267,15 @@ export default function ShipmentSendPopup({
                                     />
                                 )}
                             />
-                        </Box>
+                        </div>
 
-                        <Box sx={{ width: { xs: "100%", sm: "48%" } }}>
-                            <FieldLabel>עובד מוציא</FieldLabel>
+                        <div>
                             <Controller
                                 name="sending_worker_id"
                                 control={control}
                                 render={({ field: { onChange, value } }) => (
                                     <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
+                                        label="עובד מוציא"
                                         options={sender.options}
                                         getOptionLabel={(option) => option.worker_name}
                                         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
@@ -276,19 +290,27 @@ export default function ShipmentSendPopup({
                                     />
                                 )}
                             />
-                            {sender.locked && !sender.blocked && <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 0.5 }}>מזוהה מההתחברות</Typography>}
-                        </Box>
-                    </Box>
+                            {sender.locked && !sender.blocked && <div className="sh-field-helper">מזוהה מההתחברות</div>}
+                        </div>
+                    </div>
 
                     {/* Dynamic Items Selection */}
-                    <Box sx={{ mt: 3, borderTop: `1px solid ${theme.palette.divider}`, pt: 2 }}>
-                        <Button variant="outlined" onClick={() => append({ item_type_id: null, makat: null, amount: '' })} sx={{ mb: 2 }}>
-                            הוסף סוג מארז לשליחה
-                        </Button>
+                    <div style={{ marginTop: "var(--space-lg)", borderTop: "1px solid var(--color-hairline)", paddingTop: "var(--space-md)" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                            <div style={{ fontSize: "var(--text-body)", fontWeight: 600 }}>מארזים לשליחה</div>
+                            <Button variant="outlined" size="small" startIcon={<AddIcon fontSize={16} aria-hidden />} onClick={() => append({ item_type_id: null, makat: null, amount: '' })}>
+                                הוסף סוג מארז לשליחה
+                            </Button>
+                        </div>
+                        <div className="shp-items-head shp-items-row--wide" aria-hidden>
+                            <span>סוג מארז</span>
+                            <span>מארזים</span>
+                            <span />
+                        </div>
                         {fields.map((item, index) => (
                             // One line: type, amount, delete — tops aligned so the amount's
                             // note / error underneath doesn't push the line out of shape.
-                            <Box key={item.id} sx={{ display: 'flex', gap: 2, mb: 1.5, alignItems: 'flex-start' }}>
+                            <div key={item.id} className="shp-items-row shp-items-row--wide">
                                 <Controller
                                     name={`items.${index}` as const}
                                     control={control}
@@ -296,31 +318,29 @@ export default function ShipmentSendPopup({
                                         validate: (val) => val.item_type_id ? true : "בחר סוג מארז"
                                     }}
                                     render={({ field: { onChange, value } }) => (
-                                        <Box sx={{ width: 400 }}>
-                                            <SearchableCombobox<(typeof availableItems)[number]>
-                                                options={availableItems}
-                                                getOptionLabel={(option) =>
-                                                    `${option.item_type_desc || '—'}`
+                                        <SearchableCombobox<(typeof availableItems)[number]>
+                                            options={availableItems}
+                                            getOptionLabel={(option) =>
+                                                `${option.item_type_desc || '—'}`
+                                            }
+                                            // Find the matching option based on item_type_id and makat
+                                            value={availableItems.find(opt =>
+                                                opt.item_type_id === value.item_type_id && opt.makat == value.makat
+                                            ) || null}
+                                            onChange={(newValue) => {
+                                                if (newValue) {
+                                                    onChange({
+                                                        item_type_id: newValue.item_type_id,
+                                                        makat: newValue.makat || null,
+                                                        amount: value.amount // Keep typed amount or reset? User didn't specify. Keeping it is safer unless we change item.
+                                                    });
+                                                } else {
+                                                    onChange({ item_type_id: null, makat: null, amount: '' });
                                                 }
-                                                // Find the matching option based on item_type_id and makat
-                                                value={availableItems.find(opt =>
-                                                    opt.item_type_id === value.item_type_id && opt.makat == value.makat
-                                                ) || null}
-                                                onChange={(newValue) => {
-                                                    if (newValue) {
-                                                        onChange({
-                                                            item_type_id: newValue.item_type_id,
-                                                            makat: newValue.makat || null,
-                                                            amount: value.amount // Keep typed amount or reset? User didn't specify. Keeping it is safer unless we change item.
-                                                        });
-                                                    } else {
-                                                        onChange({ item_type_id: null, makat: null, amount: '' });
-                                                    }
-                                                }}
-                                                placeholder="סוג מארז"
-                                                error={!!errors.items?.[index]}
-                                            />
-                                        </Box>
+                                            }}
+                                            placeholder="סוג מארז"
+                                            error={!!errors.items?.[index]}
+                                        />
                                     )}
                                 />
 
@@ -373,7 +393,8 @@ export default function ShipmentSendPopup({
                                                 type="number"
                                                 required
                                                 size="small"
-                                                sx={{ width: 160 }}
+                                                fullWidth
+                                                inputProps={{ "aria-label": `מארזים לשליחה, שורה ${index + 1}`, style: { fontVariantNumeric: "tabular-nums" } }}
                                                 onChange={(e) => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
                                                 error={!!errors.items?.[index]?.amount}
                                                 helperText={errors.items?.[index]?.amount ? (errors.items[index]?.amount?.message || "כמות לא תקינה") : `מקס׳ ${maxAllowed}`}
@@ -381,44 +402,39 @@ export default function ShipmentSendPopup({
                                         );
                                     }}
                                 />
-                                <Button color="error" variant="outlined" onClick={() => remove(index)} sx={{ flexShrink: 0 }}>
-                                    מחק
-                                </Button>
-                            </Box>
+                                <IconButton size="small" color="error" title="הסר שורה" onClick={() => remove(index)}>
+                                    <DeleteIcon fontSize={16} aria-hidden />
+                                </IconButton>
+                            </div>
                         ))}
-                    </Box>
+                    </div>
 
-                    {/* Signature Section — compact */}
-                    <Box sx={{ mt: 2, borderTop: `1px solid ${theme.palette.divider}`, pt: 1.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>חתימה</Typography>
-                            <Button size="small" onClick={() => sigCanvas.current?.clear()}>נקה חתימה</Button>
-                        </Box>
-                        <Box sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 2, overflow: 'hidden', bgcolor: '#fafafa' }}>
-                            <SignatureCanvas
-                                ref={sigCanvas}
-                                canvasProps={{ width: 800, height: 120, className: 'sigCanvas' }}
-                                backgroundColor="#fafafa"
-                                onEnd={() => setIsSigned(!sigCanvas.current?.isEmpty())}
-                            />
-                        </Box>
-                    </Box>
+                    {/* Signature — required to send (the button waits for it), and
+                        now it says so, the same way the receiving form does. */}
+                    <div style={{ marginTop: "var(--space-md)", borderTop: "1px solid var(--color-hairline)", paddingTop: "var(--space-sm)" }}>
+                        <ShipmentSignatureField
+                            canvasRef={sigCanvas}
+                            signed={isSigned}
+                            onSignedChange={setIsSigned}
+                            hint="יש לחתום לפני השליחה"
+                        />
+                    </div>
 
                 </DialogContent>
-                <DialogActions sx={{ p: 3, gap: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-                    <Button
-                        onClick={onClose}
-                        variant="outlined"
-                        sx={{ borderRadius: 9999, px: 3, borderColor: 'rgba(0,0,0,0.12)', color: 'text.primary' }}
-                    >
+                {submitError && (
+                    <div style={{ padding: "0 var(--space-lg) var(--space-sm)" }}>
+                        <Alert severity="error">{submitError}</Alert>
+                    </div>
+                )}
+                <DialogActions>
+                    <Button onClick={onClose} variant="outlined" color="inherit">
                         ביטול
                     </Button>
                     <Button
                         type="submit"
                         disabled={!isValid || !isSigned || sender.blocked}
+                        loading={isSubmitting}
                         variant="contained"
-                        color="success"
-                        sx={{ borderRadius: 9999, px: 4, fontWeight: 700 }}
                     >
                         שלח
                     </Button>

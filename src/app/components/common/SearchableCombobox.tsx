@@ -58,6 +58,9 @@ export interface ComboboxProps<T>
   getOptionSubtitle?: (option: T) => string | null | undefined;
   /** Icon rendered at the inline-start of the trigger input. */
   startIcon?: React.ReactNode;
+  /** Accessible name when the field has no visible label (e.g. a filter in a
+   *  row of placeholders). A visible `label` wins. */
+  ariaLabel?: string;
   /** Fixed container width; when omitted the field is full-width. */
   width?: number | string;
   /** Forwarded to the trigger TextField. */
@@ -95,6 +98,7 @@ export default function SearchableCombobox<T>({
   renderOptionContent,
   getOptionSubtitle,
   startIcon,
+  ariaLabel,
   width,
   noOptionsText = "אין תוצאה תואמת",
   inputSx,
@@ -122,6 +126,11 @@ export default function SearchableCombobox<T>({
     };
   }, [filterOptions, getOptionSubtitle, labelOf, value, valueLabel]);
 
+  // The above-field label names the input (aria-labelledby), so a screen
+  // reader announces it; the placeholder disappears once a value is chosen.
+  const labelId = React.useId();
+  const labelledBy = !floatingLabel && label ? labelId : undefined;
+
   const wrapClassName = [
     dense && "sh-combo--dense",
     dense && denseHeight !== 44 && `sh-combo--h${denseHeight}`,
@@ -136,7 +145,8 @@ export default function SearchableCombobox<T>({
       {!floatingLabel && label && (
         <Typography
           component="label"
-          sx={{ display: "block", mb: 0.75, fontSize: 13, fontWeight: 600, color: theme.tokens.fieldLabel }}
+          id={labelId}
+          sx={{ display: "block", mb: 0.75, fontSize: "var(--text-small)", fontWeight: 600, color: "var(--color-ink-muted-80)" }}
         >
           {label}
           {required && (
@@ -215,8 +225,10 @@ export default function SearchableCombobox<T>({
                 readOnly: true,
                 autoComplete: "off",
                 onMouseDown: (e) => e.preventDefault(),
+                "aria-labelledby": labelledBy,
+                "aria-label": labelledBy ? undefined : ariaLabel,
               }
-            : params.inputProps;
+            : { ...params.inputProps, "aria-labelledby": labelledBy, "aria-label": labelledBy ? undefined : ariaLabel };
           // The primitive already shows its own spinner while loading.
           const endAdornment = locked ? <LockIcon className="sh-combo-lock" fontSize={15} /> : params.InputProps.endAdornment;
           return (

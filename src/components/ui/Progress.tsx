@@ -2,6 +2,20 @@
 import React, { forwardRef } from "react";
 import { sxToStyle, type SxInput } from "./sx";
 
+/** MUI colour names → tokens. Anything else (a var(), a hex) is used as is;
+ *  passing "success" straight to `background` was invalid CSS, so the bar
+ *  never painted. */
+const PROGRESS_COLOR: Record<string, string> = {
+  primary: "var(--color-primary)",
+  info: "var(--color-primary)",
+  secondary: "var(--color-ink-muted-80)",
+  success: "var(--color-status-approved)",
+  warning: "var(--color-status-late)",
+  error: "var(--color-destructive)",
+  inherit: "currentColor",
+};
+const progressColor = (c: string) => PROGRESS_COLOR[c] ?? c;
+
 /* ---------------------------------------------------- LinearProgress ----- */
 export interface LinearProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: "determinate" | "indeterminate";
@@ -18,14 +32,20 @@ export const LinearProgress = forwardRef<HTMLDivElement, LinearProgressProps>(fu
     <div
       ref={ref}
       role="progressbar"
+      aria-valuemin={variant === "determinate" ? 0 : undefined}
+      aria-valuemax={variant === "determinate" ? 100 : undefined}
+      aria-valuenow={variant === "determinate" ? Math.round(Math.min(100, Math.max(0, value))) : undefined}
       style={{ height: 6, width: "100%", background: "var(--color-canvas-parchment)", borderRadius: "var(--r-pill)", overflow: "hidden", ...sxToStyle(sx), ...style }}
       {...rest}
     >
       <div
+        className={variant === "determinate" ? "sh-progress-fill" : "sh-progress-indeterminate"}
         style={
           variant === "determinate"
-            ? { width: `${Math.min(100, Math.max(0, value))}%`, height: "100%", background: color, transition: "width .3s ease" }
-            : { width: "40%", height: "100%", background: color, borderRadius: "var(--r-pill)", animation: "sh-indeterminate 1.4s ease-in-out infinite" }
+            // Scaled, not resized: transform animates off the layout path. The
+            // origin is the reading edge (ui.css .sh-progress-fill).
+            ? { width: "100%", height: "100%", background: progressColor(color), transform: `scaleX(${Math.min(100, Math.max(0, value)) / 100})`, transition: "transform var(--dur-slow) var(--ease-out)" }
+            : { width: "40%", height: "100%", background: progressColor(color), borderRadius: "var(--r-pill)", animation: "sh-indeterminate 1.4s ease-in-out infinite" }
         }
       />
     </div>
@@ -52,12 +72,13 @@ export const CircularProgress = forwardRef<HTMLSpanElement, CircularProgressProp
     <span
       ref={ref}
       role="progressbar"
+      aria-label={rest["aria-hidden"] ? undefined : rest["aria-label"] ?? "טוען"}
       style={{
         display: "inline-block",
         width: dim,
         height: dim,
         border: `${border}px solid var(--color-hairline)`,
-        borderTopColor: color,
+        borderTopColor: progressColor(color),
         borderRadius: "50%",
         animation: "sh-spin 0.8s linear infinite",
         boxSizing: "border-box",

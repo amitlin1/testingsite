@@ -21,6 +21,7 @@
 import * as React from "react";
 import { SessionProvider } from "next-auth/react";
 import { BASE_PATH } from "@/lib/base-path";
+import { TooltipProvider } from "@/components/ui/Tooltip";
 
 const SESSION_REFETCH_SECONDS = 14 * 60; // 840s — accessTokenTTL(900s) - ~60s
 const AUTH_BASE = `${BASE_PATH}/api/auth`;
@@ -44,7 +45,9 @@ export function Providers({
 }) {
   return (
     <SessionProvider basePath={AUTH_BASE} refetchInterval={SESSION_REFETCH_SECONDS}>
-      <DevModeContext.Provider value={isDev}>{children}</DevModeContext.Provider>
+      <DevModeContext.Provider value={isDev}>
+        <TooltipProvider>{children}</TooltipProvider>
+      </DevModeContext.Provider>
     </SessionProvider>
   );
 }

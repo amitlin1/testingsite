@@ -41,17 +41,20 @@ export default function PackageIdText({
 /** Status pill: neutral chip with a coloured dot (design: סטטוס המארז). */
 export function StatusPill({ label, dot, size = 12 }: { label: string; dot: string; size?: number }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, fontWeight: 600, background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap", color: INK }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, fontWeight: 600, background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap", color: INK }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />
       {label}
     </span>
   );
 }
 
-/** The mini-items strip: one 20×9 block per item, coloured by state. */
+/** The mini-items strip: one 20×9 block per item, coloured by state. The
+ *  colours alone say nothing to a screen reader (or to someone who can't tell
+ *  amber from green), so the strip is one image named by every item's
+ *  "01 · type · state" line. */
 export function MiniItems({ items, width = 20, height = 9 }: { items: { color: string; title: string }[]; width?: number; height?: number }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+    <div role="img" aria-label={items.map((m) => m.title).join("; ")} style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
       {items.map((m, i) => (
         <span key={i} title={m.title} style={{ width, height, borderRadius: 3, background: m.color, display: "inline-block" }} />
       ))}

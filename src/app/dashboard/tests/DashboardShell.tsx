@@ -83,6 +83,8 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
   React.useEffect(() => {
     setDrawerOpen(false);
   }, [api.state.tab]);
+  const drawerRef = React.useRef<HTMLDivElement>(null);
+  useDrawerFocus(drawerOpen, drawerRef, () => setDrawerOpen(false));
 
   const kpis = data.get<KpisWire>("kpis");
   const stations = data.get<StationWire[]>("stationsLive");
@@ -157,7 +159,7 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
         />
 
         {/* A refresh never blanks the body; this 2px bar is the only signal. */}
-        <div className="dash-refresh-bar" aria-hidden style={{ opacity: data.refreshing ? 1 : 0 }}>
+        <div className={data.refreshing ? "dash-refresh-bar dash-refresh-bar--on" : "dash-refresh-bar"} aria-hidden>
           <span />
         </div>
 
@@ -165,11 +167,11 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
           <div
             style={{
               flexShrink: 0,
-              fontSize: 11.5,
+              fontSize: "var(--text-fine)",
               color: "var(--dash-amber-ink)",
               background: "var(--dash-amber-tint)",
               border: "1px solid var(--dash-amber-hairline)",
-              borderRadius: 8,
+              borderRadius: "var(--r-sm)",
               padding: "5px 12px",
             }}
           >
@@ -181,11 +183,11 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
           <div
             style={{
               flexShrink: 0,
-              fontSize: 11.5,
+              fontSize: "var(--text-fine)",
               color: "var(--dash-amber-ink)",
               background: "var(--dash-amber-tint)",
               border: "1px solid var(--dash-amber-hairline)",
-              borderRadius: 8,
+              borderRadius: "var(--r-sm)",
               padding: "5px 12px",
             }}
           >
@@ -222,12 +224,21 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
             position: "fixed",
             inset: 0,
             zIndex: 1200,
-            background: "rgba(0,0,0,.28)",
+            background: "var(--color-scrim)",
             display: "flex",
             justifyContent: "flex-start",
           }}
         >
-          <div onClick={(event) => event.stopPropagation()} style={{ height: "100%" }}>
+          {/* A modal panel: Escape closes it, Tab stays inside it, and focus
+              returns to the button that opened it (useDrawerFocus). */}
+          <div
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="מקטעים ומסננים"
+            onClick={(event) => event.stopPropagation()}
+            style={{ height: "100%" }}
+          >
             <DashboardSidebar
               api={api}
               options={options}
@@ -334,9 +345,11 @@ function tabMeta(state: DashboardState, counts: MetaCounts): { title: string; su
 }
 
 /**
- * The ≤1099px tab row. The active pill is brought into view with `scrollLeft`
- * arithmetic — never `scrollIntoView`, which scrolls every scrollable ancestor
- * and would drag the page itself.
+ * The ≤1099px tab row. The active pill is brought into view with `scrollBy`
+ * on a delta measured with getBoundingClientRect — never `scrollIntoView`,
+ * which scrolls every scrollable ancestor and would drag the page itself. (The
+ * old `scrollLeft = offsetLeft − …` arithmetic assumed LTR: in this RTL
+ * scroller `scrollLeft` runs from 0 down to negatives, so it never moved.)
  */
 function MobileNav({
   tab,
@@ -349,14 +362,19 @@ function MobileNav({
   activeFilterCount: number;
   onOpenFilters: () => void;
 }) {
-  const scroller = React.useRef<HTMLDivElement>(null);
+  const scroller = React.useRef<HTMLElement>(null);
   const activeRef = React.useRef<HTMLButtonElement>(null);
 
   React.useEffect(() => {
     const box = scroller.current;
     const pill = activeRef.current;
     if (!box || !pill) return;
-    box.scrollLeft = pill.offsetLeft - (box.clientWidth - pill.clientWidth) / 2;
+    // Viewport coordinates mean the same thing in RTL and LTR, and scrollBy
+    // takes a physical delta, so the centring is direction-proof.
+    const boxRect = box.getBoundingClientRect();
+    const pillRect = pill.getBoundingClientRect();
+    const delta = pillRect.left + pillRect.width / 2 - (boxRect.left + boxRect.width / 2);
+    if (delta !== 0) box.scrollBy({ left: delta });
   }, [tab]);
 
   return (
@@ -364,8 +382,9 @@ function MobileNav({
       className="dash-mobile-nav"
       style={{ display: "none", alignItems: "center", gap: 8, flexShrink: 0 }}
     >
-      <div
+      <nav
         ref={scroller}
+        aria-label="מקטעי הלוח"
         className="dash-scroll"
         style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, overflowX: "auto", overflowY: "hidden", paddingBottom: 2 }}
       >
@@ -377,52 +396,26 @@ function MobileNav({
               ref={active ? activeRef : undefined}
               type="button"
               onClick={() => onSelect(item.key)}
-              className="dash-press dash-tap"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "7px 13px",
-                borderRadius: 9999,
-                fontSize: 12.5,
-                fontFamily: "inherit",
-                whiteSpace: "nowrap",
-                cursor: "pointer",
-                background: active ? "var(--color-primary)" : "var(--color-canvas)",
-                color: active ? "var(--color-on-primary)" : "var(--color-ink-muted-80)",
-                fontWeight: active ? 600 : 400,
-                border: active ? "none" : "1px solid var(--color-hairline)",
-              }}
+              aria-current={active ? "page" : undefined}
+              className="dash-pill dash-tap"
             >
               <span className="dash-icon">
-                <item.Icon fontSize={14} />
+                <item.Icon fontSize={14} aria-hidden />
               </span>
               {item.label}
             </button>
           );
         })}
-      </div>
+      </nav>
       <button
         type="button"
         onClick={onOpenFilters}
-        className="dash-press dash-tap"
-        style={{
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          background: "var(--color-canvas)",
-          border: "1px solid var(--color-hairline)",
-          borderRadius: 9999,
-          padding: "7px 13px",
-          fontSize: 12.5,
-          fontWeight: 600,
-          fontFamily: "inherit",
-          cursor: "pointer",
-        }}
+        aria-haspopup="dialog"
+        className="dash-pill dash-tap"
+        style={{ fontWeight: 600 }}
       >
         <span className="dash-icon">
-          <FilterList fontSize={14} />
+          <FilterList fontSize={14} aria-hidden />
         </span>
         מסננים
         {activeFilterCount > 0 && (
@@ -430,10 +423,11 @@ function MobileNav({
             style={{
               background: "var(--color-primary)",
               color: "var(--color-on-primary)",
-              fontSize: 10,
+              fontSize: "var(--text-micro)",
               fontWeight: 700,
-              borderRadius: 9999,
+              borderRadius: "var(--r-pill)",
               padding: "1px 6px",
+              fontVariantNumeric: "tabular-nums",
             }}
           >
             {activeFilterCount}
@@ -442,4 +436,58 @@ function MobileNav({
       </button>
     </div>
   );
+}
+
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * The filter drawer behaves as the modal it looks like: focus moves into it
+ * when it opens, Tab and Shift+Tab cycle inside it, Escape closes it, and
+ * focus goes back to whatever opened it (the מסננים pill) when it closes.
+ */
+function useDrawerFocus(
+  open: boolean,
+  panelRef: React.RefObject<HTMLDivElement | null>,
+  close: () => void,
+) {
+  // The latest close, without re-running the effect (and refocusing) on every
+  // render that hands in a new arrow.
+  const closeRef = React.useRef(close);
+  React.useEffect(() => {
+    closeRef.current = close;
+  }, [close]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusables = () =>
+      Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+    focusables()[0]?.focus();
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      opener?.focus();
+    };
+  }, [open, panelRef]);
 }

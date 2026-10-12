@@ -1,19 +1,22 @@
 "use client";
 
-// The white card shell every widget sits in (§9): 1px hairline, 14px radius,
-// no shadow, no gradient. Three optional bands under the title, in this order:
+// The white card shell every widget sits in (§9): 1px hairline, the card
+// radius, no shadow, no gradient. Two optional bands under the title, in this
+// order:
 //
 //   note   — the sentence that explains a column whose meaning changed. §5 of
 //            the build guide: these lines are part of the design, not
 //            decoration, and are never dropped to save space.
 //   error  — an endpoint that answered 4xx/5xx. It sits ABOVE the body and the
-//            last good rows stay visible underneath (§11).
+//            last good rows stay visible underneath (§11). With `onRetry` it
+//            carries the one action that helps: run the fetch again.
 //
 // `right` is the slot the legends, segmented controls and the ignored-filter
 // pill live in.
 
 import * as React from "react";
 
+import { Tag } from "@/components/ui";
 import { Info } from "@/components/ui/icons";
 
 export interface DataCardProps {
@@ -21,7 +24,7 @@ export interface DataCardProps {
   /** Muted line next to the title — the on-screen explanation of a column. */
   subtitle?: React.ReactNode;
   right?: React.ReactNode;
-  /** Full-width band under the header, amber-tinted, with an info glyph. */
+  /** Full-width band under the header, with an info glyph. */
   note?: React.ReactNode;
   error?: string | null;
   onRetry?: () => void;
@@ -81,10 +84,10 @@ export default function DataCard({
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 9, minWidth: 0 }}>
             {title && (
-              <div style={{ fontSize: 14.5, fontWeight: 600, whiteSpace: "nowrap" }}>{title}</div>
+              <h2 style={{ margin: 0, fontSize: "var(--text-body-sm)", fontWeight: 600, whiteSpace: "nowrap" }}>{title}</h2>
             )}
             {subtitle && (
-              <div style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>{subtitle}</div>
+              <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>{subtitle}</div>
             )}
           </div>
           {right && (
@@ -102,13 +105,13 @@ export default function DataCard({
             padding: "7px 16px",
             background: "var(--color-canvas-parchment)",
             borderBottom: "1px solid var(--color-hairline)",
-            fontSize: 11.5,
+            fontSize: "var(--text-fine)",
             color: "var(--color-ink-muted-48)",
             flexShrink: 0,
           }}
         >
           <span className="dash-icon" style={{ color: "var(--dash-amber-ink)" }}>
-            <Info fontSize={13} strokeWidth={2} />
+            <Info fontSize={13} strokeWidth={2} aria-hidden />
           </span>
           {note}
         </div>
@@ -121,32 +124,17 @@ export default function DataCard({
             display: "flex",
             alignItems: "center",
             gap: 10,
-            padding: "8px 16px",
-            background: "rgba(191,53,53,.06)",
+            padding: "6px 16px",
+            background: "var(--color-danger-bg)",
             borderBottom: "1px solid var(--color-hairline)",
-            fontSize: 12.5,
+            fontSize: "var(--text-small)",
             color: "var(--color-destructive)",
             flexShrink: 0,
           }}
         >
           <span style={{ flex: 1 }}>{error}</span>
           {onRetry && (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="dash-press"
-              style={{
-                border: "1px solid var(--color-destructive)",
-                background: "transparent",
-                color: "var(--color-destructive)",
-                borderRadius: 8,
-                padding: "4px 12px",
-                fontSize: 12,
-                fontWeight: 600,
-                fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >
+            <button type="button" onClick={onRetry} className="dash-btn dash-btn--danger">
               נסה שוב
             </button>
           )}
@@ -162,42 +150,15 @@ export default function DataCard({
  * The amber pill of §16.3. A filter an endpoint cannot honour is NAMED on
  * screen — a silently dropped filter is the failure class the metrics rewrite
  * exists to kill, and hiding it in a tooltip is the same failure with extra
- * steps.
+ * steps. The app's one small label pill, in its warning tone.
  */
 export function IgnoredFiltersPill({ text }: { text: string }) {
-  return (
-    <span
-      style={{
-        background: "var(--dash-amber-tint)",
-        color: "var(--dash-amber-ink)",
-        borderRadius: 9999,
-        padding: "3px 10px",
-        fontSize: 11.5,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {text}
-    </span>
-  );
+  return <Tag tone="warning">{text}</Tag>;
 }
 
 /** A neutral statement of fact, not a warning — `המסך אינו תלוי בטווח התאריכים`. */
 export function NeutralPill({ text }: { text: string }) {
-  return (
-    <span
-      style={{
-        background: "var(--color-canvas-parchment)",
-        color: "var(--color-ink-muted-48)",
-        borderRadius: 9999,
-        padding: "3px 10px",
-        fontSize: 11.5,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {text}
-    </span>
-  );
+  return <Tag tone="neutral">{text}</Tag>;
 }
 
 /** The hand-built legend that keeps recharts' plot area full height (§10). */
@@ -212,7 +173,7 @@ export function Legend({
         display: "flex",
         alignItems: "center",
         gap: 13,
-        fontSize: 11.5,
+        fontSize: "var(--text-fine)",
         color: "var(--color-ink-muted-48)",
         flexWrap: "wrap",
       }}
@@ -220,6 +181,7 @@ export function Legend({
       {items.map((item) => (
         <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <span
+            aria-hidden
             style={
               item.line
                 ? item.dashed

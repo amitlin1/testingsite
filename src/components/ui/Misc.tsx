@@ -19,7 +19,7 @@ export const Fab = forwardRef<HTMLButtonElement, FabProps>(function Fab(
 ) {
   const dim = size === "small" ? 40 : size === "medium" ? 48 : 56;
   const bg = color === "primary" ? "var(--color-primary)" : color === "error" ? "var(--color-destructive)" : color === "inherit" ? "var(--color-ink)" : "var(--color-canvas)";
-  const fg = color === "default" ? "var(--color-ink)" : "#fff";
+  const fg = color === "default" ? "var(--color-ink)" : "var(--color-on-primary)";
   const Component = (component || (href ? "a" : "button")) as React.ElementType;
   return (
     <Component
@@ -137,9 +137,10 @@ function makeTransition(kind: "fade" | "grow") {
   return forwardRef<HTMLElement, TransitionProps>(function Transition({ in: inProp = true, unmountOnExit, children, style }, ref) {
     if (unmountOnExit && !inProp) return null;
     const t: React.CSSProperties = {
-      transition: "opacity .2s ease, transform .2s ease",
+      // Nothing appears from nothing: grow starts at .95 (not .85), ease-out.
+      transition: "opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out)",
       opacity: inProp ? 1 : 0,
-      transform: kind === "grow" ? (inProp ? "scale(1)" : "scale(0.85)") : undefined,
+      transform: kind === "grow" ? (inProp ? "scale(1)" : "scale(0.95)") : undefined,
       transformOrigin: "center",
     };
     return React.cloneElement(children, {
@@ -257,7 +258,7 @@ export const StepLabel = forwardRef<HTMLDivElement, StepLabelProps>(function Ste
   const on = active || completed;
   return (
     <div ref={ref} style={{ display: "inline-flex", alignItems: "center", gap: 8, ...sxToStyle(sx), ...style }} {...rest}>
-      <span style={{ width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, background: on ? "var(--color-primary)" : "var(--color-canvas-parchment)", color: on ? "#fff" : "var(--color-ink-muted-48)", border: on ? "none" : "1px solid var(--color-hairline)", flexShrink: 0 }}>
+      <span style={{ width: 26, height: 26, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, background: on ? "var(--color-primary)" : "var(--color-canvas-parchment)", color: on ? "var(--color-on-primary)" : "var(--color-ink-muted-48)", border: on ? "none" : "1px solid var(--color-hairline)", flexShrink: 0 }}>
         {icon ?? (completed ? "✓" : index + 1)}
       </span>
       <span style={{ display: "flex", flexDirection: "column" }}>

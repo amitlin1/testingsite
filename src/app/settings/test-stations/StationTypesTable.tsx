@@ -1,10 +1,11 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Snackbar, Alert, Checkbox, FormControlLabel,
+  Button, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, SearchInput, Snackbar, Alert, Checkbox, FormControlLabel,
+  ConfirmDialog, Skeleton, Tag,
 } from "@/components/ui";
-import { Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 
 interface StationType {
@@ -22,18 +23,27 @@ interface StationTypesTableProps {
   onSelect: (id: number, name: string) => void;
 }
 
+type FormErrors = Partial<Record<"id" | "desc" | "stale", string>>;
+
+const STALE_HELP =
+  "כמה דקות פריט יכול לשבת בבדיקה או במחקר בעמדה מסוג זה ללא תוצאה, לפני שהמערכת מחזירה אותו לתור ומשחררת את העמדה. יש להתאים את הערך לזמן שבדיקה מסוג זה באמת אורכת. 0 = הסוג הזה לא משוחרר אוטומטית לעולם.";
+
 export default function StationTypesTable({ selectedId, onSelect }: StationTypesTableProps) {
   const [rows, setRows] = useState<StationType[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed load is not "no types": it gets its own band and a retry.
+  const [loadError, setLoadError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRow, setEditingRow] = useState<any | null>(null);
   const [formData, setFormData] = useState<any>({});
+  // Validation is shown on the field it is about, not in a toast.
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [saveLoading, setSaveLoading] = useState(false);
 
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [rowToDelete, setRowToDelete] = useState<any | null>(null);
+  const [rowToDelete, setRowToDelete] = useState<StationType | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
     open: false, message: "", severity: "success",
@@ -46,13 +56,14 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await apiFetch(apiUrl);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
     } catch {
-      setSnackbar({ open: true, message: "שגיאה בטעינת נתונים", severity: "error" });
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -74,31 +85,42 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     onSelect(match.test_station_type_id, match.test_type_desc);
   }, [rows, selectedId, onSelect]);
 
+  const openAdd = () => {
+    setEditingRow(null);
+    setFormData({ stale_after_minutes: DEFAULT_STALE_AFTER_MINUTES });
+    setFormErrors({});
+    setOpenDialog(true);
+  };
+  const openEdit = (r: StationType) => { setEditingRow(r); setFormData({ ...r }); setFormErrors({}); setOpenDialog(true); };
+  const setField = (key: string, value: unknown, err?: keyof FormErrors) => {
+    setFormData((f: any) => ({ ...f, [key]: value }));
+    if (err && formErrors[err]) setFormErrors((e) => ({ ...e, [err]: undefined }));
+  };
+
   const handleSave = async () => {
-    if (!formData.test_type_desc?.trim()) {
-      setSnackbar({ open: true, message: "תיאור חובה", severity: "error" });
-      return;
-    }
+    const errors: FormErrors = {};
+    if (!formData.test_type_desc?.trim()) errors.desc = "יש להזין תיאור לסוג העמדה";
     const staleStr = `${formData.stale_after_minutes ?? ""}`.trim();
     const staleNum = Number(staleStr);
     if (!staleStr || !Number.isInteger(staleNum) || staleNum < 0) {
-      setSnackbar({ open: true, message: "זמן שחרור אוטומטי חייב להיות מספר שלם של דקות, 0 או יותר", severity: "error" });
-      return;
+      errors.stale = "יש להזין מספר שלם של דקות, 0 או יותר";
     }
     if (editingRow) {
       const idStr = `${formData.test_station_type_id ?? ""}`.trim();
       const idNum = parseInt(idStr, 10);
-      if (!idStr || !Number.isInteger(idNum) || idNum <= 0) {
-        setSnackbar({ open: true, message: "מזהה חייב להיות מספר שלם חיובי", severity: "error" });
-        return;
-      }
+      if (!idStr || !Number.isInteger(idNum) || idNum <= 0) errors.id = "המזהה חייב להיות מספר שלם חיובי";
     }
+    if (Object.keys(errors).length > 0) { setFormErrors(errors); return; }
+
     setSaveLoading(true);
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow.test_station_type_id}` : apiUrl;
       const res = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
-      if (!res.ok) { const errBody = await res.json().catch(() => null); throw new Error(errBody?.error || "Failed to save"); }
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error || "שמירת סוג העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
+      }
       const savedRow = await res.json();
       if (editingRow && savedRow) {
         setRows(rows.map((r) => (r.test_station_type_id === editingRow.test_station_type_id ? savedRow : r)));
@@ -107,9 +129,9 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         setRows([...rows, savedRow]);
       }
       setOpenDialog(false);
-      setSnackbar({ open: true, message: "נשמר בהצלחה", severity: "success" });
+      setSnackbar({ open: true, message: "סוג העמדה נשמר", severity: "success" });
     } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || "שגיאה בשמירה", severity: "error" });
+      setSnackbar({ open: true, message: err.message || "שמירת סוג העמדה נכשלה. נסה שוב.", severity: "error" });
     } finally {
       setSaveLoading(false);
     }
@@ -117,19 +139,20 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
 
   const handleDeleteConfirm = async () => {
     if (!rowToDelete) return;
+    setDeleting(true);
     try {
       const res = await apiFetch(`${apiUrl}/${rowToDelete.test_station_type_id}`, { method: "DELETE" });
       if (!res.ok) {
-        if (res.status === 409) throw new Error("לא ניתן למחוק כי קיימות עמדות משויכות");
-        throw new Error("Failed to delete");
+        if (res.status === 409) throw new Error("לא ניתן למחוק כי קיימות עמדות משויכות. מחק או העבר אותן קודם.");
+        throw new Error("מחיקת סוג העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
       }
       setRows(rows.filter((r) => r.test_station_type_id !== rowToDelete.test_station_type_id));
       if (selectedId === rowToDelete.test_station_type_id) onSelect(0, "");
-      setSnackbar({ open: true, message: "נמחק בהצלחה", severity: "success" });
+      setSnackbar({ open: true, message: "סוג העמדה נמחק", severity: "success" });
     } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || "שגיאה במחיקה", severity: "error" });
+      setSnackbar({ open: true, message: err.message || "מחיקת סוג העמדה נכשלה. נסה שוב.", severity: "error" });
     } finally {
-      setDeleteConfirmOpen(false);
+      setDeleting(false);
       setRowToDelete(null);
     }
   };
@@ -138,87 +161,111 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
 
   return (
     <div dir="rtl">
-      <style>{`
-        .stz-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 16px; border-top:1px solid #f0f0f0; cursor:pointer; border-inline-start:3px solid transparent; transition:background 0.12s ease; }
-        .stz-row:hover { background:#f5f5f7; }
-        .stz-row.stz-selected { background:#f3f8ff; border-inline-start-color:#0066cc; }
-        .stz-iconbtn { width:28px; height:28px; border:0; border-radius:7px; background:transparent; color:#9a9aa0; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.12s ease, color 0.12s ease; }
-        .stz-iconbtn:hover { background:#ececf0; color:#0066cc; }
-        .stz-iconbtn.stz-danger:hover { background:rgba(191,53,53,0.08); color:#bf3535; }
-      `}</style>
-
-      <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 16, overflow: "hidden" }}>
-        {/* card header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #e0e0e0" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#1d1d1f" }}>סוגי עמדות</span>
-          <button
-            onClick={() => { setEditingRow(null); setFormData({ stale_after_minutes: DEFAULT_STALE_AFTER_MINUTES }); setOpenDialog(true); }}
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#0066cc", color: "#fff", border: 0, borderRadius: 9999, padding: "7px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-          >
-            <Plus size={15} strokeWidth={2.2} />הוסף
-          </button>
+      <div className="settings-card">
+        {/* card header — the compact add pill of Settings.dc.html */}
+        <div className="settings-card__head">
+          <span className="settings-card__title">סוגי עמדות</span>
+          <Button size="small" onClick={openAdd} startIcon={<Plus size={15} strokeWidth={2} aria-hidden />}>
+            הוסף
+          </Button>
         </div>
 
-        {/* search */}
-        <div style={{ position: "relative", padding: "10px 12px", borderBottom: "1px solid #f0f0f0" }}>
-          <span style={{ position: "absolute", insetInlineStart: 24, top: "50%", transform: "translateY(-50%)", color: "#7a7a7a", pointerEvents: "none", display: "flex" }}>
-            <Search size={15} strokeWidth={1.75} />
-          </span>
-          <input
-            className="shx-input"
+        <div className="settings-card__search">
+          <SearchInput
+            fullWidth
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="חיפוש..."
-            style={{ height: 38, borderRadius: 9, paddingInlineStart: 36, paddingInlineEnd: 12, fontSize: 14 }}
+            placeholder="חיפוש סוג עמדה…"
+            aria-label="חיפוש סוג עמדה"
           />
         </div>
 
         {/* rows */}
-        {loading ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "#7a7a7a", fontSize: 14 }}>טוען…</div>
+        {loadError ? (
+          <div className="settings-error">
+            <Alert severity="error">טעינת סוגי העמדות נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
+            <Button variant="outlined" color="inherit" size="small" onClick={fetchData}>נסה שוב</Button>
+          </div>
+        ) : loading ? (
+          <div aria-busy="true" aria-label="טוען סוגי עמדות">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} aria-hidden style={{ padding: "16px var(--space-md)", borderTop: "1px solid var(--color-divider-soft)" }}>
+                <Skeleton width={`${70 - i * 8}%`} height={14} />
+              </div>
+            ))}
+          </div>
         ) : filteredRows.length === 0 ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "#7a7a7a", fontSize: 14 }}>לא נמצאו סוגי עמדות.</div>
+          <div className="settings-empty" style={{ padding: "40px var(--space-md)" }}>
+            {searchTerm ? (
+              <>
+                <div className="settings-empty__title">אין סוגי עמדות שתואמים לחיפוש</div>
+                <div>נסה מילה אחרת, או נקה את החיפוש.</div>
+              </>
+            ) : (
+              <>
+                <div className="settings-empty__title">עדיין אין סוגי עמדות</div>
+                <div>הוסף סוג עמדה ראשון, ואז שייך אליו עמדות.</div>
+              </>
+            )}
+          </div>
         ) : (
           filteredRows.map((r) => {
             const selected = selectedId === r.test_station_type_id;
+            const select = () => onSelect(r.test_station_type_id, r.test_type_desc);
             return (
+              // The row's own button is the keyboard stop (aria-pressed = the
+              // selected type); a click anywhere on the row still selects.
               <div
                 key={r.test_station_type_id}
-                className={"stz-row" + (selected ? " stz-selected" : "")}
-                onClick={() => onSelect(r.test_station_type_id, r.test_type_desc)}
+                className="stz-row"
+                data-selected={selected || undefined}
+                onClick={select}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <span style={{ fontSize: 14, fontWeight: selected ? 600 : 400, color: "#1d1d1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.test_type_desc}
-                  </span>
+                <button
+                  type="button"
+                  className="stz-row__select"
+                  aria-pressed={selected}
+                  onClick={(e) => { e.stopPropagation(); select(); }}
+                >
+                  <span className="stz-row__name">{r.test_type_desc}</span>
                   {r.package_level && (
-                    <span title="עמדה ברמת מארז: בתור מופיעים מארזים בלבד, והפריטים שבתוכם נבדקים יחד איתם" style={{ fontSize: 11, color: "#0066cc", background: "#f3f8ff", border: "1px solid #cfe3fb", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}>
+                    <Tag tone="primary" title="עמדה ברמת מארז: בתור מופיעים מארזים בלבד, והפריטים שבתוכם נבדקים יחד איתם">
                       עמדה ברמת מארז
-                    </span>
+                    </Tag>
                   )}
                   {r.stale_after_minutes != null && (
-                    <span
+                    <Tag
+                      tone="neutral"
                       title={r.stale_after_minutes === 0
                         ? "פריט בעמדה מסוג זה לא משוחרר אוטומטית לעולם"
                         : `פריט שיושב בבדיקה בעמדה מסוג זה ${r.stale_after_minutes} דקות ללא תוצאה משוחרר אוטומטית`}
-                      style={{ fontSize: 11, color: "#7a7a7a", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "2px 8px", flexShrink: 0, whiteSpace: "nowrap" }}
                     >
                       {r.stale_after_minutes === 0 ? "ללא שחרור אוטומטי" : `שחרור אחרי ${r.stale_after_minutes} דק׳`}
-                    </span>
+                    </Tag>
                   )}
                   {r.station_count != null && (
-                    <span style={{ fontSize: 11, color: "#9a9aa0", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "2px 8px", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                    <Tag tone="neutral" style={{ fontVariantNumeric: "tabular-nums" }} aria-label={`${r.station_count} עמדות`}>
                       {r.station_count}
-                    </span>
+                    </Tag>
                   )}
-                </div>
+                </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-                  <button className="stz-iconbtn" title="ערוך" onClick={(e) => { e.stopPropagation(); setEditingRow(r); setFormData({ ...r }); setOpenDialog(true); }}>
-                    <Pencil size={14} strokeWidth={1.75} />
-                  </button>
-                  <button className="stz-iconbtn stz-danger" title="מחק" onClick={(e) => { e.stopPropagation(); setRowToDelete(r); setDeleteConfirmOpen(true); }}>
-                    <Trash2 size={14} strokeWidth={1.75} />
-                  </button>
+                  <IconButton
+                    size="small"
+                    className="set-act"
+                    title={`ערוך את ${r.test_type_desc}`}
+                    onClick={(e) => { e.stopPropagation(); openEdit(r); }}
+                  >
+                    <Pencil size={15} strokeWidth={1.75} aria-hidden />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    className="set-act set-act--danger"
+                    title={`מחק את ${r.test_type_desc}`}
+                    onClick={(e) => { e.stopPropagation(); setRowToDelete(r); }}
+                  >
+                    <Trash2 size={15} strokeWidth={1.75} aria-hidden />
+                  </IconButton>
                 </div>
               </div>
             );
@@ -226,62 +273,71 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         )}
       </div>
 
-      {/* Dialogs */}
+      {/* Add / edit — one column with a real gap between the fields. */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingRow ? "ערוך סוג" : "הוסף סוג"}</DialogTitle>
+        <DialogTitle>{editingRow ? "עריכת סוג עמדה" : "סוג עמדה חדש"}</DialogTitle>
         <DialogContent>
-          {editingRow && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+            {editingRow && (
+              <TextField
+                label="מזהה (ID)"
+                type="number"
+                fullWidth
+                value={formData.test_station_type_id ?? ""}
+                onChange={(e) => setField("test_station_type_id", e.target.value, "id")}
+                error={!!formErrors.id}
+                helperText={formErrors.id ?? "שינוי המזהה יעדכן גם את כל העמדות והמסלולים המשויכים"}
+                inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
+              />
+            )}
             <TextField
-              margin="dense"
-              label="מזהה (ID)"
+              autoFocus
+              label="תיאור סוג עמדה"
+              required
+              fullWidth
+              value={formData.test_type_desc || ""}
+              onChange={(e) => setField("test_type_desc", e.target.value, "desc")}
+              error={!!formErrors.desc}
+              helperText={formErrors.desc}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={Boolean(formData.package_level)}
+                  onChange={(_e, checked) => setField("package_level", checked)}
+                />
+              }
+              label="עמדה ברמת מארז (פתיחת מארז / סגירת מארז): בתור מופיעים מארזים בלבד"
+            />
+            <TextField
+              label="שחרור אוטומטי אחרי (דקות)"
               type="number"
               fullWidth
-              value={formData.test_station_type_id ?? ""}
-              onChange={(e) => setFormData({ ...formData, test_station_type_id: e.target.value })}
-              helperText="שינוי המזהה יעדכן גם את כל העמדות והמסלולים המשויכים"
+              value={formData.stale_after_minutes ?? ""}
+              onChange={(e) => setField("stale_after_minutes", e.target.value, "stale")}
+              error={!!formErrors.stale}
+              helperText={formErrors.stale ?? STALE_HELP}
             />
-          )}
-          <TextField
-            autoFocus
-            margin="dense"
-            label="תיאור סוג עמדה"
-            fullWidth
-            value={formData.test_type_desc || ""}
-            onChange={(e) => setFormData({ ...formData, test_type_desc: e.target.value })}
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={Boolean(formData.package_level)}
-                onChange={(_e, checked) => setFormData({ ...formData, package_level: checked })}
-              />
-            }
-            label="עמדה ברמת מארז (פתיחת מארז / סגירת מארז): בתור מופיעים מארזים בלבד"
-          />
-          <TextField
-            margin="dense"
-            label="שחרור אוטומטי אחרי (דקות)"
-            type="number"
-            fullWidth
-            value={formData.stale_after_minutes ?? ""}
-            onChange={(e) => setFormData({ ...formData, stale_after_minutes: e.target.value })}
-            helperText="כמה דקות פריט יכול לשבת בבדיקה או במחקר בעמדה מסוג זה ללא תוצאה, לפני שהמערכת מחזירה אותו לתור ומשחררת את העמדה. יש להתאים את הערך לזמן שבדיקה מסוג זה באמת אורכת. 0 = הסוג הזה לא משוחרר אוטומטית לעולם."
-          />
+          </div>
         </DialogContent>
+        {/* Cancel first, the action last (DialogActions puts it at the end). */}
         <DialogActions>
-          <Button onClick={handleSave} variant="contained" disabled={saveLoading}>שמור</Button>
-          <Button variant="outlined" onClick={() => setOpenDialog(false)}>ביטול</Button>
+          <Button variant="outlined" color="inherit" onClick={() => setOpenDialog(false)}>ביטול</Button>
+          <Button onClick={handleSave} variant="contained" loading={saveLoading}>שמור</Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} draggable={false}>
-        <DialogTitle>מחיקה</DialogTitle>
-        <DialogContent>בטוח שברצונך למחוק?</DialogContent>
-        <DialogActions>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">מחק</Button>
-          <Button variant="outlined" onClick={() => setDeleteConfirmOpen(false)}>ביטול</Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        draggable={false}
+        open={rowToDelete != null}
+        title="מחיקת סוג עמדה"
+        message={rowToDelete ? `למחוק את סוג העמדה "${rowToDelete.test_type_desc}"? פעולה זו אינה ניתנת לביטול.` : ""}
+        confirmText="מחק"
+        destructive
+        busy={deleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setRowToDelete(null)}
+      />
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>

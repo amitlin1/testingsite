@@ -181,7 +181,8 @@ export function ListItemAvatar({ children, style, sx, ...rest }: React.HTMLAttri
 }
 export function ListSubheader({ children, style, ...rest }: React.HTMLAttributes<HTMLLIElement>) {
   return (
-    <li style={{ listStyle: "none", padding: "8px 16px", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--color-ink-muted-48)", ...style }} {...rest}>
+    // No uppercase / tracking: Hebrew has no capitals, so they only cost legibility.
+    <li style={{ listStyle: "none", padding: "8px 16px", fontSize: "var(--text-fine)", fontWeight: 600, color: "var(--color-ink-muted-48)", ...style }} {...rest}>
       {children}
     </li>
   );
@@ -208,7 +209,7 @@ export const Collapse = forwardRef<HTMLDivElement, CollapseProps>(function Colla
         display: "grid",
         gridTemplateRows: horizontal ? undefined : open ? "1fr" : "0fr",
         gridTemplateColumns: horizontal ? (open ? "1fr" : "0fr") : undefined,
-        transition: "grid-template-rows .25s ease, grid-template-columns .25s ease",
+        transition: "grid-template-rows var(--dur-slow) var(--ease-out), grid-template-columns var(--dur-slow) var(--ease-out)",
         ...sxToStyle(sx),
         ...style,
       }}
@@ -255,7 +256,7 @@ export const Breadcrumbs = forwardRef<HTMLElement, BreadcrumbsProps>(function Br
 ) {
   const items = React.Children.toArray(children).filter(Boolean);
   return (
-    <nav ref={ref} aria-label="breadcrumb" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--color-ink-muted-48)", ...sxToStyle(sx), ...style }} {...rest}>
+    <nav ref={ref} aria-label="נתיב ניווט" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--color-ink-muted-48)", ...sxToStyle(sx), ...style }} {...rest}>
       {items.map((child, i) => (
         <React.Fragment key={i}>
           {i > 0 && <span style={{ color: "var(--color-ink-muted-48)" }}>{separator}</span>}

@@ -1,0 +1,221 @@
+/* /testing — the testing station (src/app/testing/page.tsx) and everything it
+   opens: the context dock (components/testing/TestingDock), the station
+   wizards (tests-popups/stationKit + referenceScan), the report dialog
+   (components/PopUpTestDialog) and the station history (StationHistoryDialog).
+   Imported once, from page.tsx — those components only render on this route.
+
+   What lives here is what an inline style cannot say: hover (only on a fine
+   pointer — station touchscreens would keep it stuck), focus-visible, pressed,
+   the dock panel's open/close, and the small-screen collapses. A rule that a
+   breakpoint or a state overrides must not ALSO be set inline on the element
+   (an inline style always wins). Colours are tokens (src/styles/tokens.css). */
+
+/* ------------------------------------------------------------ Page frame -- */
+/* One width for the dock rows and the board (the artboard's 1280), so their
+   edges line up at every window size. */
+.tst-frame { box-sizing: border-box; width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: var(--space-lg); }
+
+@media (max-width: 599px) {
+  .tst-hide-sm { display: none; }
+}
+
+/* ------------------------------------------------------------------ Dock -- */
+.tst-dock { position: sticky; top: 0; z-index: 30; }
+.tst-dock-strip {
+  background: color-mix(in srgb, var(--color-canvas-parchment) 90%, transparent);
+  -webkit-backdrop-filter: var(--blur-frosted);
+  backdrop-filter: var(--blur-frosted);
+  border-bottom: 1px solid var(--color-hairline-rgba);
+  cursor: pointer;
+}
+.tst-dock-row { display: flex; align-items: center; gap: var(--space-sm); padding-block: var(--space-xs); }
+
+/* The panel under the strip. Closed, it is `visibility: hidden` — not only
+   transparent — so its fields leave the Tab order and the accessibility tree.
+   Closing is faster than opening, and visibility flips only after the fade. */
+.tst-dock-panel {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  background: color-mix(in srgb, var(--color-canvas-parchment) 97%, transparent);
+  -webkit-backdrop-filter: var(--blur-frosted);
+  backdrop-filter: var(--blur-frosted);
+  border-bottom: 1px solid var(--color-hairline-rgba);
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  transform: translateY(-8px);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), visibility 0s linear var(--dur-fast);
+}
+.tst-dock-panel[data-open] {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out), visibility 0s;
+}
+.tst-dock-panel-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding-block: 14px; }
+
+/* "שינוי עמדה ועובד" — the panel's toggle (aria-expanded). */
+.tst-dock-toggle {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding-inline: var(--space-xs);
+  border-radius: var(--r-sm);
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.tst-dock-toggle:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .tst-dock-toggle:hover { color: var(--color-ink); background: color-mix(in srgb, var(--color-ink) 5%, transparent); }
+}
+.tst-dock-chevron { transition: transform var(--dur-base) var(--ease-out); }
+.tst-dock-toggle[aria-expanded="true"] .tst-dock-chevron { transform: rotate(180deg); }
+
+/* Scan button: the ink `variant="dark"` button at the artboard's 44px / r10. */
+.sh-btn.tst-dock-scan { min-height: 44px; border-radius: 10px; padding-inline: 20px; }
+
+/* ----------------------------------------------------------------- Queue -- */
+.sh-input-wrap.tst-filter { width: 300px; max-width: 56vw; min-height: 44px; }
+.sh-btn.tst-toolbar-btn { min-height: 44px; }
+
+/* Row CTA ("התחל בדיקה" / "המשך בדיקה"): the artboard's 44px, r11 button. */
+.sh-btn.tst-cta { flex-shrink: 0; width: 120px; min-height: 44px; padding-inline: 0; border-radius: var(--r-md); }
+/* A finished row has nothing to press: a status, not a disabled button. */
+.tst-cta-done {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 120px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--r-md);
+  background: var(--color-canvas-parchment);
+  color: var(--color-success-ink);
+  font-size: var(--text-body);
+  font-weight: var(--fw-semibold);
+}
+
+/* "פריטים באותו מארז" — the soft-blue box button in the package slot. */
+.sh-iconbtn.tst-pkg-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--color-primary-border);
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+  border-radius: var(--r-md);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.tst-pkg-btn:hover:not(:disabled) { background: var(--color-primary-soft); }
+}
+
+/* "מתעדכן…" beside the queue title while a refresh runs over a list that is
+   already on screen (the list itself stays, so the scroll position does too). */
+.tst-refreshing { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+
+/* -------------------------------------------------------------- Scanning -- */
+/* The scan dialog's field: a code, so LTR, kept at the reading edge. */
+.sh-input-wrap.tst-scan-field { min-height: 52px; }
+.sh-input-wrap.tst-scan-field > input { font-size: var(--text-lead); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Reference-item scan field in the package wizards (referenceScan.tsx). The
+   edge follows focus (the .sh-input ring), not whether the field has text. */
+.sh-input.tst-ref-scan { height: 52px; border-radius: var(--r-md); font-size: var(--text-lead); font-variant-numeric: tabular-nums; letter-spacing: 1px; text-align: right; }
+
+/* --------------------------------------------------------- Station wizard -- */
+/* stationKit's StationShell, aligned to the package wizard shell
+   (PackageWizardShell / design/Package Stations.dc.html). */
+.tst-wiz-step {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+.tst-wiz-step[aria-current="step"] { background: var(--color-primary-soft); }
+.tst-wiz-step:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) {
+  .tst-wiz-step:not([aria-current="step"]):hover { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
+}
+
+/* Step chips (tablet / phone, where the rail is gone). */
+.tst-wiz-chip {
+  all: unset;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding-inline: 14px;
+  border-radius: var(--r-pill);
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-48);
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.tst-wiz-chip[data-done] { background: var(--color-success-bg); color: var(--color-success-ink); }
+.tst-wiz-chip[aria-current="step"] { background: var(--color-primary-soft); color: var(--color-primary); }
+.tst-wiz-chip:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+
+.sh-btn.tst-wiz-btn { min-height: 44px; padding-inline: 22px; }
+
+/* Pass / fail pair: a real toggle (aria-pressed), so it gets every state. */
+.tst-passfail {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--color-border-strong);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: var(--text-lead);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: transform var(--t-press) var(--ease-press), background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.tst-passfail:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .tst-passfail:not([aria-pressed="true"]):hover { background: var(--color-surface-pearl); border-color: var(--color-field-border); }
+}
+.tst-passfail--pass[aria-pressed="true"] { border-color: var(--color-success-ink); background: var(--color-success-bg); color: var(--color-success-ink); }
+.tst-passfail--fail[aria-pressed="true"] { border-color: var(--color-destructive); background: var(--color-danger-bg); color: var(--color-destructive); }
+
+/* Photo uploader: camera / gallery buttons at touch height, and the filmstrip
+   tiles (buttons: Tab + Enter pick the frame shown large). */
+.sh-btn.tst-photo-btn { min-height: 56px; }
+.tst-film {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  flex: 1 1 150px;
+  min-width: 130px;
+  max-width: 280px;
+  aspect-ratio: 4 / 3;
+  border-radius: 13px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--color-canvas-parchment);
+}
+.tst-film:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }

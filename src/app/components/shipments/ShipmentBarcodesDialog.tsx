@@ -6,17 +6,13 @@ import {
     DialogContent,
     DialogActions,
     Button,
-    Box,
-    Typography,
     Alert,
-    IconButton,
 } from "@/components/ui";
 import Barcode from "react-barcode";
 import { useReactToPrint } from "react-to-print";
 import { Print as PrintIcon } from "@/components/ui/icons";
-import { Close as CloseIcon } from "@/components/ui/icons";
-import { QrCode2 as QrCode2Icon } from "@/components/ui/icons";
 import { Shipment } from "@/types";
+import { formatDate } from "@/app/lib/datetime";
 
 type ShipmentBarcodesDialogProps = {
     open: boolean;
@@ -36,7 +32,7 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
 
     // The barcode encodes the shipment number so a scan resolves to the shipment.
     const barcodeValue = shipment?.shipment_code ?? "";
-    const shipmentDate = shipment ? new Date(shipment.shipment_date).toLocaleDateString("he-IL") : "";
+    const shipmentDate = shipment ? formatDate(shipment.shipment_date) : "";
 
     const handlePrint = useReactToPrint({
         contentRef: printRef,
@@ -44,34 +40,26 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
     });
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-            <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <QrCode2Icon color="primary" />
-                    <Typography variant="h6" component="span" fontWeight="bold">
-                        הדפסת מדבקות למשלוח {shipment?.shipment_code ?? ""}
-                    </Typography>
-                </Box>
-                <IconButton onClick={onClose}>
-                    <CloseIcon />
-                </IconButton>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle onClose={onClose}>
+                הדפסת מדבקות למשלוח {shipment?.shipment_code ?? ""}
             </DialogTitle>
             <DialogContent dividers>
                 {total <= 0 ? (
-                    <Alert severity="info">למשלוח זה לא הוגדרה כמות פריטים להדפסה</Alert>
+                    <Alert severity="info" style={{ marginTop: "var(--space-md)" }}>למשלוח זה לא הוגדרה כמות פריטים להדפסה</Alert>
                 ) : (
                     <>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        <p style={{ margin: "var(--space-md) 0", fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-48)" }}>
                             יודפסו {total} מדבקות — מדבקה אחת לכל פריט, עם פרטי המשלוח ומספר מתוך סה״כ.
-                        </Typography>
+                        </p>
                         {/* Printable area: one label per item, each on its own page/label. */}
-                        <Box
-                            sx={{
+                        <div
+                            style={{
                                 maxHeight: 360,
                                 overflowY: "auto",
-                                border: "1px solid #e0e0e0",
-                                borderRadius: 2,
-                                bgcolor: "#fafafa",
+                                border: "1px solid var(--color-hairline)",
+                                borderRadius: "var(--r-sm)",
+                                background: "var(--color-surface-pearl)",
                             }}
                         >
                             <div ref={printRef}>
@@ -96,22 +84,23 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                                             <div style={{ fontSize: 13 }}>לקוח: {shipment?.customer_code}</div>
                                             <div style={{ fontSize: 13 }}>תאריך: {shipmentDate}</div>
                                             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
-                                                {n} / {total}
+                                                {/* <bdi>: RTL would print label 3 of 12 as "12 / 3" */}
+                                                <bdi dir="ltr">{n} / {total}</bdi>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        </Box>
+                        </div>
                     </>
                 )}
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose}>סגור</Button>
+                <Button variant="outlined" color="inherit" onClick={onClose}>סגור</Button>
                 <Button
                     onClick={() => handlePrint()}
                     variant="contained"
-                    startIcon={<PrintIcon sx={{ ml: 1 }} />}
+                    startIcon={<PrintIcon fontSize={18} />}
                     disabled={total <= 0}
                 >
                     הדפס הכל ({total})

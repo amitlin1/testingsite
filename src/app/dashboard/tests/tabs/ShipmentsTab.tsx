@@ -38,14 +38,16 @@ export function shipmentColumns(): Array<Column<ShipmentWire>> {
       header: "משלוח",
       sortValue: (r) => r.shipmentCode,
       render: (r) => (
-        <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>{r.shipmentCode}</span>
+        // Ink, not the action blue: the code is not a link (the row opens the
+        // history), and blue on a non-link dilutes "blue = clickable".
+        <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{r.shipmentCode}</span>
       ),
     },
     {
       key: "customer",
       header: "לקוח",
       sortValue: (r) => r.customerName,
-      render: (r) => <span style={{ fontSize: 12.5 }}>{r.customerName}</span>,
+      render: (r) => <span style={{ fontSize: "var(--text-small)" }}>{r.customerName}</span>,
     },
     {
       key: "date",
@@ -54,7 +56,7 @@ export function shipmentColumns(): Array<Column<ShipmentWire>> {
       secondary: true,
       sortValue: (r) => new Date(r.shipmentDate).getTime() || null,
       render: (r) => (
-        <span style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>
+        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
           {formatShortDate(r.shipmentDate)}
         </span>
       ),
@@ -109,7 +111,7 @@ export function shipmentColumns(): Array<Column<ShipmentWire>> {
       numeric: true,
       sortValue: (r) => r.itemsInRoutesPercentage,
       render: (r) => (
-        <span style={{ fontSize: 12.5, color: "var(--color-ink-muted-48)" }}>
+        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
           {formatPercent(r.itemsInRoutesPercentage)}
         </span>
       ),
@@ -130,7 +132,7 @@ export default function ShipmentsTab({ api, data, openHistory }: TabProps) {
       title="התקדמות משלוחים פתוחים"
       right={
         <>
-          <span style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>
+          <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
             ״במסלול״ = פריטים שכבר נפתח להם מסלול בדיקה
           </span>
           {ignored && <IgnoredFiltersPill text={ignored.text} />}

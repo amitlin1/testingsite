@@ -1,5 +1,7 @@
 /* =========================================================================
-   Dashboard — the layout rules inline styles cannot express (§15).
+   Dashboard — the layout rules inline styles cannot express (§15), and the
+   control states (hover / focus / pressed / selected) they cannot express
+   either.
 
    Breakpoints are CSS, not `useMediaQuery`: the layout has to be right on the
    FIRST paint, before hydration. `useMediaQuery` is used only where the
@@ -12,27 +14,36 @@
 
    Any property one of these rules overrides must NOT be set inline on the same
    element, or must be overridden with !important here.
+
+   Hover effects live under `(hover: hover) and (pointer: fine)` so they never
+   stick on the station touchscreens.
    ========================================================================= */
 
-.dash-root {
-  /* Dashboard-local palette. Every value is from §9 / the build guide's table;
-     nothing here invents a colour, it only gives the ramp and the two amber
-     roles a name so no component carries a raw hex. */
-  --dash-ramp-1: #0066cc;
+/* The palette is declared on the page root AND on the history overlay: the
+   overlay is the app's Dialog, which portals to <body>, outside .dash-root,
+   so it would not inherit these otherwise. */
+.dash-root,
+.dash-overlay {
+  /* Dashboard-local chart palette. The ramp is the one place a raw value is
+     allowed: it is the documented chart scale (§9 / the build guide), not a
+     UI colour. Everything else points at a token. */
+  --dash-ramp-1: var(--color-primary);
   --dash-ramp-2: #4d94dd;
   --dash-ramp-3: #86b7e8;
   --dash-ramp-4: #b8d4f0;
-  --dash-ramp-5: #dcdce2;
-  --dash-tint: #e6efff;
-  --dash-amber-ink: #a86a1a;
-  --dash-amber-on-dark: #f0b366;
-  --dash-amber-tint: #fdf3e6;
-  --dash-amber-hairline: #f0e2cc;
-  --dash-green-on-dark: #7fd1a8;
-  --dash-strip-divider: rgba(255, 255, 255, 0.1);
-  --dash-row-hover: rgba(0, 0, 0, 0.02);
-  --dash-nav-hover: rgba(0, 0, 0, 0.035);
+  /* The neutral step. Was #dcdce2 (1.37:1 on white — the research band all but
+     vanished on a white card); this clears the 3:1 a graphic needs. */
+  --dash-ramp-5: #949499;
+  --dash-tint: var(--color-primary-soft);
+  --dash-amber-ink: var(--color-warning-ink);   /* was #a86a1a: 4.04:1 on its tint */
+  /* Amber as a FILL on a white card (the unmapped-status slice / band). */
+  --dash-amber-chart: var(--color-status-late);
+  --dash-amber-tint: var(--color-warning-bg);
+  --dash-amber-hairline: var(--color-warning-border);
+  --dash-strip-divider: color-mix(in srgb, var(--color-on-dark) 10%, transparent);
+}
 
+.dash-root {
   /* §14.2 — height:100% and NOT 100vh. AppShell's content area is already
      calc(100vh - 56px) with overflowY:auto; 100vh here would add a second
      scrollbar the moment the shell's own bar appears. */
@@ -49,7 +60,7 @@
 .dash-card {
   background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
-  border-radius: 14px;
+  border-radius: var(--r-card);
   /* §9: no shadow anywhere. Elevation is a surface change or a hairline. */
   box-shadow: none;
 }
@@ -73,8 +84,8 @@
   height: 10px;
 }
 .dash-scroll::-webkit-scrollbar-thumb {
-  background: #d4d4dc;
-  border-radius: 9999px;
+  background: var(--color-border-strong);
+  border-radius: var(--r-pill);
   border: 3px solid transparent;
   background-clip: content-box;
 }
@@ -89,11 +100,11 @@
 }
 
 .dash-table th {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
   color: var(--color-ink-muted-48);
   padding: 9px 10px;
-  text-align: right;
+  text-align: start;
   white-space: nowrap;
   position: sticky;
   top: 0;
@@ -111,7 +122,7 @@
 }
 
 .dash-table td {
-  font-size: 13px;
+  font-size: var(--text-small);
   padding: 9px 10px;
 }
 
@@ -119,12 +130,21 @@
   border-top: 1px solid var(--color-divider-soft);
 }
 
+/* A row that opens the history overlay is a keyboard stop too (DenseTable
+   gives it tabIndex + Enter/Space). Inset ring: an outside one is clipped by
+   the scrolling card. */
 .dash-table tbody tr.dash-row-click {
   cursor: pointer;
 }
+.dash-table tbody tr.dash-row-click:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: -2px;
+}
 
-.dash-table tbody tr:hover {
-  background: var(--dash-row-hover);
+@media (hover: hover) and (pointer: fine) {
+  .dash-table tbody tr:hover {
+    background: var(--color-surface-pearl);
+  }
 }
 
 .dash-num {
@@ -132,18 +152,64 @@
   font-variant-numeric: tabular-nums;
 }
 
-.dash-sortable {
+/* A sortable header is a button inside the th (aria-sort lives on the th).
+   The chevron is always there, faint, so a sortable column reads as one
+   before anyone clicks it; the active column's chevron is ink. */
+.dash-sort {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 24px;
   cursor: pointer;
+  color: inherit;
+  font: inherit;
+  border-radius: var(--r-xs);
   user-select: none;
 }
-
-/* Press affordance — the only button motion in the system (§9). */
-.dash-press:active {
-  transform: scale(0.97);
+.dash-sort__chevron {
+  display: inline-flex;
+  color: var(--color-ink-muted-40);
+}
+.dash-sort[data-active] {
+  color: var(--color-ink);
+}
+.dash-sort[data-active] .dash-sort__chevron {
+  color: var(--color-ink);
+}
+.dash-sort:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .dash-sort:hover {
+    color: var(--color-ink);
+  }
 }
 
-.dash-nav-item:hover {
-  background: var(--dash-nav-hover);
+/* A duration and its other clock (§16.1): the measured value, and under it the
+   twin in muted fine print — both on screen, never one hidden in a tooltip. */
+.dash-twin {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.25;
+}
+.dash-twin__alt {
+  font-size: var(--text-fine);
+  font-weight: var(--fw-regular);
+  color: var(--color-ink-muted-48);
+  white-space: nowrap;
+}
+
+/* Extra figures one focus away (p95 / mean): the trigger is focusable, so the
+   tooltip opens from the keyboard as well as the mouse. */
+.dash-more {
+  border-radius: var(--r-xs);
+  text-decoration: underline dotted var(--color-ink-muted-40);
+  text-underline-offset: 3px;
+  cursor: help;
 }
 
 .dash-icon {
@@ -153,20 +219,321 @@
   flex-shrink: 0;
 }
 
-/* The 2px indeterminate bar under the header during a refresh (§4, §11). */
+/* ---- controls ------------------------------------------------------- */
+/* One button shape for the dashboard's own controls (header, cards, overlay):
+   a 32px pill, hover / focus / pressed / disabled. The press is the only
+   button motion in the system (§9). */
+.dash-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--r-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-80);
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--t-press) var(--ease-press),
+    background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.dash-btn--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.dash-btn--danger {
+  background: transparent;
+  border-color: var(--color-destructive);
+  color: var(--color-destructive);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dash-btn:hover:not(:disabled) { background: var(--color-canvas-parchment); }
+  .dash-btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+  .dash-btn--danger:hover:not(:disabled) { background: var(--color-danger-bg); }
+}
+.dash-btn:active:not(:disabled) { transform: scale(.97); }
+.dash-btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.dash-btn:disabled {
+  background: var(--color-canvas-parchment);
+  border-color: transparent;
+  color: var(--color-ink-muted-48);
+  cursor: not-allowed;
+}
+/* Busy (the 60s refresh): keep the button's own colours, dimmed — not the
+   grey disabled look, which would flash every minute. */
+.dash-btn[aria-busy="true"] { cursor: progress; }
+.dash-btn--primary[aria-busy="true"] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+  opacity: .7;
+}
+
+/* A text action ("נקה הכל", "הכל", "הצג"). The padding is the hit area
+   (≥24px tall); the negative margin keeps the text where the design put it. */
+.dash-link {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+.dash-link--on-dark { color: var(--color-primary-on-dark); }
+@media (hover: hover) and (pointer: fine) {
+  .dash-link:hover { background: color-mix(in srgb, var(--color-primary) 8%, transparent); }
+  .dash-link--on-dark:hover { background: color-mix(in srgb, var(--color-on-dark) 10%, transparent); }
+}
+.dash-link:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 0; }
+
+/* Square icon buttons: the collapsed rail (36) and the rail's collapse (32). */
+.dash-icon-btn {
+  box-sizing: border-box;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--color-ink-muted-48);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.dash-icon-btn--sm {
+  width: 32px;
+  height: 32px;
+  background: var(--color-canvas-parchment);
+}
+.dash-icon-btn[aria-current="page"] {
+  background: var(--dash-tint);
+  color: var(--color-primary);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dash-icon-btn:not([aria-current="page"]):hover { background: var(--color-canvas-parchment); color: var(--color-ink); }
+  .dash-icon-btn--sm:hover { background: var(--color-divider-soft); }
+}
+.dash-icon-btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+
+/* The expanded rail's section list. */
+.dash-nav-item {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--color-ink-muted-80);
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-regular);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.dash-nav-item[aria-current="page"] {
+  background: var(--dash-tint);
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dash-nav-item:not([aria-current="page"]):hover { background: var(--color-canvas-parchment); color: var(--color-ink); }
+}
+.dash-nav-item:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+
+/* The ≤1099px tab pills and the filters button beside them. */
+.dash-pill {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 13px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-80);
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-regular);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--t-press) var(--ease-press), background-color var(--dur-fast) ease;
+}
+.dash-pill[aria-current="page"] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: var(--fw-semibold);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dash-pill:not([aria-current="page"]):hover { background: var(--color-canvas-parchment); }
+}
+.dash-pill:active { transform: scale(.97); }
+.dash-pill:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+
+/* The segmented control (§9): parchment track, the pressed option on white. */
+.dash-seg {
+  display: flex;
+  background: var(--color-canvas-parchment);
+  border-radius: var(--r-sm);
+  padding: 2px;
+}
+.dash-seg__btn {
+  flex: 1;
+  border: none;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--color-ink-muted-48);
+  font-family: inherit;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-regular);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.dash-seg__btn[aria-pressed="true"] {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-weight: var(--fw-semibold);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dash-seg__btn:not([aria-pressed="true"]):hover { color: var(--color-ink); }
+}
+.dash-seg__btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 0; }
+
+/* Rail filter fields (select / text / date). Focus is the app's field ring;
+   a field that CARRIES a value is told apart by a soft-blue fill and bold ink —
+   not by the focus blue, so "focused" and "filled" never look the same. */
+.dash-field {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-sm);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-regular);
+  outline: none;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, background-color var(--dur-fast) ease;
+}
+select.dash-field {
+  appearance: none;
+  padding-inline-end: 28px;
+  cursor: pointer;
+}
+.dash-field::placeholder { color: var(--color-ink-muted-48); }
+.dash-field--set {
+  background: var(--color-primary-tint);
+  border-color: var(--color-primary-border);
+  font-weight: var(--fw-semibold);
+}
+.dash-field:focus {
+  border-color: var(--color-primary-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+.dash-field-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+}
+
+/* The overview's at-risk list: each row opens the shipment's history. */
+.dash-risk-row {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 3px 4px;
+  margin: -3px -4px;
+  border: none;
+  border-radius: var(--r-xs);
+  background: none;
+  text-align: start;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .dash-risk-row:hover { background: var(--color-surface-pearl); }
+}
+.dash-risk-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 0; }
+
+/* The 2px indeterminate bar under the header during a refresh (§4, §11).
+   It moves only while a refresh is running (`--on`), and it sweeps in the
+   reading direction: from the start edge toward the end. */
 .dash-refresh-bar {
   height: 2px;
   overflow: hidden;
   background: var(--color-divider-soft);
   border-radius: 2px;
   flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease;
+}
+.dash-refresh-bar--on {
+  opacity: 1;
 }
 .dash-refresh-bar > span {
   display: block;
   width: 30%;
   height: 100%;
   background: var(--color-primary);
-  animation: sh-indeterminate 1.1s infinite linear;
+}
+.dash-refresh-bar--on > span {
+  animation: dash-sweep-ltr 1.1s infinite linear;
+}
+:dir(rtl) > .dash-refresh-bar--on > span,
+[dir="rtl"] .dash-refresh-bar--on > span {
+  animation-name: dash-sweep-rtl;
+}
+@keyframes dash-sweep-ltr {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+/* In RTL the block sits at the right edge, so it starts just outside it and
+   travels left. */
+@keyframes dash-sweep-rtl {
+  0% { transform: translateX(120%); }
+  100% { transform: translateX(-340%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-refresh-bar--on > span {
+    animation: none;
+    width: 100%;
+    opacity: .45;
+  }
 }
 
 /* Charts are LTR islands so the time axis runs left to right (§10). */

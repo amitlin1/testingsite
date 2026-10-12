@@ -24,7 +24,7 @@ export const GRID_STROKE = "var(--color-divider-soft)";
 export const AXIS_PROPS = {
   tickLine: false,
   axisLine: false,
-  tick: { fontSize: 11, fill: "#7a7a7a" },
+  tick: { fontSize: 11, fill: "var(--color-ink-muted-48)" },
 } as const;
 
 export interface TooltipRow {
@@ -61,9 +61,9 @@ export function RtlTooltip({
       style={{
         background: "var(--color-canvas)",
         border: "1px solid var(--color-hairline)",
-        borderRadius: 8,
+        borderRadius: "var(--r-sm)",
         padding: "8px 10px",
-        fontSize: 12.5,
+        fontSize: "var(--text-small)",
         fontFamily: "var(--font-text)",
         color: "var(--color-ink)",
         boxShadow: "none",

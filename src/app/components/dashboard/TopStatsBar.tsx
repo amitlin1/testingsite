@@ -10,10 +10,18 @@
 // is what the customer experienced and its note carries the work twin — the two
 // never share a cell without saying which is which. On dark, links are
 // `--color-primary-on-dark`; the action blue is unreadable there.
+//
+// The notes are NEUTRAL: no threshold says the queue is bad or the net wait is
+// good, so neither is painted amber or green regardless of its value. The one
+// coloured note is the link to the stuck items.
+//
+// The values use tabular numerals: Rubik's digits are proportional, and without
+// them the strip jittered sideways on every 60-second refresh.
 
 import * as React from "react";
 
 import { Skeleton } from "@/components/ui";
+import { ArrowForward } from "@/components/ui/icons";
 import type { KpisWire, StationWire } from "@/app/lib/dashboard/api-types";
 import { formatCount, formatMinutes, isNil } from "@/app/lib/dashboard/format";
 
@@ -30,7 +38,6 @@ interface Cell {
   label: string;
   value: React.ReactNode;
   note: React.ReactNode;
-  tone: string;
 }
 
 export default function TopStatsBar({
@@ -52,7 +59,6 @@ export default function TopStatsBar({
       label: "בבדיקה עכשיו",
       value: formatCount(kpis?.itemsCurrentlyInTest),
       note: isNil(activeStations) ? "" : `${formatCount(activeStations)} עמדות`,
-      tone: "var(--color-body-muted)",
     },
     {
       label: "ממתינים",
@@ -60,7 +66,6 @@ export default function TopStatsBar({
       // `מזה`, not `ועוד`: itemsCurrentlyInQueue already counts `queued` AND
       // `queued_research`, so the pool is a breakdown of the number above it.
       note: isNil(researchPool) ? "" : `מזה ${formatCount(researchPool)} בבריכת המחקר`,
-      tone: "var(--dash-amber-on-dark)",
     },
     {
       label: "המתנה · ברוטו",
@@ -68,36 +73,21 @@ export default function TopStatsBar({
       note: isNil(kpis?._new_averageQueueWorkMinutes)
         ? ""
         : `נטו ${formatMinutes(kpis?._new_averageQueueWorkMinutes)}`,
-      tone: "var(--dash-green-on-dark)",
     },
     {
       label: "מסלולים שנסגרו",
       value: formatCount(kpis?.totalItemsProcessed),
       note: isNil(kpis?._new_unitsTouched) ? "" : `${formatCount(kpis?._new_unitsTouched)} יחידות טופלו`,
-      tone: "var(--color-body-muted)",
     },
     {
       label: "תקועים 48 ש׳+",
       value: formatCount(stuckCount),
       note: (
-        <button
-          type="button"
-          onClick={onShowStuck}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            fontFamily: "inherit",
-            fontSize: 11.5,
-            fontWeight: 600,
-            color: "var(--color-primary-on-dark)",
-            cursor: "pointer",
-          }}
-        >
-          הצג ←
+        <button type="button" onClick={onShowStuck} className="dash-link dash-link--on-dark">
+          הצג
+          <ArrowForward fontSize={13} aria-hidden />
         </button>
       ),
-      tone: "var(--color-primary-on-dark)",
     },
   ];
 
@@ -106,7 +96,7 @@ export default function TopStatsBar({
       className="dash-strip"
       style={{
         background: "var(--color-surface-tile-1)",
-        borderRadius: 12,
+        borderRadius: "var(--r-md)",
         display: "flex",
         color: "var(--color-on-dark)",
         overflow: "hidden",
@@ -118,18 +108,26 @@ export default function TopStatsBar({
           key={cell.label}
           style={{ flex: 1, padding: "11px 18px", borderInlineEnd: "1px solid var(--dash-strip-divider)" }}
         >
-          <div style={{ fontSize: 11.5, color: "var(--color-body-muted)", fontWeight: 600 }}>
+          <div style={{ fontSize: "var(--text-fine)", color: "var(--color-body-muted)", fontWeight: 600 }}>
             {cell.label}
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2 }}>
-            <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.8px", lineHeight: 1.1 }}>
+            <span
+              style={{
+                fontSize: "var(--text-kpi)",
+                fontWeight: 700,
+                letterSpacing: "var(--ls-display)",
+                lineHeight: 1.1,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
               {loading ? (
-                <Skeleton variant="text" width={54} height={28} animation="pulse" />
+                <Skeleton variant="text" width={54} height={26} animation="pulse" />
               ) : (
                 cell.value
               )}
             </span>
-            <span style={{ fontSize: 11.5, color: cell.tone }}>{cell.note}</span>
+            <span style={{ fontSize: "var(--text-fine)", color: "var(--color-body-muted)" }}>{cell.note}</span>
           </div>
         </div>
       ))}

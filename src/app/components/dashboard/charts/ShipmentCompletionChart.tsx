@@ -43,7 +43,7 @@ export default function ShipmentCompletionChart({ points }: { points: Completion
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 12.5,
+          fontSize: "var(--text-small)",
           color: "var(--color-ink-muted-48)",
           direction: "rtl",
         }}
@@ -83,7 +83,9 @@ export default function ShipmentCompletionChart({ points }: { points: Completion
                     // Numerator and denominator on one line, so the ratio above
                     // them is checkable rather than taken on faith.
                     label: "נסגרו מתוך שנפתחו",
-                    value: `${formatCount(row?.finished ?? null)} / ${formatCount(row?.routed ?? null)}`,
+                    // LRI…PDI isolate the ratio: a spaced "a / b" in the RTL
+                    // tooltip is otherwise shown reversed (build guide §3.1).
+                    value: `\u2066${formatCount(row?.finished ?? null)} / ${formatCount(row?.routed ?? null)}\u2069`,
                     color: "var(--color-ink-muted-48)",
                   },
                 ]}

@@ -2,6 +2,7 @@
 import React, { forwardRef } from "react";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
+import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 
 export interface TableContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   component?: React.ElementType;
@@ -83,14 +84,16 @@ export interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement>
   sx?: SxInput;
 }
 export const TableRow = forwardRef<HTMLTableRowElement, TableRowProps>(function TableRow(
-  { hover, selected, sx, style, className, children, ...rest },
+  { hover: _hover, selected, sx, style, className, children, ...rest },
   ref,
 ) {
   return (
     <tr
       ref={ref}
-      className={cn(hover && "sh-row-hover", className)}
-      style={{ background: selected ? "var(--color-surface-pearl)" : undefined, ...sxToStyle(sx), ...style }}
+      className={className}
+      // Every body row hovers (ui.css); selected rows get the blue tint there.
+      aria-selected={selected || undefined}
+      style={{ ...sxToStyle(sx), ...style }}
       {...rest}
     >
       {children}
@@ -108,7 +111,7 @@ export interface TableCellProps extends Omit<React.TdHTMLAttributes<HTMLTableCel
   sx?: SxInput;
 }
 export const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(function TableCell(
-  { align, component, variant, padding, sortDirection: _sd, sx, style, children, ...rest },
+  { align, component, variant, padding, sortDirection, sx, style, children, ...rest },
   ref,
 ) {
   const section = React.useContext(TableSectionCtx);
@@ -116,6 +119,7 @@ export const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(functi
   return (
     <Component
       ref={ref}
+      aria-sort={sortDirection === "asc" ? "ascending" : sortDirection === "desc" ? "descending" : undefined}
       style={{
         textAlign: align && align !== "inherit" ? (align as React.CSSProperties["textAlign"]) : undefined,
         padding: padding === "none" ? 0 : undefined,
@@ -129,20 +133,25 @@ export const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(functi
   );
 });
 
-export interface TableSortLabelProps extends React.HTMLAttributes<HTMLSpanElement> {
+export interface TableSortLabelProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
   direction?: "asc" | "desc";
   sx?: SxInput;
 }
+/** A real button (keyboard + focus), with a drawn chevron. Put the direction on
+ *  the header cell too (`<TableCell sortDirection>` → aria-sort). */
 export function TableSortLabel({ active, direction = "asc", sx, style, children, ...rest }: TableSortLabelProps) {
+  const Icon = !active ? ChevronsUpDown : direction === "asc" ? ChevronUp : ChevronDown;
   return (
-    <span
-      role="button"
-      style={{ display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer", color: active ? "var(--color-ink)" : "inherit", ...sxToStyle(sx), ...style }}
+    <button
+      type="button"
+      className="sh-sort-label"
+      data-active={active || undefined}
+      style={{ ...sxToStyle(sx), ...style }}
       {...rest}
     >
       {children}
-      <span style={{ fontSize: 10, opacity: active ? 1 : 0.4 }}>{direction === "asc" ? "▲" : "▼"}</span>
-    </span>
+      <Icon size={13} strokeWidth={2} aria-hidden style={{ opacity: active ? 1 : 0.45, flexShrink: 0 }} />
+    </button>
   );
 }

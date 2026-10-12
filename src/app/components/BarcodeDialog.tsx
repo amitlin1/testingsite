@@ -33,7 +33,7 @@ export default function BarcodeDialog({ open, onClose, itemId, sourceId, itemSer
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>הדפסת ברקוד</DialogTitle>
+            <DialogTitle onClose={onClose}>הדפסת ברקוד</DialogTitle>
             <DialogContent>
                 <Box
                     sx={{
@@ -55,12 +55,13 @@ export default function BarcodeDialog({ open, onClose, itemId, sourceId, itemSer
                     </div>
                 </Box>
             </DialogContent>
+            {/* Close then the action; DialogActions keeps the filled one last. */}
             <DialogActions>
-                <Button onClick={onClose}>סגור</Button>
+                <Button variant="outlined" color="inherit" onClick={onClose}>סגור</Button>
                 <Button
                     onClick={() => handlePrint()}
                     variant="contained"
-                    startIcon={<PrintIcon sx={{ ml: 1 }} />}
+                    startIcon={<PrintIcon fontSize={18} />}
                 >
                     הדפס
                 </Button>

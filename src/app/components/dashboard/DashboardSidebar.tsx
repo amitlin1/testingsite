@@ -8,12 +8,17 @@
 // dense screen unreadable.
 //
 // Collapsed (56px) it keeps the nine icons and puts a blue count badge on the
-// filter glyph, so the manager can see that a scope is still applied even when
-// the fields are hidden. The state is one localStorage key and survives a
-// reload (§12.6).
+// filter button, so the manager can see that a scope is still applied even when
+// the fields are hidden — and one press on it opens the rail again. The state
+// is one localStorage key and survives a reload (§12.6).
+//
+// Every field has a real <label>; a field that carries a value is told apart
+// from a focused one (dashboard.css `.dash-field--set` vs `:focus`); the
+// current tab is `aria-current="page"`; the switch is the app's ui Switch.
 
 import * as React from "react";
 
+import { Switch } from "@/components/ui";
 import {
   AccessTime,
   ArrowDropDown,
@@ -94,6 +99,10 @@ export default function DashboardSidebar({
 }: DashboardSidebarProps) {
   const { state, setTab, setDatePreset, setCustomRange, setFilter, clearFilters, toggleRail } = api;
   const open = drawer || state.railOpen;
+  // The rail and the drawer can be mounted at once (the rail is only hidden by
+  // CSS below 1100px), so every id is per instance.
+  const uid = React.useId();
+  const id = (name: string) => `${uid}-${name}`;
 
   if (!open) {
     return (
@@ -115,38 +124,53 @@ export default function DashboardSidebar({
           type="button"
           onClick={toggleRail}
           aria-label="הרחבת סרגל הלוח"
-          className="dash-press dash-icon"
-          style={iconButtonStyle(false)}
+          title="הרחבת סרגל הלוח"
+          className="dash-icon-btn"
         >
-          <ChevronLeft fontSize={16} />
+          <ChevronLeft fontSize={16} aria-hidden />
         </button>
-        <div style={{ width: 24, height: 1, background: "var(--color-hairline)", margin: "6px 0" }} />
-        {NAV_ITEMS.map((item) => {
-          const active = item.key === state.tab;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              title={item.label}
-              aria-label={item.label}
-              onClick={() => setTab(item.key)}
-              className={active ? "dash-icon" : "dash-icon dash-nav-item"}
-              style={{ ...iconButtonStyle(active), position: "relative" }}
-            >
-              <item.Icon fontSize={16} />
-              {item.key === "slow" && (stuckCount ?? 0) > 0 && (
-                <span style={badgeStyle("var(--color-destructive)")}>{stuckCount}</span>
-              )}
-            </button>
-          );
-        })}
-        <div style={{ marginTop: "auto", position: "relative" }}>
-          <div className="dash-icon" style={iconButtonStyle(false)} title="מסננים">
-            <FilterList fontSize={16} />
+        <div aria-hidden style={{ width: 24, height: 1, background: "var(--color-hairline)", margin: "6px 0" }} />
+        <nav aria-label="מקטעי הלוח" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          {NAV_ITEMS.map((item) => {
+            const active = item.key === state.tab;
+            const stuck = item.key === "slow" && (stuckCount ?? 0) > 0;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                title={item.label}
+                aria-label={stuck ? `${item.label} · ${stuckCount} תקועים` : item.label}
+                aria-current={active ? "page" : undefined}
+                onClick={() => setTab(item.key)}
+                className="dash-icon-btn"
+              >
+                <item.Icon fontSize={16} aria-hidden />
+                {stuck && (
+                  <span aria-hidden style={badgeStyle("var(--color-destructive)")}>{stuckCount}</span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+        {/* Filters are hidden in this state; the button says how many are on
+            and opens the rail to show them. */}
+        <div style={{ marginTop: "auto" }}>
+          <button
+            type="button"
+            onClick={toggleRail}
+            title="מסננים"
+            aria-label={
+              api.activeFilterCount > 0
+                ? `מסננים · ${api.activeFilterCount} פעילים — הרחבת הסרגל`
+                : "מסננים — הרחבת הסרגל"
+            }
+            className="dash-icon-btn"
+          >
+            <FilterList fontSize={16} aria-hidden />
             {api.activeFilterCount > 0 && (
-              <span style={badgeStyle("var(--color-primary)")}>{api.activeFilterCount}</span>
+              <span aria-hidden style={badgeStyle("var(--color-primary)")}>{api.activeFilterCount}</span>
             )}
-          </div>
+          </button>
         </div>
       </div>
     );
@@ -169,57 +193,34 @@ export default function DashboardSidebar({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px" }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>לוח בדיקות</div>
+        <div style={{ fontSize: "var(--text-body-sm)", fontWeight: 700 }}>לוח בדיקות</div>
         <button
           type="button"
           onClick={drawer ? onCloseDrawer : toggleRail}
           aria-label={drawer ? "סגירת המסננים" : "כיווץ סרגל הלוח"}
-          className="dash-press dash-icon"
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 8,
-            background: "var(--color-canvas-parchment)",
-            color: "var(--color-ink-muted-48)",
-            border: "none",
-            cursor: "pointer",
-          }}
+          title={drawer ? "סגירת המסננים" : "כיווץ סרגל הלוח"}
+          className="dash-icon-btn dash-icon-btn--sm"
         >
-          <ChevronRight fontSize={15} />
+          <ChevronRight fontSize={15} aria-hidden />
         </button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <nav aria-label="מקטעי הלוח" style={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {NAV_ITEMS.map((item) => {
           const active = item.key === state.tab;
           return (
             <button
               key={item.key}
               type="button"
+              aria-current={active ? "page" : undefined}
               onClick={() => {
                 setTab(item.key);
                 onCloseDrawer?.();
               }}
-              className={active ? "dash-tap" : "dash-nav-item dash-tap"}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-                padding: "6px 10px",
-                borderRadius: 8,
-                border: "none",
-                width: "100%",
-                fontFamily: "inherit",
-                fontSize: 13,
-                textAlign: "start",
-                cursor: "pointer",
-                background: active ? "var(--dash-tint)" : "transparent",
-                color: active ? "var(--color-primary)" : "var(--color-ink-muted-80)",
-                fontWeight: active ? 600 : 400,
-              }}
+              className="dash-nav-item dash-tap"
             >
               <span className="dash-icon">
-                <item.Icon fontSize={16} />
+                <item.Icon fontSize={16} aria-hidden />
               </span>
               {item.label}
               {item.key === "slow" && (stuckCount ?? 0) > 0 && (
@@ -228,10 +229,11 @@ export default function DashboardSidebar({
                     marginInlineStart: "auto",
                     background: "var(--color-destructive)",
                     color: "var(--color-on-primary)",
-                    fontSize: 10,
+                    fontSize: "var(--text-micro)",
                     fontWeight: 700,
-                    borderRadius: 9999,
+                    borderRadius: "var(--r-pill)",
                     padding: "1px 6px",
+                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
                   {stuckCount}
@@ -240,45 +242,33 @@ export default function DashboardSidebar({
             </button>
           );
         })}
-      </div>
+      </nav>
 
-      <div style={{ height: 1, background: "var(--color-hairline)" }} />
+      <div aria-hidden style={{ height: 1, background: "var(--color-hairline)" }} />
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span className="dash-icon" style={{ color: "var(--color-ink-muted-48)" }}>
-            <FilterList fontSize={13} />
+            <FilterList fontSize={13} aria-hidden />
           </span>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink-muted-48)" }}>מסננים</div>
+          <div style={{ fontSize: "var(--text-fine)", fontWeight: 700, color: "var(--color-ink-muted-48)" }}>מסננים</div>
           {api.activeFilterCount > 0 && (
             <span
               style={{
                 background: "var(--dash-tint)",
                 color: "var(--color-primary)",
-                fontSize: 10,
+                fontSize: "var(--text-micro)",
                 fontWeight: 700,
-                borderRadius: 9999,
+                borderRadius: "var(--r-pill)",
                 padding: "1px 6px",
+                fontVariantNumeric: "tabular-nums",
               }}
             >
               {api.activeFilterCount}
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={clearFilters}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            fontFamily: "inherit",
-            fontSize: 11.5,
-            color: "var(--color-primary)",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
+        <button type="button" onClick={clearFilters} className="dash-link">
           נקה הכל
         </button>
       </div>
@@ -287,14 +277,16 @@ export default function DashboardSidebar({
         className="dash-scroll"
         style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 2px" }}
       >
-        <Field label="טווח תאריכים">
+        <div>
+          <div className="dash-field-label" aria-hidden>טווח תאריכים</div>
           <Segmented
             options={RANGES.map((r) => ({ value: r.value, label: r.label }))}
             value={state.datePreset}
             onChange={(value) => setDatePreset(value as DateRangePreset)}
             padding="5px 0"
+            ariaLabel="טווח תאריכים"
           />
-        </Field>
+        </div>
 
         {state.datePreset === "custom" && (
           <div style={{ display: "flex", gap: 6 }}>
@@ -302,20 +294,23 @@ export default function DashboardSidebar({
               type="date"
               value={state.customStart}
               onChange={(e) => setCustomRange(e.target.value, state.customEnd)}
-              style={inputStyle(Boolean(state.customStart))}
+              className={fieldClass(Boolean(state.customStart))}
+              style={{ flex: 1, fontVariantNumeric: "tabular-nums" }}
               aria-label="מתאריך"
             />
             <input
               type="date"
               value={state.customEnd}
               onChange={(e) => setCustomRange(state.customStart, e.target.value)}
-              style={inputStyle(Boolean(state.customEnd))}
+              className={fieldClass(Boolean(state.customEnd))}
+              style={{ flex: 1, fontVariantNumeric: "tabular-nums" }}
               aria-label="עד תאריך"
             />
           </div>
         )}
 
         <SelectField
+          id={id("customer")}
           label="לקוח"
           value={state.filters.customerId}
           onChange={(v) => setFilter("customerId", v)}
@@ -324,6 +319,7 @@ export default function DashboardSidebar({
         />
 
         <SelectField
+          id={id("shipment")}
           label="משלוח"
           value={state.filters.shipmentId}
           onChange={(v) => setFilter("shipmentId", v)}
@@ -332,6 +328,7 @@ export default function DashboardSidebar({
         />
 
         <SelectField
+          id={id("type")}
           label="סוג פריט"
           value={state.filters.itemTypeId}
           onChange={(v) => setFilter("itemTypeId", v)}
@@ -341,6 +338,7 @@ export default function DashboardSidebar({
 
         {EXTRAS[state.tab].includes("stationType") && (
           <SelectField
+            id={id("stationType")}
             label="סוג עמדה"
             value={state.filters.testStationTypeId}
             onChange={(v) => setFilter("testStationTypeId", v)}
@@ -351,6 +349,7 @@ export default function DashboardSidebar({
 
         {EXTRAS[state.tab].includes("station") && (
           <SelectField
+            id={id("station")}
             label="עמדה"
             value={state.filters.testStationId}
             onChange={(v) => setFilter("testStationId", v)}
@@ -361,6 +360,7 @@ export default function DashboardSidebar({
 
         {EXTRAS[state.tab].includes("worker") && (
           <TextField
+            id={id("worker")}
             label="מס׳ עובד"
             value={state.filters.workerId ?? ""}
             onChange={(v) => setFilter("workerId", v || null)}
@@ -370,16 +370,19 @@ export default function DashboardSidebar({
 
         {EXTRAS[state.tab].includes("serial") && (
           <TextField
+            id={id("serial")}
             label="סריאלי"
             value={state.filters.itemSerial ?? ""}
             onChange={(v) => setFilter("itemSerial", v || null)}
             placeholder="חיפוש…"
+            ltr
           />
         )}
 
         {EXTRAS[state.tab].includes("status") && (
-          <Field label="סטטוס">
+          <Field id={id("status")} label="סטטוס">
             <NativeSelect
+              id={id("status")}
               value={state.filters.status}
               set={state.filters.status !== "all"}
               onChange={(v) => setFilter("status", v as StatusFilter)}
@@ -389,8 +392,9 @@ export default function DashboardSidebar({
         )}
 
         {EXTRAS[state.tab].includes("shipmentScope") && (
-          <Field label="סטטוס משלוח">
+          <Field id={id("scope")} label="סטטוס משלוח">
             <NativeSelect
+              id={id("scope")}
               value={state.filters.showAllHistory ? "all" : "open"}
               set={state.filters.showAllHistory === true}
               onChange={(v) => setFilter("showAllHistory", v === "all")}
@@ -402,43 +406,20 @@ export default function DashboardSidebar({
           </Field>
         )}
 
+        {/* The app's Switch (focus ring, 3:1 off track, the RTL thumb travel
+            every other switch uses), named by its label. */}
         <div
           className="dash-tap"
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 2 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 2 }}
         >
-          <div style={{ fontSize: 12 }}>כלול משלוחים שנשלחו</div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={state.filters.showAllHistory === true}
-            aria-label="כלול משלוחים שנשלחו"
-            onClick={() => setFilter("showAllHistory", !state.filters.showAllHistory)}
-            style={{
-              width: 32,
-              height: 19,
-              borderRadius: 9999,
-              border: "none",
-              padding: 0,
-              cursor: "pointer",
-              position: "relative",
-              background: state.filters.showAllHistory
-                ? "var(--color-primary)"
-                : "var(--color-hairline)",
-            }}
-          >
-            <span
-              style={{
-                position: "absolute",
-                top: 2,
-                insetInlineEnd: state.filters.showAllHistory ? 15 : 2,
-                width: 15,
-                height: 15,
-                borderRadius: 9999,
-                background: "var(--color-canvas)",
-                transition: "inset-inline-end 120ms var(--ease-press)",
-              }}
-            />
-          </button>
+          <label htmlFor={id("sent")} style={{ fontSize: "var(--text-fine)", cursor: "pointer" }}>
+            כלול משלוחים שנשלחו
+          </label>
+          <Switch
+            id={id("sent")}
+            checked={state.filters.showAllHistory === true}
+            onChange={(_, checked) => setFilter("showAllHistory", checked)}
+          />
         </div>
       </div>
 
@@ -448,13 +429,14 @@ export default function DashboardSidebar({
           display: "flex",
           alignItems: "center",
           gap: 7,
-          fontSize: 11.5,
+          fontSize: "var(--text-fine)",
           color: "var(--color-ink-muted-48)",
           padding: "0 2px",
         }}
       >
         <span
-          style={{ width: 6, height: 6, borderRadius: 9999, background: "var(--color-status-approved)" }}
+          aria-hidden
+          style={{ width: 6, height: 6, borderRadius: "var(--r-pill)", background: "var(--color-status-approved)" }}
         />
         רענון אוטומטי · כל דקה
       </div>
@@ -464,64 +446,47 @@ export default function DashboardSidebar({
 
 // ---------------------------------------------------------------------------
 
-function iconButtonStyle(active: boolean): React.CSSProperties {
-  return {
-    width: 36,
-    height: 36,
-    borderRadius: 9,
-    border: "none",
-    cursor: "pointer",
-    background: active ? "var(--dash-tint)" : "transparent",
-    color: active ? "var(--color-primary)" : "var(--color-ink-muted-48)",
-  };
-}
-
 function badgeStyle(background: string): React.CSSProperties {
   return {
     position: "absolute",
-    top: 2,
-    insetInlineEnd: 2,
+    top: 1,
+    insetInlineEnd: 1,
     background,
     color: "var(--color-on-primary)",
-    fontSize: 9,
+    fontSize: "var(--text-micro)",
     fontWeight: 700,
-    borderRadius: 9999,
+    borderRadius: "var(--r-pill)",
     padding: "0 4px",
-    lineHeight: "13px",
+    lineHeight: "14px",
+    fontVariantNumeric: "tabular-nums",
   };
 }
 
-function inputStyle(set: boolean): React.CSSProperties {
-  return {
-    flex: 1,
-    minWidth: 0,
-    height: 32,
-    border: `1px solid ${set ? "var(--color-primary-focus)" : "var(--color-hairline)"}`,
-    borderRadius: 8,
-    padding: "0 9px",
-    fontSize: 12.5,
-    fontFamily: "inherit",
-    color: set ? "var(--color-primary)" : "var(--color-ink)",
-    background: "var(--color-canvas)",
-  };
+/** A field carrying a value gets the "set" look (soft-blue fill, bold ink) —
+ *  never the focus blue, so a focused field and a filled one differ (§6). */
+function fieldClass(set: boolean): string {
+  return set ? "dash-field dash-field--set" : "dash-field";
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 11, color: "var(--color-ink-muted-48)", marginBottom: 4 }}>{label}</div>
+      <label className="dash-field-label" htmlFor={id}>
+        {label}
+      </label>
       {children}
     </div>
   );
 }
 
-/** A filter carrying a value gets the focus-blue border and blue text (§6). */
 function NativeSelect({
+  id,
   value,
   set,
   onChange,
   items,
 }: {
+  id: string;
   value: string;
   set: boolean;
   onChange: (value: string) => void;
@@ -530,23 +495,11 @@ function NativeSelect({
   return (
     <div style={{ position: "relative" }}>
       <select
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{
-          width: "100%",
-          height: 32,
-          border: `1px solid ${set ? "var(--color-primary-focus)" : "var(--color-hairline)"}`,
-          borderRadius: 8,
-          padding: "0 9px",
-          paddingInlineEnd: 28,
-          fontSize: 12.5,
-          fontWeight: set ? 600 : 400,
-          fontFamily: "inherit",
-          color: set ? "var(--color-primary)" : "var(--color-ink-muted-48)",
-          background: "var(--color-canvas)",
-          appearance: "none",
-          cursor: "pointer",
-        }}
+        className={fieldClass(set)}
+        style={{ color: set ? "var(--color-ink)" : "var(--color-ink-muted-48)" }}
       >
         {items.map((item) => (
           <option key={item.value} value={item.value}>
@@ -556,9 +509,12 @@ function NativeSelect({
       </select>
       <span
         className="dash-icon"
+        aria-hidden
         style={{
           position: "absolute",
-          insetInlineStart: 9,
+          // The select reserves its 28px at the inline END for this caret; at
+          // the start it sat on the first letters of the selected value.
+          insetInlineEnd: 9,
           top: 9,
           color: "var(--color-ink-muted-48)",
           pointerEvents: "none",
@@ -571,12 +527,14 @@ function NativeSelect({
 }
 
 function SelectField({
+  id,
   label,
   value,
   onChange,
   placeholder,
   options,
 }: {
+  id: string;
   label: string;
   value: number | null;
   onChange: (value: number | null) => void;
@@ -584,8 +542,9 @@ function SelectField({
   options: Array<{ id: number; name: string }>;
 }) {
   return (
-    <Field label={label}>
+    <Field id={id} label={label}>
       <NativeSelect
+        id={id}
         value={value === null ? "" : String(value)}
         set={value !== null}
         onChange={(v) => onChange(v === "" ? null : Number(v))}
@@ -599,23 +558,31 @@ function SelectField({
 }
 
 function TextField({
+  id,
   label,
   value,
   onChange,
   placeholder,
+  ltr = false,
 }: {
+  id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  /** Codes (serials) are typed left to right, aligned with the Hebrew fields. */
+  ltr?: boolean;
 }) {
   return (
-    <Field label={label}>
+    <Field id={id} label={label}>
       <input
+        id={id}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        style={{ ...inputStyle(value !== ""), width: "100%" }}
+        className={fieldClass(value !== "")}
+        dir={ltr ? "ltr" : undefined}
+        style={ltr ? { textAlign: "right" } : undefined}
       />
     </Field>
   );

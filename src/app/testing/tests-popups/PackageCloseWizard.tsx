@@ -9,8 +9,9 @@ import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
 import PackageDecisionDialog, { type PackDecision } from "./PackageDecisionDialog";
 import { ScanField, useReferenceLookup } from "./referenceScan";
 import {
-  AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, MUTED, RED, RED_BG, seq2,
+  AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, HAIR, HAIR_2, INK, INK_2, MUTED, RED, RED_BG, seq2,
 } from "@/app/components/packages/packageUi";
+import "@/app/packages/packages.css";
 
 /**
  * אשף סגירת מארז — design/Package Stations.dc.html (close). Runs on a
@@ -49,6 +50,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   const [error, setError] = React.useState<string | null>(null);
   const submitIdRef = React.useRef<string | null>(null);
   const committedRef = React.useRef<Set<string>>(new Set());
+  const noteId = React.useId();
 
   React.useEffect(() => {
     if (!open) return;
@@ -139,8 +141,8 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
         nextLabel={nextLabel} nextEnabled={nextEnabled} onNext={onNext} busy={submitting}
       >
         {error && (
-          <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid rgba(191,53,53,0.25)", borderRadius: 10, padding: "11px 14px" }}>
-            <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} /></span>
+          <div role="alert" style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent)", borderRadius: 10, padding: "11px 14px" }}>
+            <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} aria-hidden /></span>
             <div style={{ fontSize: 13, fontWeight: 600, color: RED }}>{error}</div>
           </div>
         )}
@@ -163,9 +165,10 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
                 const isArr = arrived(it);
                 const d = decisions[it.item_id];
                 const isPacked = packed[it.item_id] === true;
+                const name = `${seq2(it.package_seq)} · ${it.item_type_desc}`;
                 return (
-                  <div key={it.item_id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: `1px solid ${HAIR_2}`, background: isArr ? "#fff" : AMBER_BG, flexWrap: "wrap" }}>
-                    <span style={{ width: 34, height: 34, borderRadius: 9, background: isArr ? "#f5f5f7" : "rgba(168,106,26,0.1)", color: isArr ? MUTED : AMBER_INK, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
+                  <div key={it.item_id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: `1px solid ${HAIR_2}`, background: isArr ? "var(--color-canvas)" : AMBER_BG, flexWrap: "wrap" }}>
+                    <span style={{ width: 34, height: 34, borderRadius: 9, background: isArr ? "var(--color-canvas-parchment)" : "color-mix(in srgb, var(--color-warning-ink) 10%, transparent)", color: isArr ? MUTED : AMBER_INK, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 600 }}>{it.item_type_desc}</div>
                       <div style={{ fontSize: 12.5, color: isArr ? MUTED : AMBER_INK, marginTop: 2 }}>
@@ -173,12 +176,18 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
                       </div>
                     </div>
                     {isArr ? (
-                      <div onClick={() => setPacked((p) => ({ ...p, [it.item_id]: !isPacked }))} style={{ display: "flex", alignItems: "center", gap: 9, minHeight: 44, padding: "8px 14px", border: `1px solid ${isPacked ? BLUE : HAIR}`, background: isPacked ? "#e6efff" : "#fff", borderRadius: 11, cursor: "pointer" }}>
-                        <span style={{ width: 20, height: 20, borderRadius: 6, border: `1px solid ${isPacked ? BLUE : GREY}`, background: isPacked ? BLUE : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{isPacked && <Check size={12} strokeWidth={2.5} />}</span>
+                      // A real checkbox for the keyboard: Tab, then Space / Enter.
+                      <button type="button" role="checkbox" aria-checked={isPacked} aria-label={`${name} · נארז`}
+                        onClick={() => setPacked((p) => ({ ...p, [it.item_id]: !isPacked }))}
+                        className="pkg-choice pkg-choice--soft pkg-press"
+                        style={{ width: "auto", display: "flex", alignItems: "center", gap: 9, minHeight: 44, padding: "8px 14px", borderRadius: 11 }}>
+                        <span aria-hidden className={isPacked ? "pkg-tick pkg-tick--on" : "pkg-tick"} style={{ width: 20, height: 20, borderRadius: 6, borderColor: isPacked ? undefined : "var(--color-field-border)" }}>{isPacked && <Check size={12} strokeWidth={2.5} />}</span>
                         <span style={{ fontSize: 14, fontWeight: 600, color: isPacked ? BLUE : INK }}>נארז</span>
-                      </div>
+                      </button>
                     ) : (
-                      <button type="button" onClick={() => setDecideFor(it)} style={{ minHeight: 44, background: d == null ? "#fff" : d.decision === "packed_anyway" ? "#e6efff" : RED_BG, color: d == null ? AMBER_INK : d.decision === "packed_anyway" ? BLUE : RED, border: `1px solid ${d == null ? AMBER_BORDER : d.decision === "packed_anyway" ? BLUE : "rgba(191,53,53,0.25)"}`, borderRadius: 9999, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+                      <button type="button" onClick={() => setDecideFor(it)} aria-haspopup="dialog" aria-label={`${name} · ${d == null ? "נדרשת החלטה" : d.decision === "packed_anyway" ? "נארז בכל זאת" : "חסר במארז"}`}
+                        className="pkg-pill pkg-pill--station"
+                        style={{ background: d == null ? "var(--color-canvas)" : d.decision === "packed_anyway" ? "var(--color-primary-soft)" : RED_BG, color: d == null ? AMBER_INK : d.decision === "packed_anyway" ? BLUE : RED, borderColor: d == null ? AMBER_BORDER : d.decision === "packed_anyway" ? BLUE : "color-mix(in srgb, var(--color-destructive) 25%, transparent)", padding: "10px 18px" }}>
                         {d == null ? "נדרשת החלטה" : d.decision === "packed_anyway" ? "נארז בכל זאת" : "חסר במארז"}
                       </button>
                     )}
@@ -187,35 +196,36 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
               })}
             </div>
             {!allResolved && (
-              <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 11, padding: "11px 14px", marginTop: 14 }}>אי אפשר לאשר תקינות אריזה לפני שכל פריט סומן כנארז או קיבל החלטה מפורשת.</div>
+              <div role="status" style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 11, padding: "11px 14px", marginTop: 14 }}>אי אפשר לאשר תקינות אריזה לפני שכל פריט סומן כנארז או קיבל החלטה מפורשת.</div>
             )}
           </div>
         )}
 
         {stepKey === "packOk" && (
           <div style={{ maxWidth: 620, marginTop: 20 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div role="group" aria-label="תקינות האריזה" style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               {CHECKS.map((label, i) => {
                 const on = checks[i];
                 return (
-                  <div key={label} onClick={() => setChecks((c) => c.map((v, j) => (j === i ? !v : v)))} style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52, border: `1px solid ${on ? BLUE : HAIR}`, background: on ? "#f7fbff" : "#fff", borderRadius: 12, padding: "13px 15px", cursor: "pointer" }}>
-                    <span style={{ width: 22, height: 22, borderRadius: 7, border: `1px solid ${on ? BLUE : GREY}`, background: on ? BLUE : "#fff", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{on && <Check size={13} strokeWidth={2.5} />}</span>
+                  <button key={label} type="button" role="checkbox" aria-checked={on} onClick={() => setChecks((c) => c.map((v, j) => (j === i ? !v : v)))}
+                    className="pkg-choice pkg-press" style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52, borderRadius: 12, padding: "13px 15px" }}>
+                    <span aria-hidden className={on ? "pkg-tick pkg-tick--on" : "pkg-tick"} style={{ width: 22, height: 22, borderRadius: 7, borderColor: on ? undefined : "var(--color-field-border)" }}>{on && <Check size={13} strokeWidth={2.5} />}</span>
                     <span style={{ fontSize: 14.5, fontWeight: 600, color: on ? BLUE : INK }}>{label}</span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
-            <div style={{ fontSize: 12.5, color: MUTED, margin: "18px 0 7px" }}>הערות אריזה</div>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="אופציונלי" style={{ width: "100%", minHeight: 76, border: `1px solid ${HAIR}`, borderRadius: 11, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", fontFamily: "inherit" }} />
+            <label htmlFor={noteId} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "18px 0 7px" }}>הערות אריזה</label>
+            <textarea id={noteId} value={note} onChange={(e) => setNote(e.target.value)} placeholder="אופציונלי" className="pkg-field pkg-field--area" />
           </div>
         )}
 
         {stepKey === "done" && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "36px 0 8px" }}>
-            <span style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(31,138,91,0.09)", color: GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={30} strokeWidth={2} /></span>
+            <span style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--color-success-bg)", color: GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><Check size={30} strokeWidth={2} aria-hidden /></span>
             <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.3px", marginTop: 16 }}>המארז נסגר</div>
             <div style={{ fontSize: 14.5, color: INK_2, marginTop: 7, maxWidth: 440, lineHeight: 1.55 }}>המארז והפריטים שבו סומנו כנארזו. המארז עובר לסטטוס הושלם ומופיע במשלוח כמארז שסיים.</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 20 }}>
+            <div role="img" aria-label={items.map((it) => `${seq2(it.package_seq)} · ${it.item_type_desc} · ${decisions[it.item_id]?.decision === "missing" ? "חסר במארז" : "נארז"}`).join("; ")} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 20 }}>
               {items.map((it) => <span key={it.item_id} title={`${seq2(it.package_seq)} · ${it.item_type_desc}`} style={{ width: 30, height: 10, borderRadius: 3, background: decisions[it.item_id]?.decision === "missing" ? RED : GREEN }} />)}
             </div>
             <div style={{ fontSize: 12.5, color: MUTED, marginTop: 9, fontVariantNumeric: "tabular-nums" }}>{items.filter((it) => decisions[it.item_id]?.decision !== "missing").length} פריטים נארזו · {pkg.item_type_desc}</div>
@@ -223,6 +233,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
         )}
       </PackageWizardShell>
 
+      {/* Mounted after the wizard, so it stacks above it and owns Escape while open. */}
       <PackageDecisionDialog
         open={decideFor != null}
         item={decideFor ? { item_id: decideFor.item_id, package_seq: decideFor.package_seq, item_type_desc: decideFor.item_type_desc, station_name: decideFor.station_name } : null}

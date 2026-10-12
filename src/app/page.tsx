@@ -1,16 +1,18 @@
 "use client";
 import { Suspense } from "react";
-import { Box } from "@/components/ui";
 import ItemTable from "./components/ItemTable";
+import "@/components/items.css";
 
 export default function Page() {
   return (
-    <Box sx={{ p: 3 }}>
+    // .items-home fills AppShell's content box, so the items table can take
+    // the remaining height and scroll inside it (header pinned).
+    <div className="items-home">
       {/* ItemTable reads ?q=/?status= (command-palette deep links) via
           useSearchParams, which needs a Suspense boundary. */}
       <Suspense fallback={null}>
         <ItemTable />
       </Suspense>
-    </Box>
+    </div>
   );
 }

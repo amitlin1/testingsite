@@ -4,6 +4,8 @@ import * as RDialog from "@radix-ui/react-dialog";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
 import { useDraggable } from "./useDraggable";
+import { IconButton } from "./IconButton";
+import { X } from "lucide-react";
 
 /** Whether the surrounding Dialog moves; its DialogTitle is the handle only then
  *  (a fixed delete confirmation shows no move cursor). */
@@ -46,6 +48,12 @@ export function Dialog({
 }: DialogProps) {
   const paper = { ...slotProps?.paper, ...PaperProps };
   const { ref: dragRef, onPointerDown: onDragStart, offset: dragOffset, moved: dragMoved } = useDraggable(open, draggable && !fullScreen);
+  // Radix reports WHAT closed the dialog (Escape / a press outside) before it
+  // asks to close; remember it so onClose runs exactly once, with the reason.
+  // (It used to run twice on a backdrop press — once as "backdropClick", then
+  // again as "escapeKeyDown" — so a handler that commits ran twice and a
+  // caller ignoring backdrop presses closed anyway.)
+  const reasonRef = React.useRef<"backdropClick" | "escapeKeyDown">("escapeKeyDown");
   const contentStyle: React.CSSProperties = fullScreen
     ? { width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", borderRadius: 0, top: 0, left: 0, transform: "none" }
     : {
@@ -55,7 +63,12 @@ export function Dialog({
   return (
     <RDialog.Root
       open={open}
-      onOpenChange={(o) => { if (!o) onClose?.({}, "escapeKeyDown"); }}
+      onOpenChange={(o) => {
+        if (o) return;
+        const reason = reasonRef.current;
+        reasonRef.current = "escapeKeyDown";
+        onClose?.({}, reason);
+      }}
     >
       <RDialog.Portal>
         <RDialog.Overlay className="sh-dialog-overlay" />
@@ -69,8 +82,15 @@ export function Dialog({
             // Centred by translate(-50%, -50%) in ui.css; the drag adds to it.
             ...(dragMoved ? { transform: `translate(calc(-50% + ${dragOffset.x}px), calc(-50% + ${dragOffset.y}px))` } : {}),
           }}
-          onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); }}
-          onPointerDownOutside={(e) => { onClose?.(e, "backdropClick"); }}
+          onEscapeKeyDown={(e) => {
+            // An open combobox list owns Escape: it closes the list, not the
+            // dialog (Radix listens before the field's own handler).
+            const el = document.activeElement;
+            const listOpen = el instanceof HTMLElement && el.getAttribute("role") === "combobox" && el.getAttribute("aria-expanded") === "true";
+            if (disableEscapeKeyDown || listOpen) { e.preventDefault(); return; }
+            reasonRef.current = "escapeKeyDown";
+          }}
+          onPointerDownOutside={() => { reasonRef.current = "backdropClick"; }}
           aria-describedby={undefined}
         >
           <DraggableDialog.Provider value={draggable && !fullScreen}>{children}</DraggableDialog.Provider>
@@ -82,15 +102,22 @@ export function Dialog({
 
 export interface DialogTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
   sx?: SxInput;
+  /** Renders the one close button every dialog shares, at the inline end. */
+  onClose?: () => void;
 }
 export const DialogTitle = forwardRef<HTMLHeadingElement, DialogTitleProps>(function DialogTitle(
-  { sx, style, className, children, ...rest },
+  { sx, style, className, children, onClose, ...rest },
   ref,
 ) {
   const draggable = React.useContext(DraggableDialog);
   return (
     <RDialog.Title ref={ref} data-drag-handle={draggable ? "" : undefined} className={cn("sh-dialog-title", className)} style={{ ...sxToStyle(sx), ...style }} {...rest}>
       {children}
+      {onClose && (
+        <IconButton className="sh-dialog-close" size="small" aria-label="סגירה" onClick={onClose}>
+          <X size={18} strokeWidth={1.75} aria-hidden />
+        </IconButton>
+      )}
     </RDialog.Title>
   );
 });
@@ -108,8 +135,9 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
       ref={ref}
       className={cn("sh-dialog-body", className)}
       style={{
+        // Top only: DialogActions draws its own top border, so a bottom one
+        // here doubled the line above the buttons.
         borderTop: dividers ? "1px solid var(--color-hairline)" : undefined,
-        borderBottom: dividers ? "1px solid var(--color-hairline)" : undefined,
         ...sxToStyle(sx),
         ...style,
       }}
@@ -122,7 +150,7 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
 
 export function DialogContentText({ sx, style, children, ...rest }: React.HTMLAttributes<HTMLParagraphElement> & { sx?: SxInput }) {
   return (
-    <p style={{ margin: 0, fontSize: 17, lineHeight: 1.47, color: "var(--color-ink-muted-80)", ...sxToStyle(sx), ...style }} {...rest}>
+    <p style={{ margin: 0, fontSize: "var(--text-body)", lineHeight: "var(--lh-body)", color: "var(--color-ink-muted-80)", ...sxToStyle(sx), ...style }} {...rest}>
       {children}
     </p>
   );

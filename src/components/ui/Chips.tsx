@@ -22,12 +22,14 @@ export interface ChipProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "c
 
 const CHIP_COLORS: Record<ChipColor, { bg: string; fg: string; border?: string }> = {
   default: { bg: "var(--color-canvas-parchment)", fg: "var(--color-ink)" },
-  primary: { bg: "rgba(0,102,204,.08)", fg: "var(--color-primary)" },
+  primary: { bg: "var(--color-primary-soft)", fg: "var(--color-primary)" },
   secondary: { bg: "var(--color-canvas-parchment)", fg: "var(--color-ink-muted-80)" },
-  error: { bg: "rgba(191,53,53,.10)", fg: "var(--color-destructive)" },
-  success: { bg: "rgba(31,138,91,.12)", fg: "var(--color-status-approved)" },
-  warning: { bg: "rgba(217,119,6,.12)", fg: "var(--color-status-late)" },
-  info: { bg: "rgba(0,102,204,.08)", fg: "var(--color-primary)" },
+  error: { bg: "var(--color-danger-bg)", fg: "var(--color-destructive)" },
+  // Text in a status colour uses its *-ink token (AA); the plain status
+  // colours are for dots and fills.
+  success: { bg: "var(--color-success-bg)", fg: "var(--color-success-ink)" },
+  warning: { bg: "var(--color-warning-bg)", fg: "var(--color-warning-ink)" },
+  info: { bg: "var(--color-primary-soft)", fg: "var(--color-primary)" },
 };
 
 export const Chip = forwardRef<HTMLDivElement, ChipProps>(function Chip(
@@ -51,17 +53,36 @@ export const Chip = forwardRef<HTMLDivElement, ChipProps>(function Chip(
     opacity: disabled ? 0.5 : 1,
     whiteSpace: "nowrap",
   };
+  // A clickable chip is a button for the keyboard too; its × is its own
+  // named button, so removing never needs a mouse.
+  const interactive = !!onClick && !disabled;
   return (
-    <div ref={ref} className={className} style={{ ...base, ...sxToStyle(sx), ...style }} onClick={onClick} {...rest}>
+    <div
+      ref={ref}
+      className={className}
+      style={{ ...base, ...sxToStyle(sx), ...style }}
+      onClick={interactive ? onClick : undefined}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-disabled={disabled || undefined}
+      onKeyDown={interactive ? (e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick!(e as unknown as React.MouseEvent); }
+      } : undefined}
+      {...rest}
+    >
       {icon}
       {label ?? children}
       {onDelete && (
-        <X
-          size={14}
-          strokeWidth={1.75}
-          style={{ color: "var(--color-ink-muted-48)", cursor: "pointer", flexShrink: 0 }}
+        <button
+          type="button"
+          className="sh-chip-delete"
+          aria-label={typeof label === "string" ? `הסר ${label}` : "הסר"}
+          disabled={disabled}
           onClick={(e) => { e.stopPropagation(); onDelete(e); }}
-        />
+        >
+          <X size={14} strokeWidth={1.75} aria-hidden />
+        </button>
       )}
     </div>
   );
@@ -83,8 +104,9 @@ const BADGE_BG: Record<string, string> = {
   default: "var(--color-ink-muted-48)",
   primary: "var(--color-primary)",
   error: "var(--color-destructive)",
-  success: "var(--color-status-approved)",
-  warning: "var(--color-status-late)",
+  // White count text: the *-ink fills keep it at AA.
+  success: "var(--color-success-ink)",
+  warning: "var(--color-warning-ink)",
   secondary: "var(--color-ink-muted-80)",
 };
 
@@ -111,7 +133,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
             padding: "0 5px",
             borderRadius: 9,
             background: BADGE_BG[color],
-            color: "#fff",
+            color: "var(--color-on-primary)",
             fontSize: 11,
             fontWeight: 600,
             display: "flex",
@@ -151,10 +173,8 @@ export function StatusPill({ label, status = "on", dotColor, sx, style, classNam
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        fontSize: 10,
+        fontSize: "var(--text-fine)",
         fontWeight: 600,
-        letterSpacing: "0.6px",
-        textTransform: "uppercase",
         color: "var(--color-ink)",
         background: "var(--color-canvas-parchment)",
         border: "1px solid var(--color-hairline)",
@@ -169,6 +189,27 @@ export function StatusPill({ label, status = "on", dotColor, sx, style, classNam
     >
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor ?? STATUS_DOT[status] }} />
       {label}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ Tag ---- */
+export type TagTone = "primary" | "neutral" | "success" | "warning" | "danger";
+
+export interface TagProps extends React.HTMLAttributes<HTMLSpanElement> {
+  tone?: TagTone;
+  /** sm = the artboard badge (11px, 3px 10px); md = 12px for denser lists. */
+  size?: "sm" | "md";
+  icon?: React.ReactNode;
+}
+
+/** The one small label pill (package / package-level-station / role badges):
+ *  one shape and size per tone instead of a hand-rolled pill on every screen. */
+export function Tag({ tone = "primary", size = "sm", icon, className, children, ...rest }: TagProps) {
+  return (
+    <span className={cn("sh-tag", `sh-tag--${size}`, `sh-tag--${tone}`, className)} {...rest}>
+      {icon}
+      {children}
     </span>
   );
 }

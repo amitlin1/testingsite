@@ -1,0 +1,509 @@
+/* =========================================================================
+   /settings/* (and the /files header) — the states inline styles cannot
+   express: hover, focus, press, media queries. Tokens only.
+   Imported by settings/layout.tsx, and by SettingsToolbar so /files, which
+   uses the same page header, gets it too.
+   ========================================================================= */
+
+/* ---------------------------------------------------------- page shell --- */
+/* The ONE frame every settings page sits in: the layout owns the scroll, the
+   padding and the 1180 column; pages add none of their own. */
+.settings-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-xl) var(--space-lg);
+}
+.settings-page {
+  max-width: 1180px;
+  margin-inline: auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+/* A table page (CrudTable, users) fills the frame and scrolls its table
+   inside, with the header pinned; every other page grows and the frame
+   scrolls. */
+.settings-page:has(> .settings-fill) { height: 100%; }
+.settings-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+@media (max-width: 640px) {
+  .settings-content { padding: var(--space-md); }
+}
+
+/* --------------------------------------------------------- page header --- */
+/* Settings.dc.html: 30/700 title, 15px muted subtitle, the action at the end. */
+.settings-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-ml);
+  flex-wrap: wrap;
+}
+.settings-header__title {
+  margin: 0;
+  font-size: var(--text-page);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-display);
+  color: var(--color-ink);
+}
+.settings-header__subtitle {
+  margin: var(--space-xs) 0 0;
+  max-width: 720px;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--color-ink-muted-48);
+}
+.settings-header__actions { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.settings-count {
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-48);
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+  padding: 4px 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.settings-filters {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: var(--space-lg);
+}
+.settings-filters__search { flex: 1; min-width: 240px; max-width: 340px; }
+
+/* ------------------------------------------------------- shared pieces --- */
+.settings-card {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+.settings-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding: 14px var(--space-md);
+  border-bottom: 1px solid var(--color-hairline);
+}
+.settings-card__title { font-size: var(--text-body); font-weight: var(--fw-bold); color: var(--color-ink); }
+.settings-card__search { padding: 10px var(--space-sm); border-bottom: 1px solid var(--color-divider-soft); }
+
+/* An empty / first-step state: what is missing and what to do. */
+.settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: 56px var(--space-lg);
+  text-align: center;
+  color: var(--color-ink-muted-48);
+  font-size: var(--text-small);
+}
+.settings-empty__title { font-size: var(--text-body); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.settings-empty .sh-btn { margin-top: var(--space-xs); }
+/* Inside DataTable's own empty slot, which already pads and centres. */
+.settings-empty--bare { padding: 0; }
+
+/* A load failure: the error band and its retry, never an empty list. */
+.settings-error { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-sm); padding: var(--space-md); }
+
+/* Row icon actions (edit / delete) — Settings.dc.html: muted glyph, blue on
+   hover for edit, red on hover for delete. */
+.sh-iconbtn.set-act { color: var(--color-ink-muted-48); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.set-act:hover:not(:disabled) { background: var(--color-canvas-parchment); color: var(--color-primary); }
+  .sh-iconbtn.set-act--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 8%, transparent); color: var(--color-destructive); }
+}
+
+/* ------------------------------------------------ test stations (SP-1) --- */
+/* Master–detail: types · stations side by side, one column on narrow screens. */
+.stations-grid {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: var(--space-ml);
+  margin-top: var(--space-lg);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .stations-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A station-type row selects it (the only way to manage its stations). Its
+   name area is a real button (aria-pressed = the selected type), so the row
+   is reachable by Tab and Enter / Space; a click anywhere on the row still
+   selects. Selected = tint and weight, no side stripe. */
+.stz-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding-block: 8px;
+  padding-inline: var(--space-md) var(--space-xs);
+  border-top: 1px solid var(--color-divider-soft);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .stz-row:hover { background: var(--color-canvas-parchment); }
+}
+.stz-row[data-selected] { background: var(--color-primary-tint); }
+.stz-row__select {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  min-height: 32px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  background: none;
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+.stz-row__select:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 3px; }
+.stz-row__name {
+  min-width: 0;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stz-row[data-selected] .stz-row__name { font-weight: var(--fw-semibold); }
+
+/* -------------------------------------------------------- testing routes --- */
+.route-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--color-surface-pearl);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+  padding: var(--space-xs) var(--space-sm);
+}
+.route-step__num {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-small);
+  font-weight: var(--fw-bold);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* Settings.dc.html step buttons: framed, blue on hover; remove is red. */
+.sh-iconbtn.route-step__btn { border: 1px solid var(--color-hairline); background: var(--color-canvas); color: var(--color-ink-muted-48); }
+.sh-iconbtn.route-step__btn--danger { color: var(--color-destructive); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.route-step__btn:hover:not(:disabled) { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-canvas); }
+  .sh-iconbtn.route-step__btn--danger:hover:not(:disabled) { color: var(--color-destructive); border-color: var(--color-destructive); background: color-mix(in srgb, var(--color-destructive) 6%, transparent); }
+}
+.sh-iconbtn.route-step__btn:disabled { color: var(--color-border-strong); }
+/* "הוסף שלב": the dashed add affordance of the artboard. */
+.route-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 var(--space-md);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  background: var(--color-canvas);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .route-add:hover:not(:disabled) { border-color: var(--color-primary); background: var(--color-primary-tint); }
+}
+.route-add:disabled { color: var(--color-ink-muted-40); cursor: not-allowed; }
+
+/* ------------------------------------------- packages (Package Types) --- */
+/* Package Types Settings.dc.html: parchment action squares that turn blue
+   (edit) or red (delete) on hover, quiet order chevrons, 38px row fields
+   with the system focus ring, compact pills. */
+.sh-iconbtn.stp-act { background: var(--color-canvas-parchment); color: var(--color-ink); }
+.sh-iconbtn.stp-act--muted { color: var(--color-ink-muted-48); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.stp-act:hover:not(:disabled) { background: var(--color-primary-soft); color: var(--color-primary); }
+  .sh-iconbtn.stp-act--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 8%, transparent); color: var(--color-destructive); }
+}
+.sh-iconbtn.stp-chev { color: var(--color-ink-muted-48); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.stp-chev:hover:not(:disabled) { background: var(--color-canvas-parchment); color: var(--color-ink); }
+}
+.sh-iconbtn.stp-chev:disabled { color: var(--color-border-strong); }
+
+.stp-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  outline: none;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+.stp-input::placeholder { color: var(--color-ink-muted-40); }
+.stp-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
+.stp-input--num { text-align: center; font-variant-numeric: tabular-nums; }
+.stp-input--code { font-variant-numeric: tabular-nums; }
+.stp-input--route { font-weight: var(--fw-semibold); }
+/* A route number other than the default reads blue (the artboard's set state). */
+.stp-input--route-set { border-color: var(--color-primary-focus); color: var(--color-primary); }
+.stp-input--error, .stp-input--error:focus { border-color: var(--color-destructive); }
+.stp-input--error:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
+.stp-input--lg { height: 40px; width: 110px; font-size: var(--text-body); }
+
+/* The artboard's compact pills (14px, 10px 22px) on the shared Button. */
+.sh-btn.stp-pill { font-size: var(--text-body-sm); padding: 10px 22px; }
+.sh-btn--outlined.stp-pill { padding: 9px 18px; }
+
+/* The "new package type" dialog: the package artboards' shadowed sheet with
+   an unbanded footer. */
+.stp-dialog { box-shadow: var(--shadow-modal); }
+.stp-dialog .sh-dialog-actions { background: transparent; border-top: 0; padding: var(--space-ml) var(--space-lg) var(--space-lg); }
+
+/* ------------------------------------------------------ reference items --- */
+.ri-step-card { padding: var(--space-lg); margin-top: var(--space-lg); overflow: visible; }
+.ri-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: var(--space-ml);
+  margin-top: var(--space-lg);
+}
+/* A card opens the item for editing: a real button, with hover and focus. */
+.ri-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ri-card:hover { border-color: var(--color-border-strong); }
+}
+.ri-card:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+/* SP-1: the dialog's two-column form stacks on narrow screens. */
+.ri-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
+@media (max-width: 600px) {
+  .ri-form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* Photo-group choice ("העלאה אל"). */
+.ri-chip {
+  min-height: 32px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1.5px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ri-chip:hover { border-color: var(--color-primary); }
+}
+.ri-chip[aria-pressed="true"] { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+/* The drop zone opens the file picker by click or keyboard. */
+.ri-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 22px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--color-surface-pearl);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--r-md);
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.ri-drop--over { border-color: var(--color-primary); background: var(--color-primary-tint); }
+@media (hover: hover) and (pointer: fine) {
+  .ri-drop:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
+}
+.ri-drop:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+
+/* ------------------------------------------------------------- users --- */
+.users-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+.users-kpi {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  padding: 14px var(--space-md);
+}
+.users-kpi__value {
+  margin-top: var(--space-xxs);
+  font-size: var(--text-kpi);
+  font-weight: var(--fw-bold);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+.role-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ---------------------------------------------------------- work hours --- */
+/* Base looks live in the classes (not inline), so :hover can win. */
+.wh-card { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--r-card); }
+.wh-cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; margin-top: 18px; align-items: start; }
+@media (max-width: 900px) {
+  .wh-cols { grid-template-columns: minmax(0, 1fr); }
+}
+.wh-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 108px;
+  padding: 14px var(--space-sm);
+  text-align: center;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease-out), transform var(--t-press) var(--ease-press);
+}
+.wh-tile--off { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
+.wh-tile--fixed { background: var(--color-canvas-parchment); cursor: default; }
+@media (hover: hover) and (pointer: fine) {
+  .wh-tile:not(.wh-tile--fixed):hover { border-color: var(--color-primary-border); }
+}
+.wh-tile:not(.wh-tile--fixed):active { transform: scale(.97); }
+.sh-iconbtn.wh-nav { background: var(--color-canvas-parchment); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.wh-nav:hover:not(:disabled) { background: var(--color-primary-soft); color: var(--color-primary); }
+}
+.wh-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 76px;
+  padding: 7px var(--space-xs);
+  overflow: hidden;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.wh-cell--off { background: var(--color-canvas-parchment); }
+.wh-cell--closed { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
+@media (hover: hover) and (pointer: fine) {
+  .wh-cell:hover { border-color: var(--color-primary-border); }
+}
+/* SP-12: one hairline between records (the old inline border shorthand
+   painted a 3px ink line). */
+.wh-rec {
+  display: flex;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 10px var(--space-xs);
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--color-divider-soft);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wh-rec:hover { background: var(--color-surface-pearl); }
+}
+.wh-rec:focus-visible, .wh-cell:focus-visible, .wh-tile:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+.wh-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  min-height: 32px;
+  padding-inline: 11px 4px;
+  font-size: var(--text-small);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+}
+.wh-type--plain { padding-inline-end: 11px; }
+/* "+ סוג חדש" — the dashed add affordance, for both the page and the dialog. */
+.wh-add-type {
+  min-height: 32px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  background: var(--color-canvas);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wh-add-type:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
+}
+/* Choice chips in the work-hours dialogs (aria-pressed). */
+.wh-chip {
+  min-height: 34px;
+  padding: 0 15px;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wh-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--color-primary); color: var(--color-primary); }
+}
+.wh-chip[aria-pressed="true"] { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+.wh-chip:disabled { opacity: .5; cursor: default; }

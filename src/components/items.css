@@ -1,0 +1,176 @@
+/* =========================================================================
+   Items screens — ניהול פריטים, the KPI strip (shared with Shipments), the
+   item dialogs and the item history page. Only what inline styles cannot
+   express lives here: hover (pointer devices only), selected states, the
+   page-height layout, the small-screen collapse and the visually-hidden
+   label. Tokens only. Imported by each component that uses a class, so the
+   rules travel with the component (ItemFilesPanel also renders in testing
+   and on the package page).
+   ========================================================================= */
+
+/* A name for assistive tech on a field whose visible cue is a placeholder. */
+.items-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- ניהול פריטים: the page fills AppShell's content box; the table takes
+   the remaining height and scrolls inside it, so its header stays pinned and
+   the page itself does not scroll a second time. On a short screen the table
+   keeps a usable minimum and the page scrolls instead. ---- */
+.items-home {
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-lg);
+}
+.items-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.items-table-slot {
+  flex: 1 1 0;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* An inline text action inside a sentence ("· הצג"). Tall enough to hit on a
+   station touchscreen; the focus ring is the global one. */
+.items-link-btn {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0 var(--space-xxs);
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .items-link-btn:hover { text-decoration: underline; }
+}
+
+/* ---- SummaryStrip tile (Items + Shipments). The border lives here, not
+   inline, so the toggle tile's hover and pressed states can reach it. ---- */
+.summary-tile {
+  box-sizing: border-box;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  padding: var(--space-md) var(--space-ml);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+button.summary-tile {
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  button.summary-tile:hover:not([aria-pressed="true"]) { border-color: var(--color-border-strong); }
+}
+/* Pressed = selected: the one selection blue, not the tile's status tone. */
+button.summary-tile[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+/* ---- Files list rows (ItemFilesPanel) ---- */
+.items-file-row { transition: background-color var(--dur-fast) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .items-file-row:hover { background: var(--color-surface-pearl); }
+}
+
+/* ---- Edit item form: two columns, one on a phone ---- */
+.items-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+@media (max-width: 560px) {
+  .items-edit-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---- Item history ---- */
+.items-history-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--space-ml);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .items-history-cols { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A whole row that is a link (connected items, attached files). The row
+   bleeds to the card edge so the hover reads as the row, not a box in it. */
+.items-row-link {
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .items-row-link:hover { background: var(--color-surface-pearl); }
+}
+
+/* Station filter for the attached files: a toggle per station. Selected uses
+   the selected-chip fill; ≥32px for touch. No press animation — it is a
+   repeated filter action. */
+.items-file-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 32px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .items-file-tab:hover:not([aria-pressed="true"]) { border-color: var(--color-border-strong); }
+}
+.items-file-tab[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+.items-file-tab-count {
+  font-size: var(--text-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-48);
+  background: var(--color-divider-soft);
+  border-radius: var(--r-pill);
+  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+}
+.items-file-tab[aria-pressed="true"] .items-file-tab-count {
+  color: var(--color-primary);
+  background: var(--color-canvas);
+}

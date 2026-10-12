@@ -9,13 +9,10 @@ import {
     Box,
     Typography,
     Alert,
-    IconButton,
 } from "@/components/ui";
 import Barcode from "react-barcode";
 import { useReactToPrint } from "react-to-print";
 import { Print as PrintIcon } from "@/components/ui/icons";
-import { Close as CloseIcon } from "@/components/ui/icons";
-import { QrCode2 as QrCode2Icon } from "@/components/ui/icons";
 
 /** A single ID label to print — one per physical item. */
 export type ItemLabel = {
@@ -55,19 +52,11 @@ export default function ItemLabelsDialog({ open, onClose, labels, heading, onPri
     const barcodeOf = (l: ItemLabel) => (l.sourceId ? `${l.itemId}-${l.sourceId}` : String(l.itemId));
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-            <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <QrCode2Icon color="primary" />
-                    <Typography variant="h6" component="span" fontWeight="bold">
-                        {heading ?? "הדפסת מדבקות ID"}
-                    </Typography>
-                </Box>
-                <IconButton onClick={onClose}>
-                    <CloseIcon />
-                </IconButton>
-            </DialogTitle>
-            <DialogContent dividers>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            {/* The shared title: one size, the one named × at the inline end. */}
+            <DialogTitle onClose={onClose}>{heading ?? "הדפסת מדבקות ID"}</DialogTitle>
+            {/* Top divider only — DialogActions draws the line above the footer. */}
+            <DialogContent style={{ borderTop: "1px solid var(--color-hairline)", paddingTop: "var(--space-md)" }}>
                 {labels.length === 0 ? (
                     <Alert severity="info">אין פריטים להדפסת מדבקות</Alert>
                 ) : (
@@ -79,9 +68,9 @@ export default function ItemLabelsDialog({ open, onClose, labels, heading, onPri
                             sx={{
                                 maxHeight: 360,
                                 overflowY: "auto",
-                                border: "1px solid #e0e0e0",
-                                borderRadius: 2,
-                                bgcolor: "#fafafa",
+                                border: "1px solid var(--color-hairline)",
+                                borderRadius: "var(--r-md)",
+                                bgcolor: "var(--color-surface-pearl)",
                             }}
                         >
                             <div ref={printRef}>
@@ -99,6 +88,9 @@ export default function ItemLabelsDialog({ open, onClose, labels, heading, onPri
                                         }}
                                     >
                                         <Barcode value={barcodeOf(l)} width={2} height={80} fontSize={16} />
+                                        {/* Printed label: literal sizes (13 / 14, on the
+                                            scale) so the print frame never depends on
+                                            the page's custom properties. */}
                                         <div style={{ marginTop: 8, textAlign: "center", direction: "rtl" }}>
                                             {l.role && <div style={{ fontSize: 13, fontWeight: 700 }}>{l.role}</div>}
                                             {l.title && <div style={{ fontSize: 14 }}>{l.title}</div>}
@@ -112,11 +104,11 @@ export default function ItemLabelsDialog({ open, onClose, labels, heading, onPri
                 )}
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose}>סגור</Button>
+                <Button variant="outlined" color="inherit" onClick={onClose}>סגור</Button>
                 <Button
                     onClick={() => handlePrint()}
                     variant="contained"
-                    startIcon={<PrintIcon sx={{ ml: 1 }} />}
+                    startIcon={<PrintIcon fontSize={18} />}
                     disabled={labels.length === 0}
                 >
                     הדפס הכל ({labels.length})

@@ -56,10 +56,14 @@ export default function CommandPaletteTrigger() {
         className="cp-trigger"
         onClick={() => setOpen(true)}
         aria-label="פתיחת חיפוש כללי"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        // The shortcut, said once for assistive tech (the <kbd> is visual).
+        aria-keyshortcuts={isMac ? "Meta+K /" : "Control+K /"}
       >
-        <Search size={16} strokeWidth={1.9} />
+        <Search size={16} strokeWidth={1.9} aria-hidden />
         <span className="cp-trigger-text">חיפוש מארז, פריט, משלוח או עמדה</span>
-        <kbd className="cp-trigger-kbd">{isMac ? "⌘ K" : "Ctrl K"}</kbd>
+        <kbd className="cp-trigger-kbd" aria-hidden>{isMac ? "⌘ K" : "Ctrl K"}</kbd>
       </button>
       <CommandPalette open={open} onClose={() => setOpen(false)} />
     </>

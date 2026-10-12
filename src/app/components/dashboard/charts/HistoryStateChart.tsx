@@ -16,6 +16,9 @@
 // station of that type. The legend label carries that, because a band the
 // reader takes for "this station's backlog" is a wrong number with a right
 // shape.
+//
+// The band colours are the shared state colours (palette.ts), and each band is
+// edged by a 1px canvas line so neighbouring ramp steps stay apart.
 
 import * as React from "react";
 import {
@@ -32,6 +35,7 @@ import {
 import type { HistoryPoint } from "@/app/lib/dashboard/api-types";
 import { formatCount, formatDayTick } from "@/app/lib/dashboard/format";
 import { AXIS_PROPS, GRID_STROKE, RtlTooltip } from "./chartConfig";
+import { SEGMENT_SEPARATOR, STATE_COLOR } from "./palette";
 
 export interface HistoryStateChartProps {
   points: HistoryPoint[];
@@ -73,8 +77,9 @@ export default function HistoryStateChart({
           dataKey="queue"
           name={queueLabel}
           stackId="s"
-          stroke="none"
-          fill="var(--dash-ramp-4)"
+          stroke={SEGMENT_SEPARATOR}
+          strokeWidth={1}
+          fill={STATE_COLOR.queued}
           isAnimationActive={false}
           connectNulls={false}
         />
@@ -84,8 +89,9 @@ export default function HistoryStateChart({
           dataKey="test"
           name="בבדיקה"
           stackId="s"
-          stroke="none"
-          fill="var(--dash-ramp-1)"
+          stroke={SEGMENT_SEPARATOR}
+          strokeWidth={1}
+          fill={STATE_COLOR.testing}
           fillOpacity={0.85}
           isAnimationActive={false}
           connectNulls={false}
@@ -96,8 +102,9 @@ export default function HistoryStateChart({
           dataKey="research"
           name="במחקר"
           stackId="s"
-          stroke="none"
-          fill="var(--dash-ramp-5)"
+          stroke={SEGMENT_SEPARATOR}
+          strokeWidth={1}
+          fill={STATE_COLOR.in_research}
           isAnimationActive={false}
           connectNulls={false}
         />
@@ -108,8 +115,9 @@ export default function HistoryStateChart({
             dataKey="unmapped"
             name="סטטוס לא ממופה"
             stackId="s"
-            stroke="none"
-            fill="var(--dash-amber-on-dark)"
+            stroke={SEGMENT_SEPARATOR}
+            strokeWidth={1}
+            fill={STATE_COLOR.unmapped}
             isAnimationActive={false}
             connectNulls={false}
           />

@@ -1,18 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Box,
-  Typography,
-  Collapse,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  IconButton,
-  Tooltip,
-} from "@/components/ui";
-import { useTheme, alpha } from "@/components/ui";
+import { Box, Typography, Collapse, IconButton, Tooltip } from "@/components/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -38,10 +27,7 @@ import { settingsLinks } from "../settings/settingsNav";
 export const SIDEBAR_WIDTH = 240;
 export const SIDEBAR_COLLAPSED_WIDTH = 56;
 
-const SIDEBAR_BG = "#15171a";
-const ACTIVE_BG = "rgba(41,151,255,0.14)";
-const ACTIVE_BAR = "#2997ff";
-const INACTIVE_TEXT = "#b8bcc2";
+const SIDEBAR_BG = "var(--color-nav-bg)";
 
 // ==========================================
 // 1. קומפוננטת טמפלט (DRY) לפריט ניווט בתפריט
@@ -57,45 +43,43 @@ type NavItemProps = {
 };
 
 function NavItem({ href, label, icon, active, onClose, isNested = false, collapsed = false }: NavItemProps) {
-  const button = (
-    <ListItemButton
-      component={Link}
+  // States live in ui.css (.sh-nav-item): hover, the active page, keyboard focus.
+  const link = (
+    <Link
       href={href}
       onClick={onClose} // יופעל רק בלחיצה שמאלית, לחיצה על הגלגל תפתח טאב חדש ותתעלם מזה
-      sx={{
-        minHeight: isNested ? 38 : 42,
-        borderRadius: "9px",
-        px: collapsed ? 0 : 1.5,
-        mb: "3px",
-        justifyContent: collapsed ? "center" : "flex-start",
-        color: active ? "#fff" : INACTIVE_TEXT,
-        bgcolor: active ? ACTIVE_BG : "transparent",
-        borderInlineStart: `3px solid ${active ? ACTIVE_BAR : "transparent"}`,
-        "&:hover": { bgcolor: alpha("#ffffff", 0.06), color: "#fff" },
-        "& .MuiListItemIcon-root": {
-          color: "inherit",
-          minWidth: collapsed ? 0 : 34,
-          justifyContent: "center",
-        },
-        "& .MuiListItemText-primary": {
-          fontSize: isNested ? 13 : 14,
-          fontWeight: active ? 600 : 400,
-        },
-      }}
+      className="sh-nav-item"
+      data-nested={isNested || undefined}
+      data-collapsed={collapsed || undefined}
+      aria-current={active ? "page" : undefined}
+      aria-label={collapsed ? label : undefined}
     >
-      <ListItemIcon>{icon}</ListItemIcon>
-      {!collapsed && <ListItemText primary={label} />}
-    </ListItemButton>
+      <span className="sh-nav-icon" aria-hidden>{icon}</span>
+      {!collapsed && <span className="sh-nav-label">{label}</span>}
+    </Link>
   );
 
   // In collapsed mode the label is hidden, so surface it as a tooltip.
   return collapsed ? (
     <Tooltip title={label} placement="left" arrow>
-      {button}
+      {link}
     </Tooltip>
   ) : (
-    button
+    link
   );
+}
+
+/** The nav entry a path belongs to: the longest href that is the path itself
+ *  or a parent of it ("/" only for itself and the item pages it opens), so
+ *  /packages/12 lights the packages entry and /dashboard/tests/kpis the dashboard. */
+function activeHref(pathname: string | null, hrefs: string[]): string | null {
+  if (!pathname) return null;
+  let best: string | null = null;
+  for (const h of hrefs) {
+    const hit = h === "/" ? pathname === "/" || pathname.startsWith("/items/") : pathname === h || pathname.startsWith(h + "/");
+    if (hit && (best === null || h.length > best.length)) best = h;
+  }
+  return best;
 }
 
 // ==========================================
@@ -118,7 +102,6 @@ export default function NavBar({
   onExpand,
   onToggle,
 }: SidebarProps) {
-  const theme = useTheme();
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -141,12 +124,12 @@ export default function NavBar({
   const avatarChar = displayName.trim().charAt(0) || "מ";
 
   const mainLinks = [
-    { href: "/", label: "דוחות/ניהול פריטים", icon: <DashboardIcon sx={{ fontSize: 20 }} /> },
-    { href: "/packages", label: "מארזים", icon: <InventoryIcon sx={{ fontSize: 20 }} /> },
-    { href: "/testing", label: "מסך בדיקה", icon: <ScienceIcon sx={{ fontSize: 20 }} /> },
-    { href: "/dashboard/tests", label: "לוח ניהול", icon: <AnalyticsIcon sx={{ fontSize: 20 }} /> },
-    { href: "/shipments", label: "משלוחים נכנסים", icon: <LocalShippingIcon sx={{ fontSize: 20 }} /> },
-    { href: "/files", label: "ניהול קבצים", icon: <FolderCopyIcon sx={{ fontSize: 20 }} /> },
+    { href: "/", label: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> },
+    { href: "/packages", label: "מארזים", icon: <InventoryIcon fontSize={20} /> },
+    { href: "/testing", label: "מסך בדיקה", icon: <ScienceIcon fontSize={20} /> },
+    { href: "/dashboard/tests", label: "לוח ניהול", icon: <AnalyticsIcon fontSize={20} /> },
+    { href: "/shipments", label: "משלוחים נכנסים", icon: <LocalShippingIcon fontSize={20} /> },
+    { href: "/files", label: "ניהול קבצים", icon: <FolderCopyIcon fontSize={20} /> },
   ];
 
   // Hide nav entries the current role may not open (same source of truth as the
@@ -155,14 +138,18 @@ export default function NavBar({
   const visibleSettingsLinks = settingsLinks.filter((s) => canSeeInNav(s.path, roles));
 
   const isSettingsActive = pathname?.startsWith("/settings");
+  const currentMain = activeHref(pathname, visibleMainLinks.map((l) => l.href));
+  const currentSetting = activeHref(pathname, visibleSettingsLinks.map((s) => s.path));
 
   return (
     <Box
       component="aside"
       style={{
+        // Only the mobile drawer slides; the desktop width snaps (animating
+        // width would re-lay out the whole page on every frame).
         transform: isMobile ? (open ? "translateX(0)" : "translateX(100%)") : "none",
-        transition: "transform 0.2s ease, width 0.2s ease",
-        boxShadow: isMobile && open ? "rgba(0,0,0,0.35) 0 0 50px" : "none",
+        transition: isMobile ? "transform var(--dur-slow) var(--ease-out)" : "none",
+        boxShadow: isMobile && open ? "var(--shadow-pop)" : "none",
       }}
       sx={{
         position: "fixed",
@@ -171,7 +158,7 @@ export default function NavBar({
         bottom: 0,
         width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
         bgcolor: SIDEBAR_BG,
-        color: "#fff",
+        color: "var(--color-on-primary)",
         display: "flex",
         flexDirection: "column",
         overflowX: "hidden",
@@ -187,7 +174,7 @@ export default function NavBar({
           justifyContent: collapsed ? "center" : "flex-start",
           gap: 1.25,
           px: collapsed ? 0 : 2.25,
-          borderBottom: `1px solid ${alpha("#ffffff", 0.08)}`,
+          borderBottom: "1px solid var(--color-nav-divider)",
           flexShrink: 0,
         }}
       >
@@ -198,17 +185,17 @@ export default function NavBar({
               sx={{
                 width: 26,
                 height: 26,
-                borderRadius: "7px",
-                bgcolor: theme.tokens?.accent || ACTIVE_BAR, // גיבוי למקרה שהטוקן חסר
+                borderRadius: "var(--r-xs)",
+                bgcolor: "var(--color-primary)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <CheckIcon sx={{ fontSize: 16, color: "#fff" }} />
+              <CheckIcon sx={{ fontSize: 16, color: "var(--color-on-primary)" }} />
             </Box>
-            <Typography sx={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-0.3px", whiteSpace: "nowrap" }}>
+            <Typography sx={{ fontSize: "var(--text-body)", fontWeight: 700, whiteSpace: "nowrap" }}>
               מערכת בדיקות
             </Typography>
           </>
@@ -218,19 +205,13 @@ export default function NavBar({
             <IconButton
               onClick={onToggle}
               aria-label={collapsed ? "הרחב תפריט" : "כווץ תפריט"}
-              sx={{
-                color: "#fff",
-                width: 36,
-                height: 36,
-                borderRadius: "9px",
-                flexShrink: 0,
-                "&:hover": { bgcolor: alpha("#ffffff", 0.08) },
-              }}
+              aria-expanded={!collapsed}
+              className="sh-nav-iconbtn"
             >
               <MenuIcon sx={{ fontSize: 20 }} />
             </IconButton>
             {!collapsed && (
-              <Typography sx={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-0.3px", whiteSpace: "nowrap" }}>
+              <Typography sx={{ fontSize: "var(--text-body)", fontWeight: 700, whiteSpace: "nowrap" }}>
                 מערכת בדיקות
               </Typography>
             )}
@@ -241,25 +222,17 @@ export default function NavBar({
       {/* Navigation — the ONLY scroll region. minHeight:0 lets the flex child
           shrink instead of forcing the whole column to overflow. */}
       <Box
-        className="sidebar-nav"
+        component="nav"
+        aria-label="ניווט ראשי"
+        className="sidebar-nav sh-nav-scroll"
         sx={{
           flex: 1,
           minHeight: 0,
           overflowY: "auto",
           p: collapsed ? "10px 8px" : "10px 14px",
-          scrollbarWidth: "thin",
-          scrollbarColor: "rgba(255,255,255,0.18) transparent",
-          "&::-webkit-scrollbar": { width: 8 },
-          "&::-webkit-scrollbar-thumb": {
-            background: "rgba(255,255,255,0.18)",
-            borderRadius: "9999px",
-            border: "2px solid transparent",
-            backgroundClip: "content-box",
-          },
-          "&::-webkit-scrollbar-track": { background: "transparent" },
         }}
       >
-        <List disablePadding>
+        <Box>
           {/* Main Links */}
           {visibleMainLinks.map((link) => (
             <NavItem
@@ -267,52 +240,33 @@ export default function NavBar({
               href={link.href}
               label={link.label}
               icon={link.icon}
-              active={pathname === link.href}
+              active={currentMain === link.href}
               onClose={onClose}
               collapsed={collapsed}
             />
           ))}
 
-          <Box sx={{ height: "1px", bgcolor: alpha("#ffffff", 0.08), my: 1.25, mx: 0.5 }} />
+          <Box sx={{ height: "1px", bgcolor: "var(--color-nav-divider)", my: 1.25, mx: 0.5 }} />
 
           {/* Settings Toggle Button (לא מפעיל ניווט, רק פותח/סוגר את הרשימה).
               במצב מכווץ לחיצה עליו מרחיבה את הסרגל במקום לפתוח תת-רשימה. */}
           {(() => {
             const settingsButton = (
-              <ListItemButton
+              <button
+                type="button"
                 onClick={collapsed ? onExpand : () => setSettingsOpen((o) => !o)}
-                sx={{
-                  minHeight: 42,
-                  borderRadius: "9px",
-                  px: collapsed ? 0 : 1.5,
-                  mb: "3px",
-                  justifyContent: collapsed ? "center" : "flex-start",
-                  color: isSettingsActive ? "#fff" : INACTIVE_TEXT,
-                  bgcolor: isSettingsActive && (collapsed || !settingsOpen) ? ACTIVE_BG : "transparent",
-                  borderInlineStart: `3px solid ${isSettingsActive ? ACTIVE_BAR : "transparent"}`,
-                  "&:hover": { bgcolor: alpha("#ffffff", 0.06), color: "#fff" },
-                  "& .MuiListItemIcon-root": {
-                    color: "inherit",
-                    minWidth: collapsed ? 0 : 34,
-                    justifyContent: "center",
-                  },
-                  "& .MuiListItemText-primary": { fontSize: 14, fontWeight: isSettingsActive ? 600 : 400 },
-                }}
+                className="sh-nav-item"
+                data-collapsed={collapsed || undefined}
+                data-section-active={isSettingsActive && (collapsed || !settingsOpen) ? "" : undefined}
+                aria-expanded={collapsed ? undefined : settingsOpen}
+                aria-label={collapsed ? "הגדרות מערכת" : undefined}
               >
-                <ListItemIcon>
-                  <SettingsIcon sx={{ fontSize: 20 }} />
-                </ListItemIcon>
-                {!collapsed && <ListItemText primary="הגדרות מערכת" />}
-                {!collapsed && (
-                  <ExpandMoreIcon
-                    sx={{
-                      fontSize: 18,
-                      transition: "transform 0.2s",
-                      transform: settingsOpen ? "rotate(180deg)" : "none",
-                    }}
-                  />
-                )}
-              </ListItemButton>
+                <span className="sh-nav-icon" aria-hidden>
+                  <SettingsIcon fontSize={20} />
+                </span>
+                {!collapsed && <span className="sh-nav-label">הגדרות מערכת</span>}
+                {!collapsed && <ExpandMoreIcon fontSize={18} className="sh-nav-chevron" data-open={settingsOpen || undefined} aria-hidden />}
+              </button>
             );
             return collapsed ? (
               <Tooltip title="הגדרות מערכת" placement="left" arrow>
@@ -326,7 +280,7 @@ export default function NavBar({
           {/* Settings Links — hidden in collapsed mode (the gear expands the rail first) */}
           {!collapsed && (
             <Collapse in={settingsOpen} timeout="auto" unmountOnExit>
-              <List disablePadding sx={{ pr: 1 }}>
+              <Box sx={{ pr: 1 }}>
                 {visibleSettingsLinks.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -335,23 +289,23 @@ export default function NavBar({
                       href={item.path}
                       label={item.label}
                       icon={<Icon fontSize="small" />}
-                      active={pathname === item.path}
+                      active={currentSetting === item.path}
                       onClose={onClose}
                       isNested={true}
                     />
                   );
                 })}
-              </List>
+              </Box>
             </Collapse>
           )}
-        </List>
+        </Box>
       </Box>
 
       {/* User footer — pinned (never scrolls). Static placeholder for now;
           wire the name/role/logout up to the real auth/session later. */}
       <Box
         sx={{
-          borderTop: `1px solid ${alpha("#ffffff", 0.08)}`,
+          borderTop: "1px solid var(--color-nav-divider)",
           p: collapsed ? "12px 0" : "12px 16px",
           display: "flex",
           alignItems: "center",
@@ -366,8 +320,8 @@ export default function NavBar({
               width: 34,
               height: 34,
               borderRadius: "9999px",
-              bgcolor: theme.tokens?.accent || ACTIVE_BAR,
-              color: "#fff",
+              bgcolor: "var(--color-primary)",
+              color: "var(--color-on-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -384,9 +338,9 @@ export default function NavBar({
             <Box sx={{ lineHeight: 1.2, minWidth: 0 }}>
               <Typography
                 sx={{
-                  fontSize: 13.5,
+                  fontSize: "var(--text-small)",
                   fontWeight: 600,
-                  color: "#fff",
+                  color: "var(--color-on-primary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -394,23 +348,16 @@ export default function NavBar({
               >
                 {displayName}
               </Typography>
-              <Typography sx={{ fontSize: 11.5, color: "#9aa0a6" }}>{roleLabel}</Typography>
+              <Typography sx={{ fontSize: "var(--text-fine)", color: "var(--color-nav-ink-muted)" }}>{roleLabel}</Typography>
             </Box>
             <IconButton
               title="התנתקות"
               aria-label="התנתקות"
               onClick={() => fullLogout(session?.idToken)}
-              sx={{
-                marginInlineStart: "auto",
-                width: 30,
-                height: 30,
-                borderRadius: "8px",
-                color: "#9aa0a6",
-                flexShrink: 0,
-                "&:hover": { bgcolor: alpha("#ffffff", 0.08), color: "#fff" },
-              }}
+              className="sh-nav-iconbtn sh-nav-iconbtn--muted"
+              style={{ marginInlineStart: "auto" }}
             >
-              <LogoutIcon sx={{ fontSize: 17 }} />
+              <LogoutIcon fontSize={18} />
             </IconButton>
           </>
         )}

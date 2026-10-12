@@ -5,6 +5,38 @@
    Imported once from globals.css.
    ========================================================================= */
 
+/* ------------------------------------------------------- Global baseline -- */
+/* One keyboard-focus ring for everything interactive. :where() keeps the
+   specificity at zero, so a component's own focus style still wins. */
+:where(a[href], button, summary, [role="button"], [role="tab"], [role="checkbox"],
+       [role="radio"], [role="switch"], [role="menuitem"], [role="option"],
+       [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
+}
+
+/* Present for assistive tech, invisible on screen (labels for placeholder-only fields). */
+.sh-visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* The parts of the page no component draws still carry the palette. */
+::selection { background: var(--color-primary-soft); color: var(--color-ink); }
+input, textarea { caret-color: var(--color-primary); }
+html { scrollbar-color: var(--color-border-strong) transparent; }
+
+/* Reduced motion: nothing moves, but feedback stays. Transitions keep only
+   colour / opacity / shadow (state still reads), presses don't scale, and the
+   looping skeleton / indeterminate bars hold still. The spinner keeps turning:
+   it is the one signal that work is in progress. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-property: color, background-color, border-color, outline-color, opacity, box-shadow, fill, stroke !important;
+    scroll-behavior: auto !important;
+  }
+  .sh-btn:active, .sh-iconbtn:active, .sh-press:active { transform: none !important; }
+  .sh-skeleton { animation: none !important; background: var(--color-canvas-parchment) !important; }
+  .sh-progress-indeterminate { animation: none !important; width: 100% !important; opacity: .45; }
+}
+
 /* ------------------------------------------------------------- Button ----- */
 .sh-btn {
   box-sizing: border-box;
@@ -20,9 +52,10 @@
   user-select: none;
   white-space: nowrap;
   transition: transform var(--t-press) var(--ease-press),
-    background-color .2s ease, border-color .2s ease, color .2s ease;
+    background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
 }
-.sh-btn:active:not(:disabled):not([aria-disabled="true"]) { transform: scale(.95); }
+.sh-btn:active:not(:disabled):not([aria-disabled="true"]) { transform: scale(.97); }
+.sh-btn[aria-busy="true"] { cursor: progress; }
 .sh-btn:focus-visible {
   outline: 2px solid var(--color-primary-focus);
   outline-offset: 2px;
@@ -35,69 +68,80 @@
 }
 .sh-btn--full { width: 100%; }
 
-/* contained (default) */
+/* contained (default). 15px / 40px: the control size of this dense UI. */
 .sh-btn--contained {
   border-radius: var(--r-pill);
-  font-size: 17px;
-  padding: 11px 22px;
-  min-height: 38px;
+  font-size: var(--text-body);
+  padding: 9px 20px;
+  min-height: 40px;
   color: var(--color-on-primary);
   background: var(--color-primary);
 }
-.sh-btn--contained:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-primary-hover); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--contained:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-primary-hover); } }
 .sh-btn--contained.sh-btn--error { background: var(--color-destructive); }
-.sh-btn--contained.sh-btn--error:hover:not(:disabled) { background: var(--color-destructive-hover); }
-.sh-btn--contained.sh-btn--success { background: var(--color-status-approved); }
-.sh-btn--contained.sh-btn--success:hover:not(:disabled) { background: #1a7a4f; }
+@media (hover: hover) and (pointer: fine) { .sh-btn--contained.sh-btn--error:hover:not(:disabled) { background: var(--color-destructive-hover); } }
+.sh-btn--contained.sh-btn--success { background: var(--color-success-ink); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--contained.sh-btn--success:hover:not(:disabled) { background: var(--color-success-ink-hover); } }
+.sh-btn--contained.sh-btn--warning { background: var(--color-warning-ink); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--contained.sh-btn--warning:hover:not(:disabled) { background: color-mix(in srgb, var(--color-warning-ink) 88%, black); } }
 .sh-btn--contained.sh-btn--inherit { background: var(--color-ink); color: var(--color-on-dark); }
 
 /* outlined (secondary) */
 .sh-btn--outlined {
   border-radius: var(--r-pill);
-  font-size: 17px;
-  padding: 10px 21px;
-  min-height: 38px;
+  font-size: var(--text-body);
+  padding: 8px 19px;
+  min-height: 40px;
   background: transparent;
   color: var(--color-primary);
   border: 1px solid var(--color-primary);
 }
-.sh-btn--outlined:hover:not(:disabled) { background: rgba(0,102,204,.06); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--outlined:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); } }
 .sh-btn--outlined.sh-btn--error { color: var(--color-destructive); border-color: var(--color-destructive); }
-.sh-btn--outlined.sh-btn--error:hover:not(:disabled) { background: rgba(191,53,53,.06); }
-.sh-btn--outlined.sh-btn--inherit { color: var(--color-ink); border-color: var(--color-hairline); }
-.sh-btn--outlined.sh-btn--inherit:hover:not(:disabled) { background: rgba(0,0,0,.04); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--outlined.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); } }
+.sh-btn--outlined.sh-btn--warning { color: var(--color-warning-ink); border-color: var(--color-warning-ink); }
+.sh-btn--outlined.sh-btn--inherit { color: var(--color-ink); border-color: var(--color-border-strong); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--outlined.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); } }
 
 /* text */
 .sh-btn--text {
   border-radius: var(--r-sm);
-  font-size: 17px;
+  font-size: var(--text-body);
   padding: 8px 12px;
+  min-height: 36px;
   background: transparent;
   color: var(--color-primary);
   border-color: transparent;
 }
-.sh-btn--text:hover:not(:disabled) { background: rgba(0,102,204,.06); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--text:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 6%, transparent); } }
 .sh-btn--text.sh-btn--error { color: var(--color-destructive); }
-.sh-btn--text.sh-btn--error:hover:not(:disabled) { background: rgba(191,53,53,.06); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--text.sh-btn--error:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); } }
+.sh-btn--text.sh-btn--warning { color: var(--color-warning-ink); }
 .sh-btn--text.sh-btn--inherit { color: var(--color-ink); }
-.sh-btn--text.sh-btn--inherit:hover:not(:disabled) { background: rgba(0,0,0,.04); }
+@media (hover: hover) and (pointer: fine) { .sh-btn--text.sh-btn--inherit:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); } }
 
 /* dark utility */
 .sh-btn--dark {
   border-radius: var(--r-sm);
-  font-size: 14px;
+  font-size: var(--text-body-sm);
   padding: 8px 15px;
   min-height: 32px;
   background: var(--color-ink);
   color: var(--color-on-dark);
   border-color: transparent;
 }
-.sh-btn--dark:hover:not(:disabled) { background: #000; }
+@media (hover: hover) and (pointer: fine) { .sh-btn--dark:hover:not(:disabled) { background: var(--color-surface-black); } }
 
 /* sizes (override padding/height) */
-.sh-btn--small { font-size: 14px; padding: 7px 14px; min-height: 32px; }
+.sh-btn--small { font-size: var(--text-body-sm); padding: 6px 14px; min-height: 32px; }
 .sh-btn--small.sh-btn--text { padding: 5px 10px; }
-.sh-btn--large { font-size: 18px; padding: 13px 26px; min-height: 44px; }
+.sh-btn--large { font-size: var(--text-lead); padding: 11px 24px; min-height: 44px; }
+
+/* ----------------------------------------------- Direction icons ------- */
+/* ArrowBack / ArrowForward mean a reading direction, and lucide draws them
+   for LTR. `:dir()` on the (HTML) parent reads its resolved direction, as the
+   Switch thumb below does, so they flip in RTL and stay put in an LTR island. */
+:dir(rtl) > .sh-icon-rtl-mirror { transform: scaleX(-1); }
 
 /* ---------------------------------------------------------- IconButton ---- */
 .sh-iconbtn {
@@ -112,10 +156,10 @@
   border: none;
   cursor: pointer;
   color: var(--color-ink);
-  transition: background-color .15s ease, color .15s ease, transform var(--t-press) var(--ease-press);
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--t-press) var(--ease-press);
 }
-.sh-iconbtn:hover:not(:disabled) { background: rgba(0,0,0,.05); }
-.sh-iconbtn:active:not(:disabled) { transform: scale(.92); }
+@media (hover: hover) and (pointer: fine) { .sh-iconbtn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 5%, transparent); } }
+.sh-iconbtn:active:not(:disabled) { transform: scale(.95); }
 .sh-iconbtn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
 .sh-iconbtn:disabled { color: var(--color-ink-muted-48); cursor: not-allowed; }
 .sh-iconbtn--small { width: 32px; height: 32px; }
@@ -123,7 +167,7 @@
 .sh-iconbtn--primary { color: var(--color-primary); }
 .sh-iconbtn--error { color: var(--color-destructive); }
 .sh-iconbtn--round { border-radius: var(--r-full); background: var(--color-surface-chip-translucent); }
-.sh-iconbtn--round:hover:not(:disabled) { background: rgba(190,190,195,.8); }
+@media (hover: hover) and (pointer: fine) { .sh-iconbtn--round:hover:not(:disabled) { background: rgba(190,190,195,.8); } }
 
 /* --------------------------------------------------------------- Input ---- */
 .sh-input {
@@ -133,18 +177,18 @@
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: inherit;
-  font-size: 17px;
-  border: 1px solid var(--color-hairline);
+  font-size: var(--text-body);
+  border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
   padding: 10px 14px;
   outline: none;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 .sh-input::placeholder { color: var(--color-ink-muted-48); }
-.sh-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px rgba(0,113,227,.15); }
+.sh-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
 .sh-input:disabled { background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); cursor: not-allowed; }
 .sh-input--error { border-color: var(--color-destructive); }
-.sh-input--error:focus { border-color: var(--color-destructive); box-shadow: 0 0 0 3px rgba(191,53,53,.15); }
+.sh-input--error:focus { border-color: var(--color-destructive); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
 .sh-input--textarea { height: auto; line-height: 1.47; resize: vertical; }
 .sh-input--search { height: 44px; border-radius: var(--r-pill); padding-inline: 46px 16px; }
 /* hide number spinners */
@@ -155,10 +199,10 @@
 /* Field wrapper (used by TextField, supports adornments) */
 .sh-field-label {
   display: block;
-  font-size: 14px;
+  font-size: var(--text-small);
   font-weight: var(--fw-semibold);
-  margin-bottom: 8px;
-  color: var(--color-ink);
+  margin-bottom: 6px;   /* same as FieldLabel and the combobox label, so a row lines up */
+  color: var(--color-ink-muted-80);
 }
 .sh-field-label--error { color: var(--color-destructive); }
 .sh-input-wrap {
@@ -169,14 +213,14 @@
   width: 100%;
   min-height: 40px;
   background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
   padding-inline: 14px;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
-.sh-input-wrap:focus-within { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px rgba(0,113,227,.15); }
+.sh-input-wrap:focus-within { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
 .sh-input-wrap.sh-input--error { border-color: var(--color-destructive); }
-.sh-input-wrap.sh-input--error:focus-within { box-shadow: 0 0 0 3px rgba(191,53,53,.15); }
+.sh-input-wrap.sh-input--error:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
 .sh-input-wrap.sh-input--disabled { background: var(--color-canvas-parchment); }
 .sh-input-wrap.sh-input--search { min-height: 44px; border-radius: var(--r-pill); }
 .sh-input-wrap.sh-input--multiline { align-items: stretch; }
@@ -188,7 +232,7 @@
   outline: none;
   background: transparent;
   font-family: inherit;
-  font-size: 17px;
+  font-size: var(--text-body);
   color: var(--color-ink);
   padding: 10px 0;
 }
@@ -219,18 +263,18 @@
   gap: 8px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 17px;
+  font-size: var(--text-body);
   color: var(--color-ink);
   background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
   padding: 10px 14px;
   outline: none;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 .sh-select-trigger:focus, .sh-select-trigger[data-state="open"] {
   border-color: var(--color-primary-focus);
-  box-shadow: 0 0 0 3px rgba(0,113,227,.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
 }
 .sh-select-trigger[data-placeholder] { color: var(--color-ink-muted-48); }
 .sh-select-trigger:disabled { background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); cursor: not-allowed; }
@@ -249,7 +293,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 17px;
+  font-size: var(--text-body);
   color: var(--color-ink);
   padding: 9px 12px;
   border-radius: var(--r-xs);
@@ -265,13 +309,13 @@
 /* Locked: read-only value, lock instead of the arrow (the component never
    opens it), no focus ring. */
 .sh-input-wrap.sh-combo--locked { background: var(--color-canvas-parchment); }
-.sh-input-wrap.sh-combo--locked:focus-within { border-color: var(--color-hairline); box-shadow: none; }
+.sh-input-wrap.sh-combo--locked:focus-within { border-color: var(--color-field-border); box-shadow: none; }
 .sh-input-wrap.sh-combo--locked > input { color: var(--color-ink-muted-48); cursor: default; }
 
 /* Dense: the package screens' field metrics. The primitive's × (.sh-ac-clear) and
    arrow (.sh-ac-arrow) are pinned at fixed insets (× 38px, arrow 12px) so every
    field lines up to the pixel; the end padding keeps text clear of both. */
-.sh-input-wrap.sh-combo--dense { position: relative; height: 44px; min-height: 0; border-radius: 8px; padding-inline: 13px 66px; gap: 0; }
+.sh-input-wrap.sh-combo--dense { position: relative; height: 44px; min-height: 0; border-radius: var(--r-field); padding-inline: 13px 66px; gap: 0; }
 .sh-input-wrap.sh-combo--dense.sh-combo--h38 { height: 38px; }
 .sh-input-wrap.sh-combo--dense.sh-combo--h34 { height: 34px; }
 .sh-input-wrap.sh-combo--dense.sh-combo--icon { padding-inline-start: 38px; }
@@ -289,8 +333,8 @@
 .sh-combo-option[data-highlighted] { background: var(--color-canvas-parchment); }
 .sh-combo-check { width: 15px; display: inline-flex; flex-shrink: 0; color: var(--color-primary); }
 .sh-combo-text { min-width: 0; }
-.sh-combo-sub { display: block; margin-top: 1px; font-size: 12px; color: var(--color-ink-muted-40); }
-.sh-combo-empty { font-size: 14px; color: var(--color-ink-muted-40); }
+.sh-combo-sub { display: block; margin-top: 1px; font-size: 12px; color: var(--color-ink-muted-48); }
+.sh-combo-empty { font-size: 14px; color: var(--color-ink-muted-48); }
 
 /* --------------------------------------------------------------- Menu ----- */
 .sh-menu-content {
@@ -305,7 +349,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 15px;
+  font-size: var(--text-body);
   color: var(--color-ink);
   padding: 9px 12px;
   border-radius: var(--r-xs);
@@ -313,17 +357,18 @@
   outline: none;
   user-select: none;
 }
-.sh-menu-item[data-highlighted] { background: var(--color-canvas-parchment); }
+.sh-menu-item[data-highlighted], .sh-menu-item:focus-visible { background: var(--color-canvas-parchment); outline: none; }
+@media (hover: hover) and (pointer: fine) { .sh-menu-item:hover { background: var(--color-canvas-parchment); } }
 .sh-menu-item[data-disabled] { color: var(--color-ink-muted-48); pointer-events: none; }
 .sh-menu-item--danger { color: var(--color-destructive); }
 
 /* ------------------------------------------------------------- Dialog ----- */
-/* Plain grey, no blur: the same scrim as the package dialogs (packageUi
-   `overlay`), so every popup in the app sits on one backdrop. */
+/* Plain grey, no blur (--color-scrim): every popup in the app, the package
+   dialogs included, sits on this one backdrop. */
 .sh-dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: var(--color-scrim);
   z-index: 1300;
 }
 .sh-dialog-content {
@@ -345,9 +390,9 @@
   margin: 0;
   font-family: var(--font-display);
   font-weight: var(--fw-semibold);
-  font-size: 24px;
-  letter-spacing: -0.374px;
-  padding: 24px 28px 16px;
+  font-size: var(--text-title);
+  line-height: 1.25;
+  padding: 22px 24px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -360,15 +405,21 @@
   [data-drag-handle] :is(button, a, input, textarea, select, [role="button"], [data-no-drag]) { cursor: auto; }
   [data-drag-handle] :is(button, a, [role="button"]) { cursor: pointer; }
 }
-.sh-dialog-body { padding: 0 28px 24px; overflow-y: auto; font-size: 17px; line-height: 1.47; }
+.sh-dialog-body { padding: 0 24px 24px; overflow-y: auto; font-size: var(--text-body); line-height: var(--lh-body); }
+/* Actions sit at the inline END and the primary (filled) action is always
+   last in reading order — the artboards’ footer, made a rule so every dialog
+   agrees whatever order its buttons are written in. */
 .sh-dialog-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
+  align-items: center;
   gap: 12px;
-  padding: 16px 28px;
-  background: var(--color-canvas-parchment);
+  padding: 16px 24px;
+  background: var(--color-surface-pearl);
   border-top: 1px solid var(--color-hairline);
 }
+.sh-dialog-actions > .sh-btn--contained { order: 1; }
+.sh-dialog-close { margin-inline-start: auto; margin-inline-end: -8px; color: var(--color-ink-muted-48); }
 
 /* ---------------------------------------------------------- Switch etc. --- */
 .sh-switch {
@@ -376,11 +427,11 @@
   width: 44px;
   height: 26px;
   border-radius: var(--r-pill);
-  background: #d2d2d7;
+  background: var(--color-field-border);  /* off track: 3:1 against the surface */
   border: none;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background .2s ease;
+  transition: background var(--dur-fast) ease;
   padding: 0;
 }
 .sh-switch[data-state="checked"] { background: var(--color-primary); }
@@ -390,9 +441,9 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--color-canvas);
   transform: translateX(3px);
-  transition: transform .2s ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 .sh-switch[data-state="checked"] .sh-switch-thumb { transform: translateX(21px); }
 :dir(rtl) .sh-switch-thumb { transform: translateX(-3px); }
@@ -407,10 +458,10 @@
   align-items: center;
   justify-content: center;
   background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   cursor: pointer;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--color-on-primary);
   padding: 0;
 }
 .sh-checkbox[data-state="checked"], .sh-checkbox[data-state="indeterminate"] {
@@ -429,7 +480,7 @@
   align-items: center;
   justify-content: center;
   background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-field-border);
   cursor: pointer;
   flex-shrink: 0;
   padding: 0;
@@ -451,9 +502,9 @@
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: color .15s ease, border-color .15s ease;
+  transition: color var(--dur-fast) ease, border-color var(--dur-fast) ease;
 }
-.sh-tab:hover { color: var(--color-ink); }
+@media (hover: hover) and (pointer: fine) { .sh-tab:hover { color: var(--color-ink); } }
 .sh-tab[data-state="active"], .sh-tab[aria-selected="true"] {
   color: var(--color-ink);
   font-weight: var(--fw-semibold);
@@ -461,20 +512,142 @@
 }
 
 /* ------------------------------------------------------- ListItemButton -- */
-.sh-list-button { transition: background-color .12s ease, color .12s ease; text-decoration: none; color: inherit; }
-.sh-list-button:hover { background: var(--color-canvas-parchment); }
-.sh-list-button--selected { background: rgba(0,102,204,.08); color: var(--color-primary); font-weight: var(--fw-semibold); }
-.sh-list-button--selected:hover { background: rgba(0,102,204,.12); }
+.sh-list-button { transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; text-decoration: none; color: inherit; }
+@media (hover: hover) and (pointer: fine) { .sh-list-button:hover { background: var(--color-canvas-parchment); } }
+.sh-list-button--selected { background: color-mix(in srgb, var(--color-primary) 8%, transparent); color: var(--color-primary); font-weight: var(--fw-semibold); }
+@media (hover: hover) and (pointer: fine) { .sh-list-button--selected:hover { background: color-mix(in srgb, var(--color-primary) 12%, transparent); } }
 
 /* ---------------------------------------------------------- Link ---------- */
-.sh-link:hover { color: var(--color-primary-hover); }
+@media (hover: hover) and (pointer: fine) { .sh-link:hover { color: var(--color-primary-hover); } }
 .sh-link--always { text-decoration: underline; }
-.sh-link--none:hover { text-decoration: none; }
-.sh-link:not(.sh-link--none):not(.sh-link--always):hover { text-decoration: underline; }
+@media (hover: hover) and (pointer: fine) { .sh-link--none:hover { text-decoration: none; } }
+@media (hover: hover) and (pointer: fine) { .sh-link:not(.sh-link--none):not(.sh-link--always):hover { text-decoration: underline; } }
 
 /* --------------------------------------------------- CardActionArea ------- */
-.sh-card-action { transition: background-color .12s ease; }
-.sh-card-action:hover { background: rgba(0,0,0,.02); }
+.sh-card-action { transition: background-color var(--dur-fast) ease; }
+@media (hover: hover) and (pointer: fine) { .sh-card-action:hover { background: color-mix(in srgb, var(--color-ink) 2%, transparent); } }
+
+/* ------------------------------------------------- App rail (navBar) ---- */
+/* The dark side navigation. Inline styles cannot express its states, so they
+   live here: hover (pointer devices only), the current page, keyboard focus. */
+.sh-nav-item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding-inline: 12px;
+  margin-bottom: 3px;
+  border-radius: var(--r-sm);
+  color: var(--color-nav-ink);
+  font-size: var(--text-body-sm);
+  line-height: 1.3;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.sh-nav-item[data-nested] { min-height: 38px; font-size: var(--text-small); }
+.sh-nav-item[data-collapsed] { justify-content: center; padding-inline: 0; }
+.sh-nav-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; flex-shrink: 0; color: inherit; }
+.sh-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) {
+  .sh-nav-item:hover { background: var(--color-nav-hover); color: var(--color-on-dark); }
+}
+.sh-nav-item[aria-current="page"], .sh-nav-item[data-section-active] {
+  background: color-mix(in srgb, var(--color-primary-on-dark) 16%, transparent);
+  color: var(--color-on-dark);
+  font-weight: var(--fw-semibold);
+}
+/* On the dark rail the focus ring is the on-dark blue (the light one fails 3:1 there). */
+.sh-nav-item:focus-visible, .sh-nav-iconbtn:focus-visible { outline: 2px solid var(--color-primary-on-dark); outline-offset: -2px; }
+.sh-nav-chevron { transition: transform var(--dur-base) var(--ease-out); }
+.sh-nav-chevron[data-open] { transform: rotate(180deg); }
+.sh-nav-iconbtn { color: var(--color-on-dark); width: 36px; height: 36px; flex-shrink: 0; }
+.sh-nav-iconbtn--muted { color: var(--color-nav-ink-muted); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-nav-iconbtn:hover:not(:disabled) { background: var(--color-nav-hover); color: var(--color-on-dark); }
+}
+.sh-nav-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
+
+/* ------------------------------------------- Settings sub-navigation ---- */
+.sh-subnav-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-inline: 12px;
+  border-radius: var(--r-sm);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-70);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sh-subnav-tab:hover { background: color-mix(in srgb, var(--color-ink) 4%, transparent); color: var(--color-ink); }
+}
+.sh-subnav-tab[aria-current="page"] { color: var(--color-primary); font-weight: var(--fw-semibold); }
+.sh-subnav-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-primary);
+}
+.sh-subnav-tab:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+
+/* ------------------------------------------------------ Overlay motion -- */
+/* Occasional surfaces only (emil): a dialog / toast fades and scales in over
+   --dur-base and leaves faster; popovers grow from their trigger. Nothing
+   starts from scale(0). The `scale` / `translate` properties compose with the
+   dialog's inline centring (and drag) transform instead of replacing it.
+   Not animated on purpose: menus and the command palette (keyboard, many
+   times a day) and a tooltip opened while another was showing (instant). */
+@keyframes sh-fade-in { from { opacity: 0; } }
+@keyframes sh-fade-out { to { opacity: 0; } }
+@keyframes sh-scale-in { from { opacity: 0; scale: .97; } }
+@keyframes sh-scale-out { to { opacity: 0; scale: .97; } }
+@keyframes sh-toast-in { from { opacity: 0; translate: 0 8px; } }
+.sh-dialog-overlay[data-state="open"] { animation: sh-fade-in var(--dur-base) var(--ease-out); }
+.sh-dialog-overlay[data-state="closed"] { animation: sh-fade-out var(--dur-fast) var(--ease-out); }
+.sh-dialog-content[data-state="open"] { animation: sh-scale-in var(--dur-base) var(--ease-out); }
+.sh-dialog-content[data-state="closed"] { animation: sh-scale-out var(--dur-fast) var(--ease-out); }
+.sh-select-content[data-state="open"] { transform-origin: var(--radix-select-content-transform-origin); animation: sh-scale-in var(--dur-fast) var(--ease-out); }
+.sh-tooltip[data-state="delayed-open"] { transform-origin: var(--radix-tooltip-content-transform-origin); animation: sh-scale-in var(--dur-fast) var(--ease-out); }
+.sh-snackbar { animation: sh-toast-in var(--dur-base) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) {
+  .sh-dialog-content[data-state="open"], .sh-select-content[data-state="open"],
+  .sh-tooltip[data-state="delayed-open"], .sh-snackbar { animation-name: sh-fade-in; }
+  .sh-dialog-content[data-state="closed"] { animation-name: sh-fade-out; }
+}
+
+/* ------------------------------------------------------- Feedback ------ */
+/* 32px hit area (station touchscreens); the negative margin keeps the glyph
+   where a 24px button sat, so the band does not grow. */
+.sh-alert-close { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: -6px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; flex-shrink: 0; }
+@media (hover: hover) and (pointer: fine) { .sh-alert-close:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); } }
+.sh-alert-close:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
+.sh-progress-fill { transform-origin: left; }
+:dir(rtl) > .sh-progress-fill { transform-origin: right; }
+
+/* ------------------------------------------------------------ Chip / Tag --- */
+/* 24px hit area around the 14px ×; the negative margins keep the chip's size. */
+.sh-chip-delete { all: unset; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-block: -4px; margin-inline-end: -7px; border-radius: var(--r-pill); color: var(--color-ink-muted-48); cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .sh-chip-delete:hover { background: color-mix(in srgb, var(--color-ink) 8%, transparent); color: var(--color-ink); } }
+.sh-chip-delete:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
+.sh-tag { display: inline-flex; align-items: center; gap: 5px; font-weight: var(--fw-semibold); line-height: 1.3; border-radius: var(--r-pill); white-space: nowrap; }
+.sh-tag--sm { font-size: var(--text-micro); padding: 3px 10px; }
+.sh-tag--md { font-size: var(--text-fine); padding: 4px 10px; }
+.sh-tag--primary { color: var(--color-primary); background: var(--color-primary-soft); }
+.sh-tag--neutral { color: var(--color-ink-muted-70); background: var(--color-canvas-parchment); }
+.sh-tag--success { color: var(--color-success-ink); background: var(--color-success-bg); }
+.sh-tag--warning { color: var(--color-warning-ink); background: var(--color-warning-bg); }
+.sh-tag--danger { color: var(--color-destructive); background: var(--color-danger-bg); }
 
 /* --------------------------------------------------------- Tooltip -------- */
 .sh-tooltip {
@@ -489,14 +662,14 @@
 }
 
 /* --------------------------------------------------------- Table ---------- */
-/* Matches the Items-screen table (DataTable / shx-table): flat parchment
-   header (11.5px, muted, no uppercase), hairline dividers, hover on all rows. */
+/* The one table look (Table primitive and DataTable): flat parchment header
+   (12px, muted, no uppercase), hairline dividers, hover on all rows. */
 .sh-table { width: 100%; border-collapse: collapse; }
 .sh-table thead th,
 .sh-table thead td {
   text-align: start;
   padding: 13px 12px;
-  font-size: 11.5px;
+  font-size: var(--text-fine);
   /* !important normalizes legacy inline header overrides (fontWeight 700 /
      bgcolor / dark color) across the app so every table matches the
      Items-screen header. */
@@ -509,8 +682,15 @@
   white-space: nowrap;
 }
 .sh-table tbody td { padding: 12px; font-size: 14px; color: var(--color-ink); vertical-align: middle; }
-.sh-table tbody tr { border-top: 1px solid var(--color-divider-soft); transition: background .12s ease; }
-.sh-table tbody tr:hover { background: var(--color-surface-pearl); }
+.sh-table tbody tr { border-top: 1px solid var(--color-divider-soft); transition: background var(--dur-fast) ease; }
+@media (hover: hover) and (pointer: fine) { .sh-table tbody tr:hover { background: var(--color-surface-pearl); } }
 .sh-table--sticky thead th, .sh-table--sticky thead td { position: sticky; top: 0; z-index: 2; }
+.sh-table tbody tr.sh-row--clickable { cursor: pointer; }
+/* Inset ring: an outside one is clipped by the scrolling table frame. */
+.sh-table tbody tr.sh-row--clickable:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+.sh-table tbody tr[aria-selected="true"], .sh-table tbody tr[aria-selected="true"]:hover { background: var(--color-primary-tint); }
 .sh-table--sm thead th, .sh-table--sm thead td { padding: 10px; }
+.sh-sort-label { all: unset; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: inherit; font: inherit; border-radius: var(--r-xs); }
+.sh-sort-label[data-active] { color: var(--color-ink); }
+.sh-sort-label:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
 .sh-table--sm tbody td { padding: 8px 10px; }

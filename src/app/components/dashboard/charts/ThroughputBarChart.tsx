@@ -24,6 +24,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import { formatCount, formatDayTick } from "@/app/lib/dashboard/format";
 import { AXIS_PROPS, GRID_STROKE, RtlTooltip } from "./chartConfig";
+import { SERIES_COLOR } from "./palette";
 
 export interface ThroughputPoint {
   date: string;
@@ -34,8 +35,8 @@ export interface ThroughputPoint {
 }
 
 export const THROUGHPUT_LEGEND = [
-  { color: "var(--dash-ramp-4)", label: "התחילו עבודה" },
-  { color: "var(--dash-ramp-1)", label: "סיימו מסלול" },
+  { color: SERIES_COLOR.started, label: "התחילו עבודה" },
+  { color: SERIES_COLOR.finished, label: "סיימו מסלול" },
 ];
 
 export default function ThroughputBarChart({ data }: { data: ThroughputPoint[] }) {
@@ -46,7 +47,7 @@ export default function ThroughputBarChart({ data }: { data: ThroughputPoint[] }
         <XAxis dataKey="date" {...AXIS_PROPS} tickFormatter={formatDayTick} minTickGap={12} />
         <YAxis {...AXIS_PROPS} width={34} />
         <Tooltip
-          cursor={{ fill: "rgba(0,0,0,.03)" }}
+          cursor={{ fill: "color-mix(in srgb, var(--color-ink) 3%, transparent)" }}
           content={({ active, label, payload }) => (
             <RtlTooltip
               active={active}
@@ -62,14 +63,14 @@ export default function ThroughputBarChart({ data }: { data: ThroughputPoint[] }
         <Bar
           dataKey="started"
           name="התחילו עבודה"
-          fill="var(--dash-ramp-4)"
+          fill={SERIES_COLOR.started}
           radius={[2, 2, 0, 0]}
           isAnimationActive={false}
         />
         <Bar
           dataKey="finished"
           name="סיימו מסלול"
-          fill="var(--dash-ramp-1)"
+          fill={SERIES_COLOR.finished}
           radius={[2, 2, 0, 0]}
           isAnimationActive={false}
         />

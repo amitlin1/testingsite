@@ -39,10 +39,12 @@ export default function StationsTab({ api, data, openHistory }: TabProps) {
   return (
     <DataCard
       panel
-      title="עומס וניצולת לפי עמדה"
+      // Not "ניצולת": the card says on its face why no utilisation is shown,
+      // so the title promises what the table holds — load and work hours.
+      title="עומס ושעות עבודה לפי עמדה"
       right={
         <>
-          <span style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>
+          <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
             שעות עבודה נטו בתקופה · שעות הפעילות אינן נחשפות בשירות ולכן לא מוצג אחוז ניצולת
           </span>
           {ignored && <IgnoredFiltersPill text={ignored.text} />}

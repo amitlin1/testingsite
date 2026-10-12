@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/api/client";
 import { WEEKDAY_LABELS, ERR_END_BEFORE_START, ERR_HALF_DAY_MAX, type Weekday, type WeekdayDefault } from "@/lib/workHours/types";
 import { isEndBeforeStart, netMinutes, toMinutes } from "@/lib/workHours/time";
 import { DialogShell, Chip, TimeField, NetRow } from "./fields";
-import { DANGER, MUTED } from "./ui";
+import { DANGER } from "./ui";
 
 const HALF_DAY_CAP = toMinutes("12:00");
 
@@ -84,29 +84,29 @@ export default function WeekdayEditorDialog({
       }
       footer={
         <>
-          <Button variant="contained" onClick={save} disabled={!canSave || saving}>
+          <Button variant="outlined" color="inherit" onClick={onClose}>ביטול</Button>
+          <Button variant="contained" onClick={save} disabled={!canSave} loading={saving}>
             שמור
           </Button>
-          <Button variant="outlined" onClick={onClose}>ביטול</Button>
         </>
       }
     >
-      <div style={{ marginBottom: 4, fontSize: 13, color: MUTED }}>המחלקה עובדת ביום זה</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+      <div id="weekday-working-label" className="sh-field-label">המחלקה עובדת ביום זה</div>
+      <div role="group" aria-labelledby="weekday-working-label" style={{ display: "flex", gap: 8, marginBottom: 18 }}>
         <Chip active={working} onClick={() => setWorking(true)}>כן</Chip>
         <Chip active={!working} onClick={() => setWorking(false)}>לא</Chip>
       </div>
 
       {working ? (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
             <TimeField label="שעת התחלה" value={start} onChange={setStart} />
             <TimeField label="שעת סיום" value={end} onChange={setEnd} error={endErr || capErr} />
             {!isFriday && <TimeField label="תחילת הפסקה" value={bStart} onChange={setBStart} />}
             {!isFriday && <TimeField label="סיום הפסקה" value={bEnd} onChange={setBEnd} />}
           </div>
           {(endErr || capErr) && (
-            <div style={{ color: DANGER, fontSize: 12.5, marginTop: 8 }}>
+            <div role="alert" style={{ color: DANGER, fontSize: "var(--text-fine)", marginTop: 8 }}>
               {endErr ? ERR_END_BEFORE_START : ERR_HALF_DAY_MAX}
             </div>
           )}

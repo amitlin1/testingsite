@@ -1,0 +1,686 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-11T13:36:44+00:00",
+  "title": "Design System: Shifthouse",
+  "extensions": {
+    "colorMeta": {
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "#0066cc",
+        "tonalRamp": [
+          "#00264c",
+          "#00458a",
+          "#0063c7",
+          "#0582ff",
+          "#42a1ff",
+          "#80bfff",
+          "#bddeff",
+          "#e5f2ff"
+        ]
+      },
+      "focus-blue": {
+        "role": "primary",
+        "displayName": "Focus Blue",
+        "canonical": "#0071e3",
+        "tonalRamp": [
+          "#00264c",
+          "#00458a",
+          "#0063c7",
+          "#0581ff",
+          "#42a0ff",
+          "#80bfff",
+          "#bddeff",
+          "#e5f2ff"
+        ]
+      },
+      "on-dark-blue": {
+        "role": "primary",
+        "displayName": "On-Dark Blue",
+        "canonical": "#2997ff",
+        "tonalRamp": [
+          "#00274c",
+          "#00478a",
+          "#0066c7",
+          "#0586ff",
+          "#42a3ff",
+          "#80c1ff",
+          "#bddfff",
+          "#e5f3ff"
+        ]
+      },
+      "primary-tint": {
+        "role": "primary",
+        "displayName": "Selected Wash",
+        "canonical": "#f3f8ff",
+        "tonalRamp": [
+          "#00204c",
+          "#00398a",
+          "#0053c7",
+          "#056dff",
+          "#4291ff",
+          "#80b5ff",
+          "#bdd8ff",
+          "#e5f0ff"
+        ]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "displayName": "Soft Blue",
+        "canonical": "#e6efff",
+        "tonalRamp": [
+          "#001c4c",
+          "#00328a",
+          "#0048c7",
+          "#055fff",
+          "#4286ff",
+          "#80adff",
+          "#bdd5ff",
+          "#e5efff"
+        ]
+      },
+      "primary-border": {
+        "role": "primary",
+        "displayName": "Soft Blue Edge",
+        "canonical": "#cfe3fb",
+        "tonalRamp": [
+          "#062347",
+          "#0b407f",
+          "#0f5cb8",
+          "#1878ec",
+          "#5199f0",
+          "#89baf5",
+          "#c2dbfa",
+          "#e7f1fd"
+        ]
+      },
+      "destructive": {
+        "role": "secondary",
+        "displayName": "Destructive Red",
+        "canonical": "#bf3535",
+        "tonalRamp": [
+          "#3c1111",
+          "#6c1e1e",
+          "#9c2b2b",
+          "#c93b3b",
+          "#d66b6b",
+          "#e39b9b",
+          "#f1cbcb",
+          "#f9ebeb"
+        ]
+      },
+      "danger-bg": {
+        "role": "secondary",
+        "displayName": "Danger Band",
+        "canonical": "#fbf2f2",
+        "tonalRamp": [
+          "#3a1212",
+          "#692020",
+          "#982f2f",
+          "#c44040",
+          "#d36f6f",
+          "#e19e9e",
+          "#efcccc",
+          "#f9ebeb"
+        ]
+      },
+      "success-ink": {
+        "role": "secondary",
+        "displayName": "Success Ink",
+        "canonical": "#17784f",
+        "tonalRamp": [
+          "#0c402a",
+          "#16744c",
+          "#20a76e",
+          "#2dd78f",
+          "#61e1ab",
+          "#94eac6",
+          "#c7f4e1",
+          "#eafbf4"
+        ]
+      },
+      "success-bg": {
+        "role": "secondary",
+        "displayName": "Success Band",
+        "canonical": "#eaf5ef",
+        "tonalRamp": [
+          "#193425",
+          "#2c5d43",
+          "#408760",
+          "#56ae7e",
+          "#7fc29e",
+          "#a9d6bd",
+          "#d2eadd",
+          "#eef7f2"
+        ]
+      },
+      "warning-ink": {
+        "role": "secondary",
+        "displayName": "Warning Ink",
+        "canonical": "#9a5b06",
+        "tonalRamp": [
+          "#4a2c03",
+          "#854e05",
+          "#bf7107",
+          "#f6930e",
+          "#f8ae49",
+          "#fac884",
+          "#fde2bf",
+          "#fef4e6"
+        ]
+      },
+      "warning-bg": {
+        "role": "secondary",
+        "displayName": "Warning Band",
+        "canonical": "#fdf3e6",
+        "tonalRamp": [
+          "#472a06",
+          "#804c0a",
+          "#b86e0f",
+          "#ec9018",
+          "#f1ab50",
+          "#f6c689",
+          "#fae2c2",
+          "#fdf4e7"
+        ]
+      },
+      "status-late": {
+        "role": "secondary",
+        "displayName": "Waiting Amber (graphics only)",
+        "canonical": "#d97706",
+        "tonalRamp": [
+          "#4a2902",
+          "#864904",
+          "#c26a05",
+          "#f88a0c",
+          "#faa747",
+          "#fcc483",
+          "#fde0be",
+          "#fef3e6"
+        ]
+      },
+      "status-approved": {
+        "role": "secondary",
+        "displayName": "Done Green (graphics only)",
+        "canonical": "#1f8a5b",
+        "tonalRamp": [
+          "#0e3e29",
+          "#19704a",
+          "#24a26b",
+          "#33d18c",
+          "#65dca8",
+          "#97e8c4",
+          "#c9f3e0",
+          "#eafaf3"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#262626",
+          "#454545",
+          "#636363",
+          "#828282",
+          "#a1a1a1",
+          "#bfbfbf",
+          "#dedede",
+          "#f2f2f2"
+        ]
+      },
+      "parchment": {
+        "role": "neutral",
+        "displayName": "Parchment",
+        "canonical": "#f5f5f7",
+        "tonalRamp": [
+          "#22222a",
+          "#3d3d4c",
+          "#58586e",
+          "#747490",
+          "#9696ab",
+          "#b8b8c6",
+          "#dadae2",
+          "#f1f1f4"
+        ]
+      },
+      "pearl": {
+        "role": "neutral",
+        "displayName": "Pearl",
+        "canonical": "#fafafc",
+        "tonalRamp": [
+          "#1d1d30",
+          "#343456",
+          "#4b4b7c",
+          "#6363a1",
+          "#8989b8",
+          "#afafcf",
+          "#d6d6e6",
+          "#efeff5"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1d1d1f",
+        "tonalRamp": [
+          "#252528",
+          "#434347",
+          "#606067",
+          "#7e7e86",
+          "#9e9ea4",
+          "#bdbdc1",
+          "#dddddf",
+          "#f2f2f3"
+        ]
+      },
+      "ink-muted-80": {
+        "role": "neutral",
+        "displayName": "Label Grey",
+        "canonical": "#333333",
+        "tonalRamp": [
+          "#262626",
+          "#454545",
+          "#636363",
+          "#828282",
+          "#a1a1a1",
+          "#bfbfbf",
+          "#dedede",
+          "#f2f2f2"
+        ]
+      },
+      "ink-muted-70": {
+        "role": "neutral",
+        "displayName": "Subtitle Grey",
+        "canonical": "#444444",
+        "tonalRamp": [
+          "#262626",
+          "#454545",
+          "#636363",
+          "#828282",
+          "#a1a1a1",
+          "#bfbfbf",
+          "#dedede",
+          "#f2f2f2"
+        ]
+      },
+      "ink-muted-48": {
+        "role": "neutral",
+        "displayName": "Secondary Grey",
+        "canonical": "#6e6e73",
+        "tonalRamp": [
+          "#252527",
+          "#434346",
+          "#616166",
+          "#7f7f85",
+          "#9f9fa3",
+          "#bebec1",
+          "#dddddf",
+          "#f2f2f3"
+        ]
+      },
+      "ink-muted-40": {
+        "role": "neutral",
+        "displayName": "Faint Grey (placeholder/disabled only)",
+        "canonical": "#9a9aa0",
+        "tonalRamp": [
+          "#252527",
+          "#434347",
+          "#606066",
+          "#7e7e86",
+          "#9e9ea4",
+          "#bdbdc1",
+          "#dddddf",
+          "#f2f2f3"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e0e0e0",
+        "tonalRamp": [
+          "#262626",
+          "#454545",
+          "#636363",
+          "#828282",
+          "#a1a1a1",
+          "#bfbfbf",
+          "#dedede",
+          "#f2f2f2"
+        ]
+      },
+      "divider-soft": {
+        "role": "neutral",
+        "displayName": "Soft Divider",
+        "canonical": "#f0f0f0",
+        "tonalRamp": [
+          "#262626",
+          "#454545",
+          "#636363",
+          "#828282",
+          "#a1a1a1",
+          "#bfbfbf",
+          "#dedede",
+          "#f2f2f2"
+        ]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Strong Border",
+        "canonical": "#d4d4dc",
+        "tonalRamp": [
+          "#22222a",
+          "#3e3e4c",
+          "#59596e",
+          "#75758f",
+          "#9797aa",
+          "#b9b9c6",
+          "#dadae1",
+          "#f1f1f4"
+        ]
+      },
+      "field-border": {
+        "role": "neutral",
+        "displayName": "Field Border (3:1)",
+        "canonical": "#949499",
+        "tonalRamp": [
+          "#252527",
+          "#434346",
+          "#616166",
+          "#7f7f85",
+          "#9e9ea3",
+          "#bebec1",
+          "#dddddf",
+          "#f2f2f3"
+        ]
+      },
+      "nav-bg": {
+        "role": "neutral",
+        "displayName": "Rail Black",
+        "canonical": "#15171a",
+        "tonalRamp": [
+          "#22252a",
+          "#3e434c",
+          "#59616e",
+          "#757f8f",
+          "#979fab",
+          "#b8bec6",
+          "#dadde1",
+          "#f1f2f4"
+        ]
+      },
+      "nav-ink": {
+        "role": "neutral",
+        "displayName": "Rail Ink",
+        "canonical": "#b8bcc2",
+        "tonalRamp": [
+          "#232629",
+          "#40444a",
+          "#5c626b",
+          "#79808c",
+          "#9a9fa8",
+          "#babec4",
+          "#dbdde0",
+          "#f1f2f3"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "page": {
+        "displayName": "Page",
+        "purpose": "Page h1 (30/700)."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "Large in-page headings (h2)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Dialog and card titles."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "Section titles, emphasised body (h5)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Controls, dialog body, body1."
+      },
+      "body-sm": {
+        "displayName": "Body Small",
+        "purpose": "Table cells, menus, alerts, nav rail."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, dense secondary lines."
+      },
+      "fine": {
+        "displayName": "Fine",
+        "purpose": "Table headers, helper text, captions."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Small Tags, counters, badges."
+      },
+      "kpi": {
+        "displayName": "KPI",
+        "purpose": "KPI values, always tabular-nums."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-modal",
+        "value": "rgba(0,0,0,.22) 3px 5px 30px 0",
+        "purpose": "Package-artboard dialogs; same value as --shadow-product (under photographs only)."
+      },
+      {
+        "name": "shadow-pop",
+        "value": "0 10px 34px rgba(17,21,31,.14)",
+        "purpose": "Floating lists."
+      },
+      {
+        "name": "focus-halo",
+        "value": "0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent)",
+        "purpose": "Focused field (destructive at 15% when invalid)."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 2px solid var(--color-primary-focus); outline-offset: 2px",
+        "purpose": "Global :focus-visible ring; on-dark-blue and inset on the nav rail."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.23,1,0.32,1)",
+        "purpose": "Anything that appears or responds."
+      },
+      {
+        "name": "ease-in-out",
+        "value": "cubic-bezier(0.77,0,0.175,1)",
+        "purpose": "Movement on screen."
+      },
+      {
+        "name": "dur-fast",
+        "value": "120ms",
+        "purpose": "Press, hover, colour; overlay exits; select and tooltip in."
+      },
+      {
+        "name": "dur-base",
+        "value": "180ms",
+        "purpose": "Dialogs and snackbar in."
+      },
+      {
+        "name": "dur-slow",
+        "value": "240ms",
+        "purpose": "Larger panels."
+      },
+      {
+        "name": "press",
+        "value": "transform: scale(.97) over 120ms (icon buttons .95)",
+        "purpose": "The only button motion; off under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "600px"
+      },
+      {
+        "name": "package-fullscreen-dialog",
+        "value": "760px"
+      },
+      {
+        "name": "settings-grid-collapse",
+        "value": "900px"
+      },
+      {
+        "name": "package-container-query",
+        "value": "1040px"
+      },
+      {
+        "name": "content-max",
+        "value": "1440px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Contained action-blue pill; ordered last at the inline end.",
+      "html": "<button class=\"ds-btn-primary\">שמירה</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:40px; border-radius:var(--r-pill); font-family:var(--font-text); font-size:var(--text-body); font-weight:var(--fw-semibold); cursor:pointer; transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) ease; padding:9px 20px; border:1px solid transparent; background:var(--color-primary); color:var(--color-on-primary); } @media (hover: hover) and (pointer: fine) { .ds-btn-primary:hover { background:var(--color-primary-hover); } } .ds-btn-primary:active { transform:scale(.97); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined pill; the neutral (inherit) variant is Cancel.",
+      "html": "<button class=\"ds-btn-outlined\">ביטול</button>",
+      "css": ".ds-btn-outlined { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:40px; border-radius:var(--r-pill); font-family:var(--font-text); font-size:var(--text-body); font-weight:var(--fw-semibold); cursor:pointer; transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) ease; padding:8px 19px; border:1px solid var(--color-primary); background:transparent; color:var(--color-primary); } @media (hover: hover) and (pointer: fine) { .ds-btn-outlined:hover { background:color-mix(in srgb, var(--color-primary) 6%, transparent); } } .ds-btn-outlined:active { transform:scale(.97); } .ds-btn-outlined:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Contained red pill for irreversible actions; ConfirmDialog focuses Cancel first.",
+      "html": "<button class=\"ds-btn-danger\">מחיקה</button>",
+      "css": ".ds-btn-danger { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:40px; border-radius:var(--r-pill); font-family:var(--font-text); font-size:var(--text-body); font-weight:var(--fw-semibold); cursor:pointer; transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) ease; padding:9px 20px; border:1px solid transparent; background:var(--color-destructive); color:var(--color-on-primary); } @media (hover: hover) and (pointer: fine) { .ds-btn-danger:hover { background:var(--color-destructive-hover); } } .ds-btn-danger:active { transform:scale(.97); } .ds-btn-danger:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Labelled 40px field, 8px radius, 3:1 border, blue focus halo.",
+      "html": "<label class=\"ds-field\" dir=\"rtl\"><span class=\"ds-field-label\">מספר פריט</span><input class=\"ds-input\" placeholder=\"הקלד מספר\" /></label>",
+      "css": ".ds-field { display:block; font-family:var(--font-text); } .ds-field-label { display:block; margin-bottom:6px; font-size:var(--text-small); font-weight:var(--fw-semibold); color:var(--color-ink-muted-80); } .ds-input { box-sizing:border-box; width:100%; height:40px; padding:10px 14px; border:1px solid var(--color-field-border); border-radius:var(--r-field); background:var(--color-canvas); color:var(--color-ink); font:inherit; font-size:var(--text-body); outline:none; transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; } .ds-input::placeholder { color:var(--color-ink-muted-48); } .ds-input:focus { border-color:var(--color-primary-focus); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag-primary",
+      "description": "The one Tag spec: 11/600, 3px 10px, pill; tones primary / neutral / success / warning / danger.",
+      "html": "<span class=\"ds-tag ds-tag--primary\">מארז</span> <span class=\"ds-tag ds-tag--success\">הושלם</span> <span class=\"ds-tag ds-tag--warning\">ממתין</span>",
+      "css": ".ds-tag { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:var(--r-pill); font-family:var(--font-text); font-size:var(--text-micro); font-weight:var(--fw-semibold); line-height:1.3; white-space:nowrap; } .ds-tag--primary { color:var(--color-primary); background:var(--color-primary-soft); } .ds-tag--success { color:var(--color-success-ink); background:var(--color-success-bg); } .ds-tag--warning { color:var(--color-warning-ink); background:var(--color-warning-bg); }"
+    },
+    {
+      "name": "Table",
+      "kind": "card",
+      "refersTo": "table-frame",
+      "description": "Flat white frame (16px), parchment 12/600 header without uppercase, pearl row hover.",
+      "html": "<div class=\"ds-table-frame\" dir=\"rtl\"><table class=\"ds-table\"><thead><tr><th>מזהה</th><th>סטטוס</th></tr></thead><tbody><tr tabindex=\"0\"><td class=\"ds-num\">10482</td><td>בבדיקה</td></tr><tr tabindex=\"0\"><td class=\"ds-num\">10483</td><td>הושלם</td></tr></tbody></table></div>",
+      "css": ".ds-table-frame { background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--r-card); overflow:hidden; font-family:var(--font-text); } .ds-table { width:100%; border-collapse:collapse; } .ds-table th { text-align:start; padding:13px 12px; font-size:var(--text-fine); font-weight:var(--fw-semibold); color:var(--color-ink-muted-48); background:var(--color-canvas-parchment); border-bottom:1px solid var(--color-hairline); } .ds-table td { padding:12px; font-size:14px; color:var(--color-ink); } .ds-table tbody tr { border-top:1px solid var(--color-divider-soft); cursor:pointer; transition: background var(--dur-fast) ease; } @media (hover: hover) and (pointer: fine) { .ds-table tbody tr:hover { background:var(--color-surface-pearl); } } .ds-table tbody tr:focus-visible { outline:2px solid var(--color-primary-focus); outline-offset:-2px; } .ds-num { font-variant-numeric:tabular-nums; }"
+    },
+    {
+      "name": "Nav Rail Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Dark rail item; the current page gets a 16% on-dark-blue wash, no side stripe.",
+      "html": "<nav class=\"ds-rail\" dir=\"rtl\"><a class=\"ds-nav-item\" href=\"#\" aria-current=\"page\">מארזים</a><a class=\"ds-nav-item\" href=\"#\">משלוחים</a></nav>",
+      "css": ".ds-rail { background:var(--color-nav-bg); padding:8px; width:240px; font-family:var(--font-text); } .ds-nav-item { display:flex; align-items:center; gap:10px; min-height:42px; padding-inline:12px; margin-bottom:3px; border-radius:var(--r-sm); color:var(--color-nav-ink); font-size:var(--text-body-sm); text-decoration:none; transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; } @media (hover: hover) and (pointer: fine) { .ds-nav-item:hover { background:var(--color-nav-hover); color:var(--color-on-dark); } } .ds-nav-item[aria-current=\"page\"] { background:color-mix(in srgb, var(--color-primary-on-dark) 16%, transparent); color:var(--color-on-dark); font-weight:var(--fw-semibold); } .ds-nav-item:focus-visible { outline:2px solid var(--color-primary-on-dark); outline-offset:-2px; }"
+    },
+    {
+      "name": "Dialog Footer",
+      "kind": "custom",
+      "refersTo": "dialog-actions",
+      "description": "Pearl footer; actions at the inline end, contained primary always ordered last.",
+      "html": "<div class=\"ds-dlg-actions\" dir=\"rtl\"><button class=\"ds-dlg-primary\">שמירה</button><button class=\"ds-dlg-cancel\">ביטול</button></div>",
+      "css": ".ds-dlg-actions { display:flex; justify-content:flex-end; align-items:center; gap:12px; padding:16px 24px; background:var(--color-surface-pearl); border-top:1px solid var(--color-hairline); font-family:var(--font-text); } .ds-dlg-primary { order:1; min-height:40px; padding:9px 20px; border:none; border-radius:var(--r-pill); background:var(--color-primary); color:var(--color-on-primary); font:inherit; font-size:var(--text-body); font-weight:var(--fw-semibold); cursor:pointer; } .ds-dlg-cancel { min-height:40px; padding:8px 19px; border:1px solid var(--color-border-strong); border-radius:var(--r-pill); background:transparent; color:var(--color-ink); font:inherit; font-size:var(--text-body); font-weight:var(--fw-semibold); cursor:pointer; } @media (hover: hover) and (pointer: fine) { .ds-dlg-primary:hover { background:var(--color-primary-hover); } .ds-dlg-cancel:hover { background:color-mix(in srgb, var(--color-ink) 4%, transparent); } } .ds-dlg-primary:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; } .ds-dlg-cancel:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Workbench",
+    "overview": "Shifthouse is a Hebrew, right-to-left operations tool that testers, packers and shipping staff keep open all day, on desktops and station touchscreens, on an air-gapped network. The system is built for that: flat white surfaces, hairline edges, one action blue, and a dense product type scale (11 to 30px) in a single locally bundled family, Rubik. Nothing on screen decorates. A colour means something is clickable or reports a status, and a status colour always comes with a word, a dot or an icon.\n\nEvery surface uses logical properties and reads from the inline start (the right). Primary actions sit last, at the inline end. Numbers that get compared or scanned (IDs, KPIs, counters, durations) use tabular figures. The components are an in-house primitive set (`src/components/ui`, Radix underneath where needed). No MUI and no new npm packages, and package screens follow the artboards in `claude-code-handoff/packages/design`.\n\nMotion is short and decelerating, and only on occasional surfaces. Hover exists only for fine pointers. Every interactive element shares one 2px focus ring.",
+    "keyCharacteristics": [
+      "Flat white canvas on parchment, hairline borders, no gradients, no elevation on cards.",
+      "One action blue for everything clickable. Status colour reaches text only through an AA `*-ink` token.",
+      "Dense product type scale in Rubik (bundled locally, never from a CDN) with no weight 500.",
+      "RTL first: logical properties, primary action last at the inline end, reading-direction fills.",
+      "Controls are 40px tall at 15px text. Fields share one radius (8px), buttons are pills.",
+      "Motion under 300ms, `--ease-out`, exits faster than entrances, with a reduced-motion path."
+    ],
+    "rules": [
+      {
+        "name": "The One Blue Rule",
+        "body": "If it is blue on a light surface, it is clickable or selected. Don't use blue for decoration (for example, a page-header icon is grey).",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink-For-Text Rule",
+        "body": "Status colours are for dots, bars and fills. Text in a status colour uses the matching `*-ink` token, which passes AA. status-late (3.19:1) and status-approved (4.33:1) never set small text.",
+        "section": "colors"
+      },
+      {
+        "name": "The 3:1 Edge Rule",
+        "body": "Any edge that identifies a form control uses field-border. Decorative edges (cards, dividers) use hairline.",
+        "section": "colors"
+      },
+      {
+        "name": "The No-Caps Rule",
+        "body": "Hebrew has no capitals. Don't use `text-transform: uppercase` or added letter-spacing on labels, overlines, table headers or eyebrows.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "IDs, KPIs, counters, durations and code fields set `font-variant-numeric: tabular-nums` in Rubik. Inter is not bundled, so the artboards' Inter for IDs maps to Rubik plus tabular-nums.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-500 Rule",
+        "body": "The weights are 300, 400, 600 and 700. Don't use 500. Use the `--text-*` product scale. The legacy `--fs-*` marketing scale (17/21/28/56) is not for new code.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "A card, table or panel is white with a hairline edge. If you reach for a shadow to separate it, use tone instead.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Field Radius Rule",
+        "body": "Every input, select and combobox in a row uses `--r-field` (8px), the dense package combobox included. The artboards' 10px is not used. The search field is the one exception: a 44px pill.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do take every value from `src/styles/tokens.css`. Never inline a raw hex.",
+      "Do put the primary action last, at the inline end, in every dialog and footer.",
+      "Do use one field radius (8px) and the 40px, 15px control size across a row.",
+      "Do use the one Tag spec (11/600, 3px 10px, pill) and colour status through `status-tones.ts`.",
+      "Do set IDs, KPIs and durations in Rubik with tabular-nums.",
+      "Do gate hover behind `(hover: hover) and (pointer: fine)` and keep the shared 2px focus-blue ring with a 2px offset (on-dark-blue on the rail).",
+      "Do animate only occasional surfaces, with `--ease-out` under 300ms and exits faster than entrances. Leave menus and the command palette unanimated.",
+      "Do show an empty state that distinguishes \"no data\" from \"no match\", a retry on load errors, and \"—\" when no number is available instead of a fake 0."
+    ],
+    "donts": [
+      "Don't use MUI, add npm packages, or load fonts from a CDN. Rubik is bundled.",
+      "Don't uppercase or letter-space Hebrew text.",
+      "Don't set text in status-late, status-approved or ink-muted-40.",
+      "Don't add coloured side stripes to alerts, rows, nav items or KPI tiles.",
+      "Don't put shadows on cards or tables, or use gradients on screens.",
+      "Don't use font-weight 500 or the legacy `--fs-*` scale in new code.",
+      "Don't use ease-in or `transition: all`, or start anything from scale(0)."
+    ]
+  }
+}

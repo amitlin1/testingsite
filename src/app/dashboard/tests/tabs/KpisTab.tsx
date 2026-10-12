@@ -17,6 +17,11 @@
 // `itemsCurrentlyInTest` counts `testing` + `in_research`. So their second line
 // says `מזה`, not `ועוד`: the research figure is a breakdown of the number
 // above it, not an addition to it.
+//
+// A NOTE IS COLOURED ONLY WHEN A THRESHOLD SAYS SO. The closed-routes delta has
+// one (deltaTone); "waiting now" and "the busiest station" do not, so they read
+// in muted ink whatever their value — the busiest station is not an alarm just
+// for being the busiest.
 
 import * as React from "react";
 
@@ -45,6 +50,7 @@ import {
   formatMinutes,
   isNil,
 } from "@/app/lib/dashboard/format";
+import { textTone } from "@/app/components/dashboard/tone";
 import { EmptyChart } from "./TimesTab";
 import type { TabProps } from "./tabTypes";
 
@@ -76,6 +82,8 @@ export default function KpisTab({ data }: TabProps) {
   const stations = data.get<StationWire[]>("stationsLive");
 
   const k = kpis.data;
+  // Until the KPI endpoint answers, a card says nothing — not "אין מדידה בתקופה".
+  const kpiPending = kpis.loading || (kpis.data === null && !kpis.error);
   const p = prev.data;
   const timeRows = React.useMemo(() => times.data ?? [], [times.data]);
   const historyRows = React.useMemo(() => history.data ?? [], [history.data]);
@@ -133,7 +141,7 @@ export default function KpisTab({ data }: TabProps) {
       note: isNil(researchPool)
         ? "כולל את בריכת המחקר"
         : `מזה ${formatCount(researchPool)} בבריכת המחקר`,
-      tone: DASH_COLORS.amber,
+      tone: DASH_COLORS.muted,
       spark: seriesFromHistory(historyRows, WAITING_STATES),
     },
     {
@@ -149,7 +157,7 @@ export default function KpisTab({ data }: TabProps) {
       note: isNil(k?._new_busiestStationWorkHours)
         ? "אין שעות עבודה בתקופה"
         : `${formatHours(k?._new_busiestStationWorkHours)} עבודה · ${formatCount(k?.busiestStationCount)} צעדים`,
-      tone: DASH_COLORS.red,
+      tone: DASH_COLORS.muted,
       // No daily series exists for "which station was busiest", and a flat
       // placeholder line would read as "steady", which is a claim.
       spark: [],
@@ -191,22 +199,23 @@ export default function KpisTab({ data }: TabProps) {
             }}
           >
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: "var(--color-ink-muted-48)", fontWeight: 600 }}>
+              <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", fontWeight: 600 }}>
                 {card.label}
               </div>
               <div
                 style={{
-                  fontSize: 30,
+                  fontSize: "var(--text-kpi)",
                   fontWeight: 700,
-                  letterSpacing: "-0.8px",
+                  letterSpacing: "var(--ls-display)",
                   lineHeight: 1.1,
                   marginTop: 2,
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
-                {kpis.loading ? <Skeleton variant="text" width="70%" height={30} /> : card.value}
+                {kpiPending ? <Skeleton variant="text" width="70%" height={26} /> : card.value}
               </div>
-              <div style={{ fontSize: 11.5, color: card.tone, fontWeight: 600, marginTop: 2 }}>
-                {card.note}
+              <div style={{ fontSize: "var(--text-fine)", color: textTone(card.tone), fontWeight: 600, marginTop: 2 }}>
+                {kpiPending ? <Skeleton variant="text" width="80%" height={12} /> : card.note}
               </div>
             </div>
             <Sparkline points={card.spark} color={card.tone} />
@@ -227,7 +236,10 @@ export default function KpisTab({ data }: TabProps) {
           {throughput.length > 0 ? (
             <ThroughputBarChart data={throughput} />
           ) : (
-            <EmptyChart loading={times.loading || history.loading} />
+            <EmptyChart
+              loading={times.loading || history.loading || (history.data === null && !history.error)}
+              failed={history.data === null && !!history.error}
+            />
           )}
         </ChartBody>
       </DataCard>

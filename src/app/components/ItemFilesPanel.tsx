@@ -6,18 +6,16 @@ import {
   Stack,
   IconButton,
   Tooltip,
-  CircularProgress,
   Alert,
   Button,
   Paper,
   Divider,
   LinearProgress,
-  Chip,
+  Skeleton,
+  Tag,
   Checkbox,
   FormControlLabel,
   ConfirmDialog,
-  alpha,
-  useTheme,
 } from "@/components/ui";
 import { AttachFile as AttachFileIcon } from "@/components/ui/icons";
 import { CloudUpload as CloudUploadIcon } from "@/components/ui/icons";
@@ -27,7 +25,8 @@ import { OpenInNew as OpenInNewIcon } from "@/components/ui/icons";
 import { SwapHoriz as SwapHorizIcon } from "@/components/ui/icons";
 import { EditNote as EditNoteIcon } from "@/components/ui/icons";
 import { FileIcon } from "@/app/components/files/FileIcon";
-import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
+import { formatFileSize } from "@/lib/minioFileUtils";
+import { formatMoment } from "@/app/items/format";
 import WorkerPicker from "./WorkerPicker";
 import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
 import { useSession } from "next-auth/react";
@@ -36,6 +35,7 @@ import TextEditorModal from "./TextEditorModal";
 import OnlyOfficeEditorModal from "./OnlyOfficeEditorModal";
 import { apiFetch } from "@/lib/api/client";
 import { uploadItemFiles, replaceItemFile } from "@/lib/api/direct-upload";
+import "@/components/items.css";
 
 type ItemFile = {
   objectKey: string;
@@ -117,7 +117,6 @@ export default function ItemFilesPanel({
   compact = false,
   stationTypeId = null,
 }: ItemFilesPanelProps) {
-  const theme = useTheme();
   const [files, setFiles] = React.useState<ItemFile[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -288,19 +287,20 @@ export default function ItemFilesPanel({
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: compact ? 1 : 1.5 }}>
-        <AttachFileIcon color="primary" fontSize="small" />
-        <Typography variant="subtitle1" fontWeight={700} sx={{ flex: 1 }}>
+        {/* Decorative glyph: muted — blue stays the colour of what you can press. */}
+        <AttachFileIcon fontSize={18} style={{ color: "var(--color-ink-muted-48)" }} aria-hidden />
+        <Typography variant="subtitle1" component="h3" sx={{ flex: 1 }}>
           קבצים מצורפים
           {files.length > 0 && (
-            <Typography component="span" color="text.secondary" sx={{ ml: 1, fontWeight: 500 }}>
+            <span style={{ marginInlineStart: "var(--space-xs)", fontWeight: 400, color: "var(--color-ink-muted-48)", fontVariantNumeric: "tabular-nums" }}>
               ({files.length})
-            </Typography>
+            </span>
           )}
         </Typography>
         <Button
           variant="outlined"
           size="small"
-          startIcon={<CloudUploadIcon sx={{ ml: 1 }} />}
+          startIcon={<CloudUploadIcon fontSize={16} />}
           onClick={() => inputRef.current?.click()}
           disabled={uploading || (standalone && effectiveWorkerId == null)}
         >
@@ -332,7 +332,7 @@ export default function ItemFilesPanel({
         <FormControlLabel
           control={<Checkbox size="small" checked={globalUpload} onChange={(e) => setGlobalUpload(e.target.checked)} />}
           label={<Typography variant="caption">קובץ גלובלי — יוצג בכל התחנות עבור פריט זה</Typography>}
-          sx={{ mb: 1, ml: 0 }}
+          sx={{ mb: 1 }}
         />
       )}
 
@@ -359,19 +359,20 @@ export default function ItemFilesPanel({
 
       {/* Drag-drop zone wraps the list. Visual cue only while a drag is active. */}
       <Paper
-        variant="outlined"
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        sx={{
-          borderRadius: 2,
-          borderStyle: dragging ? "dashed" : "solid",
-          borderColor: dragging ? "primary.main" : "divider",
-          bgcolor: dragging ? alpha(theme.palette.primary.main, 0.04) : "transparent",
-          transition: "all 0.15s",
+        // The edge is drawn here in full (not Paper's outlined shorthand plus
+        // longhand overrides), and only named properties transition — the
+        // drag cue changes the edge and the wash, nothing else.
+        style={{
+          borderRadius: "var(--r-md)",
+          border: `1px ${dragging ? "dashed" : "solid"} ${dragging ? "var(--color-primary)" : "var(--color-hairline)"}`,
+          backgroundColor: dragging ? "color-mix(in srgb, var(--color-primary) 4%, transparent)" : "transparent",
+          transition: "border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out)",
           maxHeight,
           overflow: "auto",
         }}
@@ -384,9 +385,18 @@ export default function ItemFilesPanel({
         )}
 
         {loading && files.length === 0 ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-            <CircularProgress size={28} />
-          </Box>
+          // The list's own shape while it loads: thumbnail + name + meta.
+          <Stack divider={<Divider />} aria-busy="true" aria-label="טוען קבצים">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Box key={i} sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 1.5, py: 1 }}>
+                <Skeleton variant="rounded" width={44} height={44} style={{ flexShrink: 0 }} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Skeleton width="45%" height={14} />
+                  <Skeleton width="70%" height={11} style={{ marginTop: 6 }} />
+                </Box>
+              </Box>
+            ))}
+          </Stack>
         ) : files.length === 0 ? (
           <Box sx={{ textAlign: "center", py: compact ? 3 : 5, px: 2, color: "text.secondary" }}>
             <CloudUploadIcon sx={{ fontSize: 36, opacity: 0.5, mb: 0.5 }} />
@@ -398,13 +408,13 @@ export default function ItemFilesPanel({
             {files.map((file) => (
               <Box
                 key={file.objectKey}
+                className="items-file-row"
                 sx={{
                   display: "flex",
                   alignItems: "center",
                   gap: 1.5,
                   px: 1.5,
                   py: 1,
-                  "&:hover": { bgcolor: alpha(theme.palette.action.hover, 0.5) },
                 }}
               >
                 {/* Thumbnail for images; FileIcon for everything else */}
@@ -412,13 +422,13 @@ export default function ItemFilesPanel({
                   sx={{
                     width: 44,
                     height: 44,
-                    borderRadius: 1,
+                    borderRadius: "var(--r-sm)",
                     overflow: "hidden",
                     flexShrink: 0,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    bgcolor: "action.hover",
+                    bgcolor: "var(--color-canvas-parchment)",
                   }}
                 >
                   {isImage(file.fileName) ? (
@@ -440,12 +450,11 @@ export default function ItemFilesPanel({
                       {file.fileName}
                     </Typography>
                     {file.isGlobal && (
-                      <Chip label="גלובלי" size="small" color="primary" variant="outlined"
-                        sx={{ height: 18, fontSize: 10, flexShrink: 0, "& .MuiChip-label": { px: 0.75 } }} />
+                      <Tag tone="primary" style={{ flexShrink: 0 }}>גלובלי</Tag>
                     )}
                   </Box>
                   <Typography variant="caption" color="text.secondary" noWrap>
-                    {formatFileSize(file.size)} • עודכן {formatDate(file.updatedAt)}
+                    {formatFileSize(file.size)} • עודכן {formatMoment(file.updatedAt)}
                     {file.updatedBy ? ` • עובד ${file.updatedBy}` : ""}
                   </Typography>
                 </Box>
@@ -453,7 +462,7 @@ export default function ItemFilesPanel({
                 <Stack direction="row" spacing={0.5}>
                   {(isTextLike(file.fileName) || isOfficeDoc(file.fileName)) && (
                     <Tooltip title="ערוך">
-                      <IconButton size="small" color="primary" onClick={() => handleOpen(file)}>
+                      <IconButton size="small" color="primary" aria-label={"ערוך את " + file.fileName} onClick={() => handleOpen(file)}>
                         {isTextLike(file.fileName) ? (
                           <EditNoteIcon fontSize="small" />
                         ) : (
@@ -468,6 +477,7 @@ export default function ItemFilesPanel({
                       component="a"
                       href={downloadUrl(file.objectKey)}
                       download={file.fileName}
+                      aria-label={"הורד את " + file.fileName}
                     >
                       <DownloadIcon fontSize="small" />
                     </IconButton>
@@ -478,13 +488,14 @@ export default function ItemFilesPanel({
                         size="small"
                         onClick={() => triggerReplace(file)}
                         disabled={uploading}
+                        aria-label={"החלף את " + file.fileName}
                       >
                         <SwapHorizIcon fontSize="small" />
                       </IconButton>
                     </span>
                   </Tooltip>
                   <Tooltip title="מחק">
-                    <IconButton size="small" color="error" onClick={() => setPendingDelete(file)}>
+                    <IconButton size="small" color="error" aria-label={"מחק את " + file.fileName} onClick={() => setPendingDelete(file)}>
                       <DeleteOutlineIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>

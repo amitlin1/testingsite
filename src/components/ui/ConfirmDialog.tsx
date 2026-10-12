@@ -50,18 +50,20 @@ export function ConfirmDialog({
           <DialogContentText>{message}</DialogContentText>
         </DialogContent>
       )}
-      <DialogActions sx={{ justifyContent: "flex-start" }}>
+      {/* Cancel first, the action last (DialogActions). A destructive
+          question starts on Cancel, so Enter never deletes by reflex. */}
+      <DialogActions>
+        <Button variant="outlined" color="inherit" onClick={onCancel} disabled={busy} autoFocus={destructive}>
+          {cancelText}
+        </Button>
         <Button
           variant="contained"
           color={destructive ? "error" : "primary"}
           onClick={onConfirm}
-          disabled={busy}
-          autoFocus
+          loading={busy}
+          autoFocus={!destructive}
         >
           {confirmText}
-        </Button>
-        <Button variant="outlined" onClick={onCancel} disabled={busy}>
-          {cancelText}
         </Button>
       </DialogActions>
     </Dialog>

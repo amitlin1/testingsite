@@ -19,7 +19,9 @@
 import * as React from "react";
 
 import DataCard from "@/app/components/dashboard/DataCard";
-import StatusDonut, { stateColor } from "@/app/components/dashboard/charts/StatusDonut";
+import { Skeleton } from "@/components/ui";
+import StatusDonut from "@/app/components/dashboard/charts/StatusDonut";
+import { stateColor } from "@/app/components/dashboard/charts/palette";
 import StatusTrendChart from "@/app/components/dashboard/charts/StatusTrendChart";
 import { ChartBody } from "@/app/components/dashboard/charts/chartConfig";
 import type { StatusHistoryWire, StatusWire } from "@/app/lib/dashboard/api-types";
@@ -34,6 +36,9 @@ export default function StatusTab({ data }: TabProps) {
   const status = data.get<StatusWire[]>("status");
   const history = data.get<StatusHistoryWire[]>("statusHistory");
 
+  // Unknown is not zero: a skeleton until the endpoint answers, "—" if it failed.
+  const statusPending = status.data === null && !status.error;
+  const statusFailed = status.data === null && !!status.error;
   const slices = status.data ?? [];
   const total = slices.reduce((sum, slice) => sum + slice.count, 0);
   const asOf = slices[0]?._new_asOf ?? null;
@@ -53,10 +58,16 @@ export default function StatusTab({ data }: TabProps) {
           padding: "14px 16px",
         }}
       >
-        <StatusDonut data={slices} size={184} total={total} centreLabel="פריטים פעילים" />
+        <StatusDonut
+          data={slices}
+          size={184}
+          total={statusFailed ? null : total}
+          centreLabel="פריטים פעילים"
+          loading={statusPending}
+        />
         <div
           style={{
-            fontSize: 11.5,
+            fontSize: "var(--text-fine)",
             color: "var(--color-ink-muted-48)",
             textAlign: "center",
             maxWidth: 260,
@@ -66,10 +77,12 @@ export default function StatusTab({ data }: TabProps) {
           {DONUT_NOTE}
         </div>
         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 9 }}>
+          {statusPending &&
+            [0, 1, 2, 3].map((i) => <Skeleton key={i} variant="text" height={14} width="100%" />)}
           {slices.map((slice, index) => (
             <div
               key={slice._new_stateKey}
-              style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}
+              style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-small)" }}
             >
               <span
                 style={{
@@ -90,7 +103,7 @@ export default function StatusTab({ data }: TabProps) {
             </div>
           ))}
           {asOf && (
-            <div style={{ fontSize: 11, color: "var(--color-ink-muted-48)", textAlign: "center" }}>
+            <div style={{ fontSize: "var(--text-micro)", color: "var(--color-ink-muted-48)", textAlign: "center" }}>
               נכון ל-{formatClock(asOf)}
             </div>
           )}
@@ -101,7 +114,7 @@ export default function StatusTab({ data }: TabProps) {
         chart
         title="מגמת סטטוסים · 14 ימים"
         right={
-          <span style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>
+          <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
             כל עמודה = הפריטים הפעילים בסוף היום · ללא ״הסתיים״
           </span>
         }
@@ -113,7 +126,10 @@ export default function StatusTab({ data }: TabProps) {
           {history.data && history.data.length > 0 ? (
             <StatusTrendChart data={history.data} />
           ) : (
-            <EmptyChart loading={history.loading} />
+            <EmptyChart
+              loading={history.loading || (history.data === null && !history.error)}
+              failed={history.data === null && !!history.error}
+            />
           )}
         </ChartBody>
       </DataCard>

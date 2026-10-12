@@ -3,7 +3,7 @@ import * as React from "react";
 import { ChevronRight, ChevronLeft, Pencil, Trash2, Plus } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
 import DataTable, { RowActions, IconAction, type Column } from "@/components/DataTable";
-import { Snackbar, Alert, ConfirmDialog } from "@/components/ui";
+import { Snackbar, Alert, ConfirmDialog, Button, IconButton } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import {
   WEEKDAY_LABELS,
@@ -24,8 +24,8 @@ import WeekdayEditorDialog from "./WeekdayEditorDialog";
 import DayEditorDialog from "./DayEditorDialog";
 import HolidayDialog from "./HolidayDialog";
 import {
-  Bdi, card, timeRange, dayNum, dayDotMonth, monthTitle, recordDetail,
-  BLUE, INK, MUTED, FAINT, HAIRLINE, SOFT, WEEKDAY_HEADERS, EM_DASH,
+  Bdi, timeRange, dayNum, dayDotMonth, monthTitle, recordDetail,
+  BLUE, INK, MUTED, FAINT, WEEKDAY_HEADERS, EM_DASH,
 } from "./ui";
 
 type Toast = { open: boolean; sev: "success" | "error"; msg: string };
@@ -189,7 +189,7 @@ export default function WorkHoursPage() {
   function deleteType(t: HolidayType) {
     setConfirm({
       title: "מחיקת סוג חופשה", confirmText: "מחק",
-      message: `למחוק את סוג החופשה "${t.name}"?`,
+      message: `למחוק את סוג החופשה "${t.name}"? פעולה זו אינה ניתנת לביטול.`,
       run: async () => {
         const res = await apiFetch(`/api/settings/work-hours/holiday-types/${t.id}`, { method: "DELETE" });
         if (res.ok) { ok("הסוג נמחק"); void loadStatic(); }
@@ -251,8 +251,8 @@ export default function WorkHoursPage() {
       key: "__a", header: "פעולות", align: "center", width: 120,
       cell: (r) => (
         <RowActions>
-          <IconAction title="ערוך" onClick={r.onEdit}><Pencil size={16} strokeWidth={1.75} /></IconAction>
-          <IconAction title="מחק" danger onClick={r.onDelete}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
+          <IconAction title={`ערוך את ${r.desc}`} onClick={r.onEdit}><Pencil size={16} strokeWidth={1.75} /></IconAction>
+          <IconAction title={`מחק את ${r.desc}`} danger onClick={r.onDelete}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
         </RowActions>
       ),
     },
@@ -260,34 +260,35 @@ export default function WorkHoursPage() {
 
   const firstWeekday = weekdayOf(from); // 0..6 leading blanks
 
+  // The settings layout owns the frame (scroll, padding, 1180 column). Hover /
+  // press / focus of the tiles, cells and records live in settings.css (.wh-*).
   return (
-    <div dir="rtl" style={{ height: "100%", overflow: "auto", padding: 24, color: INK }}>
+    <div dir="rtl" style={{ color: INK }}>
       <SettingsToolbar
         title="שעות עבודה וחופשות"
         subtitle="שעות הפעילות של המחלקה וימי ההיעדרות המשותפים. עריכה: אדמין ועובד משאן."
         onAdd={() => setHolDlg({ open: true, editing: null })}
         addLabel="הוסף חופשה"
       >
-        <button className="shx-btn" onClick={openTodayException} disabled={loading || monthDays.length === 0}>
-          <Plus size={16} strokeWidth={2} />
+        <Button variant="outlined" onClick={openTodayException} disabled={loading || monthDays.length === 0} startIcon={<Plus size={16} strokeWidth={2} aria-hidden />}>
           הזן חריגה ליום
-        </button>
+        </Button>
       </SettingsToolbar>
 
       {/* ---------- weekly default card ---------- */}
-      <div style={{ ...card, padding: 24, marginTop: 24 }}>
+      <div className="wh-card" style={{ padding: 24, marginTop: 24 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>שעות ברירת מחדל</div>
-            <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>חלות על כל יום שלא הוזנה לו חריגה.</div>
+            <h2 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 700 }}>שעות ברירת מחדל</h2>
+            <div style={{ fontSize: "var(--text-small)", color: MUTED, marginTop: 4 }}>חלות על כל יום שלא הוזנה לו חריגה.</div>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 13, color: FAINT }}>נטו ליום</span>
-            <Bdi><span style={{ fontSize: 21, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{formatNet(dailyNet)}</span></Bdi>
+            <span style={{ fontSize: "var(--text-small)", color: FAINT }}>נטו ליום</span>
+            <Bdi><span style={{ fontSize: "var(--text-title)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{formatNet(dailyNet)}</span></Bdi>
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10, marginTop: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 10, marginTop: 16 }}>
           {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((wd) => {
             const d = defByWeekday.get(wd);
             const isSat = wd === 6;
@@ -297,34 +298,29 @@ export default function WorkHoursPage() {
               <button
                 key={wd}
                 type="button"
+                // Shabbat is fixed: no editor, so not a control either.
                 onClick={() => !isSat && setWdDlg({ open: true, weekday: wd })}
-                className="wh-tile"
-                style={{
-                  textAlign: "center", minHeight: 108, borderRadius: 8, padding: "14px 12px",
-                  cursor: isSat ? "default" : "pointer",
-                  background: isSat ? SOFT : isFri && !working ? "#fafafa" : "#fff",
-                  border: isFri && !working ? `1px dashed #d4d4dc` : `1px solid ${HAIRLINE}`,
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-                  font: "inherit", color: "inherit",
-                }}
+                disabled={isSat}
+                aria-label={isSat ? undefined : `ערוך את ברירת המחדל של יום ${WEEKDAY_LABELS[wd]}`}
+                className={"wh-tile" + (isSat ? " wh-tile--fixed" : isFri && !working ? " wh-tile--off" : "")}
               >
-                <div style={{ fontSize: 13, fontWeight: 700, color: isSat ? MUTED : INK }}>{WEEKDAY_LABELS[wd]}</div>
+                <div style={{ fontSize: "var(--text-small)", fontWeight: 700, color: isSat ? MUTED : INK }}>{WEEKDAY_LABELS[wd]}</div>
                 {working ? (
                   <>
-                    <Bdi><span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{timeRange(d!.start, d!.end)}</span></Bdi>
-                    <div style={{ fontSize: 11.5, color: FAINT }}>
+                    <Bdi><span style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{timeRange(d!.start, d!.end)}</span></Bdi>
+                    <div style={{ fontSize: "var(--text-fine)", color: FAINT }}>
                       {d!.breakStart && d!.breakEnd ? <>הפסקה <Bdi>{timeRange(d!.breakStart, d!.breakEnd)}</Bdi></> : "ללא הפסקה"}
                     </div>
                   </>
                 ) : (
                   <>
-                    <div style={{ fontSize: 13, color: MUTED, marginTop: 6 }}>לא עובדים</div>
+                    <div style={{ fontSize: "var(--text-small)", color: MUTED, marginTop: 6 }}>לא עובדים</div>
                     {isFri ? (
-                      <div style={{ fontSize: 11.5, color: BLUE, display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ fontSize: "var(--text-fine)", color: BLUE, display: "flex", alignItems: "center", gap: 5 }}>
                         <span style={{ width: 6, height: 6, borderRadius: "50%", background: BLUE }} />ניתן להזין עבודה
                       </div>
                     ) : (
-                      <div style={{ fontSize: 11.5, color: FAINT }}>קבוע</div>
+                      <div style={{ fontSize: "var(--text-fine)", color: FAINT }}>קבוע</div>
                     )}
                   </>
                 )}
@@ -335,44 +331,46 @@ export default function WorkHoursPage() {
       </div>
 
       {/* ---------- calendar + aside ---------- */}
-      <div className="wh-cols" style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 18, marginTop: 18, alignItems: "start" }}>
+      <div className="wh-cols">
         {/* calendar */}
-        <div style={{ ...card, padding: 24 }}>
+        <div className="wh-card" style={{ padding: 24 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-            <div style={{ fontSize: 17, fontWeight: 700 }}>{monthTitle(view.y, view.m)}</div>
+            <h2 style={{ margin: 0, fontSize: "var(--text-lead)", fontWeight: 700 }}>{monthTitle(view.y, view.m)}</h2>
             <div style={{ display: "flex", gap: 6 }}>
-              <button className="wh-nav" type="button" aria-label="חודש הבא" onClick={() => stepMonth(1)}><ChevronLeft size={18} /></button>
-              <button className="wh-nav" type="button" aria-label="חודש קודם" onClick={() => stepMonth(-1)}><ChevronRight size={18} /></button>
+              {/* RTL: the first button sits on the right. Previous points right
+                  (back in reading order), next points left, so they face outward. */}
+              <IconButton size="small" className="wh-nav" aria-label="חודש קודם" onClick={() => stepMonth(-1)}><ChevronRight size={18} aria-hidden /></IconButton>
+              <IconButton size="small" className="wh-nav" aria-label="חודש הבא" onClick={() => stepMonth(1)}><ChevronLeft size={18} aria-hidden /></IconButton>
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 6, marginBottom: 6 }}>
             {WEEKDAY_HEADERS.map((h) => (
-              <div key={h} style={{ textAlign: "center", fontSize: 12, fontWeight: 600, color: FAINT }}>{h}</div>
+              <div key={h} style={{ textAlign: "center", fontSize: "var(--text-fine)", fontWeight: 600, color: FAINT }}>{h}</div>
             ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 6 }}>
             {Array.from({ length: firstWeekday }).map((_, i) => <div key={`b${i}`} />)}
             {monthDays.map((d) => <CalendarCell key={d.date} d={d} onClick={() => openDay(d)} />)}
           </div>
 
           {/* legend */}
-          <div style={{ display: "flex", gap: 18, marginTop: 16, flexWrap: "wrap", fontSize: 11.5, color: MUTED }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: SOFT, border: `1px solid ${HAIRLINE}` }} />יום ללא עבודה</span>
+          <div style={{ display: "flex", gap: 18, marginTop: 16, flexWrap: "wrap", fontSize: "var(--text-fine)", color: MUTED }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)" }} />יום ללא עבודה</span>
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: BLUE }} />שעות שהוזנו ידנית</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "#fafafa", border: `1px dashed #d4d4dc` }} />שישי / ערב חג — ניתן להזין עבודה</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--color-surface-pearl)", border: "1px dashed var(--color-border-strong)" }} />שישי / ערב חג — ניתן להזין עבודה</span>
           </div>
         </div>
 
         {/* aside */}
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div style={{ ...card, padding: 20 }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>החודש</div>
-            <div style={{ fontSize: 12.5, color: FAINT, marginTop: 4 }}>{records.length} רשומות ב{monthTitle(view.y, view.m).split(" ")[0]}.</div>
+          <div className="wh-card" style={{ padding: 20 }}>
+            <h2 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 700 }}>החודש</h2>
+            <div style={{ fontSize: "var(--text-fine)", color: FAINT, marginTop: 4 }}>{records.length} רשומות ב{monthTitle(view.y, view.m).split(" ")[0]}.</div>
             <div style={{ marginTop: 12 }}>
               {records.length === 0 ? (
-                <div style={{ fontSize: 13, color: FAINT }}>אין רשומות מיוחדות החודש.</div>
+                <div style={{ fontSize: "var(--text-small)", color: FAINT }}>אין רשומות מיוחדות החודש.</div>
               ) : (
                 records.map((r) => (
                   <button
@@ -380,12 +378,11 @@ export default function WorkHoursPage() {
                     type="button"
                     onClick={() => openDay(r.day)}
                     className="wh-rec"
-                    style={{ display: "flex", gap: 12, width: "100%", textAlign: "right", padding: "10px 8px", borderTop: `1px solid ${SOFT}`, background: "none", border: "none", borderTopStyle: "solid", cursor: "pointer", font: "inherit", color: "inherit" }}
                   >
-                    <Bdi><span style={{ fontSize: 13, fontWeight: 700, color: INK, minWidth: 46, display: "inline-block", fontVariantNumeric: "tabular-nums" }}>{recordDateLabel(r)}</span></Bdi>
+                    <Bdi><span style={{ fontSize: "var(--text-small)", fontWeight: 700, color: INK, minWidth: 46, display: "inline-block", fontVariantNumeric: "tabular-nums" }}>{recordDateLabel(r)}</span></Bdi>
                     <span style={{ minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 13.5, fontWeight: 600 }}>{r.label}</span>
-                      <span style={{ display: "block", fontSize: 12, color: FAINT, marginTop: 2 }}>{recordDetail(r.day)}</span>
+                      <span style={{ display: "block", fontSize: "var(--text-body-sm)", fontWeight: 600 }}>{r.label}</span>
+                      <span style={{ display: "block", fontSize: "var(--text-fine)", color: FAINT, marginTop: 2 }}>{recordDetail(r.day)}</span>
                     </span>
                   </button>
                 ))
@@ -393,27 +390,39 @@ export default function WorkHoursPage() {
             </div>
           </div>
 
-          <div style={{ ...card, padding: 20 }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>סוגי חופשה</div>
-            <div style={{ fontSize: 12.5, color: FAINT, marginTop: 4 }}>ניתן להוסיף סוג משלך.</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-              {holidayTypes.map((t) => (
-                <span key={t.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${HAIRLINE}`, borderRadius: 5, padding: "6px 11px", fontSize: 13, color: INK }}>
-                  {t.name}
-                  {!t.isSystem && (t.usageCount ?? 0) === 0 && (
-                    <button type="button" aria-label="מחק סוג" onClick={() => deleteType(t)} style={{ background: "none", border: "none", color: FAINT, cursor: "pointer", padding: 0, display: "flex" }}>
-                      <Trash2 size={13} strokeWidth={1.75} />
-                    </button>
-                  )}
-                </span>
-              ))}
+          <div className="wh-card" style={{ padding: 20 }}>
+            <h2 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 700 }}>סוגי חופשה</h2>
+            <div style={{ fontSize: "var(--text-fine)", color: FAINT, marginTop: 4 }}>ניתן להוסיף סוג משלך.</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12, alignItems: "center" }}>
+              {holidayTypes.map((t) => {
+                const removable = !t.isSystem && (t.usageCount ?? 0) === 0;
+                return (
+                  <span key={t.id} className={"wh-type" + (removable ? "" : " wh-type--plain")}>
+                    {t.name}
+                    {removable && (
+                      <IconButton size="small" aria-label={`מחק את הסוג ${t.name}`} onClick={() => deleteType(t)} style={{ color: FAINT }}>
+                        <Trash2 size={13} strokeWidth={1.75} aria-hidden />
+                      </IconButton>
+                    )}
+                  </span>
+                );
+              })}
               {addingType ? (
-                <span style={{ display: "inline-flex", gap: 6 }}>
-                  <input autoFocus value={newType} onChange={(e) => setNewType(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void addType(); if (e.key === "Escape") setAddingType(false); }} placeholder="שם הסוג" style={{ height: 34, borderRadius: 5, border: `1px solid ${HAIRLINE}`, padding: "0 10px", fontSize: 13, fontFamily: "inherit" }} />
-                  <button className="shx-btn shx-btn-primary" onClick={addType} style={{ height: 34 }}>הוסף</button>
+                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    autoFocus
+                    className="sh-input"
+                    aria-label="שם סוג החופשה החדש"
+                    value={newType}
+                    onChange={(e) => setNewType(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") void addType(); if (e.key === "Escape") setAddingType(false); }}
+                    placeholder="שם הסוג"
+                    style={{ height: 34, width: 150, fontSize: "var(--text-small)", padding: "0 10px" }}
+                  />
+                  <Button size="small" onClick={addType}>הוסף</Button>
                 </span>
               ) : (
-                <button type="button" onClick={() => setAddingType(true)} style={{ borderRadius: 5, padding: "6px 11px", fontSize: 13, fontWeight: 600, background: "#fff", color: BLUE, border: `1px dashed ${HAIRLINE}`, cursor: "pointer", fontFamily: "inherit" }}>+ סוג חדש</button>
+                <button type="button" className="wh-add-type" onClick={() => setAddingType(true)}>+ סוג חדש</button>
               )}
             </div>
           </div>
@@ -422,8 +431,8 @@ export default function WorkHoursPage() {
 
       {/* ---------- holidays + single-day exceptions ---------- */}
       <div style={{ marginTop: 18 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>חופשות וחריגות</div>
-        <div style={{ fontSize: 12.5, color: FAINT, marginBottom: 12 }}>
+        <h2 style={{ margin: "0 0 4px", fontSize: "var(--text-body)", fontWeight: 700 }}>חופשות וחריגות</h2>
+        <div style={{ fontSize: "var(--text-fine)", color: FAINT, marginBottom: 12 }}>
           חופשות מרוכזות של המחלקה, וחריגות יומיות של {monthTitle(view.y, view.m)}. חגי ישראל נוספים אוטומטית ואינם מופיעים כאן.
         </div>
         <DataTable<EntryRow>
@@ -432,7 +441,7 @@ export default function WorkHoursPage() {
           getRowKey={(r) => r.key}
           loading={loading && entryRows.length === 0}
           minWidth={720}
-          empty={<div style={{ padding: 24, textAlign: "center", color: FAINT }}>אין רשומות. הזן יום חופש בלחיצה על יום בלוח, או חופשה מרוכזת דרך "הוסף חופשה".</div>}
+          empty={<div style={{ fontSize: "var(--text-body-sm)" }}>אין רשומות. הזן יום חופש בלחיצה על יום בלוח, או חופשה מרוכזת דרך &quot;הוסף חופשה&quot;.</div>}
         />
       </div>
 
@@ -494,15 +503,6 @@ export default function WorkHoursPage() {
         <Alert severity={toast.sev} onClose={() => setToast((t) => ({ ...t, open: false }))}>{toast.msg}</Alert>
       </Snackbar>
 
-      <style>{`
-        @media (max-width: 900px){ .wh-cols{ grid-template-columns:1fr !important; } }
-        .wh-tile:hover{ border-color:#cfe0f5; }
-        .wh-tile:active{ transform:scale(0.98); }
-        .wh-nav{ width:32px;height:32px;border-radius:8px;background:${SOFT};border:none;color:${INK};cursor:pointer;display:flex;align-items:center;justify-content:center; }
-        .wh-nav:hover{ background:#e6efff;color:${BLUE}; }
-        .wh-rec:hover{ background:#fafafc; }
-        .wh-cell:hover{ border-color:#cfe0f5 !important; }
-      `}</style>
     </div>
   );
 }
@@ -513,33 +513,27 @@ function CalendarCell({ d, onClick }: { d: ResolvedDay; onClick: () => void }) {
   const isOff = d.category === "full_off" || d.category === "vacation" || d.category === "shabbat";
   const manualWorking = d.isWorking && (d.source === "override" || (d.source === "holiday" && d.category === "half_day"));
 
-  const bg = isOff ? SOFT : isFriClosed ? "#fafafa" : "#fff";
-  const border = isFriClosed ? "1px dashed #d4d4dc" : `1px solid ${HAIRLINE}`;
   const muted = isOff || isFriClosed;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="wh-cell"
-      style={{
-        textAlign: "start", minHeight: 76, borderRadius: 8, padding: "7px 8px", cursor: "pointer",
-        background: bg, border, display: "flex", flexDirection: "column", gap: 3, font: "inherit", color: "inherit", overflow: "hidden",
-      }}
+      className={"wh-cell" + (isOff ? " wh-cell--off" : isFriClosed ? " wh-cell--closed" : "")}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
         {manualWorking && <span style={{ width: 6, height: 6, borderRadius: "50%", background: BLUE, flexShrink: 0 }} />}
-        <span style={{ fontSize: 13, fontWeight: 600, color: muted ? FAINT : INK, fontVariantNumeric: "tabular-nums" }}>{dayNum(d.date)}</span>
+        <span style={{ fontSize: "var(--text-small)", fontWeight: 600, color: muted ? FAINT : INK, fontVariantNumeric: "tabular-nums" }}>{dayNum(d.date)}</span>
       </div>
       {d.label && (
-        <span style={{ fontSize: 10.5, color: isOff ? MUTED : BLUE, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</span>
+        <span style={{ fontSize: "var(--text-micro)", color: isOff ? MUTED : BLUE, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</span>
       )}
       {/* Every working day shows its hours, so a plain weekday reads clearly as a
           work day (07:00–15:35) — not just a bare number. */}
       {d.isWorking && d.start && d.end && (
-        <Bdi><span style={{ fontSize: 10, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{timeRange(d.start, d.end)}</span></Bdi>
+        <Bdi><span style={{ fontSize: "var(--text-micro)", color: MUTED, fontVariantNumeric: "tabular-nums" }}>{timeRange(d.start, d.end)}</span></Bdi>
       )}
-      {isOff && d.category !== "shabbat" && <span style={{ fontSize: 10, color: FAINT }}>יום מלא</span>}
+      {isOff && d.category !== "shabbat" && <span style={{ fontSize: "var(--text-micro)", color: FAINT }}>יום מלא</span>}
     </button>
   );
 }

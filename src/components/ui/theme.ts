@@ -3,15 +3,16 @@ import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * Compatibility theme object mirroring the old muiTheme shape (palette +
- * tokens + typography), but plain — no MUI. Values are RAW hex so alpha()
- * and other JS colour math keep working. Consumed via useTheme().
+ * tokens + typography), but plain — no MUI. Values are RAW hex so JS colour
+ * math keeps working; they MUST equal tokens.css (the source of truth), so a
+ * change there is mirrored here. Consumed via useTheme().
  */
 export const tokens = {
   accent: "#0066cc",
   accentHover: "#0058b3",
   focusRing: "#0071e3",
   ink: "#1d1d1f",
-  muted: "#7a7a7a",
+  muted: "#6e6e73",
   mutedSoft: "#9a9aa0",
   fieldLabel: "#555555",
   surface: { page: "#f5f5f7", card: "#ffffff", subtle: "#fafafc", rowHover: "#fafafc", selected: "#f3f8ff" },
@@ -57,19 +58,19 @@ export const theme: Theme = {
   palette: {
     mode: "light",
     primary: { main: "#0066cc", dark: "#0058b3", light: "#0071e3", contrastText: "#ffffff" },
-    secondary: { main: "#455A64" },
+    secondary: { main: "#333333" },
     success: { main: "#1f8a5b" },
     warning: { main: "#d97706" },
     error: { main: "#bf3535" },
     info: { main: "#0066cc" },
     background: { default: "#f5f5f7", paper: "#ffffff" },
-    text: { primary: "#1d1d1f", secondary: "#7a7a7a", disabled: "#9a9aa0" },
+    text: { primary: "#1d1d1f", secondary: "#6e6e73", disabled: "#9a9aa0" },
     divider: "#e0e0e0",
     grey: { 50: "#fafafa", 100: "#f5f5f5", 200: "#eeeeee", 300: "#e0e0e0", 400: "#bdbdbd", 500: "#9e9e9e", 600: "#757575", 700: "#616161", 800: "#424242", 900: "#212121" },
     action: { active: "rgba(0,0,0,0.54)", hover: "rgba(0,0,0,0.04)", selected: "rgba(0,0,0,0.08)", disabled: "rgba(0,0,0,0.26)", disabledBackground: "rgba(0,0,0,0.12)", focus: "rgba(0,0,0,0.12)" },
     common: { black: "#000000", white: "#ffffff" },
   },
-  typography: { fontFamily: `var(--font-rubik), "Heebo", "Inter", "Segoe UI", "Arial", sans-serif` },
+  typography: { fontFamily: "var(--font-text)" },
   shape: { borderRadius: 8 },
   spacing: (n: number) => `${n * 8}px`,
   breakpoints: { up: () => "", down: () => "", between: () => "", only: () => "" },
@@ -103,9 +104,14 @@ export function useMediaQuery(query?: string | ((t: Theme) => string)): boolean 
   return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
-/** MUI colour helper: alpha("#0066cc", 0.1) → "rgba(0,102,204,0.1)". */
+/** MUI colour helper: alpha("#0066cc", 0.1) → "rgba(0,102,204,0.1)".
+ *  A token (`var(--color-…)`) goes through color-mix, so callers can pass
+ *  tokens instead of raw hex. */
 export function alpha(color: string, value: number): string {
   const c = (color || "").trim();
+  if (c.startsWith("var(")) {
+    return `color-mix(in srgb, ${c} ${Math.round(value * 1000) / 10}%, transparent)`;
+  }
   if (c.startsWith("#")) {
     const hex = c.slice(1);
     const full = hex.length === 3 ? hex.split("").map((x) => x + x).join("") : hex;

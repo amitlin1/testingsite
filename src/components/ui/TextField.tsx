@@ -80,6 +80,12 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   ref,
 ) {
   const fill = Boolean(multiline && fullHeight);
+  // Every field gets an id, so its <label> and helper text are tied to it
+  // for assistive tech even when the caller passes none.
+  const autoId = React.useId();
+  const fieldId = id ?? autoId;
+  const helpId = helperText != null && helperText !== "" ? `${fieldId}-help` : undefined;
+  const a11y = { "aria-describedby": helpId, "aria-invalid": error || undefined };
   const start = InputProps?.startAdornment;
   const end = InputProps?.endAdornment;
   const wrapStyle = { ...sxToStyle(InputProps?.sx), ...sxToStyle(sx), ...style };
@@ -111,7 +117,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       {multiline ? (
         <textarea
           ref={inputRef as React.Ref<HTMLTextAreaElement>}
-          id={id}
+          id={fieldId}
+          {...a11y}
           required={required}
           disabled={disabled}
           rows={rows ?? minRows ?? 3}
@@ -127,7 +134,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
             if (typeof inputRef === "function") inputRef(node);
             else if (inputRef) (inputRef as React.MutableRefObject<HTMLInputElement | null>).current = node;
           }}
-          id={id}
+          id={fieldId}
+          {...a11y}
           type={type}
           required={required}
           disabled={disabled}
@@ -151,14 +159,14 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       }}
     >
       {label != null && label !== "" && (
-        <label htmlFor={id} className={cn("sh-field-label", error && "sh-field-label--error")}>
+        <label htmlFor={select ? undefined : fieldId} className={cn("sh-field-label", error && "sh-field-label--error")}>
           {label}
           {required ? " *" : ""}
         </label>
       )}
       {field}
       {helperText != null && helperText !== "" && (
-        <div className={cn("sh-field-helper", error && "sh-field-helper--error")}>{helperText}</div>
+        <div id={helpId} className={cn("sh-field-helper", error && "sh-field-helper--error")}>{helperText}</div>
       )}
     </div>
   );

@@ -18,6 +18,7 @@
 
 import * as React from "react";
 
+import { Skeleton } from "@/components/ui";
 import DataCard, { Legend } from "@/app/components/dashboard/DataCard";
 import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
 import Segmented from "@/app/components/dashboard/Segmented";
@@ -152,18 +153,22 @@ export default function TimesTab({ api, data }: TabProps) {
               value={api.state.period}
               onChange={(value) => api.setPeriod(value as AverageTimesPeriod)}
               padding="4px 14px"
+              ariaLabel="רזולוציית הגרף"
             />
           </>
         }
         error={times.error}
         onRetry={data.refresh}
-        style={{ flex: 1, minHeight: 0 }}
+        style={{ flex: 3, minHeight: 0 }}
       >
         <ChartBody style={{ marginTop: 10 }}>
           {times.data && times.data.length > 0 ? (
             <TimesLineChart data={times.data} granularity={api.state.period} />
           ) : (
-            <EmptyChart loading={times.loading} />
+            <EmptyChart
+              loading={times.loading || (times.data === null && !times.error)}
+              failed={times.data === null && !!times.error}
+            />
           )}
         </ChartBody>
       </DataCard>
@@ -172,13 +177,16 @@ export default function TimesTab({ api, data }: TabProps) {
         panel
         title="פירוט לפי עמדה · ממוצע בתקופה"
         right={
-          <span style={{ fontSize: 11.5, color: "var(--color-ink-muted-48)" }}>
+          <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
             {CLOCK_NOTE} · דלי נוצר רק אם נסגר בו משהו
           </span>
         }
         note="עמודות ההמתנה שייכות לסוג העמדה — הן חוזרות בכל שורות אותו סוג ואין לסכם אותן. ״רשומות · ביצוע״ אינו כולל אביזרים, ״רשומות · המתנה״ כן."
         error={stations.error}
-        style={{ height: 190, flexShrink: 0 }}
+        onRetry={data.refresh}
+        // A share of the column rather than a fixed 190px (about two rows on a
+        // tall screen); 190 stays as the floor.
+        style={{ flex: 2, minHeight: 190 }}
       >
         <DenseTable
           columns={columns}
@@ -194,7 +202,16 @@ export default function TimesTab({ api, data }: TabProps) {
   );
 }
 
-export function EmptyChart({ loading }: { loading: boolean }) {
+/**
+ * What a chart body shows when it has no series to draw. Three different
+ * things, never confused: still loading (a skeleton at the chart's size, not a
+ * "טוען" line), failed (the card's error band above carries the reason and the
+ * retry; the body only says nothing was drawn), and a real empty window.
+ */
+export function EmptyChart({ loading, failed = false }: { loading: boolean; failed?: boolean }) {
+  if (loading) {
+    return <Skeleton variant="rounded" width="100%" height="100%" style={{ minHeight: 120 }} />;
+  }
   return (
     <div
       style={{
@@ -202,12 +219,12 @@ export function EmptyChart({ loading }: { loading: boolean }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: 12.5,
+        fontSize: "var(--text-small)",
         color: "var(--color-ink-muted-48)",
         direction: "rtl",
       }}
     >
-      {loading ? "טוען נתונים" : "לא נסגר דבר בטווח שנבחר, ולכן אין דליים להציג."}
+      {failed ? "הגרף לא נטען." : "לא נסגר דבר בטווח שנבחר, ולכן אין דליים להציג."}
     </div>
   );
 }

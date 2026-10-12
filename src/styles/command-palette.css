@@ -10,17 +10,18 @@
    ========================================================================= */
 
 :root {
-  --cp-primary-soft: rgba(0, 102, 204, 0.08);
-  --cp-primary-soft-2: rgba(0, 102, 204, 0.16);
-  /* Tickets hovers to a SOFT primary border (#cdd3f8), not the full brand
+  --cp-primary-soft: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  --cp-primary-soft-2: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  /* Tickets hovers to a SOFT primary border (var(--color-primary-border)), not the full brand
      colour — at full strength the outline reads as an error state. */
-  --cp-primary-border: rgba(0, 102, 204, 0.28);
+  --cp-primary-border: color-mix(in srgb, var(--color-primary) 28%, transparent);
   --cp-shadow-pop: 0 10px 34px rgba(17, 21, 31, 0.14);
-  --cp-ring: 0 0 0 3px rgba(0, 113, 227, 0.15);
+  --cp-ring: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
   /* Tickets separates the icon/kbd tint (--text-3) from the placeholder
      (--text-4, lighter). tokens.css has only one muted ink, so the lighter
      step is derived here. */
-  --cp-ink-placeholder: #a3a3ab;
+  /* Group labels and the trigger text are read, not decoration: AA muted. */
+  --cp-ink-placeholder: var(--color-ink-muted-48);
 }
 
 /* ---- Top-bar trigger (a button that *looks* like an input) ---- */
@@ -44,20 +45,23 @@
     box-shadow var(--t-press) var(--ease-page),
     background var(--t-press) var(--ease-page);
 }
-.cp-trigger:hover {
-  background: var(--color-canvas);
-  border-color: var(--cp-primary-border);
+@media (hover: hover) and (pointer: fine) {
+  .cp-trigger:hover {
+    background: var(--color-canvas);
+    border-color: var(--cp-primary-border);
+  }
 }
+/* The system focus ring (the soft 15% ring alone was under 3:1). */
 .cp-trigger:focus-visible {
   outline: none;
   background: var(--color-canvas);
-  border-color: var(--cp-primary-border);
+  border-color: var(--color-primary-focus);
   box-shadow: var(--cp-ring);
 }
 .cp-trigger-text {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--text-small);
   color: var(--cp-ink-placeholder);
   white-space: nowrap;
   overflow: hidden;
@@ -65,7 +69,7 @@
 }
 .cp-trigger-kbd {
   flex-shrink: 0;
-  font-size: 10.5px;
+  font-size: var(--text-micro);
   font-weight: var(--fw-semibold);
   color: var(--color-ink-muted-48);
   background: var(--color-canvas);
@@ -105,19 +109,8 @@
   border-radius: var(--r-lg);
   box-shadow: var(--cp-shadow-pop);
   overflow: hidden;
-  animation: cp-in 180ms var(--ease-page) both;
-}
-
-/* CRITICAL: animate transform ONLY — never opacity. Animating opacity from 0
-   leaves the palette invisible if the tab is backgrounded and the animation
-   freezes at frame 0. */
-@keyframes cp-in {
-  from { transform: translateY(-8px) scale(0.98); }
-  to   { transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cp-panel { animation: none; }
+  /* No open animation: Ctrl+K / "/" is a keyboard action repeated all day,
+     and motion there only reads as delay. */
 }
 
 /* ---- Input row ---- */
@@ -136,24 +129,29 @@
   background: none;
   outline: none;
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-body);
   color: var(--color-ink);
 }
 .cp-input::placeholder { color: var(--cp-ink-placeholder); }
 .cp-esc {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;   /* a real target, not a 20px key cap */
   border: 1px solid var(--color-hairline);
   background: var(--color-canvas-parchment);
   color: var(--color-ink-muted-48);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-micro);
   font-weight: var(--fw-semibold);
-  border-radius: 6px;
-  padding: 3px 7px;
+  border-radius: var(--r-xs);
+  padding: 0 8px;
   cursor: pointer;
   flex-shrink: 0;
 }
-.cp-esc:hover { color: var(--color-ink); }
+@media (hover: hover) and (pointer: fine) { .cp-esc:hover { color: var(--color-ink); } }
 
 /* ---- Results ---- */
 .cp-list {
@@ -162,11 +160,10 @@
   padding: 6px;
 }
 .cp-group-label {
-  font-size: 11px;
+  font-size: var(--text-micro);
   font-weight: var(--fw-bold);
   color: var(--cp-ink-placeholder);
   padding: 10px 10px 4px;
-  letter-spacing: 0.02em;
 }
 .cp-item {
   display: flex;
@@ -196,7 +193,7 @@
   gap: 1px;
 }
 .cp-item-label {
-  font-size: 13.5px;
+  font-size: var(--text-body-sm);
   font-weight: var(--fw-semibold);
   color: var(--color-ink);
   white-space: nowrap;
@@ -204,7 +201,7 @@
   text-overflow: ellipsis;
 }
 .cp-item-sub {
-  font-size: 11.5px;
+  font-size: var(--text-fine);
   color: var(--color-ink-muted-48);
   white-space: nowrap;
   overflow: hidden;
@@ -229,7 +226,7 @@
 /* Trailing count/status pill on a result row (e.g. "4 עמדות"). */
 .cp-item-tag {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--text-micro);
   font-weight: var(--fw-semibold);
   color: var(--color-ink-muted-48);
   background: var(--color-canvas-parchment);
@@ -249,7 +246,7 @@
   padding: 30px 16px;
   text-align: center;
   color: var(--color-ink-muted-48);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 .cp-empty strong { color: var(--color-ink); font-weight: var(--fw-semibold); }
 
@@ -261,12 +258,12 @@
   padding: 9px 14px;
   border-top: 1px solid var(--color-divider-soft);
   background: var(--color-surface-pearl);
-  font-size: 11.5px;
+  font-size: var(--text-fine);
   color: var(--color-ink-muted-48);
 }
 .cp-foot kbd {
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--text-micro);
   background: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: var(--r-xs);

@@ -1,12 +1,14 @@
 "use client";
 import * as React from "react";
+import { Skeleton } from "@/components/ui";
+import { TONE_DOT, type StatusTone } from "@/app/lib/status-tones";
 
 /* =========================================================================
    DataTable — THE standard table for the app (Shifthouse look).
-   Flat white card, parchment header, hairline dividers, row hover (#fafafc),
+   Flat white card, parchment header, hairline dividers, row hover (var(--color-surface-pearl)),
    one Action Blue. Use this for every table so they all look identical.
 
-   Requires: import "@/styles/shifthouse.css" once in the app (done in layout).
+   Styles: the shared .sh-table rules in components/ui/ui.css.
 
    How to make your table match the rest of the system:
      <DataTable
@@ -47,7 +49,10 @@ type Props<T> = {
   rows: T[];
   getRowKey: (row: T, i: number) => React.Key;
   onRowClick?: (row: T) => void;
-  /** Highlight a row as selected (master-detail tables) — blue tint + edge. */
+  /** Rows that have nothing to open (e.g. a sent shipment) — no pointer, no
+      focus stop, no click. Defaults to every row when onRowClick is set. */
+  rowClickable?: (row: T) => boolean;
+  /** Highlight a row as selected (master-detail tables) — blue tint. */
   rowSelected?: (row: T) => boolean;
   minWidth?: number;
   /** Cap the body height and keep the header pinned (for long lists). */
@@ -61,28 +66,22 @@ type Props<T> = {
   plain?: boolean;
 };
 
-const alignMap = { start: "right", center: "center", end: "left" } as const;
-
 export default function DataTable<T>({
-  columns, rows, getRowKey, onRowClick, rowSelected, minWidth = 960,
+  columns, rows, getRowKey, onRowClick, rowClickable, rowSelected, minWidth = 960,
   maxHeight, stickyHeader = maxHeight != null, loading = false, loadingRows = 8, empty, plain = false,
 }: Props<T>) {
   const fill = maxHeight != null;
   const cardStyle: React.CSSProperties = plain
     ? { display: "flex", flexDirection: "column", height: maxHeight != null ? "100%" : undefined, maxHeight, overflow: "hidden" }
-    : { background: "#fff", border: "1px solid #e0e0e0", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight };
+    : { background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "var(--r-card)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight };
   return (
     <div style={cardStyle}>
-      <div className="shx-scroll" style={{ overflowX: "auto", overflowY: fill ? "auto" : undefined, flex: fill ? 1 : undefined, minHeight: fill ? 0 : undefined }}>
-        <table className={"shx-table" + (stickyHeader ? " shx-table--sticky" : "")} style={{ minWidth }}>
+      <div style={{ overflowX: "auto", overflowY: fill ? "auto" : undefined, flex: fill ? 1 : undefined, minHeight: fill ? 0 : undefined }}>
+        <table className={"sh-table" + (stickyHeader ? " sh-table--sticky" : "")} style={{ minWidth }}>
           <thead>
             <tr>
               {columns.map((c) => (
-                <th
-                  key={c.key}
-                  className={"shx-th" + (c.align === "center" ? " shx-th--center" : "")}
-                  style={{ width: c.width, textAlign: c.align ? alignMap[c.align] : "right" }}
-                >
+                <th key={c.key} style={{ width: c.width, textAlign: c.align ?? "start" }}>
                   {c.header}
                 </th>
               ))}
@@ -91,29 +90,36 @@ export default function DataTable<T>({
           <tbody>
             {loading
               ? Array.from({ length: loadingRows }).map((_, i) => (
-                  <tr key={`sk-${i}`} className="shx-row">
+                  <tr key={`sk-${i}`} aria-hidden>
                     {columns.map((c) => (
-                      <td key={c.key} className="shx-td">
-                        <span style={{ display: "block", height: 14, borderRadius: 5, background: "linear-gradient(90deg,#eee,#f5f5f7,#eee)", backgroundSize: "200% 100%", animation: "shx-shimmer 1.4s infinite" }} />
+                      <td key={c.key}>
+                        <Skeleton height={14} />
                       </td>
                     ))}
                   </tr>
                 ))
-              : rows.map((row, i) => (
+              : rows.map((row, i) => {
+                  // A clickable row is also a keyboard stop: Enter / Space opens it.
+                  const clickable = !!onRowClick && (rowClickable ? rowClickable(row) : true);
+                  return (
                   <tr
                     key={getRowKey(row, i)}
-                    className={"shx-row" + (onRowClick ? " shx-row--clickable" : "")}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    style={rowSelected?.(row) ? { background: "#f3f8ff", borderInlineStart: "3px solid #0066cc" } : undefined}
+                    className={clickable ? "sh-row--clickable" : undefined}
+                    aria-selected={rowSelected ? rowSelected(row) : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    onClick={clickable ? () => onRowClick!(row) : undefined}
+                    onKeyDown={clickable ? (e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowClick!(row); }
+                    } : undefined}
                   >
                     {columns.map((c) => (
                       <td
                         key={c.key}
-                        className="shx-td"
                         style={{
-                          textAlign: c.align ? alignMap[c.align] : "right",
+                          textAlign: c.align ?? "start",
                           fontWeight: c.bold ? 600 : 400,
-                          color: c.muted ? "#7a7a7a" : "#1d1d1f",
+                          color: c.muted ? "var(--color-ink-muted-48)" : "var(--color-ink)",
                           fontVariantNumeric: c.nums ? "tabular-nums" : undefined,
                           whiteSpace: c.nowrap ? "nowrap" : undefined,
                         }}
@@ -122,26 +128,28 @@ export default function DataTable<T>({
                       </td>
                     ))}
                   </tr>
-                ))}
+                  );
+                })}
           </tbody>
         </table>
       </div>
       {!loading && rows.length === 0 && (
-        <div style={{ textAlign: "center", padding: "56px 0", color: "#7a7a7a" }}>
+        <div style={{ textAlign: "center", padding: "56px 0", color: "var(--color-ink-muted-48)" }}>
           {empty ?? <div style={{ fontSize: 15 }}>לא נמצאו נתונים.</div>}
         </div>
       )}
-      <style>{`@keyframes shx-shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }`}</style>
     </div>
   );
 }
 
-/* Neutral status pill — dot is Action Blue for the active state, muted ink
-   otherwise. Never green/orange (Shifthouse: one blue, status is cased). */
-export function StatusPill({ label, active = false }: { label: React.ReactNode; active?: boolean }) {
+/* Neutral status pill: ink text, the status shown by its dot. Pass `tone`
+   (toneOfStatus) so every screen colours a status the same way; `active`
+   is the older blue-or-grey switch. */
+export function StatusPill({ label, active = false, tone }: { label: React.ReactNode; active?: boolean; tone?: StatusTone }) {
+  const dot = tone ? TONE_DOT[tone] : active ? "var(--color-primary)" : "var(--color-ink-muted-48)";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#1d1d1f", background: "#f5f5f7", border: "1px solid #e0e0e0", borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap" }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "#0066cc" : "#7a7a7a" }} />
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--color-ink)", background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap" }}>
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }} />
       {label}
     </span>
   );
@@ -154,10 +162,10 @@ export function ProgressCell({ pct, text }: { pct: number | null; text: string }
   const done = pct !== null && pct >= 100;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{ flex: 1, height: 5, borderRadius: 9999, background: done ? "#dbe9fb" : "#f0f0f0", overflow: "hidden", minWidth: 80 }}>
-        <div style={{ height: "100%", width: `${pct === null ? 0 : Math.min(pct, 100)}%`, background: "#0066cc", borderRadius: 9999 }} />
+      <div style={{ flex: 1, height: 5, borderRadius: 9999, background: done ? "var(--color-primary-border)" : "var(--color-divider-soft)", overflow: "hidden", minWidth: 80 }}>
+        <div style={{ height: "100%", width: `${pct === null ? 0 : Math.min(pct, 100)}%`, background: "var(--color-primary)", borderRadius: 9999 }} />
       </div>
-      <span style={{ fontSize: 12, color: "#7a7a7a", fontVariantNumeric: "tabular-nums", minWidth: 30 }}>{text}</span>
+      <span style={{ fontSize: 12, color: "var(--color-ink-muted-48)", fontVariantNumeric: "tabular-nums", minWidth: 30 }}>{text}</span>
     </div>
   );
 }
@@ -176,8 +184,7 @@ export function IconAction({ title, danger, disabled, onClick, children }: { tit
       aria-label={title}
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); if (!disabled) onClick?.(e); }}
-      className="shx-icon-btn"
-      style={{ ...(danger ? { color: "#bf3535" } : {}), ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : {}) }}
+      className={"sh-iconbtn sh-iconbtn--small" + (danger ? " sh-iconbtn--error" : "")}
     >
       {children}
     </button>

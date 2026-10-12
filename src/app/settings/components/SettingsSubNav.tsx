@@ -10,7 +10,7 @@ import { canSeeInNav } from "@/lib/routes";
  * Settings secondary navigation — a horizontal tab strip pinned to the top of
  * the settings content area (rendered once by settings/layout.tsx, so it shows
  * on every /settings/** route). Light/frosted surface per the Shifthouse design
- * system; Action Blue (#0066cc) active state because this is a light surface.
+ * system; Action Blue (var(--color-primary)) active state because this is a light surface.
  * Routes/labels/icons come from the shared `settingsLinks` single source.
  */
 export default function SettingsSubNav() {
@@ -26,6 +26,7 @@ export default function SettingsSubNav() {
   return (
     <Box
       component="nav"
+      aria-label="הגדרות מערכת"
       sx={{
         position: "sticky",
         top: 0,
@@ -36,14 +37,14 @@ export default function SettingsSubNav() {
         gap: 2,
         px: 2,
         height: 52,
-        borderBottom: "1px solid #e0e0e0",
-        background: "rgba(245,245,247,0.8)",
-        backdropFilter: "saturate(180%) blur(20px)",
-        WebkitBackdropFilter: "saturate(180%) blur(20px)",
+        borderBottom: "1px solid var(--color-hairline)",
+        background: "var(--bg-frosted-parchment)",
+        backdropFilter: "var(--blur-frosted)",
+        WebkitBackdropFilter: "var(--blur-frosted)",
       }}
     >
       <Typography
-        sx={{ fontSize: 14, fontWeight: 700, color: "#1d1d1f", whiteSpace: "nowrap", flexShrink: 0 }}
+        sx={{ fontSize: "var(--text-body-sm)", fontWeight: 700, color: "var(--color-ink)", whiteSpace: "nowrap", flexShrink: 0 }}
       >
         הגדרות מערכת
       </Typography>
@@ -60,51 +61,23 @@ export default function SettingsSubNav() {
           overflowX: "auto",
           overflowY: "hidden",
           scrollbarWidth: "thin",
-          scrollbarColor: "rgba(0,0,0,0.2) transparent",
-          "&::-webkit-scrollbar": { height: 6 },
-          "&::-webkit-scrollbar-thumb": { background: "rgba(0,0,0,0.2)", borderRadius: "9999px" },
-          "&::-webkit-scrollbar-track": { background: "transparent" },
         }}
       >
         {links.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.path || pathname?.startsWith(item.path + "/");
           return (
-            <Box
+            // States in ui.css (.sh-subnav-tab): hover, the blue active text with its
+            // underline, keyboard focus.
+            <Link
               key={item.path}
-              component={Link}
               href={item.path}
-              sx={{
-                position: "relative",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 0.75,
-                flexShrink: 0,
-                px: 1.5,
-                borderRadius: "8px",
-                fontSize: 14,
-                fontWeight: active ? 600 : 400,
-                color: active ? "#0066cc" : "#5a5a5f",
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-                transition: "background-color 0.15s ease, color 0.15s ease",
-                "&:hover": { bgcolor: "rgba(0,0,0,0.04)" },
-                ...(active && {
-                  "&::after": {
-                    content: '""',
-                    position: "absolute",
-                    insetInline: 0,
-                    bottom: 0,
-                    height: 2,
-                    borderRadius: "2px 2px 0 0",
-                    bgcolor: "#0066cc",
-                  },
-                }),
-              }}
+              className="sh-subnav-tab"
+              aria-current={active ? "page" : undefined}
             >
-              <Icon sx={{ fontSize: 18 }} />
+              <Icon fontSize={18} aria-hidden />
               {item.label}
-            </Box>
+            </Link>
           );
         })}
       </Box>

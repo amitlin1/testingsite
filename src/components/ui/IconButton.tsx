@@ -37,8 +37,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   );
   const Component: React.ElementType = component || (href ? "a" : "button");
   const extra = Component === "button" ? { type: type || "button", disabled } : { href, "aria-disabled": disabled || undefined };
+  // An icon-only button needs a name: fall back to its `title` (a tooltip
+  // alone only adds a description, and only while it is open).
+  const { title } = rest;
+  const label = rest["aria-label"] ?? (typeof title === "string" ? title : undefined);
   return (
-    <Component ref={ref} className={classes} style={{ ...sxToStyle(sx), ...style }} {...extra} {...rest}>
+    <Component ref={ref} className={classes} style={{ ...sxToStyle(sx), ...style }} {...extra} {...rest} aria-label={label}>
       {children}
     </Component>
   );

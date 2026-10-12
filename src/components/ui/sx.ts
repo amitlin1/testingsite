@@ -29,19 +29,23 @@ const COLOR_TOKENS: Record<string, string> = {
   "secondary.main": "var(--color-ink-muted-80)",
   error: "var(--color-destructive)",
   "error.main": "var(--color-destructive)",
-  success: "var(--color-status-approved)",
-  "success.main": "var(--color-status-approved)",
-  warning: "var(--color-status-late)",
-  "warning.main": "var(--color-status-late)",
+  // These names are used for text and for fills under white text, so they map
+  // to the AA-safe *-ink shades, not the bare status colours.
+  success: "var(--color-success-ink)",
+  "success.main": "var(--color-success-ink)",
+  warning: "var(--color-warning-ink)",
+  "warning.main": "var(--color-warning-ink)",
   info: "var(--color-primary)",
   "info.main": "var(--color-primary)",
   "text.primary": "var(--color-ink)",
   "text.secondary": "var(--color-ink-muted-48)",
-  "text.disabled": "var(--color-ink-muted-48)",
+  "text.disabled": "var(--color-ink-muted-40)",
   divider: "var(--color-hairline)",
+  // Same soft surface the system uses for hover/highlight (.sh-select-item).
+  "action.hover": "var(--color-canvas-parchment)",
   "background.paper": "var(--color-canvas)",
   "background.default": "var(--color-canvas-parchment)",
-  "common.white": "#ffffff",
+  "common.white": "var(--color-canvas)",
   "common.black": "#000000",
 };
 
@@ -98,6 +102,30 @@ function numberToUnit(key: string, v: number): string | number {
   return v + "px";
 }
 
+const BREAKPOINT_ORDER = ["xl", "lg", "md", "sm", "xs"] as const;
+const BREAKPOINTS = new Set<string>(BREAKPOINT_ORDER);
+
+/** `{ xs: …, md: … }` — a MUI responsive value, not a nested selector block. */
+function isBreakpointObject(v: object): v is Record<string, unknown> {
+  const keys = Object.keys(v);
+  return keys.length > 0 && keys.every((k) => BREAKPOINTS.has(k));
+}
+
+/** The value of the largest breakpoint present, whatever order it was written in. */
+function largestBreakpoint(v: Record<string, unknown>): unknown {
+  for (const bp of BREAKPOINT_ORDER) if (bp in v) return v[bp];
+  return undefined;
+}
+
+// Dev-only: say once per key that an sx entry was dropped, so new hover /
+// media rules that silently do nothing are caught while they are written.
+const warned = new Set<string>();
+function warnDropped(key: string) {
+  if (process.env.NODE_ENV === "production" || warned.has(key)) return;
+  warned.add(key);
+  console.warn(`[ui/sx] "${key}" cannot be an inline style and is ignored — use a CSS class (ui.css) instead.`);
+}
+
 /** Translate one MUI `sx` object into a flat React style object. */
 function translateOne(sx: Record<string, unknown>): CSSProperties {
   const out: Record<string, unknown> = {};
@@ -105,11 +133,16 @@ function translateOne(sx: Record<string, unknown>): CSSProperties {
     if (raw == null) continue;
     // Selectors / media / nested objects can't be inline styles — skip.
     if (key.startsWith("&") || key.startsWith("@") || key.startsWith(":") ||
-        (typeof raw === "object" && !Array.isArray(raw))) {
+        (typeof raw === "object" && !Array.isArray(raw) && !isBreakpointObject(raw))) {
+      warnDropped(key);
       continue;
     }
-    // Responsive array values → take the last (largest breakpoint) entry.
-    let value: unknown = Array.isArray(raw) ? raw[raw.length - 1] : raw;
+    // Responsive values (array or { xs, md }) → the largest breakpoint, the
+    // same desktop-first choice the arrays always had. Dropping them outright
+    // collapsed grids and forms to one column; a real breakpoint needs CSS.
+    let value: unknown = Array.isArray(raw)
+      ? raw[raw.length - 1]
+      : typeof raw === "object" ? largestBreakpoint(raw as Record<string, unknown>) : raw;
     // Per-property theme callback: sx={{ color: (theme) => ... }}.
     if (typeof value === "function") value = (value as (t: Theme) => unknown)(theme);
 

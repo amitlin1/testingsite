@@ -13,7 +13,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import type { StatusHistoryWire } from "@/app/lib/dashboard/api-types";
 import { formatCount, formatDayTick } from "@/app/lib/dashboard/format";
 import { AXIS_PROPS, GRID_STROKE, RtlTooltip } from "./chartConfig";
-import { stateColor } from "./StatusDonut";
+import { SEGMENT_SEPARATOR, stateColor } from "./palette";
 
 /** Stack order, strongest at the bottom — the design's reading order. */
 const STACK: Array<{ key: string; label: string }> = [
@@ -54,7 +54,7 @@ export default function StatusTrendChart({ data }: { data: StatusHistoryWire[] }
         <XAxis dataKey="date" {...AXIS_PROPS} tickFormatter={formatDayTick} minTickGap={10} />
         <YAxis {...AXIS_PROPS} width={34} />
         <Tooltip
-          cursor={{ fill: "rgba(0,0,0,.03)" }}
+          cursor={{ fill: "color-mix(in srgb, var(--color-ink) 3%, transparent)" }}
           content={({ active, label, payload }) => (
             <RtlTooltip
               active={active}
@@ -77,6 +77,10 @@ export default function StatusTrendChart({ data }: { data: StatusHistoryWire[] }
             name={state.label}
             stackId="s"
             fill={stateColor(state.key, index)}
+            // A 1px canvas line between stacked segments, so neighbouring ramp
+            // steps never merge into one block.
+            stroke={SEGMENT_SEPARATOR}
+            strokeWidth={1}
             isAnimationActive={false}
             radius={index === stack.length - 1 ? [3, 3, 0, 0] : undefined}
           />

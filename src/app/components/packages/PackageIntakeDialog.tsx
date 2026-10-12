@@ -2,13 +2,14 @@
 import React from "react";
 import { Lock, Trash2, Plus, CircleAlert, Check } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import { DialogTitle, Tag } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import PackageLabelsDialog from "./PackageLabelsDialog";
+import { PackageDialog } from "./PackageDialog";
 import {
-  DIALOG_Z, BLUE, FOCUS, HAIR, HAIR_2, INK, INK_2, MUTED, MUTED_LT, RED, RED_BG, AMBER, AMBER_INK, AMBER_BG, AMBER_BORDER, SHADOW,
-  fieldInput, fmtId, overlay, pillGhost, pillPrimary, seq2,
+  BLUE, HAIR, HAIR_2, INK, INK_2, MUTED, RED, RED_BG, AMBER_INK, AMBER_BG, AMBER_BORDER,
+  fmtId, seq2,
 } from "./packageUi";
-import { useDraggable } from "@/components/ui/useDraggable";
 
 /**
  * קליטת מארז — design/Packages.dc.html (intake dialog, 1200px). Four steps in
@@ -60,6 +61,12 @@ type StepKey = (typeof STEPS)[number]["key"];
 
 let rowKey = 1;
 
+/** A field label tied to its input. */
+function FieldLabel({ htmlFor, children, small }: { htmlFor?: string; children: React.ReactNode; small?: boolean }) {
+  const style: React.CSSProperties = { display: "block", fontSize: small ? 11.5 : 12.5, color: MUTED, marginBottom: small ? 5 : 6 };
+  return htmlFor ? <label htmlFor={htmlFor} style={style}>{children}</label> : <div style={style}>{children}</div>;
+}
+
 export default function PackageIntakeDialog({
   open, onClose, onCreated, initialShipmentId,
 }: {
@@ -85,6 +92,7 @@ export default function PackageIntakeDialog({
   const [error, setError] = React.useState<{ rowIndex: number | null; text: string } | null>(null);
   const [labelsFor, setLabelsFor] = React.useState<{ packageId: number; itemIds: number[] } | null>(null);
   const serialRefs = React.useRef<(HTMLInputElement | null)[]>([]);
+  const uid = React.useId();
 
   const shipment = shipments.find((s) => s.id === shipmentId) ?? null;
   const packageTypeDesc = itemTypes.find((t) => t.item_type_id === packageType)?.item_type_desc ?? "";
@@ -150,7 +158,6 @@ export default function PackageIntakeDialog({
     return () => { cancelled = true; };
   }, [packageType, expandTemplate]);
 
-  const { ref: dragRef, onPointerDown: onDragStart, style: dragStyle } = useDraggable(open);
   if (!open) return null;
 
   // --- derived ----------------------------------------------------------
@@ -236,50 +243,54 @@ export default function PackageIntakeDialog({
     : "בחר משלוח וסוג מארז";
 
   const labelItems = labelsFor ? rows.map((r, i) => ({ item_id: labelsFor.itemIds[i] ?? "", package_seq: i + 1, item_type_desc: r.typeDesc || memberTypes.find((t) => t.item_type_id === r.itemType)?.item_type_desc || "פריט", serial_no: r.serial })) : [];
+  const stepHeading: React.CSSProperties = { margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" };
 
   return (
     <>
-      <div onClick={() => !saving && onClose()} style={overlay}>
-        <div ref={dragRef} onPointerDown={onDragStart} onClick={(e) => e.stopPropagation()} dir="rtl" style={{ ...dragStyle, width: 1200, maxWidth: "100%", height: "min(760px, 92vh)", background: "#fff", borderRadius: 18, boxShadow: SHADOW, display: "flex", overflow: "hidden", color: INK }}>
+      <PackageDialog open onClose={onClose} busy={saving} width="min(1200px, calc(100vw - 48px))" height="min(760px, 92vh)" fullScreenBelow760>
+        <div className="pkg-wiz">
           {/* Sidebar */}
-          <div style={{ width: 288, flexShrink: 0, background: "#f5f5f7", borderInlineEnd: `1px solid ${HAIR}`, display: "flex", flexDirection: "column", padding: "22px 20px" }}>
-            <div data-drag-handle="" style={{ fontSize: 19, fontWeight: 700, letterSpacing: "-0.3px" }}>קליטת מארז</div>
-            <div style={{ fontSize: 13, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>המארז והפריטים נוצרים יחד בשמירה אחת.</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 22 }}>
+          <div className="pkg-wiz-rail" style={{ width: 288, padding: "22px 20px" }}>
+            <div data-drag-handle="">
+              <DialogTitle style={{ padding: 0, display: "block" }}>קליטת מארז</DialogTitle>
+              <div className="pkg-wiz-sub" style={{ fontSize: 13, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>המארז והפריטים נוצרים יחד בשמירה אחת.</div>
+            </div>
+            <nav aria-label="שלבי הקליטה" className="pkg-wiz-steps" style={{ marginTop: 22 }}>
               {STEPS.map((s, i) => {
                 const active = s.key === step;
                 const done = i < stepIdx;
                 const note = s.key === "shipment" ? (shipment ? `${shipment.shipment_code} · ${packageTypeDesc || "בחר סוג מארז"}` : "בחר משלוח וסוג")
                   : s.key === "details" ? "מסלול, מק״ט, דגם" : s.key === "items" ? "סריאלי לכל פריט" : "קופסה + פריטים";
                 return (
-                  <div key={s.key} onClick={() => { if (i <= stepIdx || canNext) setStep(s.key); }} style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "10px 11px", borderRadius: 10, background: active ? "#e6efff" : "transparent", cursor: "pointer" }}>
-                    <span style={{ width: 24, height: 24, borderRadius: "50%", background: active ? BLUE : done ? "#eaf5ef" : "#fff", color: active ? "#fff" : done ? "#1f8a5b" : MUTED, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? BLUE : HAIR}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {done ? <Check size={13} strokeWidth={2.5} /> : i + 1}
+                  <button key={s.key} type="button" aria-current={active ? "step" : undefined} onClick={() => { if (i <= stepIdx || canNext) setStep(s.key); }}
+                    className="pkg-step" style={{ gap: 11, padding: "10px 11px" }}>
+                    <span style={{ width: 24, height: 24, borderRadius: "50%", background: active ? BLUE : done ? "var(--color-success-bg)" : "var(--color-canvas)", color: active ? "var(--color-on-primary)" : done ? "var(--color-success-ink)" : MUTED, fontSize: 12, fontWeight: 700, border: `1px solid ${active ? BLUE : HAIR}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {done ? <Check size={13} strokeWidth={2.5} aria-hidden /> : i + 1}
                     </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: active ? BLUE : INK }}>{s.label}</div>
-                      <div style={{ fontSize: 11.5, color: MUTED, marginTop: 2 }}>{note}</div>
-                    </div>
-                  </div>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: active ? BLUE : INK }}>{s.label}{done && <span className="pkg-sr-only"> (הושלם)</span>}</span>
+                      <span className="pkg-wiz-sub" style={{ display: "block", fontSize: 11.5, color: MUTED, marginTop: 2 }}>{note}</span>
+                    </span>
+                  </button>
                 );
               })}
-            </div>
-            <div style={{ marginTop: "auto", background: "#fff", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "13px 14px" }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, letterSpacing: ".6px", textTransform: "uppercase" }}>המארז שייווצר</div>
+            </nav>
+            <div className="pkg-wiz-sub" style={{ marginTop: "auto", background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "13px 14px" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>המארז שייווצר</div>
               <div style={{ fontSize: 14, fontWeight: 600, marginTop: 7 }}>{packageTypeDesc || "—"}</div>
               <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{sidebarSummary}</div>
             </div>
           </div>
 
           {/* Content */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 28px" }}>
+          <div className="pkg-wiz-main">
+            <div className="pkg-wiz-body">
               {step === "shipment" && (
                 <>
-                  <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>משלוח וסוג מארז</div>
+                  <h3 style={stepHeading}>משלוח וסוג מארז</h3>
                   <div style={{ fontSize: 13.5, color: MUTED, marginTop: 5 }}>בחר משלוח, ואז סוג מארז מתוך מה שהוצהר עליו.</div>
                   <div style={{ maxWidth: 420, marginTop: 18 }}>
-                    <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>משלוח</div>
+                    <FieldLabel>משלוח</FieldLabel>
                     <SearchableCombobox<Shipment>
                       dense
                       options={shipments}
@@ -297,12 +308,12 @@ export default function PackageIntakeDialog({
                       <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, overflow: "hidden" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse" }}>
                           <thead>
-                            <tr style={{ background: "#f5f5f7" }}>
-                              <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 16px" }}>סוג מארז</th>
-                              <th style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>הוצהר</th>
-                              <th style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>נקלט</th>
-                              <th style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>נותר</th>
-                              <th style={{ padding: "11px 16px" }}></th>
+                            <tr style={{ background: "var(--color-canvas-parchment)" }}>
+                              <th className="pkg-th" style={{ paddingInline: 16 }}>סוג מארז</th>
+                              <th className="pkg-th pkg-th--center">הוצהר</th>
+                              <th className="pkg-th pkg-th--center">נקלט</th>
+                              <th className="pkg-th pkg-th--center">נותר</th>
+                              <th className="pkg-th" style={{ paddingInline: 16 }}><span className="pkg-sr-only">בחירה</span></th>
                             </tr>
                           </thead>
                           <tbody>
@@ -314,12 +325,16 @@ export default function PackageIntakeDialog({
                               const picked = packageType === d.item_type_id;
                               const doneRow = left === 0;
                               return (
-                                <tr key={d.item_type_id} onClick={() => { if (!doneRow) setPackageType(d.item_type_id); }} style={{ borderTop: `1px solid ${HAIR_2}`, cursor: doneRow ? "default" : "pointer", background: picked ? "#f7fbff" : "#fff" }}>
+                                // Pick a declared type: Tab + Enter / Space, like a click.
+                                <tr key={d.item_type_id} className="pkg-row" tabIndex={doneRow ? -1 : 0} aria-selected={picked} aria-disabled={doneRow || undefined}
+                                  onClick={() => { if (!doneRow) setPackageType(d.item_type_id); }}
+                                  onKeyDown={(e) => { if (!doneRow && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setPackageType(d.item_type_id); } }}
+                                  style={{ borderTop: `1px solid ${HAIR_2}` }}>
                                   <td style={{ padding: "12px 16px", fontSize: 14, fontWeight: 600 }}>{d.item_type_desc}</td>
                                   <td style={{ padding: 12, fontSize: 14, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{d.total_quantity}</td>
                                   <td style={{ padding: 12, fontSize: 14, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{d.sample_count}</td>
-                                  <td style={{ padding: 12, fontSize: 14, textAlign: "center", fontWeight: 600, color: doneRow ? MUTED_LT : AMBER, fontVariantNumeric: "tabular-nums" }}>{left}</td>
-                                  <td style={{ padding: "12px 16px", textAlign: "end", fontSize: 13, fontWeight: 600, color: doneRow ? MUTED_LT : BLUE, whiteSpace: "nowrap" }}>{doneRow ? "הושלם" : picked ? "נבחר" : "בחר"}</td>
+                                  <td style={{ padding: 12, fontSize: 14, textAlign: "center", fontWeight: 600, color: doneRow ? MUTED : AMBER_INK, fontVariantNumeric: "tabular-nums" }}>{left}</td>
+                                  <td style={{ padding: "12px 16px", textAlign: "end", fontSize: 13, fontWeight: 600, color: doneRow ? MUTED : BLUE, whiteSpace: "nowrap" }}>{doneRow ? "הושלם" : picked ? "נבחר" : "בחר"}</td>
                                 </tr>
                               );
                             })}
@@ -333,11 +348,11 @@ export default function PackageIntakeDialog({
 
               {step === "details" && (
                 <>
-                  <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>פרטי המארז</div>
+                  <h3 style={stepHeading}>פרטי המארז</h3>
                   <div style={{ fontSize: 13.5, color: MUTED, marginTop: 5 }}>למארז אין מספר סריאלי. המזהה נוצר בשמירה ומסתיים ב-00.</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16, maxWidth: 660, marginTop: 20 }}>
                     <div>
-                      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>מסלול המארז</div>
+                      <FieldLabel>מסלול המארז</FieldLabel>
                       <SearchableCombobox<RouteOption>
                         dense
                         options={packageRoutes.map(routeOption)}
@@ -348,26 +363,26 @@ export default function PackageIntakeDialog({
                       />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>סוג מארז</div>
+                      <FieldLabel>סוג מארז</FieldLabel>
                       <SearchableCombobox<RouteOption> dense locked options={[]} value={{ value: String(packageType), label: packageTypeDesc }} onChange={() => {}} />
                       <div style={{ fontSize: 11.5, color: MUTED, marginTop: 5 }}>סוג המארז נקבע בקליטה ואינו ניתן לשינוי אחר כך.</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>מק״ט</div>
-                      <input value={makat} onChange={(e) => setMakat(e.target.value)} style={fieldInput} />
+                      <FieldLabel htmlFor={`${uid}-makat`}>מק״ט</FieldLabel>
+                      <input id={`${uid}-makat`} dir="ltr" value={makat} onChange={(e) => setMakat(e.target.value)} className="pkg-field pkg-field--code" />
                       {shipment?.makat && makat === String(shipment.makat) && <div style={{ fontSize: 11.5, color: MUTED, marginTop: 5 }}>מולא מהמשלוח</div>}
                     </div>
                     <div>
-                      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>דגם (אופציונלי)</div>
-                      <input value={model} onChange={(e) => setModel(e.target.value)} style={fieldInput} />
+                      <FieldLabel htmlFor={`${uid}-model`}>דגם (אופציונלי)</FieldLabel>
+                      <input id={`${uid}-model`} value={model} onChange={(e) => setModel(e.target.value)} className="pkg-field" />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>יצרן (אופציונלי)</div>
-                      <input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} style={fieldInput} />
+                      <FieldLabel htmlFor={`${uid}-mfr`}>יצרן (אופציונלי)</FieldLabel>
+                      <input id={`${uid}-mfr`} value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} className="pkg-field" />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 6 }}>מספר סריאלי</div>
-                      <div style={{ ...fieldInput, background: "#f5f5f7", color: MUTED_LT, display: "flex", alignItems: "center", justifyContent: "space-between" }}>אין סריאלי למארז<Lock size={14} strokeWidth={1.75} color={MUTED_LT} /></div>
+                      <FieldLabel>מספר סריאלי</FieldLabel>
+                      <div className="pkg-field pkg-field--static">אין סריאלי למארז<Lock size={14} strokeWidth={1.75} aria-hidden /></div>
                     </div>
                   </div>
                 </>
@@ -377,10 +392,10 @@ export default function PackageIntakeDialog({
                 <>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
                     <div>
-                      <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>פריטים במארז</div>
+                      <h3 style={stepHeading}>פריטים במארז</h3>
                       <div style={{ fontSize: 13.5, color: MUTED, marginTop: 5 }}>השורות נפרשו מתכולת המארז. הקלד סריאלי ולחץ Enter למעבר לשורה הבאה.</div>
                     </div>
-                    <div style={{ textAlign: "center", background: "#f5f5f7", borderRadius: 12, padding: "10px 18px", flexShrink: 0 }}>
+                    <div style={{ textAlign: "center", background: "var(--color-canvas-parchment)", borderRadius: 12, padding: "10px 18px", flexShrink: 0 }}>
                       <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{rows.length}</div>
                       <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3 }}>פריטים במארז</div>
                     </div>
@@ -393,26 +408,29 @@ export default function PackageIntakeDialog({
                   <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, overflow: "hidden", marginTop: 16 }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
-                        <tr style={{ background: "#f5f5f7" }}>
-                          <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 16px", width: 48 }}>#</th>
-                          <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>סוג פריט</th>
-                          <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px", width: 210 }}>מספר סריאלי</th>
-                          <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px" }}>מסלול</th>
-                          <th style={{ textAlign: "right", fontSize: 11.5, fontWeight: 600, color: MUTED, padding: "11px 12px", width: 92 }}>פרטים</th>
-                          <th style={{ padding: "11px 16px", width: 52 }}></th>
+                        <tr style={{ background: "var(--color-canvas-parchment)" }}>
+                          <th className="pkg-th" style={{ paddingInline: 16, width: 48 }}>#</th>
+                          <th className="pkg-th">סוג פריט</th>
+                          <th className="pkg-th" style={{ width: 210 }}>מספר סריאלי</th>
+                          <th className="pkg-th">מסלול</th>
+                          <th className="pkg-th" style={{ width: 92 }}>פרטים</th>
+                          <th className="pkg-th" style={{ paddingInline: 16, width: 52 }}><span className="pkg-sr-only">הסרה</span></th>
                         </tr>
                       </thead>
                       <tbody>
-                        {rows.map((r, i) => (
+                        {rows.map((r, i) => {
+                          const typeName = r.typeDesc || memberTypes.find((t) => t.item_type_id === r.itemType)?.item_type_desc || `שורה ${i + 1}`;
+                          const detailsId = `${uid}-row-${r.key}`;
+                          return (
                           <React.Fragment key={r.key}>
-                            <tr style={{ borderTop: `1px solid ${HAIR_2}`, background: error?.rowIndex === i ? RED_BG : "#fff" }}>
+                            <tr style={{ borderTop: `1px solid ${HAIR_2}`, background: error?.rowIndex === i ? RED_BG : "var(--color-canvas)" }}>
                               <td style={{ padding: "10px 16px", fontSize: 13, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                               <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                   {r.fromTemplate ? (
                                     <>
                                       <span style={{ fontSize: 14, fontWeight: 600 }}>{r.typeDesc}</span>
-                                      <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, background: "#f5f5f7", border: `1px solid ${HAIR}`, borderRadius: 9999, padding: "2px 8px" }}>מהתבנית</span>
+                                      <Tag tone="neutral">מהתבנית</Tag>
                                     </>
                                   ) : (
                                     <div style={{ minWidth: 186 }}>
@@ -431,10 +449,12 @@ export default function PackageIntakeDialog({
                                 </div>
                               </td>
                               <td style={{ padding: "10px 12px" }}>
-                                <input ref={(el) => { serialRefs.current[i] = el; }} value={r.serial} placeholder="סרוק או הקלד"
+                                {/* Serials are codes: typed left-to-right, kept on the RTL edge. */}
+                                <input ref={(el) => { serialRefs.current[i] = el; }} value={r.serial} placeholder="סרוק או הקלד" dir="ltr"
+                                  aria-label={`מספר סריאלי · שורה ${i + 1} · ${typeName}`} aria-invalid={error?.rowIndex === i || undefined}
                                   onChange={(e) => patchRow(i, { serial: e.target.value })}
                                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); serialRefs.current[i + 1]?.focus(); } }}
-                                  style={{ ...fieldInput, height: 38, borderRadius: 9, padding: "0 11px", borderColor: r.serial.trim() === "" ? HAIR : FOCUS, fontVariantNumeric: "tabular-nums" }} />
+                                  className="pkg-field pkg-field--sm pkg-field--code" />
                               </td>
                               <td style={{ padding: "10px 12px", fontSize: 13.5, color: INK_2, whiteSpace: "nowrap" }}>
                                 {routesOfType(r.itemType).length > 1 ? (
@@ -452,23 +472,26 @@ export default function PackageIntakeDialog({
                                 ) : routeLabel(r)}
                               </td>
                               <td style={{ padding: "10px 12px" }}>
-                                <button type="button" onClick={() => patchRow(i, { open: !r.open })} style={{ fontSize: 13, fontWeight: 600, color: BLUE, background: "transparent", border: 0, cursor: "pointer", padding: 0, fontFamily: "inherit", whiteSpace: "nowrap" }}>{r.open ? "סגור" : "פרטים"}</button>
+                                <button type="button" onClick={() => patchRow(i, { open: !r.open })} aria-expanded={r.open} aria-controls={r.open ? detailsId : undefined}
+                                  className="pkg-link pkg-link--hit" style={{ fontSize: 13 }}>{r.open ? "סגור" : "פרטים"}</button>
                               </td>
                               <td style={{ padding: "10px 16px", textAlign: "center" }}>
-                                <button type="button" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} style={{ width: 30, height: 30, borderRadius: 8, background: "#f5f5f7", color: MUTED, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                                  <Trash2 size={15} strokeWidth={1.75} />
+                                <button type="button" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} aria-label={`הסר שורה ${i + 1} · ${typeName}`} title="הסר שורה"
+                                  className="pkg-iconbtn pkg-iconbtn--trash">
+                                  <Trash2 size={15} strokeWidth={1.75} aria-hidden />
                                 </button>
                               </td>
                             </tr>
                             {r.open && (
-                              <tr style={{ background: "#fafafc", borderTop: `1px solid ${HAIR_2}` }}>
+                              <tr id={detailsId} style={{ background: "var(--color-surface-pearl)", borderTop: `1px solid ${HAIR_2}` }}>
                                 <td></td>
                                 <td colSpan={5} style={{ padding: "4px 12px 16px" }}>
                                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, maxWidth: 760 }}>
-                                    {([["מק״ט", "makat"], ["דגם", "model"], ["יצרן", "manufacturer"], ["מק״ט יצרן", "manufacturerNo"]] as const).map(([label, field]) => (
+                                    {([["מק״ט", "makat", true], ["דגם", "model", false], ["יצרן", "manufacturer", false], ["מק״ט יצרן", "manufacturerNo", true]] as const).map(([label, field, code]) => (
                                       <div key={field}>
-                                        <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 5 }}>{label}</div>
-                                        <input value={r[field]} onChange={(e) => patchRow(i, { [field]: e.target.value } as Partial<Row>)} style={{ ...fieldInput, height: 36, borderRadius: 9, padding: "0 10px", fontSize: 13.5 }} />
+                                        <FieldLabel htmlFor={`${detailsId}-${field}`} small>{label}</FieldLabel>
+                                        <input id={`${detailsId}-${field}`} value={r[field]} dir={code ? "ltr" : undefined} onChange={(e) => patchRow(i, { [field]: e.target.value } as Partial<Row>)}
+                                          className={code ? "pkg-field pkg-field--xs pkg-field--code" : "pkg-field pkg-field--xs"} />
                                       </div>
                                     ))}
                                   </div>
@@ -476,16 +499,17 @@ export default function PackageIntakeDialog({
                               </tr>
                             )}
                           </React.Fragment>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
-                    <button type="button" onClick={addRow} style={{ width: "100%", display: "flex", alignItems: "center", gap: 7, padding: "12px 16px", borderTop: `1px solid ${HAIR_2}`, fontSize: 13.5, fontWeight: 600, color: BLUE, background: "transparent", border: 0, borderRadius: 0, cursor: "pointer", fontFamily: "inherit" }}>
-                      <Plus size={15} strokeWidth={2} />הוסף פריט
+                    <button type="button" onClick={addRow} className="pkg-addrow">
+                      <Plus size={15} strokeWidth={2} aria-hidden />הוסף פריט
                     </button>
                   </div>
                   {error && (
-                    <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid rgba(191,53,53,0.25)", borderRadius: 10, padding: "11px 14px" }}>
-                      <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} /></span>
+                    <div role="alert" style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent)", borderRadius: 10, padding: "11px 14px" }}>
+                      <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} aria-hidden /></span>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: RED }}>{error.text}</div>
                         {error.rowIndex != null && <div style={{ fontSize: 12.5, color: INK_2, marginTop: 3 }}>בחר מסלול אחר לשורה, או תקן את המסלול במסך מסלולי הבדיקה.</div>}
@@ -497,22 +521,23 @@ export default function PackageIntakeDialog({
 
               {step === "labels" && (
                 <>
-                  <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" }}>מדבקות</div>
+                  <h3 style={stepHeading}>מדבקות</h3>
                   <div style={{ fontSize: 13.5, color: MUTED, marginTop: 5 }}>בחר מה להדפיס בשמירה. המזהים נוצרים בשרת.</div>
                   <div style={{ display: "flex", gap: 16, marginTop: 20, flexWrap: "wrap" }}>
                     <div style={{ width: 300, border: `1px solid ${HAIR}`, borderRadius: 14, padding: 18 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, letterSpacing: ".6px", textTransform: "uppercase" }}>מדבקת קופסה</div>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 56, marginTop: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>מדבקת קופסה</div>
+                      <div aria-hidden style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 56, marginTop: 14 }}>
                         {Array.from({ length: 28 }, (_, i) => <div key={i} style={{ width: (i % 3) + 1, height: "100%", background: i % 4 === 0 ? INK : i % 3 === 0 ? INK_2 : INK }} />)}
                       </div>
-                      <div style={{ fontFamily: "'Inter', monospace", fontSize: 14, letterSpacing: 2, marginTop: 10, fontVariantNumeric: "tabular-nums", direction: "ltr", unicodeBidi: "isolate", textAlign: "right", color: MUTED_LT }}>{fmtId("0000000000000000").head} 00</div>
+                      {/* A placeholder id: the real one is minted on save. */}
+                      <div style={{ fontSize: 14, letterSpacing: 2, marginTop: 10, fontVariantNumeric: "tabular-nums", direction: "ltr", unicodeBidi: "isolate", textAlign: "right", color: MUTED }}>{fmtId("0000000000000000").head} 00</div>
                       <div style={{ fontSize: 13, color: INK_2, marginTop: 8 }}>{packageTypeDesc} · {shipment?.customer_name ?? shipment?.customer_code ?? ""}</div>
                       <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{rows.length} פריטים</div>
                     </div>
                     <div style={{ flex: 1, minWidth: 280, display: "flex", flexDirection: "column", gap: 10 }}>
                       {rows.map((r, i) => (
                         <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 12, border: `1px solid ${HAIR}`, borderRadius: 12, padding: "12px 14px" }}>
-                          <span style={{ width: 30, height: 30, borderRadius: 8, background: "#e6efff", color: BLUE, fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(i + 1)}</span>
+                          <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--color-primary-soft)", color: BLUE, fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(i + 1)}</span>
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 13.5, fontWeight: 600 }}>{r.typeDesc || memberTypes.find((t) => t.item_type_id === r.itemType)?.item_type_desc || "פריט"}</div>
                             <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{r.makat || "—"} · {r.serial || "ללא סריאלי"}</div>
@@ -522,35 +547,35 @@ export default function PackageIntakeDialog({
                       ))}
                     </div>
                   </div>
-                  {error && <div style={{ marginTop: 14, fontSize: 13, color: RED }}>{error.text}</div>}
+                  {error && <div role="alert" style={{ marginTop: 14, fontSize: 13, color: RED }}>{error.text}</div>}
                 </>
               )}
             </div>
 
-            <div style={{ flexShrink: 0, borderTop: `1px solid ${HAIR}`, padding: "14px 28px", display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="pkg-wiz-foot">
               <div style={{ fontSize: 12.5, color: MUTED }}>{step === "items" ? "Enter בשדה סריאלי מקדם לשורה הבאה" : "המזהים נוצרים בשרת בשמירה"}</div>
-              <div style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-                <button type="button" onClick={onClose} disabled={saving} style={{ ...pillGhost, padding: "10px 18px" }}>ביטול</button>
-                <button type="button" onClick={goBack} disabled={saving || stepIdx === 0} style={{ ...pillGhost, padding: "10px 18px", color: stepIdx === 0 ? MUTED_LT : INK }}>הקודם</button>
+              <div className="pkg-dlg-foot-actions">
+                <button type="button" onClick={onClose} disabled={saving} className="pkg-pill pkg-pill--ghost">ביטול</button>
+                <button type="button" onClick={goBack} disabled={saving || stepIdx === 0} className="pkg-pill pkg-pill--ghost">הקודם</button>
                 {step === "labels" ? (
                   <>
-                    <button type="button" onClick={() => save("another")} disabled={saving} style={{ ...pillGhost, padding: "10px 18px" }}>שמור והוסף מארז נוסף</button>
-                    <button type="button" onClick={() => save("close")} disabled={saving} style={{ ...pillGhost, padding: "10px 18px" }}>שמור</button>
-                    <button type="button" onClick={() => save("labels")} disabled={saving} style={{ ...pillPrimary, padding: "10px 22px", opacity: saving ? 0.7 : 1 }}>{saving ? "שומר…" : "שמור והדפס מדבקות"}</button>
+                    <button type="button" onClick={() => save("another")} disabled={saving} className="pkg-pill pkg-pill--ghost">שמור והוסף מארז נוסף</button>
+                    <button type="button" onClick={() => save("close")} disabled={saving} className="pkg-pill pkg-pill--ghost">שמור</button>
+                    <button type="button" onClick={() => save("labels")} disabled={saving} aria-busy={saving || undefined} className="pkg-pill pkg-pill--primary" style={{ paddingInline: 22 }}>{saving ? "שומר…" : "שמור והדפס מדבקות"}</button>
                   </>
                 ) : (
-                  <button type="button" onClick={goNext} disabled={!canNext} style={{ ...pillPrimary, padding: "10px 22px", opacity: canNext ? 1 : 0.5, cursor: canNext ? "pointer" : "not-allowed" }}>הבא</button>
+                  <button type="button" onClick={goNext} disabled={!canNext} className="pkg-pill pkg-pill--primary" style={{ paddingInline: 22 }}>הבא</button>
                 )}
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </PackageDialog>
 
       {labelsFor && shipment && (
+        // Mounted after the intake dialog, so it stacks above it.
         <PackageLabelsDialog
           open
-          zIndex={DIALOG_Z + 10} // the intake overlay stays mounted underneath
           onClose={() => { setLabelsFor(null); onClose(); }}
           packageId={labelsFor.packageId}
           packageType={packageTypeDesc}
