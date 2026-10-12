@@ -8,34 +8,17 @@ import {
 } from "./stationKit";
 
 /**
- * Config that turns this generic verdict-only station into a concrete one
- * (X-ray / black-mirror / …). No photo capture: the worker scans the SKU, the
- * system shows the instruction message (with that SKU spliced in), and records a
- * pass/fail verdict + notes.
- */
-export type VerdictStationConfig = {
-  /** Stable station key echoed into the result Details payload. */
-  stationKey: string;
-  /** The station kind — the wizard rail's title (e.g. "שיקוף" / "מראה שחורה"). */
-  contextLabel: string;
-  /** Title of the verdict phase (e.g. "שיקוף הפריט"). */
-  phaseTitle: string;
-  /** One-line description under the verdict-phase title. */
-  phaseDesc: string;
-  /** The system instruction message — receives the scanned SKU (replaces "XXX"). */
-  buildMessage: (sku: string) => string;
-  /** Green finish button label. */
-  finishLabel: string;
-};
-
-/**
  * Generic two-screen test station: manufacturer-SKU scan → instruction message +
- * verdict. Configured (via `config`) into the X-ray / black-mirror stations.
- * Shares the intake wizard's chrome via StationShell.
+ * verdict. No photo capture: the worker scans the SKU, the system shows the
+ * instruction (with that SKU spliced in), and records a pass/fail verdict +
+ * notes. Its titles come from the station type's name in the DB
+ * (`stationTypeName`), so no station name lives in the code. Shares the intake
+ * wizard's chrome via StationShell.
  */
 export default function VerdictStation({
-  open, onClose, item, station, workerId, workerName, onSubmit, config,
-}: StationTestDialogProps & { config: VerdictStationConfig }) {
+  open, onClose, item, station, stationTypeName, workerId, workerName, onSubmit,
+}: StationTestDialogProps) {
+  const kind = stationTypeName?.trim() || null;
   const [phaseIdx, setPhaseIdx] = React.useState(0); // 0 = sku, 1 = verdict
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -50,7 +33,7 @@ export default function VerdictStation({
 
   const phases: ShellPhase[] = [
     { key: "sku", title: SKU_TITLE, desc: SKU_DESC },
-    { key: "verdict", title: config.phaseTitle, desc: config.phaseDesc },
+    { key: "verdict", title: kind ? `בדיקת ${kind}` : "בדיקת הפריט", desc: "בצע את הבדיקה לפי ההנחיה ואשר את תקינות הפריט." },
   ];
 
   const onNext = () => { setError(null); setPhaseIdx(1); };
@@ -68,7 +51,8 @@ export default function VerdictStation({
       const data: TestResultData = {
         Result: pass ? 1 : 0, Passed: pass, Comments: verdict.note || undefined, WorkerID: workerId ?? undefined,
         Details: {
-          station: config.stationKey,
+          // The station type by number (the result also stores it as a column).
+          station: `type-${station.test_station_type_id}`,
           sku: skuScan,
           verdict: { ok: verdict.ok, note: verdict.note },
         },
@@ -81,18 +65,18 @@ export default function VerdictStation({
   return (
     <StationShell
       open={open} onClose={onClose} item={item} workerId={workerId} workerName={workerName}
-      contextLabel={config.contextLabel} stationName={station.test_station_desc} phases={phases} currentIndex={phaseIdx}
+      contextLabel={kind ?? station.test_station_desc} stationName={station.test_station_desc} phases={phases} currentIndex={phaseIdx}
       onStep={onStep} onBack={onBack} error={error} onClearError={() => setError(null)}
       busy={false} submitting={submitting}
       canNext={skuScan.trim().length > 0} onNext={onNext}
-      canFinish={canFinish} onFinish={onFinish} finishLabel={config.finishLabel}
+      canFinish={canFinish} onFinish={onFinish} finishLabel={kind ? `סיום בדיקת ${kind}` : "סיום בדיקה"}
     >
       {phaseIdx === 0 ? (
         <SkuScreen value={skuScan} onChange={setSkuScan} />
       ) : (
         <Stack spacing={3}>
-          {/* System instruction with the scanned SKU spliced in place of "XXX". */}
-          <SystemNote>{config.buildMessage(skuScan.trim())}</SystemNote>
+          {/* System instruction with the scanned SKU spliced in. */}
+          <SystemNote>{`נא לבצע את הבדיקה עפ״י מק״ט ${skuScan.trim() || "—"}`}</SystemNote>
           <VerdictCard ok={verdict.ok} note={verdict.note}
             onOk={(v) => setVerdict((pk) => ({ ...pk, ok: v }))}
             onNote={(v) => setVerdict((pk) => ({ ...pk, note: v }))} />

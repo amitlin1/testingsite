@@ -3,6 +3,7 @@ import * as React from "react";
 import { Stack, Alert } from "@/components/ui";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
 import { uploadItemFiles } from "@/lib/api/direct-upload";
+import { apiFetch } from "@/lib/api/client";
 import {
   type Photos, type RefImg, emptyPhotos, lookupRU,
   SkuScreen, PhotoSection, PhotoUploader, VerdictCard,
@@ -10,34 +11,47 @@ import {
 } from "./stationKit";
 
 /**
- * Config that turns this generic two-screen station into a concrete one
- * (disassembly / assembly / …). `photoType` is the photo_types.code the screen
- * addresses: reference images are pulled from imagesByType[photoType] and every
- * capture is tagged with the same code so each station lists only its own group.
+ * Which photo group this station captures. Only the numeric photo_types id is
+ * kept in code, so no group name lives here (the ids are pinned by the
+ * settings seed); the group's `code` is resolved at runtime from
+ * /api/settings/photo-types, inactive types included. Reference images are
+ * pulled from imagesByType[code] and every capture is tagged with that code,
+ * so each station lists only its own group.
  */
 export type PhotoStationConfig = {
-  /** Stable station key echoed into the result Details payload. */
-  stationKey: string;
-  /** photo_types.code — reference-image group + capture tag. */
-  photoType: string;
-  /** The station kind — the wizard rail's title (e.g. "פירוק" / "הרכבה"). */
-  contextLabel: string;
-  /** Title of the photo phase (e.g. "צילום פירוק"). */
-  photoTitle: string;
-  /** One-line description under the photo-phase title. */
-  photoDesc: string;
-  /** Green finish button label. */
-  finishLabel: string;
+  /** photo_types.photo_type_id of the group this station captures. */
+  photoTypeId: number;
 };
 
 /**
  * Generic two-screen test station: manufacturer-SKU scan → one reference-guided
- * photo group + verdict. Configured (via `config`) into the disassembly / assembly
- * stations. Shares the intake wizard's chrome via StationShell.
+ * photo group + verdict. Its titles come from the station type's name in the DB
+ * (`stationTypeName`), so no station name lives in the code. Shares the intake
+ * wizard's chrome via StationShell.
  */
 export default function PhotoStation({
-  open, onClose, item, station, workerId, workerName, onSubmit, config,
+  open, onClose, item, station, stationTypeName, workerId, workerName, onSubmit, config,
 }: StationTestDialogProps & { config: PhotoStationConfig }) {
+  const kind = stationTypeName?.trim() || null;
+
+  // The photo group's code, looked up by id once the wizard opens. Kept with
+  // the id it was resolved for, so a different config never reuses it.
+  const [resolved, setResolved] = React.useState<{ id: number; code: string | null } | null>(null);
+  const photoCode = resolved?.id === config.photoTypeId ? resolved.code : null;
+  React.useEffect(() => {
+    if (!open || resolved?.id === config.photoTypeId) return;
+    let cancelled = false;
+    apiFetch("/api/settings/photo-types?all=1")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((rows: { photo_type_id: number; code: string }[]) => {
+        if (cancelled) return;
+        const hit = Array.isArray(rows) ? rows.find((t) => t.photo_type_id === config.photoTypeId) : undefined;
+        setResolved({ id: config.photoTypeId, code: hit?.code ?? null });
+      })
+      .catch(() => {}); // left unresolved → retried on the next open
+    return () => { cancelled = true; };
+  }, [open, resolved, config.photoTypeId]);
+
   const [phaseIdx, setPhaseIdx] = React.useState(0); // 0 = sku, 1 = photo
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -55,7 +69,7 @@ export default function PhotoStation({
 
   const phases: ShellPhase[] = [
     { key: "sku", title: SKU_TITLE, desc: SKU_DESC },
-    { key: "photo", title: config.photoTitle, desc: config.photoDesc },
+    { key: "photo", title: kind ? `צילום ${kind}` : "צילום", desc: "צלם את הפריט לפי תמונות הייחוס, ואשר את תקינותו." },
   ];
 
   // ---- real photo upload (reuses the item-files pipeline) ----
@@ -66,15 +80,18 @@ export default function PhotoStation({
   // storage; the shot is then flagged failed so it reads red instead of looking
   // saved.
   const uploadToItem = React.useCallback(async (itemId: number, file: File): Promise<string | null> => {
+    // No resolved group yet → treat as a failed shot (red, retake) rather than
+    // storing an untagged photo.
+    if (!photoCode) return null;
     try {
       const [result] = await uploadItemFiles(itemId, [file], {
         workerId,
         stationTypeId: station.test_station_type_id,
-        photoType: config.photoType,
+        photoType: photoCode,
       });
       return result?.objectKey ?? null;
     } catch { return null; }
-  }, [workerId, station.test_station_type_id, config.photoType]);
+  }, [workerId, station.test_station_type_id, photoCode]);
 
   const pickPhoto = (file: File) => {
     const previewUrl = URL.createObjectURL(file);
@@ -87,9 +104,9 @@ export default function PhotoStation({
 
   // ---- navigation ----
   const runLookup = React.useCallback(async () => {
-    try { const ru = await lookupRU(skuScan.trim(), item.item_type_id); setHasRU(ru.hasRU); setRefImages(ru.imagesByType[config.photoType] ?? []); }
+    try { const ru = await lookupRU(skuScan.trim(), item.item_type_id); setHasRU(ru.hasRU); setRefImages(photoCode ? ru.imagesByType[photoCode] ?? [] : []); }
     catch { setHasRU(false); }
-  }, [skuScan, item.item_type_id, config.photoType]);
+  }, [skuScan, item.item_type_id, photoCode]);
 
   const onNext = async () => {
     setError(null);
@@ -126,7 +143,8 @@ export default function PhotoStation({
       const data: TestResultData = {
         Result: pass ? 1 : 0, Passed: pass, Comments: photo.note || undefined, WorkerID: workerId ?? undefined,
         Details: {
-          station: config.stationKey,
+          // The station type by number (the result also stores it as a column).
+          station: `type-${station.test_station_type_id}`,
           sku: skuScan, hasRU,
           photo: { ok: photo.ok, note: photo.note, photos: keysOf(photo) },
         },
@@ -139,11 +157,11 @@ export default function PhotoStation({
   return (
     <StationShell
       open={open} onClose={onClose} item={item} workerId={workerId} workerName={workerName}
-      contextLabel={config.contextLabel} stationName={station.test_station_desc} phases={phases} currentIndex={phaseIdx}
+      contextLabel={kind ?? station.test_station_desc} stationName={station.test_station_desc} phases={phases} currentIndex={phaseIdx}
       onStep={onStep} onBack={onBack} error={error} onClearError={() => setError(null)}
       busy={busy} submitting={submitting}
       canNext={skuScan.trim().length > 0} onNext={onNext}
-      canFinish={canFinish} onFinish={onFinish} finishLabel={config.finishLabel}
+      canFinish={canFinish} onFinish={onFinish} finishLabel={kind ? `סיום בדיקת ${kind}` : "סיום בדיקה"}
     >
       {phaseIdx === 0 ? (
         <SkuScreen value={skuScan} onChange={setSkuScan} />

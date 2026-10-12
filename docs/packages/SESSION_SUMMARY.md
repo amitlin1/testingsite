@@ -107,7 +107,7 @@ source of truth, with the CONFIG block). `02-migrate-production.sql` is the migr
 declared (KVM 4 PORTS ×54, KVM 8 PORTS ×54), 110 items registered, all top-level, none
 tested (0 results, 0 station history), 6 waiting for research (status 4 at step 1), 3 with
 attached files, 2 orphan `item_routes` rows, 4 duplicate serials, 0 package types defined,
-station types: צילום (#1, the only `parents_only`), פירוק, שיקוף, מראה שחורה, הרכבה, אריזה
+station types: צילום (#1, the only `parents_only`), four test types (#2–#5), אריזה
 (#6), דוח סופי (#7); KVM routes `1→2→3→4→5→6→7`, "מחשב" route `1→…→6`.
 
 **What the CONFIG in `03` / `2-upgrade` assumes (owner-approved on 2026-09-17):**

@@ -316,7 +316,7 @@ export function StationShell({
 }: {
   open: boolean; onClose: () => void;
   item: ItemRow; workerId: number | null; workerName: string;
-  /** The station kind ("פירוק", "שיקוף"…): the rail's title. */
+  /** The station kind (the station type's name): the rail's title. */
   contextLabel: string;
   /** The concrete station, shown under the title. */
   stationName?: string;

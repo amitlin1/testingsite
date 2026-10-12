@@ -543,7 +543,7 @@
 - **B6 — משוב:** `Alert` (בלי פס צד, `role` לפי חומרה, תווית סגירה בעברית), `Snackbar` (`role="status"`, תנועה), `Skeleton` (טוקנים, RTL, reduced-motion), `LinearProgress` (`scaleX`, aria).
 - **B7 — מעטפת וניווט:** מחלקות `.sh-nav-item` (CM-1), התאמת prefix ו-meta לנתיב (HI-1), `aria-current` ו-`<nav>`, הסרגל בלי הנפשת layout ובלי הנפשה בטעינה (MO-2), מצבים ל-`SettingsSubNav`.
 - **B8 — `Tabs`/`Tooltip`/`Menu`:** focus-visible וניווט חיצים, Provider משותף לטולטיפים (skip-delay), `Menu` עם ניווט מקלדת (שקילת Radix DropdownMenu, שכבר מותקן).
-- **B9 — פירוק `shifthouse.css`:** העברת `ItemsToolbar`, `SettingsToolbar`, `ShipmentTable`, `EditItemDialog`, `StationsTable`, `StationTypesTable`, `testing-routes`, `work-hours` ו-history ל-primitives, ומחיקת הקובץ (CM-2, CM-6).
+- **B9 — פיצול `shifthouse.css`:** העברת `ItemsToolbar`, `SettingsToolbar`, `ShipmentTable`, `EditItemDialog`, `StationsTable`, `StationTypesTable`, `testing-routes`, `work-hours` ו-history ל-primitives, ומחיקת הקובץ (CM-2, CM-6).
 
 ### שלב C — מסכים (לפי תנועה, הגבוה קודם)
 כל צעד כולל את המצבים (שגיאה מול ריק, skeletons), RTL ונגישות של אותו מסך:

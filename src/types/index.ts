@@ -152,6 +152,8 @@ export interface StationTestDialogProps {
   onClose: () => void;
   item: ItemRow;
   station: TestStation;
+  /** The station type's name from the DB (test_stations_type) — the wizard's titles. */
+  stationTypeName?: string;
   workerId: number | null;
   workerName: string;
   /** Called with the test result — the page persists it and drives the follow-up dialogs. */

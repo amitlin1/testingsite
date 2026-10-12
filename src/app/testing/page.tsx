@@ -1456,6 +1456,7 @@ function TestingPageView() {
       }}
       item={selectedItem}
       station={selectedStation}
+      stationTypeName={selectedStationType.name}
       workerId={activeWorkerId}
       workerName={activeWorkerName}
       onSubmit={handleSubmitTestResult}

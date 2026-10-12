@@ -8,11 +8,14 @@ export const runtime = "nodejs";
  *
  * Screens/pickers list these to tag reference images and worker-captured item
  * photos; code addresses a group by the stable `code`, never by the numeric id.
+ * Active types only, unless `?all=1` — a test station keeps tagging its captures
+ * with its group even after the type is hidden from the pickers.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const all = new URL(request.url).searchParams.get("all") === "1";
     const rows = await prisma.photo_types.findMany({
-      where: { is_active: true },
+      where: all ? {} : { is_active: true },
       orderBy: { sort_order: "asc" },
       select: { photo_type_id: true, code: true, photo_type_desc: true, sort_order: true },
     });
