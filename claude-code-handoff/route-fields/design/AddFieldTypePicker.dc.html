@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>הוספת שדה · סוגי שדות</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#f5f5f7}
+a{color:#0066cc}a:hover{color:#0058b3}
+</style>
+</helmet>
+<div dir="rtl" style="min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; background: #f5f5f7; font-family: 'Rubik', system-ui, -apple-system, sans-serif; color: #1d1d1f; text-align: right; font-size: 15px">
+
+<nav aria-label="ניווט ראשי" style="flex: 1 1 240px; max-width: 100%; background: #15171a; color: #b8bcc2; display: flex; flex-direction: column; box-sizing: border-box">
+<div style="height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,.08)">
+<div style="width: 26px; height: 26px; border-radius: 7px; background: #0066cc; display: flex; align-items: center; justify-content: center; color: #fff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></div>
+<div style="flex: 1; font-size: 15px; font-weight: 700; color: #fff">מערכת בדיקות</div>
+<button type="button" aria-label="כווץ תפריט" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #9aa0a6; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line></svg></button>
+</div>
+<div style="padding: 14px; display: flex; flex-direction: column; gap: 2px">
+<a href="#" style="height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 14px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>דוחות וניהול פריטים</a>
+<a href="#" style="height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 14px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"></path><path d="M12 22V12"></path><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"></path><path d="m7.5 4.27 9 5.15"></path></svg>מארזים</a>
+<a href="#" style="height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 14px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"></path><path d="M8.5 2h7"></path><path d="M7 16h10"></path></svg>מסך בדיקה</a>
+<a href="#" style="height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 14px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>לוח ניהול</a>
+<a href="#" style="height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 14px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path><circle cx="17" cy="18" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>משלוחים נכנסים</a>
+<a href="#" style="height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 14px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 17a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.9a2 2 0 0 1-1.69-.9l-.81-1.2a2 2 0 0 0-1.67-.9H8a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2Z"></path><path d="M2 8v11a2 2 0 0 0 2 2h14"></path></svg>ניהול קבצים</a>
+<div style="height: 1px; background: rgba(255,255,255,.08); margin: 8px 0"></div>
+<div style="height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 8px; color: #fff; font-size: 14px; font-weight: 600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg><span style="flex: 1">הגדרות מערכת</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg></div>
+<div style="display: flex; flex-direction: column; gap: 2px; padding-right: 16px">
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">משתמשים והרשאות</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">לקוחות</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">סוגי פריטים</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">מארזים</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">ניהול מקורות</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">סטטוסי פריט</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">סטטוסי עמדת בדיקה</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">עמדות בדיקה</a>
+<a href="#" aria-current="page" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #fff; background: rgba(41,151,255,.16); text-decoration: none; font-size: 13px; font-weight: 600">מסלולי בדיקה</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">פריטי ייחוס</a>
+<a href="#" style="height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; color: #b8bcc2; text-decoration: none; font-size: 13px">שעות עבודה וחופשות</a>
+</div>
+</div>
+<div style="margin-top: auto; padding: 14px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 10px">
+<div style="width: 34px; height: 34px; border-radius: 9999px; background: #0066cc; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600">נל</div>
+<div style="flex: 1; display: flex; flex-direction: column"><span style="font-size: 13px; font-weight: 600; color: #fff">נועה לוי</span><span style="font-size: 12px; color: #9aa0a6">מנהל</span></div>
+<button type="button" aria-label="התנתקות" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #9aa0a6; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: scaleX(-1)"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" x2="9" y1="12" y2="12"></line></svg></button>
+</div>
+</nav>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+<header style="height: 56px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px; padding: 0 24px; box-sizing: border-box">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"></circle><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"></path><circle cx="18" cy="5" r="3"></circle></svg>
+<span style="font-size: 15px; font-weight: 600; flex: 1">מסלולי בדיקה</span>
+<button type="button" style="width: 280px; max-width: 45%; height: 36px; border-radius: 9999px; border: 0; background: #f5f5f7; display: flex; align-items: center; gap: 8px; padding: 0 14px; color: #6e6e73; font-family: inherit; font-size: 14px; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><span style="flex: 1; text-align: right">חיפוש או פקודה…</span><span dir="ltr" style="font-size: 12px; border: 1px solid #e0e0e0; border-radius: 5px; padding: 1px 6px; background: #fff">Ctrl K</span></button>
+</header>
+
+<div style="height: 52px; background: rgba(245,245,247,.8); backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 22px; padding: 0 24px; overflow-x: auto; white-space: nowrap">
+<span style="font-size: 14px; font-weight: 700">הגדרות מערכת</span>
+<a href="#" style="font-size: 14px; color: #444; text-decoration: none">משתמשים והרשאות</a>
+<a href="#" style="font-size: 14px; color: #444; text-decoration: none">לקוחות</a>
+<a href="#" style="font-size: 14px; color: #444; text-decoration: none">סוגי פריטים</a>
+<a href="#" style="font-size: 14px; color: #444; text-decoration: none">מארזים</a>
+<a href="#" style="font-size: 14px; color: #444; text-decoration: none">עמדות בדיקה</a>
+<a href="#" aria-current="page" style="font-size: 14px; color: #0066cc; font-weight: 600; text-decoration: none; height: 52px; display: flex; align-items: center; box-shadow: inset 0 -2px 0 #0066cc">מסלולי בדיקה</a>
+<a href="#" style="font-size: 14px; color: #444; text-decoration: none">פריטי ייחוס</a>
+<a href="#" style="font-size: 14px; color: #444; text-decoration: none">שעות עבודה וחופשות</a>
+</div>
+
+<main style="padding: 32px 24px 40px; display: flex; flex-direction: column; gap: 16px; min-width: 0">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 720px">
+<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap"><h1 style="margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.374px; line-height: 1.1">מסלולי בדיקה</h1><span style="font-size: 13px; color: #6e6e73; background: #f5f5f7; border: 1px solid #e0e0e0; border-radius: 9999px; padding: 4px 11px; font-variant-numeric: tabular-nums">14 מסלולים</span></div>
+<p style="margin: 0; font-size: 15px; color: #6e6e73">הגדרת סדר העמדות והשדות שהעובד ממלא בכל עמדה, לפי סוג פריט או מארז.</p>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; background: #f5f5f7; border: 1px solid #e0e0e0; border-radius: 9999px; padding: 5px 11px"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #d97706"></span>טיוטה · 6 שינויים</span>
+<span style="font-size: 12px; color: #6e6e73">נשמר אוטומטית לפני רגע</span>
+<button type="button" style="min-height: 40px; padding: 8px 19px; border-radius: 9999px; border: 1px solid #d4d4dc; background: transparent; color: #1d1d1f; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">ביטול הטיוטה</button>
+<button type="button" style="min-height: 40px; padding: 8px 19px; border-radius: 9999px; border: 1px solid #9a5b06; background: #fdf3e6; color: #9a5b06; font-family: inherit; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>בעיה אחת לתיקון</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<a href="Main.dc.html" style="min-height: 36px; padding: 8px 12px; border-radius: 8px; color: #0066cc; text-decoration: none; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: scaleX(-1)"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>חזרה למפה</a>
+<nav aria-label="מיקום" style="font-size: 14px; color: #6e6e73">
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 6px">
+<li><a href="Main.dc.html" style="text-decoration: none">מפת שדות</a></li>
+<li aria-hidden="true" style="display: flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></li>
+<li>חשמל</li>
+<li aria-hidden="true" style="display: flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></li>
+<li aria-current="page" style="color: #1d1d1f; font-weight: 600">מחשב</li>
+</ol>
+</nav>
+<div style="margin-right: auto; display: flex; align-items: center; gap: 4px">
+<button type="button" style="min-height: 36px; padding: 8px 12px; border-radius: 8px; border: 0; background: transparent; color: #0066cc; font-family: inherit; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>העמדה הקודמת</button>
+<button type="button" style="min-height: 36px; padding: 8px 12px; border-radius: 8px; border: 0; background: transparent; color: #0066cc; font-family: inherit; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer">העמדה הבאה: מכניקה<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
+</div>
+</div>
+
+<div style="display: flex; align-items: flex-start; gap: 20px">
+
+<section aria-label="עורך השדות" style="flex: 0 1 712px; min-width: 0; background: #fff; border: 1px solid #e0e0e0; border-radius: 16px; position: relative">
+
+<div style="padding: 18px 20px 0; display: flex; flex-direction: column; gap: 14px; border-bottom: 1px solid #e0e0e0">
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px"><h2 style="margin: 0; font-size: 20px; font-weight: 700; line-height: 1.3">שלב 2 מתוך 5 · חשמל</h2><span style="font-size: 11px; font-weight: 600; color: #444; background: #f5f5f7; border-radius: 9999px; padding: 3px 10px">לכל פריט בנפרד</span></div>
+</div>
+<div style="display: flex; align-items: center; gap: 2px">
+<button type="button" style="min-height: 36px; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent; color: #0066cc; font-family: inherit; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>העתק מ…</button>
+<button type="button" style="min-height: 36px; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent; color: #0066cc; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">העתק לפריטים…</button>
+<button type="button" aria-label="פעולות נוספות לתא" style="width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+</div>
+</div>
+<div role="group" aria-label="פריט" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span style="font-size: 13px; color: #6e6e73">מה העובד ממלא בעמדה הזו עבור:</span>
+<button type="button" aria-pressed="true" style="height: 32px; padding: 0 14px; border-radius: 9999px; border: 1px solid #cfe3fb; background: #e6efff; color: #0066cc; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; font-variant-numeric: tabular-nums">מחשב · 5</button>
+<button type="button" aria-pressed="false" style="height: 32px; padding: 0 14px; border-radius: 9999px; border: 1px solid #e0e0e0; background: #fff; color: #444; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; font-variant-numeric: tabular-nums">מסך ×2 · 3</button>
+</div>
+<nav aria-label="תצוגות העמדה" style="display: flex; gap: 24px; height: 40px; align-items: stretch">
+<a href="#" aria-current="page" style="display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: #0066cc; font-weight: 600; text-decoration: none; box-shadow: inset 0 -2px 0 #0066cc; font-variant-numeric: tabular-nums">שדות · 5</a>
+<a href="PopupLayoutCustomizer.dc.html" style="display: inline-flex; align-items: center; font-size: 14px; color: #444; text-decoration: none">פריסת החלון</a>
+</nav>
+</div>
+
+<div style="padding: 14px 16px 12px">
+<div style="min-height: 44px; box-sizing: border-box; border-radius: 11px; background: #f5f5f7; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 14px; color: #6e6e73"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>סריקת מק״ט יצרן · חלק קבוע · שלב 1 בחלון</div>
+</div>
+
+<div role="row" style="display: grid; grid-template-columns: 24px 140px minmax(0,1fr) 116px 64px 32px; gap: 8px; align-items: center; height: 36px; padding: 0 16px; background: #f5f5f7; font-size: 12px; font-weight: 600; color: #6e6e73">
+<span></span><span>שם השדה</span><span>אפשרויות · בחירה מהירה</span><span>הערות</span><span>חובה</span><span></span>
+</div>
+
+<div style="display: grid; grid-template-columns: 24px 140px minmax(0,1fr) 116px 64px 32px; gap: 8px; align-items: center; min-height: 44px; padding: 0 16px; background: #fafafc; border-top: 1px solid #f0f0f0">
+<button type="button" aria-label="גרירת המקטע הפעלה" style="width: 24px; height: 32px; border: 0; padding: 0; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: grab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg></button>
+<div style="grid-column: 2 / 6; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h12"></path><path d="M6 20V4"></path><path d="M18 20V4"></path></svg><span style="font-size: 14px; font-weight: 700">הפעלה</span><span style="font-size: 12px; color: #6e6e73">3 שדות</span></div>
+<button type="button" aria-label="פעולות למקטע הפעלה" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+</div>
+
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+<div role="group" aria-label="{{r.name}}" style="display: grid; grid-template-columns: 24px 140px minmax(0,1fr) 116px 64px 32px; gap: 8px; align-items: start; min-height: 52px; box-sizing: border-box; padding: 10px 16px; border-top: 1px solid #f0f0f0; background: #fff">
+<button type="button" aria-label="גרירה לשינוי סדר: {{r.name}}" style="width: 24px; height: 38px; border: 0; padding: 0; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: grab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg></button>
+<input aria-label="שם השדה" value="{{r.name}}" onChange="{{r.rename}}" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0">
+<sc-for list="{{r.chips}}" as="c" hint-placeholder-count="4"><span style="display: inline-flex; align-items: center; gap: 6px; height: 30px; box-sizing: border-box; padding: 0 10px 0 2px; border-radius: 5px; background: #f5f5f7; border: 1px solid #e0e0e0; font-size: 13px; color: #1d1d1f; white-space: nowrap"><span title="{{c.word}}" style="width: 6px; height: 6px; border-radius: 9999px; background: {{c.color}}; flex: none"></span>{{c.label}}<button type="button" aria-label="הסרת האפשרות {{c.label}}" style="width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #6e6e73; display: inline-flex; align-items: center; justify-content: center; cursor: pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></span></sc-for>
+<sc-if value="{{r.list}}" hint-placeholder-val="{{true}}"><button type="button" style="min-height: 32px; padding: 0 6px; border: 0; border-radius: 8px; background: transparent; color: #0066cc; font-family: inherit; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; cursor: pointer">רשימה: {{r.list}}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button></sc-if>
+<button type="button" style="min-height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: #0066cc; font-family: inherit; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>אפשרות</button>
+</div>
+<button type="button" aria-label="מצב הערות: {{r.notes}}" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; background: #fff; padding: 0 10px; font-family: inherit; font-size: 14px; color: #1d1d1f; display: flex; align-items: center; justify-content: space-between; gap: 4px; cursor: pointer">{{r.notes}}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button type="button" aria-pressed="{{r.req}}" onClick="{{r.toggleReq}}" style="height: 32px; margin-top: 3px; padding: 0 12px; border-radius: 9999px; border: 1px solid {{r.reqBorder}}; background: {{r.reqBg}}; color: {{r.reqInk}}; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">חובה</button>
+<button type="button" aria-label="פעולות לשדה {{r.name}}" style="width: 32px; height: 32px; margin-top: 3px; border: 0; border-radius: 8px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+</div>
+</sc-for>
+
+<div style="display: grid; grid-template-columns: 24px 140px minmax(0,1fr) 116px 64px 32px; gap: 8px; align-items: center; min-height: 44px; padding: 0 16px; background: #fafafc; border-top: 1px solid #f0f0f0">
+<button type="button" aria-label="גרירת המקטע בטיחות חשמלית" style="width: 24px; height: 32px; border: 0; padding: 0; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: grab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg></button>
+<div style="grid-column: 2 / 6; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h12"></path><path d="M6 20V4"></path><path d="M18 20V4"></path></svg><span style="font-size: 14px; font-weight: 700">בטיחות חשמלית</span><span style="font-size: 12px; color: #6e6e73">2 שדות</span></div>
+<button type="button" aria-label="פעולות למקטע בטיחות חשמלית" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+</div>
+
+<div role="group" aria-label="התנגדות הארקה" style="border-top: 1px solid #f0f0f0; background: {{gndBg}}">
+<div style="display: grid; grid-template-columns: 24px 140px minmax(0,1fr) 116px 64px 32px; gap: 8px; align-items: center; min-height: 52px; box-sizing: border-box; padding: 10px 16px">
+<button type="button" aria-label="גרירה לשינוי סדר: התנגדות הארקה" style="width: 24px; height: 38px; border: 0; padding: 0; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: grab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg></button>
+<div style="display: flex; align-items: center; gap: 6px; min-width: 0">
+<span title="מספר" style="width: 24px; height: 24px; flex: none; border-radius: 6px; background: #f5f5f7; border: 1px solid #e0e0e0; box-sizing: border-box; color: #6e6e73; display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="9" y2="9"></line><line x1="4" x2="20" y1="15" y2="15"></line><line x1="10" x2="8" y1="3" y2="21"></line><line x1="16" x2="14" y1="3" y2="21"></line></svg></span>
+<input aria-label="שם השדה" value="התנגדות הארקה" style="flex: 1; min-width: 0; width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 10px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff">
+</div>
+<button type="button" onClick="{{toggleExpand}}" aria-expanded="{{expanded}}" aria-controls="gnd-settings" style="height: 38px; box-sizing: border-box; border-radius: 8px; border: 1px solid {{sumBorder}}; background: {{sumBg}}; padding: 0 10px; font-family: inherit; font-size: 14px; color: #1d1d1f; display: flex; align-items: center; gap: 8px; cursor: pointer; text-align: right; min-width: 0">
+<span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">יחידה <span dir="ltr">Ω</span> · <span style="font-variant-numeric: tabular-nums">{{rangeShort}}</span></span>
+<span style="font-size: 12px; color: #6e6e73">מספר</span>
+<sc-if value="{{expanded}}" hint-placeholder-val="{{true}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0066cc" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg></sc-if>
+<sc-if value="{{collapsed}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></sc-if>
+</button>
+<button type="button" aria-label="מצב הערות: אופציונלי" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; background: #fff; padding: 0 10px; font-family: inherit; font-size: 14px; color: #1d1d1f; display: flex; align-items: center; justify-content: space-between; gap: 4px; cursor: pointer">אופציונלי<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button type="button" aria-pressed="{{gnd.req}}" onClick="{{gnd.toggleReq}}" style="height: 32px; padding: 0 12px; border-radius: 9999px; border: 1px solid {{gnd.reqBorder}}; background: {{gnd.reqBg}}; color: {{gnd.reqInk}}; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">חובה</button>
+<button type="button" aria-label="פעולות לשדה התנגדות הארקה" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+</div>
+
+<sc-if value="{{expanded}}" hint-placeholder-val="{{true}}">
+<div id="gnd-settings" style="border-top: 1px solid #f0f0f0; padding: 16px 48px 16px 16px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px 16px">
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="gnd-unit" style="font-size: 13px; font-weight: 600; color: #333">יחידה</label>
+<button id="gnd-unit" type="button" aria-haspopup="listbox" style="height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; background: #fff; padding: 0 12px; font-family: inherit; font-size: 14px; color: #1d1d1f; display: flex; align-items: center; justify-content: space-between; cursor: pointer"><span><span dir="ltr">Ω</span> אוהם</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="gnd-min" style="font-size: 13px; font-weight: 600; color: #333">מינימום</label>
+<div style="position: relative; display: flex; align-items: center">
+<input id="gnd-min" dir="ltr" inputmode="decimal" placeholder="—" value="{{min}}" onChange="{{setMin}}" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 34px 0 12px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff; text-align: left; font-variant-numeric: tabular-nums">
+<span dir="ltr" aria-hidden="true" style="position: absolute; right: 12px; font-size: 14px; color: #6e6e73">Ω</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="gnd-max" style="font-size: 13px; font-weight: 600; color: #333">מקסימום</label>
+<div style="position: relative; display: flex; align-items: center">
+<input id="gnd-max" dir="ltr" inputmode="decimal" value="{{max}}" onChange="{{setMax}}" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #0071e3; box-shadow: 0 0 0 3px color-mix(in srgb,#0071e3 15%,transparent); border-radius: 8px; padding: 0 34px 0 12px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff; text-align: left; font-variant-numeric: tabular-nums">
+<span dir="ltr" aria-hidden="true" style="position: absolute; right: 12px; font-size: 14px; color: #6e6e73">Ω</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="gnd-ref" style="font-size: 13px; font-weight: 600; color: #333">ערך ייחוס</label>
+<input id="gnd-ref" inputmode="decimal" placeholder="לא בשימוש" value="{{ref}}" onChange="{{setRef}}" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff; font-variant-numeric: tabular-nums">
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="gnd-tol" style="font-size: 13px; font-weight: 600; color: {{tolLabel}}">סטייה מותרת ±%</label>
+<sc-if value="{{tolOff}}" hint-placeholder-val="{{true}}">
+<input id="gnd-tol" disabled placeholder="—" aria-describedby="gnd-tol-help" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #e0e0e0; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 14px; color: #6e6e73; background: #f5f5f7">
+</sc-if>
+<sc-if value="{{tolOn}}" hint-placeholder-val="{{false}}">
+<input id="gnd-tol" dir="ltr" inputmode="decimal" placeholder="5" value="{{tol}}" onChange="{{setTol}}" aria-describedby="gnd-tol-help" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff; text-align: left; font-variant-numeric: tabular-nums">
+</sc-if>
+<span id="gnd-tol-help" style="font-size: 12px; color: #6e6e73">{{tolHelp}}</span>
+</div>
+
+<div style="display: flex; align-items: center; gap: 10px; align-self: center">
+<button type="button" role="switch" aria-checked="{{oor}}" aria-labelledby="gnd-oor-label" onClick="{{toggleOor}}" style="position: relative; flex: none; width: 44px; height: 26px; border: 0; border-radius: 9999px; background: {{oorBg}}; padding: 0; cursor: pointer"><span style="position: absolute; top: 3px; right: {{knobRight}}; width: 20px; height: 20px; border-radius: 9999px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2)"></span></button>
+<span id="gnd-oor-label" style="font-size: 14px">ערך מחוץ לטווח נחשב "לא תקין"</span>
+</div>
+
+<div style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px">
+<label for="gnd-help" style="font-size: 13px; font-weight: 600; color: #333">טקסט עזרה לעובד</label>
+<input id="gnd-help" value="{{help}}" onChange="{{setHelp}}" placeholder="למשל: היכן ואיך למדוד" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 12px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff">
+<span style="font-size: 12px; color: #6e6e73">מוצג מתחת לשם השדה בחלון העובד</span>
+</div>
+
+<div style="grid-column: 1 / -1; display: flex">
+<button type="button" onClick="{{toggleExpand}}" style="min-height: 36px; padding: 8px 12px; border-radius: 8px; border: 0; background: transparent; color: #0066cc; font-family: inherit; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>סגור הגדרות</button>
+</div>
+
+</div>
+</sc-if>
+</div>
+
+<div role="group" aria-label="בדיקת בידוד" style="display: grid; grid-template-columns: 24px 140px minmax(0,1fr) 116px 64px 32px; gap: 8px; align-items: center; min-height: 52px; box-sizing: border-box; padding: 10px 16px; border-top: 1px solid #f0f0f0">
+<button type="button" aria-label="גרירה לשינוי סדר: בדיקת בידוד" style="width: 24px; height: 38px; border: 0; padding: 0; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: grab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg></button>
+<div style="display: flex; align-items: center; gap: 6px; min-width: 0">
+<span title="תקין / לא תקין" style="width: 24px; height: 24px; flex: none; border-radius: 6px; background: #f5f5f7; border: 1px solid #e0e0e0; box-sizing: border-box; color: #6e6e73; display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="12" x="2" y="6" rx="6" ry="6"></rect><circle cx="8" cy="12" r="2"></circle></svg></span>
+<input aria-label="שם השדה" value="בדיקת בידוד" style="flex: 1; min-width: 0; width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 10px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff">
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+<span style="height: 26px; box-sizing: border-box; padding: 0 10px; border-radius: 9999px; border: 1px solid #d4d4dc; font-size: 12px; font-weight: 600; color: #17784f; display: inline-flex; align-items: center">תקין</span>
+<span style="height: 26px; box-sizing: border-box; padding: 0 10px; border-radius: 9999px; border: 1px solid #d4d4dc; font-size: 12px; font-weight: 600; color: #bf3535; display: inline-flex; align-items: center">לא תקין</span>
+<span style="font-size: 12px; color: #6e6e73">תקין / לא תקין</span>
+<span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #9a5b06"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #d97706"></span>חדש בטיוטה</span>
+</div>
+<button type="button" aria-label="מצב הערות: חובה בכשל" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; background: #fff; padding: 0 10px; font-family: inherit; font-size: 14px; color: #1d1d1f; display: flex; align-items: center; justify-content: space-between; gap: 4px; cursor: pointer">חובה בכשל<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button type="button" aria-pressed="{{iso.req}}" onClick="{{iso.toggleReq}}" style="height: 32px; padding: 0 12px; border-radius: 9999px; border: 1px solid {{iso.reqBorder}}; background: {{iso.reqBg}}; color: {{iso.reqInk}}; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">חובה</button>
+<button type="button" aria-label="פעולות לשדה בדיקת בידוד" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+</div>
+
+<div style="padding: 12px 16px; border-top: 1px solid #f0f0f0; display: flex; align-items: center; gap: 8px">
+<button type="button" style="flex: 1; min-width: 0; height: 44px; box-sizing: border-box; border: 1.5px dashed #d4d4dc; border-radius: 11px; background: transparent; padding: 0 14px; font-family: inherit; color: #0066cc; display: flex; align-items: center; gap: 10px; cursor: pointer; text-align: right"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg><span style="display: flex; flex-direction: column; gap: 1px; min-width: 0"><span style="font-size: 14px; font-weight: 600; line-height: 1.2">הוסף שורת בדיקה</span><span style="font-size: 12px; color: #6e6e73; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">שם · בחירה מתוך 4 אפשרויות · הערות</span></span></button>
+<div style="position: relative; display: flex">
+<button type="button" onClick="{{togglePicker}}" aria-expanded="{{open}}" aria-haspopup="dialog" aria-controls="type-picker" style="height: 32px; padding: 0 12px 0 10px; border-radius: 9999px; border: 1px solid #0066cc; background: {{pickBtnBg}}; box-shadow: {{pickBtnHalo}}; color: #0066cc; font-family: inherit; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap">סוג שדה אחר<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+
+<sc-if value="{{open}}" hint-placeholder-val="{{true}}">
+<div id="type-picker" role="dialog" aria-label="הוספת שדה מסוג אחר" style="position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 380px; box-sizing: border-box; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 10px 34px rgba(17,21,31,.14); display: flex; flex-direction: column; overflow: hidden; text-align: right">
+<div style="padding: 8px 8px 0">
+<div style="position: relative; display: flex; align-items: center">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; right: 12px"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+<input aria-label="חיפוש סוג שדה" placeholder="חיפוש סוג שדה…" value="{{q}}" onChange="{{setQ}}" style="width: 100%; height: 38px; box-sizing: border-box; border: 1px solid #0071e3; box-shadow: 0 0 0 3px color-mix(in srgb,#0071e3 15%,transparent); border-radius: 8px; padding: 0 38px 0 12px; font-family: inherit; font-size: 14px; color: #1d1d1f; background: #fff">
+</div>
+</div>
+<div style="padding: 0 8px 8px; display: flex; flex-direction: column">
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="5">
+<div role="group" aria-label="{{g.name}}" style="display: flex; flex-direction: column">
+<div style="padding: 8px 10px 4px; font-size: 11px; font-weight: 600; color: #6e6e73">{{g.name}}</div>
+<sc-for list="{{g.items}}" as="t" hint-placeholder-count="2">
+<button type="button" onClick="{{t.pick}}" aria-current="{{t.active}}" style="min-height: 48px; width: 100%; box-sizing: border-box; border: 0; border-radius: 6px; background: {{t.bg}}; padding: 6px 8px; font-family: inherit; color: #1d1d1f; display: flex; align-items: center; gap: 10px; cursor: pointer; text-align: right">
+<span style="width: 32px; height: 32px; flex: none; box-sizing: border-box; border-radius: 8px; background: {{t.tileBg}}; border: 1px solid {{t.tileBorder}}; color: {{t.tileInk}}; display: inline-flex; align-items: center; justify-content: center">
+<sc-if value="{{t.iRow}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"></path><path d="m3 7 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></svg></sc-if>
+<sc-if value="{{t.iPf}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="12" x="2" y="6" rx="6" ry="6"></rect><circle cx="8" cy="12" r="2"></circle></svg></sc-if>
+<sc-if value="{{t.iNum}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="20" y1="9" y2="9"></line><line x1="4" x2="20" y1="15" y2="15"></line><line x1="10" x2="8" y1="3" y2="21"></line><line x1="16" x2="14" y1="3" y2="21"></line></svg></sc-if>
+<sc-if value="{{t.iText}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" x2="15" y1="20" y2="20"></line><line x1="12" x2="12" y1="4" y2="20"></line></svg></sc-if>
+<sc-if value="{{t.iLong}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12H9"></path><path d="M21 18H7"></path><path d="M21 6H3"></path></svg></sc-if>
+<sc-if value="{{t.iTodo}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="6" height="6" rx="1"></rect><path d="m3 17 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></svg></sc-if>
+<sc-if value="{{t.iMulti}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 12H3"></path><path d="M16 6H3"></path><path d="M16 18H3"></path><path d="M18 9v6"></path><path d="M21 12h-6"></path></svg></sc-if>
+<sc-if value="{{t.iPhoto}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg></sc-if>
+<sc-if value="{{t.iScan}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M8 7v10"></path><path d="M12 7v10"></path><path d="M17 7v10"></path></svg></sc-if>
+<sc-if value="{{t.iHead}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h12"></path><path d="M6 20V4"></path><path d="M18 20V4"></path></svg></sc-if>
+</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; line-height: 1.25">{{t.name}}<sc-if value="{{t.def}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; font-weight: 600; color: #0066cc; background: #e6efff; border-radius: 9999px; padding: 3px 10px; line-height: 1.2">ברירת מחדל</span></sc-if></span>
+<span style="font-size: 12px; color: #6e6e73; line-height: 1.3">{{t.desc}}</span>
+</span>
+<sc-if value="{{t.active}}" hint-placeholder-val="{{false}}"><span dir="ltr" style="flex: none; font-size: 11px; color: #6e6e73; border: 1px solid #e0e0e0; border-radius: 5px; padding: 1px 6px; background: #fff">Enter</span></sc-if>
+</button>
+</sc-for>
+</div>
+</sc-for>
+<sc-if value="{{noResults}}" hint-placeholder-val="{{false}}">
+<div style="padding: 28px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center">
+<span style="font-size: 15px; font-weight: 600">אין סוג שדה מתאים</span>
+<span style="font-size: 13px; color: #6e6e73">נסו מילה אחרת, למשל "מספר" או "צילום"</span>
+</div>
+</sc-if>
+</div>
+<div style="background: #fafafc; border-top: 1px solid #e0e0e0; padding: 10px 16px; font-size: 12px; color: #6e6e73">טיפ: <span dir="ltr">Enter</span> בשם השדה האחרון מוסיף שורת בדיקה חדשה</div>
+</div>
+</sc-if>
+</div>
+<button type="button" style="min-height: 36px; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent; color: #0066cc; font-family: inherit; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>כותרת מקטע</button>
+<button type="button" title="הדביקו שורות: שם⇥אפשרות 1⇥אפשרות 2⇥…" style="min-height: 36px; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent; color: #0066cc; font-family: inherit; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H9a1 1 0 0 0-1 1v2c0 .6.4 1 1 1h6c.6 0 1-.4 1-1V3c0-.6-.4-1-1-1Z"></path><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M16 4h2a2 2 0 0 1 2 2v2M11 14h10"></path><path d="m17 10 4 4-4 4"></path></svg>הדבק מאקסל</button>
+</div>
+
+<div style="padding: 0 16px 12px">
+<div style="min-height: 44px; box-sizing: border-box; border-radius: 11px; background: #f5f5f7; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 14px; color: #6e6e73"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>פסק דין · "בדיקה תקינה?" · תמיד אחרון</div>
+</div>
+
+<footer style="border-top: 1px solid #e0e0e0; padding: 12px 20px; font-size: 12px; color: #6e6e73; font-variant-numeric: tabular-nums">{{footText}}</footer>
+</section>
+
+<aside aria-label="תצוגת העובד" style="flex: 0 0 420px; position: sticky; top: 16px">
+<div style="position: relative; background: #fff; border: 1px solid #e0e0e0; border-radius: 16px; overflow: hidden">
+<div style="padding: 14px 18px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px">
+<span style="font-size: 15px; font-weight: 700">תצוגת העובד</span>
+<span style="font-size: 11px; font-weight: 600; color: #17784f; background: #eaf5ef; border-radius: 9999px; padding: 3px 10px">חי</span>
+<a href="WorkerPopupItem.dc.html" style="margin-right: auto; min-height: 36px; padding: 8px 12px; border-radius: 8px; color: #0066cc; text-decoration: none; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" x2="14" y1="3" y2="10"></line><line x1="3" x2="10" y1="21" y2="14"></line></svg>פתח בחלון מלא</a>
+</div>
+<div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="border-radius: 11px; background: #f5f5f7; padding: 10px 12px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center"><span style="font-weight: 600">מחשב</span><span style="color: #6e6e73">·</span><span dir="ltr">Dell OptiPlex 7040</span><span style="color: #6e6e73">·</span><span dir="ltr" style="font-variant-numeric: tabular-nums">1005 1509 26<b>00 01</b></span></div>
+<span style="font-size: 12px; color: #6e6e73">שינוי אפשרות כאן לא נשמר</span>
+</div>
+
+<span style="font-size: 12px; font-weight: 600; color: #6e6e73">הפעלה</span>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 14px; font-weight: 600">נורית מתח <span style="color: #bf3535" aria-label="חובה">*</span></span>
+<div style="height: 44px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 12px; display: flex; align-items: center; gap: 8px; font-size: 14.5px"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #1f8a5b"></span><span style="flex: 1">תקין</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></div>
+<div style="height: 38px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 12px; display: flex; align-items: center; font-size: 14px; color: #9a9aa0">הערה…</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px; background: #fbf2f2; border-radius: 11px; padding: 10px 12px">
+<span style="font-size: 14px; font-weight: 600">הפעלה ו-POST <span style="color: #bf3535" aria-label="חובה">*</span></span>
+<div style="height: 44px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; background: #fff; padding: 0 12px; display: flex; align-items: center; gap: 8px; font-size: 14.5px; color: #bf3535; font-weight: 600"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #bf3535"></span><span style="flex: 1">לא עולה</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></div>
+<span style="font-size: 12px; font-weight: 600; color: #bf3535">הערה · חובה</span>
+<div style="height: 38px; box-sizing: border-box; border: 1px solid #bf3535; border-radius: 8px; background: #fff; padding: 0 12px; display: flex; align-items: center; font-size: 14px; color: #9a9aa0">פרט את החריגה…</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 14px; font-weight: 600">מאוורר ספק הכוח</span>
+<div style="height: 44px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 12px; display: flex; align-items: center; gap: 8px; font-size: 14.5px; color: #9a9aa0"><span style="flex: 1">בחר…</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></div>
+</div>
+
+<span style="font-size: 12px; font-weight: 600; color: #6e6e73">בטיחות חשמלית</span>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 14px; font-weight: 600">התנגדות הארקה<sc-if value="{{gnd.req}}" hint-placeholder-val="{{true}}"> <span style="color: #bf3535" aria-label="חובה">*</span></sc-if></span>
+<sc-if value="{{help}}" hint-placeholder-val="{{true}}"><span style="font-size: 12px; color: #6e6e73">{{help}}</span></sc-if>
+<div style="position: relative; height: 44px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; padding: 0 12px; display: flex; align-items: center; font-size: 14.5px"><span dir="ltr" style="flex: 1; text-align: left; font-variant-numeric: tabular-nums">0.08</span><span dir="ltr" style="color: #6e6e73">Ω</span></div>
+<span style="font-size: 12px; color: {{rangeInk}}; font-variant-numeric: tabular-nums">{{rangeMsg}}</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 14px; font-weight: 600">בדיקת בידוד <span style="color: #bf3535" aria-label="חובה">*</span></span>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+<span style="height: 44px; box-sizing: border-box; border: 1px solid #d4d4dc; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #17784f">תקין</span>
+<span style="height: 44px; box-sizing: border-box; border: 1px solid #d4d4dc; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #bf3535">לא תקין</span>
+</div>
+</div>
+</div>
+<div style="border-top: 1px solid #e0e0e0; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<span style="font-size: 12px; color: #6e6e73">נותרו 2 שדות חובה</span>
+<button type="button" disabled style="height: 32px; padding: 0 14px; border-radius: 9999px; border: 0; background: #f5f5f7; color: #6e6e73; font-family: inherit; font-size: 14px; font-weight: 600">סיום בדיקת חשמל</button>
+</div>
+<sc-if value="{{open}}" hint-placeholder-val="{{true}}"><div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(255,255,255,.5); border-radius: 16px"></div></sc-if>
+</div>
+</aside>
+
+</div>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      open: true,
+      active: 'number',
+      q: '',
+      expanded: true,
+      min: '',
+      max: '0.1',
+      ref: '',
+      tol: '',
+      help: 'מדוד בין פין ההארקה לגוף המארז',
+      oor: true,
+      names: { r1: 'נורית מתח', r2: 'הפעלה ו-POST', r3: 'מאוורר ספק הכוח' },
+      req: { r1: true, r2: true, r3: false, gnd: true, iso: true }
+    };
+  }
+  flip(key) {
+    const req = Object.assign({}, this.state.req);
+    req[key] = !req[key];
+    this.setState({ req: req });
+  }
+  reqVals(key) {
+    const on = !!this.state.req[key];
+    return {
+      req: on,
+      reqBg: on ? '#e6efff' : '#ffffff',
+      reqInk: on ? '#0066cc' : '#444444',
+      reqBorder: on ? '#cfe3fb' : '#e0e0e0',
+      toggleReq: () => this.flip(key)
+    };
+  }
+  renderVals() {
+    const s = this.state;
+    const P = '#1f8a5b', W = '#d97706', F = '#bf3535', N = '#9a9aa0';
+    const word = { [P]: 'תקין', [W]: 'אזהרה', [F]: 'כשל', [N]: 'ניטרלי' };
+    const chip = (label, color) => ({ label: label, color: color, word: word[color] });
+    const rowDefs = [
+      { key: 'r1', list: 'מצב נורית', notes: 'חובה בכשל', chips: [chip('תקין', P), chip('מהבהבת', W), chip('לא דולקת', F), chip('לא נבדק', N)] },
+      { key: 'r2', list: 'תוצאת הפעלה', notes: 'חובה בכשל', chips: [chip('עולה תקין', P), chip('עולה עם שגיאה', W), chip('לא עולה', F), chip('לא נבדק', N)] },
+      { key: 'r3', list: '', notes: 'אופציונלי', chips: [chip('מסתובב תקין', P), chip('רעש חריג', W), chip('לא מסתובב', F), chip('לא נבדק', N)] }
+    ];
+    const rows = rowDefs.map((d) => Object.assign({
+      name: s.names[d.key],
+      list: d.list,
+      notes: d.notes,
+      chips: d.chips,
+      rename: (e) => {
+        const names = Object.assign({}, this.state.names);
+        names[d.key] = e && e.target ? e.target.value : names[d.key];
+        this.setState({ names: names });
+      }
+    }, this.reqVals(d.key)));
+
+    const types = [
+      { g: 'נפוץ', items: [
+        { k: 'row', name: 'שורת בדיקה', def: true, desc: 'שם · בחירה מ-4 אפשרויות · הערות', i: 'Row' },
+        { k: 'pf', name: 'תקין / לא תקין', desc: 'שני כפתורים גדולים', i: 'Pf' }
+      ] },
+      { g: 'מדידה וטקסט', items: [
+        { k: 'number', name: 'מספר', desc: 'ערך עם יחידה, טווח או ערך ייחוס ±%', i: 'Num' },
+        { k: 'text', name: 'טקסט קצר', desc: 'שורה אחת חופשית', i: 'Text' },
+        { k: 'textarea', name: 'טקסט ארוך', desc: 'פסקה, עד 3 שורות', i: 'Long' }
+      ] },
+      { g: 'בחירה', items: [
+        { k: 'checklist', name: 'רשימת סימון', desc: 'כמה תיבות סימון, כמו בבדיקת הסגירה', i: 'Todo' },
+        { k: 'multi', name: 'בחירה מרובה', desc: 'אפשר לבחור יותר מאפשרות אחת', i: 'Multi' }
+      ] },
+      { g: 'תיעוד', items: [
+        { k: 'photo', name: 'צילום', desc: 'סוג צילום ומינימום תמונות', i: 'Photo' },
+        { k: 'scan', name: 'סריקה', desc: 'שדה לקורא ברקוד', i: 'Scan' }
+      ] },
+      { g: 'מבנה', items: [
+        { k: 'section', name: 'כותרת מקטע', desc: 'מחלקת את השדות לקבוצות בחלון', i: 'Head' }
+      ] }
+    ];
+    const q = (s.q || '').trim();
+    const icons = ['Row', 'Pf', 'Num', 'Text', 'Long', 'Todo', 'Multi', 'Photo', 'Scan', 'Head'];
+    const groups = types.map((grp) => ({
+      name: grp.g,
+      items: grp.items
+        .filter((t) => !q || t.name.indexOf(q) !== -1 || t.desc.indexOf(q) !== -1)
+        .map((t) => {
+          const active = s.active === t.k;
+          const v = {
+            name: t.name, desc: t.desc, def: !!t.def, active: active,
+            bg: active ? '#f5f5f7' : 'transparent',
+            tileBg: active ? '#ffffff' : '#f5f5f7',
+            tileBorder: active ? '#e0e0e0' : '#f5f5f7',
+            tileInk: active ? '#1d1d1f' : '#6e6e73',
+            pick: () => this.setState({ active: t.k })
+          };
+          icons.forEach((n) => { v['i' + n] = t.i === n; });
+          return v;
+        })
+    })).filter((grp) => grp.items.length > 0);
+
+    const num = (x) => { const n = parseFloat(String(x).replace(',', '.')); return isNaN(n) ? null : n; };
+    const mn = num(s.min), mx = num(s.max);
+    const val = 0.08;
+    let rangeShort = 'ללא טווח';
+    let rangeLabel = '';
+    if (mn !== null && mx !== null) { rangeShort = mn + '–' + mx; rangeLabel = mn + '–' + mx + ' Ω'; }
+    else if (mx !== null) { rangeShort = 'מקס׳ ' + mx; rangeLabel = 'עד ' + mx + ' Ω'; }
+    else if (mn !== null) { rangeShort = 'מינ׳ ' + mn; rangeLabel = 'מעל ' + mn + ' Ω'; }
+    const inRange = (mn === null || val >= mn) && (mx === null || val <= mx);
+    let rangeMsg = 'ללא טווח מוגדר';
+    let rangeInk = '#6e6e73';
+    if (rangeLabel) {
+      rangeMsg = inRange ? 'בטווח · ' + rangeLabel : (s.oor ? 'מחוץ לטווח · ' + rangeLabel + ' · יסומן לא תקין' : 'מחוץ לטווח · ' + rangeLabel);
+      rangeInk = inRange ? '#17784f' : '#bf3535';
+    }
+    const hasRef = num(s.ref) !== null;
+    const reqCount = Object.keys(s.req).filter((k) => s.req[k]).length;
+    const val2 = (e) => (e && e.target ? e.target.value : '');
+
+    return {
+      rows: rows,
+      gnd: this.reqVals('gnd'),
+      iso: this.reqVals('iso'),
+      open: s.open,
+      togglePicker: () => this.setState({ open: !this.state.open }),
+      pickBtnBg: s.open ? '#f3f8ff' : 'transparent',
+      pickBtnHalo: s.open ? '0 0 0 3px color-mix(in srgb,#0071e3 15%,transparent)' : 'none',
+      q: s.q,
+      setQ: (e) => this.setState({ q: val2(e) }),
+      groups: groups,
+      noResults: groups.length === 0,
+      expanded: s.expanded,
+      collapsed: !s.expanded,
+      toggleExpand: () => this.setState({ expanded: !this.state.expanded }),
+      gndBg: s.expanded ? '#fafafc' : '#ffffff',
+      sumBg: s.expanded ? '#f3f8ff' : '#ffffff',
+      sumBorder: s.expanded ? '#cfe3fb' : '#949499',
+      rangeShort: rangeShort,
+      min: s.min,
+      max: s.max,
+      ref: s.ref,
+      tol: s.tol,
+      help: s.help,
+      setMin: (e) => this.setState({ min: val2(e) }),
+      setMax: (e) => this.setState({ max: val2(e) }),
+      setRef: (e) => this.setState({ ref: val2(e) }),
+      setTol: (e) => this.setState({ tol: val2(e) }),
+      setHelp: (e) => this.setState({ help: val2(e) }),
+      tolOn: hasRef,
+      tolOff: !hasRef,
+      tolLabel: hasRef ? '#333333' : '#6e6e73',
+      tolHelp: hasRef ? 'סטייה מותרת מערך הייחוס, באחוזים' : 'זמין לאחר הזנת ערך ייחוס',
+      oor: s.oor,
+      toggleOor: () => this.setState({ oor: !this.state.oor }),
+      oorBg: s.oor ? '#0066cc' : '#949499',
+      knobRight: s.oor ? '21px' : '3px',
+      rangeMsg: rangeMsg,
+      rangeInk: rangeInk,
+      footText: '5 שדות · ' + reqCount + ' חובה · גרירה או Alt+חיצים לשינוי סדר'
+    };
+  }
+}
+</script>
+</body>
+</html>

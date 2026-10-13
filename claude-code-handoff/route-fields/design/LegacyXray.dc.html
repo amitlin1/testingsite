@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>חלון עמדה · שיקוף · עם שדות</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#f5f5f7}
+a{color:#0066cc}a:hover{color:#0058b3}
+</style>
+</helmet>
+<div dir="rtl" style="position: relative; width: 1280px; height: 900px; overflow: hidden; background: #f5f5f7; font-family: 'Rubik', system-ui, -apple-system, sans-serif; color: #1d1d1f; text-align: right; font-size: 15px">
+
+<div aria-hidden="true" style="position: absolute; inset: 0; display: flex; flex-direction: column">
+<div style="height: 56px; flex: none; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px; padding: 0 24px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"></path><path d="M8.5 2h7"></path><path d="M7 16h10"></path></svg>
+<span style="font-size: 15px; font-weight: 600; flex: 1">מסך בדיקה</span>
+<span style="width: 280px; height: 36px; border-radius: 9999px; background: #f5f5f7"></span>
+</div>
+<div style="padding: 28px 24px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 190px; height: 26px; border-radius: 6px; background: #e4e4e8"></span>
+<span style="width: 84px; height: 26px; border-radius: 9999px; background: #ececf0"></span>
+<span style="width: 84px; height: 26px; border-radius: 9999px; background: #ececf0"></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px">
+<div style="background: #fff; border: 1px solid #e0e0e0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 34px; height: 34px; border-radius: 8px; background: #ececf0"></span><span style="display: flex; flex-direction: column; gap: 6px; flex: 1"><span style="width: 60%; height: 12px; border-radius: 4px; background: #e4e4e8"></span><span style="width: 40%; height: 10px; border-radius: 4px; background: #ececf0"></span></span></div>
+<span style="width: 85%; height: 10px; border-radius: 4px; background: #ececf0"></span>
+<span style="width: 70%; height: 10px; border-radius: 4px; background: #ececf0"></span>
+<span style="width: 120px; height: 44px; border-radius: 11px; background: #e4e4e8"></span>
+</div>
+<div style="background: #fff; border: 1px solid #e0e0e0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 34px; height: 34px; border-radius: 8px; background: #ececf0"></span><span style="display: flex; flex-direction: column; gap: 6px; flex: 1"><span style="width: 55%; height: 12px; border-radius: 4px; background: #e4e4e8"></span><span style="width: 45%; height: 10px; border-radius: 4px; background: #ececf0"></span></span></div>
+<span style="width: 80%; height: 10px; border-radius: 4px; background: #ececf0"></span>
+<span style="width: 65%; height: 10px; border-radius: 4px; background: #ececf0"></span>
+<span style="width: 120px; height: 44px; border-radius: 11px; background: #e4e4e8"></span>
+</div>
+<div style="background: #fff; border: 1px solid #e0e0e0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px"><span style="width: 34px; height: 34px; border-radius: 8px; background: #ececf0"></span><span style="display: flex; flex-direction: column; gap: 6px; flex: 1"><span style="width: 65%; height: 12px; border-radius: 4px; background: #e4e4e8"></span><span style="width: 35%; height: 10px; border-radius: 4px; background: #ececf0"></span></span></div>
+<span style="width: 75%; height: 10px; border-radius: 4px; background: #ececf0"></span>
+<span style="width: 60%; height: 10px; border-radius: 4px; background: #ececf0"></span>
+<span style="width: 120px; height: 44px; border-radius: 11px; background: #e4e4e8"></span>
+</div>
+</div>
+</div>
+</div>
+
+<div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,.4)"></div>
+
+<div role="dialog" aria-modal="true" aria-labelledby="dlg-title" style="position: absolute; top: 90px; left: 120px; width: 1040px; height: 720px; background: #fff; border-radius: 18px; box-shadow: rgba(0,0,0,.22) 3px 5px 30px 0; display: flex; flex-direction: row; overflow: hidden">
+
+<aside aria-label="פרטי הפריט ושלבים" style="width: 268px; flex: none; box-sizing: border-box; background: #f5f5f7; border-left: 1px solid #e0e0e0; display: flex; flex-direction: column; padding: 20px 18px; min-height: 0; overflow-y: auto">
+<div>
+<div style="font-size: 17px; font-weight: 700; color: #1d1d1f; line-height: 1.3">שיקוף</div>
+<div style="font-size: 12px; color: #6e6e73; margin-top: 3px">עמדת שיקוף 1</div>
+</div>
+
+<div style="background: #fff; border: 1px solid #e0e0e0; border-radius: 11px; padding: 12px 14px; margin-top: 14px">
+<div style="font-size: 15px; font-weight: 700; color: #1d1d1f">Dell OptiPlex 7040</div>
+<div style="font-size: 12px; color: #6e6e73; margin-top: 4px"><span dir="ltr" style="font-variant-numeric: tabular-nums">#1005 1509 2600 01</span> · מק״ט <span dir="ltr">PC-7040</span></div>
+<div style="font-size: 12px; color: #6e6e73; margin-top: 2px">לקוח אורן טכנולוגיות · S/N <span dir="ltr" style="font-variant-numeric: tabular-nums">7KX2Q93</span></div>
+</div>
+
+<ol style="list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="2">
+<li>
+<button type="button" onClick="{{s.go}}" aria-current="{{s.current}}" aria-label="{{s.aria}}" style="box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 9px 10px; border: 0; border-radius: 10px; background: {{s.rowBg}}; font-family: inherit; text-align: right; cursor: pointer">
+<span style="width: 24px; height: 24px; flex: none; box-sizing: border-box; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; background: {{s.cBg}}; color: {{s.cFg}}; border: {{s.cBorder}}">
+<sc-if value="{{s.done}}" hint-placeholder-val="{{true}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+<sc-if value="{{s.notDone}}" hint-placeholder-val="{{false}}">{{s.n}}</sc-if>
+</span>
+<span style="font-size: 14px; font-weight: 600; color: {{s.fg}}">{{s.title}}</span>
+</button>
+</li>
+</sc-for>
+</ol>
+
+<div style="margin-top: auto; padding-top: 14px; font-size: 12px; color: #6e6e73">עובד: דנה אברהם</div>
+</aside>
+
+<div style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0">
+<div style="flex: 1; min-height: 0; overflow-y: auto; padding: 24px 28px">
+
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px">
+<div style="min-width: 0">
+<h2 id="dlg-title" style="display: block; margin: 0; padding: 0; font-size: 20px; font-weight: 700; line-height: 1.25; color: #1d1d1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{phaseTitle}}</h2>
+<p style="margin: 5px 0 0; font-size: 14px; color: #6e6e73; line-height: 1.5">{{phaseDesc}}</p>
+</div>
+<span style="font-size: 13px; color: #6e6e73; white-space: nowrap; flex: none; font-variant-numeric: tabular-nums">{{counter}}</span>
+</div>
+
+<div style="margin-top: 20px">
+
+<sc-if value="{{isSku}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div role="note" style="display: flex; align-items: flex-start; gap: 12px; background: #f3f8ff; border: 1px solid #cfe3fb; border-radius: 11px; padding: 14px 16px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0066cc" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+<span style="font-size: 15px; line-height: 1.47; color: #1d1d1f">יש לסרוק את מק״ט היצרן של המוצר. פרטי הסריקה נשמרים במערכת ובדו״ח.</span>
+</div>
+<div style="width: 100%; display: block">
+<label for="sku-in" style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #333333">מק״ט יצרן</label>
+<div style="display: flex; align-items: center; gap: 8px; box-sizing: border-box; width: 100%; min-height: 40px; background: #fff; border: 1px solid #0071e3; box-shadow: 0 0 0 3px color-mix(in srgb, #0071e3 15%, transparent); border-radius: 8px; padding: 0 14px">
+<input id="sku-in" dir="ltr" value="{{sku}}" onChange="{{setSku}}" placeholder="סרוק או הזן מק״ט…" autocomplete="off" style="flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-family: inherit; font-size: 15px; color: #1d1d1f; padding: 10px 0; text-align: right; font-variant-numeric: tabular-nums">
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isVerdict}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 24px">
+
+<div role="note" style="display: flex; align-items: flex-start; gap: 12px; background: #f3f8ff; border: 1px solid #cfe3fb; border-radius: 11px; padding: 14px 16px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0066cc" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+<span style="font-size: 15px; line-height: 1.47; color: #1d1d1f">נא לשקף עפ״י תכנית <span dir="ltr">{{skuShown}}</span></span>
+</div>
+
+<sc-if value="{{withFields}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="fx-title" style="border-radius: 16px; outline-offset: 8px; outline: {{blockOutline}}">
+<div style="display: flex; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid #e0e0e0; margin-bottom: 12px">
+<h3 id="fx-title" style="margin: 0; font-size: 17px; font-weight: 700; color: #1d1d1f; white-space: nowrap">בדיקות שיקוף</h3>
+<span style="font-size: 13px; color: #6e6e73; font-variant-numeric: tabular-nums; white-space: nowrap">4 שדות</span>
+<sc-if value="{{markNew}}" hint-placeholder-val="{{true}}"><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; line-height: 1.3; padding: 3px 10px; border-radius: 9999px; color: #0066cc; background: #e6efff; white-space: nowrap">מהגדרות המסלול</span></sc-if>
+<span style="flex: 1"></span>
+<span role="status" style="font-size: 13px; font-weight: 600; white-space: nowrap; color: {{reqColor}}">{{reqLabel}}</span>
+</div>
+
+<div style="background: #fff; border: 1px solid #e0e0e0; border-radius: 16px">
+<sc-for list="{{fields}}" as="f" hint-placeholder-count="4">
+<div style="display: grid; grid-template-columns: 150px 230px 1fr; gap: 14px; align-items: start; padding: 12px 16px; background: {{f.rowBg}}; border-top: {{f.rule}}; border-radius: {{f.radius}}">
+
+<div style="min-height: 44px; padding-top: {{f.ctlPad}}; display: flex; align-items: center; gap: 3px; font-size: 14.5px; font-weight: 600; color: #1d1d1f; white-space: nowrap">
+<label for="c-{{f.key}}" style="cursor: pointer">{{f.label}}</label>
+<sc-if value="{{f.req}}" hint-placeholder-val="{{true}}"><span aria-hidden="true" style="color: #bf3535; font-weight: 600">*</span></sc-if>
+</div>
+
+<div style="padding-top: {{f.ctlPad}}; min-width: 0">
+<sc-if value="{{f.closed}}" hint-placeholder-val="{{true}}">
+<button type="button" id="c-{{f.key}}" onClick="{{f.toggle}}" aria-haspopup="listbox" aria-expanded="false" aria-required="{{f.req}}" style="width: 100%; height: 44px; box-sizing: border-box; border: 1px solid #949499; border-radius: 8px; background: #fff; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-family: inherit; font-size: 14.5px; text-align: right; cursor: pointer; color: {{f.valColor}}; font-weight: {{f.valWeight}}">
+<sc-if value="{{f.has}}" hint-placeholder-val="{{true}}"><span style="width: 6px; height: 6px; flex: none; border-radius: 9999px; background: {{f.dot}}"></span><span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{f.valLabel}}</span></sc-if>
+<sc-if value="{{f.empty}}" hint-placeholder-val="{{false}}"><span style="flex: 1; color: #9a9aa0; font-weight: 400">בחר…</span></sc-if>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"></path></svg>
+</button>
+</sc-if>
+
+<sc-if value="{{f.open}}" hint-placeholder-val="{{false}}">
+<div style="position: relative">
+<input id="c-{{f.key}}" role="combobox" aria-expanded="true" aria-controls="lb-{{f.key}}" aria-autocomplete="list" aria-required="{{f.req}}" value="{{f.query}}" onChange="{{f.setQuery}}" placeholder="הקלד לסינון או 1–4…" autocomplete="off" style="width: 100%; height: 44px; box-sizing: border-box; border: 1px solid #0071e3; box-shadow: 0 0 0 3px color-mix(in srgb, #0071e3 15%, transparent); border-radius: 8px; padding: 0 12px 0 44px; background: #fff; font-family: inherit; font-size: 14.5px; color: #1d1d1f; outline: none">
+<button type="button" onClick="{{f.toggle}}" aria-label="סגירת הרשימה" style="position: absolute; left: 0; top: 0; width: 44px; height: 44px; border: 0; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg></button>
+<div style="position: absolute; top: calc(100% + 6px); right: 0; left: 0; z-index: 30; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 4px; box-shadow: 0 10px 34px rgba(17,21,31,.14); display: flex; flex-direction: column; gap: 2px">
+<div role="listbox" id="lb-{{f.key}}" aria-label="{{f.label}}" style="display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{f.opts}}" as="o" hint-placeholder-count="4">
+<button type="button" role="option" aria-selected="{{o.sel}}" onClick="{{o.pick}}" style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 9px 10px; box-sizing: border-box; border-radius: 6px; border: 0; background: {{o.bg}}; color: {{o.fg}}; font-weight: {{o.fw}}; font-family: inherit; font-size: 14.5px; text-align: right; cursor: pointer">
+<span style="width: 15px; flex: none; display: inline-flex; color: #0066cc"><sc-if value="{{o.sel}}" hint-placeholder-val="{{false}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>
+<span style="width: 6px; height: 6px; flex: none; border-radius: 9999px; background: {{o.dot}}"></span>
+<span style="flex: 1; white-space: pre-wrap">{{o.pre}}<b style="font-weight: 600">{{o.mid}}</b>{{o.post}}</span>
+<span dir="ltr" aria-hidden="true" style="min-width: 20px; height: 20px; box-sizing: border-box; border: 1px solid #e0e0e0; border-radius: 5px; background: #fafafc; color: #6e6e73; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums">{{o.key}}</span>
+</button>
+</sc-for>
+<sc-if value="{{f.noMatch}}" hint-placeholder-val="{{false}}"><div style="padding: 9px 10px; font-size: 14px; color: #6e6e73">אין אפשרויות</div></sc-if>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px 4px; border-top: 1px solid #f0f0f0; font-size: 12px; color: #6e6e73">
+<span style="font-variant-numeric: tabular-nums">{{f.countLabel}}</span>
+<span style="flex: 1"></span>
+<span><span dir="ltr">1–4</span> בחירה מהירה</span>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+
+<div style="position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<sc-if value="{{f.noteReq}}" hint-placeholder-val="{{false}}"><label for="n-{{f.key}}" style="font-size: 12px; line-height: 16px; font-weight: 600; color: #bf3535">הערה · חובה</label></sc-if>
+<sc-if value="{{f.noteOpt}}" hint-placeholder-val="{{true}}"><label for="n-{{f.key}}" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">הערה ל{{f.label}}</label></sc-if>
+<div style="position: relative">
+<textarea id="n-{{f.key}}" rows="{{f.noteRows}}" maxlength="{{f.noteMax}}" dir="auto" value="{{f.note}}" onChange="{{f.setNote}}" onFocus="{{f.onNoteFocus}}" onBlur="{{f.onNoteBlur}}" placeholder="{{f.ph}}" aria-invalid="{{f.noteErr}}" aria-required="{{f.noteReq}}" style="display: block; box-sizing: border-box; width: 100%; min-height: 44px; max-height: {{f.noteMaxH}}; line-height: 20px; padding: 11px 12px; padding-inline-end: 40px; border: 1px solid {{f.noteBorder}}; border-radius: 8px; background: #fff; font-family: inherit; font-size: 14px; color: #1d1d1f; text-align: right; resize: none; overflow-y: {{f.noteOverflow}}; field-sizing: content"></textarea>
+<sc-if value="{{f.collapsed}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; right: 1px; left: 1px; bottom: 1px; height: 20px; border-radius: 0 0 7px 7px; background: {{f.fadeBg}}; pointer-events: none"></span></sc-if>
+<sc-if value="{{f.expandOn}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{f.openEditor}}" aria-label="פתח עורך הערה" aria-haspopup="dialog" aria-expanded="{{f.editorOpen}}" style="position: absolute; left: 6px; top: 8px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" x2="14" y1="3" y2="10"></line><line x1="3" x2="10" y1="21" y2="14"></line></svg></button></sc-if>
+</div>
+<sc-if value="{{f.noteErr}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; line-height: 16px; color: #bf3535">יש לפרט את החריגה</span></sc-if>
+<sc-if value="{{f.showMeta}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 8px; min-height: 16px">
+<sc-if value="{{f.collapsed}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{f.showAll}}" aria-controls="n-{{f.key}}" style="padding: 0; border: 0; background: transparent; font-family: inherit; font-size: 12px; line-height: 16px; font-weight: 600; color: #0066cc; cursor: pointer; white-space: nowrap">{{f.showAllLabel}}</button></sc-if>
+<span style="flex: 1"></span>
+<sc-if value="{{f.nearLimit}}" hint-placeholder-val="{{false}}">
+<sc-if value="{{f.atLimit}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; line-height: 16px; color: #9a5b06; white-space: nowrap">הגעת לאורך המרבי</span></sc-if>
+<span dir="ltr" aria-live="polite" style="font-size: 12px; line-height: 16px; color: {{f.counterColor}}; font-variant-numeric: tabular-nums; white-space: nowrap">{{f.counterText}}</span>
+</sc-if>
+</div>
+</sc-if>
+<sc-if value="{{f.editorOpen}}" hint-placeholder-val="{{false}}">
+<div role="dialog" aria-label="{{f.editorTitle}}" style="position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; width: 520px; max-width: 650px; box-sizing: border-box; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 10px 34px rgba(17,21,31,.14); padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="flex: 1; min-width: 0; font-size: 15px; line-height: 20px; font-weight: 700; color: #1d1d1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{f.editorTitle}}</span>
+<button type="button" onClick="{{f.closeEditor}}" aria-label="סגירה" style="width: 28px; height: 28px; flex: none; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+</div>
+<textarea id="ne-{{f.key}}" rows="8" maxlength="{{f.noteMax}}" dir="auto" value="{{f.note}}" onChange="{{f.setNote}}" placeholder="{{f.ph}}" aria-label="{{f.editorTitle}}" aria-invalid="{{f.noteErr}}" style="display: block; box-sizing: border-box; width: 100%; min-height: 180px; line-height: 20px; padding: 11px 12px; border: 1px solid {{f.noteBorder}}; border-radius: 8px; background: #fff; font-family: inherit; font-size: 14px; color: #1d1d1f; text-align: right; resize: vertical; overflow-y: auto"></textarea>
+<div style="display: flex; align-items: center; gap: 8px">
+<span dir="ltr" aria-live="polite" style="font-size: 12px; line-height: 16px; color: {{f.counterColor}}; font-variant-numeric: tabular-nums; white-space: nowrap">{{f.counterText}}</span>
+<sc-if value="{{f.atLimit}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; line-height: 16px; color: #9a5b06; white-space: nowrap">הגעת לאורך המרבי</span></sc-if>
+<span style="flex: 1"></span>
+<button type="button" onClick="{{f.closeEditor}}" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 16px; border-radius: 9999px; border: 0; background: #0066cc; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap">סיום</button>
+</div>
+</div>
+</sc-if>
+</div>
+
+</div>
+</sc-for>
+</div>
+</section>
+</sc-if>
+
+<div style="border: 1px solid #e0e0e0; border-radius: 16px; padding: 20px 24px; display: flex; flex-direction: column; gap: 18px">
+<div>
+<div id="q-verdict" style="font-size: 15px; font-weight: 600; color: #1d1d1f; margin-bottom: 12px">בדיקה תקינה?</div>
+<div role="group" aria-labelledby="q-verdict" style="display: flex; gap: 12px">
+<button type="button" onClick="{{setPass}}" aria-pressed="{{passPressed}}" style="box-sizing: border-box; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border-radius: 11px; border: 1.5px solid {{passBorder}}; background: {{passBg}}; color: {{passFg}}; font-family: inherit; font-size: 17px; font-weight: 600; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>תקין</button>
+<button type="button" onClick="{{setFail}}" aria-pressed="{{failPressed}}" style="box-sizing: border-box; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; border-radius: 11px; border: 1.5px solid {{failBorder}}; background: {{failBg}}; color: {{failFg}}; font-family: inherit; font-size: 17px; font-weight: 600; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>לא תקין</button>
+</div>
+<sc-if value="{{hasSuggest}}" hint-placeholder-val="{{true}}">
+<div role="status" style="display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; font-weight: 600; color: {{suggestColor}}">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+<span>{{suggestText}}</span>
+</div>
+</sc-if>
+</div>
+<div style="position: relative">
+<label for="v-note" style="display: block; font-size: 15px; font-weight: 600; color: #1d1d1f; margin-bottom: 10px">הערות</label>
+<div style="position: relative; display: flex; align-items: stretch; gap: 8px; box-sizing: border-box; width: 100%; min-height: 40px; background: #fff; border: 1px solid #949499; border-radius: 8px; padding: 0 14px">
+<textarea id="v-note" rows="3" maxlength="{{vMax}}" dir="auto" value="{{vnote}}" onChange="{{setVNote}}" onFocus="{{onVFocus}}" onBlur="{{onVBlur}}" placeholder="הוסף הערה…" style="flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-family: inherit; font-size: 15px; line-height: 1.47; color: #1d1d1f; padding: 10px 0; padding-inline-end: 32px; text-align: right; resize: vertical"></textarea>
+<sc-if value="{{vExpandOn}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{openVEditor}}" aria-label="פתח עורך הערה" aria-haspopup="dialog" aria-expanded="{{vEditorOpen}}" style="position: absolute; left: 6px; top: 8px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" x2="14" y1="3" y2="10"></line><line x1="3" x2="10" y1="21" y2="14"></line></svg></button></sc-if>
+</div>
+<sc-if value="{{vNearLimit}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 4px">
+<span style="flex: 1"></span>
+<sc-if value="{{vAtLimit}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; line-height: 16px; color: #9a5b06; white-space: nowrap">הגעת לאורך המרבי</span></sc-if>
+<span dir="ltr" aria-live="polite" style="font-size: 12px; line-height: 16px; color: {{vCounterColor}}; font-variant-numeric: tabular-nums; white-space: nowrap">{{vCounterText}}</span>
+</div>
+</sc-if>
+<sc-if value="{{vEditorOpen}}" hint-placeholder-val="{{false}}">
+<div role="dialog" aria-label="הערה · הערות" style="position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; width: 520px; max-width: calc(100% - 32px); box-sizing: border-box; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 10px 34px rgba(17,21,31,.14); padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="flex: 1; min-width: 0; font-size: 15px; line-height: 20px; font-weight: 700; color: #1d1d1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">הערה · הערות</span>
+<button type="button" onClick="{{closeEditor}}" aria-label="סגירה" style="width: 28px; height: 28px; flex: none; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #6e6e73; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+</div>
+<textarea id="ve-note" rows="8" maxlength="{{vMax}}" dir="auto" value="{{vnote}}" onChange="{{setVNote}}" placeholder="הוסף הערה…" aria-label="הערות" style="display: block; box-sizing: border-box; width: 100%; min-height: 180px; line-height: 20px; padding: 11px 12px; border: 1px solid #949499; border-radius: 8px; background: #fff; font-family: inherit; font-size: 14px; color: #1d1d1f; text-align: right; resize: vertical; overflow-y: auto"></textarea>
+<div style="display: flex; align-items: center; gap: 8px">
+<span dir="ltr" aria-live="polite" style="font-size: 12px; line-height: 16px; color: {{vCounterColor}}; font-variant-numeric: tabular-nums; white-space: nowrap">{{vCounterText}}</span>
+<sc-if value="{{vAtLimit}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; line-height: 16px; color: #9a5b06; white-space: nowrap">הגעת לאורך המרבי</span></sc-if>
+<span style="flex: 1"></span>
+<button type="button" onClick="{{closeEditor}}" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 16px; border-radius: 9999px; border: 0; background: #0066cc; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap">סיום</button>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+
+</div>
+</sc-if>
+
+</div>
+</div>
+
+<div style="flex: none; border-top: 1px solid #e0e0e0; padding: 14px 28px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<div style="margin-right: auto; display: flex; align-items: center; gap: 10px">
+<a href="Main.dc.html" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 22px; border-radius: 9999px; border: 1px solid #d4d4dc; background: transparent; color: #1d1d1f; font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap">יציאה</a>
+<sc-if value="{{prevOn}}" hint-placeholder-val="{{true}}"><button type="button" onClick="{{onBack}}" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 22px; border-radius: 9999px; border: 1px solid #d4d4dc; background: transparent; color: #1d1d1f; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap">הקודם</button></sc-if>
+<sc-if value="{{prevOff}}" hint-placeholder-val="{{false}}"><button type="button" aria-disabled="true" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 22px; border-radius: 9999px; border: 1px solid transparent; background: #f5f5f7; color: #6e6e73; font-family: inherit; font-size: 15px; font-weight: 600; cursor: not-allowed; white-space: nowrap">הקודם</button></sc-if>
+<sc-if value="{{nextOn}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{onNext}}" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 22px; border-radius: 9999px; border: 1px solid transparent; background: #0066cc; color: #fff; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap">המשך</button></sc-if>
+<sc-if value="{{nextOff}}" hint-placeholder-val="{{false}}"><button type="button" aria-disabled="true" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 22px; border-radius: 9999px; border: 1px solid transparent; background: #f5f5f7; color: #6e6e73; font-family: inherit; font-size: 15px; font-weight: 600; cursor: not-allowed; white-space: nowrap">המשך</button></sc-if>
+<sc-if value="{{finishOn}}" hint-placeholder-val="{{false}}"><button type="button" onClick="{{onFinish}}" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 22px; border-radius: 9999px; border: 1px solid transparent; background: #17784f; color: #fff; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>{{finishLabel}}</button></sc-if>
+<sc-if value="{{finishOff}}" hint-placeholder-val="{{true}}"><button type="button" aria-disabled="true" style="box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 22px; border-radius: 9999px; border: 1px solid transparent; background: #f5f5f7; color: #6e6e73; font-family: inherit; font-size: 15px; font-weight: 600; cursor: not-allowed; white-space: nowrap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>{{finishLabel}}</button></sc-if>
+</div>
+</div>
+</div>
+
+</div>
+
+<div style="position: absolute; top: 826px; left: 120px; width: 1040px; text-align: center; font-size: 12px; color: #fff; line-height: 1.5">מראה שחורה משתמשת באותו רכיב — השדות ייכנסו שם באותו מקום</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"withFields":{"editor":"boolean","default":true},"markNew":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      phase: 1,
+      sku: 'PC-7040',
+      verdict: '',
+      vnote: '',
+      vals: { foreign: 0, solder: 2 },
+      notes: { solder: 'סדק ליד מחבר המעבד, נראה בשתי זוויות שיקוף. ייתכן שנגרם בהובלה — לבדוק את האריזה של המארז.' },
+      noteFocus: '',
+      noteLast: '',
+      editor: '',
+      open: 'cmos',
+      query: '',
+      finished: false
+    };
+  }
+  toggleList(key) {
+    this.setState({ open: this.state.open === key ? '' : key, query: '', editor: '' });
+  }
+  focusNote(key) {
+    this.setState({ noteFocus: key, noteLast: key });
+  }
+  blurNote(key) {
+    if (this.state.noteFocus === key) { this.setState({ noteFocus: '' }); }
+  }
+  openEditor(key) {
+    this.setState({ editor: this.state.editor === key ? '' : key, open: '', query: '', noteLast: key });
+  }
+  pick(key, i) {
+    const vals = Object.assign({}, this.state.vals);
+    vals[key] = i;
+    this.setState({ vals: vals, open: '', query: '' });
+  }
+  setNote(key, v, max) {
+    const notes = Object.assign({}, this.state.notes);
+    notes[key] = max ? String(v).slice(0, max) : v;
+    this.setState({ notes: notes });
+  }
+  renderVals() {
+    const val = (e) => (e && e.target ? e.target.value : String(e == null ? '' : e));
+    const props = this.props || {};
+    const wf = props.withFields !== false;
+    const mn = props.markNew !== false;
+    const st = this.state;
+    const RED = '#bf3535';
+    const noteLines = (t, cpl) => String(t || '').split('\n').reduce((n, p) => n + Math.max(1, Math.ceil(p.length / cpl)), 0);
+    const NOTE_CPL = Math.floor((274 - 52) / 7.4);
+    const V_CPL = Math.floor((666 - 52) / 7.4);
+    const counter = (len, max) => ({
+      text: len + ' / ' + max,
+      near: len >= max * 0.8,
+      at: len >= max,
+      color: len >= max ? '#9a5b06' : '#6e6e73'
+    });
+    const TONE = { pass: '#1f8a5b', warn: '#d97706', fail: '#bf3535', neutral: '#9a9aa0' };
+    const FIELDS = [
+      { id: 'foreign', noteMax: 1000, label: 'רכיבים זרים', req: true, notes: 'fail', opts: [['אין', 'pass'], ['חשוד', 'warn'], ['נמצא', 'fail'], ['לא נבדק', 'neutral']] },
+      { id: 'solder', noteMax: 1000, label: 'הלחמות בלוח', req: true, notes: 'fail', opts: [['תקינות', 'pass'], ['הלחמה קרה', 'warn'], ['סדק', 'fail'], ['לא נבדק', 'neutral']] },
+      { id: 'cmos', noteMax: 1000, label: 'סוללת CMOS', req: true, notes: 'fail', opts: [['קיימת', 'pass'], ['חסרה', 'fail'], ['נפוחה', 'fail'], ['לא נבדק', 'neutral']] },
+      { id: 'cables', noteMax: 1000, label: 'כבלים פנימיים', req: false, notes: 'opt', opts: [['קיימים', 'pass'], ['חסר', 'fail'], ['פגום', 'fail'], ['הוחלף', 'warn']] }
+    ];
+    const PHASES = [
+      { title: 'סריקת מק״ט יצרן', desc: 'סרוק את מק״ט היצרן של המוצר לזיהוי פריט הייחוס.' },
+      { title: 'שיקוף הפריט', desc: 'שקף את הפריט לפי התכנית ואשר את תקינותו.' }
+    ];
+    const idx = st.phase;
+    const last = PHASES.length - 1;
+
+    let miss = 0, noteMiss = 0;
+    const fails = [];
+    const fields = FIELDS.map((f, fi) => {
+      const v = st.vals[f.id];
+      const has = v !== undefined && v !== null;
+      const opt = has ? f.opts[v] : null;
+      const tone = opt ? opt[1] : '';
+      const open = st.open === f.id;
+      const q = open ? String(st.query || '').trim() : '';
+      const list = [];
+      f.opts.forEach((o, i) => {
+        const at = q ? o[0].indexOf(q) : 0;
+        if (q && at < 0) { return; }
+        list.push({ o: o, i: i, at: at });
+      });
+      const hlIdx = list.length ? list[0].i : -1;
+      const opts = list.map((x) => {
+        const sel = has && x.i === v;
+        const lab = x.o[0];
+        return {
+          pre: q ? lab.slice(0, x.at) : lab,
+          mid: q ? lab.slice(x.at, x.at + q.length) : '',
+          post: q ? lab.slice(x.at + q.length) : '',
+          dot: TONE[x.o[1]],
+          key: String(x.i + 1),
+          sel: sel,
+          bg: sel ? '#f3f8ff' : (x.i === hlIdx ? '#f5f5f7' : 'transparent'),
+          fg: sel ? '#0066cc' : '#1d1d1f',
+          fw: sel ? 600 : 400,
+          pick: () => this.pick(f.id, x.i)
+        };
+      });
+      const isFail = tone === 'fail';
+      if (isFail) { fails.push("'" + f.label + "' = " + opt[0]); }
+      const noteReq = isFail && f.notes === 'fail';
+      const note = st.notes[f.id] || '';
+      const noteErr = noteReq && note.trim() === '';
+      if (f.req && !has) { miss += 1; }
+      if (noteErr) { noteMiss += 1; }
+      const nMax = f.noteMax || 1000;
+      const lines = noteLines(note, NOTE_CPL);
+      const focused = st.noteFocus === f.id;
+      const collapsed = !focused && lines > 2;
+      const cnt = counter(note.length, nMax);
+      return {
+        key: f.id,
+        label: f.label,
+        req: f.req,
+        open: open,
+        closed: !open,
+        has: has,
+        empty: !has,
+        valLabel: opt ? opt[0] : '',
+        dot: opt ? TONE[opt[1]] : 'transparent',
+        valColor: isFail ? RED : '#1d1d1f',
+        valWeight: isFail ? 600 : 400,
+        opts: opts,
+        query: st.query || '',
+        noMatch: list.length === 0,
+        countLabel: q ? (list.length + ' מתוך ' + f.opts.length) : (f.opts.length + ' אפשרויות'),
+        toggle: () => this.toggleList(f.id),
+        setQuery: (e) => {
+          const t = val(e);
+          const n = t.trim();
+          if (n.length === 1 && n >= '1' && n <= String(f.opts.length)) {
+            this.pick(f.id, Number(n) - 1);
+          } else {
+            this.setState({ query: t });
+          }
+        },
+        rowBg: isFail ? '#fbf2f2' : '#ffffff',
+        rule: fi === 0 ? '0' : '1px solid #f0f0f0',
+        radius: fi === 0 ? '15px 15px 0 0' : (fi === FIELDS.length - 1 ? '0 0 15px 15px' : '0'),
+        ctlPad: noteReq ? '20px' : '0',
+        noteReq: noteReq,
+        noteOpt: !noteReq,
+        noteErr: noteErr,
+        note: note,
+        noteBorder: noteErr ? RED : '#949499',
+        ph: noteReq ? 'פרט את החריגה…' : (isFail ? 'פרט את החריגה (אופציונלי)' : 'הערה (אופציונלי)'),
+        setNote: (e) => this.setNote(f.id, val(e), nMax),
+        noteMax: nMax,
+        noteRows: collapsed ? 2 : Math.min(6, Math.max(1, lines)),
+        noteMaxH: collapsed ? '64px' : '146px',
+        noteOverflow: collapsed ? 'hidden' : 'auto',
+        collapsed: collapsed,
+        fadeBg: 'linear-gradient(to bottom, rgba(255,255,255,0), #ffffff)',
+        showAll: () => this.focusNote(f.id),
+        showAllLabel: 'הצג הכל · ' + lines + ' שורות',
+        expandOn: focused || lines > 1 || st.noteLast === f.id || st.editor === f.id,
+        editorOpen: st.editor === f.id,
+        editorTitle: 'הערה · ' + f.label,
+        openEditor: () => this.openEditor(f.id),
+        closeEditor: () => this.setState({ editor: '' }),
+        onNoteFocus: () => this.focusNote(f.id),
+        onNoteBlur: () => this.blurNote(f.id),
+        nearLimit: cnt.near,
+        atLimit: cnt.at,
+        counterText: cnt.text,
+        counterColor: cnt.color,
+        showMeta: collapsed || cnt.near
+      };
+    });
+
+    const total = miss + noteMiss;
+    let reqLabel = 'כל שדות החובה מולאו';
+    let reqColor = '#17784f';
+    if (miss === 0 && noteMiss === 1) { reqLabel = 'חסרה הערה לחריגה'; reqColor = '#6e6e73'; }
+    else if (total === 1) { reqLabel = 'נותר שדה חובה אחד'; reqColor = '#6e6e73'; }
+    else if (total > 1) { reqLabel = 'נותרו ' + total + ' שדות חובה'; reqColor = '#6e6e73'; }
+
+    const steps = PHASES.map((p, i) => {
+      const done = i < idx;
+      const on = i === idx;
+      return {
+        n: String(i + 1),
+        title: p.title,
+        aria: (i + 1) + '. ' + p.title + (done ? ' — הושלם' : ''),
+        done: done,
+        notDone: !done,
+        current: on ? 'step' : 'false',
+        rowBg: on ? '#e6efff' : 'transparent',
+        cBg: on ? '#0066cc' : (done ? '#eaf5ef' : '#ffffff'),
+        cFg: on ? '#ffffff' : (done ? '#17784f' : '#6e6e73'),
+        cBorder: '1px solid ' + (on ? '#0066cc' : '#e0e0e0'),
+        fg: on ? '#0066cc' : '#1d1d1f',
+        go: () => this.setState({ phase: i, open: '', query: '' })
+      };
+    });
+
+    const sku = String(st.sku || '').trim();
+    const ok = st.verdict;
+    const fieldsDone = !wf || total === 0;
+    const canFinish = sku.length > 0 && ok !== '' && fieldsDone;
+    const isLast = idx === last;
+    const hasSuggest = wf && fails.length > 0;
+    const V_MAX = 1000;
+    const vText = String(st.vnote || '');
+    const vCnt = counter(vText.length, V_MAX);
+    const vLines = noteLines(vText, V_CPL);
+
+    return {
+      steps: steps,
+      phaseTitle: PHASES[idx].title,
+      phaseDesc: PHASES[idx].desc,
+      counter: 'שלב ' + (idx + 1) + ' מתוך ' + PHASES.length,
+      isSku: idx === 0,
+      isVerdict: idx === 1,
+      sku: st.sku,
+      skuShown: sku || '—',
+      setSku: (e) => this.setState({ sku: val(e) }),
+      withFields: wf,
+      markNew: mn,
+      blockOutline: mn ? '1px solid #cfe3fb' : 'none',
+      fields: fields,
+      reqLabel: reqLabel,
+      reqColor: reqColor,
+      passPressed: ok === 'pass',
+      failPressed: ok === 'fail',
+      passBorder: ok === 'pass' ? '#17784f' : '#d4d4dc',
+      passBg: ok === 'pass' ? '#eaf5ef' : '#ffffff',
+      passFg: ok === 'pass' ? '#17784f' : '#1d1d1f',
+      failBorder: ok === 'fail' ? RED : '#d4d4dc',
+      failBg: ok === 'fail' ? '#fbf2f2' : '#ffffff',
+      failFg: ok === 'fail' ? RED : '#1d1d1f',
+      setPass: () => this.setState({ verdict: 'pass', open: '' }),
+      setFail: () => this.setState({ verdict: 'fail', open: '' }),
+      hasSuggest: hasSuggest,
+      suggestText: 'מוצע: לא תקין — ' + fails.join(' · '),
+      suggestColor: ok === 'fail' ? '#0066cc' : '#9a5b06',
+      vnote: st.vnote,
+      setVNote: (e) => this.setState({ vnote: String(val(e)).slice(0, V_MAX) }),
+      vMax: V_MAX,
+      onVFocus: () => this.focusNote('v'),
+      onVBlur: () => this.blurNote('v'),
+      vExpandOn: st.noteFocus === 'v' || vLines > 1 || st.noteLast === 'v' || st.editor === 'v',
+      vEditorOpen: st.editor === 'v',
+      openVEditor: () => this.openEditor('v'),
+      closeEditor: () => this.setState({ editor: '' }),
+      vNearLimit: vCnt.near,
+      vAtLimit: vCnt.at,
+      vCounterText: vCnt.text,
+      vCounterColor: vCnt.color,
+      prevOn: idx > 0,
+      prevOff: idx === 0,
+      onBack: () => { if (st.phase > 0) { this.setState({ phase: st.phase - 1, open: '', query: '' }); } },
+      nextOn: !isLast && sku.length > 0,
+      nextOff: !isLast && sku.length === 0,
+      onNext: () => this.setState({ phase: 1, open: '', query: '' }),
+      finishOn: isLast && canFinish,
+      finishOff: isLast && !canFinish,
+      finishLabel: 'סיום בדיקת שיקוף',
+      onFinish: () => this.setState({ finished: true })
+    };
+  }
+}
+</script>
+</body>
+</html>
