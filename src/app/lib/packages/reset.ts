@@ -48,6 +48,10 @@ export async function resetPackageToOpening(
 
   for (const r of rows) {
     const stationId = await findStationForRouteStep(tx, r.item_type_id, r.route_number, 1);
+    // The intake is void, so fields_version is frozen afresh (route-fields
+    // spec §1.5): the version the row's route has published NOW — for the
+    // retyped item, its new route's. 0 (never published) → NULL = the fixed
+    // popups.
     await tx.$executeRaw`
       UPDATE item_routes
          SET current_route_step = 1,
@@ -56,7 +60,9 @@ export async function resetPackageToOpening(
              is_finished = false,
              finished_at = NULL,
              queue_start_time = ${now}::timestamp,
-             processing_start_time = NULL
+             processing_start_time = NULL,
+             fields_version = (SELECT NULLIF(tr.fields_version, 0) FROM testing_routes tr
+                                WHERE tr.item_type_id = ${r.item_type_id} AND tr.route_number = ${r.route_number})
        WHERE item_id = ${r.item_id}
     `;
 

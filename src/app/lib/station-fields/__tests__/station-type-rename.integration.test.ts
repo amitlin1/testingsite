@@ -7,10 +7,16 @@
 // The rename here also keeps the description, as the settings form does when
 // only the id is edited — a path the UNIQUE test_type_desc used to fail with 500.
 //
+// The same transaction rewrites the station-field drafts that name the old id
+// (renameStationTypeInDrafts); published versions are history and keep it, and
+// fields still resolve by step uid (spec §8.1).
+//
 // Like write-path.integration.test.ts, this drives the REAL handlers: the rename
-// is PUT /api/settings/test-stations-type/[id] and the queue is GET
-// /api/testing/items. Neither is wrapped in withAuth (authentication lives in
-// the middleware, src/lib/routes.ts), so both are invoked directly.
+// is PUT /api/settings/test-stations-type/[id], the queue is GET
+// /api/testing/items and a popup's fields are GET /api/testing/station-fields.
+// None is wrapped in withAuth (authentication lives in the middleware,
+// src/lib/routes.ts), so all are invoked directly. The draft and the version are
+// written through admin.ts, the functions behind the withAuth'd field endpoints.
 //
 // Runs ONLY when TEST_DATABASE_URL points at a throwaway database; without it the
 // describe block is skipped. It borrows the write-path harness, whose setup()
@@ -19,6 +25,7 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as H from "../../metrics/__tests__/write-path-helpers";
+import type { RouteFieldsConfig, StepConfig } from "../schema";
 
 /** A plain item type whose route visits TYPE_FUNC twice: {FUNC, INTAKE, FUNC}. */
 const ITEM_TYPE_TWICE = 8;
@@ -47,6 +54,9 @@ describe(
   () => {
     let rename: RenameHandler;
     let queue: QueueHandler;
+    let stationFields: QueueHandler;
+    let A: typeof import("../admin");
+    let prisma: (typeof import("../../prisma"))["prisma"];
 
     before(async () => {
       // MUST come first: it points DATABASE_URL at the scratch database before
@@ -54,6 +64,9 @@ describe(
       await H.setup();
       rename = (await import("../../../api/settings/test-stations-type/[id]/route")).PUT;
       queue = (await import("../../../api/testing/items/route")).GET;
+      stationFields = (await import("../../../api/testing/station-fields/route")).GET;
+      A = await import("../admin");
+      prisma = (await import("../../prisma")).prisma;
       await H.q(
         `INSERT INTO item_status (item_status_id, item_status_desc) VALUES ($1, $2)
          ON CONFLICT (item_status_id) DO NOTHING`,
@@ -178,5 +191,64 @@ describe(
       // items waiting at either of its steps.
       assert.deepEqual(await queuedAt(H.STATION_FUNC_A), [ITEM_AT_FIRST_FUNC, ITEM_AT_SECOND_FUNC]);
     });
+
+    it("rewrites the station-field draft to the new id without a new draft_rev, leaves the published version as it was, and an item frozen at that version still gets its fields by step uid", async () => {
+      const UIDS = ["s_twice001", "s_twice002", "s_twice003"];
+      const route = await H.one<{ test_route_id: number }>(
+        "UPDATE testing_routes SET step_uids = $2::text[] WHERE item_type_id = $1 AND route_number = 1 RETURNING test_route_id",
+        [ITEM_TYPE_TWICE, UIDS],
+      );
+      const routeId = route.test_route_id;
+      const actor = { username: "rename-suite", name: "Rename Suite" };
+      const funcStep = (uid: string, fieldId: string): StepConfig => ({
+        uid, station_type_id: H.TYPE_FUNC, station_label: "FUNC", scope: "item",
+        groups: [{ target: "item", fields: [{ id: fieldId, type: "pass_fail", label: `check ${fieldId}`, required: true, notes: "optional" }] }],
+      });
+      const cfg = (...steps: StepConfig[]): RouteFieldsConfig => ({ schema: 1, steps: Object.fromEntries(steps.map((s) => [s.uid, s])) });
+
+      // Version 1: fields at the second FUNC step. Then a draft over both FUNC steps.
+      const v1 = cfg(funcStep(UIDS[2], "f_second01"));
+      const rev1 = (await A.saveFieldsDraft(prisma, routeId, { config: v1, base_rev: 0 }, actor)).draft_rev;
+      await A.publishFields(prisma, { route_ids: [routeId], base_revs: { [routeId]: rev1 }, apply_mode: "new_only" }, actor);
+      const draft = cfg(funcStep(UIDS[0], "f_first001"), funcStep(UIDS[2], "f_second01"));
+      const rev = (await A.saveFieldsDraft(prisma, routeId, { config: draft, base_rev: rev1 + 1 }, actor)).draft_rev;
+      await seedQueuedAt(ITEM_AT_SECOND_FUNC, 3, H.STATION_FUNC_A);
+      await H.q("UPDATE item_routes SET fields_version = 1 WHERE item_id = $1", [ITEM_AT_SECOND_FUNC]);
+      const fieldsBefore = await stationFieldsOf(ITEM_AT_SECOND_FUNC);
+      assert.equal(fieldsBefore.mode, "item", "the control: the frozen version configures step 3");
+      const before = await H.one<{ draft_updated_at: Date; draft_updated_by: string }>(
+        "SELECT draft_updated_at, draft_updated_by FROM testing_routes WHERE test_route_id = $1",
+        [routeId],
+      );
+
+      const res = await renameType(H.TYPE_FUNC, TYPE_FUNC_RENAMED, "FUNC");
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+
+      const after = await H.one<{ fields_draft: unknown; draft_rev: number; draft_updated_at: Date; draft_updated_by: string; step_uids: string[]; fields_version: number }>(
+        "SELECT fields_draft, draft_rev, draft_updated_at, draft_updated_by, step_uids, fields_version FROM testing_routes WHERE test_route_id = $1",
+        [routeId],
+      );
+      const renamed = (s: StepConfig): StepConfig => ({ ...s, station_type_id: TYPE_FUNC_RENAMED });
+      assert.deepEqual(after.fields_draft, cfg(renamed(draft.steps[UIDS[0]]), renamed(draft.steps[UIDS[2]])));
+      assert.equal(after.draft_rev, rev, "nothing the admin edited changed: the open editor's base_rev stays good");
+      assert.deepEqual([after.draft_updated_at, after.draft_updated_by], [before.draft_updated_at, before.draft_updated_by]);
+      assert.deepEqual(after.step_uids, UIDS, "no step moved");
+      assert.equal(after.fields_version, 1);
+      const versions = await H.q<{ version: number; config: unknown }>(
+        "SELECT version, config FROM route_field_versions WHERE test_route_id = $1",
+        [routeId],
+      );
+      assert.deepEqual(versions, [{ version: 1, config: v1 }], "a published version is history: it keeps the old id");
+
+      // Resolution goes uid → step_uids → route_steps (now the new id): the fields are still there.
+      assert.deepEqual(await stationFieldsOf(ITEM_AT_SECOND_FUNC), fieldsBefore);
+    });
+
+    /** GET /api/testing/station-fields for an item, opened on FUNC-A. */
+    async function stationFieldsOf(itemId: number): Promise<any> {
+      const res = await stationFields(new Request(`http://localhost/api/testing/station-fields?itemId=${itemId}&stationId=${H.STATION_FUNC_A}`));
+      assert.equal(res.status, 200);
+      return res.json();
+    }
   },
 );

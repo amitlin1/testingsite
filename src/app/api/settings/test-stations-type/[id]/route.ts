@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
+import { renameStationTypeInDrafts } from "@/app/lib/station-fields/route-steps";
 import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
@@ -125,6 +126,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
            SET route_steps = array_replace(route_steps, ${oldId}::int, ${newId}::int)
          WHERE ${oldId}::int = ANY(route_steps)
       `;
+      // Field-config drafts name each step's station type too — as information
+      // only, resolution goes through the step uids, which stay as they are.
+      // Published versions are history and keep the old id.
+      await renameStationTypeInDrafts(tx, oldId, newId);
       await tx.test_stations_type.delete({
         where: { test_station_type_id: oldId },
       });

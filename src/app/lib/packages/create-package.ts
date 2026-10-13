@@ -167,10 +167,17 @@ async function insertRoutedRow(
   // items are hidden there (package-level) until the wizard submits for them.
   const stationId = await findStationForRouteStep(tx, itemType, routeNumber, 1);
   const now = new Date(getCurrentUtcIso());
+  // fields_version freezes the station-field config this row's route has
+  // published at intake (route-fields spec §1.5): the row's popups are built
+  // from that version, not the route's latest. 0 (never published) → NULL =
+  // the fixed popups. The box freezes the kit route's version, each item its
+  // own route's — createPackage and addPackageItem both come through here.
   await tx.$executeRaw`
     INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step, test_station_id,
-                             created_at, is_finished, queue_start_time, route_number)
-    VALUES (${itemId}, ${itemType}, 2, 1, ${stationId}, ${now}::timestamp, FALSE, ${now}::timestamp, ${routeNumber})
+                             created_at, is_finished, queue_start_time, route_number, fields_version)
+    VALUES (${itemId}, ${itemType}, 2, 1, ${stationId}, ${now}::timestamp, FALSE, ${now}::timestamp, ${routeNumber},
+            (SELECT NULLIF(fields_version, 0) FROM testing_routes
+              WHERE item_type_id = ${itemType} AND route_number = ${routeNumber}))
   `;
 
   // Ledger call site #1: item_created → queued, same tx as the item_routes

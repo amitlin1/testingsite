@@ -1,33 +1,27 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { withAuth } from "@/lib/auth/withAuth";
+import { FIELDS_EDIT_ROLES } from "@/app/lib/station-fields/roles";
+import { RouteStepsError, saveRouteSteps } from "@/app/lib/station-fields/route-steps";
 
 export const runtime = "nodejs";
 
-export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+// Only the steps change (key fields are immutable): body { route_steps, step_uids? }.
+// The step uids, the draft and the first station type follow them in one
+// transaction — see saveRouteSteps.
+export const PUT = withAuth(async (req, ctx, routeCtx) => {
   try {
-    const { id } = await params;
+    const { id } = await (routeCtx as { params: Promise<{ id: string }> }).params;
     const body = await req.json();
-    const { route_steps } = body; // Only allowing updating steps for now, key fields usually immutable or require recreation
+    const actor = ctx.session.user.preferredUsername || null;
 
-    const updated = await prisma.testing_routes.update({
-      where: { test_route_id: Number(id) },
-      data: { route_steps },
-    });
+    const saved = await prisma.$transaction((tx) => saveRouteSteps(tx, Number(id), body, actor));
 
-    return NextResponse.json({
-      test_route_id: updated.test_route_id,
-      item_type_id: updated.item_type_id,
-      test_station_type_id: updated.test_station_type_id,
-      route_number: updated.route_number,
-      route_steps: updated.route_steps,
-    });
+    return NextResponse.json(saved);
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
-      return NextResponse.json({ error: "Route not found" }, { status: 404 });
+    if (error instanceof RouteStepsError) {
+      return NextResponse.json(error.body, { status: error.status });
     }
     console.error("Error updating testing route:", error);
     return NextResponse.json(
@@ -35,7 +29,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       { status: 500 }
     );
   }
-}
+}, { role: FIELDS_EDIT_ROLES });
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

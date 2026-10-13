@@ -29,7 +29,8 @@ export type IssueCode =
   | "CHECKLIST_EMPTY"
   | "CHECKLIST_ITEM_LABEL_EMPTY"
   | "PHOTO_TYPE_EMPTY"
-  | "STEP_SCOPE_MISMATCH";
+  | "STEP_SCOPE_MISMATCH"
+  | "STEP_UNKNOWN";
 
 /** One lint finding. step_uid / target / field_id / option_id / item_id say where, so the map and
  *  the editor can point at the exact cell, row, option and checklist item. */
@@ -449,8 +450,9 @@ export function optionListLine(options: readonly ChoiceOption[]): { level: "ok" 
 // ---- against the live route ---------------------------------------------------------
 /**
  * Every step uid of the config must be in step_uids (unknownUids otherwise — PUT draft answers
- * 409 STEP_UNKNOWN), and its scope must match package_level of route_steps at that position
- * (STEP_SCOPE_MISMATCH, an error, so publish is blocked instead of the step being dropped).
+ * 409 STEP_UNKNOWN; publish and its preview list them as unknownStepIssues), and its scope must
+ * match package_level of route_steps at that position (STEP_SCOPE_MISMATCH, an error, so publish
+ * is blocked instead of the step being dropped).
  * route_steps / step_uids of different lengths have no usable positions: every uid is unknown.
  */
 export function checkConfigAgainstRoute(
@@ -474,4 +476,10 @@ export function checkConfigAgainstRoute(
     }
   }
   return { unknownUids, issues };
+}
+
+/** checkConfigAgainstRoute's unknownUids as publish-blocking errors: the issues publish and its
+ *  preview answer 422 with (spec §3.4.3 step 3), and the ones the editor lists next to them. */
+export function unknownStepIssues(unknownUids: readonly StepUid[]): Issue[] {
+  return unknownUids.map((uid) => ({ level: "error", code: "STEP_UNKNOWN", step_uid: uid, message: COPY_PENDING.stepUnknown }));
 }

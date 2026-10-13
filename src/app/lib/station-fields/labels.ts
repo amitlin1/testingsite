@@ -98,6 +98,14 @@ export function missLabel(missingRequired: number, missingNotes: number): string
   return "נותרו " + total + " שדות חובה";
 }
 
+// ---- publish dialog (artboard 10) -------------------------------------------------
+/** Artboard 10 — the route under a "מה השתנה" group: "מסלול {n} של {type}" ("מסלול 1 של מחשב"). */
+export function routeOfTypeLabel(routeNumber: number, itemTypeDesc: string): string {
+  return "מסלול " + routeNumber + " של " + itemTypeDesc;
+}
+/** Artboard 10 — the same line for the kit's own route, when the dialog is opened on a kit. */
+export const KIT_ROUTE_LABEL = "מסלול המארז";
+
 // ---- not drawn in any artboard ----------------------------------------------------
 /** Drafts for text the artboards never draw. Listed in the PR under "טקסט לאישור"; do not
  *  treat as approved copy. */
@@ -116,6 +124,9 @@ export const COPY_PENDING = {
   photoTypeEmpty: "יש לבחור סוג צילום",
   // COPY-PENDING: STEP_SCOPE_MISMATCH — the step's station type changed level (package / item) under its fields (spec §3.5).
   stepScopeMismatch: "השדות לא תואמים לרמת העמדה",
+  // COPY-PENDING: STEP_UNKNOWN — the config names a step the route does not have (or the route's
+  // step uids no longer line up with its steps); publish refuses it with the other errors (spec §3.4.3).
+  stepUnknown: "השלב לא נמצא במסלול",
   // COPY-PENDING: server 400 NOTE_TOO_LONG (spec §3.4 step 4, §10.4).
   noteTooLong: "ההערה ארוכה מהאורך המרבי",
   // COPY-PENDING: server 409 FIELDS_SCHEMA_MISMATCH — the config changed while the popup was open (spec §3.4 step 2, §10.4).

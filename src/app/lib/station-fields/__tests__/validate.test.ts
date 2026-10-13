@@ -11,6 +11,7 @@ import {
   parseOptionList,
   parseRouteFieldsConfig,
   takenLabels,
+  unknownStepIssues,
 } from "../validate";
 import type { Issue } from "../validate";
 import { FIELD_TYPES, NOTES_MODE_LABEL, TONE_WORD, targetKey } from "../schema";
@@ -464,7 +465,7 @@ test("artboard strings are exact", () => {
   // Drafts for undrawn text exist and are non-empty (each is marked COPY-PENDING in labels.ts).
   assert.deepEqual(Object.keys(COPY_PENDING).sort(), [
     "checklistEmpty", "checklistItemLabelEmpty", "duplicateLabel", "noteTooLong", "numberRange", "optionsEmpty",
-    "photoTypeEmpty", "schemaMismatch", "stepScopeMismatch",
+    "photoTypeEmpty", "schemaMismatch", "stepScopeMismatch", "stepUnknown",
   ]);
   for (const text of Object.values(COPY_PENDING)) assert.ok(text.trim().length > 0);
 });
@@ -482,4 +483,12 @@ test("checkConfigAgainstRoute: unknown uids, scope against package_level, misali
   });
   // Without one uid per step there are no positions at all.
   assert.deepEqual(checkConfigAgainstRoute(cfg, [21, 22, 26], ["s_open0001", "s_elec0001"], packageLevel), { unknownUids: ["s_elec0001", "s_open0001"], issues: [] });
+});
+
+test("unknownStepIssues: one publish-blocking STEP_UNKNOWN error per unknown uid, in order", () => {
+  assert.deepEqual(unknownStepIssues([]), []);
+  assert.deepEqual(unknownStepIssues(["s_elec0001", "s_open0001"]), [
+    { level: "error", code: "STEP_UNKNOWN", step_uid: "s_elec0001", message: COPY_PENDING.stepUnknown },
+    { level: "error", code: "STEP_UNKNOWN", step_uid: "s_open0001", message: COPY_PENDING.stepUnknown },
+  ]);
 });

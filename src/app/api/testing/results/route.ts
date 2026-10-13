@@ -7,6 +7,8 @@ import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { recordTransition, recordNote } from "@/app/lib/metrics/record";
 import { loadPackageContext } from "@/app/lib/packages/context";
 import { recheckPackageReadiness } from "@/app/lib/packages/readiness";
+import { GATE_FINISH_ON_REQUIRED } from "@/app/lib/station-fields/evaluate";
+import { FieldsSubmissionError, checkFieldsSubmission, resolveForSubmission } from "@/app/lib/station-fields/submit";
 
 
 export const runtime = "nodejs";
@@ -158,8 +160,11 @@ export async function POST(req: Request) {
       // item could then deadlock (ABBA). Taking the row lock here makes the
       // order identical everywhere; the UPDATEs below would have taken it
       // anyway, so nothing is held longer than before.
+      //
+      // item_type_id / current_route_step / fields_version: the station-fields
+      // check below resolves the step from THIS locked row, never from the body.
       const routeInfoRows = await tx.$queryRaw<any[]>`
-        SELECT route_number, current_status
+        SELECT route_number, current_status, item_type_id, current_route_step, fields_version
         FROM item_routes
         WHERE item_id = ${itemIdBig}
         FOR UPDATE
@@ -221,6 +226,25 @@ export async function POST(req: Request) {
         SELECT test_station_type_id FROM test_stations WHERE test_station_id = ${StationID}
       `;
       const testStationTypeId = stationTypeRows[0]?.test_station_type_id ?? null;
+
+      // Station fields (route-fields spec §3.4): the fields this row answers,
+      // decided from the locked row; Details are checked and re-derived from the
+      // published config before the first write, so a rejected submit leaves
+      // nothing behind, and a replay (above) is never checked again. A row taken
+      // in before the first publish (fields_version NULL) keeps its Details
+      // exactly as sent, without a further query unless it is inside a kit.
+      const fieldsTarget = await resolveForSubmission(tx, {
+        itemId: itemIdBig,
+        stationId: StationID,
+        stationTypeId: testStationTypeId,
+        row: routeInfoRows[0],
+        pkgCtx,
+      });
+      const detailsToWrite = checkFieldsSubmission(fieldsTarget, {
+        details: Details,
+        // "העבר לחקר" and research are never gated; note length always is.
+        gate: GATE_FINISH_ON_REQUIRED && sendToResearch !== true && currentStatus !== 4 && currentStatus !== 5,
+      });
 
       // Call site #15 (§4.5/§4.7): an item submitted while still queued
       // (status 2 before the UPDATE) never went through start-test — the
@@ -566,7 +590,7 @@ export async function POST(req: Request) {
         VALUES (
           ${itemIdBig}, ${StationID}, ${testStationTypeId}, ${routeNumber}, ${CurrentRouteStep},
           ${WorkerID || null}, ${Passed ?? null}, ${Result}, ${Comments || null},
-          ${Details != null ? JSON.stringify(Details) : null}::jsonb,
+          ${detailsToWrite != null ? JSON.stringify(detailsToWrite) : null}::jsonb,
           ${stateEventId}
         )
       `;
@@ -932,6 +956,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json(responseData);
   } catch (error: any) {
+    // Station fields refused the Details (409 schema / 400 value or note /
+    // 422 gate / 413). Before the generic branch, or it would answer 500.
+    if (error instanceof FieldsSubmissionError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code, missing: error.missing },
+        { status: error.status }
+      );
+    }
     if (error.message === "PACKAGE_CANNOT_GO_TO_RESEARCH") {
       return NextResponse.json(
         { error: "מארז לא נשלח למחקר — הפניה למחקר היא של פריטים בלבד", code: "PACKAGE_CANNOT_GO_TO_RESEARCH" },
