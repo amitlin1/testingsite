@@ -539,7 +539,12 @@ async function ensureReference() {
 
   // testing routes --------------------------------------------------------
   const gotRoutes = await api("GET", "/api/settings/testing-routes");
-  const existingRoutes = gotRoutes.json || [];
+  // A failed read is not "no routes yet": the handler answers 500 with an
+  // { error } body, which would otherwise reach existingRoutes.find() below.
+  if (!gotRoutes.ok || !Array.isArray(gotRoutes.json)) {
+    throw new Error(`GET /api/settings/testing-routes failed (${gotRoutes.status || "network"}) — cannot reconcile routes without the existing list; see findings above`);
+  }
+  const existingRoutes = gotRoutes.json;
   for (const t of ITEM_TYPES) {
     const entry = ref.byTypeDesc.get(t.desc);
     if (!entry) continue;

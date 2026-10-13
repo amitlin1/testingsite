@@ -27,8 +27,9 @@ export async function GET(req: Request) {
     return NextResponse.json(rows);
   } catch (error) {
     console.error("Error fetching testing routes:", error);
-    // Return empty array instead of error to prevent frontend crashes
-    return NextResponse.json([]);
+    // A real error, never []: the settings screen reads an empty list as
+    // "no route yet", so a failed read would look like a missing route.
+    return NextResponse.json({ error: "Failed to fetch testing routes" }, { status: 500 });
   }
 }
 
