@@ -199,11 +199,13 @@ export function FieldsBlock({
 
 // ---- artboard 17: the close wizard's kit card ------------------------------------------------------
 /** The band at the top of the kit card, before the item rows: "בדיקות בסגירה · {n} שדות" and the
- *  tag. `count` counts only the items whose fields are shown (17 `fieldCount`). */
+ *  tag. `count` counts only the items whose fields are shown (17 `fieldCount`). Its title is the
+ *  block's: it takes the focus from a fallback that held it, as FieldsBlock's does — the rows
+ *  under it are new nodes by then (their wrapper became the item's group). */
 export function PackFieldsBand({ title, count }: { title: string; count: number }) {
   return (
     <div className="tst-fx-band">
-      <span className="tst-fx-title">{title}</span>
+      <span ref={focusIfFallbackHadIt} tabIndex={-1} className="tst-fx-title">{title}</span>
       <span aria-hidden="true" className="tst-fx-sep">·</span>
       <span className="tst-fx-count">{fieldCountText(count)}</span>
       <RouteTag />

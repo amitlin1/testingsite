@@ -21,7 +21,7 @@ import { FieldsBlock, FieldsBlockFallback } from "@/app/testing/fields/FieldsBlo
 import { NotesField } from "@/app/testing/fields/NotesField";
 import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
 import { shouldReloadFields } from "@/app/testing/fields/errors";
-import { BLOCK_TITLE, draftsFieldsState, kitItemFieldGroups, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
+import { BLOCK_TITLE, VARIANT_SPEC, draftsFieldsState, kitItemFieldGroups, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
 import { WORKER_COPY_PENDING } from "@/app/testing/fields/labels";
 import { buildFieldsBlock, inputFieldCount, useFieldsState, type Drafts } from "@/app/testing/fields/useFieldsState";
 import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
@@ -451,7 +451,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
                 <label htmlFor={`${uid}-item-note`} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>הערות</label>
                 {curFx ? (
                   <NotesField size="area" id={`${uid}-item-note`} value={curWork.photos.note} onChange={(note) => patchWork(cur.item_id, { photos: { ...curWork.photos, note } })}
-                    placeholder="אופציונלי" editorTitle={`הערות · ${cur.item_type_desc}`} />
+                    placeholder="אופציונלי" editorTitle={`הערות · ${cur.item_type_desc}`} look={VARIANT_SPEC["kit-item"].noteLook} />
                 ) : (
                   <textarea id={`${uid}-item-note`} value={curWork.photos.note} onChange={(e) => patchWork(cur.item_id, { photos: { ...curWork.photos, note: e.target.value } })} placeholder="אופציונלי" className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
                 )}
@@ -506,7 +506,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               <label htmlFor={`${uid}-box-note`} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>הערות</label>
               {boxHasFields ? (
                 <NotesField size="area" id={`${uid}-box-note`} value={boxPhotos.note} onChange={(note) => setBoxPhotos((p) => ({ ...p, note }))}
-                  placeholder="אופציונלי" editorTitle="הערות · הקופסה" />
+                  placeholder="אופציונלי" editorTitle="הערות · הקופסה" look={VARIANT_SPEC.wizard.noteLook} />
               ) : (
                 <textarea id={`${uid}-box-note`} value={boxPhotos.note} onChange={(e) => setBoxPhotos((p) => ({ ...p, note: e.target.value }))} placeholder="אופציונלי" className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
               )}

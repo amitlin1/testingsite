@@ -5,10 +5,17 @@
    a failing value, the pick-only trigger, the option rows, the list footer and
    the multi_choice box. Tokens only (src/styles/tokens.css). */
 
+/* The control's live region (.sh-visually-hidden, absolutely placed) lays out inside it, never
+   against an overflow: hidden dialog around the row. */
+.tst-fx-choice { position: relative; }
+
 /* ---------------------------------------------------------------- trigger -- */
-/* No × (disableClearable), so the text may run up to the arrow (12 + 18 + 8px).
+/* No × (disableClearable), so the text may run up to the arrow (12 + 16 + 8px).
    A value's 6px tone dot sits in the icon slot (13px in), its text 8px after. */
-.tst-fx-choice .sh-input-wrap.sh-combo--dense { padding-inline-end: 38px; }
+.tst-fx-choice .sh-input-wrap.sh-combo--dense { padding-inline-end: 36px; }
+/* The artboards' 16px chevron (the dense field's is 18px), still 12px from the edge. */
+.tst-fx-choice .sh-ac-arrow { width: 16px; height: 16px; }
+.tst-fx-choice .sh-combo--dense .sh-ac-arrow { margin-top: -8px; }
 .tst-fx-choice .sh-input-wrap.sh-combo--dense.sh-combo--icon { padding-inline-start: 27px; }
 .tst-fx-choice .sh-input-wrap > input { text-overflow: ellipsis; }
 
@@ -58,15 +65,18 @@
 }
 
 /* ------------------------------------------- list footer (`listFooter`) -- */
+/* The list's frame as artboards 12–18 draw it: radius 8, 4px inside (the
+   dense list's are 10 and 5). Its shadow is the primitive's, set inline and
+   turned up when the list opens above the field. */
+.sh-select-content:has(> .sh-ac-footer > .tst-fx-choice-foot) { border-radius: var(--r-sm); padding: 4px; scroll-padding-bottom: 32px; }
 /* "{N} אפשרויות" / "{k} מתוך {N}" and the window's key hint. Pinned under the
    rows so it stays in view in a long list (its shadow covers the list's bottom
    padding); a row scrolled into view by the keyboard stops clear of it. */
-.sh-select-content:has(> .sh-ac-footer > .tst-fx-choice-foot) { scroll-padding-bottom: 32px; }
 .sh-ac-footer:has(> .tst-fx-choice-foot) {
   position: sticky;
   bottom: 0;
   background: var(--color-canvas);
-  box-shadow: 0 5px 0 var(--color-canvas);
+  box-shadow: 0 4px 0 var(--color-canvas);
 }
 .tst-fx-choice-foot {
   display: flex;
@@ -92,7 +102,7 @@
   flex-wrap: wrap;
   gap: 0 4px;
   padding-block: 4px;
-  padding-inline: 9px 38px;
+  padding-inline: 9px 36px;
   border-radius: var(--r-field);
 }
 .tst-fx-choice-multi > .sh-adornment:first-child { display: contents; color: var(--color-ink); }

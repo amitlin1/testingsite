@@ -10,15 +10,15 @@ import { evaluateDrafts, patchDraft, type DraftPatch, type Drafts, type DraftsEv
  * order with their separators, each row's state, the header status, and the artboards' words.
  * Pure — FieldsBlock.tsx and FieldRow.tsx draw from it; the layout metrics live in fields.css.
  *
- * | variant   | artboard / popup                      | status | typing | note        |
- * |-----------|---------------------------------------|--------|--------|-------------|
- * | station   | 12 VerdictStation                     | א      | yes    | row         |
- * | photo     | 13 PhotoStation                       | ב      | yes    | row         |
- * | dialog    | 14 PopUpTestDialog                    | ג      | yes    | row, legend |
- * | wizard    | 15 PackageOpenWizard, the box         | א      | yes    | row         |
- * | kit-item  | 16 PackageOpenWizard, an item         | א      | yes    | row         |
- * | pack-item | 17 PackageCloseWizard, under each item| —      | no     | row-compact |
- * | pack      | 18 PackageCloseWizard, the packing    | —      | no     | row-compact |
+ * | variant   | artboard / popup                      | status | typing | note        | note look |
+ * |-----------|---------------------------------------|--------|--------|-------------|-----------|
+ * | station   | 12 VerdictStation                     | א      | yes    | row         | plain     |
+ * | photo     | 13 PhotoStation                       | ב      | yes    | row         | bold      |
+ * | dialog    | 14 PopUpTestDialog                    | ג      | yes    | row, legend | plain     |
+ * | wizard    | 15 PackageOpenWizard, the box         | א      | yes    | row         | dot       |
+ * | kit-item  | 16 PackageOpenWizard, an item         | א      | yes    | row         | dot       |
+ * | pack-item | 17 PackageCloseWizard, under each item| —      | no     | row-compact | bold      |
+ * | pack      | 18 PackageCloseWizard, the packing    | —      | no     | row-compact | bold      |
  */
 
 export type FieldsBlockVariant = "station" | "photo" | "dialog" | "wizard" | "kit-item" | "pack";
@@ -95,28 +95,37 @@ export type VariantSpec = {
   typeToFilter: boolean;
   placeholderOpen: string;
   footerHint: string;
+  /** An empty choice's list opens on its first row (12, 13, 15, 16 `hlIdx`); 14 highlights only
+   *  while typing, 17/18 never (ChoiceAutocomplete `highlightFirst`). */
+  highlightFirst: boolean;
   /** The note at rest: 44px (12–16) or 38px (17, 18). */
   note: "row" | "row-compact";
   /** "הערה · חובה" as a line above the box, with 20px on the other two columns (12, 13, 15–18),
    *  or as a legend on its border with the message as the placeholder (14). */
   noteLabel: "above" | "legend";
+  /** The popup's counter at the limit and editor's "סיום" (NotesField `look`). The popup's verdict
+   *  or area note draws the same. */
+  noteLook: "plain" | "dot" | "bold";
   /** A failing row's optional note asks "פרט את החריגה (אופציונלי)" (12–16); 17/18 never do. */
   failPlaceholder: boolean;
 };
 
 const OPEN_WIZARD: VariantSpec = {
   status: "A", typeToFilter: true, placeholderOpen: CHOICE_PROMPT.filterOrKeys, footerHint: CHOICE_HINT.quick,
-  note: "row", noteLabel: "above", failPlaceholder: true,
+  highlightFirst: true, note: "row", noteLabel: "above", noteLook: "dot", failPlaceholder: true,
 };
 const CLOSE_WIZARD: VariantSpec = {
   status: null, typeToFilter: false, placeholderOpen: "", footerHint: CHOICE_HINT.pick,
-  note: "row-compact", noteLabel: "above", failPlaceholder: false,
+  highlightFirst: false, note: "row-compact", noteLabel: "above", noteLook: "bold", failPlaceholder: false,
 };
 
 export const VARIANT_SPEC: Record<FieldRowVariant, VariantSpec> = {
-  station: OPEN_WIZARD,
-  photo: { ...OPEN_WIZARD, status: "B", placeholderOpen: CHOICE_PROMPT.filter, footerHint: CHOICE_HINT.enter },
-  dialog: { ...OPEN_WIZARD, status: "C", placeholderOpen: CHOICE_PROMPT.filter, footerHint: CHOICE_HINT.enter, noteLabel: "legend" },
+  station: { ...OPEN_WIZARD, noteLook: "plain" },
+  photo: { ...OPEN_WIZARD, status: "B", placeholderOpen: CHOICE_PROMPT.filter, footerHint: CHOICE_HINT.enter, noteLook: "bold" },
+  dialog: {
+    ...OPEN_WIZARD, status: "C", placeholderOpen: CHOICE_PROMPT.filter, footerHint: CHOICE_HINT.enter, highlightFirst: false,
+    noteLabel: "legend", noteLook: "plain",
+  },
   wizard: OPEN_WIZARD,
   "kit-item": OPEN_WIZARD,
   "pack-item": CLOSE_WIZARD,

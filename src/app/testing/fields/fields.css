@@ -44,7 +44,9 @@
 .tst-fx--kit-item .tst-fx-count,
 .tst-fx--pack .tst-fx-count,
 .tst-fx-band .tst-fx-count { font-size: 12.5px; }
-.tst-fx-sep { color: var(--color-ink-muted-40); }
+/* Its own line box: inheriting a host's 24px line height made the header row and the band 3–4px
+   taller than artboards 17/18, where the tag sets the row's height. */
+.tst-fx-sep { color: var(--color-ink-muted-40); line-height: var(--lh-tight); }
 .tst-fx-spacer { flex: 1; }
 
 /* The status line (labels.ts statusA / statusB / statusC): muted, green when everything is in,
@@ -176,6 +178,10 @@
 
 .tst-fx-control,
 .tst-fx-note { min-width: 0; }
+/* The controls' live regions (.sh-visually-hidden, absolutely placed) lay out in their row. Without
+   a positioned ancestor here they did against the popup's dialog box, past its bottom edge: a wizard's
+   overflow: hidden dialog then had room to scroll, and a centring scrollIntoView shifted it for good. */
+.tst-fx-control { position: relative; }
 /* "הערה · חובה" above the note: the other two columns step down 20px to stay level with its box
    (artboard 12 `ctlPad`). */
 .tst-fx-row[data-pad] > .tst-fx-name,

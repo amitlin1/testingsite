@@ -28,7 +28,7 @@ import type { UploadFieldPhoto } from "@/app/testing/fields/FieldRow";
 import { NotesField } from "@/app/testing/fields/NotesField";
 import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
 import { shouldReloadFields } from "@/app/testing/fields/errors";
-import { BLOCK_TITLE } from "@/app/testing/fields/fieldsBlockModel";
+import { BLOCK_TITLE, VARIANT_SPEC } from "@/app/testing/fields/fieldsBlockModel";
 import { useFieldsState } from "@/app/testing/fields/useFieldsState";
 import { useStationFields } from "@/app/testing/fields/useStationFields";
 import type { StationTestDialogProps } from "@/types";
@@ -90,9 +90,11 @@ export default function PopUpTestDialog({
   const finishHeld = fieldsWait
     || (!isResearchStatus && hasFields && (fx.photosPending.length > 0 || fx.ev.noteTooLong.length > 0));
   // "העבר לחקר" is never held by the fields' gate (the server releases it),
-  // but it too waits for their answer (spec §4.2): sent before it, a step with
-  // a config would get the hand-off back as 409 — no Details.schema yet.
-  const researchHeld = !isResearchStatus && sf.status === "loading";
+  // but it too waits for their answer, and after a failed load for a retry
+  // that answers (spec §4.2: blocked until success or legacy). Sent without
+  // it, a step with a config gets the hand-off back as 409 — no Details.schema
+  // — under the words of a config that changed, which this is not.
+  const researchHeld = fieldsWait;
   // Artboard 14 `tried` / `alertOn`: a "שמור וסיים" with fields missing marks
   // the empty required rows and raises the gate alert in the Alert at the top
   // of the body. Its text follows the fields as they fill (`alertText`), it
@@ -266,6 +268,7 @@ export default function PopUpTestDialog({
               <label htmlFor={commentsId} className="sh-field-label">הערות נוספות</label>
               <NotesField
                 size="verdict"
+                look={VARIANT_SPEC.dialog.noteLook}
                 id={commentsId}
                 value={comments}
                 onChange={setComments}

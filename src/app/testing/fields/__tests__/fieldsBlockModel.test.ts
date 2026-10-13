@@ -47,6 +47,11 @@ test("each popup keeps its own artboard's list wording, status and note (spec §
   assert.deepEqual(ALL_VARIANTS.map((v) => VARIANT_SPEC[v].status), ["A", "B", "C", "A", "A", null, null]);
   assert.deepEqual(ALL_VARIANTS.map((v) => VARIANT_SPEC[v].note), ["row", "row", "row", "row", "row", "row-compact", "row-compact"]);
   assert.deepEqual(ALL_VARIANTS.filter((v) => VARIANT_SPEC[v].noteLabel === "legend"), ["dialog"]);
+  // An empty list opens on its first row in 12, 13, 15, 16 (`hlIdx = list[0]`); 14 highlights only
+  // while typing, and 17/18 draw no highlight.
+  assert.deepEqual(ALL_VARIANTS.filter((v) => VARIANT_SPEC[v].highlightFirst), ["station", "photo", "wizard", "kit-item"]);
+  // The counter at the limit and "סיום": 12/14 plain, 15/16 "הגעת לאורך המרבי · {count}", 13/17/18 bold.
+  assert.deepEqual(ALL_VARIANTS.map((v) => VARIANT_SPEC[v].noteLook), ["plain", "bold", "plain", "dot", "dot", "bold", "bold"]);
 });
 
 test("the artboards' characters: en dash, ellipsis and middle dot, never their ASCII look-alikes", () => {

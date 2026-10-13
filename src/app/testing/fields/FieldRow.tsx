@@ -81,7 +81,7 @@ export function FieldRow({
           id={ids.control} label={def.label} options={def.options} value={draft?.opt ?? null}
           onChange={(opt) => onChange({ opt })} required={def.required} invalid={showRequiredError}
           typeToFilter={spec.typeToFilter} placeholderOpen={spec.placeholderOpen} footerHint={spec.footerHint}
-          onPicked={afterPick} aria-describedby={helpId} />
+          highlightFirst={spec.highlightFirst} onPicked={afterPick} aria-describedby={helpId} />
       );
       break;
     case "multi_choice":
@@ -132,7 +132,7 @@ export function FieldRow({
       control = (
         <NotesField
           size="area" id={ids.control} value={draft?.text ?? ""} onChange={(text) => onChange({ text })}
-          max={TEXT_VALUE_MAX} placeholder="" editorTitle={def.label} describedBy={helpId}
+          max={TEXT_VALUE_MAX} placeholder="" editorTitle={def.label} describedBy={helpId} look={spec.noteLook}
           required={def.required} requiredLabel="none" error={showRequiredError} errorStyle="edge" />
       );
       break;
@@ -178,7 +178,7 @@ export function FieldRow({
             ref={noteRef} size={spec.note} id={ids.note} value={draft?.note ?? ""} onChange={(note) => onChange({ note })}
             max={def.note_max} required={noteRequired} error={noteError} rowTone={isFail ? "fail" : "normal"}
             placeholder={notePlaceholder(variant, noteRequired, isFail)} editorTitle={noteEditorTitle(def.label)}
-            labelText={noteLabelText(def.label)} requiredLabel={spec.noteLabel}
+            labelText={noteLabelText(def.label)} requiredLabel={spec.noteLabel} look={spec.noteLook}
             errorStyle={spec.noteLabel === "legend" ? "placeholder" : "line"} />
         )}
       </div>

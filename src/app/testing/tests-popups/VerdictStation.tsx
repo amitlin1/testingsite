@@ -13,7 +13,7 @@ import { FieldsBlock, FieldsBlockFallback } from "../fields/FieldsBlock";
 import type { UploadFieldPhoto } from "../fields/FieldRow";
 import { SuggestionLine } from "../fields/SuggestionLine";
 import { fieldsErrorText, shouldReloadFields } from "../fields/errors";
-import { stationBlockTitle } from "../fields/fieldsBlockModel";
+import { VARIANT_SPEC, stationBlockTitle } from "../fields/fieldsBlockModel";
 import { useFieldsState } from "../fields/useFieldsState";
 import { useStationFields } from "../fields/useStationFields";
 
@@ -129,7 +129,7 @@ export default function VerdictStation({
             onOk={(v) => setVerdict((pk) => ({ ...pk, ok: v }))}
             onNote={(v) => setVerdict((pk) => ({ ...pk, note: v }))}
             suggestion={hasFields ? <SuggestionLine fails={fx.ev.fails} defs={ready.fields} prefix={SUGGEST_PREFIX} decided={verdict.ok} /> : undefined}
-            noteMax={hasFields ? NOTE_MAX_DEFAULT : undefined} />
+            noteMax={hasFields ? NOTE_MAX_DEFAULT : undefined} noteLook={VARIANT_SPEC.station.noteLook} />
         </Stack>
       )}
     </StationShell>

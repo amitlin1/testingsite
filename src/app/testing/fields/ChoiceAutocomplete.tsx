@@ -23,7 +23,8 @@ import "./choice.css";
  *  - the list footer: "{N} אפשרויות" / "{k} מתוך {N}" and the window's key hint;
  *  - keys 1–4: with `typeToFilter`, a lone digit typed into the search picks
  *    that option (artboard 12 `setQuery`); without it (artboards 17/18) the
- *    field is pick-only and its trigger takes 1–4 while the list is open.
+ *    field is pick-only and its trigger takes 1–4 while the list is open;
+ *  - with `highlightFirst`, an empty field's list opens on its first row.
  * After a keyboard pick (1–4, or Enter on a highlighted row) `onPicked` runs
  * once the new value has rendered, so the host can move focus on from it.
  */
@@ -98,6 +99,17 @@ function clickRow(input: HTMLInputElement | null, index: number): boolean {
   return true;
 }
 
+/**
+ * Highlights the row the list `listbox` shows at `index` as a pointer resting
+ * on it does. The primitive then holds that highlight as its own: the row's
+ * tint, aria-activedescendant, ↓ / ↑ from there, and Enter. It opens a list on
+ * no row, and only `listFooter` may be added to it (route-fields conventions),
+ * so the control moves the highlight through the row's own pointer handler.
+ */
+function highlightRow(listbox: HTMLElement, index: number) {
+  document.getElementById(listbox.id + "-" + index)?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+}
+
 /** A press anywhere on the field box (the dot, the padding, between chips) goes
  *  to the input, so the whole 44px box opens the list. The input and the arrow
  *  keep their own handling; presses inside the portaled list are not ours. */
@@ -132,18 +144,24 @@ function OptionRow({ option, index, search, selected }: {
 }
 
 /** The list footer: the count, and the key hint at the inline end. */
-function ListFooter({ listLabel, count, hint }: { listLabel: string; count: string; hint: string }) {
+function ListFooter({ listLabel, count, hint, highlightFirst = false }: {
+  listLabel: string; count: string; hint: string; highlightFirst?: boolean;
+}) {
   // The primitive's listbox has no name of its own, and this row is the one
   // node the control renders inside it: it names the list after the field
-  // (spec §4.6) each time the list mounts.
-  const nameList = React.useCallback(
+  // (spec §4.6) each time the list mounts — and, with `highlightFirst`, puts
+  // the highlight on its first row once that commit is over.
+  const listShown = React.useCallback(
     (el: HTMLDivElement | null) => {
-      el?.closest('[role="listbox"]')?.setAttribute("aria-label", listLabel);
+      const listbox = el?.closest<HTMLElement>('[role="listbox"]');
+      if (!listbox) return;
+      listbox.setAttribute("aria-label", listLabel);
+      if (highlightFirst) queueMicrotask(() => highlightRow(listbox, 0));
     },
-    [listLabel],
+    [listLabel, highlightFirst],
   );
   return (
-    <div ref={nameList} className="tst-fx-choice-foot">
+    <div ref={listShown} className="tst-fx-choice-foot">
       <span className="tst-fx-choice-count">{count}</span>
       <span className="tst-fx-choice-hint">{ltrRuns(hint)}</span>
     </div>
@@ -174,6 +192,12 @@ export interface ChoiceAutocompleteProps {
   placeholderOpen: string;
   /** The footer's key hint: "1–4 בחירה מהירה" / "1–4 · Enter בחירה" / "1–4 בחירה". */
   footerHint: string;
+  /** Artboards 12, 13, 15, 16 (`hlIdx = list[0]`): while nothing is chosen, the
+   *  list opens on its first row, so Enter right after opening takes it. A
+   *  chosen value keeps the primitive's rule — no row until ↓ / ↑ or typing —
+   *  so Enter never swaps a value for the first option. Artboard 14 highlights
+   *  only while typing (the primitive's own rule); 17/18 draw no highlight. */
+  highlightFirst?: boolean;
   /** After a keyboard pick (1–4, or Enter on a highlighted row), once the new
    *  value has rendered: the host moves focus to the row's required note or to
    *  the next row. Not after a pointer pick — a tap must not open the next list. */
@@ -185,7 +209,7 @@ export interface ChoiceAutocompleteProps {
 
 export default function ChoiceAutocomplete({
   id, label, options, value, onChange, required, invalid, typeToFilter, placeholderOpen, footerHint,
-  onPicked, "aria-describedby": describedBy, ref,
+  highlightFirst = false, onPicked, "aria-describedby": describedBy, ref,
 }: ChoiceAutocompleteProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.id === value) ?? null;
@@ -314,7 +338,8 @@ export default function ChoiceAutocomplete({
           <OptionRow option={o} index={options.indexOf(o)} search={search} selected={isSelected} />
         )}
         listFooter={
-          <ListFooter listLabel={label} count={choiceCountText(shown.length, options.length, search !== "")} hint={footerHint} />
+          <ListFooter listLabel={label} count={choiceCountText(shown.length, options.length, search !== "")} hint={footerHint}
+            highlightFirst={highlightFirst && selected == null} />
         }
         inputAttributes={{
           readOnly: typeToFilter ? undefined : true,

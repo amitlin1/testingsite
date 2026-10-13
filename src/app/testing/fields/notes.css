@@ -74,6 +74,13 @@
 /* The missing note (.sh-input--error's look). */
 .tst-note-input[aria-invalid="true"] { border-color: var(--color-destructive); }
 .tst-note-input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
+/* …except under a legend (artboard 14 `.lf-ctl:focus`): the focused note, and its editor, take the
+   blue ring over the red edge, as every other control of that popup does. */
+.tst-note--legend .tst-note-box > .tst-note-input[aria-invalid="true"]:focus,
+.tst-note-editor--legend .tst-note-input[aria-invalid="true"]:focus {
+  border-color: var(--color-primary-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
 /* Artboard 14: the message is the placeholder. */
 .tst-note-input[data-error-placeholder]::placeholder { color: var(--color-destructive); }
 
@@ -194,6 +201,11 @@
 }
 .tst-note-count[data-at-max] { color: var(--color-warning-ink); }
 .tst-note-count-num { font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+/* The popup's look (NotesField `look`): "bold" (13, 17, 18) sets the words in 600, 6px from the
+   count; "dot" (15, 16) writes "הגעת לאורך המרבי · {count}" as one run of text. */
+.tst-note-count--bold { gap: 6px; }
+.tst-note-count--bold > .tst-note-limit { font-weight: var(--fw-semibold); }
+.tst-note-count--dot { display: inline-block; }
 
 /* ---- the editor (AnchoredPopover): 520px, or the viewport less 16px a side -------------------- */
 .tst-note-editor {
@@ -229,4 +241,7 @@
 .tst-note-editor:dir(rtl) .tst-note-ed-input { text-align: right; }
 .tst-note-editor:dir(ltr) .tst-note-ed-input { text-align: left; }
 .tst-note-ed-foot { display: flex; align-items: center; gap: 8px; }
-.tst-note-ed-foot > .tst-note-ed-done { margin-inline-start: auto; }
+/* "סיום": the blue pill 32px high (spec §6; Button size small, whose padding and line height would
+   make it 35px), 16px a side — 18px in the "bold" look (artboards 13, 17, 18). */
+.tst-note-ed-foot > .tst-note-ed-done { margin-inline-start: auto; height: 32px; min-height: 0; padding-block: 0; padding-inline: 16px; }
+.tst-note-editor--bold .tst-note-ed-foot > .tst-note-ed-done { padding-inline: 18px; }

@@ -37,7 +37,8 @@ import "./notes.css";
      opening it takes the focus (which closes a list).
    - Length: `maxLength={max}`, in UTF-16 code units (String length, as the
      server counts it). The counter "{len} / {max}" shows from 80%; at the max
-     it turns --color-warning-ink and "הגעת לאורך המרבי" appears beside it.
+     it turns --color-warning-ink and "הגעת לאורך המרבי" appears beside it, as
+     the popup's artboard draws it (`look`).
    - dir="auto" (Hebrew and English mix), aligned with the column.
    ========================================================================== */
 
@@ -82,6 +83,14 @@ const NOTE_ATTR = "data-note-field";
 
 export type NotesFieldSize = "row" | "row-compact" | "pack" | "area" | "verdict";
 
+/** How a popup draws the counter at the limit and the editor's "סיום": the artboards differ, and
+ *  each popup keeps its own (spec §4.4). Every note of a popup draws the same.
+ *  - "plain" (12, 14): "הגעת לאורך המרבי" 8px beside the count; "סיום" 16px a side.
+ *  - "dot" (15, 16): "הגעת לאורך המרבי · " before the count, under the note and in the editor
+ *    alike; "סיום" 16px a side.
+ *  - "bold" (13, 17, 18): the words in 600, 6px from the count; "סיום" 18px a side. */
+export type NoteLook = "plain" | "dot" | "bold";
+
 /** The sizes that grow with their text, and the lines each shows when it folds out of focus (it
  *  folds once its text is longer than that): two in the field rows, three for "pack". */
 const FOLDED_LINES: Partial<Record<NotesFieldSize, number>> = { row: 2, "row-compact": 2, pack: 3 };
@@ -108,6 +117,8 @@ export interface NotesFieldProps {
   editorTitle: string;
   /** Default "row". */
   size?: NotesFieldSize;
+  /** The popup's counter at the limit and "סיום" (NoteLook). Default "plain". */
+  look?: NoteLook;
   /** The row's background — "fail" rows are --color-danger-bg: the collapsed note's fade, and the
    *  legend's upper half, end in it. Default "normal" (white). */
   rowTone?: "fail" | "normal";
@@ -140,7 +151,7 @@ export interface NotesFieldProps {
 
 export function NotesField({
   id, value, onChange, max = NOTE_MAX_DEFAULT, required = false, error = false,
-  placeholder, editorTitle, size = "row", rowTone = "normal", labelText,
+  placeholder, editorTitle, size = "row", look = "plain", rowTone = "normal", labelText,
   requiredLabel = "above", errorStyle = "line", legendBg, describedBy, className, ref,
 }: NotesFieldProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -165,6 +176,7 @@ export function NotesField({
   const collapsed = folded !== undefined && !focused && lines > folded;
   const near = len >= Math.ceil(max * 0.8);
   const showExpand = focused || lines > 1 || wasLast || editorOpen;
+  const legend = required && requiredLabel === "legend";
   const errorAsPlaceholder = error && errorStyle === "placeholder";
   /** "יש לפרט את החריגה" is said — as the line, or as the placeholder ("edge" says nothing). */
   const errorWords = error && errorStyle !== "edge";
@@ -275,7 +287,7 @@ export function NotesField({
         "tst-note",
         `tst-note--${size}`,
         rowTone === "fail" && "tst-note--fail",
-        required && requiredLabel === "legend" && "tst-note--legend",
+        legend && "tst-note--legend",
         className,
       )}
       style={legendBg ? ({ "--tst-note-legend-bg": legendBg } as React.CSSProperties) : undefined}
@@ -319,7 +331,8 @@ export function NotesField({
           align="end"
           sideOffset={8}
           collisionPadding={16}
-          className="tst-note-editor"
+          // Portaled: the look and the legend's focus ring (artboard 14) travel on the editor itself.
+          className={cn("tst-note-editor", look === "bold" && "tst-note-editor--bold", legend && "tst-note-editor--legend")}
           aria-label={editorTitle}
           onOpenAutoFocus={focusEditor}
           onCloseAutoFocus={returnFocus}
@@ -351,7 +364,7 @@ export function NotesField({
           />
           <div className="tst-note-ed-foot">
             {/* Always shown here; announced from 80%, like the note's own counter. */}
-            <Counter len={len} max={max} live={near} countFirst />
+            <Counter len={len} max={max} live={near} look={look} countFirst />
             <Button size="small" className="tst-note-ed-done" onClick={closeEditor}>{DONE_LABEL}</Button>
           </div>
         </AnchoredPopover>
@@ -378,22 +391,26 @@ export function NotesField({
             </button>
           )}
           {/* Quiet while the editor is open: its own counter speaks. */}
-          {near && <Counter len={len} max={max} live={!editorOpen} />}
+          {near && <Counter len={len} max={max} live={!editorOpen} look={look} />}
         </div>
       )}
     </div>
   );
 }
 
-/** "{len} / {max}" (left to right), and "הגעת לאורך המרבי" beside it at the limit: before it under
- *  the note, after it in the editor (artboard 12). */
-function Counter({ len, max, live, countFirst = false }: { len: number; max: number; live: boolean; countFirst?: boolean }) {
+/** "{len} / {max}" (left to right), and "הגעת לאורך המרבי" beside it at the limit, as `look` draws
+ *  it: "plain" / "bold" put the words before the count under the note and after it in the editor
+ *  (artboards 12, 13); "dot" writes "הגעת לאורך המרבי · {count}" in both (artboards 15/16). */
+function Counter({ len, max, live, look, countFirst = false }: {
+  len: number; max: number; live: boolean; look: NoteLook; countFirst?: boolean;
+}) {
   const atMax = len >= max;
   const count = <span dir="ltr" className="tst-note-count-num">{len} / {max}</span>;
-  const limit = atMax ? <span>{AT_MAX_TEXT}</span> : null;
+  const limit = !atMax ? null : look === "dot" ? <span>{AT_MAX_TEXT + " · "}</span> : <span className="tst-note-limit">{AT_MAX_TEXT}</span>;
   return (
-    <span className="tst-note-count" data-at-max={atMax || undefined} aria-live={live ? "polite" : "off"} aria-atomic="true">
-      {countFirst ? <>{count}{limit}</> : <>{limit}{count}</>}
+    <span className={cn("tst-note-count", look !== "plain" && `tst-note-count--${look}`)} data-at-max={atMax || undefined}
+      aria-live={live ? "polite" : "off"} aria-atomic="true">
+      {countFirst && look !== "dot" ? <>{count}{limit}</> : <>{limit}{count}</>}
     </span>
   );
 }

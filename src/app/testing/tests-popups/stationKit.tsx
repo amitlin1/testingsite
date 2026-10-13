@@ -13,7 +13,7 @@ import { Check as CheckIcon } from "@/components/ui/icons";
 import { Info as InfoIcon } from "@/components/ui/icons";
 import type { ItemRow } from "../../../types";
 import { apiFetch } from "@/lib/api/client";
-import { NotesField } from "../fields/NotesField";
+import { NotesField, type NoteLook } from "../fields/NotesField";
 
 /**
  * stationKit — the shared visual language for the testing-station wizards
@@ -114,10 +114,11 @@ export function PhotoSection({ children }: { children: React.ReactNode }) {
  *  With station fields (route-fields spec §4.11.1–2, artboards 12/13): `suggestion`
  *  (the SuggestionLine) sits right under the pass/fail pair, 10px below it — and
  *  takes no room while it says nothing; `noteMax` turns the notes into a
- *  NotesField of that length. Without them the card is exactly today's. */
-export function VerdictCard({ ok, note, onOk, onNote, rows = 3, suggestion, noteMax, notePlaceholder = "הוסף הערה…", noteEditorTitle = "הערה · הערות" }: {
+ *  NotesField of that length, drawn as the popup's other notes (`noteLook`).
+ *  Without them the card is exactly today's. */
+export function VerdictCard({ ok, note, onOk, onNote, rows = 3, suggestion, noteMax, notePlaceholder = "הוסף הערה…", noteEditorTitle = "הערה · הערות", noteLook }: {
   ok: Photos["ok"]; note: string; onOk: (v: "pass" | "fail") => void; onNote: (v: string) => void; rows?: number;
-  suggestion?: React.ReactNode; noteMax?: number; notePlaceholder?: string; noteEditorTitle?: string;
+  suggestion?: React.ReactNode; noteMax?: number; notePlaceholder?: string; noteEditorTitle?: string; noteLook?: NoteLook;
 }) {
   const questionId = React.useId();
   const noteId = React.useId();
@@ -131,7 +132,7 @@ export function VerdictCard({ ok, note, onOk, onNote, rows = 3, suggestion, note
       <Box>
         <label htmlFor={noteId} style={{ display: "block", fontSize: "var(--text-body)", fontWeight: 600, color: INK, marginBottom: 10 }}>הערות</label>
         {noteMax != null ? (
-          <NotesField size="verdict" id={noteId} value={note} onChange={onNote} max={noteMax}
+          <NotesField size="verdict" id={noteId} value={note} onChange={onNote} max={noteMax} look={noteLook}
             placeholder={notePlaceholder} editorTitle={noteEditorTitle} />
         ) : (
           <TextField id={noteId} value={note} onChange={(e) => onNote(e.target.value)} placeholder="הוסף הערה…" multiline rows={rows} fullWidth />

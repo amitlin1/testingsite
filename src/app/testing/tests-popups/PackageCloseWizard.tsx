@@ -14,7 +14,7 @@ import type { UploadFieldPhoto } from "@/app/testing/fields/FieldRow";
 import { NotesField } from "@/app/testing/fields/NotesField";
 import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
 import { shouldReloadFields } from "@/app/testing/fields/errors";
-import { BLOCK_TITLE, draftsFieldsState, noteEditorTitle, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
+import { BLOCK_TITLE, VARIANT_SPEC, draftsFieldsState, noteEditorTitle, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
 import { buildFieldsBlock, inputFieldCount, useFieldsState, type Drafts } from "@/app/testing/fields/useFieldsState";
 import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
 import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
@@ -366,7 +366,8 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
             <label htmlFor={noteId} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "18px 0 7px" }}>{PACK_NOTE_LABEL}</label>
             {boxFields ? (
               // Artboard 18 `pk`: the column's full width, three lines growing to six.
-              <NotesField size="pack" id={noteId} value={note} onChange={setNote} placeholder="אופציונלי" editorTitle={noteEditorTitle(PACK_NOTE_LABEL)} />
+              <NotesField size="pack" id={noteId} value={note} onChange={setNote} placeholder="אופציונלי" editorTitle={noteEditorTitle(PACK_NOTE_LABEL)}
+                look={VARIANT_SPEC.pack.noteLook} />
             ) : (
               <textarea id={noteId} value={note} onChange={(e) => setNote(e.target.value)} placeholder="אופציונלי" className="pkg-field pkg-field--area" />
             )}

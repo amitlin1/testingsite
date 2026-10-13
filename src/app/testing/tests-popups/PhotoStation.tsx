@@ -15,7 +15,7 @@ import { FieldsBlock, FieldsBlockFallback } from "../fields/FieldsBlock";
 import type { UploadFieldPhoto } from "../fields/FieldRow";
 import { SuggestionLine } from "../fields/SuggestionLine";
 import { fieldsErrorText, shouldReloadFields } from "../fields/errors";
-import { stationBlockTitle } from "../fields/fieldsBlockModel";
+import { VARIANT_SPEC, stationBlockTitle } from "../fields/fieldsBlockModel";
 import { useFieldsState } from "../fields/useFieldsState";
 import { useStationFields } from "../fields/useStationFields";
 
@@ -227,7 +227,7 @@ export default function PhotoStation({
             suggestion={hasFields
               ? <SuggestionLine fails={fx.ev.fails} defs={ready.fields} prefix={SUGGEST_PREFIX} tail={SUGGEST_TAIL_WORKER_DECIDES} icon="triangle" />
               : undefined}
-            noteMax={hasFields ? NOTE_MAX_DEFAULT : undefined} />
+            noteMax={hasFields ? NOTE_MAX_DEFAULT : undefined} noteLook={VARIANT_SPEC.photo.noteLook} />
         </Stack>
       )}
     </StationShell>
