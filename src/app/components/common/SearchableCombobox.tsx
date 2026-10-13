@@ -77,6 +77,16 @@ export interface ComboboxProps<T>
   dense?: boolean;
   /** Dense trigger height; 38 / 34 are for fields inside table rows. */
   denseHeight?: 44 | 38 | 34;
+  /**
+   * Attributes for the trigger input, when the host labels and validates the
+   * field itself (aria-required / aria-invalid / aria-describedby), or keeps it
+   * pick-only (readOnly: no typing — the list still opens on focus and click
+   * and keeps its keyboard). Never the primitive's combobox wiring.
+   */
+  inputAttributes?: Pick<
+    React.InputHTMLAttributes<HTMLInputElement>,
+    "readOnly" | "aria-required" | "aria-invalid" | "aria-describedby"
+  >;
 }
 
 export default function SearchableCombobox<T>({
@@ -105,6 +115,7 @@ export default function SearchableCombobox<T>({
   locked = false,
   dense = false,
   denseHeight = 44,
+  inputAttributes,
   ...rest
 }: ComboboxProps<T>) {
   const theme = useTheme();
@@ -221,6 +232,7 @@ export default function SearchableCombobox<T>({
           // handlers are not attached, so no focus / click / key reaches it.
           const inputProps: React.InputHTMLAttributes<HTMLInputElement> = locked
             ? {
+                ...inputAttributes,
                 value: valueLabel,
                 readOnly: true,
                 autoComplete: "off",
@@ -228,7 +240,7 @@ export default function SearchableCombobox<T>({
                 "aria-labelledby": labelledBy,
                 "aria-label": labelledBy ? undefined : ariaLabel,
               }
-            : { ...params.inputProps, "aria-labelledby": labelledBy, "aria-label": labelledBy ? undefined : ariaLabel };
+            : { ...inputAttributes, ...params.inputProps, "aria-labelledby": labelledBy, "aria-label": labelledBy ? undefined : ariaLabel };
           // The primitive already shows its own spinner while loading.
           const endAdornment = locked ? <LockIcon className="sh-combo-lock" fontSize={15} /> : params.InputProps.endAdornment;
           return (

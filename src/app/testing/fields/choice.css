@@ -1,0 +1,100 @@
+/* ChoiceAutocomplete.tsx — the choice control of a worker field row
+   (route-fields spec §4.6; artboards 12–18, the row as in artboards 5/6).
+   It is the dense SearchableCombobox (ui.css .sh-combo--dense); only what
+   differs from that field lives here: the dot's slot, the placeholder colours,
+   a failing value, the pick-only trigger, the option rows, the list footer and
+   the multi_choice box. Tokens only (src/styles/tokens.css). */
+
+/* ---------------------------------------------------------------- trigger -- */
+/* No × (disableClearable), so the text may run up to the arrow (12 + 18 + 8px).
+   A value's 6px tone dot sits in the icon slot (13px in), its text 8px after. */
+.tst-fx-choice .sh-input-wrap.sh-combo--dense { padding-inline-end: 38px; }
+.tst-fx-choice .sh-input-wrap.sh-combo--dense.sh-combo--icon { padding-inline-start: 27px; }
+.tst-fx-choice .sh-input-wrap > input { text-overflow: ellipsis; }
+
+/* "בחר…" in the placeholder grey; the search prompt while the list is open;
+   "יש לבחור ערך" in red after a save attempt (artboard 14). */
+.tst-fx-choice .sh-input-wrap > input::placeholder { color: var(--color-ink-muted-40); }
+.tst-fx-choice--search .sh-input-wrap > input::placeholder { color: var(--color-ink-muted-48); }
+.tst-fx-choice--invalid .sh-input-wrap > input::placeholder { color: var(--color-destructive); }
+
+/* A value in the fail tone: red 600 (artboard 12 valColor / valWeight). */
+.tst-fx-choice--fail .sh-input-wrap > input { color: var(--color-destructive); font-weight: var(--fw-semibold); }
+
+/* Pick-only (artboards 17/18): the field acts as a button — no caret, no text selection. */
+.tst-fx-choice--static .sh-input-wrap,
+.tst-fx-choice--static .sh-input-wrap > input { cursor: pointer; }
+.tst-fx-choice--static .sh-input-wrap > input { caret-color: transparent; user-select: none; }
+
+/* ------------------------------------------------------------ option rows -- */
+/* The dense row (check · text) carrying a tone dot, the label and a key box,
+   at the station windows' 44px touch target (spec §0.3). The selected row keeps
+   the dense tint; its label turns blue 600. */
+.sh-combo-option:has(.tst-fx-choice-opt) { min-height: 44px; }
+.sh-combo-text:has(> .tst-fx-choice-opt) { flex: 1; }
+.tst-fx-choice-opt { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14.5px; }
+.tst-fx-choice-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tst-fx-choice-label > b { font-weight: var(--fw-semibold); }
+.tst-fx-choice-opt--sel .tst-fx-choice-label { color: var(--color-primary); font-weight: var(--fw-semibold); }
+
+/* The key box "1".."4" on the first four rows (aria-hidden; the footer names the keys). */
+.tst-fx-choice-key {
+  flex: none;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  background: var(--color-surface-pearl);
+  color: var(--color-ink-muted-48);
+  font-size: var(--text-micro);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------- list footer (`listFooter`) -- */
+/* "{N} אפשרויות" / "{k} מתוך {N}" and the window's key hint. Pinned under the
+   rows so it stays in view in a long list (its shadow covers the list's bottom
+   padding); a row scrolled into view by the keyboard stops clear of it. */
+.sh-select-content:has(> .sh-ac-footer > .tst-fx-choice-foot) { scroll-padding-bottom: 32px; }
+.sh-ac-footer:has(> .tst-fx-choice-foot) {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-canvas);
+  box-shadow: 0 5px 0 var(--color-canvas);
+}
+.tst-fx-choice-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 6px 10px 4px;
+  border-top: 1px solid var(--color-divider-soft);
+  font-size: var(--text-fine);
+  line-height: 16px;
+  color: var(--color-ink-muted-48);
+  cursor: default;
+}
+.tst-fx-choice-count { font-variant-numeric: tabular-nums; }
+.tst-fx-choice-hint { margin-inline-start: auto; }
+
+/* --------------------------------------- multi_choice (no artboard draws it) -- */
+/* The same 44px box; the primitive's chips wrap inside it and the arrow keeps
+   the dense inset. */
+.sh-input-wrap.tst-fx-choice-multi {
+  position: relative;
+  min-height: 44px;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  padding-block: 4px;
+  padding-inline: 9px 38px;
+  border-radius: var(--r-field);
+}
+.tst-fx-choice-multi > .sh-adornment:first-child { display: contents; color: var(--color-ink); }
+.sh-input-wrap.tst-fx-choice-multi > input { flex: 1 0 60px; min-width: 60px; height: 34px; padding: 0 4px; font-size: 14.5px; }
+.tst-fx-choice-multi > .sh-adornment:last-child { position: absolute; inset-inline-end: 12px; top: 50%; transform: translateY(-50%); }

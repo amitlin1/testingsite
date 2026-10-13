@@ -43,6 +43,8 @@ import { sxToStyle, type SxInput } from "./sx";
 
    The public API is unchanged for every consumer; renderOption additionally
    receives `highlighted` in its state and `data-highlighted` in its props.
+   An optional `listFooter` adds one last row (<li role="presentation">, never
+   an option); without it the list renders exactly the rows above.
    ========================================================================== */
 
 type Reason = "selectOption" | "removeOption" | "clear" | "createOption" | "blur" | "input" | "reset";
@@ -77,6 +79,10 @@ export interface AutocompleteProps<
   loading?: boolean;
   loadingText?: React.ReactNode;
   noOptionsText?: React.ReactNode;
+  /** The list's last row, after the options (or the empty / loading text): an
+   *  <li role="presentation"> the keyboard never highlights — e.g. a count and
+   *  key hints. */
+  listFooter?: React.ReactNode;
   disableClearable?: boolean;
   size?: "small" | "medium";
   popupIcon?: React.ReactNode;
@@ -118,6 +124,7 @@ export function Autocomplete<
     isOptionEqualToValue = (a: T, b: T) => a === b,
     renderInput, renderOption, filterOptions, multiple, freeSolo, disabled, fullWidth,
     loading, loadingText = "טוען…", noOptionsText = "אין אפשרויות", disableClearable, size, sx, id,
+    listFooter,
   } = props;
 
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -433,6 +440,9 @@ export function Autocomplete<
                 const { key: _k, ...liRest } = liProps;
                 return <li key={i} {...liRest}>{getOptionLabel(o)}</li>;
               })
+            )}
+            {listFooter != null && listFooter !== false && (
+              <li role="presentation" className="sh-ac-footer">{listFooter}</li>
             )}
           </ul>
         </DismissableLayerBranch>,

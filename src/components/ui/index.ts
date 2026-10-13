@@ -35,6 +35,7 @@ export {
   Table, TableContainer, TableHead, TableBody, TableFooter, TableRow, TableCell, TableSortLabel,
 } from "./Table";
 export { Tooltip } from "./Tooltip";
+export { AnchoredPopover, type AnchoredPopoverProps } from "./AnchoredPopover";
 export { Menu } from "./Menu";
 export { Autocomplete } from "./Autocomplete";
 export type { AutocompleteProps, OptionLiProps } from "./Autocomplete";

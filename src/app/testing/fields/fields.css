@@ -1,0 +1,301 @@
+/* FieldsBlock / FieldRow (./FieldsBlock.tsx, ./FieldRow.tsx) — the block of station fields in a
+   worker popup and its [name | control | note] rows: route-fields spec §4.4–§4.5, artboards 12–18
+   (the row as in artboards 5/6). Colours are tokens (src/styles/tokens.css); sizes are the
+   artboards' pixels. Imported by FieldsBlock.tsx and FieldRow.tsx.
+
+   One class per variant carries that popup's metrics (spec §4.4 table):
+     station 12 · photo 13 · dialog 14 · wizard 15 (box) · kit-item 16 · pack-item 17 · pack 18
+   The card holds them as custom properties, so every row, section and group label inside reads
+   the same numbers. */
+
+/* ---------------------------------------------------------------- the block -- */
+/* Full width in any host (the card is a size container, so it never sizes itself from its rows:
+   inside a flex column that does not stretch it would otherwise collapse). */
+.tst-fx { width: 100%; min-width: 0; }
+/* Artboard 18: the packing block sits 26px above the three packing checks. */
+.tst-fx--pack { margin-bottom: 26px; }
+
+/* The header: title · "{n} שדות" · "מהגדרות המסלול" · … · status. It wraps rather than
+   overflows when a station type's name is long. */
+.tst-fx-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.tst-fx--station > .tst-fx-head,
+.tst-fx--photo > .tst-fx-head { padding-bottom: 12px; border-bottom: 1px solid var(--color-hairline); margin-bottom: 12px; }
+.tst-fx--photo > .tst-fx-head { margin-bottom: 16px; }
+.tst-fx--dialog > .tst-fx-head { column-gap: 8px; margin-bottom: 8px; }
+.tst-fx--wizard > .tst-fx-head,
+.tst-fx--kit-item > .tst-fx-head { margin-bottom: 10px; }
+.tst-fx--pack > .tst-fx-head { column-gap: 8px; margin-bottom: 8px; }
+
+.tst-fx-head-icon { flex: none; color: var(--color-ink-muted-48); }
+.tst-fx-title { margin: 0; min-width: 0; color: var(--color-ink); overflow-wrap: anywhere; }
+.tst-fx--station .tst-fx-title,
+.tst-fx--photo .tst-fx-title { font-size: var(--text-lead); font-weight: var(--fw-bold); line-height: var(--lh-snug); }
+.tst-fx--dialog .tst-fx-title { font-size: var(--text-body); font-weight: var(--fw-semibold); line-height: 1.4; }
+.tst-fx--wizard .tst-fx-title,
+.tst-fx--kit-item .tst-fx-title { font-size: 14.5px; font-weight: var(--fw-semibold); line-height: var(--lh-snug); }
+.tst-fx--pack .tst-fx-title { font-size: 12.5px; font-weight: var(--fw-semibold); line-height: var(--lh-snug); color: var(--color-ink-muted-70); }
+
+.tst-fx-count { color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tst-fx--station .tst-fx-count,
+.tst-fx--photo .tst-fx-count { font-size: var(--text-small); }
+/* Artboard 14: the count sits inside the heading. */
+.tst-fx--dialog .tst-fx-count { margin-inline-start: 8px; font-weight: var(--fw-regular); }
+.tst-fx--wizard .tst-fx-count,
+.tst-fx--kit-item .tst-fx-count,
+.tst-fx--pack .tst-fx-count,
+.tst-fx-band .tst-fx-count { font-size: 12.5px; }
+.tst-fx-sep { color: var(--color-ink-muted-40); }
+.tst-fx-spacer { flex: 1; }
+
+/* The status line (labels.ts statusA / statusB / statusC): muted, green when everything is in,
+   red for status ב's missing note. */
+.tst-fx-status { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--color-ink-muted-48); }
+.tst-fx-status[data-tone="success"] { color: var(--color-success-ink); }
+.tst-fx-status[data-tone="danger"] { color: var(--color-destructive); }
+.tst-fx--station .tst-fx-status { font-size: var(--text-small); font-weight: var(--fw-semibold); }
+.tst-fx--photo .tst-fx-status { font-size: var(--text-fine); font-weight: var(--fw-semibold); }
+.tst-fx--dialog .tst-fx-status { font-size: var(--text-fine); }
+.tst-fx--wizard .tst-fx-status,
+.tst-fx--kit-item .tst-fx-status { font-size: 12.5px; font-weight: var(--fw-semibold); }
+
+/* ----------------------------------------------------------------- the card -- */
+/* A white card with a hairline edge; rows meet its rounded corners (overflow), so no row needs
+   to know whether it is the first or the last. The list and the note editor are portaled. */
+.tst-fx-card {
+  --fx-cols: 150px 230px minmax(0, 1fr);
+  --fx-gap: 14px;
+  --fx-pad: 12px 16px;
+  --fx-pad-inline: 16px;
+  --fx-rule: var(--color-divider-soft);
+  --fx-label: 14.5px;
+  container: tst-fx-card / inline-size;
+  overflow: hidden;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+}
+.tst-fx-card--photo { --fx-cols: 150px 240px minmax(0, 1fr); }
+.tst-fx-card--dialog {
+  --fx-cols: 150px 190px minmax(0, 1fr);
+  --fx-gap: 12px;
+  --fx-pad: 8px 12px;
+  --fx-pad-inline: 12px;
+  --fx-rule: var(--color-hairline);
+  --fx-label: var(--text-body-sm);
+  border-radius: var(--r-md);
+}
+.tst-fx-card--wizard,
+.tst-fx-card--kit-item { border-radius: 14px; }
+/* Artboard 17: nested under a kit item's row; its edge is only the design note's blue
+   (markNew, not built), so the frame is invisible and keeps its geometry. */
+.tst-fx-card--pack-item {
+  --fx-cols: 170px 220px minmax(0, 1fr);
+  --fx-gap: 12px;
+  --fx-pad: 8px 12px;
+  --fx-pad-inline: 12px;
+  --fx-label: var(--text-body-sm);
+  margin-top: 10px;
+  border-color: transparent;
+  border-radius: 10px;
+}
+.tst-fx-card--pack {
+  --fx-cols: 150px 210px minmax(0, 1fr);
+  --fx-gap: 12px;
+  --fx-pad: 8px 15px;
+  --fx-pad-inline: 15px;
+  --fx-label: var(--text-body-sm);
+  border-radius: 12px;
+}
+
+/* A group label of a kit item (artboard 16): "לכל פריט" / "שדות {type}", 11px/600, a 12px icon. */
+.tst-fx-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px var(--fx-pad-inline) 4px;
+  font-size: var(--text-micro);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--color-ink-muted-48);
+}
+.tst-fx-mini[data-rule] { border-top: 1px solid var(--color-divider-soft); }
+.tst-fx-mini > svg { flex: none; }
+
+/* A section title (artboard 6, "הפעלה" / "בטיחות חשמלית"): 13/700 on parchment, the width of the
+   card. Never counted in "{n} שדות". */
+.tst-fx-section {
+  padding: 8px var(--fx-pad-inline);
+  background: var(--color-canvas-parchment);
+  font-size: var(--text-small);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+.tst-fx-section[data-rule] { border-top: 1px solid var(--color-hairline); }
+
+/* ------------------------------------------------------------------ a row -- */
+.tst-fx-row {
+  display: grid;
+  grid-template-columns: var(--fx-cols);
+  gap: var(--fx-gap);
+  align-items: start;
+  padding: var(--fx-pad);
+  background: var(--color-canvas);
+}
+.tst-fx-row[data-rule] { border-top: 1px solid var(--fx-rule); }
+.tst-fx-row[data-fail] { background: var(--color-danger-bg); }
+/* A row under a group label (artboard 16). */
+.tst-fx-row[data-mini] { padding-block: 8px; }
+
+/* The name: the label (and "*"), the help under it, a number's range line under that (14). It
+   keeps the control's 44px, so a one-line name centres on it. */
+.tst-fx-name {
+  box-sizing: content-box;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+.tst-fx-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--fx-label);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+.tst-fx-label > label { cursor: pointer; }
+.tst-fx-req { color: var(--color-destructive); font-weight: var(--fw-semibold); }
+/* "מוצג מתחת לשם השדה בחלון העובד" (artboard 3). */
+.tst-fx-help { font-size: var(--text-fine); line-height: var(--lh-snug); color: var(--color-ink-muted-48); overflow-wrap: anywhere; }
+
+.tst-fx-control,
+.tst-fx-note { min-width: 0; }
+/* "הערה · חובה" above the note: the other two columns step down 20px to stay level with its box
+   (artboard 12 `ctlPad`). */
+.tst-fx-row[data-pad] > .tst-fx-name,
+.tst-fx-row[data-pad] > .tst-fx-control { padding-top: 20px; }
+/* Artboards 17/18: the 38px note sits 3px down, level with the 44px controls (`notePad`). */
+.tst-fx-row[data-note-pad] > .tst-fx-note { padding-top: 3px; }
+
+/* A photo field: the uploader takes the control and note columns, the note goes under it. */
+.tst-fx-row[data-wide] > .tst-fx-control,
+.tst-fx-row[data-wide] > .tst-fx-note { grid-column: 2 / -1; }
+
+/* ------------------------------------------------- controls without an artboard -- */
+/* text / scan: a 44px input in the system's field look (.pkg-field / .sh-input). */
+.tst-fx-input {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: var(--text-body);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.tst-fx-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
+.tst-fx-input[aria-invalid="true"] { border-color: var(--color-destructive); }
+.tst-fx-input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
+/* A scanned code: typed left to right, kept at the column's reading edge (SkuScreen). */
+.tst-fx-input--code { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* checklist: the packing checks' cards (.pkg-choice / .pkg-tick, PackageCloseWizard) at the
+   station windows' 44px. */
+.tst-fx-checklist { display: flex; flex-direction: column; gap: 6px; }
+.tst-fx-check { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 9px 12px; border-radius: var(--r-md); }
+.tst-fx-check > .pkg-tick { width: 20px; height: 20px; border-radius: 6px; }
+.tst-fx-check:not([aria-checked="true"]) > .pkg-tick { border-color: var(--color-field-border); }
+.tst-fx-check-label { min-width: 0; font-size: var(--text-body-sm); font-weight: var(--fw-semibold); line-height: var(--lh-snug); color: var(--color-ink); overflow-wrap: anywhere; }
+.tst-fx-check[aria-checked="true"] .tst-fx-check-label { color: var(--color-primary); }
+.tst-fx-check[data-invalid] { border-color: var(--color-destructive); }
+
+/* ------------------------------------------- artboard 17: fields under each kit item -- */
+/* The header band at the top of the kit card: "בדיקות בסגירה · {n} שדות" and the tag. */
+.tst-fx-band {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 40px;
+  padding: 8px 16px;
+  background: var(--color-surface-pearl);
+  border-bottom: 1px solid var(--color-divider-soft);
+  border-radius: 13px 13px 0 0;
+}
+.tst-fx-band .tst-fx-title { font-size: var(--text-small); font-weight: var(--fw-bold); line-height: var(--lh-snug); }
+/* Under an item's row: indented past its number badge. */
+.tst-fx-pack-item { width: 100%; padding-block: 0 10px; padding-inline: 51px 12px; border-bottom: 1px solid var(--color-divider-soft); }
+/* An item that has not arrived and has no decision yet. */
+.tst-fx-pending {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 16px;
+  padding-inline-start: 64px;
+  border-bottom: 1px solid var(--color-divider-soft);
+  font-size: 12.5px;
+  line-height: var(--lh-snug);
+  color: var(--color-ink-muted-48);
+}
+.tst-fx-pending > svg { flex: none; }
+
+/* ------------------------------------------------- loading / load failure (spec §4.2) -- */
+.tst-fx-skeleton { display: flex; flex-direction: column; gap: 8px; }
+.sh-btn.tst-fx-retry { min-height: 44px; }
+/* Where the keyboard focus waits after "נסה שוב" (the region while the fields load again), and
+   where it lands when they come (the block's title): the app's ring, which ui.css keeps off
+   tabindex="-1". */
+.tst-fx-fallback:focus-visible,
+.tst-fx-title:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+
+/* ------------------------------------------------------------- narrow windows -- */
+/* Below the width a variant's columns need (its two fixed columns + a ~140px note), the name
+   goes on its own line over the control and the note; on a phone everything stacks. */
+@container tst-fx-card (max-width: 579px) {
+  .tst-fx-card--station .tst-fx-row,
+  .tst-fx-card--wizard .tst-fx-row,
+  .tst-fx-card--kit-item .tst-fx-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 8px; }
+  .tst-fx-card--station .tst-fx-row > .tst-fx-name,
+  .tst-fx-card--wizard .tst-fx-row > .tst-fx-name,
+  .tst-fx-card--kit-item .tst-fx-row > .tst-fx-name { grid-column: 1 / -1; min-height: 0; padding-top: 0; }
+  .tst-fx-card--station .tst-fx-row[data-wide] > :is(.tst-fx-control, .tst-fx-note),
+  .tst-fx-card--wizard .tst-fx-row[data-wide] > :is(.tst-fx-control, .tst-fx-note),
+  .tst-fx-card--kit-item .tst-fx-row[data-wide] > :is(.tst-fx-control, .tst-fx-note) { grid-column: 1 / -1; }
+}
+@container tst-fx-card (max-width: 589px) {
+  .tst-fx-card--photo .tst-fx-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 8px; }
+  .tst-fx-card--photo .tst-fx-row > .tst-fx-name { grid-column: 1 / -1; min-height: 0; padding-top: 0; }
+  .tst-fx-card--photo .tst-fx-row[data-wide] > :is(.tst-fx-control, .tst-fx-note) { grid-column: 1 / -1; }
+}
+@container tst-fx-card (max-width: 519px) {
+  .tst-fx-card--dialog .tst-fx-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 8px; }
+  .tst-fx-card--dialog .tst-fx-row > .tst-fx-name { grid-column: 1 / -1; min-height: 0; padding-top: 0; }
+  .tst-fx-card--dialog .tst-fx-row[data-wide] > :is(.tst-fx-control, .tst-fx-note) { grid-column: 1 / -1; }
+}
+@container tst-fx-card (max-width: 559px) {
+  .tst-fx-card--pack-item .tst-fx-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 8px; }
+  .tst-fx-card--pack-item .tst-fx-row > .tst-fx-name { grid-column: 1 / -1; min-height: 0; padding-top: 0; }
+  .tst-fx-card--pack-item .tst-fx-row[data-wide] > :is(.tst-fx-control, .tst-fx-note) { grid-column: 1 / -1; }
+}
+@container tst-fx-card (max-width: 539px) {
+  .tst-fx-card--pack .tst-fx-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 8px; }
+  .tst-fx-card--pack .tst-fx-row > .tst-fx-name { grid-column: 1 / -1; min-height: 0; padding-top: 0; }
+  .tst-fx-card--pack .tst-fx-row[data-wide] > :is(.tst-fx-control, .tst-fx-note) { grid-column: 1 / -1; }
+}
+@container tst-fx-card (max-width: 399px) {
+  .tst-fx-card .tst-fx-row { grid-template-columns: minmax(0, 1fr); }
+  .tst-fx-card .tst-fx-row > :is(.tst-fx-control, .tst-fx-note) { grid-column: 1 / -1; padding-top: 0; }
+  .tst-fx-card .tst-fx-row > .tst-fx-name { min-height: 0; padding-top: 0; }
+}

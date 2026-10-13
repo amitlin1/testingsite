@@ -65,6 +65,14 @@
   --color-success-ink-hover:#12663f;
   --color-success-bg:#eaf5ef;
 
+  /* Route-field option tones (route-fields spec §0.3): the 6px dot of a choice
+     option, always shown with its word. Aliases of the dot colours above, so
+     their rules hold — the only tone ever used for text is fail. */
+  --rf-tone-pass:var(--color-status-approved);
+  --rf-tone-warn:var(--color-status-late);
+  --rf-tone-fail:var(--color-destructive);
+  --rf-tone-neutral:var(--color-ink-muted-40);
+
   /* App rail (the dark side navigation) */
   --color-nav-bg:#15171a;
   --color-nav-ink:#b8bcc2;

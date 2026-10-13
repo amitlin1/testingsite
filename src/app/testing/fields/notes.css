@@ -1,0 +1,232 @@
+/* NotesField (./NotesField.tsx) — the worker's note that grows as needed: route-fields spec §6,
+   artboard 7א, and the note logic in the scripts of artboards 12–18. Tokens only
+   (src/styles/tokens.css); sizes are the artboards' pixels.
+
+   The textareas are dir="auto", so their own direction follows what is typed. The room kept for
+   the expand button and the alignment therefore follow the BOX's direction (:dir on the box, as
+   ui.css does for its direction icons), not the textarea's: an English note must not run under
+   the button, and every note stays aligned with its column. */
+
+.tst-note {
+  --tst-note-row-bg: var(--color-canvas);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* A failing row is tinted: the fade and the legend end in its colour. */
+.tst-note--fail { --tst-note-row-bg: var(--color-danger-bg); }
+
+/* "הערה · חובה" — a line above the box: 16px + the 4px under it, the 20px a row pads its other
+   columns by to stay level with the box (artboards 7א, 12, 13, 15–18)… */
+.tst-note-req {
+  margin-bottom: 4px;
+  font-size: var(--text-fine);
+  line-height: 16px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-destructive);
+}
+/* …or a legend on the box's border (artboard 14): its upper half on the row, its lower half on
+   the box's white. */
+.tst-note-legend {
+  position: absolute;
+  top: -8px;
+  inset-inline-start: 9px;
+  z-index: 1;
+  padding: 0 4px;
+  font-size: var(--text-micro);
+  line-height: 15px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-destructive);
+  white-space: nowrap;
+  background: var(--tst-note-legend-bg, linear-gradient(to bottom, var(--tst-note-row-bg) 50%, var(--color-canvas) 50%));
+}
+
+.tst-note-box { position: relative; }
+
+/* ---- the textarea (the note, and the editor's) ------------------------------------------ */
+.tst-note-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 11px 12px;
+  font-family: inherit;
+  font-size: var(--text-body-sm);
+  line-height: 20px;
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.tst-note-input::placeholder { color: var(--color-ink-muted-48); }
+/* A required note under a legend keeps a red edge while it is not being typed in (14). */
+.tst-note--legend .tst-note-box > .tst-note-input:not(:focus) { border-color: var(--color-destructive); }
+.tst-note-input:focus {
+  border-color: var(--color-primary-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+/* The missing note (.sh-input--error's look). */
+.tst-note-input[aria-invalid="true"] { border-color: var(--color-destructive); }
+.tst-note-input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
+/* Artboard 14: the message is the placeholder. */
+.tst-note-input[data-error-placeholder]::placeholder { color: var(--color-destructive); }
+
+/* The room for the expand button, at the box's inline end. */
+.tst-note-box > .tst-note-input { --tst-note-pad-start: 12px; --tst-note-pad-end: 40px; }
+.tst-note-box:dir(rtl) > .tst-note-input { padding-right: var(--tst-note-pad-start); padding-left: var(--tst-note-pad-end); text-align: right; }
+.tst-note-box:dir(ltr) > .tst-note-input { padding-left: var(--tst-note-pad-start); padding-right: var(--tst-note-pad-end); text-align: left; }
+
+/* ---- sizes ---------------------------------------------------------------------------------- */
+/* row — a field row's note column: one 20px line at rest (44px), a line at a time up to six
+   (146px), then it scrolls (7א, 12–16). row-compact — the close wizard's rows (17/18): 38px up to
+   138px. field-sizing does the growing; NotesField sets the height itself where it is missing. */
+.tst-note--row .tst-note-input,
+.tst-note--row-compact .tst-note-input,
+.tst-note--pack .tst-note-input { field-sizing: content; }
+.tst-note--row .tst-note-input { min-height: 44px; max-height: 146px; }
+.tst-note--row-compact .tst-note-input { min-height: 38px; max-height: 138px; padding-block: 8px; }
+/* Out of focus and longer than two lines: the first two, a fade, and "הצג הכל · N שורות". */
+.tst-note--row .tst-note-input[data-collapsed] { max-height: 64px; overflow-y: hidden; }
+.tst-note--row-compact .tst-note-input[data-collapsed] { max-height: 58px; overflow-y: hidden; }
+
+/* pack — the close wizard's "הערות אריזה" (artboard 18 `pk`): the column's full width, three
+   lines at rest (84px), a line at a time up to six (146px); out of focus and longer than three
+   lines, the first three with the fade and "הצג הכל · N שורות". */
+.tst-note--pack .tst-note-input { min-height: 84px; max-height: 146px; }
+.tst-note--pack .tst-note-input[data-collapsed] { max-height: 84px; overflow-y: hidden; }
+
+/* area — the wizards' "הערות" (.pkg-field--area: 76px, the body line height), up to 560px. */
+.tst-note--area { max-width: 560px; }
+.tst-note--area .tst-note-input { min-height: 76px; line-height: var(--lh-body); resize: vertical; }
+.tst-note--area .tst-note-box > .tst-note-input { --tst-note-pad-start: 13px; }
+
+/* verdict — VerdictCard's "הערות" and the report dialog's "הערות נוספות": the metrics of
+   TextField multiline rows={3} (15px, 10px × 14px). */
+.tst-note--verdict .tst-note-input { padding-block: 10px; font-size: var(--text-body); line-height: var(--lh-body); resize: vertical; }
+.tst-note--verdict .tst-note-box > .tst-note-input { --tst-note-pad-start: 14px; }
+
+/* The collapsed note's last line fades into the row. */
+.tst-note-fade {
+  position: absolute;
+  inset-inline: 1px;
+  bottom: 1px;
+  height: 20px;
+  border-radius: 0 0 calc(var(--r-field) - 1px) calc(var(--r-field) - 1px);
+  background: linear-gradient(to bottom, transparent, var(--tst-note-row-bg));
+  pointer-events: none;
+}
+
+/* ---- the expand button (Maximize2), the box's inline-end corner ------------------------------ */
+.tst-note-expand {
+  position: absolute;
+  top: 8px;
+  inset-inline-end: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-ink-muted-48);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.tst-note--row-compact .tst-note-expand { top: 5px; }
+.tst-note--area .tst-note-expand { inset-inline-end: 8px; }
+.tst-note-expand[aria-expanded="true"] { background: var(--color-canvas-parchment); }
+@media (hover: hover) and (pointer: fine) {
+  .tst-note-expand:hover { background: var(--color-canvas-parchment); }
+}
+
+/* ---- under the box: the error line, then "הצג הכל" and the counter --------------------------- */
+.tst-note-error {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--text-fine);
+  line-height: 16px;
+  color: var(--color-destructive);
+}
+/* Kept in the page while empty (it is the live region that announces the error). */
+.tst-note-error:empty { margin-top: 0; }
+
+.tst-note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 16px;
+  margin-top: 4px;
+}
+.tst-note-more {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-fine);
+  line-height: 16px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tst-note-more:hover { color: var(--color-primary-hover); }
+}
+.tst-note-meta > .tst-note-count { margin-inline-start: auto; }
+
+.tst-note-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-fine);
+  line-height: 16px;
+  color: var(--color-ink-muted-48);
+  white-space: nowrap;
+}
+.tst-note-count[data-at-max] { color: var(--color-warning-ink); }
+.tst-note-count-num { font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+
+/* ---- the editor (AnchoredPopover): 520px, or the viewport less 16px a side -------------------- */
+.tst-note-editor {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  max-height: var(--radix-popover-content-available-height);
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  outline: none;
+}
+.tst-note-ed-head { display: flex; align-items: center; gap: 8px; }
+.tst-note-ed-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+  line-height: 20px;
+  font-weight: var(--fw-bold);
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tst-note-editor .tst-note-ed-x { color: var(--color-ink-muted-48); }
+.tst-note-ed-input { min-height: 180px; resize: vertical; }
+.tst-note-editor:dir(rtl) .tst-note-ed-input { text-align: right; }
+.tst-note-editor:dir(ltr) .tst-note-ed-input { text-align: left; }
+.tst-note-ed-foot { display: flex; align-items: center; gap: 8px; }
+.tst-note-ed-foot > .tst-note-ed-done { margin-inline-start: auto; }
