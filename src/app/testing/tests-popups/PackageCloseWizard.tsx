@@ -4,7 +4,19 @@ import { Check, CircleAlert } from "lucide-react";
 import type { StationTestDialogProps } from "@/types";
 import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
+import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { newActionId } from "@/app/lib/metrics/action-id";
+import type { FieldsEvaluation } from "@/app/lib/station-fields/evaluate";
+import { SUGGEST_PREFIX, fieldsGateText, missLabel } from "@/app/lib/station-fields/labels";
+import type { Field, FieldsSchemaRef } from "@/app/lib/station-fields/schema";
+import { FieldsBlock, FieldsBlockFallback, PackFieldsBand, PackFieldsPending, PackItemFields } from "@/app/testing/fields/FieldsBlock";
+import type { UploadFieldPhoto } from "@/app/testing/fields/FieldRow";
+import { NotesField } from "@/app/testing/fields/NotesField";
+import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
+import { shouldReloadFields } from "@/app/testing/fields/errors";
+import { BLOCK_TITLE, draftsFieldsState, noteEditorTitle, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
+import { buildFieldsBlock, inputFieldCount, useFieldsState, type Drafts } from "@/app/testing/fields/useFieldsState";
+import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
 import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
 import PackageDecisionDialog, { type PackDecision } from "./PackageDecisionDialog";
 import { ScanField, useReferenceLookup } from "./referenceScan";
@@ -24,6 +36,12 @@ import "@/app/packages/packages.css";
  * The scan starts from the label scanned when the box was opened
  * (pkg.opening_sku) and, like the opening, is looked up among the package
  * type's reference items; the worker may rescan it.
+ *
+ * Station fields (route-fields spec §4.11.4–§4.11.5, D5): when the kit's
+ * route has a published config for this step, each kit item's fields nest
+ * under its row in the kit card (artboard 17) and the box's sit before the
+ * packing checks (artboard 18); they hold those steps' next button, and the
+ * results carry them. Without a config the wizard is exactly as before.
  */
 
 const STEPS: WizardStep[] = [
@@ -34,8 +52,35 @@ const STEPS: WizardStep[] = [
 ];
 
 const CHECKS = ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת הקופסה קריאה"];
+/** The packing note's label; with station fields, also its editor's title (artboard 18 `pk`). */
+const PACK_NOTE_LABEL = "הערות אריזה";
+/** A field photo not stored yet when the box is closed — the opening wizard's words. */
+const PHOTO_FAILED = "יש צילום שההעלאה שלו נכשלה — הסר אותו וצלם שוב לפני הסיום.";
+const PHOTO_UPLOADING = "יש צילום שעדיין עולה — המתן לסיום ההעלאה.";
 
 type Decision = { decision: PackDecision; note: string };
+
+/** A kit item's station fields at this step: its definitions, its drafts' state, and whether its
+ *  row shows them (artboard 17 `fieldsVisible`: it reached the station, or was packed anyway). */
+type KitItemFieldsState = { defs: Field[]; fx: DraftsFieldsState; shown: boolean };
+
+const NO_DRAFTS: Drafts = {};
+
+/** Required fields and notes still missing over several field lists (never the same field twice). */
+function countMissing(states: readonly { ev: Pick<FieldsEvaluation, "missingRequired" | "missingNotes"> }[]): { required: number; notes: number } {
+  let required = 0;
+  let notes = 0;
+  for (const { ev } of states) {
+    required += ev.missingRequired.length;
+    notes += ev.missingNotes.length;
+  }
+  return { required, notes };
+}
+
+/** The next button's words for what is missing (artboards 17/18 `missLabel`), or null. */
+function missText(m: { required: number; notes: number }): string | null {
+  return m.required + m.notes > 0 ? missLabel(m.required, m.notes) : null;
+}
 
 export default function PackageCloseWizard({ open, onClose, item, station, workerId, workerName, onSubmit }: StationTestDialogProps) {
   const pkg = item.package as PackageView | null;
@@ -52,11 +97,20 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   const committedRef = React.useRef<Set<string>>(new Set());
   const noteId = React.useId();
 
+  // Station fields: the kit's answer (the popup opens on the box row → mode "package"), the box's
+  // drafts, and each kit item's by item_id.
+  const sf = useStationFields(item.item_id, open, station.test_station_id);
+  const kitFields = sf.status === "ready" && sf.mode === "package" ? sf : null;
+  const boxFx = useFieldsState(kitFields ? kitFields.box : []);
+  const { reset: resetBoxFields } = boxFx;
+  const [itemDrafts, setItemDrafts] = React.useState<Record<string, Drafts>>({});
+
   React.useEffect(() => {
     if (!open) return;
     setStep(0); setScan(pkg?.opening_sku ?? ""); setPacked({}); setDecisions({}); setDecideFor(null); setChecks(CHECKS.map(() => false)); setNote("");
     setSubmitting(false); setError(null); submitIdRef.current = null; committedRef.current = new Set();
-  }, [open, pkg]);
+    setItemDrafts({}); resetBoxFields();
+  }, [open, pkg, resetBoxFields]);
 
   const boxLookup = useReferenceLookup(scan, item.item_type_id, open);
 
@@ -71,6 +125,42 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   const anyMissing = items.some((it) => decisions[it.item_id]?.decision === "missing");
   const fromOpening = pkg.opening_sku != null && scan.trim() === pkg.opening_sku;
 
+  // ---- station fields (artboards 17/18) ----------------------------------------
+  const gate = kitFields?.gate ?? false;
+  /** While the answer is still coming, or failed: the steps that show fields wait (spec §4.2). */
+  const fieldsWaiting = sf.status === "loading" || sf.status === "error";
+  /** Every field a kit item answers here ("לכל פריט", then its type's) — [] without a config. */
+  const defsOf = (it: PackageItemView): Field[] => kitItemDefs(findKitItem(sf, it.item_id));
+  const draftsOf = (it: PackageItemView): Drafts => itemDrafts[it.item_id] ?? NO_DRAFTS;
+  const kitItemFields = new Map<string, KitItemFieldsState>();
+  for (const it of items) {
+    const defs = defsOf(it);
+    if (inputFieldCount(defs) === 0) continue;
+    const id = it.item_id;
+    kitItemFields.set(id, {
+      defs,
+      fx: draftsFieldsState(defs, draftsOf(it), (next) => setItemDrafts((all) => ({ ...all, [id]: next(all[id] ?? NO_DRAFTS) }))),
+      shown: arrived(it) || decisions[id]?.decision === "packed_anyway",
+    });
+  }
+  const itemFieldsOn = kitItemFields.size > 0;
+  const shownItemFields = Array.from(kitItemFields.values()).filter((f) => f.shown);
+  /** The box's fields (artboard 18), when it has any. */
+  const boxFields = kitFields && boxFx.defsCount > 0 ? kitFields.box : null;
+  // Each step that shows fields holds its next button while they block (evaluate.ts
+  // fieldsBlocking); the button then names what is missing.
+  const itemsHold = fieldsWaiting || shownItemFields.some((f) => f.fx.blocking(gate));
+  const boxHold = fieldsWaiting || (boxFields != null && boxFx.blocking(gate));
+  const itemsMissText = gate ? missText(countMissing(shownItemFields.map((f) => f.fx))) : null;
+  const boxMissText = gate && boxFields ? missText(countMissing([boxFx])) : null;
+  /** A photo field's shot, stored on `targetId` (a kit item, or the box) as the opening wizard does. */
+  const uploadTo = (targetId: string | number): UploadFieldPhoto => async (file, photoType) => {
+    try {
+      const [result] = await uploadItemFiles(targetId, [file], { workerId, stationTypeId: station.test_station_type_id, photoType });
+      return result?.objectKey ?? null;
+    } catch { return null; }
+  };
+
   let stepSubtitle = "";
   let systemMsg: string | null = null;
   if (stepKey === "scan") { stepSubtitle = "סרוק את מדבקת הקופסה כדי לפתוח את המארז בעמדה."; systemMsg = "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה."; }
@@ -80,13 +170,41 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   let nextLabel = "המשך";
   let nextEnabled = true;
   if (stepKey === "scan") nextEnabled = scan.trim() !== "" && !boxLookup.checking;
-  else if (stepKey === "arrival") { nextEnabled = allResolved; nextLabel = allResolved ? "המשך" : "נדרשת החלטה לכל פריט"; }
-  else if (stepKey === "packOk") { nextEnabled = checksAll; nextLabel = "סגור מארז"; }
+  else if (stepKey === "arrival") {
+    nextEnabled = allResolved; nextLabel = allResolved ? "המשך" : "נדרשת החלטה לכל פריט";
+    // Then the fields of the items that show them (artboard 17).
+    if (allResolved && itemsHold) { nextEnabled = false; nextLabel = itemsMissText ?? nextLabel; }
+  }
+  else if (stepKey === "packOk") {
+    nextEnabled = checksAll; nextLabel = "סגור מארז";
+    // Then the box's fields (artboard 18).
+    if (checksAll && boxHold) { nextEnabled = false; nextLabel = boxMissText ?? nextLabel; }
+  }
   else if (stepKey === "done") nextLabel = "סיום וחזרה לתור";
 
   const finish = async () => {
+    // Belt and braces for the steps' holds, which the rail can skip: nothing is sent while a shown
+    // field is missing (the server's own 422 text) or one of their photos is not stored yet.
+    if (kitFields) {
+      const shown = [...shownItemFields.map((f) => f.fx), ...(boxFields ? [boxFx] : [])];
+      const missing = countMissing(shown);
+      const shots = shown.flatMap((fx) => fx.photosPending.flatMap((id) => fx.drafts[id]?.photos ?? []));
+      const held = (gate ? fieldsGateText(missing.required, missing.notes) : null)
+        ?? (shots.length === 0 ? null : shots.some((s) => s.failed) ? PHOTO_FAILED : PHOTO_UPLOADING);
+      if (held) { setError(held); return; }
+    }
     setSubmitting(true); setError(null);
     const submitId = (submitIdRef.current ??= newActionId());
+    // With a config every row answers it (D5): each arrived item as "kit_item" and the box as "box",
+    // on the kit's route, version and step. Their verdict is { suggested } only — the worker's own
+    // decision stays in Result / Passed, as today.
+    const kitItemRef: FieldsSchemaRef | null = kitFields ? { ...kitFields.schema, target: "kit_item" } : null;
+    const itemBlock = (it: PackageItemView, ref: FieldsSchemaRef) => buildFieldsBlock(defsOf(it), draftsOf(it), ref, {});
+    /** An item packed anyway has no result row: its fields travel in its decision. */
+    const decisionFields = (it: PackageItemView, ref: FieldsSchemaRef) => {
+      const { fields, verdict } = itemBlock(it, ref);
+      return { fields, suggested: verdict.suggested };
+    };
     try {
       for (const it of items) {
         if (!arrived(it) || committedRef.current.has(it.item_id)) continue;
@@ -94,11 +212,14 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ItemID: Number(it.item_id), StationID: station.test_station_id, WorkerID: workerId ?? undefined, WorkerName: workerName || undefined, SubmitID: submitId,
-            Result: 1, Passed: true, Details: { closing: true, packed: true, package_id: String(item.item_id) },
+            Result: 1, Passed: true, Details: { closing: true, packed: true, package_id: String(item.item_id), ...(kitItemRef ? itemBlock(it, kitItemRef) : {}) },
           }),
         });
         if (!res.ok) {
           const d = await res.json().catch(() => ({}));
+          // 409 FIELDS_SCHEMA_MISMATCH: the fields changed while the wizard was open — load them
+          // again, whatever the last answer was; the drafts stay (by FieldId).
+          if (shouldReloadFields(d)) sf.reload();
           throw new Error(`שמירת הפריט ${it.serial_no ?? seq2(it.package_seq)} נכשלה${d?.error ? ` — ${d.error}` : ` (${res.status})`}`);
         }
         committedRef.current.add(it.item_id);
@@ -108,12 +229,19 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
         Details: {
           sku: scan.trim(), hasRU: boxLookup.ref?.hasRU ?? null, closing: true, checks: CHECKS.map((label, i) => ({ label, ok: checks[i] })), note,
           packed: items.filter((it) => arrived(it) && packed[it.item_id]).map((it) => it.item_id),
-          decisions: items.filter((it) => decisions[it.item_id]).map((it) => ({ item_id: it.item_id, decision: decisions[it.item_id].decision, note: decisions[it.item_id].note })),
+          decisions: items.filter((it) => decisions[it.item_id]).map((it) => ({
+            item_id: it.item_id, decision: decisions[it.item_id].decision, note: decisions[it.item_id].note,
+            // Every "נארז בכל זאת" carries `fields` when the kit has a config, filled or not (D5);
+            // "חסר במארז" carries none.
+            ...(kitItemRef && decisions[it.item_id].decision === "packed_anyway" ? decisionFields(it, kitItemRef) : {}),
+          })),
+          ...(kitFields ? boxFx.toBlock({ ...kitFields.schema, target: "box" }, {}) : {}),
         },
       });
       setStep(STEPS.length - 1);
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : "שגיאה בשמירת סגירת המארז");
+      if (shouldReloadFields(e)) sf.reload();
     } finally {
       setSubmitting(false);
     }
@@ -160,14 +288,16 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
 
         {stepKey === "arrival" && (
           <div style={{ marginTop: 20 }}>
+            {fieldsWaiting && <div style={{ marginBottom: 14 }}><FieldsBlockFallback sf={sf} /></div>}
             <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, overflow: "hidden" }}>
+              {itemFieldsOn && <PackFieldsBand title={BLOCK_TITLE.closing} count={shownItemFields.reduce((n, f) => n + inputFieldCount(f.defs), 0)} />}
               {items.map((it) => {
                 const isArr = arrived(it);
                 const d = decisions[it.item_id];
                 const isPacked = packed[it.item_id] === true;
                 const name = `${seq2(it.package_seq)} · ${it.item_type_desc}`;
-                return (
-                  <div key={it.item_id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: `1px solid ${HAIR_2}`, background: isArr ? "var(--color-canvas)" : AMBER_BG, flexWrap: "wrap" }}>
+                const row = (
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: `1px solid ${HAIR_2}`, background: isArr ? "var(--color-canvas)" : AMBER_BG, flexWrap: "wrap" }}>
                     <span style={{ width: 34, height: 34, borderRadius: 9, background: isArr ? "var(--color-canvas-parchment)" : "color-mix(in srgb, var(--color-warning-ink) 10%, transparent)", color: isArr ? MUTED : AMBER_INK, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 600 }}>{it.item_type_desc}</div>
@@ -193,6 +323,18 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
                     )}
                   </div>
                 );
+                if (!itemFieldsOn) return <React.Fragment key={it.item_id}>{row}</React.Fragment>;
+                // Artboard 17: the item's row, then its fields — or, while it waits for a decision,
+                // a line that they come after it; "חסר במארז" has none.
+                const f = kitItemFields.get(it.item_id);
+                return (
+                  <div key={it.item_id} role="group" aria-label={name}>
+                    {row}
+                    {f && (f.shown
+                      ? <PackItemFields fields={f.defs} fx={f.fx} uploadPhoto={uploadTo(it.item_id)} />
+                      : d == null && <PackFieldsPending />)}
+                  </div>
+                );
               })}
             </div>
             {!allResolved && (
@@ -203,6 +345,11 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
 
         {stepKey === "packOk" && (
           <div style={{ maxWidth: 620, marginTop: 20 }}>
+            {fieldsWaiting && <div style={{ marginBottom: 26 }}><FieldsBlockFallback sf={sf} /></div>}
+            {/* Artboard 18: the box's fields before the packing checks. */}
+            {boxFields && (
+              <FieldsBlock variant="pack" title={BLOCK_TITLE.packing} groups={[{ fields: boxFields }]} fx={boxFx} uploadPhoto={uploadTo(item.item_id)} />
+            )}
             <div role="group" aria-label="תקינות האריזה" style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               {CHECKS.map((label, i) => {
                 const on = checks[i];
@@ -215,8 +362,14 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
                 );
               })}
             </div>
-            <label htmlFor={noteId} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "18px 0 7px" }}>הערות אריזה</label>
-            <textarea id={noteId} value={note} onChange={(e) => setNote(e.target.value)} placeholder="אופציונלי" className="pkg-field pkg-field--area" />
+            {boxFields && <SuggestionLine fails={boxFx.ev.fails} defs={boxFields} prefix={SUGGEST_PREFIX} size="12.5" style={{ marginTop: 9 }} />}
+            <label htmlFor={noteId} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "18px 0 7px" }}>{PACK_NOTE_LABEL}</label>
+            {boxFields ? (
+              // Artboard 18 `pk`: the column's full width, three lines growing to six.
+              <NotesField size="pack" id={noteId} value={note} onChange={setNote} placeholder="אופציונלי" editorTitle={noteEditorTitle(PACK_NOTE_LABEL)} />
+            ) : (
+              <textarea id={noteId} value={note} onChange={(e) => setNote(e.target.value)} placeholder="אופציונלי" className="pkg-field pkg-field--area" />
+            )}
           </div>
         )}
 
