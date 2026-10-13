@@ -513,6 +513,9 @@ async function verify(made) {
 try {
   cookie = await mintSession();
   const probe = await api("GET", "/api/settings/item-types", undefined, { quiet: true });
+  if (probe.status >= 500) {
+    throw new Error(`the app at ${API_BASE} could not read the item types (status ${probe.status}) — see its server log (database?)`);
+  }
   if (!probe.ok || !Array.isArray(probe.json)) {
     throw new Error(`the app at ${API_BASE} did not accept the session (status ${probe.status}) — is it running, with the same AUTH_SECRET?`);
   }

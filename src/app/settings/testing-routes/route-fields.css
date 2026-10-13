@@ -1,0 +1,237 @@
+/* =========================================================================
+   /settings/testing-routes — the route-fields screen (spec §5.2, §5.12; D6).
+   rf-* classes only, tokens only (src/styles/tokens.css). The page sits in
+   the settings frame (settings.css); `.settings-wide` on its root lifts the
+   1180 column for the map and the editor (settings.css).
+   ========================================================================= */
+
+/* ------------------------------------------------------------ page --- */
+/* Artboards 1, 8, 11: header, context card, tabs and the view, 16px apart. */
+.rf-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* --------------------------------------------------------- header --- */
+/* "נשמר אוטומטית לפני רגע" / "אין שינויים לפרסום": 12px muted. */
+.rf-header-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+}
+/* A save that failed: the one tone used for text is the destructive one. */
+.rf-header-note--failed { color: var(--color-destructive); }
+.rf-header-note--conflict { color: var(--color-warning-ink); }
+.rf-header-note > .sh-btn.sh-btn--text { font-size: var(--text-fine); min-height: 28px; padding: 4px 8px; }
+.rf-header-pill { font-variant-numeric: tabular-nums; }
+
+/* "בעיה אחת לתיקון" (artboards 1, 2, 8): warning ink for the text and the
+   edge, on the warning wash, in place of the publish button. */
+.sh-btn.rf-issues-btn {
+  background: var(--color-warning-bg);
+  font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sh-btn.rf-issues-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-warning-ink) 8%, var(--color-warning-bg));
+  }
+}
+/* The Send glyph points the reading way (artboards draw it mirrored). */
+.rf-send-icon { transform: scaleX(-1); }
+
+/* --------------------------------------------------- context card --- */
+/* <section aria-label="מסלול נבחר">: one row that wraps (artboard 1). */
+.rf-context-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 14px 18px;
+  overflow: visible;
+}
+.rf-context-card__pick { width: 380px; max-width: 100%; }
+.rf-context-card__tags {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  align-self: flex-end;
+  padding-bottom: var(--space-xs);
+}
+.rf-context-card__actions {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  align-self: flex-end;
+}
+.sh-iconbtn.rf-help-btn { color: var(--color-ink-muted-48); }
+
+/* "קיצורי מקלדת" — the AnchoredPopover of the "?" button (spec §5.16). */
+.rf-kbd-popover {
+  box-sizing: border-box;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  padding: 14px 16px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  color: var(--color-ink);
+}
+.rf-kbd-popover__title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+}
+.rf-kbd-popover__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--text-small);
+  line-height: var(--lh-snug);
+  color: var(--color-ink-muted-70);
+}
+/* Key names: the artboard's "Ctrl V" hint (artboard 1, selection bar). */
+.rf-kbd {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+  font-family: inherit;
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-muted-48);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  padding: 0 5px;
+}
+
+/* -------------------------------------------------------- view tabs --- */
+/* <nav aria-label="תצוגות">: 44px, gap 24, hairline under; the active tab
+   blue / 600 with a 2px underline (artboards 1, 8). */
+.rf-view-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-lg);
+  height: 44px;
+  border-bottom: 1px solid var(--color-hairline);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.rf-view-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-70);
+  text-decoration: none;
+  transition: color var(--dur-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rf-view-tab:hover { color: var(--color-ink); }
+}
+.rf-view-tab[aria-current="page"],
+.rf-view-tab[aria-current="true"] {
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+  box-shadow: inset 0 -2px 0 var(--color-primary);
+}
+.rf-view-tab:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; border-radius: var(--r-xs); }
+/* "שלבי המסלול 5": 12px, parchment, hairline. */
+.rf-view-tab__count {
+  font-size: var(--text-fine);
+  font-weight: var(--fw-regular);
+  color: var(--color-ink-muted-48);
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+  padding: 1px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------- map view --- */
+/* Where the fields map goes; the header's "בעיה אחת לתיקון" scrolls here. */
+.rf-map-region { scroll-margin-top: var(--space-md); }
+.rf-map-region:focus { outline: none; }
+
+/* Loading: the map's shape — a column header and 6 rows (spec §5.12). */
+.rf-map-skeleton {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+.rf-map-skeleton__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 240px) repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border-top: 1px solid var(--color-divider-soft);
+}
+.rf-map-skeleton__row:first-child { border-top: 0; }
+.rf-map-skeleton__row--head { background: var(--color-surface-pearl); }
+.rf-map-skeleton__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+.rf-map-skeleton__lines { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+
+/* No steps / kit without contents (artboard 11): a card with the empty state. */
+.settings-empty.rf-state-card {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  padding: var(--space-xl) var(--space-lg);
+}
+.rf-state-card .settings-empty__title { margin: var(--space-xxs) 0 0; }
+.rf-state-card p { margin: 0; }
+
+/* Load failure (artboard 11): danger wash, radius 11, padding 24. */
+.rf-load-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  background: var(--color-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent);
+  border-radius: var(--r-md);
+}
+.rf-load-error__icon { flex: none; margin-top: 2px; color: var(--color-destructive); }
+.rf-load-error__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.rf-load-error__title {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink);
+}
+.rf-load-error__text {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  color: var(--color-ink-muted-70);
+}
+.rf-load-error .sh-btn { margin-top: 10px; }
+.rf-load-error .sh-btn--outlined:not(:disabled) { background: var(--color-canvas); }
+@media (hover: hover) and (pointer: fine) {
+  .rf-load-error .sh-btn--outlined:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primary) 6%, var(--color-canvas));
+  }
+}

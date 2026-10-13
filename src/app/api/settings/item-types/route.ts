@@ -26,8 +26,10 @@ export async function GET() {
     return NextResponse.json(trimmed);
   } catch (error) {
     console.error("Error fetching item types:", error);
-    // Return empty array instead of error to prevent frontend crashes
-    return NextResponse.json([]);
+    // A real error, never []: a settings screen reads an empty list as "no item
+    // types", and the seed scripts would create the "missing" ones (route-fields
+    // spec §11 rule 12).
+    return NextResponse.json({ error: "Failed to fetch item types" }, { status: 500 });
   }
 }
 

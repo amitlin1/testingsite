@@ -160,7 +160,10 @@ export default function PackagesSettingsPage() {
       const all = typesRes.ok ? await typesRes.json() : [];
       if (!typesRes.ok) setTypesFailed(true);
       setItemTypes(Array.isArray(all) ? all : []);
-      if (list.length > 0) setSelectedId((cur) => cur ?? list[0].item_type_id);
+      // ?type={id} (the testing-routes screen's "פתח במסך המארזים") opens that package type.
+      const wanted = Number(new URLSearchParams(window.location.search).get("type"));
+      const first = list.find((t) => t.item_type_id === wanted) ?? list[0];
+      if (first) setSelectedId((cur) => cur ?? first.item_type_id);
     } catch {
       setTypesFailed(true);
     } finally {
@@ -281,8 +284,10 @@ export default function PackagesSettingsPage() {
       if (!res.ok) { say(data?.error || "יצירת סוג המארז נכשלה. נסה שוב.", "error"); return; }
       setNewOpen(false); setNewName(""); setNewRoute("");
       const list = await loadTypes();
-      const all = await apiFetch("/api/settings/item-types").then((r) => (r.ok ? r.json() : []));
-      setItemTypes(Array.isArray(all) ? all : []);
+      // A failed re-read keeps the list we have: it is not "no item types" (the new type is a
+      // package type, which the contents editor does not list anyway).
+      const all = await apiFetch("/api/settings/item-types").then((r) => (r.ok ? r.json() : null));
+      if (Array.isArray(all)) setItemTypes(all);
       setSelectedId(list.find((t) => t.item_type_id === data.item_type_id)?.item_type_id ?? data.item_type_id);
       say("סוג המארז נוצר");
     } catch {

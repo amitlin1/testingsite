@@ -523,7 +523,12 @@ async function ensureReference() {
 
   // item types ------------------------------------------------------------
   const gotItemTypes = await api("GET", "/api/settings/item-types");
-  const existingItemTypes = gotItemTypes.json || [];
+  // A failed read is not "no item types yet": the handler answers 500 with an
+  // { error } body, and creating the "missing" types would duplicate them.
+  if (!gotItemTypes.ok || !Array.isArray(gotItemTypes.json)) {
+    throw new Error(`GET /api/settings/item-types failed (${gotItemTypes.status || "network"}) — cannot reconcile item types without the existing list; see findings above`);
+  }
+  const existingItemTypes = gotItemTypes.json;
   for (const t of ITEM_TYPES) {
     const hit = existingItemTypes.find((r) => trim(r.item_type_desc) === t.desc);
     let id = hit?.item_type_id;
