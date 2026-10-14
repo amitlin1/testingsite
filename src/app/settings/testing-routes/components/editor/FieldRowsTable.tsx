@@ -43,6 +43,10 @@ export type FieldRowsTableProps = {
   stationLabel: string;
   rowLabel: string;
   listName: (ref: VersionRef) => string | null;
+  /** In a field set (artboard 8): a linked field's "רשימה: {name}" opens the list in the library. */
+  onOpenList?: (ref: VersionRef) => void;
+  /** Extra class on the table frame — the field set's own column grid (library.css). */
+  className?: string;
 };
 
 type Drop = { id: FieldId; after: boolean };
@@ -102,7 +106,7 @@ export function FieldRowsTable(props: FieldRowsTableProps) {
 
   return (
     <div className="sfe-table-scroll">
-      <div className="sfe-table">
+      <div className={props.className ? "sfe-table " + props.className : "sfe-table"}>
         <div className="sfe-table__head" aria-hidden="true">
           <span />
           <span>{EDITOR_TEXT.colName}</span>
@@ -148,6 +152,7 @@ export function FieldRowsTable(props: FieldRowsTableProps) {
             stationLabel={props.stationLabel}
             rowLabel={props.rowLabel}
             listName={props.listName}
+            onOpenList={props.onOpenList}
           />
         ))}
       </div>

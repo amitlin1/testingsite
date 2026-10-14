@@ -20,6 +20,8 @@ import { MAP_ERROR_ACTION_ID } from "./components/map/FieldsMapErrorBar";
 import StationFieldEditor from "./components/editor/StationFieldEditor";
 import { EditorBreadcrumb } from "./components/editor/EditorBreadcrumb";
 import PublishDialog from "./components/dialogs/PublishDialog";
+import FieldLibrary from "./components/library/FieldLibrary";
+import { useFieldSetNames, useFieldSetVersions } from "./lib/useLibrary";
 import { DraftStoreProvider, useFieldsMap, useStepsOutOfContextKey } from "./lib/draftStore";
 import { findCell } from "./lib/mapModel";
 import type { CellBinding } from "./lib/mapModel";
@@ -247,7 +249,10 @@ function RouteFieldsScreen({
   optionsLoaded, onRetryOptions, ctx, context, onStepsSaved,
 }: ScreenProps) {
   const ref = useMemo(() => routeRefOf(query), [query]);
-  const map = useFieldsMap(context);
+  // Field sets (session 2d): their versions mark "הערכה עודכנה" cells, their names the "ערכה: …" tags.
+  const setVersions = useFieldSetVersions();
+  const setNames = useFieldSetNames();
+  const map = useFieldsMap(context, setVersions);
   const view = query.view;
   const editorOpen = isEditorOpen(query);
 
@@ -392,7 +397,7 @@ function RouteFieldsScreen({
         return editorOpen ? (
           <StationFieldEditor context={ctx.data} model={map} query={query} onNavigate={navigate} breadcrumbOutside />
         ) : (
-          <FieldsMap context={ctx.data} model={map} query={query} onOpenCell={openCell} />
+          <FieldsMap context={ctx.data} model={map} query={query} onOpenCell={openCell} setNames={setNames} />
         );
     }
   };
@@ -450,7 +455,8 @@ function RouteFieldsScreen({
         />
       )}
 
-      {/* view === "library": "ערכות ורשימות" (artboard 8) is session 2d's. */}
+      {/* "ערכות ורשימות" (artboard 8): global, independent of the chosen route. */}
+      {view === "library" && <FieldLibrary query={query} onNavigate={navigate} />}
     </div>
   );
 }

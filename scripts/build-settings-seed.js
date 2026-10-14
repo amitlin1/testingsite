@@ -8,8 +8,9 @@
 //
 // WHAT IT CAPTURES: the lookup/configuration tables behind every /settings page
 // — customers, item types, sources, the two status lists, station types and
-// stations, testing routes and their published station-field versions, photo
-// types, reference items and their image records, and the work-hours calendar. NOT transactional data (items,
+// stations, testing routes and their published station-field versions, the
+// station-field libraries (option lists, field sets), photo types, reference
+// items and their image records, and the work-hours calendar. NOT transactional data (items,
 // shipments, test results, snapshots): a new installation starts empty of those.
 // Identity ("who did this") is Keycloak-only now — no local `workers` table.
 //
@@ -62,7 +63,13 @@ const MINIO_CONTAINER = arg("minio", "FileServiceDB");
 // route_field_versions travels with testing_routes: a route's fields_version
 // names one of its rows, and a route that points at a version the target does
 // not have answers 500 in the routes screen and freezes a dangling version at
-// every intake. (option_lists / field_sets join in phase 2 of station fields.)
+// every intake.
+//
+// option_lists and field_sets have no foreign key, but they travel with the
+// routes all the same: a field's list_ref / from_set inside a route config (a
+// draft or a published version) names their ids, so they are dumped with those
+// ids — archived rows too, since an older version may still name one — and the
+// sequence reset below moves past them.
 const TABLES = [
   // no dependencies
   "customers",
@@ -75,6 +82,8 @@ const TABLES = [
   "holiday_types",
   "weekday_defaults",
   "workday_overrides",
+  "option_lists",
+  "field_sets",
   // depend on the above
   "reference_items",
   "test_stations",

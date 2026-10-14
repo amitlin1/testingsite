@@ -1,0 +1,474 @@
+/* =========================================================================
+   "ערכות ורשימות" — the field sets and option lists library (artboard 8,
+   route-fields spec §5.9): the list pane, the set editor and the list
+   detail. rf-lib-* classes only, tokens only (src/styles/tokens.css).
+   Logical properties throughout: the page is RTL. The page keeps the 1180
+   column here (spec §5.2).
+   ========================================================================= */
+
+/* Two panes on the .stations-grid pattern (330px + flexible, 20 apart, one
+   column under 900px); the page already spaces the view from the tabs. */
+.stations-grid.rf-lib { margin-top: 0; }
+
+/* The one tone dot (6px): always beside its word or in a row of dots. */
+.rf-tone-dot {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+}
+.rf-tone-dot[data-tone="pass"] { background: var(--rf-tone-pass); }
+.rf-tone-dot[data-tone="warn"] { background: var(--rf-tone-warn); }
+.rf-tone-dot[data-tone="fail"] { background: var(--rf-tone-fail); }
+.rf-tone-dot[data-tone="neutral"] { background: var(--rf-tone-neutral); }
+
+/* --------------------------------------------------------- list pane --- */
+.rf-lib-pane { min-width: 0; }
+.rf-lib-pane__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-hairline);
+}
+/* The segmented control: two 32px pills, the chosen one soft blue. */
+.rf-lib-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.rf-lib-seg__btn {
+  flex: 1 1 auto;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-70);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rf-lib-seg__btn:hover:not([aria-pressed="true"]) { border-color: var(--color-border-strong); }
+}
+.rf-lib-seg__btn[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+.rf-lib-seg__btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.rf-lib-pane__title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-xs); }
+.rf-lib-pane__title { margin: 0; font-size: var(--text-body); font-weight: var(--fw-bold); color: var(--color-ink); }
+.sh-btn.rf-lib-pane__new { gap: 4px; padding: 5px 13px; white-space: nowrap; }
+.rf-lib-error { font-size: var(--text-fine); font-weight: var(--fw-semibold); color: var(--color-destructive); }
+
+/* The pill search, 40px, the glass at its inline start. */
+.rf-lib-search { position: relative; display: flex; align-items: center; }
+.rf-lib-search__icon {
+  position: absolute;
+  inset-inline-start: 14px;
+  color: var(--color-ink-muted-48);
+  pointer-events: none;
+}
+.rf-lib-search__input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  padding-inline: 42px 14px;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  outline: none;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+.rf-lib-search__input::placeholder { color: var(--color-ink-muted-48); }
+.rf-lib-search__input:focus {
+  border-color: var(--color-primary-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+
+/* A row: the .stz-row pattern as one 56px button. */
+.stz-row.rf-lib-row {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 18px;
+  border: 0;
+  border-top: 1px solid var(--color-divider-soft);
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  text-align: start;
+}
+.stz-row.rf-lib-row[data-selected] { background: var(--color-primary-tint); }
+.stz-row.rf-lib-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+.rf-lib-rows > :first-child > .rf-lib-row,
+.rf-lib-rows > .rf-lib-row:first-child { border-top: 0; }
+.rf-lib-row__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rf-lib-row__name { font-size: var(--text-body-sm); font-weight: var(--fw-semibold); color: var(--color-ink); overflow-wrap: anywhere; }
+.rf-lib-row[data-selected] .rf-lib-row__name { color: var(--color-primary); }
+.rf-lib-row__line { font-size: var(--text-fine); color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; }
+.rf-lib-row__dirty { flex: none; width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--color-status-late); }
+.rf-lib-row__dots { flex: none; display: inline-flex; gap: 3px; }
+.rf-lib-row__chev { flex: none; color: var(--color-ink-muted-48); }
+.rf-lib-row--skeleton { flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; cursor: default; }
+
+/* "אין תוצאות", and a load that failed. */
+.rf-lib-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 32px 18px;
+  text-align: center;
+}
+.rf-lib-empty--rule { border-top: 1px solid var(--color-divider-soft); }
+.rf-lib-empty__title { font-size: var(--text-body); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.rf-lib-empty__body { font-size: var(--text-small); color: var(--color-ink-muted-48); }
+
+.rf-lib-pane__foot {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  padding: 12px 18px;
+  background: var(--color-surface-pearl);
+  border-top: 1px solid var(--color-hairline);
+  font-size: var(--text-fine);
+  line-height: 1.5;
+  color: var(--color-ink-muted-48);
+}
+.rf-lib-pane__foot-icon { flex: none; margin-top: 1px; }
+
+/* ------------------------------------------- the editor pane (both) --- */
+.settings-card.rf-lib-editor {
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-ml);
+  overflow: visible;
+}
+.rf-lib-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.rf-lib-head__titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rf-lib-head__title-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.rf-lib-head__title-row .sh-tag { font-variant-numeric: tabular-nums; }
+.rf-lib-head__title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+.sh-iconbtn.rf-lib-head__rename { width: 32px; height: 32px; color: var(--color-ink-muted-48); }
+/* The name in place of the h2: the same 20/700, a field's edge and halo. */
+.rf-lib-rename {
+  box-sizing: border-box;
+  width: 320px;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--color-primary-focus);
+  border-radius: var(--r-field);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-title);
+  font-weight: var(--fw-bold);
+  outline: none;
+}
+.rf-lib-head__meta { font-size: var(--text-fine); color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; }
+/* "שינויים שלא נשמרו · יישמרו כגרסה {v+1}": warning ink, the orange dot. */
+.rf-lib-head__dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  color: var(--color-warning-ink);
+  font-variant-numeric: tabular-nums;
+}
+.rf-lib-head__dirty-dot { flex: none; width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--color-status-late); }
+.rf-lib-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sh-btn.rf-lib-ghost { min-height: 36px; padding: 8px 12px; gap: 6px; }
+.sh-btn.rf-lib-edit-options { gap: 6px; white-space: nowrap; }
+
+/* A pearl block: the usage of a set, "בערכות שדות" of a list. */
+.rf-lib-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-divider-soft);
+  border-radius: var(--r-md);
+  background: var(--color-surface-pearl);
+}
+.rf-lib-block__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.rf-lib-block__icon { flex: none; color: var(--color-ink-muted-48); }
+.rf-lib-block__title { font-size: var(--text-small); font-weight: var(--fw-semibold); color: var(--color-ink-muted-80); font-variant-numeric: tabular-nums; }
+.rf-lib-block__hint { font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+.rf-lib-block__para { margin: 0; font-size: var(--text-small); line-height: 1.5; color: var(--color-ink-muted-48); }
+.rf-lib-inline-error { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--text-fine); font-weight: var(--fw-semibold); color: var(--color-destructive); }
+
+/* Chips: a cell that uses the set (a link to its editor), a set that uses the list. */
+.rf-lib-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.rf-lib-chip {
+  box-sizing: border-box;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-small);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+a.rf-lib-chip, button.rf-lib-chip { cursor: pointer; }
+@media (hover: hover) and (pointer: fine) {
+  a.rf-lib-chip:hover, button.rf-lib-chip:hover { border-color: var(--color-border-strong); color: var(--color-ink); }
+}
+.rf-lib-chip:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+/* A cell on an older version: the warning wash and a white "גרסה {n}". */
+.rf-lib-chip[data-old] { background: var(--color-warning-bg); border-color: var(--color-warning-border); }
+.rf-lib-chip__icon { flex: none; color: var(--color-ink-muted-48); }
+.rf-lib-chip__old {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--color-canvas);
+  color: var(--color-warning-ink);
+  font-size: var(--text-micro);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.rf-lib-chip__name { font-weight: var(--fw-semibold); }
+.rf-lib-chip__line { color: var(--color-ink-muted-48); }
+.rf-lib-more {
+  box-sizing: border-box;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  color: var(--color-primary);
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rf-lib-more:hover { color: var(--color-primary-hover); background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
+}
+.rf-lib-more:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+
+/* "{n} תאים משתמשים בגרסה קודמת של הערכה": role="status", the warning wash. */
+.rf-lib-outdated {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--r-md);
+  background: var(--color-warning-bg);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+}
+.rf-lib-outdated__icon { flex: none; color: var(--color-warning-ink); }
+.rf-lib-outdated__text { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; }
+.rf-lib-outdated__title { font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+.rf-lib-outdated__note { font-size: var(--text-fine); color: var(--color-ink-muted-70); }
+.sh-btn.rf-lib-outdated__btn { background: var(--color-canvas); padding: 5px 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* "שדות בערכה · {n}" / "אפשרויות · {n}" and their notes. */
+.rf-lib-fields { display: flex; flex-direction: column; gap: var(--space-xs); }
+.rf-lib-fields__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-xs); }
+.rf-lib-fields__title {
+  margin: 0;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-80);
+  font-variant-numeric: tabular-nums;
+}
+.rf-lib-fields__note { font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+
+/* The set's rows table: artboard 8's columns (the editor's are 140 / 100). */
+.sfe-table.rf-set-table .sfe-table__head,
+.sfe-table.rf-set-table .sfe-row { grid-template-columns: 28px 150px minmax(0, 1fr) 104px 56px 32px; }
+
+/* "אין עדיין שדות בערכה". */
+.rf-lib-empty-set {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 40px 24px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+  text-align: center;
+}
+.rf-lib-empty-set__icon { color: var(--color-ink-muted-48); }
+.rf-lib-empty-set__title { font-size: var(--text-body); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.rf-lib-empty-set__body { font-size: var(--text-small); color: var(--color-ink-muted-48); }
+
+.rf-lib-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-divider-soft);
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+}
+.rf-lib-foot__stats { font-weight: var(--fw-semibold); color: var(--color-ink-muted-70); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------- the list detail --- */
+.rf-lib-opts { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+/* An option: 36px, the mono key box, dot, label, tone word. */
+.rf-lib-opt {
+  box-sizing: border-box;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-inline: 12px 8px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  background: var(--color-canvas-parchment);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+.rf-lib-opt__key {
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-70);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+.rf-lib-opt__word { font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+.rf-lib-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  color: var(--color-success-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-lib-cols { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-md); }
+.rf-lib-cols__verdict { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
+.rf-lib-cols__worker { flex: 0 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.rf-lib-cols__note { font-size: var(--text-fine); line-height: 1.5; color: var(--color-ink-muted-48); }
+
+/* "איך כל אפשרות נספרת בפסק הדין": a row per tone. */
+.rf-lib-tones { border: 1px solid var(--color-hairline); border-radius: var(--r-md); overflow: hidden; }
+.rf-lib-tones__row {
+  box-sizing: border-box;
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: var(--space-xs);
+  align-items: center;
+  padding: 6px 14px;
+}
+.rf-lib-tones__row + .rf-lib-tones__row { border-top: 1px solid var(--color-divider-soft); }
+.rf-lib-tones__word { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-small); font-weight: var(--fw-semibold); }
+.rf-lib-tones__labels { font-size: var(--text-body-sm); color: var(--color-ink); }
+.rf-lib-tones__labels[data-empty] { color: var(--color-ink-muted-48); }
+
+/* "כך העובד יראה את הרשימה": a still picture of the worker's open list. */
+.rf-lib-mock { display: flex; flex-direction: column; gap: 6px; }
+.rf-lib-mock__box {
+  box-sizing: border-box;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0 12px;
+  border: 1px solid var(--color-primary-focus);
+  border-radius: var(--r-field);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+  background: var(--color-canvas);
+  font-size: var(--text-body);
+}
+.rf-lib-mock__ph { flex: 1; color: var(--color-ink-muted-40); }
+.rf-lib-mock__chev { flex: none; color: var(--color-ink-muted-48); }
+.rf-lib-mock__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-field);
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-pop);
+}
+.rf-lib-mock__row {
+  box-sizing: border-box;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 9px 10px;
+  border-radius: 6px;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+}
+.rf-lib-mock__row[data-first] { background: var(--color-canvas-parchment); }
+.rf-lib-mock__label { flex: 1; min-width: 0; }
+.rf-lib-mock__key {
+  padding: 0 5px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-48);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+
+/* The impact note: role="note", tint, primary edge. */
+.rf-lib-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--r-md);
+  background: var(--color-primary-tint);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+.rf-lib-note__icon { flex: none; color: var(--color-primary); }

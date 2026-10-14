@@ -9,6 +9,7 @@ import type { Issue } from "@/app/lib/station-fields/validate";
 import { bindingKey, columnCells } from "./mapModel";
 import type { FieldsMapModel, MapCell, MapRow } from "./mapModel";
 import { DEFAULT_CHOICE_OPTIONS, EDITOR_COPY_PENDING, EDITOR_TEXT, stopSubText } from "./labels";
+import { findDefaultCheckList } from "./libraryModel";
 
 /**
  * The station field editor's pure half (route-fields spec §5.5, §5.15, §5.16, §10.3; artboard 2):
@@ -39,19 +40,27 @@ export function defaultOptions(ids: IdSource = DEFAULT_IDS): ChoiceOption[] {
   return DEFAULT_CHOICE_OPTIONS.map((o) => ({ id: ids.option(), label: o.label, tone: o.tone }));
 }
 
+/** A shared option list as newField needs it (OptionListJson's members). */
+export type SharedListLike = { id: number; name: string; version: number; options: readonly ChoiceOption[] };
+
 /**
  * A new row of `type`. Artboard 2's "הוסף שורת בדיקה": a choice row with the "תקינות כללית" options,
- * notes "חובה בכשל", not required, no name yet. Every other type takes the same notes / required
- * defaults (spec §5.14's defaults for pasted rows); a number field counts out of range as a fail
- * (artboard 3 draws the switch on); a section is "מקטע חדש". The options are local copies — linking
- * them to the shared list "תקינות כללית" needs the option lists of session 2d.
+ * notes "חובה בכשל", not required, no name yet — LINKED to the shared list "תקינות כללית" (list_ref and
+ * a copy of its options) when `lists` has it, else a local copy of artboard 2's options. Every other
+ * type takes the same notes / required defaults (spec §5.14's defaults for pasted rows); a number
+ * field counts out of range as a fail (artboard 3 draws the switch on); a section is "מקטע חדש".
  */
-export function newField(type: FieldType, ids: IdSource = DEFAULT_IDS): Field {
+export function newField(type: FieldType, ids: IdSource = DEFAULT_IDS, lists: readonly SharedListLike[] | null = null): Field {
   const id = ids.field();
   if (type === "section") return { id, type, label: EDITOR_TEXT.newSection };
   const base = { id, label: "", required: false, notes: "required_on_fail" as const };
   switch (type) {
-    case "choice_row":
+    case "choice_row": {
+      const shared = findDefaultCheckList(lists);
+      return shared
+        ? { ...base, type, options: shared.options.map((o) => ({ ...o })), list_ref: { id: shared.id, ver: shared.version } }
+        : { ...base, type, options: defaultOptions(ids) };
+    }
     case "multi_choice":
       return { ...base, type, options: defaultOptions(ids) };
     case "number":

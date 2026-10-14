@@ -68,6 +68,24 @@ test("a new check row is artboard 2's addRow: the 'תקינות כללית' opti
   assert.equal(defaultOptions(ids()).length, 4);
 });
 
+test("a new check row links to the shared list 'תקינות כללית' when there is one (session 2d)", () => {
+  const shared = {
+    id: 7,
+    name: " תקינות כללית ",
+    version: 3,
+    options: [{ id: "o_shared01", label: "תקין", tone: "pass" as const }, { id: "o_shared02", label: "לא תקין", tone: "fail" as const }],
+  };
+  const other = { id: 8, name: "מצב נורית", version: 1, options: [] };
+  const f = newField("choice_row", ids(), [other, shared]) as ChoiceRowField;
+  assert.deepEqual(f.list_ref, { id: 7, ver: 3 });
+  assert.deepEqual(f.options, shared.options);
+  assert.notEqual(f.options[0], shared.options[0], "the options are a copy");
+  assert.deepEqual(parseFieldList([f]), [f]);
+  // No such list: today's local copy, unlinked; other types never link.
+  assert.equal((newField("choice_row", ids(), [other]) as ChoiceRowField).list_ref, undefined);
+  assert.equal((newField("multi_choice", ids(), [shared]) as { list_ref?: unknown }).list_ref, undefined);
+});
+
 test("every type's new row passes the shape check", () => {
   const src = ids();
   const all = FIELD_TYPES.map((t) => newField(t, src));

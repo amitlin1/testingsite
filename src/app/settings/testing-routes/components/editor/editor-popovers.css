@@ -328,12 +328,6 @@
   border-color: var(--color-primary-border);
   color: var(--color-primary);
 }
-.rf-olp__seg-btn[aria-disabled="true"] {
-  color: var(--color-ink-muted-48);
-  background: var(--color-canvas-parchment);
-  border-color: var(--color-canvas-parchment);
-  cursor: not-allowed;
-}
 .rf-olp__seg-btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
 .sh-iconbtn.rf-olp__close { margin-inline-start: auto; flex: none; color: var(--color-ink-muted-48); }
 .rf-olp__body {
@@ -526,3 +520,151 @@
   border-top: 1px solid var(--color-hairline);
 }
 .rf-olp__foot-end { margin-inline-start: auto; display: flex; align-items: center; gap: 12px; }
+/* "שמור כרשימה חדשה…": ghost, 14/600, at the footer's inline start. */
+.sh-btn.rf-olp__save-new { min-height: 36px; padding: 8px 10px; gap: 6px; }
+
+/* ----------------------------------------- shared mode (artboard 4) --- */
+/* The lists column: inline-start, 200px, parchment, radius 8. */
+.rf-olp__lists {
+  flex: 0 0 200px;
+  width: 200px;
+  box-sizing: border-box;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  border-radius: var(--r-sm);
+  background: var(--color-canvas-parchment);
+}
+.rf-olp__search { position: relative; display: flex; align-items: center; flex: none; }
+.rf-olp__search-icon {
+  position: absolute;
+  inset-inline-start: 10px;
+  color: var(--color-ink-muted-48);
+  pointer-events: none;
+}
+.sh-input.rf-olp__search-input {
+  height: 34px;
+  padding: 0 10px;
+  padding-inline-start: 32px;
+  font-size: var(--text-body-sm);
+}
+/* "רשימות משותפות" · "שדות": 11/600 muted. */
+.rf-olp__lists-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: 2px 6px 0;
+  font-size: var(--text-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-48);
+}
+.rf-olp__lists-rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* A list: 40px, the name 13/600 and its count; the chosen one tint, primary edge, blue. */
+.rf-olp__list-row {
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rf-olp__list-row:hover { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
+}
+.rf-olp__list-row[aria-pressed="true"] {
+  background: var(--color-primary-tint);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+.rf-olp__list-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 0; }
+.rf-olp__list-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+}
+.rf-olp__list-link { flex: none; display: inline-flex; color: var(--color-primary); }
+.rf-olp__list-count {
+  flex: none;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+.rf-olp__nomatch,
+.rf-olp__lists-error {
+  padding: 12px 6px;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  text-align: center;
+}
+.rf-olp__lists-error { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+/* "+ רשימה חדשה": ghost at the column's foot. */
+.sh-btn.rf-olp__newlist { flex: none; margin-top: auto; align-self: flex-start; min-height: 36px; padding: 8px; gap: 6px; }
+
+/* "שם הרשימה" and its help line. */
+.rf-olp__name { display: flex; flex-direction: column; gap: 6px; }
+.rf-olp__name-label { font-size: var(--text-small); font-weight: var(--fw-semibold); color: var(--color-ink-muted-80); }
+.sh-input.rf-olp__name-input { height: 38px; padding: 0 12px; font-size: var(--text-body-sm); }
+.rf-olp__help {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+}
+.rf-olp__help-icon { flex: none; color: var(--color-primary); }
+
+/* The impact note: role="note", tint, primary edge, radius 11. */
+.rf-olp__impact {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  padding: 10px 12px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--r-md);
+  background: var(--color-primary-tint);
+  font-size: var(--text-small);
+  line-height: 1.45;
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+.rf-olp__impact-icon { flex: none; margin-top: 2px; color: var(--color-primary); }
+
+/* A save that did not go through: the one tone used for text is the destructive one. */
+.rf-olp__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  color: var(--color-destructive);
+}
+.rf-olp__error > svg { flex: none; }
+.rf-olp__error > .sh-btn { font-size: var(--text-fine); min-height: 28px; padding: 4px 8px; }

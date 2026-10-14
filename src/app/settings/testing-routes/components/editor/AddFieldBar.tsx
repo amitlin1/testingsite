@@ -20,7 +20,9 @@ export type AddFieldBarProps = {
   pickerOpen: boolean;
   onPickerOpenChange: (open: boolean) => void;
   onAddRow: () => void;
-  onAddSection: () => void;
+  /** "+ כותרת מקטע"; without it the button is not drawn (a field set — artboard 8 has none: a section
+   *  comes from the type picker there). */
+  onAddSection?: () => void;
   /** A type from the picker (the picker closes itself). */
   onPick: (type: FieldType) => void;
 };
@@ -50,15 +52,17 @@ export function AddFieldBar({ pickerOpen, onPickerOpenChange, onAddRow, onAddSec
       >
         {EDITOR_TEXT.otherType}
       </Button>
-      <Button
-        variant="text"
-        size="small"
-        className="sfe-addbar__section"
-        startIcon={<Plus size={15} strokeWidth={1.75} aria-hidden />}
-        onClick={onAddSection}
-      >
-        {EDITOR_TEXT.addSection}
-      </Button>
+      {onAddSection && (
+        <Button
+          variant="text"
+          size="small"
+          className="sfe-addbar__section"
+          startIcon={<Plus size={15} strokeWidth={1.75} aria-hidden />}
+          onClick={onAddSection}
+        >
+          {EDITOR_TEXT.addSection}
+        </Button>
+      )}
       <FieldTypePicker open={pickerOpen} onOpenChange={onPickerOpenChange} anchorRef={typeRef} onPick={onPick} />
     </div>
   );

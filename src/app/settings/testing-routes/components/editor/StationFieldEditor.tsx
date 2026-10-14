@@ -16,10 +16,11 @@ import {
   EDITOR_COPY_PENDING, EDITOR_TEXT, editorFooterText, editorSubText, editorTitleText, fieldsTabText, targetChipText,
 } from "../../lib/labels";
 import {
-  editorCounts, issuesOfGroup, lockedRowTexts, namedFieldCount, newField, opensExpanded, packageWizardAt, popupKindOf,
-  targetChips, timelineStops,
+  DEFAULT_IDS, editorCounts, issuesOfGroup, lockedRowTexts, namedFieldCount, newField, opensExpanded, packageWizardAt,
+  popupKindOf, targetChips, timelineStops,
 } from "../../lib/editorModel";
 import type { EditorPopover, PackageWizard, PopupLookup } from "../../lib/editorModel";
+import { useOptionLists } from "../../lib/useLibrary";
 import { StationTimeline } from "./StationTimeline";
 import { SharedRouteNotice } from "./SharedRouteNotice";
 import { FieldRowsTable } from "./FieldRowsTable";
@@ -59,8 +60,9 @@ export type StationFieldEditorProps = {
   model: FieldsMapModel;
   query: RouteQuery;
   onNavigate: (q: RouteQuery) => void;
-  /** Names of the shared option lists by id, once the screen loads them (session 2d). Without a
-   *  name a linked field reads "רשימה: רשימה משותפת" (COPY-PENDING). */
+  /** Names of the shared option lists by id (useLibrary.useOptionListNames). Without it the editor
+   *  reads them from the same shared store; a name not known yet reads "רשימה: רשימה משותפת"
+   *  (COPY-PENDING). */
   listNames?: Readonly<Record<number, string>>;
   /** The host draws the breadcrumb (EditorBreadcrumb) itself — the page puts it in the view tabs'
    *  row, as artboard 2 does. Without it the editor draws it above the station bar. */
@@ -155,8 +157,11 @@ function CellEditor({ context, model, query, onNavigate, listNames, breadcrumbOu
     [store, binding, stepMeta],
   );
 
+  // The shared lists: a new "שורת בדיקה" links to "תקינות כללית" when it exists (editorModel.newField).
+  const optionLists = useOptionLists().data;
+
   const addField = (type: FieldType) => {
-    const f = newField(type);
+    const f = newField(type, DEFAULT_IDS, optionLists);
     setFields([...fields, f]);
     setFreshId(type === "section" ? null : f.id);
     if (opensExpanded(type)) setExpanded((s) => new Set(s).add(f.id));
@@ -190,7 +195,7 @@ function CellEditor({ context, model, query, onNavigate, listNames, breadcrumbOu
   const chips = targetChips(model, cell);
   const namedOf = (c: MapCell) => namedFieldCount(groupFieldsOf(drafts.routes[c.binding.route_id]?.current, c.binding.step_uid, c.binding.target));
   const showShared = !cell.packageLevel && cell.sharedWith.length > 0 && row?.routeNumber != null;
-  const listName = (ref: VersionRef) => listNames?.[ref.id] ?? null;
+  const listName = (ref: VersionRef) => listNames?.[ref.id] ?? optionLists?.find((l) => l.id === ref.id)?.name ?? null;
   const cellMenuOpen = popover?.kind === "cellMenu";
   const n = column?.n ?? 1;
   const total = model.columns.length;

@@ -4,7 +4,7 @@
  * (admin.ts, context.ts) produces exactly these shapes. Dates travel as ISO strings.
  */
 import type { Change } from "./diff";
-import type { RouteFieldsConfig } from "./schema";
+import type { ChoiceOption, Field, GroupTarget, RouteFieldsConfig } from "./schema";
 import type { Issue } from "./validate";
 
 /** A kit whose template (package_contents) runs an item type on this route. */
@@ -89,6 +89,58 @@ export type FieldVersionRowJson = FieldVersionSummaryJson & {
   config: RouteFieldsConfig;
   published_by: string | null;
 };
+
+// ---- libraries (session 2d; spec §3.2 option-lists / field-sets rows, artboards 4 and 8) ---------
+
+/** Where a library item is used: counted over every route's fields_draft AND its latest published
+ *  version (a route counts once per place, draft preferred when both have it). */
+export type LibraryUseJson = {
+  route_id: number;
+  step_uid: string;
+  /** The group of the cell ("item" | "box" | "each_item" | {item_type_id}). */
+  target: GroupTarget;
+  /** option lists: the linked field; field sets: the first field of the cell taken from the set. */
+  field_id: string;
+  /** The version the place holds (list_ref.ver / from_set.ver). */
+  ver: number;
+  in: "draft" | "published";
+  /** Labels for chips like "מארז עמדת עבודה › בדיקה ויזואלית › מחשב" (kit null for an item route). */
+  kit_desc: string | null;
+  station_label: string;
+  item_label: string;
+};
+
+/** GET /api/settings/option-lists → OptionListJson[] (archived lists omitted); POST → OptionListJson. */
+export type OptionListJson = {
+  id: number;
+  name: string;
+  options: ChoiceOption[];
+  version: number;
+  updated_at: string;
+  updated_by: string | null;
+  /** "בשימוש ב-{fields} שדות[ ב-{routes} מסלולים]". */
+  usage: { fields: number; routes: number };
+};
+
+/** GET /api/settings/field-sets → FieldSetJson[] (archived omitted); POST → FieldSetJson. */
+export type FieldSetJson = {
+  id: number;
+  name: string;
+  fields: Field[];
+  version: number;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+  /** "בשימוש ב-{cells} תאים"; outdated = cells holding an older version ("{n} תאים משתמשים בגרסה קודמת"). */
+  usage: { cells: number; outdated: number };
+};
+
+/** PUT /api/settings/option-lists/[id] → 200 (409 VERSION_CONFLICT when base_version is stale). */
+export type OptionListSavedJson = { version: number; linked: { route_id: number; step_uid: string; field_id: string }[] };
+/** PUT /api/settings/field-sets/[id] → 200 (409 VERSION_CONFLICT). */
+export type FieldSetSavedJson = { version: number };
+/** POST …/[id]/propagate → 200: how many route drafts were written (drafts only; nothing is published). */
+export type PropagateResultJson = { updated_drafts: number };
 
 /** The reason a context route is null: no testing_routes row for (item_type_id, route_number). */
 export const ROUTE_MISSING = "ROUTE_MISSING";

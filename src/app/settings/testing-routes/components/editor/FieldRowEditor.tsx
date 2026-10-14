@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { ChevronDown, ChevronUp, Ellipsis, GripVertical, Hash, Heading, Plus, ToggleLeft } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronUp, Ellipsis, GripVertical, Hash, Heading, Plus, ToggleLeft } from "lucide-react";
 import { Menu, MenuItem, cn } from "@/components/ui";
 import { NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
 import type { ChoiceRowField, Field, InputField, MultiChoiceField, NoteMax, NumberField, VersionRef } from "@/app/lib/station-fields/schema";
@@ -11,6 +11,7 @@ import {
   EDITOR_COPY_PENDING, EDITOR_TEXT, FIELD_TYPE_TEXT, NUMBER_SETTINGS_TEXT, listLinkText, optionsGroupLabel, requiredAria,
   rowGripLabel, rowMoreLabel,
 } from "../../lib/labels";
+import { LIBRARY_TEXT } from "../../lib/libraryLabels";
 import { addOption, removeOption, renameOption, setOptionTone, withFieldHelp } from "../../lib/editorModel";
 import type { EditorPopover, OptionField } from "../../lib/editorModel";
 import { formatDecimal, parseDecimalText, withNumberSetting, withUnit } from "../../lib/numberText";
@@ -76,6 +77,9 @@ export type FieldRowEditorProps = {
   rowLabel: string;
   /** The name of a shared option list, when the screen knows it. */
   listName: (ref: VersionRef) => string | null;
+  /** In a field set (artboard 8): a linked field's "רשימה: {name}" opens the list in the library
+   *  instead of the options popover. */
+  onOpenList?: (ref: VersionRef) => void;
 };
 
 /** DOM ids of a row's controls — the table focuses them after a move, an add, "עבור לשדה". */
@@ -412,6 +416,7 @@ function ChoiceOptions(props: FieldRowEditorProps & { field: ChoiceRowField | Mu
   const editingId = popover?.kind === "option" && popover.fieldId === field.id ? popover.optionId : null;
   const isMine = (p: EditorPopover | null, optionId: string) => p?.kind === "option" && p.fieldId === field.id && p.optionId === optionId;
   const isList = (p: EditorPopover | null) => p?.kind === "list" && p.fieldId === field.id;
+  const opensList = field.list_ref != null && props.onOpenList != null;
 
   const change = (next: OptionField) => onChange(next);
   return (
@@ -435,18 +440,27 @@ function ChoiceOptions(props: FieldRowEditorProps & { field: ChoiceRowField | Mu
         ))}
       </div>
       <div className="sfe-links">
+        {/* One element either way, so it stays the popover's anchor (focus returns to it) when
+            "החל על השדה" links the field. In a field set (artboard 8) a linked field's link opens the
+            list in the library instead of the popover. */}
         <button
           ref={listRef}
           type="button"
           className="sfe-link"
-          aria-haspopup="dialog"
-          aria-expanded={listOpen}
-          aria-controls={listOpen ? OPTION_LIST_POPOVER_ID : undefined}
-          // The popover leaves presses on its anchor alone: the link is its toggle.
-          onClick={() => setPopover((p) => (isList(p) ? null : { kind: "list", fieldId: field.id }))}
+          title={opensList ? LIBRARY_TEXT.openListTitle : undefined}
+          aria-haspopup={opensList ? undefined : "dialog"}
+          aria-expanded={opensList ? undefined : listOpen}
+          aria-controls={!opensList && listOpen ? OPTION_LIST_POPOVER_ID : undefined}
+          onClick={() => {
+            if (opensList && field.list_ref) props.onOpenList?.(field.list_ref);
+            // The popover leaves presses on its anchor alone: the link is its toggle.
+            else setPopover((p) => (isList(p) ? null : { kind: "list", fieldId: field.id }));
+          }}
         >
           {listLinkText(field.list_ref != null, field.list_ref ? props.listName(field.list_ref) : null)}
-          <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
+          {opensList
+            ? <ChevronLeft size={12} strokeWidth={1.75} aria-hidden />
+            : <ChevronDown size={12} strokeWidth={1.75} aria-hidden />}
         </button>
         <button
           ref={addRef}
@@ -470,10 +484,8 @@ function ChoiceOptions(props: FieldRowEditorProps & { field: ChoiceRowField | Mu
         field={field}
         stationLabel={props.stationLabel}
         rowLabel={props.rowLabel}
-        onApply={(next) => {
-          change(next);
-          setPopover((p) => (isList(p) ? null : p));
-        }}
+        // The popover closes itself (onOpenChange) once the list's other linked fields are reached.
+        onApply={change}
       />
     </>
   );

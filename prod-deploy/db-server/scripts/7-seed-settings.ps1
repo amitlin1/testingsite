@@ -8,8 +8,8 @@
 # Fills the lookup tables behind every /settings page so the system arrives
 # configured instead of empty: customers, item types, sources, item and station
 # statuses, station types and stations, testing routes (with their published
-# station-field versions), workers, photo types, reference items, and the
-# work-hours calendar.
+# station-field versions), the station-field option lists and field sets,
+# workers, photo types, reference items, and the work-hours calendar.
 #
 # NOT transactional data. Items, shipments, test results and snapshots stay
 # empty - a new installation starts its own history.
@@ -56,8 +56,10 @@ try {
     if (-not $pgUser -or -not $pgDb) { throw "POSTGRES_USER / POSTGRES_DB are not set in .env." }
 
     # Reverse FK order - children first, so a reload cannot trip a constraint.
+    # option_lists / field_sets have no FK (route configs name them by id).
     $tables = @(
-        "reference_item_images", "department_holidays", "route_field_versions", "testing_routes", "test_stations",
+        "reference_item_images", "department_holidays", "route_field_versions", "testing_routes",
+        "field_sets", "option_lists", "test_stations",
         "reference_items", "workday_overrides", "weekday_defaults", "holiday_types",
         "photo_types", "workers", "test_stations_type", "test_station_status",
         "item_status", "sources", "item_types", "customers"
@@ -181,6 +183,8 @@ UNION ALL SELECT 'test_stations_type',  count(*)::text FROM test_stations_type
 UNION ALL SELECT 'test_stations',       count(*)::text FROM test_stations
 UNION ALL SELECT 'testing_routes',      count(*)::text FROM testing_routes
 UNION ALL SELECT 'route_field_versions', count(*)::text FROM route_field_versions
+UNION ALL SELECT 'option_lists',        count(*)::text FROM option_lists
+UNION ALL SELECT 'field_sets',          count(*)::text FROM field_sets
 UNION ALL SELECT 'workers',             count(*)::text FROM workers
 UNION ALL SELECT 'photo_types',         count(*)::text FROM photo_types
 UNION ALL SELECT 'reference_items',     count(*)::text FROM reference_items
@@ -203,7 +207,8 @@ SELECT string_agg(tbl || '.' || col, ', ') FROM (
     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
    WHERE c.relkind = 'r' AND c.relnamespace = 'public'::regnamespace
      AND c.relname IN ('customers','item_types','sources','item_status','test_station_status',
-                       'test_stations_type','test_stations','testing_routes','route_field_versions','photo_types',
+                       'test_stations_type','test_stations','testing_routes','route_field_versions',
+                       'option_lists','field_sets','photo_types',
                        'reference_items','reference_item_images','holiday_types',
                        'workday_overrides','department_holidays')
      AND pg_get_serial_sequence('public.' || quote_ident(c.relname), a.attname) IS NOT NULL
