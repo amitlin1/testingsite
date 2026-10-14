@@ -232,6 +232,15 @@ test("a single item route: one row, a column per step, package-level steps are '
   assert.deepEqual(m.columns.map((c) => c.label), ["פתיחת מארז", "חשמל", "בדיקה ויזואלית", "סגירת מארז"]);
   assert.deepEqual(m.rows[0].cells.map((c) => (c.na ? c.reason : c.fieldCount)), ["package_level", 2, 0, "package_level"]);
   assert.deepEqual(m.coverage, { defined: 1, relevant: 2 });
+  assert.equal(m.onboarding, false, "the route on screen holds its fields, though kits run it too");
+});
+
+test("a single item route without fields is the onboarding, kits or not", () => {
+  const item = route(300, PC, 2, [[OPEN, "s_iopen000"], [ELEC, "s_ielec000"], [CLOSE, "s_iclose00"]], { shared: [KIT_A] });
+  const m = buildFieldsMap({
+    context: { kind: "item", subject: { item_type_id: PC, desc: "מחשב", is_package: false, route_number: 2 }, stations: STATIONS, kit: null, item, lines: [] },
+  });
+  assert.equal(m.onboarding, true);
 });
 
 test("empty states: no kit route, a route without steps, a kit without contents", () => {

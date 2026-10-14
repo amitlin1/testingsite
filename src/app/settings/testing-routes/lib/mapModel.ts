@@ -1,9 +1,9 @@
 import { stepConfigOf, targetKey } from "@/app/lib/station-fields/schema";
-import type { Field, GroupTarget, RouteFieldsConfig, StepUid, Tone, VersionRef } from "@/app/lib/station-fields/schema";
+import type { Field, FieldId, GroupTarget, RouteFieldsConfig, StepUid, Tone, VersionRef } from "@/app/lib/station-fields/schema";
 import type { Issue } from "@/app/lib/station-fields/validate";
 import type { ContextLineJson, FieldsContextJson, RouteFieldsJson, SharedKitJson, StationTypeJson } from "@/app/lib/station-fields/admin-types";
 import { contextRouteIds, contextRoutes, jsonEqual, sortedLines } from "./draftModel";
-import { BOX_ROW_TEXT, EACH_ITEM_ROW_TEXT, lineRouteMissingText, lineSubText, qtyText, seqText } from "./labels";
+import { BOX_ROW_TEXT, EACH_ITEM_ROW_TEXT, lineRouteMissingText, lineSubText, mapErrorBarText, qtyText, seqText } from "./labels";
 
 /**
  * The fields map (route-fields spec §5.4.1, §5.4.3; artboards 1, 11): columns × rows × cells, built
@@ -171,7 +171,8 @@ export type FieldsMapModel = {
   coverage: { defined: number; relevant: number };
   totals: MapTotals;
   /** Artboard 11's onboarding: no cell this route holds has a field, in the draft or the published
-   *  version. A cell whose route another kit runs belongs to that route, not to this one. */
+   *  version. On a kit's map a cell whose route another kit runs belongs to that route, not to this
+   *  one; a single item route holds all of its cells. */
   onboarding: boolean;
   /** Artboard 11's info bar: per line, the shared cells that already have fields. */
   sharedFilled: { rowKey: string; itemTypeDesc: string; routeNumber: number; kits: SharedKitJson[]; cells: number }[];
@@ -591,7 +592,10 @@ function finish(ctx: FieldsContextJson, drafts: ColumnDraft[], rows: MapRow[], e
         totals.sharedFields += c.fieldCount;
         sharedHere += 1;
       }
-      if (!shared && (c.fieldCount > 0 || c.publishedFieldCount > 0)) ownFields = true;
+      // A kit's item cells belong to the item routes other kits run too (artboard 11); an item
+      // route opened on its own holds every cell of its map, whoever else runs it.
+      const ownCell = !shared || ctx.kind === "item";
+      if (ownCell && (c.fieldCount > 0 || c.publishedFieldCount > 0)) ownFields = true;
     }
     if (sharedHere > 0 && row.routeNumber != null) {
       sharedFilled.push({ rowKey: row.key, itemTypeDesc: row.label, routeNumber: row.routeNumber, kits: row.sharedWith, cells: sharedHere });
@@ -643,4 +647,102 @@ function finish(ctx: FieldsContextJson, drafts: ColumnDraft[], rows: MapRow[], e
 function routeConfig(ctx: FieldsContextJson, b: Builder, routeId: number): RouteFieldsConfig {
   const r = contextRoutes(ctx).find((x) => x.route.test_route_id === routeId);
   return r ? b.configOf(r) : EMPTY;
+}
+
+// ---- the toolbar's filter chips (artboard 1; spec §5.4.4) -----------------------------------------
+/** "הכל" · "ללא שדות" · "שגיאות" · "לא פורסמו" — one at a time. */
+export const MAP_FILTERS = ["all", "empty", "errors", "unpublished"] as const;
+export type MapFilter = (typeof MAP_FILTERS)[number];
+
+/** A cell the filter picks: never a "—" cell. */
+export function cellMatchesFilter(cell: AnyMapCell, filter: MapFilter): boolean {
+  if (cell.na) return false;
+  switch (filter) {
+    case "all": return true;
+    case "empty": return cell.fieldCount === 0;
+    case "errors": return cell.errorCount > 0;
+    case "unpublished": return cell.unpublished;
+  }
+}
+
+/** The chips' numbers: "הכל · 20" (relevant cells), "ללא שדות · 5", "שגיאות · 1", "לא פורסמו · 1". */
+export function filterCounts(model: FieldsMapModel): Record<MapFilter, number> {
+  const t = model.totals;
+  return { all: t.relevantCells, empty: t.emptyCells, errors: t.errorCells, unpublished: t.unpublishedCells };
+}
+
+/** The rows the map draws under a filter: every row for "הכל", else the rows with at least one
+ *  matching cell. The other cells of a row drawn are shown as they are (לא אומת — no filtered map
+ *  is drawn in any artboard; spec §5.4.4). */
+export function visibleRows(model: FieldsMapModel, filter: MapFilter): MapRow[] {
+  if (filter === "all") return model.rows;
+  return model.rows.filter((r) => r.cells.some((c) => cellMatchesFilter(c, filter)));
+}
+
+// ---- keyboard: the grid the arrows move in (spec §5.16) -------------------------------------------
+/** The navigation key of a column header (the header's button). */
+export function columnNavKey(columnKey: string): string {
+  return "col:" + columnKey;
+}
+
+/** The map as useGridNavigation walks it: row 0 = the column headers, then one row per drawn map
+ *  row with the key of each cell that can hold fields — null for a "—" cell, which is not in the
+ *  tab order and the arrows skip. */
+export function mapNavGrid(columns: readonly MapColumn[], rows: readonly MapRow[]): (string | null)[][] {
+  const head = columns.map((c) => columnNavKey(c.key));
+  return [head, ...rows.map((r) => columns.map((col) => {
+    const c = r.cells.find((x) => x.columnKey === col.key);
+    return c && !c.na ? c.key : null;
+  }))];
+}
+
+// ---- the error bar above the map (artboard 1; spec §5.4.4) ----------------------------------------
+export type MapErrorBar = {
+  /** "{station} · {item}: {message}" — "מכניקה · מסך: אפשרות ריקה בשדה 'ברגי VESA'". */
+  text: string;
+  /** "עבור לשדה" opens the editor on this cell; null for an error the map draws no cell for. */
+  cell: MapCell | null;
+  /** …focused on this field (&field=), when the error names one. */
+  fieldId: FieldId | null;
+};
+
+/** The item a route's error is about: the kit or the item on screen for its own route, else the
+ *  first template line that runs the route. */
+function routeOwnerLabel(ctx: FieldsContextJson, routeId: number): string {
+  const own = ctx.kit ?? ctx.item;
+  if (own && own.route.test_route_id === routeId) return ctx.subject.desc;
+  const line = sortedLines(ctx).find((l) => l.route?.route.test_route_id === routeId);
+  return line ? line.item_type_desc : ctx.subject.desc;
+}
+
+/**
+ * The bar shows the FIRST error (the model lists the errors on a cell first, in column then row
+ * order); the header's "{n} בעיות לתיקון" counts them all. An error on no cell (a step the map draws
+ * no cell for, e.g. one that left the route) is named by its route's item and the station of its
+ * step as the context's config has it, and has no "עבור לשדה" — there is no cell to open. Without
+ * a station it reads "{item}: {message}" (the same parts, the artboard's ": "). null = no error.
+ */
+export function mapErrorBar(model: FieldsMapModel, ctx: FieldsContextJson): MapErrorBar | null {
+  const first = model.errors[0];
+  if (!first) return null;
+  const fieldId = first.issue.field_id ?? null;
+  if (first.cell) {
+    return { text: mapErrorBarText(first.cell.stationLabel, first.cell.rowLabel, first.issue, first.fieldLabel), cell: first.cell, fieldId };
+  }
+  const item = routeOwnerLabel(ctx, first.routeId);
+  const route = contextRoutes(ctx).find((r) => r.route.test_route_id === first.routeId);
+  const cfg = route ? route.draft ?? route.published : null;
+  const step = cfg && first.issue.step_uid ? stepConfigOf(cfg, first.issue.step_uid) : undefined;
+  if (!step) return { text: item + ": " + first.issue.message, cell: null, fieldId: null };
+  let fieldLabel: string | null = null;
+  if (fieldId) {
+    for (const g of step.groups) {
+      const f = g.fields.find((x) => x.id === fieldId);
+      if (f) {
+        fieldLabel = f.label;
+        break;
+      }
+    }
+  }
+  return { text: mapErrorBarText(stationLabel(ctx.stations, step.station_type_id), item, first.issue, fieldLabel), cell: null, fieldId: null };
 }

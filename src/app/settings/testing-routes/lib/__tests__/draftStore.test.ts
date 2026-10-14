@@ -294,6 +294,33 @@ test("409 STEP_UNKNOWN (D7): the error state, then the route is read back and no
   assert.equal(net.calls.length, 2, "no PUT after the reload");
 });
 
+test("a route read back with other steps puts the context out of date until a context with them is loaded", async () => {
+  const { clock, net, store, ctx } = setup();
+  assert.equal(store.getStepsOutOfContextKey(), "");
+  store.edit(101, addField("א"));
+  await clock.advance(800);
+  await net.calls[0].reply(409, { code: "STEP_UNKNOWN", error: "x", route_id: 101, uids: ["s_x"] });
+  assert.equal(store.getStepsOutOfContextKey(), "", "nothing read back yet");
+  const server = ctx.lines[0].route!;
+  const steps = { ...server.route, route_steps: server.route.route_steps.filter((_, i) => i !== 2), step_uids: server.route.step_uids.filter((_, i) => i !== 2) };
+  await net.calls[1].reply(200, { ...server, route: steps, draft_rev: 6 });
+  assert.equal(store.getStepsOutOfContextKey(), "101:" + steps.step_uids.join(","));
+
+  // The page asks for the context again: it now has the route's steps.
+  const next = { ...ctx, lines: ctx.lines.map((l, i) => (i === 0 ? { ...l, route: { ...server, route: steps, draft_rev: 6 } } : l)) };
+  store.load(next);
+  assert.equal(store.getStepsOutOfContextKey(), "");
+});
+
+test("a steps save: the reloaded context brings the new steps, and the entries follow — nothing out of date", () => {
+  const { store, ctx } = setup();
+  const server = ctx.lines[0].route!;
+  const steps = { ...server.route, route_steps: server.route.route_steps.slice(0, 2), step_uids: server.route.step_uids.slice(0, 2) };
+  store.load({ ...ctx, lines: ctx.lines.map((l, i) => (i === 0 ? { ...l, route: { ...server, route: steps } } : l)) });
+  assert.deepEqual(store.getSnapshot().model.routes[101].route.step_uids, steps.step_uids);
+  assert.equal(store.getStepsOutOfContextKey(), "");
+});
+
 test("409 STEP_UNKNOWN whose read-back fails keeps the error, and does not PUT the refused config again", async () => {
   const { clock, net, store } = setup();
   store.edit(101, addField("א"));

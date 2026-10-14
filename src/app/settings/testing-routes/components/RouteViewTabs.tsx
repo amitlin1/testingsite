@@ -18,6 +18,9 @@ import type { RouteView } from "../lib/routeQuery";
  *
  * The active tab is aria-current="page" — except while the cell editor is open under "מפת שדות":
  * then the editor's breadcrumb holds the page, and the tab is aria-current="true" (artboard 2).
+ *
+ * The tabs sit in a row of their own (the hairline under it) whose inline end takes `trailing` —
+ * artboard 2 puts the editor's breadcrumb there.
  */
 
 export type RouteViewTabsProps = {
@@ -28,6 +31,8 @@ export type RouteViewTabsProps = {
   hrefOf: (view: RouteView) => string;
   /** route_steps.length of the selected route; null = unknown (no chip). */
   stepsCount: number | null;
+  /** Drawn at the row's inline end (the cell editor's breadcrumb, artboard 2). */
+  trailing?: React.ReactNode;
 };
 
 const TABS: readonly { view: RouteView; label: string; Icon: LucideIcon }[] = [
@@ -36,26 +41,29 @@ const TABS: readonly { view: RouteView; label: string; Icon: LucideIcon }[] = [
   { view: "library", label: VIEW_TAB_TEXT.library, Icon: Library },
 ];
 
-export default function RouteViewTabs({ view, editorOpen = false, hrefOf, stepsCount }: RouteViewTabsProps) {
+export default function RouteViewTabs({ view, editorOpen = false, hrefOf, stepsCount, trailing }: RouteViewTabsProps) {
   const current = editorOpen && view === "map" ? "true" : "page";
   return (
-    <nav aria-label={VIEW_TAB_TEXT.navLabel} className="rf-view-tabs">
-      {TABS.map(({ view: v, label, Icon }) => (
-        <Link
-          key={v}
-          href={hrefOf(v)}
-          replace
-          scroll={false}
-          className="rf-view-tab"
-          aria-current={v === view ? current : undefined}
-        >
-          <Icon size={18} strokeWidth={1.75} aria-hidden />
-          {label}
-          {v === "steps" && stepsCount != null && (
-            <span className="rf-view-tab__count" dir="ltr">{stepsCount}</span>
-          )}
-        </Link>
-      ))}
-    </nav>
+    <div className="rf-view-bar">
+      <nav aria-label={VIEW_TAB_TEXT.navLabel} className="rf-view-tabs">
+        {TABS.map(({ view: v, label, Icon }) => (
+          <Link
+            key={v}
+            href={hrefOf(v)}
+            replace
+            scroll={false}
+            className="rf-view-tab"
+            aria-current={v === view ? current : undefined}
+          >
+            <Icon size={18} strokeWidth={1.75} aria-hidden />
+            {label}
+            {v === "steps" && stepsCount != null && (
+              <span className="rf-view-tab__count" dir="ltr">{stepsCount}</span>
+            )}
+          </Link>
+        ))}
+      </nav>
+      {trailing ? <div className="rf-view-bar__end">{trailing}</div> : null}
+    </div>
   );
 }

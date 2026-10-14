@@ -115,14 +115,26 @@
 }
 
 /* -------------------------------------------------------- view tabs --- */
-/* <nav aria-label="תצוגות">: 44px, gap 24, hairline under; the active tab
-   blue / 600 with a 2px underline (artboards 1, 8). */
+/* The tabs' row: hairline under, min-height 44, wrapping; the cell editor's
+   breadcrumb at its inline end (artboard 2: gap 8px 24px). */
+.rf-view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-lg);
+  min-height: 44px;
+  border-bottom: 1px solid var(--color-hairline);
+}
+.rf-view-bar__end { margin-inline-start: auto; min-width: 0; }
+/* <nav aria-label="תצוגות">: 44px, gap 24; the active tab blue / 600 with a
+   2px underline (artboards 1, 8). */
 .rf-view-tabs {
   display: flex;
   align-items: stretch;
   gap: var(--space-lg);
   height: 44px;
-  border-bottom: 1px solid var(--color-hairline);
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   white-space: nowrap;
 }

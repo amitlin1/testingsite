@@ -123,6 +123,27 @@ export function contextRouteIds(ctx: FieldsContextJson): number[] {
   return contextRoutes(ctx).map((r) => r.route.test_route_id);
 }
 
+/** The same steps: route_steps and step_uids alike, in order. */
+function sameSteps(a: RouteFieldsJson["route"], b: RouteFieldsJson["route"]): boolean {
+  return a.route_steps.length === b.route_steps.length && a.route_steps.every((t, i) => t === b.route_steps[i])
+    && a.step_uids.length === b.step_uids.length && a.step_uids.every((u, i) => u === b.step_uids[i]);
+}
+
+/**
+ * The routes of `ctx` whose entry holds OTHER steps than the context does — a route read back on its
+ * own (draftStore.reloadRoute after a 409 STEP_UNKNOWN) with steps that changed under the draft. The
+ * map's columns come from the context, so it is out of date until it is asked for again. "" when
+ * none; else "{route id}:{step uids}" per route, so each change of steps is a key of its own.
+ */
+export function stepsOutOfContextKey(state: DraftModel, ctx: FieldsContextJson): string {
+  const parts: string[] = [];
+  for (const r of contextRoutes(ctx)) {
+    const e = state.routes[r.route.test_route_id];
+    if (e && !sameSteps(e.route, r.route)) parts.push(e.routeId + ":" + e.route.step_uids.join(","));
+  }
+  return parts.join(" ");
+}
+
 /** The template lines in map order: sort_order, then line id. */
 export function sortedLines(ctx: FieldsContextJson): FieldsContextJson["lines"] {
   return [...ctx.lines].sort((a, z) => a.sort_order - z.sort_order || a.line_id - z.line_id);

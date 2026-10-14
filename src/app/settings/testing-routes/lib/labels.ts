@@ -1,4 +1,6 @@
 import { optionEmptyMapText } from "@/app/lib/station-fields/labels";
+import { TONE_WORD } from "@/app/lib/station-fields/schema";
+import type { FieldType, Tone } from "@/app/lib/station-fields/schema";
 import type { Issue } from "@/app/lib/station-fields/validate";
 
 /**
@@ -73,6 +75,18 @@ export const COPY_PENDING = {
   // — the kit Tag of the item-types and packages screens; "פריט").
   routeGroupKit: "מארז",
   routeGroupItem: "פריט",
+  // COPY-PENDING: a number setting (מינימום / מקסימום / ערך ייחוס / סטייה מותרת ±%) holding text that
+  // is not a number (spec §5.15 "ערך לא מספרי", not drawn) — the worker's own words for the same
+  // case under a number field (artboards 14 and 6, RANGE_WORD.nan in src/app/testing/fields/labels.ts).
+  numberNotNumeric: "יש להזין מספר",
+  // COPY-PENDING: the number row's summary when only a reference ± tolerance limits the value
+  // (artboard 3's `rangeShort` knows min / max only and would read "ללא טווח"): "ייחוס {ref} ±{tol}%",
+  // in the word of the worker's own (COPY-PENDING) reference line, WORKER_COPY_PENDING.rangeRef.
+  numberRefShort: "ייחוס",
+  // COPY-PENDING: the note of local options copied from a shared list whose name this screen does
+  // not hold yet (the option-lists API arrives in session 2d). Artboard 4 draws the named form
+  // 'הועתקו מהרשימה "{list}".' — localOptionsNote uses it as soon as the name is known.
+  optionsCopiedFromSharedList: "הועתקו מהרשימה המשותפת.",
 } as const;
 
 // ---- counts -----------------------------------------------------------------------------------
@@ -385,4 +399,473 @@ export function editorFooterText(named: number, required: number, unnamed: numbe
   if (unnamed > 0) foot.push(unnamed === 1 ? "שורה אחת ללא שם" : unnamed + " שורות ללא שם");
   foot.push("גרירה או Alt+חיצים לשינוי סדר");
   return foot.join(" · ");
+}
+
+// ---- "סוג שדה אחר" — the field type picker (artboard 3, spec §5.6) ---------------------------------
+/** Each type's name and description in the picker (artboard 3 `types`, spec §5.6 table). */
+export const FIELD_TYPE_TEXT: Record<FieldType, { name: string; desc: string }> = {
+  choice_row: { name: "שורת בדיקה", desc: "שם · בחירה מ-4 אפשרויות · הערות" },
+  pass_fail: { name: "תקין / לא תקין", desc: "שני כפתורים גדולים" },
+  number: { name: "מספר", desc: "ערך עם יחידה, טווח או ערך ייחוס ±%" },
+  text: { name: "טקסט קצר", desc: "שורה אחת חופשית" },
+  textarea: { name: "טקסט ארוך", desc: "פסקה, עד 3 שורות" },
+  checklist: { name: "רשימת סימון", desc: "כמה תיבות סימון, כמו בבדיקת הסגירה" },
+  multi_choice: { name: "בחירה מרובה", desc: "אפשר לבחור יותר מאפשרות אחת" },
+  photo: { name: "צילום", desc: "סוג צילום ומינימום תמונות" },
+  scan: { name: "סריקה", desc: "שדה לקורא ברקוד" },
+  section: { name: "כותרת מקטע", desc: "מחלקת את השדות לקבוצות בחלון" },
+};
+
+/** The picker's group headers (artboard 3 `types[].g`). */
+export const FIELD_TYPE_GROUP_TEXT = {
+  common: "נפוץ",
+  measure: "מדידה וטקסט",
+  choice: "בחירה",
+  record: "תיעוד",
+  structure: "מבנה",
+} as const;
+
+/** The picker's fixed text (artboard 3). */
+export const TYPE_PICKER_TEXT = {
+  dialogLabel: "הוספת שדה מסוג אחר",
+  searchLabel: "חיפוש סוג שדה",
+  searchPlaceholder: "חיפוש סוג שדה…",
+  defaultTag: "ברירת מחדל",
+  /** The key hint on the active row (set left to right). */
+  enterKey: "Enter",
+  noResultsTitle: "אין סוג שדה מתאים",
+  noResultsText: "נסו מילה אחרת, למשל \"מספר\" או \"צילום\"",
+  /** The pearl footer: "טיפ: Enter בשם השדה האחרון מוסיף שורת בדיקה חדשה" — the key set apart so it
+   *  is isolated left to right. */
+  tipLead: "טיפ: ",
+  tipKey: "Enter",
+  tipTail: " בשם השדה האחרון מוסיף שורת בדיקה חדשה",
+} as const;
+
+// ---- the expanded number row (artboard 3, spec §5.6) -------------------------------------------------
+/** The settings grid of a number field (artboard 3, `gnd-settings`). */
+export const NUMBER_SETTINGS_TEXT = {
+  unit: "יחידה",
+  min: "מינימום",
+  max: "מקסימום",
+  /** Placeholder of מינימום / מקסימום (and of the unit select while the field has no unit). */
+  emptyValue: "—",
+  ref: "ערך ייחוס",
+  refPlaceholder: "לא בשימוש",
+  tol: "סטייה מותרת ±%",
+  tolPlaceholder: "5",
+  tolHelpOff: "זמין לאחר הזנת ערך ייחוס",
+  tolHelpOn: "סטייה מותרת מערך הייחוס, באחוזים",
+  outOfRangeFail: "ערך מחוץ לטווח נחשב \"לא תקין\"",
+  help: "טקסט עזרה לעובד",
+  helpPlaceholder: "למשל: היכן ואיך למדוד",
+  helpNote: "מוצג מתחת לשם השדה בחלון העובד",
+  close: "סגור הגדרות",
+} as const;
+
+/** The "יחידה" select: artboard 3 draws one unit, "Ω אוהם" — the list itself is not verified (spec
+ *  §5.6 "לא אומת"). A field's own unit outside this list stays selectable as itself. */
+export const NUMBER_UNITS: readonly { value: string; name: string }[] = [{ value: "Ω", name: "אוהם" }];
+
+/** The summary button of a number row (artboard 3 `rangeShort` and the button's text). */
+export const NUMBER_SUMMARY_TEXT = {
+  unitLead: "יחידה ",
+  noRange: "ללא טווח",
+  maxShort: "מקס׳ ",
+  minShort: "מינ׳ ",
+} as const;
+
+/** The live preview's line under a number field (artboard 3 `rangeMsg`, spec §5.6 last bullet). */
+export const NUMBER_PREVIEW_TEXT = {
+  inRange: "בטווח",
+  outOfRange: "מחוץ לטווח",
+  markedFail: "יסומן לא תקין",
+  noRange: "ללא טווח מוגדר",
+} as const;
+
+// ---- options of a choice field (artboard 4, spec §5.7) -------------------------------------------------
+/** The popover's fixed text (artboard 4). */
+export const OPTION_LIST_TEXT = {
+  sourceGroup: "מקור האפשרויות",
+  shared: "רשימה משותפת",
+  local: "רק לשדה הזה",
+  close: "סגירה",
+  /** role="list" aria-label. */
+  list: "אפשרויות",
+  /** "מקשים 1–4 לבחירה מהירה בעמדה", the key range set apart so it is isolated left to right. */
+  keysLead: "מקשים ",
+  keysRange: "1–4",
+  keysTail: " לבחירה מהירה בעמדה",
+  /** The key box from the fifth option on (U+2013), with its title. */
+  noKey: "–",
+  noKeyTitle: "אין מקש קיצור לאפשרות זו",
+  toneTitle: "לחיצה מחליפה: תקין ← אזהרה ← כשל ← ניטרלי",
+  addLabel: "אפשרות חדשה",
+  addPlaceholder: "הוסף אפשרות (Enter)",
+  add: "הוסף",
+  cancel: "ביטול",
+  apply: "החל על השדה",
+} as const;
+
+/** The head (artboard 4): "אפשרויות · {field}". */
+export function optionListTitle(field: string): string {
+  return field.trim() ? "אפשרויות · " + field.trim() : OPTION_LIST_TEXT.list;
+}
+
+/** Local mode's box title (artboard 4): "אפשרויות מקומיות · {station} · {item}". */
+export function localOptionsTitle(station: string, item: string): string {
+  return "אפשרויות מקומיות · " + station + " · " + item;
+}
+
+/** Local mode's note (artboard 4 `localNote`): 'הועתקו מהרשימה "{list}". שינוי כאן חל רק על {field} ולא
+ *  ישפיע על שדות אחרים.' Without the list's name, the first sentence is COPY-PENDING. */
+export function localOptionsNote(field: string, listName: string | null): string {
+  const copied = listName != null ? "הועתקו מהרשימה \"" + listName + "\"." : COPY_PENDING.optionsCopiedFromSharedList;
+  return copied + " שינוי כאן חל רק על " + field + " ולא ישפיע על שדות אחרים.";
+}
+
+/** The options' header (artboard 4 `optsTitle`): "אפשרויות לשדה הזה · {n}" (local) /
+ *  "אפשרויות · {n}" (shared). */
+export function optionsCountText(n: number, local: boolean): string {
+  return (local ? "אפשרויות לשדה הזה" : "אפשרויות") + " · " + n;
+}
+
+/** An option row's accessible name (artboard 4 `aria`): "אפשרות {n}: {label} · {tone word}", an
+ *  empty label read as "ריקה". `index` is 0-based. */
+export function optionRowLabel(index: number, label: string, tone: Tone): string {
+  return "אפשרות " + (index + 1) + ": " + (label || "ריקה") + " · " + TONE_WORD[tone];
+}
+
+/** The key box's title (artboard 4 `keyTitle`): "מקש {n} לבחירה מהירה", from the fifth option on
+ *  OPTION_LIST_TEXT.noKeyTitle. `index` is 0-based. */
+export function optionKeyTitle(index: number): string {
+  return index < 4 ? "מקש " + (index + 1) + " לבחירה מהירה" : OPTION_LIST_TEXT.noKeyTitle;
+}
+
+/** The label input's name (artboard 4): "שם האפשרות {n}". `index` is 0-based. */
+export function optionNameLabel(index: number): string {
+  return "שם האפשרות " + (index + 1);
+}
+
+/** The tone button's name (artboard 4 `toneAria`): "סוג האפשרות: {w}. לחיצה מחליפה ל{next}". */
+export function toneButtonLabel(tone: Tone, next: Tone): string {
+  return "סוג האפשרות: " + TONE_WORD[tone] + ". לחיצה מחליפה ל" + TONE_WORD[next];
+}
+
+/** The drag handle's name (artboard 4): "גרירה לשינוי סדר: {label}". */
+export function optionDragLabel(label: string): string {
+  return "גרירה לשינוי סדר: " + label;
+}
+
+/** The × button's name (artboards 2, 4): "הסרת האפשרות {label}". */
+export function optionRemoveLabel(label: string): string {
+  return "הסרת האפשרות " + label;
+}
+
+// ---- the station field editor (artboard 2, spec §5.5) -----------------------------------------------
+/** Text of the editor no artboard draws (spec §5.5, §10.3, §10.4). Listed in the PR under "טקסט
+ *  לאישור"; do not treat as approved copy. */
+export const EDITOR_COPY_PENDING = {
+  // COPY-PENDING: the row ⋯ menu (spec §5.5.2: "התפריט לא מצויר"; the proposal is two words artboard 8
+  // already has).
+  rowDuplicate: "שכפל",
+  rowDelete: "מחק",
+  // COPY-PENDING: the confirm of the card's ⋯ "נקה את התא" (spec §10.4 "אישורים: … 'נקה'"). The cancel
+  // button reuses the discard confirm's "המשך לערוך".
+  clearTitle: "לנקות את התא?",
+  clearMessage: "כל השדות של התא יוסרו מהטיוטה. ביטול הטיוטה מחזיר אותם.",
+  clearCancel: COPY_PENDING.discardCancel,
+  // COPY-PENDING: the shared notice when the route runs in more than one other kit — artboard 2's
+  // "בשניהם" is right for two kits only (spec §5.5.2 ⚠, §10.4).
+  sharedAll: "שינוי כאן יחול בכולם.",
+  // COPY-PENDING: a field linked to a shared option list whose name this screen does not hold yet
+  // (the option-lists API arrives in session 2d): "רשימה: רשימה משותפת" — artboard 4's own word for a
+  // shared list.
+  listUnnamed: "רשימה משותפת",
+  // COPY-PENDING: the locked rows of a station that opens PopUpTestDialog (spec §10.3: artboard 2 draws
+  // the VerdictStation / PhotoStation wording; the dialog has no "בדיקה תקינה?"). The words are the
+  // dialog's own labels ("תוצאת בדיקה", "עובד מבצע", "הערות נוספות", "שמור וסיים").
+  lockedTopDialog: "תוצאת בדיקה · עובד מבצע",
+  lockedBottomDialog: "הערות נוספות · 'שמור וסיים' · תמיד אחרון",
+  // COPY-PENDING: the locked rows of a package-level step (spec §5.5.2 ב/ה "לא אומת לעורך"), in the
+  // package wizards' own step names and questions. Opening wizard: the box fields sit in "צילום הקופסה"
+  // before "האריזה תקינה?"; an item's in its photo phase before "הפריט תקין?".
+  lockedTopOpenBox: "סריקת מק״ט המארז · צילום הקופסה · חלק קבוע",
+  lockedBottomOpenBox: "פסק דין · 'האריזה תקינה?' · תמיד אחרון",
+  lockedTopOpenItem: "סריקה · צילום · חלק קבוע",
+  lockedBottomOpenItem: "פסק דין · 'הפריט תקין?' · תמיד אחרון",
+  // Closing wizard: the box fields open "תקינות האריזה"; an item's sit under its row in "פריטים ואריזה".
+  lockedTopCloseBox: "סריקת מק״ט המארז · פריטים ואריזה · חלק קבוע",
+  lockedTopCloseItem: "סריקת מק״ט המארז · חלק קבוע",
+  lockedBottomClose: "תקינות האריזה · 'סגור מארז' · תמיד אחרון",
+} as const;
+
+/** Fixed text of the editor (artboard 2 DOM and script, spec §5.5). */
+export const EDITOR_TEXT = {
+  /** The breadcrumb <nav aria-label="מיקום">: "חזרה למפה", "מפת שדות › {station} › {item}". */
+  breadcrumbLabel: "מיקום",
+  backToMap: "חזרה למפה",
+  mapCrumb: VIEW_TAB_TEXT.map,
+  /** The station bar <section aria-label="עמדות המסלול">. */
+  timelineLabel: "עמדות המסלול",
+  prevStation: "העמדה הקודמת",
+  /** A stop's line when its column has an error (red / 600). */
+  stopError: "שגיאה",
+  /** The card header's Tag: an item column (artboard 2) / a package-level column (spec §5.5.1 — the
+   *  station types screen's Tag). */
+  perItem: MAP_TEXT.perItem,
+  packageLevel: "עמדה ברמת מארז",
+  /** The card's ⋯ (artboard 2 aria-label) and its one item for now ("שמור כערכה…" / "החל ערכה…" come
+   *  with sessions 2d / 2e). */
+  cellMenuLabel: "פעולות נוספות לתא: שמור כערכה, החל ערכה, נקה את התא",
+  clearCell: "נקה את התא",
+  /** The target chips (artboard 2; a package-level column's from artboard 7). */
+  targetsLabel: "הפריט שעבורו מגדירים שדות",
+  targetsLead: "פריט:",
+  boxChip: BOX_ROW_TEXT.title,
+  eachItemChip: "כל פריט",
+  /** The locked rows of VerdictStation / PhotoStation (artboard 2). */
+  lockedTopStation: "סריקת מק״ט יצרן · חלק קבוע · שלב 1 בחלון",
+  lockedBottomStation: "פסק דין · 'בדיקה תקינה?' · תמיד אחרון",
+  /** The rows table's column header (aria-hidden). */
+  colName: "שם השדה",
+  colOptions: "אפשרויות · בחירה מהירה",
+  colNotes: "הערות",
+  colRequired: "חובה",
+  /** A row. */
+  unnamedRow: "שורה ללא שם",
+  nameLabel: "שם השדה",
+  namePlaceholder: "שם השדה",
+  newNamePlaceholder: "לדוגמה: מאוורר מעבד",
+  numberTile: "שדה מספר",
+  passFailTile: "שדה תקין / לא תקין",
+  /** A section row. */
+  sectionLabel: "כותרת מקטע",
+  sectionCaption: "כותרת מקטע · מקבצת את השורות שמתחתיה",
+  newSection: "מקטע חדש",
+  /** Options of a choice row. */
+  optionNameLabel: "שם האפשרות",
+  newOption: "אפשרות חדשה",
+  addOption: "אפשרות",
+  listCustom: "רשימה: מותאמת לשדה",
+  /** ToneMenu. */
+  toneMenuLabel: "עריכת אפשרות",
+  toneMenuTitle: "סוג האפשרות",
+  close: "סגירה",
+  deleteOption: "מחק אפשרות",
+  /** A number row (artboard 2). */
+  unit: "יחידה",
+  max: "מקס׳",
+  numberCaption: "מספר · מחוץ לטווח = כשל",
+  /** A pass / fail row. */
+  passFailCaption: "תקין / לא תקין",
+  draftNew: "חדש בטיוטה",
+  /** NotesModeSelect. */
+  notesListLabel: "מצב הערות",
+  notesFootnote: "חובה בכשל: העובד חייב לפרט כשנבחרה אפשרות מסוג כשל.",
+  /** NoteMaxSelect. */
+  noteMaxTitle: "אורך מרבי להערה",
+  noteMaxHeader: "אורך מרבי",
+  noteMaxFootnote: "העובד רואה מונה תווים מ-80% מהאורך.",
+  /** The "חובה" chip. */
+  required: "חובה",
+  /** AddFieldBar. */
+  addRow: "הוסף שורת בדיקה",
+  addRowCaption: "שם · בחירה מתוך 4 אפשרויות · הערות",
+  otherType: "סוג שדה אחר",
+  addSection: "כותרת מקטע",
+} as const;
+
+/** A new "שורת בדיקה"'s options (artboard 2 script `lists.L1`, the list "תקינות כללית"). */
+export const DEFAULT_CHOICE_OPTIONS: readonly { label: string; tone: Tone }[] = [
+  { label: "תקין", tone: "pass" },
+  { label: "תקין עם הערה", tone: "warn" },
+  { label: "לא תקין", tone: "fail" },
+  { label: "לא נבדק", tone: "neutral" },
+];
+
+/** A row's name in the accessible names below — its label, or "שורה ללא שם" (artboard 2 `label`). */
+export function rowNameText(label: string): string {
+  return label.trim() || EDITOR_TEXT.unnamedRow;
+}
+
+/** The card's h2 (artboard 2): "שלב {n} מתוך {total} · {station}". */
+export function editorTitleText(n: number, total: number, station: string): string {
+  return "שלב " + n + " מתוך " + total + " · " + station;
+}
+
+/** The card's sub-line (artboard 2): "מה העובד ממלא בעמדה הזו עבור: {item}". */
+export function editorSubText(item: string): string {
+  return "מה העובד ממלא בעמדה הזו עבור: " + item;
+}
+
+/** The fields sub-tab (artboard 2 `fieldCount`, named fields only): "שדות · {n}". */
+export function fieldsTabText(named: number): string {
+  return "שדות · " + named;
+}
+
+/** The station bar's end button (artboard 2): "העמדה הבאה: {name}". */
+export function nextStationText(name: string): string {
+  return "העמדה הבאה: " + name;
+}
+
+/** A stop's line (artboard 2 `stopsRaw`): "{N} שדות" / "שדה אחד", or "שגיאה". */
+export function stopSubText(fields: number, errors: number): string {
+  return errors > 0 ? EDITOR_TEXT.stopError : fieldsText(fields);
+}
+
+/** A target chip (artboard 2 `targets`, artboard 7): "{lead} · {named}" — "מחשב · 5", "מסך ×2 · 3",
+ *  "הקופסה · 3", "01 מחשב · 2". */
+export function targetChipText(lead: string, named: number): string {
+  return lead + " · " + named;
+}
+
+/** The shared notice (artboard 2): "השדות נשמרים במסלול {r} של {item} ומשמשים גם ב: {kits}. שינוי כאן
+ *  יחול בשניהם." — more than one other kit ends COPY-PENDING. */
+export function sharedNoticeText(routeNumber: number, item: string, kits: readonly string[]): string {
+  const tail = kits.length > 1 ? EDITOR_COPY_PENDING.sharedAll : "שינוי כאן יחול בשניהם.";
+  return "השדות נשמרים במסלול " + routeNumber + " של " + item + " ומשמשים גם ב: " + kits.join(", ") + ". " + tail;
+}
+
+/** The settings of a checklist row and of a photo row. No artboard draws them (spec §5.5.2: "photo:
+ *  photo_type … ו-min. checklist: items[]" — "לא אומת"), so every word here is pending approval. Each
+ *  is patterned on the drawn wording of the option chips (artboard 2), the option list's add input
+ *  (artboard 4) and the type picker's descriptions (artboard 3). Listed in the PR under "טקסט
+ *  לאישור"; do not treat as approved copy. */
+export const FIELD_SETTINGS_COPY_PENDING = {
+  // COPY-PENDING: the checklist row's add input — artboard 4's "הוסף אפשרות (Enter)" / "אפשרות חדשה"
+  // with the checklist's own word ("תיבת סימון", the lint messages').
+  checklistAddPlaceholder: "הוסף תיבת סימון (Enter)",
+  checklistAddLabel: "תיבת סימון חדשה",
+  // COPY-PENDING: a checklist box's rename input — artboard 2's "שם האפשרות".
+  checklistItemName: "שם תיבת הסימון",
+  // COPY-PENDING: the accessible names of the boxes' group, a box chip and its × — artboard 2's
+  // "אפשרויות לשדה {name}", "עריכת האפשרות {label}", "הסרת האפשרות {label}".
+  checklistGroupPrefix: "תיבות סימון לשדה ",
+  checklistItemEditPrefix: "עריכת תיבת הסימון ",
+  checklistItemRemovePrefix: "הסרת תיבת הסימון ",
+  // COPY-PENDING: the photo row — artboard 3's description of the type, "סוג צילום ומינימום תמונות":
+  // the photo type combobox (its name and placeholder, worded like the packages screen's "בחר סוג
+  // פריט…") and the minimum ("מינ׳", the short form artboard 3 uses for a minimum; the input's title
+  // spells it out).
+  photoTypeLabel: "סוג צילום",
+  photoTypePlaceholder: "בחר סוג צילום…",
+  photoMinLabel: "מינ׳",
+  photoMinTitle: "מינימום תמונות",
+} as const;
+
+/** The checklist row's boxes (COPY-PENDING): "תיבות סימון לשדה {name}". */
+export function checklistGroupLabel(fieldLabel: string): string {
+  return FIELD_SETTINGS_COPY_PENDING.checklistGroupPrefix + rowNameText(fieldLabel);
+}
+
+/** A checklist box chip (COPY-PENDING): "עריכת תיבת הסימון {label}". */
+export function checklistItemEditLabel(label: string): string {
+  return FIELD_SETTINGS_COPY_PENDING.checklistItemEditPrefix + label;
+}
+
+/** A checklist box's × (COPY-PENDING): "הסרת תיבת הסימון {label}". */
+export function checklistItemRemoveLabel(label: string): string {
+  return FIELD_SETTINGS_COPY_PENDING.checklistItemRemovePrefix + label;
+}
+
+/** The drag handle (artboard 2 `gripLabel`): "גרירה לשינוי סדר: {name}". */
+export function rowGripLabel(label: string): string {
+  return "גרירה לשינוי סדר: " + rowNameText(label);
+}
+
+/** The row's ⋯ (artboard 2 `moreLabel`): "פעולות נוספות: {name}". */
+export function rowMoreLabel(label: string): string {
+  return "פעולות נוספות: " + rowNameText(label);
+}
+
+/** The options group (artboard 2 `optsLabel`): "אפשרויות לשדה {name}". */
+export function optionsGroupLabel(label: string): string {
+  return "אפשרויות לשדה " + rowNameText(label);
+}
+
+/** A chip (artboard 2 `aria`): "עריכת האפשרות {label} · {tone word}". */
+export function optionEditLabel(label: string, tone: Tone): string {
+  return "עריכת האפשרות " + label + " · " + TONE_WORD[tone];
+}
+
+/** The list link under the chips (artboard 2 `listText`): "רשימה: {name}" / "רשימה: מותאמת לשדה". A
+ *  linked list whose name is unknown is COPY-PENDING. */
+export function listLinkText(linked: boolean, listName: string | null): string {
+  if (!linked) return EDITOR_TEXT.listCustom;
+  return "רשימה: " + (listName ?? EDITOR_COPY_PENDING.listUnnamed);
+}
+
+/** NotesModeSelect's button (artboard 2 `notesAria`): "הערות: {mode}". */
+export function notesModeAria(modeLabel: string): string {
+  return "הערות: " + modeLabel;
+}
+
+/** NoteMaxSelect's button (artboard 2 `lenLabel` / `lenAria`). */
+export function noteMaxText(n: number): string {
+  return "עד " + n + " תווים";
+}
+export function noteMaxAria(n: number): string {
+  return "אורך מרבי להערה: " + n + " תווים";
+}
+
+/** A "אורך מרבי" option (artboard 2 `lenOpts`): "{n} תווים", the default "1000 תווים · ברירת מחדל". */
+export function noteMaxOptionText(n: number, isDefault: boolean): string {
+  return n + " תווים" + (isDefault ? " · ברירת מחדל" : "");
+}
+
+/** The "חובה" chip (artboard 2 `reqAria`): "שדה חובה: {name}". */
+export function requiredAria(label: string): string {
+  return "שדה חובה: " + rowNameText(label);
+}
+
+// ---- the live worker preview, "תצוגת העובד · חי" (artboard 2's right column, spec §5.5.3) -----------
+/** WorkerPreviewCard's fixed text (artboard 2 DOM and script; "שמור וסיים" is artboard 14's). */
+export const PREVIEW_TEXT = {
+  title: "תצוגת העובד",
+  live: "חי",
+  notSaved: "שינוי אפשרות כאן לא נשמר · מתעדכן עם כל עריכה בעורך",
+  /** The system note of the VerdictStation / PhotoStation frame; the sample's SKU follows it, left
+   *  to right (PREVIEW_SAMPLE.sku). */
+  planLead: "נא לבדוק עפ״י תכנית ",
+  /** A field without a name, as the preview shows it (artboard 2 `pv`, muted). */
+  unnamed: "(ללא שם)",
+  /** PopUpTestDialog's finish button (artboard 14). */
+  finishDialog: "שמור וסיים",
+} as const;
+
+/** Artboard 2's demo item — the sample of its script (`ITEMS`), not a real item: the dummy line
+ *  "{item} · {model} · 1005 1509 2600 {suffix}" and the SKU of the system note. */
+export const PREVIEW_SAMPLE = {
+  model: "Dell OptiPlex 7040",
+  idLead: "1005 1509 2600 ",
+  idEnd: "01",
+  sku: "PC-7040",
+} as const;
+
+/** Text of the preview no artboard draws. Listed in the PR under "טקסט לאישור"; do not treat as
+ *  approved copy. */
+export const PREVIEW_COPY_PENDING = {
+  // COPY-PENDING: the mini footer's finish button at a package-level station. Artboard 2 draws the
+  // VerdictStation's "סיום בדיקת {station}" only, and the two package wizards end in different
+  // buttons; the word is the last step of both wizards' stepper ("סיום").
+  finishPackage: "סיום",
+} as const;
+
+/** The preview frame's sub-line (artboard 2 `pvSub`): "{station} · {item} · {N} שדות" — N counts
+ *  named fields, "שדה אחד" for one. */
+export function previewSubText(station: string, item: string, named: number): string {
+  return station + " · " + item + " · " + fieldsText(named);
+}
+
+/** The preview frame's step (artboard 2): "שלב {n} מתוך {total}". */
+export function previewStepText(n: number, total: number): string {
+  return "שלב " + n + " מתוך " + total;
+}
+
+/** VerdictStation / PhotoStation's finish button (their `finishLabel`): "סיום בדיקת {kind}" from the
+ *  station type's name in the DB, "סיום בדיקה" without one. */
+export function stationFinishText(stationTypeName: string | null | undefined): string {
+  const kind = stationTypeName?.trim();
+  return kind ? "סיום בדיקת " + kind : "סיום בדיקה";
 }

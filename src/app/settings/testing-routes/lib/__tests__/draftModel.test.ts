@@ -5,7 +5,7 @@ import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
 import type { DraftAction, DraftModel } from "../draftModel";
 import {
   EMPTY_DRAFT_MODEL, contextRouteIds, copyConfig, currentConfigs, draftReducer, emptyConfig, entryHasDraft, jsonEqual, mergeRoute,
-  routeChanges, routeIssues, setGroupFields, summarize,
+  routeChanges, routeIssues, setGroupFields, stepsOutOfContextKey, summarize,
 } from "../draftModel";
 import { groupFieldsOf } from "../mapModel";
 import { ELEC, MON, OPEN, PC, artboard1, artboard11, choice, config, fields, step } from "./fixtures";
@@ -146,6 +146,23 @@ test("routeLoaded ('טען מחדש') replaces the entry, local edits and confli
   assert.equal(e.rev, 9);
   assert.equal(e.dirty, false);
   assert.deepEqual(e.current, fresh.published);
+});
+
+test("stepsOutOfContextKey: a route read back with other steps than the context, keyed by its new uids", () => {
+  const ctx = artboard1();
+  const m0 = load(ctx);
+  assert.equal(stepsOutOfContextKey(m0, ctx), "");
+  const server = ctx.lines[0].route!;
+  const fewer = { ...server.route, route_steps: server.route.route_steps.slice(1), step_uids: server.route.step_uids.slice(1) };
+  const m1 = draftReducer(m0, { type: "routeLoaded", route: { ...server, route: fewer } });
+  assert.equal(stepsOutOfContextKey(m1, ctx), "101:" + fewer.step_uids.join(","));
+  // Another change of the same route is another key; the same uids with other station types too.
+  const retyped = { ...server.route, route_steps: server.route.route_steps.map((t) => t + 1000) };
+  const m2 = draftReducer(m0, { type: "routeLoaded", route: { ...server, route: retyped } });
+  assert.equal(stepsOutOfContextKey(m2, ctx), "101:" + server.route.step_uids.join(","));
+  // A context with those steps: nothing out of date.
+  const next = { ...ctx, lines: ctx.lines.map((l, i) => (i === 0 ? { ...l, route: { ...server, route: fewer } } : l)) };
+  assert.equal(stepsOutOfContextKey(m1, next), "");
 });
 
 test("mergeRoute: a reload adopts the server for clean entries, keeps local work, and spots someone else's write", () => {

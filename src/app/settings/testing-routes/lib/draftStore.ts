@@ -5,7 +5,7 @@ import type { DraftSavedJson, FieldsContextJson } from "@/app/lib/station-fields
 import { ShapeError, parseRouteFieldsConfig } from "@/app/lib/station-fields/validate";
 import type { Issue } from "@/app/lib/station-fields/validate";
 import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
-import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "./draftModel";
+import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, stepsOutOfContextKey, summarize } from "./draftModel";
 import type { ConfigMutator, DraftAction, DraftConflict, DraftModel, DraftSummary, RouteDraft, SaveError, SaveOp } from "./draftModel";
 import { buildFieldsMap } from "./mapModel";
 import type { FieldsMapModel } from "./mapModel";
@@ -29,7 +29,8 @@ import { parseRouteFieldsJson } from "./useFieldsContext";
  *     edit; any other refusal (400, 404) waits for retry() / the next edit;
  *   - 409 STEP_UNKNOWN (the route's steps changed under the draft) → the error state, and the route
  *     is read back (reloadRoute, lead decision D7): the config can only be saved against the steps
- *     the route has now.
+ *     the route has now. Its entry then holds other steps than the context on screen
+ *     (getStepsOutOfContextKey), and the page asks for the context again so the map follows.
  * A failed DELETE ("ביטול הטיוטה") is retried by retry() as a DELETE. Edits made while a discard
  * runs are saved once it is over.
  * Multi-route edits (bulk actions, apply set, paste) call edit() once per route; each route
@@ -167,6 +168,13 @@ export class DraftStore {
   };
 
   readonly getSnapshot = (): DraftSnapshot => this.snapshot;
+
+  /** draftModel.stepsOutOfContextKey against the context last loaded ("" before any): not "" once
+   *  a route was read back with other steps than that context has — the page then asks for the
+   *  context again, so the map's columns follow the route's steps. A string, so
+   *  useSyncExternalStore compares it by value. */
+  readonly getStepsOutOfContextKey = (): string =>
+    this.lastContext ? stepsOutOfContextKey(this.model, this.lastContext) : "";
 
   private dispatch(action: DraftAction): void {
     const next = draftReducer(this.model, action);
@@ -489,6 +497,12 @@ export function useDraftSnapshot(): DraftSnapshot {
 /** The header's and the publish dialog's numbers (changeCount, blockingErrorCount, hasDraft…). */
 export function useDraftSummary(): DraftSummary {
   return useDraftSnapshot().summary;
+}
+
+/** DraftStore.getStepsOutOfContextKey: "" while the context on screen has every route's steps. */
+export function useStepsOutOfContextKey(): string {
+  const store = useDraftStore();
+  return React.useSyncExternalStore(store.subscribe, store.getStepsOutOfContextKey, store.getStepsOutOfContextKey);
 }
 
 /** One route's entry — the same object until that route changes. */

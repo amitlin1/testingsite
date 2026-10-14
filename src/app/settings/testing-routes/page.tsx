@@ -5,6 +5,7 @@ import { Route } from "lucide-react";
 import { Alert, Button, cn } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
+import type { FieldId } from "@/app/lib/station-fields/schema";
 import SettingsToolbar from "../components/SettingsToolbar";
 import RouteFieldsHeader from "./components/RouteFieldsHeader";
 import RouteContextCard, { sortRouteOptions } from "./components/RouteContextCard";
@@ -14,12 +15,18 @@ import RouteStepsTab from "./components/steps/RouteStepsTab";
 import {
   MapLoadErrorState, MapLoadingState, MapNoContentsState, MapNoStepsState,
 } from "./components/map/MapViewStates";
-import { DraftStoreProvider, useFieldsMap } from "./lib/draftStore";
+import FieldsMap from "./components/map/FieldsMap";
+import { MAP_ERROR_ACTION_ID } from "./components/map/FieldsMapErrorBar";
+import StationFieldEditor from "./components/editor/StationFieldEditor";
+import { EditorBreadcrumb } from "./components/editor/EditorBreadcrumb";
+import { DraftStoreProvider, useFieldsMap, useStepsOutOfContextKey } from "./lib/draftStore";
+import { findCell } from "./lib/mapModel";
+import type { CellBinding } from "./lib/mapModel";
 import { useFieldsContext } from "./lib/useFieldsContext";
 import type { FieldsContextState, FieldsContextSubject } from "./lib/useFieldsContext";
 import {
   backToMap, isEditorOpen, parseRouteQuery, readLastRoute, routeQueryHref, routeRefOf, sameRouteQuery,
-  withLastRoute, withRoute, withView, writeLastRoute,
+  withEditor, withLastRoute, withRoute, withView, writeLastRoute,
 } from "./lib/routeQuery";
 import type { RouteQuery, RouteRef, RouteView } from "./lib/routeQuery";
 import { HEADER_TEXT, NO_ROUTE_TEXT } from "./lib/labels";
@@ -29,8 +36,9 @@ import "./route-fields.css";
  * /settings/testing-routes — "מסלולי בדיקה" (route-fields spec §5.1, §5.2; D6): the shell of the
  * route-fields screen. Header (RouteFieldsHeader) → context card "מסלול נבחר" (hidden on the
  * library) → the view tabs → the view:
- *   map      the fields map and its cell editor (?step=&target=) — sessions 2b (map, editor) and
- *            2e (onboarding); this shell draws the map's other states (artboard 11)
+ *   map      the fields map (FieldsMap, artboard 1) and, with ?step=&target=, its cell editor
+ *            (StationFieldEditor, artboard 2 — its breadcrumb in the tabs' row); session 2e adds the
+ *            onboarding; this shell draws the map's other states (artboard 11)
  *   steps    "שלבי המסלול" (RouteStepsTab)
  *   library  "ערכות ורשימות" — session 2d
  *
@@ -40,7 +48,9 @@ import "./route-fields.css";
  *
  * Data: the item types and station types (the old page's options), the route list (the "מסלול"
  * combobox and the header count), and GET …/fields-context for the route on screen
- * (useFieldsContext), whose answer feeds the page's one DraftStoreProvider.
+ * (useFieldsContext), whose answer feeds the page's one DraftStoreProvider. The context is asked
+ * for again whenever a route's steps change: after a steps save, and when the draft store read a
+ * route back with other steps (409 STEP_UNKNOWN) — the map's columns are the context's.
  */
 
 interface Option {
@@ -238,6 +248,22 @@ function RouteFieldsScreen({
   const ref = useMemo(() => routeRefOf(query), [query]);
   const map = useFieldsMap(context);
   const view = query.view;
+  const editorOpen = isEditorOpen(query);
+
+  // ---- a route read back with other steps (409 STEP_UNKNOWN): the context again ----------------
+  // The map's columns are the context's, so it follows the route's steps; once per change.
+  const reloadContext = ctx.status === "idle" ? null : ctx.reload;
+  const stepsKey = useStepsOutOfContextKey();
+  const reloadedFor = useRef("");
+  useEffect(() => {
+    if (!stepsKey) {
+      reloadedFor.current = "";
+      return;
+    }
+    if (!reloadContext || reloadedFor.current === stepsKey) return;
+    reloadedFor.current = stepsKey;
+    reloadContext();
+  }, [stepsKey, reloadContext]);
 
   // ---- the "מסלול" options and value -------------------------------------------------------------
   const typeById = useMemo(() => new Map(itemTypes.map((t) => [t.id, t])), [itemTypes]);
@@ -279,7 +305,9 @@ function RouteFieldsScreen({
   }, [context]);
   const coverage = map && map.emptyState == null ? map.coverage : null;
 
-  // ---- "בעיה אחת לתיקון": the map into view -------------------------------------------------------
+  // ---- "בעיה אחת לתיקון": the map's error bar into view, its "עבור לשדה" focused (spec §5.2) -------
+  // From the editor (or another tab) the map comes back first. An error on no cell has no "עבור
+  // לשדה": the map region takes the focus then.
   const mapRegionRef = useRef<HTMLDivElement>(null);
   const scrollToMapPending = useRef(false);
   const scrollToMap = useCallback(() => {
@@ -287,9 +315,10 @@ function RouteFieldsScreen({
     if (!el) return;
     const reduce = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
-    el.focus({ preventScroll: true });
+    const action = document.getElementById(MAP_ERROR_ACTION_ID);
+    (action && el.contains(action) ? action : el).focus({ preventScroll: true });
   }, []);
-  const onMapView = view === "map" && !isEditorOpen(query);
+  const onMapView = view === "map" && !editorOpen;
   const showIssues = useCallback(() => {
     if (onMapView) {
       scrollToMap();
@@ -308,6 +337,20 @@ function RouteFieldsScreen({
   const hrefOf = useCallback((v: RouteView) => routeQueryHref(pathname, withView(query, v)), [pathname, query]);
   const onRouteChange = useCallback((next: RouteRef) => navigate(withRoute(query, next)), [navigate, query]);
   const packagesHref = ref ? `/settings/packages?type=${ref.type}` : "/settings/packages";
+
+  // ---- the map and its cell editor ----------------------------------------------------------------
+  const openCell = useCallback(
+    (binding: CellBinding, field?: FieldId) => navigate(withEditor(query, binding.step_uid, binding.target, field ?? null)),
+    [navigate, query],
+  );
+  const toMap = useCallback(() => navigate(backToMap(query)), [navigate, query]);
+  // The cell the editor is open on, once the map is drawn: its breadcrumb goes in the tabs' row
+  // (artboard 2). A cell the map does not have gets none — the editor sends the URL back to the map.
+  const mapReady = view === "map" && ctx.status === "ready" && map != null && map.emptyState == null;
+  const editorCell = useMemo(
+    () => (mapReady && editorOpen && map && query.step != null && query.target != null ? findCell(map, query.step, query.target) : null),
+    [mapReady, editorOpen, map, query.step, query.target],
+  );
 
   // ---- the map view --------------------------------------------------------------------------------
   const mapView = (): React.ReactNode => {
@@ -336,10 +379,13 @@ function RouteFieldsScreen({
       case "no_contents":
         return <MapNoContentsState packagesHref={packagesHref} />;
       default:
-        // Session 2b fills this region: the fields map (FieldsMap, its toolbar, selection bar and
-        // footer) and, with ?step=&target=, the cell editor (StationFieldEditor); session 2e adds
-        // the onboarding card (map.onboarding) and the bulk actions.
-        return null;
+        // With ?step=&target= the cell editor, else the map (its error bar, toolbar and footer).
+        // Session 2e adds the onboarding card (map.onboarding) and the bulk actions.
+        return editorOpen ? (
+          <StationFieldEditor context={ctx.data} model={map} query={query} onNavigate={navigate} breadcrumbOutside />
+        ) : (
+          <FieldsMap context={ctx.data} model={map} query={query} onOpenCell={openCell} />
+        );
     }
   };
 
@@ -370,7 +416,13 @@ function RouteFieldsScreen({
         />
       )}
 
-      <RouteViewTabs view={view} editorOpen={isEditorOpen(query)} hrefOf={hrefOf} stepsCount={stepsCount} />
+      <RouteViewTabs
+        view={view}
+        editorOpen={editorOpen}
+        hrefOf={hrefOf}
+        stepsCount={stepsCount}
+        trailing={editorCell ? <EditorBreadcrumb stationLabel={editorCell.stationLabel} rowLabel={editorCell.rowLabel} onBackToMap={toMap} /> : null}
+      />
 
       {view === "map" && (
         <div id={MAP_REGION_ID} ref={mapRegionRef} tabIndex={-1} className="rf-map-region">

@@ -23,6 +23,12 @@ test("GET /api/settings/item-types: an unreachable database is a real 500 { erro
   await failedRead(await GET());
 });
 
+test("GET /api/settings/photo-types: an unreachable database is a real 500 { error }, never []", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const { GET } = await import("../../../api/settings/photo-types/route");
+  await failedRead(await GET(new Request("http://localhost/api/settings/photo-types")));
+});
+
 test("GET /api/settings/testing-routes: an unreachable database is a real 500 { error }, never []", async (t) => {
   t.mock.method(console, "error", () => {});
   const { GET } = await import("../../../api/settings/testing-routes/route");
