@@ -14,6 +14,17 @@ import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import {
   AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, RED, RED_BG, seq2,
 } from "@/app/components/packages/packageUi";
+import { COPY_PENDING, SUGGEST_PREFIX, fieldsGateText } from "@/app/lib/station-fields/labels";
+import type { DraftShot } from "@/app/lib/station-fields/evaluate";
+import type { Field } from "@/app/lib/station-fields/schema";
+import { FieldsBlock, FieldsBlockFallback } from "@/app/testing/fields/FieldsBlock";
+import { NotesField } from "@/app/testing/fields/NotesField";
+import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
+import { shouldReloadFields } from "@/app/testing/fields/errors";
+import { BLOCK_TITLE, VARIANT_SPEC, draftsFieldsState, kitItemFieldGroups, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
+import { WORKER_COPY_PENDING } from "@/app/testing/fields/labels";
+import { buildFieldsBlock, inputFieldCount, useFieldsState, type Drafts } from "@/app/testing/fields/useFieldsState";
+import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
 import "@/app/packages/packages.css";
 
 /**
@@ -26,6 +37,14 @@ import "@/app/packages/packages.css";
  * worker scans: the box label is looked up among the package type's
  * reference items, each item's label among its own type's. A scan that finds
  * nothing warns and lets the worker go on without a reference.
+ *
+ * Station fields (route-fields spec §4.11.3): when the kit's route publishes
+ * fields for this step, the box photo step holds the box's block (artboard 15)
+ * and each item's photo screen its own (artboard 16, "לכל פריט" + the item
+ * type's group), each right before its verdict question, with the suggestion
+ * under the question and the notes as a NotesField. Each item's drafts live in
+ * its work, so leaving an item or "פתח שוב" keeps them. Without a config the
+ * wizard is exactly as before.
  */
 
 const PT_PACKAGE = "package";
@@ -52,9 +71,15 @@ type ItemWork = {
   hasRU: boolean | null;
   meas: string;
   done: boolean;
+  /** The item's station-field drafts, by FieldId (route-fields; empty without a config). */
+  fields: Drafts;
 };
 
-const freshWork = (): ItemWork => ({ scan: "", sku: null, photos: emptyPhotos(), refImages: [], refWeight: null, hasRU: null, meas: "", done: false });
+const freshWork = (): ItemWork => ({ scan: "", sku: null, photos: emptyPhotos(), refImages: [], refWeight: null, hasRU: null, meas: "", done: false, fields: {} });
+
+/** The shots taken in the photo fields among `defs` (station fields). */
+const fieldShots = (defs: readonly Field[], drafts: Readonly<Drafts>): DraftShot[] =>
+  defs.flatMap((d) => (d.type === "photo" ? drafts[d.id]?.photos ?? [] : []));
 
 function weightResult(ref: number | null, meas: string) {
   if (ref == null || meas.trim() === "") return null;
@@ -89,6 +114,20 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const committedRef = React.useRef<Set<string>>(new Set());
   const uid = React.useId();
 
+  // ---- station fields (route-fields spec §4.11.3) ---------------------------
+  // Asked for on the box row, so a config answers "package": the box's fields
+  // and every kit item's groups. `fieldsCfg` is that answer once it is in —
+  // null while it loads, after a failed load, and with no config (legacy).
+  const sf = useStationFields(item.item_id, open && pkg != null, station.test_station_id);
+  const fieldsCfg = sf.status === "ready" && sf.mode === "package" ? sf : null;
+  const boxFx = useFieldsState(fieldsCfg ? fieldsCfg.box : []);
+  const { reset: resetBoxFields } = boxFx;
+  // Asks again whatever the answer was (the drafts stay, by FieldId): after a
+  // 409 FIELDS_SCHEMA_MISMATCH, and after an item is added — it is not in the
+  // answer the wizard opened with, and it can give a kit that answered "legacy"
+  // (no fields for what was registered) fields of its own.
+  const reloadFields = sf.reload;
+
   // ---- open: reset ----------------------------------------------------------
   React.useEffect(() => {
     if (!open || !pkg) return;
@@ -96,8 +135,9 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     setItems(pkg.items); setWork({}); setItemIdx(null); setItemPhase("scan"); setCountInput("");
     setLabelsOpen(false); setLabelsPrinted(false); setSubmitting(false); setError(null); setAddOpen(false);
     submitIdRef.current = null; committedRef.current = new Set();
+    resetBoxFields();
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
-  }, [open, pkg]);
+  }, [open, pkg, resetBoxFields]);
 
   // ---- reference lookups, driven by what is scanned -------------------------
   // The box: its label among the package type's reference items. The answer
@@ -165,6 +205,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
       if (!res.ok) { setError(d?.error || "הוספת הפריט נכשלה"); return; }
       setAdd({ itemType: "", serialNumber: "", makat: "", model: "", manufacturer: "" }); setAddOpen(false);
       await reloadItems();
+      reloadFields();
     } catch {
       setError("שגיאה בתקשורת");
     } finally {
@@ -190,6 +231,28 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const boxPass = boxPhotos.ok === "pass";
   const itemPass = (it: PackageItemView) => { const w = workOf(it.item_id); const r = weightResult(w.refWeight, w.meas); return w.photos.ok !== "fail" && (r == null || r.pass); };
 
+  // Station fields. A step that holds them waits until they have answered
+  // (loading, or a failed load), then for their gate: required fields and
+  // notes, a note over its maximum, a field's shot still uploading or failed.
+  // Without a config nothing here draws or gates.
+  const fieldsWaiting = sf.status === "loading" || sf.status === "error";
+  const fieldsGateOn = fieldsCfg?.gate ?? false;
+  const boxHasFields = boxFx.defsCount > 0;
+  const boxGate = fieldsWaiting || boxFx.blocking(fieldsGateOn);
+  /** A kit item's fields ("לכל פריט", then its type's), and its drafts as a block's state. */
+  const itemFieldsOf = (it: PackageItemView): { defs: Field[]; fx: DraftsFieldsState } => {
+    const defs = kitItemDefs(findKitItem(sf, it.item_id));
+    const fx = draftsFieldsState(defs, workOf(it.item_id).fields, (next) => setWork((all) => {
+      const w = all[it.item_id] ?? freshWork();
+      return { ...all, [it.item_id]: { ...w, fields: next(w.fields) } };
+    }));
+    return { defs, fx };
+  };
+  // The item on screen: its block's state while it has fields, and its gate.
+  const curItemFields = cur ? itemFieldsOf(cur) : null;
+  const curFx = curItemFields && inputFieldCount(curItemFields.defs) > 0 ? curItemFields.fx : null;
+  const itemGate = fieldsWaiting || (curItemFields?.fx.blocking(fieldsGateOn) ?? false);
+
   let stepTitle = STEPS[step].label;
   let stepSubtitle = "";
   let systemMsg: string | null = null;
@@ -212,26 +275,44 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     // lose the photo. The worker removes the red shot and takes it again.
     const itemShots = curWork.photos.photos;
     nextEnabled = itemPhase === "scan" ? curWork.scan.trim() !== "" && !itemLookup.checking
-      : itemPhase === "photo" ? curWork.photos.ok !== "" && !itemShots.some((s) => s.uploading || s.failed)
+      : itemPhase === "photo" ? curWork.photos.ok !== "" && !itemShots.some((s) => s.uploading || s.failed) && !itemGate
       : curWork.meas.trim() !== "";
     if (itemPhase === "photo" && itemShots.some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
   } else if (stepKey === "scan") nextEnabled = scan.trim() !== "" && !boxLookup.checking;
   else if (stepKey === "boxPhoto") {
-    nextEnabled = boxPhotos.ok !== "" && !boxPhotos.photos.some((s) => s.uploading || s.failed);
+    // With fields the label stays: the block's status says what is missing (artboard 15).
+    nextEnabled = boxPhotos.ok !== "" && !boxPhotos.photos.some((s) => s.uploading || s.failed) && !boxGate;
     if (boxPhotos.photos.some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
   }
   else if (stepKey === "items") { nextEnabled = items.length > 0 && doneCount === items.length; nextLabel = nextEnabled ? "המשך לספירה" : `נותרו ${items.length - doneCount} פריטים`; }
   else if (stepKey === "count") nextEnabled = counted != null;
-  else if (stepKey === "labels") nextLabel = "הדפס וסיים";
+  // Finishing waits while the station fields load (spec §4.2) — e.g. reloading after a 409.
+  else if (stepKey === "labels") { nextLabel = "הדפס וסיים"; nextEnabled = sf.status !== "loading"; }
   else if (stepKey === "done") nextLabel = "חזרה לתור";
 
   // ---- finish: one result per item, then the box ---------------------------
   const finish = async () => {
+    // The station fields still to be sent: the box's, and those of every item not saved yet.
+    const fieldsToSend = fieldsCfg
+      ? [{ defs: fieldsCfg.box, fx: boxFx }, ...items.filter((it) => !committedRef.current.has(it.item_id)).map(itemFieldsOf)]
+      : [];
     // Belt and braces for the per-step gate: nothing is submitted while a shot
-    // is still uploading or failed, whichever way the worker reached this step.
-    const shots = [boxPhotos, ...items.map((it) => workOf(it.item_id).photos)].flatMap((ph) => ph.photos);
+    // is still uploading or failed, whichever way the worker reached this step
+    // (a station field's shots included).
+    const shots = [boxPhotos, ...items.map((it) => workOf(it.item_id).photos)].flatMap((ph) => ph.photos)
+      .concat(fieldsToSend.flatMap((f) => fieldShots(f.defs, f.fx.drafts)));
     if (shots.some((sh) => sh.uploading || sh.failed)) {
       setError(shots.some((sh) => sh.failed) ? "יש צילום שההעלאה שלו נכשלה — הסר אותו וצלם שוב לפני הסיום." : "יש צילום שעדיין עולה — המתן לסיום ההעלאה.");
+      return;
+    }
+    // Nor before the station fields have answered, nor with their gate shut
+    // (spec §4.11.3) — artboard 14's message, for the box and the items together.
+    if (sf.status === "loading") return; // "הדפס וסיים" waits for the answer; what is on screen stays
+    if (sf.status === "error") { setError(WORKER_COPY_PENDING.loadFailed); return; }
+    const blocked = fieldsToSend.filter((f) => f.fx.blocking(fieldsGateOn));
+    if (blocked.length > 0) {
+      const missing = (k: "missingRequired" | "missingNotes") => (fieldsGateOn ? blocked.reduce((n, f) => n + f.fx.ev[k].length, 0) : 0);
+      setError(fieldsGateText(missing("missingRequired"), missing("missingNotes")) ?? COPY_PENDING.noteTooLong);
       return;
     }
     setSubmitting(true); setError(null);
@@ -253,11 +334,14 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               weight: r ? { reference: w.refWeight, measured: Number(w.meas), diffPct: Number(r.diffPct.toFixed(1)), pass: r.pass } : null,
               product: { ok: w.photos.ok, note: w.photos.note, photos: keysOf(w.photos) },
               package_id: String(item.item_id), opening: true,
+              // Station fields: each item answers as "kit_item", on the kit's route, version and step.
+              ...(fieldsCfg ? buildFieldsBlock(kitItemDefs(findKitItem(sf, it.item_id)), w.fields, { ...fieldsCfg.schema, target: "kit_item" }, { ok: w.photos.ok }) : {}),
             },
           }),
         });
         if (!res.ok) {
           const d = await res.json().catch(() => ({}));
+          if (shouldReloadFields(d)) reloadFields();
           throw new Error(`שמירת הפריט ${it.serial_no ?? seq2(it.package_seq)} נכשלה${d?.error ? ` — ${d.error}` : ` (${res.status})`}`);
         }
         committedRef.current.add(it.item_id);
@@ -269,10 +353,13 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           pkg: { ok: boxPhotos.ok, note: boxPhotos.note, photos: keysOf(boxPhotos) },
           itemCount: counted ?? items.length, registeredCount: items.length, templateCount, labelsPrinted,
           packageItemIds: items.map((it) => it.item_id), opening: true,
+          ...(fieldsCfg ? boxFx.toBlock({ ...fieldsCfg.schema, target: "box" }, { ok: boxPhotos.ok }) : {}),
         },
       });
       setStep(STEPS.length - 1);
     } catch (e) {
+      // The box's 409 arrives as the Error page.tsx throws, carrying the body's code.
+      if (shouldReloadFields(e)) reloadFields();
       setError(e instanceof Error && e.message ? e.message : "שגיאה בשמירת פתיחת המארז");
     } finally {
       setSubmitting(false);
@@ -351,11 +438,23 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               {curWork.hasRU === false && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>לא נמצא פריט ייחוס למק״ט שנסרק ({curWork.sku}) — צלם לפי שיקול דעת והמשך.</div>}
               <PhotoUploader photos={curWork.photos.photos} refImages={curWork.refImages} onPick={(f) => pickItemPhoto(cur, f)}
                 onRemove={(i) => patchWork(cur.item_id, { photos: { ...curWork.photos, photos: curWork.photos.photos.filter((_, j) => j !== i) } })} />
+              {/* Artboard 16: the item's fields before "הפריט תקין?" — a group label even for a lone group. */}
+              {fieldsCfg ? curFx && (
+                <FieldsBlock key={cur.item_id} variant="kit-item" title={BLOCK_TITLE.kitItem}
+                  groups={kitItemFieldGroups(findKitItem(sf, cur.item_id))} fx={curFx} idPrefix={`${uid}-fx${cur.item_id}`}
+                  uploadPhoto={(file, photoType) => uploadTo(cur.item_id, file, photoType)} />
+              ) : <FieldsBlockFallback sf={sf} />}
               <div>
                 <div style={{ fontSize: 14.5, fontWeight: 600 }}>הפריט תקין?</div>
                 <div style={{ marginTop: 10 }}>{choiceBox(curWork.photos.ok, (v) => patchWork(cur.item_id, { photos: { ...curWork.photos, ok: v } }))}</div>
+                {curFx && <SuggestionLine fails={curFx.ev.fails} defs={curItemFields?.defs ?? []} prefix={SUGGEST_PREFIX} decided={curWork.photos.ok} style={{ marginTop: 10 }} />}
                 <label htmlFor={`${uid}-item-note`} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>הערות</label>
-                <textarea id={`${uid}-item-note`} value={curWork.photos.note} onChange={(e) => patchWork(cur.item_id, { photos: { ...curWork.photos, note: e.target.value } })} placeholder="אופציונלי" className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
+                {curFx ? (
+                  <NotesField size="area" id={`${uid}-item-note`} value={curWork.photos.note} onChange={(note) => patchWork(cur.item_id, { photos: { ...curWork.photos, note } })}
+                    placeholder="אופציונלי" editorTitle={`הערות · ${cur.item_type_desc}`} look={VARIANT_SPEC["kit-item"].noteLook} />
+                ) : (
+                  <textarea id={`${uid}-item-note`} value={curWork.photos.note} onChange={(e) => patchWork(cur.item_id, { photos: { ...curWork.photos, note: e.target.value } })} placeholder="אופציונלי" className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
+                )}
               </div>
             </div>
           ) : (
@@ -395,11 +494,22 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
             {boxHasRU === false && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>לא נמצא פריט ייחוס למק״ט המארז שנסרק — צלם את הקופסה משלוש זוויות והמשך.</div>}
             <PhotoUploader photos={boxPhotos.photos} refImages={boxRef} onPick={pickBoxPhoto} onRemove={(i) => setBoxPhotos((p) => ({ ...p, photos: p.photos.filter((_, j) => j !== i) }))} />
+            {/* Artboard 15: the box's fields before "האריזה תקינה?". */}
+            {fieldsCfg ? boxHasFields && (
+              <FieldsBlock variant="wizard" title={BLOCK_TITLE.box} groups={[{ fields: fieldsCfg.box }]} fx={boxFx} idPrefix={`${uid}-fxbox`}
+                uploadPhoto={(file, photoType) => uploadTo(item.item_id, file, photoType)} />
+            ) : <FieldsBlockFallback sf={sf} />}
             <div>
               <div style={{ fontSize: 14.5, fontWeight: 600 }}>האריזה תקינה?</div>
               <div style={{ marginTop: 10 }}>{choiceBox(boxPhotos.ok, (v) => setBoxPhotos((p) => ({ ...p, ok: v })))}</div>
+              {boxHasFields && <SuggestionLine fails={boxFx.ev.fails} defs={fieldsCfg?.box ?? []} prefix={SUGGEST_PREFIX} decided={boxPhotos.ok} style={{ marginTop: 10 }} />}
               <label htmlFor={`${uid}-box-note`} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>הערות</label>
-              <textarea id={`${uid}-box-note`} value={boxPhotos.note} onChange={(e) => setBoxPhotos((p) => ({ ...p, note: e.target.value }))} placeholder="אופציונלי" className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
+              {boxHasFields ? (
+                <NotesField size="area" id={`${uid}-box-note`} value={boxPhotos.note} onChange={(note) => setBoxPhotos((p) => ({ ...p, note }))}
+                  placeholder="אופציונלי" editorTitle="הערות · הקופסה" look={VARIANT_SPEC.wizard.noteLook} />
+              ) : (
+                <textarea id={`${uid}-box-note`} value={boxPhotos.note} onChange={(e) => setBoxPhotos((p) => ({ ...p, note: e.target.value }))} placeholder="אופציונלי" className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
+              )}
             </div>
           </div>
         ) : stepKey === "items" ? (

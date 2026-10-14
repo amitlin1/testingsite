@@ -4,11 +4,20 @@ import { Stack, Alert } from "@/components/ui";
 import type { StationTestDialogProps, TestResultData } from "../../../types";
 import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { apiFetch } from "@/lib/api/client";
+import { SUGGEST_PREFIX, SUGGEST_TAIL_WORKER_DECIDES } from "@/app/lib/station-fields/labels";
+import { NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
 import {
   type Photos, type RefImg, emptyPhotos, lookupRU,
   SkuScreen, PhotoSection, PhotoUploader, VerdictCard,
   StationShell, type ShellPhase, SKU_TITLE, SKU_DESC,
 } from "./stationKit";
+import { FieldsBlock, FieldsBlockFallback } from "../fields/FieldsBlock";
+import type { UploadFieldPhoto } from "../fields/FieldRow";
+import { SuggestionLine } from "../fields/SuggestionLine";
+import { fieldsErrorText, shouldReloadFields } from "../fields/errors";
+import { VARIANT_SPEC, stationBlockTitle } from "../fields/fieldsBlockModel";
+import { useFieldsState } from "../fields/useFieldsState";
+import { useStationFields } from "../fields/useStationFields";
 
 /**
  * Which photo group this station captures. Only the numeric photo_types id is
@@ -28,6 +37,12 @@ export type PhotoStationConfig = {
  * photo group + verdict. Its titles come from the station type's name in the DB
  * (`stationTypeName`), so no station name lives in the code. Shares the intake
  * wizard's chrome via StationShell.
+ *
+ * Station fields (route-fields spec §4.11.2, artboard 13): when the item's route
+ * publishes fields for this step, the photo step gets one block of them between
+ * the photos and "בדיקה תקינה?", the suggestion line under the pass/fail pair,
+ * and finishing waits for them. Without a published config the popup is exactly
+ * today's.
  */
 export default function PhotoStation({
   open, onClose, item, station, stationTypeName, workerId, workerName, onSubmit, config,
@@ -62,10 +77,19 @@ export default function PhotoStation({
   const [refImages, setRefImages] = React.useState<RefImg[]>([]);
   const [photo, setPhoto] = React.useState<Photos>(emptyPhotos());
 
+  // ---- station fields of this step (spec §4.2–§4.3) ----
+  const sf = useStationFields(item.item_id, open, station.test_station_id);
+  const ready = sf.status === "ready" && sf.mode === "item" ? sf : null;
+  const fx = useFieldsState(ready ? ready.fields : []);
+  const hasFields = ready != null && fx.defsCount > 0;
+  // Finishing waits for the answer (loading / error), then for the fields themselves.
+  const fieldsGate = sf.status === "loading" || sf.status === "error" || (hasFields && fx.blocking(ready.gate));
+  const { reset: resetFields } = fx;
+
   React.useEffect(() => {
     if (!open) return;
-    setPhaseIdx(0); setError(null); setSkuScan(""); setHasRU(null); setRefImages([]); setPhoto(emptyPhotos());
-  }, [open, item]);
+    setPhaseIdx(0); setError(null); setSkuScan(""); setHasRU(null); setRefImages([]); setPhoto(emptyPhotos()); resetFields();
+  }, [open, item, resetFields]);
 
   const phases: ShellPhase[] = [
     { key: "sku", title: SKU_TITLE, desc: SKU_DESC },
@@ -92,6 +116,14 @@ export default function PhotoStation({
       return result?.objectKey ?? null;
     } catch { return null; }
   }, [workerId, station.test_station_type_id, photoCode]);
+
+  // A photo field of the station fields uploads the same way, tagged with that
+  // field's own photo type; null = it never got there (the shot reads failed).
+  const uploadFieldPhoto = React.useCallback<UploadFieldPhoto>(
+    (file, photoType) => uploadItemFiles(item.item_id, [file], { workerId, stationTypeId: station.test_station_type_id, photoType })
+      .then(([result]) => result?.objectKey ?? null, () => null),
+    [item.item_id, workerId, station.test_station_type_id],
+  );
 
   const pickPhoto = (file: File) => {
     const previewUrl = URL.createObjectURL(file);
@@ -132,8 +164,9 @@ export default function PhotoStation({
   const pass = photo.ok === "pass";
   // A shot still uploading, or one whose upload failed, blocks finishing: a
   // failed upload leaves nothing in storage, so finishing would silently lose
-  // the photo. The worker removes the red shot and takes it again.
-  const canFinish = skuScan.trim().length > 0 && photo.ok !== "" && !photo.photos.some((s) => s.uploading || s.failed);
+  // the photo. The worker removes the red shot and takes it again. The station
+  // fields gate it too (fieldsGate).
+  const canFinish = skuScan.trim().length > 0 && photo.ok !== "" && !photo.photos.some((s) => s.uploading || s.failed) && !fieldsGate;
 
   const onFinish = async () => {
     if (workerId == null) { setError("יש לבחור עובד בכותרת מסך הבדיקות"); return; }
@@ -147,11 +180,19 @@ export default function PhotoStation({
           station: `type-${station.test_station_type_id}`,
           sku: skuScan, hasRU,
           photo: { ok: photo.ok, note: photo.note, photos: keysOf(photo) },
+          // Station fields: schema, fields and verdict { ok, suggested } beside
+          // `photo` — every key above stays (spec §4.0 rule 5).
+          ...(hasFields ? fx.toBlock(ready.schema, { ok: photo.ok }) : {}),
         },
       };
       await onSubmit(data);
       onClose();
-    } catch { setError("שגיאה בשמירת הבדיקה"); } finally { setSubmitting(false); }
+    } catch (e) {
+      setError(fieldsErrorText(e, "שגיאה בשמירת הבדיקה"));
+      // 409: the route's fields changed while the popup was open. Load them
+      // again, whatever the last answer was; the drafts stay, by FieldId.
+      if (shouldReloadFields(e)) sf.reload();
+    } finally { setSubmitting(false); }
   };
 
   return (
@@ -173,9 +214,20 @@ export default function PhotoStation({
           <PhotoSection>
             <PhotoUploader photos={photo.photos} refImages={refImages} onPick={pickPhoto} onRemove={removePhoto} />
           </PhotoSection>
+          {/* The step's station fields — or, until they arrive, their stand-in (nothing without a config). */}
+          {hasFields ? (
+            <FieldsBlock variant="photo" title={stationBlockTitle(kind)} groups={[{ fields: ready.fields }]} fx={fx}
+              uploadPhoto={uploadFieldPhoto} />
+          ) : (
+            <FieldsBlockFallback sf={sf} />
+          )}
           <VerdictCard ok={photo.ok} note={photo.note}
             onOk={(v) => setPhoto((pk) => ({ ...pk, ok: v }))}
-            onNote={(v) => setPhoto((pk) => ({ ...pk, note: v }))} />
+            onNote={(v) => setPhoto((pk) => ({ ...pk, note: v }))}
+            suggestion={hasFields
+              ? <SuggestionLine fails={fx.ev.fails} defs={ready.fields} prefix={SUGGEST_PREFIX} tail={SUGGEST_TAIL_WORKER_DECIDES} icon="triangle" />
+              : undefined}
+            noteMax={hasFields ? NOTE_MAX_DEFAULT : undefined} noteLook={VARIANT_SPEC.photo.noteLook} />
         </Stack>
       )}
     </StationShell>

@@ -1140,8 +1140,12 @@ function TestingPageView() {
     });
 
     if (!response.ok) {
+      // A body that is not JSON (a proxy's HTML 502) throws its parse error, as
+      // it always has: a popup without fields shows what it showed before.
       const error = await response.json();
-      throw new Error(error.error || "Failed to save test result");
+      // The body's code rides along: a station-field error (route-fields spec
+      // §4.12) tells the popup what to do, e.g. reload its fields on a 409.
+      throw Object.assign(new Error(error.error || "Failed to save test result"), { code: error.code as string | undefined });
     }
     // A result was actually recorded — the dialog's onClose (right after this
     // resolves) must not release the item back to waiting.

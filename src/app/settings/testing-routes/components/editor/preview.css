@@ -1,0 +1,254 @@
+/* =========================================================================
+   WorkerPreviewCard — "תצוגת העובד · חי" (route-fields spec §5.5.3, §5.8;
+   artboard 2's right column). rf-pv-* classes, tokens only
+   (src/styles/tokens.css); sizes are the artboard's pixels.
+
+   The rows are the worker's own components (FieldRow, ChoiceAutocomplete,
+   NotesField, NumberField, PassFail) in the preview's denser metrics. Every
+   rule that resizes them is scoped under .rf-pv-rows, which only this card
+   draws — so the worker popups keep their own metrics exactly. They are not
+   inside a .tst-fx-card either, so the popups' narrow-window container
+   queries (fields.css) never stack the preview's three columns.
+   ========================================================================= */
+
+/* ------------------------------------------------------------ the card --- */
+/* Beside the editor (artboard 2: `flex: 1 1 380px`, sticky 16px from the top). At most as tall as
+   the settings frame it sticks in shows — the viewport under the app's top bar (56px) and the
+   settings sub-nav (52px), less 16px above and below — with its body scrolling inside, so the mini
+   footer stays reachable beside a long editor. */
+.rf-pv {
+  flex: 1 1 380px;
+  min-width: 0;
+  align-self: flex-start;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 56px - 52px - 32px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+}
+.rf-pv-head { flex: none; }
+
+/* "תצוגת העובד" (15/700) and the Tag "חי" with its green dot. */
+.rf-pv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 12px;
+  padding-inline: 14px 18px;
+  border-bottom: 1px solid var(--color-hairline);
+}
+.rf-pv-title {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  color: var(--color-ink);
+}
+.rf-pv-live-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--color-status-approved);
+}
+
+.rf-pv-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+/* The body scrolls; its parts keep their height (the frame clips its corners, which would
+   otherwise let it shrink to nothing). */
+.rf-pv-body > * { flex: none; }
+
+/* The dummy item line and "שינוי אפשרות כאן לא נשמר · …". */
+.rf-pv-dummy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rf-pv-dummy-line { font-size: var(--text-small); line-height: var(--lh-snug); color: var(--color-ink); overflow-wrap: anywhere; }
+.rf-pv-dummy-line > b { font-weight: var(--fw-semibold); }
+.rf-pv-dummy-id { unicode-bidi: isolate; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rf-pv-dummy-id > b { font-weight: var(--fw-bold); }
+.rf-pv-hint { font-size: var(--text-fine); line-height: var(--lh-snug); color: var(--color-ink-muted-48); }
+
+/* ------------------------------------------------------------ the frame --- */
+.rf-pv-frame {
+  overflow: hidden;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: 14px;
+}
+
+/* VerdictStation / PhotoStation / package: "בדיקות העמדה", "{station} · {item} · {N} שדות", and
+   "שלב {i} מתוך {n}" at the inline end. */
+.rf-pv-frame-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 12px 10px; }
+.rf-pv-frame-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rf-pv-frame-title {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+.rf-pv-frame-sub {
+  font-size: var(--text-fine);
+  line-height: var(--lh-snug);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.rf-pv-step {
+  margin-inline-start: auto;
+  font-size: var(--text-fine);
+  line-height: var(--lh-snug);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* PopUpTestDialog: artboard 14's block header (FieldsBlock's "dialog" classes, fields.css) at the
+   frame's padding. */
+.rf-pv-frame .tst-fx--dialog > .tst-fx-head { margin-bottom: 0; padding: 12px 12px 10px; }
+
+/* The system note "נא לבדוק עפ״י תכנית {sku}" (VerdictStation / PhotoStation). */
+.rf-pv-plan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--color-primary-tint);
+  font-size: 12.5px;
+  line-height: var(--lh-snug);
+  color: var(--color-ink);
+}
+.rf-pv-plan > svg { flex: none; color: var(--color-primary); }
+.rf-pv-plan-sku { unicode-bidi: isolate; }
+
+/* ------------------------------------------- the rows, in the preview's density --- */
+/* FieldRow reads its grid from these (fields.css .tst-fx-card): 92px · 112px · the note. */
+.rf-pv-rows {
+  --fx-cols: 92px 112px minmax(0, 1fr);
+  --fx-gap: 6px;
+  --fx-pad: 7px 12px;
+  --fx-pad-inline: 12px;
+  --fx-rule: var(--color-divider-soft);
+  --fx-label: 12.5px;
+}
+/* Every line has a rule above it, the first one too (artboard 2). */
+.rf-pv-rows .tst-fx-row { border-top: 1px solid var(--fx-rule); }
+/* A section title: parchment, 12/600 muted. */
+.rf-pv-rows .tst-fx-section {
+  padding: 6px 12px;
+  border-top: 1px solid var(--color-hairline);
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-48);
+}
+
+/* The name column at the 32px controls; a field without a name reads "(ללא שם)", muted. */
+.rf-pv-rows .tst-fx-name { min-height: 32px; }
+.rf-pv-rows .tst-fx-label { line-height: 1.25; }
+.rf-pv-line[data-unnamed] .tst-fx-label { color: var(--color-ink-muted-48); }
+
+/* choice_row (ChoiceAutocomplete): a 32px box, 8px in, the 6px dot then 5px to the text, a 12px
+   chevron. */
+.rf-pv-rows .tst-fx-choice .sh-input-wrap.sh-combo--dense { height: 32px; padding-inline: 8px 26px; }
+.rf-pv-rows .tst-fx-choice .sh-input-wrap.sh-combo--dense.sh-combo--icon { padding-inline-start: 19px; }
+.rf-pv-rows .tst-fx-choice .sh-combo--dense > .sh-adornment:first-child > * { inset-inline-start: 8px; }
+.rf-pv-rows .tst-fx-choice .sh-input-wrap.sh-combo--dense > input { font-size: 12.5px; }
+.rf-pv-rows .tst-fx-choice .sh-ac-arrow { width: 12px; height: 12px; }
+.rf-pv-rows .tst-fx-choice .sh-combo--dense .sh-ac-arrow { margin-top: -6px; inset-inline-end: 8px; }
+/* multi_choice: the same box, its chips wrapping inside it. */
+.rf-pv-rows .sh-input-wrap.tst-fx-choice-multi { min-height: 32px; padding-block: 2px; padding-inline: 6px 26px; }
+.rf-pv-rows .sh-input-wrap.tst-fx-choice-multi > input { height: 26px; font-size: 12.5px; }
+.rf-pv-rows .tst-fx-choice-multi > .sh-adornment:last-child { inset-inline-end: 8px; }
+
+/* The list of a preview choice field (portaled to <body>, so it cannot be scoped by its place) is
+   as wide as artboard 14 draws a row's list, 248px, and keeps its inline-start (right) edge on the
+   112px control's: the primitive places it by `left` at the control's width, so it moves 136px
+   toward the note column (`translate` — its inline style holds `margin`). Only while a preview
+   field's list is open: on any other page there is no .rf-pv-rows, so the popups' lists are
+   untouched. */
+body:has(.rf-pv-rows .tst-fx-choice--search) .sh-select-content[dir="rtl"]:has(> .sh-ac-footer > .tst-fx-choice-foot) {
+  min-width: 248px;
+  translate: -136px 0;
+}
+
+/* number (NumberField): the 32px input and a 28px unit box. */
+.rf-pv-rows .tst-fx-num-input { height: 32px; padding: 0 8px; font-size: var(--text-small); }
+.rf-pv-rows .tst-fx-num-unit { height: 32px; min-width: 28px; padding: 0 4px; font-size: var(--text-small); }
+
+/* pass_fail (PassFail size "row"): two 32px buttons, 12/600, the words alone (artboard 2). */
+.rf-pv-rows .tst-passfail--row { min-height: 32px; padding: 0 4px; border-radius: var(--r-sm); font-size: var(--text-fine); }
+.rf-pv-rows .tst-passfail--row > svg { display: none; }
+
+/* text / scan, checklist (no artboard draws them): the same 32px scale. */
+.rf-pv-rows .tst-fx-input { height: 32px; padding: 0 8px; font-size: 12.5px; }
+.rf-pv-rows .tst-fx-checklist { gap: 4px; }
+.rf-pv-rows .tst-fx-check { min-height: 32px; gap: 6px; padding: 5px 8px; }
+.rf-pv-rows .tst-fx-check > .pkg-tick { width: 16px; height: 16px; border-radius: var(--r-xs); }
+.rf-pv-rows .tst-fx-check-label { font-size: 12.5px; }
+
+/* The note (NotesField, spec §5.5.3): an 18px line, 32px at rest, up to six lines (122px), two
+   when folded (50px); 12.5px; the expand button 22px in the box's corner, 28px kept for it. A
+   textarea field ("area") takes the same type, from two lines. The editor popover is portaled and
+   keeps its own size. */
+.rf-pv-rows .tst-fx-row .tst-note-box > .tst-note-input {
+  --tst-note-pad-start: 8px;
+  --tst-note-pad-end: 28px;
+  padding-block: 6px;
+  font-size: 12.5px;
+  line-height: 18px;
+}
+.rf-pv-rows .tst-note--row .tst-note-input { min-height: 32px; max-height: 122px; }
+.rf-pv-rows .tst-note--row .tst-note-input[data-collapsed] { max-height: 50px; }
+/* An empty note is one line (artboard 2 `noteWs`: nowrap while empty): the placeholder does not
+   wrap in the narrow note column, so field-sizing keeps the box at 32px and the placeholder runs
+   out at the inline end. The textarea is dir="auto", which reads an empty one left to right and
+   would cut the placeholder's start — so it reads right to left while the placeholder shows. */
+.rf-pv-rows .tst-fx-row .tst-note-input:placeholder-shown { direction: rtl; }
+.rf-pv-rows .tst-fx-row .tst-note-input::placeholder { white-space: nowrap; }
+/* The closing wizard's compact note (a kit's closing step, artboards 17/18) at the same density;
+   level with the 32px controls, so without the popups' 3px step down. */
+.rf-pv-rows .tst-note--row-compact .tst-note-input { min-height: 32px; max-height: 122px; }
+.rf-pv-rows .tst-note--row-compact .tst-note-input[data-collapsed] { max-height: 50px; }
+.rf-pv-rows .tst-fx-row[data-note-pad] > .tst-fx-note { padding-top: 0; }
+.rf-pv-rows .tst-note--area .tst-note-input { min-height: 50px; }
+.rf-pv-rows .tst-fx-row .tst-note-expand { top: 5px; inset-inline-end: 4px; width: 22px; height: 22px; }
+.rf-pv-rows .tst-fx-row .tst-note-expand > svg { width: 14px; height: 14px; }
+
+/* -------------------------------------------------------- the mini footer --- */
+/* "כל שדות החובה מולאו" / "נותר שדה חובה אחד" / "נותרו {n} שדות חובה", and the station's finish. */
+.rf-pv-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--color-hairline);
+}
+.rf-pv-foot-text {
+  min-width: 0;
+  font-size: var(--text-fine);
+  line-height: var(--lh-snug);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+}
+/* A success small button (13/600, 6px to its icon) that never submits. */
+.rf-pv-foot > .sh-btn.rf-pv-finish { margin-inline-start: auto; gap: 6px; font-size: var(--text-small); cursor: default; }
+/* While anything is missing: parchment and muted, as artboard 2 draws it (the success fill would
+   otherwise outrank ui.css's disabled look). */
+.rf-pv-foot > .sh-btn.rf-pv-finish[aria-disabled="true"],
+.rf-pv-foot > .sh-btn.rf-pv-finish[aria-disabled="true"]:hover {
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-48);
+}

@@ -76,6 +76,12 @@ model item_routes {
   queue_start_time      DateTime       @db.Timestamp(6)
   processing_start_time DateTime?      @db.Timestamp(6)
   route_number          Int            @default(1)
+  /// Field-config version of THIS row's route, frozen at intake
+  /// (create-package.ts insertRoutedRow) and re-frozen when the route changes
+  /// (retype, package reset). NULL = intake predates station fields → legacy popups.
+  /// A kit row freezes the kit route's version; package-level steps of the
+  /// items inside it resolve through the KIT row, not their own.
+  fields_version        Int?
   item_types            item_types     @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_item_routes_item_type")
   test_stations         test_stations? @relation(fields: [test_station_id], references: [test_station_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_item_routes_test_station")
 
@@ -364,8 +370,73 @@ model testing_routes {
   test_station_type_id Int
   route_steps          Int[]              @default([])
   route_number         Int                @default(1)
+  /// Stable id per step, parallel to route_steps (same length, same order).
+  /// Written in the SAME update as route_steps; moves with its step on reorder.
+  /// Field configs are keyed by these, never by array index.
+  step_uids            String[]           @default([])
+  /// Unpublished field config (RouteFieldsConfig, src/app/lib/station-fields/schema.ts).
+  /// NULL = no pending changes.
+  fields_draft         Json?
+  /// Bumped on every draft save; PUT .../fields/draft must send the rev it started from.
+  draft_rev            Int                @default(0)
+  draft_updated_at     DateTime?          @db.Timestamptz(6)
+  draft_updated_by     String?            @db.VarChar(255)
+  /// Latest published version (route_field_versions.version). 0 = never published.
+  fields_version       Int                @default(0)
   item_types           item_types         @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_testing_routes_item_type")
   test_stations_type   test_stations_type @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_testing_routes_test_station_type")
+  field_versions       route_field_versions[]
+}
+
+/// Immutable history of published field configs, one row per (route, version).
+/// Results point here through test_results.details.schema {route_id, v, step_uid}.
+model route_field_versions {
+  id                Int            @id @default(autoincrement())
+  test_route_id     Int
+  version           Int
+  config            Json
+  /// Structured "what changed" vs the previous version, for the history view.
+  changes           Json?
+  note              String?        @db.Text
+  /// 'new_only' | 'not_reached' — the choice made in the publish dialog.
+  apply_mode        String         @db.VarChar(20)
+  /// One publish action can cover several routes (kit + its item routes).
+  publish_batch     String         @db.Uuid
+  published_at      DateTime       @default(now()) @db.Timestamptz(6)
+  published_by      String?        @db.VarChar(255)
+  published_by_name String?        @db.Text
+  route             testing_routes @relation(fields: [test_route_id], references: [test_route_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_route_field_versions_route")
+
+  @@unique([test_route_id, version], map: "route_field_versions_route_version_uq")
+  @@index([publish_batch], map: "idx_route_field_versions_batch")
+}
+
+/// Reusable option list (ארטבורד 4). Fields copy the options and keep
+/// list_ref {id, ver}; a list edit is offered to linked fields as a draft change.
+model option_lists {
+  id         Int       @id @default(autoincrement())
+  name       String    @db.VarChar(100)
+  /// ChoiceOption[] — see schema.ts.
+  options    Json
+  version    Int       @default(1)
+  archived   Boolean   @default(false)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  updated_by String?   @db.VarChar(255)
+}
+
+/// Reusable field template (ארטבורד 8). Cells copy the fields and keep
+/// from_set {id, ver}; a set update is offered for approval per linked cell.
+model field_sets {
+  id         Int       @id @default(autoincrement())
+  name       String    @db.VarChar(100)
+  /// Field[] — see schema.ts.
+  fields     Json
+  version    Int       @default(1)
+  archived   Boolean   @default(false)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  updated_by String?   @db.VarChar(255)
 }
 
 // ============================================================================

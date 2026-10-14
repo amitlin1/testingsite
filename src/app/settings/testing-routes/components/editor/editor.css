@@ -1,0 +1,937 @@
+/* =========================================================================
+   The station field editor (artboard 2, route-fields spec §5.5): breadcrumb,
+   station bar, the editor card (header, target chips, notice, locked rows,
+   the rows table, the add bar, footer) and the live preview column.
+   sfe-* classes only, tokens only (src/styles/tokens.css). Logical
+   properties throughout: the page is RTL.
+   ========================================================================= */
+
+.sfe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.sfe-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Shared focus ring of the editor's bare buttons and inputs (artboard 2 `:focus-visible`). */
+.sfe button:focus-visible,
+.sfe-table button:focus-visible,
+.sfe-pop button:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------- breadcrumb --- */
+/* <nav aria-label="מיקום">: "חזרה למפה", then "מפת שדות › {station} › {item}". */
+.sfe-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.sfe-crumbs .sh-btn--text { font-size: var(--text-body-sm); gap: 6px; }
+.sfe-crumbs__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-48);
+}
+.sfe-crumbs__sep { display: flex; }
+.sfe-crumbs__link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-crumbs__link:hover { color: var(--color-primary-hover); }
+}
+.sfe-crumbs__current { color: var(--color-ink); font-weight: var(--fw-semibold); }
+
+/* ------------------------------------------------------ station bar --- */
+/* <section aria-label="עמדות המסלול">: white, radius 16, min-height 64. */
+.sfe-timeline {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.sfe-timeline .sh-btn--text { font-size: var(--text-body-sm); gap: 6px; }
+.sfe-stops {
+  flex: 1;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  overflow-x: auto;
+}
+.sfe-stops__line {
+  flex: 1 1 16px;
+  min-width: 10px;
+  height: 1px;
+  background: var(--color-border-strong);
+}
+.sfe-stops__item { flex: none; }
+.sfe-stop {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font: inherit;
+  color: var(--color-ink);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-stop:hover:not(:disabled):not([aria-current="step"]) { background: var(--color-canvas-parchment); }
+}
+.sfe-stop:disabled { cursor: default; }
+.sfe-stop__mark {
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-ink-muted-70);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+.sfe-stop__mark--pkg {
+  border-radius: 7px;
+  background: var(--color-primary-tint);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+.sfe-stop[aria-current="step"] .sfe-stop__mark {
+  background: var(--color-primary-soft);
+  border: 0;
+  box-shadow: 0 0 0 2px var(--color-primary);
+  color: var(--color-primary);
+}
+.sfe-stop__text { display: flex; flex-direction: column; gap: 1px; }
+.sfe-stop__name { font-size: var(--text-small); font-weight: var(--fw-semibold); white-space: nowrap; }
+.sfe-stop__sub {
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sfe-stop__sub--error { color: var(--color-destructive); font-weight: var(--fw-semibold); }
+
+/* ---------------------------------------------------- two columns --- */
+.sfe-cols {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-ml);
+}
+
+/* ------------------------------------------------------ editor card --- */
+.sfe-card {
+  flex: 999 1 560px;
+  min-width: 0;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  display: flex;
+  flex-direction: column;
+}
+.sfe-card__head {
+  padding: 16px 20px 0;
+  border-bottom: 1px solid var(--color-hairline);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.sfe-card__top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-sm); }
+.sfe-card__titles { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-xxs); }
+.sfe-card__title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sfe-card__title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+}
+.sfe-card__sub { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted-48); }
+.sfe-card__actions { display: flex; align-items: center; gap: 2px; }
+.sfe-card__more {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--color-ink-muted-48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-card__more:hover { background: var(--color-canvas-parchment); color: var(--color-ink); }
+}
+.sfe-card__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+/* "שדות · {n}": the one sub-tab until phase 3 brings "פריסת החלון". */
+.sfe-subtabs { display: flex; gap: 22px; height: 42px; align-items: stretch; }
+.sfe-subtab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  box-shadow: inset 0 -2px 0 var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* <div role="group" aria-label="הפריט שעבורו מגדירים שדות">. */
+.sfe-targets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-bottom: 6px;
+}
+.sfe-targets__lead { font-size: var(--text-small); color: var(--color-ink-muted-48); }
+.sfe-target {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-70);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-target:hover:not([aria-pressed="true"]) { border-color: var(--color-border-strong); }
+}
+.sfe-target[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+
+.sfe-card__body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* "משותף" (SharedRouteNotice): tint, primary-border, radius 11, Info. */
+.sfe-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--color-primary-tint);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  font-size: var(--text-body-sm);
+  line-height: 1.45;
+}
+.sfe-notice__icon { flex: none; margin-top: 1px; color: var(--color-primary); }
+.sfe-notice__text { flex: 1; }
+/* "צור מסלול נפרד למארז הזה" (artboard 2: a link, 600, no underline) — a button, it acts. */
+.sfe-notice__link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-notice__link:hover { color: var(--color-primary-hover); }
+}
+/* The fork dialog's error line, under its message (COPY-PENDING text). */
+.sfe-notice__fork-error {
+  display: block;
+  margin-top: 10px;
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-destructive);
+}
+
+/* The locked rows (parchment, radius 11, min-height 40, Lock 15px, 14px muted). */
+.sfe-locked {
+  min-height: 40px;
+  box-sizing: border-box;
+  background: var(--color-canvas-parchment);
+  border-radius: var(--r-md);
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-48);
+}
+.sfe-locked > svg { flex: none; }
+
+.sfe-card__foot {
+  border-top: 1px solid var(--color-hairline);
+  background: var(--color-surface-pearl);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  padding: 10px 20px;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------- rows table --- */
+.sfe-table-scroll { overflow-x: auto; }
+.sfe-table {
+  min-width: 600px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+}
+.sfe-table__head,
+.sfe-row {
+  display: grid;
+  grid-template-columns: 28px 140px minmax(0, 1fr) 100px 56px 32px;
+  gap: var(--space-xs);
+}
+.sfe-table__head {
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  background: var(--color-canvas-parchment);
+  border-radius: 10px 10px 0 0;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-48);
+}
+.sfe-table > .sfe-item:last-child { border-radius: 0 0 10px 10px; }
+
+/* One row: the grid, and — for an expanded number field — its settings under it. */
+.sfe-item {
+  border-top: 1px solid var(--color-divider-soft);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-item:hover { background: var(--color-surface-pearl); }
+}
+.sfe-item--expanded { background: var(--color-surface-pearl); }
+.sfe-item--section { border-top-color: var(--color-hairline); background: var(--color-surface-pearl); }
+.sfe-item--dragging { opacity: .5; }
+.sfe-item--drop-before { box-shadow: inset 0 2px 0 var(--color-primary); }
+.sfe-item--drop-after { box-shadow: inset 0 -2px 0 var(--color-primary); }
+
+.sfe-row { align-items: start; padding: 8px 12px 6px; }
+.sfe-section {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 32px;
+  gap: var(--space-xs);
+  align-items: center;
+  padding: 4px 12px;
+}
+
+.sfe-grip {
+  width: 28px;
+  height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-ink-muted-48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+.sfe-grip:active { cursor: grabbing; }
+.sfe-section .sfe-grip { height: 32px; }
+
+.sfe-more {
+  width: 32px;
+  height: 38px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--color-ink-muted-48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.sfe-section .sfe-more { height: 32px; }
+@media (hover: hover) and (pointer: fine) {
+  .sfe-more:hover, .sfe-grip:hover { background: var(--color-canvas-parchment); color: var(--color-ink); }
+}
+
+/* Name: .stp-input 38px; the number / pass-fail tile at inline-start. */
+.sfe-name { display: flex; flex-direction: column; gap: var(--space-xxs); min-width: 0; }
+.sfe-name__box { position: relative; display: flex; align-items: center; }
+.sfe-name__tile {
+  position: absolute;
+  inset-inline-start: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-70);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stp-input.sfe-name__input { padding-inline: 10px; }
+.stp-input.sfe-name__input--tiled { padding-inline-start: 36px; }
+/* A new row: blue edge and halo even before it takes focus (artboard 2 `fresh`). */
+.stp-input.sfe-name__input--fresh {
+  border-color: var(--color-primary-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+.sfe-err { font-size: var(--text-fine); color: var(--color-destructive); }
+.sfe-warn { font-size: var(--text-fine); color: var(--color-warning-ink); }
+.sfe-caption { font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+
+/* Section header: Heading, a transparent 220px input (14/700), the caption. */
+.sfe-section__main { display: flex; align-items: center; gap: var(--space-xs); min-width: 0; }
+.sfe-section__icon { flex: none; color: var(--color-ink-muted-48); }
+.sfe-section__input {
+  width: 220px;
+  max-width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  padding: 0 6px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-section__input:hover { border-color: var(--color-border-strong); }
+}
+.sfe-section__input:focus {
+  border-color: var(--color-primary-focus);
+  background: var(--color-canvas);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+.sfe-section__caption { font-size: var(--text-fine); color: var(--color-ink-muted-48); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* -------------------------------------------------- options column --- */
+.sfe-opts { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sfe-chips {
+  min-height: 38px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xxs);
+}
+.sfe-chip { position: relative; display: inline-flex; max-width: 100%; }
+.sfe-chip__btn {
+  height: 32px;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-small);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sfe-chip__label { overflow: hidden; text-overflow: ellipsis; }
+/* An empty label (lint "אפשרות ריקה"): the red edge artboard 4 gives an empty option's input. */
+.sfe-chip__btn[data-empty] { border-color: var(--color-destructive); }
+.sfe-chip__x {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--color-ink) 6%, var(--color-canvas-parchment));
+  color: var(--color-ink-muted-70);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.sfe-chip:hover .sfe-chip__x,
+.sfe-chip:focus-within .sfe-chip__x { opacity: 1; pointer-events: auto; }
+/* Rename in place: a white box with the focus edge and halo. */
+.sfe-chip__edit {
+  height: 32px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--color-primary-focus);
+  background: var(--color-canvas);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+.sfe-chip__input {
+  min-width: 36px;
+  max-width: 100%;
+  border: 0;
+  outline: none;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-small);
+  color: var(--color-ink);
+}
+
+.sfe-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 24px; }
+.sfe-link {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-link:hover { color: var(--color-primary-hover); }
+}
+.sfe-addopt {
+  min-height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-addopt:hover { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
+}
+
+/* "חדש בטיוטה": a status-late dot and warning-ink text (12/600). */
+.sfe-draftnew {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  color: var(--color-warning-ink);
+  white-space: nowrap;
+}
+.sfe-draftnew::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--color-status-late);
+}
+
+/* Number row (artboard 2): "יחידה" [44] "מקס׳" [56] + caption. */
+.sfe-num {
+  min-height: 38px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-70);
+}
+.sfe-num__input {
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+  padding: 0 8px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  outline: none;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+.sfe-num__input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
+.sfe-num__input[aria-invalid="true"] { border-color: var(--color-destructive); }
+.sfe-num__input--unit { width: 44px; text-align: center; }
+.sfe-num__input--max { width: 56px; }
+/* The summary button (artboard 3): a field-like box while the settings are open. */
+.sfe-numsum[aria-expanded="true"] {
+  min-height: 38px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--r-field);
+  background: var(--color-primary-tint);
+  padding: 0 10px;
+  gap: 6px;
+  font-size: var(--text-small);
+  font-weight: var(--fw-regular);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+.sfe-numsum[aria-expanded="true"] { flex: 1 1 auto; justify-content: space-between; }
+.sfe-numsum[aria-expanded="true"] > svg { color: var(--color-primary); }
+
+/* Pass / fail row: two framed chips (28px) and the caption. */
+.sfe-pf {
+  min-height: 38px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.sfe-pf__chip {
+  height: 28px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid currentColor;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+}
+.sfe-pf__chip--pass { color: var(--color-success-ink); }
+.sfe-pf__chip--fail { color: var(--color-destructive); }
+
+/* Checklist row (no artboard; spec §5.5.2): its boxes as the option chips without a tone, then a
+   dashed 32px add input (artboard 4's add input, in the chips' scale). */
+.sfe-check-add {
+  width: 168px;
+  max-width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--r-xs);
+  background: var(--color-canvas);
+  padding: 0 9px;
+  font: inherit;
+  font-size: var(--text-small);
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+.sfe-check-add::placeholder { color: var(--color-ink-muted-40); }
+.sfe-check-add:focus {
+  border-style: solid;
+  border-color: var(--color-primary-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+.sfe-check-add:disabled { background: var(--color-canvas-parchment); cursor: not-allowed; }
+
+/* Photo row (no artboard; spec §5.5.2): the photo type (a dense 38px combobox) and "מינ׳" (38px). */
+.sfe-photo {
+  min-height: 38px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-70);
+}
+.sfe-photo__type { flex: 1 1 160px; min-width: 0; }
+.stp-input.sfe-photo__min { width: 56px; flex: none; direction: ltr; unicode-bidi: isolate; }
+
+/* ---------------------------------------------------- notes column --- */
+.sfe-notes { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sfe-select {
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+  background: var(--color-canvas);
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  font: inherit;
+  font-size: var(--text-small);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+.sfe-select[aria-expanded="true"] { border-color: var(--color-primary-focus); }
+.sfe-select__value { flex: 1; min-width: 0; text-align: start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sfe-select > svg { flex: none; color: var(--color-ink-muted-48); }
+.sfe-notemax {
+  height: 24px;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  align-self: flex-start;
+  font: inherit;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.sfe-notemax[aria-expanded="true"] { background: var(--color-canvas-parchment); }
+@media (hover: hover) and (pointer: fine) {
+  .sfe-notemax:hover { background: var(--color-canvas-parchment); color: var(--color-ink); }
+}
+
+/* "חובה": 32px chip, aria-pressed. */
+.sfe-req-cell { min-height: 38px; display: flex; align-items: center; }
+.sfe-req {
+  height: 32px;
+  padding: 0 11px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-70);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.sfe-req[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+
+/* ------------------------------------------------------- popovers --- */
+/* The listboxes of NotesModeSelect / NoteMaxSelect (196px, radius 8). */
+.sfe-pop.sfe-listbox-pop {
+  width: 196px;
+  box-sizing: border-box;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+  padding: 4px;
+  box-shadow: var(--shadow-pop);
+  color: var(--color-ink);
+}
+.sfe-listbox { display: flex; flex-direction: column; gap: 2px; }
+.sfe-listbox__head { padding: 6px 10px 2px; font-size: var(--text-fine); font-weight: var(--fw-semibold); color: var(--color-ink-muted-48); }
+.sfe-listbox__opt {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-ink);
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  text-align: start;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-listbox__opt:hover:not([aria-selected="true"]) { background: var(--color-canvas-parchment); }
+}
+.sfe-listbox__opt[aria-selected="true"] {
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+}
+.sfe-listbox__check { width: 15px; display: inline-flex; flex: none; }
+.sfe-listbox__foot {
+  margin: 0;
+  padding: 6px 10px 4px;
+  border-top: 1px solid var(--color-divider-soft);
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  line-height: 1.4;
+}
+
+/* ToneMenu: role="dialog" "עריכת אפשרות", 200px, radius 12. */
+.sfe-pop.sfe-tone-menu {
+  width: 200px;
+  box-sizing: border-box;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  padding: var(--space-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-ink);
+}
+.sfe-tone-menu__head { display: flex; align-items: center; justify-content: space-between; }
+.sfe-tone-menu__title { font-size: var(--text-fine); font-weight: var(--fw-semibold); color: var(--color-ink-muted-48); }
+.sfe-tone-menu__close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--color-ink-muted-48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.sfe-tone-menu__group { display: flex; flex-direction: column; gap: 2px; }
+.sfe-tone {
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+  text-align: start;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-tone:hover:not([aria-checked="true"]) { background: var(--color-canvas-parchment); }
+}
+.sfe-tone[aria-checked="true"] { background: var(--color-primary-tint); font-weight: var(--fw-semibold); }
+.sfe-tone__ring {
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--color-field-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.sfe-tone__ring::after { content: ""; width: 6px; height: 6px; border-radius: var(--r-pill); background: transparent; }
+.sfe-tone[aria-checked="true"] .sfe-tone__ring { border-color: var(--color-primary); }
+.sfe-tone[aria-checked="true"] .sfe-tone__ring::after { background: var(--color-primary); }
+.sfe-tone__word { flex: 1; }
+.sfe-tone-menu__divider { height: 1px; background: var(--color-hairline); margin: 4px 0; }
+.sfe-tone-menu__delete {
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--color-destructive);
+  text-align: start;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-tone-menu__delete:hover { background: color-mix(in srgb, var(--color-destructive) 6%, transparent); }
+}
+
+/* The ⋯ menus (ui/Menu): the popover shadow of the artboards. */
+.sh-menu-content.sfe-menu { box-shadow: var(--shadow-pop); }
+
+/* ------------------------------------------------------------ add bar --- */
+.sfe-addbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.route-add.sfe-addbar__row {
+  flex: 1 1 300px;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 14px;
+  text-align: start;
+}
+.sfe-addbar__lead { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sfe-addbar__caption { font-size: var(--text-fine); font-weight: var(--fw-regular); color: var(--color-ink-muted-48); }
+.sh-btn.sfe-addbar__type { gap: 4px; font-size: var(--text-body-sm); padding: 5px 13px; }
+.sh-btn.sfe-addbar__type[aria-expanded="true"] {
+  background: var(--color-primary-tint);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+.sh-btn.sfe-addbar__section { gap: 5px; font-size: var(--text-body-sm); }
+
+/* -------------------------------------------------- preview column --- */
+.sfe-preview-col {
+  flex: 1 1 380px;
+  min-width: 0;
+  align-self: flex-start;
+  position: sticky;
+  top: var(--space-md);
+}
+/* While "סוג שדה אחר" is open the live preview is veiled (artboard 3, white 50%). */
+.sfe-preview-col__veil {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--color-canvas) 50%, transparent);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sfe-item, .sfe-chip__x, .sfe-target, .sfe-req, .sfe-stop { transition: none; }
+}

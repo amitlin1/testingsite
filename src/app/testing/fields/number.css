@@ -1,0 +1,83 @@
+/* NumberField (src/app/testing/fields/NumberField.tsx; route-fields spec §4.7, artboards 14 and 6):
+   a 44px input joined to its unit box, typed left to right, and the range line under it (or beside
+   it, artboard 6). What an inline style cannot say: focus, the invalid edge, the joined corners.
+   Colours are tokens (src/styles/tokens.css). Imported by NumberField.tsx. */
+
+/* The field with its own range line. */
+.tst-fx-num { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.tst-fx-num > .tst-fx-num-group { align-self: stretch; }
+/* Artboard 6: an 88px input and its unit, the line beside them. */
+.tst-fx-num--beside { flex-direction: row; align-items: center; gap: 10px; }
+.tst-fx-num--beside > .tst-fx-num-group { align-self: auto; flex: none; }
+.tst-fx-num--beside .tst-fx-num-input { flex: none; width: 88px; }
+.tst-fx-num--beside > .tst-fx-num-range { flex: 1; min-width: 0; }
+
+/* Input + unit: one control. The group is dir="ltr", so inline-start is its left edge — the number
+   reads left to right and the unit box closes it on the right (artboard 14). */
+.tst-fx-num-group { display: flex; min-width: 0; }
+.tst-fx-num-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
+  text-align: start;
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.tst-fx-num-input--unit { border-start-end-radius: 0; border-end-end-radius: 0; }
+.tst-fx-num-unit {
+  flex: none;
+  min-width: 40px;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-field-border);
+  border-inline-start: 0;
+  border-start-end-radius: var(--r-field);
+  border-end-end-radius: var(--r-field);
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-70);
+  font-size: var(--text-body);
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* Empty after a save attempt, not a number, or out of range: both boxes edge red (artboard 14 `bad`). */
+.tst-fx-num-group[data-invalid] .tst-fx-num-input,
+.tst-fx-num-group[data-invalid] .tst-fx-num-unit { border-color: var(--color-destructive); }
+/* The system focus ring (.pkg-field:focus), over the unit box beside it, red edge or not. */
+.tst-fx-num-group .tst-fx-num-input:focus {
+  position: relative;
+  z-index: 1;
+  border-color: var(--color-primary-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
+}
+.tst-fx-num-input:disabled { background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); cursor: not-allowed; }
+
+/* The range line: 12/600, its colour by state (labels.ts numberRangeLine). */
+.tst-fx-num-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-fine);
+  font-weight: 600;
+  line-height: var(--lh-snug);
+  color: var(--color-ink-muted-48);
+}
+.tst-fx-num-range[data-tone="success"] { color: var(--color-success-ink); }
+.tst-fx-num-range[data-tone="danger"] { color: var(--color-destructive); }
+.tst-fx-num-range > svg { flex: none; }
+/* A number with its unit inside the line: isolated left-to-right, never split. */
+.tst-fx-num-ltr { unicode-bidi: isolate; font-variant-numeric: tabular-nums; white-space: nowrap; }

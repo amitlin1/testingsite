@@ -18,6 +18,13 @@
 // boxes are not: every run adds a new set, tagged with makat "DEMO-*" and
 // serials carrying the run tag. Undo = restore the DB backup taken before.
 //
+// Station fields (route-fields spec §3.3/§3.4): before every result it posts,
+// the seed asks GET /api/testing/station-fields what the popup would show, and
+// when a published config answers it saves what that popup saves next to its
+// own keys — Details.schema and the fields of a passing check. With no
+// published config (a "legacy" answer) every request is exactly as before.
+// Boxes taken in after scripts/seed-station-fields-demo.mjs carry the fields.
+//
 // Auth follows scripts/seed-dev-dataset.js: an Auth.js session cookie is
 // minted offline with AUTH_SECRET (taken from the environment, else from
 // .env.local), so the app must share that secret. Refuses any API base that
@@ -159,6 +166,88 @@ const must = async (...args) => {
   return r.json;
 };
 const trim = (s) => (s == null ? "" : String(s).trim());
+
+// ---- station fields ------------------------------------------------------------------
+// The popup's question before every result: which fields does its row answer at this step
+// (GET /api/testing/station-fields — for a package-level station the popup opens on the box)?
+// On anything but "legacy", Details gets the block the popup builds with the same module
+// (src/app/lib/station-fields/evaluate.ts toResultBlock): schema (target item / box / kit_item)
+// and the fields of a passing check.
+let fieldsModule = null; // evaluate.ts, loaded when the first config answers
+const fieldsSaved = { item: 0, box: 0, kit_item: 0 };
+const DEMO_TEXT = `DEMO-${tag}`;
+
+async function evaluateModule() {
+  if (!fieldsModule) {
+    const { require: tsxRequire } = await import("tsx/cjs/api");
+    fieldsModule = tsxRequire("../src/app/lib/station-fields/evaluate.ts", import.meta.url);
+  }
+  return fieldsModule;
+}
+
+/** A number inside the field's range (any number passes a field without one). */
+function passingNumber(def, numberInRange) {
+  const { min, max, ref } = def;
+  const candidates = [ref, min != null && max != null ? (min + max) / 2 : null, max != null ? (max > 0 ? max / 2 : max - 1) : null, min != null ? min + 1 : null, 0];
+  return candidates.find((n) => typeof n === "number" && numberInRange(def, n) !== false) ?? 0;
+}
+
+/** The drafts (evaluate.ts FieldDraft) of a passing check: every field that can drive the
+ *  suggestion gets a passing value, so `suggested` comes out "pass"; every other required field
+ *  gets a value; a field whose note is always required gets one. */
+function passingDrafts(defs, ev) {
+  const drafts = {};
+  for (const def of defs) {
+    if (def.type === "section") continue;
+    const draft = {};
+    const passing = def.options && (def.options.find((o) => o.tone === "pass") ?? def.options.find((o) => o.tone !== "fail"));
+    if ((def.type === "choice_row" || def.type === "multi_choice") && !passing && def.required) {
+      throw new Error(`station fields: "${def.label}" has no option that passes`);
+    }
+    if (def.type === "choice_row" && passing) draft.opt = passing.id;
+    else if (def.type === "multi_choice" && passing) draft.opts = [passing.id];
+    else if (def.type === "pass_fail") draft.ok = "pass";
+    else if (def.type === "number") draft.num = String(passingNumber(def, ev.numberInRange));
+    else if (["text", "textarea", "scan"].includes(def.type) && def.required) draft.text = DEMO_TEXT;
+    else if (def.type === "checklist" && def.required) draft.checked = Object.fromEntries(def.items.map((it) => [it.id, true]));
+    else if (def.type === "photo" && (def.required || def.min > 0)) {
+      throw new Error(`station fields: "${def.label}" needs photos — this seed uploads none`);
+    }
+    if (def.notes === "required") draft.note = DEMO_TEXT;
+    drafts[def.id] = draft;
+  }
+  return drafts;
+}
+
+/** A kit item's fields at a package-level step: its groups (each_item, then its type) in order. */
+const kitItemFields = (sf, itemId) => sf.items.find((it) => it.item_id === String(itemId))?.groups.flatMap((g) => g.fields) ?? [];
+
+/**
+ * Details for one result, as the popup saves them. `askId` is the row the popup opens on (the box
+ * at a package-level station, else the row itself), `rowId` the row the result is for. A legacy
+ * answer returns `details` untouched (undefined stays undefined: no Details at all).
+ */
+async function withFields(details, askId, stationId, rowId, verdict = {}) {
+  const sf = await must("GET", `/api/testing/station-fields?itemId=${askId}&stationId=${stationId}`);
+  if (sf.mode === "legacy") return details;
+  const ev = await evaluateModule();
+  const target = sf.mode === "item" ? "item" : String(rowId) === String(askId) ? "box" : "kit_item";
+  const defs = target === "item" ? sf.fields : target === "box" ? sf.box : kitItemFields(sf, rowId);
+  const schema = { ...sf.schema, target };
+  const out = { ...details, ...ev.toResultBlock(defs, passingDrafts(defs, ev), schema, verdict) };
+  // Close wizard: an item packed without reaching the station answers its fields in its
+  // decision on the box (spec §2.7) — the server gates a packed_anyway decision without them.
+  if (target === "box" && Array.isArray(details?.decisions)) {
+    out.decisions = details.decisions.map((d) => {
+      if (d.decision !== "packed_anyway") return d;
+      const itemDefs = kitItemFields(sf, d.item_id);
+      const block = ev.toResultBlock(itemDefs, passingDrafts(itemDefs, ev), schema);
+      return { ...d, fields: block.fields, suggested: block.verdict.suggested };
+    });
+  }
+  fieldsSaved[target] += 1;
+  return out;
+}
 
 // ---- phase 1: reference data ---------------------------------------------------
 const ref = { type: {}, stations: {}, research: null, itemType: {}, route: {}, pkgType: {} };
@@ -322,12 +411,17 @@ async function packageStep(pkgId, kind) {
   await startTest(pkgId, st.id, w);
   const submit = uuid();
   const base = { StationID: st.id, WorkerID: w.id, WorkerName: w.name, SubmitID: submit, Result: 1, Passed: true };
+  // With fields, the opening wizard records the worker's own verdict on every row; the closing
+  // wizard asks for none (its item rows and box carry only the suggestion).
+  const verdict = kind === "opening" ? { ok: "pass" } : {};
   for (const it of v.items) {
-    await must("POST", "/api/testing/results", { ...base, ItemID: Number(it.item_id), Details: kind === "opening" ? { opening: true, package_id: pkgId } : { closing: true, packed: true } });
+    const details = kind === "opening" ? { opening: true, package_id: pkgId } : { closing: true, packed: true };
+    await must("POST", "/api/testing/results", { ...base, ItemID: Number(it.item_id), Details: await withFields(details, pkgId, st.id, it.item_id, verdict) });
   }
+  const boxDetails = kind === "opening" ? { opening: true, itemCount: v.items.length } : { closing: true, packed: v.items.map((i) => i.item_id), decisions: [] };
   await must("POST", "/api/testing/results", {
     ...base, ItemID: Number(pkgId),
-    Details: kind === "opening" ? { opening: true, itemCount: v.items.length } : { closing: true, packed: v.items.map((i) => i.item_id), decisions: [] },
+    Details: await withFields(boxDetails, pkgId, st.id, pkgId, verdict),
   });
   return view(pkgId);
 }
@@ -345,10 +439,12 @@ async function advance(itemId, { research = false } = {}) {
   const st = station(stepType, Math.floor(rand() * 2));
   const w = pick(WORKERS);
   await startTest(itemId, st.id, w);
+  const details = await withFields(undefined, itemId, st.id, itemId);
   await must("POST", "/api/testing/results", {
     ItemID: Number(itemId), StationID: st.id, CurrentRouteStep: step, RouteStepsLength: steps.length,
     WorkerID: w.id, WorkerName: w.name, SubmitID: uuid(), Result: 1, Passed: true,
     ...(research ? { sendToResearch: true, Comments: "חריגה בבדיקה — הועבר למחקר" } : {}),
+    ...(details !== undefined ? { Details: details } : {}),
   });
   return true;
 }
@@ -408,11 +504,18 @@ async function verify(made) {
     }
   }
   console.log("  boxes by state:", JSON.stringify(counts));
+  const withFieldsCount = fieldsSaved.item + fieldsSaved.box + fieldsSaved.kit_item;
+  if (withFieldsCount > 0) {
+    console.log(`  results with station fields: ${withFieldsCount} (item ${fieldsSaved.item}, box ${fieldsSaved.box}, kit item ${fieldsSaved.kit_item})`);
+  }
 }
 
 try {
   cookie = await mintSession();
   const probe = await api("GET", "/api/settings/item-types", undefined, { quiet: true });
+  if (probe.status >= 500) {
+    throw new Error(`the app at ${API_BASE} could not read the item types (status ${probe.status}) — see its server log (database?)`);
+  }
   if (!probe.ok || !Array.isArray(probe.json)) {
     throw new Error(`the app at ${API_BASE} did not accept the session (status ${probe.status}) — is it running, with the same AUTH_SECRET?`);
   }

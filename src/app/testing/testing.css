@@ -201,6 +201,20 @@
 }
 .tst-passfail--pass[aria-pressed="true"] { border-color: var(--color-success-ink); background: var(--color-success-bg); color: var(--color-success-ink); }
 .tst-passfail--fail[aria-pressed="true"] { border-color: var(--color-destructive); background: var(--color-danger-bg); color: var(--color-destructive); }
+/* The pair inside a station-field row (PassFail size="row"; route-fields
+   artboard 14): 44px, 14px/600, sized to its column. */
+.tst-passfail--row { min-height: 44px; min-width: 0; gap: 4px; padding: 0 6px; font-size: var(--text-body-sm); white-space: nowrap; }
+/* A required pair left empty after a save attempt: both edges red, no text
+   (artboard 14 `pfErr`). Holds on hover. */
+.tst-passfail.tst-passfail--invalid:not([aria-pressed="true"]) { border-color: var(--color-destructive); }
+
+/* VerdictCard's suggestion line ("מוצע: לא תקין — …"), 10px under the pair;
+   no room while it says nothing. SuggestionLine keeps its status region in
+   the page then, empty — never display:none, or the first suggestion would
+   not be announced. */
+.tst-verdict-suggest { margin-top: 10px; }
+.tst-verdict-suggest:empty,
+.tst-verdict-suggest:has(> [role="status"]:empty) { margin-top: 0; }
 
 /* Photo uploader: camera / gallery buttons at touch height, and the filmstrip
    tiles (buttons: Tab + Enter pick the frame shown large). */

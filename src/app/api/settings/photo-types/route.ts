@@ -22,6 +22,8 @@ export async function GET(request: Request) {
     return NextResponse.json(rows);
   } catch (error) {
     console.error("Error fetching photo types:", error);
-    return NextResponse.json([], { status: 200 });
+    // A real error, never an empty list (route-fields spec §11-12): every caller
+    // already treats a non-ok answer as a failed load.
+    return NextResponse.json({ error: "Failed to fetch photo types" }, { status: 500 });
   }
 }

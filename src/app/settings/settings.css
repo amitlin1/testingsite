@@ -25,6 +25,9 @@
    inside, with the header pinned; every other page grows and the frame
    scrolls. */
 .settings-page:has(> .settings-fill) { height: 100%; }
+/* The testing-routes fields map and its cell editor use the whole frame
+   (route-fields spec §5.2): the page root marks itself `.settings-wide`. */
+.settings-page:has(> .settings-wide) { max-width: none; }
 .settings-fill {
   flex: 1;
   min-height: 0;

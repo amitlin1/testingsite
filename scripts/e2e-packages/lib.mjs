@@ -122,7 +122,10 @@ export async function resolveConfig(page) {
   const pkg = pkgTypes.find((t) => t.item_type_desc === pkgName);
   if (!pkg) throw new Error(`package type "${pkgName}" not found (set E2E_PKG_TYPE); have: ${pkgTypes.map((t) => t.item_type_desc).join(", ") || "none"}`);
   const other = pkgTypes.find((t) => t.item_type_id !== pkg.item_type_id);
-  const routes = (await api(page, `/api/settings/testing-routes?itemTypeId=${pkg.item_type_id}&routeNumber=${pkg.default_route_number ?? 1}`)).json || [];
+  const gotRoutes = await api(page, `/api/settings/testing-routes?itemTypeId=${pkg.item_type_id}&routeNumber=${pkg.default_route_number ?? 1}`);
+  // api() parses error bodies too: unchecked, a 500's { error } would surface below as a misleading "no usable route".
+  if (!gotRoutes.ok || !Array.isArray(gotRoutes.json)) throw new Error(`reading the route of package type "${pkgName}" failed: GET /api/settings/testing-routes -> ${gotRoutes.status} ${gotRoutes.text ?? JSON.stringify(gotRoutes.json)}`);
+  const routes = gotRoutes.json;
   const steps = routes[0]?.route_steps ?? [];
   if (steps.length < 2) throw new Error(`package type "${pkgName}" has no usable route (steps: ${JSON.stringify(steps)})`);
   const itemTypes = (await api(page, "/api/itemTypes")).json || [];

@@ -325,7 +325,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
         if (packagePastOpening && ctx.packageId != null) {
           // The whole box starts over. Write the new type onto the item's
-          // route row first; the reset reads each row's current type.
+          // route row first; the reset reads each row's current type and
+          // route, and re-freezes fields_version from them (route-fields
+          // spec §1.5) — so this row gets its new route's version there.
           await tx.item_routes.update({
             where: { item_id: itemIdBig },
             data: { item_type_id: nextTypeId, route_number: routeNum },
@@ -335,6 +337,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         } else {
           const stationId = await findStationForRouteStep(tx, nextTypeId, routeNum, 1);
           const now = new Date(getCurrentUtcIso());
+          // The new route, read once: step 1 feeds the ledger below, and the
+          // row freezes the field-config version the route has published now
+          // (route-fields spec §1.5) — a retype starts the route over, like an
+          // intake. 0 (never published) → NULL = the fixed popups.
+          const routeRow = await tx.testing_routes.findFirst({
+            where: { item_type_id: nextTypeId, route_number: routeNum },
+            select: { route_steps: true, fields_version: true },
+          });
 
           await tx.item_routes.update({
             where: { item_id: itemIdBig },
@@ -348,6 +358,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
               finished_at: null,
               queue_start_time: now,
               processing_start_time: null,
+              fields_version: routeRow?.fields_version || null,
             },
           });
 
@@ -359,11 +370,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           // Reopens the run against the new plan (metrics_open_run reads the
           // item_routes row updated just above). station_type_id is the type the
           // fresh queued interval waits for — step 1 of the new route.
-          const routeRow = await tx.testing_routes.findFirst({
-            where: { item_type_id: nextTypeId, route_number: routeNum },
-            select: { route_steps: true },
-          });
-
           await recordTransition(tx, {
             eventKey: `retype:${itemId}:${randomUUID()}`,
             itemId: itemIdBig,

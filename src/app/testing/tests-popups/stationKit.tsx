@@ -13,6 +13,7 @@ import { Check as CheckIcon } from "@/components/ui/icons";
 import { Info as InfoIcon } from "@/components/ui/icons";
 import type { ItemRow } from "../../../types";
 import { apiFetch } from "@/lib/api/client";
+import { NotesField, type NoteLook } from "../fields/NotesField";
 
 /**
  * stationKit — the shared visual language for the testing-station wizards
@@ -77,18 +78,24 @@ export function SystemNote({ children }: { children: React.ReactNode }) {
 }
 
 /** Pass / fail toggle pair (aria-pressed). `labelledBy` names the group — the
- *  question it answers. Also used by the package opening wizard. */
-export function PassFail({ value, onChange, labelledBy }: {
+ *  question it answers. Also used by the package opening wizard.
+ *  size "row" is the pair inside a station-field row (route-fields artboard 14:
+ *  44px, 14px/600), where pressing the chosen button again clears it
+ *  (`onClear`). `invalid` edges both buttons red with no text (artboard 14
+ *  `pfErr`; the row supplies the words for assistive tech via `describedBy`). */
+export function PassFail({ value, onChange, labelledBy, size = "lg", invalid = false, onClear, describedBy }: {
   value: Photos["ok"]; onChange: (v: "pass" | "fail") => void; labelledBy?: string;
+  size?: "lg" | "row"; invalid?: boolean; onClear?: () => void; describedBy?: string;
 }) {
+  const row = size === "row";
   const opt = (v: "pass" | "fail") => (
-    <button key={v} type="button" onClick={() => onChange(v)} aria-pressed={value === v}
-      className={`tst-passfail tst-passfail--${v} sh-press`}>
-      {v === "pass" ? <CheckIcon sx={{ fontSize: 20 }} aria-hidden /> : <CloseIcon sx={{ fontSize: 20 }} aria-hidden />}
+    <button key={v} type="button" onClick={() => (row && onClear && value === v ? onClear() : onChange(v))} aria-pressed={value === v}
+      className={`tst-passfail tst-passfail--${v} sh-press${row ? " tst-passfail--row" : ""}${invalid ? " tst-passfail--invalid" : ""}`}>
+      {v === "pass" ? <CheckIcon sx={{ fontSize: row ? 16 : 20 }} aria-hidden /> : <CloseIcon sx={{ fontSize: row ? 16 : 20 }} aria-hidden />}
       {v === "pass" ? "תקין" : "לא תקין"}
     </button>
   );
-  return <div role="group" aria-labelledby={labelledBy} style={{ display: "flex", gap: 12 }}>{opt("pass")}{opt("fail")}</div>;
+  return <div role="group" aria-labelledby={labelledBy} aria-describedby={describedBy} style={{ display: "flex", gap: row ? 6 : 12 }}>{opt("pass")}{opt("fail")}</div>;
 }
 
 /** Section header for the photos block: "תיעוד בתמונות" + soft divider line. */
@@ -103,9 +110,15 @@ export function PhotoSection({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Verdict + notes card — "בדיקה תקינה?" pass/fail + free-text notes. */
-export function VerdictCard({ ok, note, onOk, onNote, rows = 3 }: {
+/** Verdict + notes card — "בדיקה תקינה?" pass/fail + free-text notes.
+ *  With station fields (route-fields spec §4.11.1–2, artboards 12/13): `suggestion`
+ *  (the SuggestionLine) sits right under the pass/fail pair, 10px below it — and
+ *  takes no room while it says nothing; `noteMax` turns the notes into a
+ *  NotesField of that length, drawn as the popup's other notes (`noteLook`).
+ *  Without them the card is exactly today's. */
+export function VerdictCard({ ok, note, onOk, onNote, rows = 3, suggestion, noteMax, notePlaceholder = "הוסף הערה…", noteEditorTitle = "הערה · הערות", noteLook }: {
   ok: Photos["ok"]; note: string; onOk: (v: "pass" | "fail") => void; onNote: (v: string) => void; rows?: number;
+  suggestion?: React.ReactNode; noteMax?: number; notePlaceholder?: string; noteEditorTitle?: string; noteLook?: NoteLook;
 }) {
   const questionId = React.useId();
   const noteId = React.useId();
@@ -114,10 +127,16 @@ export function VerdictCard({ ok, note, onOk, onNote, rows = 3 }: {
       <Box>
         <Typography id={questionId} sx={{ fontSize: "var(--text-body)", fontWeight: 600, color: INK, mb: 1.5 }}>בדיקה תקינה?</Typography>
         <PassFail value={ok} onChange={onOk} labelledBy={questionId} />
+        {suggestion != null && suggestion !== false && <div className="tst-verdict-suggest">{suggestion}</div>}
       </Box>
       <Box>
         <label htmlFor={noteId} style={{ display: "block", fontSize: "var(--text-body)", fontWeight: 600, color: INK, marginBottom: 10 }}>הערות</label>
-        <TextField id={noteId} value={note} onChange={(e) => onNote(e.target.value)} placeholder="הוסף הערה…" multiline rows={rows} fullWidth />
+        {noteMax != null ? (
+          <NotesField size="verdict" id={noteId} value={note} onChange={onNote} max={noteMax} look={noteLook}
+            placeholder={notePlaceholder} editorTitle={noteEditorTitle} />
+        ) : (
+          <TextField id={noteId} value={note} onChange={(e) => onNote(e.target.value)} placeholder="הוסף הערה…" multiline rows={rows} fullWidth />
+        )}
       </Box>
     </Box>
   );

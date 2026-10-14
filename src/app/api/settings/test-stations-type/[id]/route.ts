@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
+import { renameStationTypeInDrafts } from "@/app/lib/station-fields/route-steps";
 import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
@@ -95,6 +96,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     // (FKs are declared onUpdate: NoAction, so we repoint children manually:
     //  insert the new parent, move children to it, then delete the old parent.)
     await prisma.$transaction(async (tx) => {
+      // test_type_desc is UNIQUE and the new row normally keeps the old
+      // description, so release it first. The old row is deleted below, so
+      // this placeholder never commits.
+      await tx.test_stations_type.update({
+        where: { test_station_type_id: oldId },
+        data: { test_type_desc: `__renaming_${oldId}` },
+      });
       await tx.test_stations_type.create({
         data: {
           test_station_type_id: newId, test_type_desc: trimmedDesc, package_level: parentsOnly,
@@ -109,6 +117,19 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         where: { test_station_type_id: oldId },
         data: { test_station_type_id: newId },
       });
+      // route_steps stores station type ids as plain array elements, which no
+      // FK covers. Rewrite every occurrence (a type may appear more than once in
+      // one route), or the station queue and the route-step lookups keep asking
+      // for the id deleted below.
+      await tx.$executeRaw`
+        UPDATE testing_routes
+           SET route_steps = array_replace(route_steps, ${oldId}::int, ${newId}::int)
+         WHERE ${oldId}::int = ANY(route_steps)
+      `;
+      // Field-config drafts name each step's station type too — as information
+      // only, resolution goes through the step uids, which stay as they are.
+      // Published versions are history and keep the old id.
+      await renameStationTypeInDrafts(tx, oldId, newId);
       await tx.test_stations_type.delete({
         where: { test_station_type_id: oldId },
       });
