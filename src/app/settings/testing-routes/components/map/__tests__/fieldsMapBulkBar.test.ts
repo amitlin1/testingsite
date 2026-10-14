@@ -9,13 +9,13 @@ import { buildFieldsMap, getCell, getColumn, getRow } from "../../../lib/mapMode
 import type { FieldsMapModel } from "../../../lib/mapModel";
 import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "../../../lib/draftModel";
 import { ELEC, artboard1 } from "../../../lib/__tests__/fixtures";
-import { BULK_COPY_PENDING, clearCellsMessage, clearCellsTitle, copiedText, pastedText } from "../../../lib/bulkLabels";
+import { BULK_UNDRAWN_TEXT, clearCellsMessage, clearCellsTitle, copiedText, pastedText } from "../../../lib/bulkLabels";
 import FieldsMapBulkBar from "../FieldsMapBulkBar";
 import FieldsMapCell from "../FieldsMapCell";
 
 /**
  * The selection bar and the selected cell as markup (route-fields spec §5.4.3, §5.4.4; artboard 1),
- * and the COPY-PENDING messages around them.
+ * and the undrawn messages around them.
  */
 
 const html = (el: ReactElement): string => renderToStaticMarkup(createElement(TooltipProvider, null, el));
@@ -67,7 +67,7 @@ test("a selected cell: the gridcell is aria-selected, the tile framed, the badge
   assert.doesNotMatch(none, /aria-selected/);
 });
 
-test("COPY-PENDING messages: the clear confirm, after a copy, after a paste", () => {
+test("undrawn messages: the clear confirm, after a copy, after a paste", () => {
   assert.equal(clearCellsTitle(1), "לנקות את התא?");
   assert.equal(clearCellsTitle(4), "לנקות 4 תאים?");
   assert.equal(clearCellsMessage(4), "כל השדות של 4 התאים יוסרו מהטיוטה. ביטול הטיוטה מחזיר אותם.");
@@ -76,5 +76,5 @@ test("COPY-PENDING messages: the clear confirm, after a copy, after a paste", ()
   assert.equal(pastedText({ cells: 1, added: 1, skipped: 0, overflow: 0, outside: 0 }), "נוסף שדה אחד");
   assert.equal(pastedText({ cells: 4, added: 4, skipped: 4, overflow: 0, outside: 0 }), "נוספו 4 שדות ב-4 תאים · 4 שדות דולגו כדי למנוע כפילות");
   assert.equal(pastedText({ cells: 0, added: 0, skipped: 1, overflow: 0, outside: 1 }), "לא נוספו שדות · שדה אחד דולג כדי למנוע כפילות · תא אחד לא במסלול");
-  assert.equal(BULK_COPY_PENDING.nothingToPaste, "אין מה להדביק");
+  assert.equal(BULK_UNDRAWN_TEXT.nothingToPaste, "אין מה להדביק");
 });

@@ -13,7 +13,7 @@ import {
   optionRemoveLabel, optionRowLabel, optionsCountText, toneButtonLabel,
 } from "../../lib/labels";
 import {
-  LIBRARY_COPY_PENDING, LIBRARY_TEXT, SHARED_LIST_TEXT, linkedHelpText, linkedToFieldTitle, localOptionsTitleOf,
+  LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT, SHARED_LIST_TEXT, linkedHelpText, linkedToFieldTitle, localOptionsTitleOf,
   saveAsVersionText, sharedImpactText, sharedListRowLabel, willLinkHelpText,
 } from "../../lib/libraryLabels";
 import {
@@ -52,7 +52,7 @@ import "./editor-popovers.css";
  * "שמור כרשימה חדשה…" starts a new list from the options on screen: name it, then "החל על השדה".
  *
  * Opened from the library (`library`, no field): the shared side alone — the list's name, options and
- * impact note — and its own save ("שמירה כגרסה {v+1}", or for a new list COPY-PENDING).
+ * impact note — and its own save ("שמירה כגרסה {v+1}", or for a new list an undrawn one).
  *
  * The anchor carries aria-haspopup="dialog", aria-expanded and aria-controls={OPTION_LIST_POPOVER_ID}
  * (the editor's link button; artboard 4).
@@ -168,8 +168,8 @@ type PopoverError = { text: string; action: "retry" | "reload" | "propagate" };
 const copyOptions = (options: readonly ChoiceOption[]) => options.map((o) => ({ ...o }));
 
 function errorOf(e: LibraryWriteError, creating: boolean): PopoverError {
-  if (e.kind === "conflict") return { text: LIBRARY_COPY_PENDING.listConflict, action: "reload" };
-  return { text: creating ? LIBRARY_COPY_PENDING.createFailed : LIBRARY_COPY_PENDING.saveFailed, action: "retry" };
+  if (e.kind === "conflict") return { text: LIBRARY_UNDRAWN_TEXT.listConflict, action: "reload" };
+  return { text: creating ? LIBRARY_UNDRAWN_TEXT.createFailed : LIBRARY_UNDRAWN_TEXT.saveFailed, action: "retry" };
 }
 
 /**
@@ -330,7 +330,7 @@ function OptionListBody({
       return true;
     }
     setPendingReach({ list, linked });
-    setError({ text: LIBRARY_COPY_PENDING.updateFailed, action: "propagate" });
+    setError({ text: LIBRARY_UNDRAWN_TEXT.updateFailed, action: "propagate" });
     return false;
   };
 
@@ -418,7 +418,7 @@ function OptionListBody({
   const primaryText = !libraryMode
     ? OPTION_LIST_TEXT.apply
     : sel === NEW
-      ? LIBRARY_COPY_PENDING.saveAsNewList
+      ? LIBRARY_UNDRAWN_TEXT.saveAsNewList
       : saveAsVersionText((selList?.version ?? 0) + 1);
   const title = libraryMode ? optionListTitle(selDraft?.name ?? "") : optionListTitle(field.label);
 
@@ -465,9 +465,9 @@ function OptionListBody({
               {listsData.state.status === "loading" && [0, 1, 2].map((i) => <Skeleton key={i} variant="rounded" height={40} width="100%" />)}
               {listsData.state.status === "error" && (
                 <div className="rf-olp__lists-error">
-                  <span>{LIBRARY_COPY_PENDING.loadFailed}</span>
+                  <span>{LIBRARY_UNDRAWN_TEXT.loadFailed}</span>
                   <Button variant="text" size="small" loading={listsData.state.retrying} onClick={() => void listsData.reload()}>
-                    {LIBRARY_COPY_PENDING.retry}
+                    {LIBRARY_UNDRAWN_TEXT.retry}
                   </Button>
                 </div>
               )}
@@ -712,7 +712,7 @@ function OptionListBody({
               <CircleAlert size={14} strokeWidth={1.75} aria-hidden />
               <span>{error.text}</span>
               <Button variant="text" size="small" color="inherit" disabled={busy} onClick={() => void onErrorAction()}>
-                {error.action === "reload" ? LIBRARY_COPY_PENDING.conflictReload : LIBRARY_COPY_PENDING.retry}
+                {error.action === "reload" ? LIBRARY_UNDRAWN_TEXT.conflictReload : LIBRARY_UNDRAWN_TEXT.retry}
               </Button>
             </div>
           )}

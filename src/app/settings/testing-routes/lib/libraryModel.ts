@@ -8,7 +8,7 @@ import { jsonEqual } from "./draftModel";
 import type { OptionField } from "./editorModel";
 import { normalizeRouteQuery, parseTargetParam, encodeTarget, withEditor } from "./routeQuery";
 import type { RouteQuery } from "./routeQuery";
-import { LIBRARY_COPY_PENDING, LIBRARY_TEXT, copyNameText, usageChipLabel } from "./libraryLabels";
+import { LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT, copyNameText, usageChipLabel } from "./libraryLabels";
 
 /**
  * "ערכות ורשימות" — the library's pure half (artboard 8, spec §5.9; artboard 4's shared mode, §5.7):
@@ -217,10 +217,10 @@ export function copyName(name: string): string {
 /** How this session came by the set: "+ ערכה חדשה", or "שכפל" of another set. */
 export type SetOrigin = { kind: "created" } | { kind: "duplicated"; from: string };
 
-/** A relative time: "עכשיו" under a minute and "לפני יומיים" are artboard 8's; the rest COPY-PENDING.
+/** A relative time: "עכשיו" under a minute and "לפני יומיים" are artboard 8's; the rest undrawn.
  *  A time ahead of this clock reads as now. */
 export function agoText(atMs: number, nowMs: number): string {
-  const c = LIBRARY_COPY_PENDING;
+  const c = LIBRARY_UNDRAWN_TEXT;
   const minutes = Math.floor(Math.max(0, nowMs - atMs) / 60_000);
   if (minutes < 1) return LIBRARY_TEXT.now;
   if (minutes === 1) return c.agoMinute;

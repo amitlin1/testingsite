@@ -10,7 +10,7 @@ import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, setGroupFields, summar
 import { buildFieldsMap, findCell, getCell } from "../mapModel";
 import type { MapCell } from "../mapModel";
 import {
-  EDITOR_COPY_PENDING, EDITOR_TEXT, editorFooterText, editorSubText, editorTitleText, fieldsTabText, listLinkText, nextStationText,
+  EDITOR_UNDRAWN_TEXT, EDITOR_TEXT, editorFooterText, editorSubText, editorTitleText, fieldsTabText, listLinkText, nextStationText,
   noteMaxAria, noteMaxOptionText, noteMaxText, notesModeAria, optionEditLabel, optionsGroupLabel, requiredAria, rowGripLabel,
   rowMoreLabel, sharedNoticeText, stopSubText, targetChipText,
 } from "../labels";
@@ -263,15 +263,15 @@ test("locked rows follow the popup the station really opens", () => {
   const station = { top: "סריקת מק״ט יצרן · חלק קבוע · שלב 1 בחלון", bottom: "פסק דין · 'בדיקה תקינה?' · תמיד אחרון" };
   assert.deepEqual(lockedRowTexts("verdict", null, "item"), station);
   assert.deepEqual(lockedRowTexts("photo", null, "item"), station);
-  assert.deepEqual(lockedRowTexts("dialog", null, "item"), { top: EDITOR_COPY_PENDING.lockedTopDialog, bottom: EDITOR_COPY_PENDING.lockedBottomDialog });
+  assert.deepEqual(lockedRowTexts("dialog", null, "item"), { top: EDITOR_UNDRAWN_TEXT.lockedTopDialog, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomDialog });
 
   assert.equal(packageWizardAt(0, 2), "open");
   assert.equal(packageWizardAt(1, 2), "close");
   assert.equal(packageWizardAt(0, 1), "open");
-  assert.deepEqual(lockedRowTexts("package", "open", "box"), { top: EDITOR_COPY_PENDING.lockedTopOpenBox, bottom: EDITOR_COPY_PENDING.lockedBottomOpenBox });
-  assert.deepEqual(lockedRowTexts("package", "open", "each_item"), { top: EDITOR_COPY_PENDING.lockedTopOpenItem, bottom: EDITOR_COPY_PENDING.lockedBottomOpenItem });
-  assert.deepEqual(lockedRowTexts("package", "close", "box"), { top: EDITOR_COPY_PENDING.lockedTopCloseBox, bottom: EDITOR_COPY_PENDING.lockedBottomClose });
-  assert.deepEqual(lockedRowTexts("package", "close", { item_type_id: 3 }), { top: EDITOR_COPY_PENDING.lockedTopCloseItem, bottom: EDITOR_COPY_PENDING.lockedBottomClose });
+  assert.deepEqual(lockedRowTexts("package", "open", "box"), { top: EDITOR_UNDRAWN_TEXT.lockedTopOpenBox, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomOpenBox });
+  assert.deepEqual(lockedRowTexts("package", "open", "each_item"), { top: EDITOR_UNDRAWN_TEXT.lockedTopOpenItem, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomOpenItem });
+  assert.deepEqual(lockedRowTexts("package", "close", "box"), { top: EDITOR_UNDRAWN_TEXT.lockedTopCloseBox, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomClose });
+  assert.deepEqual(lockedRowTexts("package", "close", { item_type_id: 3 }), { top: EDITOR_UNDRAWN_TEXT.lockedTopCloseItem, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomClose });
 });
 
 // ---- station bar and target chips (artboard 1's kit, artboard 2's numbers) ----------------------------
@@ -352,7 +352,7 @@ test("the editor's strings, as artboard 2's script builds them", () => {
   assert.equal(optionEditLabel("רעש חריג", "warn"), "עריכת האפשרות רעש חריג · אזהרה");
   assert.equal(listLinkText(true, "מצב נורית"), "רשימה: מצב נורית");
   assert.equal(listLinkText(false, null), "רשימה: מותאמת לשדה");
-  assert.equal(listLinkText(true, null), "רשימה: " + EDITOR_COPY_PENDING.listUnnamed);
+  assert.equal(listLinkText(true, null), "רשימה: " + EDITOR_UNDRAWN_TEXT.listUnnamed);
   assert.equal(notesModeAria("חובה בכשל"), "הערות: חובה בכשל");
   assert.equal(noteMaxText(2000), "עד 2000 תווים");
   assert.equal(noteMaxAria(1000), "אורך מרבי להערה: 1000 תווים");
@@ -361,5 +361,5 @@ test("the editor's strings, as artboard 2's script builds them", () => {
   assert.equal(requiredAria("בדיקת בידוד"), "שדה חובה: בדיקת בידוד");
   assert.equal(targetChipText("מסך ×2", 3), "מסך ×2 · 3");
   assert.equal(sharedNoticeText(1, "מחשב", ["מארז מחשב"]), "השדות נשמרים במסלול 1 של מחשב ומשמשים גם ב: מארז מחשב. שינוי כאן יחול בשניהם.");
-  assert.equal(sharedNoticeText(1, "מסך", ["מארז מחשב", "מארז ציוד היקפי"]), "השדות נשמרים במסלול 1 של מסך ומשמשים גם ב: מארז מחשב, מארז ציוד היקפי. " + EDITOR_COPY_PENDING.sharedAll);
+  assert.equal(sharedNoticeText(1, "מסך", ["מארז מחשב", "מארז ציוד היקפי"]), "השדות נשמרים במסלול 1 של מסך ומשמשים גם ב: מארז מחשב, מארז ציוד היקפי. " + EDITOR_UNDRAWN_TEXT.sharedAll);
 });

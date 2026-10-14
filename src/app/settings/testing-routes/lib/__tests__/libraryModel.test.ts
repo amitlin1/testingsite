@@ -10,7 +10,7 @@ import {
   setsUsingList, toneRows, usageChips, usageFullText, usageQuery,
 } from "../libraryModel";
 import {
-  LIBRARY_COPY_PENDING, failCountText, linkedHelpText, listAlertText, listMetaText, listOptionLabel, listRowLine,
+  LIBRARY_UNDRAWN_TEXT, failCountText, linkedHelpText, listAlertText, listMetaText, listOptionLabel, listRowLine,
   listSummaryText, listsSegText, localOptionsTitleOf, moreUsesText, outdatedText, saveAsVersionText, setFieldsTitle,
   setFootStats, setRowLine, setsSegText, sharedImpactText, sharedListRowLabel, unsavedVersionText, updateAllText,
   usageChipLabel, usedInCellsText, willLinkHelpText,
@@ -94,7 +94,7 @@ test("the list pane's texts follow artboard 8's script", () => {
   assert.equal(setRowLine(0, 0), "ללא שדות");
   assert.equal(setRowLine(3, 0), "3 שדות", "unused: the count alone");
   assert.equal(listRowLine(4, 31), "4 אפשרויות · בשימוש ב-31 שדות");
-  assert.equal(listRowLine(1, 1), LIBRARY_COPY_PENDING.optionsOne + " · " + LIBRARY_COPY_PENDING.usedInFieldsOne);
+  assert.equal(listRowLine(1, 1), LIBRARY_UNDRAWN_TEXT.optionsOne + " · " + LIBRARY_UNDRAWN_TEXT.usedInFieldsOne);
   assert.equal(listRowLine(4, 0), "4 אפשרויות");
   assert.equal(usedInCellsText(2), "בשימוש ב-2 תאים");
 });
@@ -151,16 +151,16 @@ test("the meta line: duplicated, created, updated — with the relative time and
   assert.equal(setMetaText(setJson({ updated_at: "2026-10-14T07:59:59.000Z" }), null, now), "עודכנה עכשיו · noa");
 });
 
-test("relative times: artboard 8's 'עכשיו' and 'לפני יומיים', the rest COPY-PENDING", () => {
+test("relative times: artboard 8's 'עכשיו' and 'לפני יומיים', the rest undrawn", () => {
   const t = Date.parse("2026-10-14T08:00:00.000Z");
   const m = 60_000;
   assert.equal(agoText(t - 30_000, t), "עכשיו");
   assert.equal(agoText(t + 5 * m, t), "עכשיו", "a clock ahead reads as now");
-  assert.equal(agoText(t - m, t), LIBRARY_COPY_PENDING.agoMinute);
+  assert.equal(agoText(t - m, t), LIBRARY_UNDRAWN_TEXT.agoMinute);
   assert.equal(agoText(t - 5 * m, t), "לפני 5 דקות");
-  assert.equal(agoText(t - 60 * m, t), LIBRARY_COPY_PENDING.agoHour);
+  assert.equal(agoText(t - 60 * m, t), LIBRARY_UNDRAWN_TEXT.agoHour);
   assert.equal(agoText(t - 3 * 60 * m, t), "לפני 3 שעות");
-  assert.equal(agoText(t - 24 * 60 * m, t), LIBRARY_COPY_PENDING.agoDay);
+  assert.equal(agoText(t - 24 * 60 * m, t), LIBRARY_UNDRAWN_TEXT.agoDay);
   assert.equal(agoText(t - 48 * 60 * m, t), "לפני יומיים");
   assert.equal(agoText(t - 5 * 24 * 60 * m, t), "לפני 5 ימים");
 });
@@ -237,7 +237,7 @@ test("'בערכות שדות': the sets with fields linked to the list, and how 
 test("the popover's shared mode: impact note, help lines, rows", () => {
   assert.equal(sharedImpactText(9, 4), "שינוי ברשימה המשותפת יחול על 9 שדות ב-4 מסלולים לאחר פרסום. תוצאות שכבר נשמרו לא ישתנו.");
   assert.equal(sharedImpactText(31, 0), "שינוי ברשימה המשותפת יחול על 31 שדות לאחר פרסום. תוצאות שכבר נשמרו לא ישתנו.");
-  assert.equal(sharedImpactText(1, 1), "שינוי ברשימה המשותפת יחול על שדה אחד" + LIBRARY_COPY_PENDING.inRoutesOne + " לאחר פרסום. תוצאות שכבר נשמרו לא ישתנו.");
+  assert.equal(sharedImpactText(1, 1), "שינוי ברשימה המשותפת יחול על שדה אחד" + LIBRARY_UNDRAWN_TEXT.inRoutesOne + " לאחר פרסום. תוצאות שכבר נשמרו לא ישתנו.");
   assert.equal(linkedHelpText(2), "מקושר לשדה הזה · גרסה 2");
   assert.equal(willLinkHelpText("נורית מתח"), "בלחיצה על \"החל על השדה\" נורית מתח תקושר לרשימה הזו");
   assert.equal(sharedListRowLabel("מצב נורית", 9), "מצב נורית · בשימוש ב-9 שדות");

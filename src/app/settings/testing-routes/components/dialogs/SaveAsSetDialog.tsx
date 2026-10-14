@@ -5,16 +5,16 @@ import type { FieldSetJson } from "@/app/lib/station-fields/admin-types";
 import type { Field } from "@/app/lib/station-fields/schema";
 import { newFieldId } from "@/app/lib/station-fields/step-uids";
 import { cellFieldsForSet } from "../../lib/applySetModel";
-import { SAVE_AS_SET_COPY_PENDING } from "../../lib/applySetLabels";
+import { SAVE_AS_SET_UNDRAWN_TEXT } from "../../lib/applySetLabels";
 import { createFieldSet } from "../../lib/useLibrary";
 import "./apply-set-dialog.css";
 
 /**
  * "שמור כערכה…" — the cell editor's ⋯ (route-fields spec §5.5.1). The dialog is not drawn (spec §10.4),
- * so all of its words are COPY-PENDING (applySetLabels.SAVE_AS_SET_COPY_PENDING): a name, then POST
+ * so all of its words are undrawn (applySetLabels.SAVE_AS_SET_UNDRAWN_TEXT): a name, then POST
  * /api/settings/field-sets { name, fields } with the cell's input fields (applySetModel.cellFieldsForSet:
  * no section headers, no from_set, ids of their own). The cell itself does not change and is not
- * linked to the new set. A failed POST keeps the dialog open with the library's pending "היצירה
+ * linked to the new set. A failed POST keeps the dialog open with the library's "היצירה
  * נכשלה". Each opening starts from `defaultName`.
  */
 
@@ -44,7 +44,7 @@ export default function SaveAsSetDialog(props: SaveAsSetDialogProps) {
 }
 
 function SaveSession({ open, defaultName, fields, onClose, onSaved }: SaveAsSetDialogProps) {
-  const C = SAVE_AS_SET_COPY_PENDING;
+  const C = SAVE_AS_SET_UNDRAWN_TEXT;
   const [name, setName] = React.useState(defaultName.slice(0, NAME_MAX));
   const [busy, setBusy] = React.useState(false);
   const [failed, setFailed] = React.useState(false);

@@ -13,7 +13,7 @@ import type { FieldsMapModel, MapCell } from "../../lib/mapModel";
 import { backToMap, withEditor } from "../../lib/routeQuery";
 import type { RouteQuery } from "../../lib/routeQuery";
 import {
-  EDITOR_COPY_PENDING, EDITOR_TEXT, cellLabel, cellMenuText, editorFooterText, editorSubText, editorTitleText, fieldsTabText,
+  EDITOR_UNDRAWN_TEXT, EDITOR_TEXT, cellLabel, cellMenuText, editorFooterText, editorSubText, editorTitleText, fieldsTabText,
   targetChipText,
 } from "../../lib/labels";
 import type { CellMenuItem } from "../../lib/labels";
@@ -65,7 +65,7 @@ import "./editor.css";
  * the focus, else at the end — one draft edit; a name the cell already has (each_item's too, for a
  * kit item) is skipped.
  *
- * "שמור כערכה…" (spec §5.5.1; its dialog is not drawn — COPY-PENDING, SaveAsSetDialog): a name, then
+ * "שמור כערכה…" (spec §5.5.1; its dialog is not drawn, SaveAsSetDialog): a name, then
  * a new field set in the library with the cell's input fields; the cell does not change. "החל ערכה…"
  * opens the host's apply-set dialog (artboard 9) on this one cell.
  *
@@ -79,7 +79,7 @@ export type StationFieldEditorProps = {
   onNavigate: (q: RouteQuery) => void;
   /** Names of the shared option lists by id (useLibrary.useOptionListNames). Without it the editor
    *  reads them from the same shared store; a name not known yet reads "רשימה: רשימה משותפת"
-   *  (COPY-PENDING). */
+   *  (undrawn). */
   listNames?: Readonly<Record<number, string>>;
   /** The host draws the breadcrumb (EditorBreadcrumb) itself — the page puts it in the view tabs'
    *  row, as artboard 2 does. Without it the editor draws it above the station bar. */
@@ -147,7 +147,7 @@ function CellEditor({
   const [expanded, setExpanded] = React.useState<ReadonlySet<FieldId>>(() => new Set());
   const [clearOpen, setClearOpen] = React.useState(false);
   const [saveSetOpen, setSaveSetOpen] = React.useState(false);
-  /** The message after "שמור כערכה…" (COPY-PENDING); a new one restarts the Snackbar (its key). */
+  /** The message after "שמור כערכה…" (undrawn); a new one restarts the Snackbar (its key). */
   const [savedNotice, setSavedNotice] = React.useState<{ text: string; seq: number } | null>(null);
   const moreRef = React.useRef<HTMLButtonElement>(null);
   const [focusReq, setFocusReq] = React.useState<{ target: { id: FieldId; part: FocusPart } | null; seq: number } | null>(null);
@@ -440,10 +440,10 @@ function CellEditor({
 
       <ConfirmDialog
         open={clearOpen}
-        title={EDITOR_COPY_PENDING.clearTitle}
-        message={EDITOR_COPY_PENDING.clearMessage}
+        title={EDITOR_UNDRAWN_TEXT.clearTitle}
+        message={EDITOR_UNDRAWN_TEXT.clearMessage}
         confirmText={EDITOR_TEXT.clearCell}
-        cancelText={EDITOR_COPY_PENDING.clearCancel}
+        cancelText={EDITOR_UNDRAWN_TEXT.clearCancel}
         destructive
         draggable={false}
         onCancel={() => setClearOpen(false)}

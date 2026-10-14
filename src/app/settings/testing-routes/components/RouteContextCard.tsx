@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ExternalLink, Package } from "lucide-react";
 import { Button, Tag } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
-import { CONTEXT_CARD_TEXT, COPY_PENDING, coverageText, kitSummaryText, routeOptionText } from "../lib/labels";
+import { CONTEXT_CARD_TEXT, UNDRAWN_TEXT, coverageText, kitSummaryText, routeOptionText } from "../lib/labels";
 import type { RouteRef } from "../lib/routeQuery";
 import KeyboardHelp from "./KeyboardHelp";
 
@@ -65,7 +65,7 @@ export default function RouteContextCard({ options, value, onChange, kit, covera
           value={value}
           onChange={(o) => { if (o) onChange({ type: o.type, route: o.route }); }}
           getOptionLabel={(o) => routeOptionText(o.desc, o.route)}
-          getOptionSubtitle={(o) => (o.isPackage ? COPY_PENDING.routeGroupKit : COPY_PENDING.routeGroupItem)}
+          getOptionSubtitle={(o) => (o.isPackage ? UNDRAWN_TEXT.routeGroupKit : UNDRAWN_TEXT.routeGroupItem)}
           isOptionEqualToValue={(a, b) => a.key === b.key}
           label={CONTEXT_CARD_TEXT.routeLabel}
           dense

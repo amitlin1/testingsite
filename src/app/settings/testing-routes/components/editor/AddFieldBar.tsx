@@ -4,7 +4,7 @@ import { ChevronDown, ClipboardPaste, Plus } from "lucide-react";
 import { Button, Snackbar } from "@/components/ui";
 import type { FieldType } from "@/app/lib/station-fields/schema";
 import { EDITOR_TEXT } from "../../lib/labels";
-import { BULK_COPY_PENDING, PASTE_TSV_TEXT, pastedText } from "../../lib/bulkLabels";
+import { BULK_UNDRAWN_TEXT, PASTE_TSV_TEXT, pastedText } from "../../lib/bulkLabels";
 import { PasteTextDialog, readClipboardText } from "../map/FieldsMapBulkBar";
 import { FIELD_TYPE_PICKER_ID, FieldTypePicker } from "./FieldTypePicker";
 
@@ -17,7 +17,7 @@ import { FIELD_TYPE_PICKER_ID, FieldTypePicker } from "./FieldTypePicker";
  * "הדבק מאקסל" (spec §5.14) reads the system clipboard (navigator.clipboard.readText) and hands its
  * text to `onPasteTsv`, which parses it (pasteTsv) and makes one draft edit. When the page may not
  * read the clipboard — no permission, or plain http, where the browser has no clipboard API — a
- * paste box takes Ctrl V instead (COPY-PENDING). The message after the paste is COPY-PENDING too.
+ * paste box takes Ctrl V instead (undrawn). The message after the paste is undrawn too.
  */
 
 /** The add-row button's id: focus lands here when the last row is removed. */
@@ -58,7 +58,7 @@ export function AddFieldBar({ pickerOpen, onPickerOpenChange, onAddRow, onAddSec
   };
   const paste = (text: string) => {
     const r = onPasteTsv?.(text) ?? null;
-    say(r ? pastedText({ ...r, cells: 1, outside: 0 }) : BULK_COPY_PENDING.nothingToPaste);
+    say(r ? pastedText({ ...r, cells: 1, outside: 0 }) : BULK_UNDRAWN_TEXT.nothingToPaste);
   };
   const pasteFromClipboard = async () => {
     const text = await readClipboardText();

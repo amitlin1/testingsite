@@ -10,7 +10,7 @@ import { useDraftSnapshot, useDraftStore } from "../lib/draftStore";
 import type { DraftStore } from "../lib/draftStore";
 import type { FieldsMapModel } from "../lib/mapModel";
 import {
-  COPY_PENDING, HEADER_TEXT, draftPillText, issuesToFixText, publishedPillText, routesCountText, savedAgoText,
+  UNDRAWN_TEXT, HEADER_TEXT, draftPillText, issuesToFixText, publishedPillText, routesCountText, savedAgoText,
 } from "../lib/labels";
 
 /**
@@ -22,14 +22,14 @@ import {
  * | draft, no blocking errors | "טיוטה · N שינויים" (late)    | the session's save            | "ביטול הטיוטה"   | "פרסום לעמדות" (Send)  |
  * | draft with errors         | same                          | same                          | same             | "בעיה אחת לתיקון" pill |
  * | no fields (artboard 11)   | "ללא שדות" (muted-40)         | "אין שינויים לפרסום" (its id) | —                | publish, disabled      |
- * | published, no draft       | COPY-PENDING (approved)       | —                             | —                | publish, disabled      |
+ * | published, no draft       | "מפורסם · גרסה N" (approved)  | —                             | —                | publish, disabled      |
  *
  * Until the context of the route on screen is in — loading, a load failure, or the store not yet
  * holding that context — the header shows neither "ללא שדות" nor an enabled publish (artboard 11):
  * only the disabled publish button.
  *
  * "נשמר אוטומטית …" is the time of the last autosave made in THIS session (lead decision): a draft
- * another admin saved earlier shows no save time. The draft store's write states add the COPY-PENDING
+ * another admin saved earlier shows no save time. The draft store's write states add the undrawn
  * "save failed" (+ retry) and "conflict" (+ reload) notes.
  */
 
@@ -157,9 +157,9 @@ export default function RouteFieldsHeader({ routeCount, routeChosen, context, ma
     if (summary.conflictRoutes.length > 0) {
       return (
         <span className="rf-header-note rf-header-note--conflict" role="status">
-          {COPY_PENDING.conflict}
+          {UNDRAWN_TEXT.conflict}
           <Button variant="text" size="small" color="inherit" loading={reloading} onClick={reloadConflicts}>
-            {COPY_PENDING.conflictReload}
+            {UNDRAWN_TEXT.conflictReload}
           </Button>
         </span>
       );
@@ -167,16 +167,16 @@ export default function RouteFieldsHeader({ routeCount, routeChosen, context, ma
     if (summary.failedRoutes.length > 0) {
       return (
         <span className="rf-header-note rf-header-note--failed" role="status">
-          {COPY_PENDING.saveFailed}
+          {UNDRAWN_TEXT.saveFailed}
           <Button variant="text" size="small" color="inherit" onClick={() => store.retry()}>
-            {COPY_PENDING.saveRetry}
+            {UNDRAWN_TEXT.saveRetry}
           </Button>
         </span>
       );
     }
     let text: string | null = null;
     if (session.savedAt != null) text = savedAgoText(session.savedAt, Math.max(session.now, session.savedAt));
-    else if (summary.unsaved) text = COPY_PENDING.saving;
+    else if (summary.unsaved) text = UNDRAWN_TEXT.saving;
     return text == null ? null : <span className="rf-header-note" role="status">{text}</span>;
   };
 
@@ -258,10 +258,10 @@ export default function RouteFieldsHeader({ routeCount, routeChosen, context, ma
       />
       <ConfirmDialog
         open={confirmOpen}
-        title={COPY_PENDING.discardTitle}
-        message={COPY_PENDING.discardMessage}
-        confirmText={COPY_PENDING.discardConfirm}
-        cancelText={COPY_PENDING.discardCancel}
+        title={UNDRAWN_TEXT.discardTitle}
+        message={UNDRAWN_TEXT.discardMessage}
+        confirmText={UNDRAWN_TEXT.discardConfirm}
+        cancelText={UNDRAWN_TEXT.discardCancel}
         destructive
         busy={discarding}
         draggable={false}

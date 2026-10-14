@@ -56,7 +56,7 @@ import "./route-fields.css";
  * שדות…" (the cells of the map's first column — artboard 11 selects none) open it. The library's
  * "החל על תאים…" cannot pick cells there (spec §5.10: "לא מצויר"), so it opens the map of the route
  * on screen and remembers its set: the next opening of the dialog starts on it — no undrawn UI. After
- * an apply, the paste's COPY-PENDING message tells what went in.
+ * an apply, the paste's undrawn message tells what went in.
  *
  * ALL view state is in the URL (lib/routeQuery.ts), changed with router.replace. Without a route
  * in the URL the page opens the route last opened in this browser (localStorage), else the empty
@@ -379,7 +379,7 @@ function RouteFieldsScreen({
   );
   // The library's "החל על תאים…": the set the next opening starts on.
   const [pendingSetId, setPendingSetId] = useState<number | null>(null);
-  // The message after an apply (the paste's COPY-PENDING words); a new one restarts the Snackbar.
+  // The message after an apply (the paste's undrawn words); a new one restarts the Snackbar.
   const [applyNotice, setApplyNotice] = useState<{ text: string; seq: number } | null>(null);
   const openApply = useCallback((cells: MapCell[], returnFocus?: HTMLElement | null) => {
     if (cells.length === 0) return;

@@ -287,7 +287,7 @@
 @media (hover: hover) and (pointer: fine) {
   .sfe-notice__link:hover { color: var(--color-primary-hover); }
 }
-/* The fork dialog's error line, under its message (COPY-PENDING text). */
+/* The fork dialog's error line, under its message (undrawn text). */
 .sfe-notice__fork-error {
   display: block;
   margin-top: 10px;

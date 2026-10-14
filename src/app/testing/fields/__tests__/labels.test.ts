@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { NumberField } from "@/app/lib/station-fields/schema";
-import { RANGE_WORD, WORKER_COPY_PENDING, choiceCountText, numberRangeForm, numberRangeLine } from "../labels";
+import { RANGE_WORD, WORKER_UNDRAWN_TEXT, choiceCountText, numberRangeForm, numberRangeLine } from "../labels";
 
 // Artboard 14's number field: required, "עד 0.1 Ω", out of range counts as a fail.
 const gnd: NumberField = {
@@ -10,11 +10,11 @@ const gnd: NumberField = {
 };
 const num = (over: Partial<NumberField>): NumberField => ({ ...gnd, min: undefined, max: undefined, ref: undefined, tol_pct: undefined, ...over });
 
-test("the list footer's count (artboards 12/14/17 `countLabel`), and one option — COPY-PENDING", () => {
+test("the list footer's count (artboards 12/14/17 `countLabel`), and one option — undrawn", () => {
   assert.equal(choiceCountText(4, 4, false), "4 אפשרויות");
   assert.equal(choiceCountText(2, 4, true), "2 מתוך 4");
   assert.equal(choiceCountText(0, 4, true), "0 מתוך 4");
-  assert.equal(choiceCountText(1, 1, false), WORKER_COPY_PENDING.optionCountOne);
+  assert.equal(choiceCountText(1, 1, false), WORKER_UNDRAWN_TEXT.optionCountOne);
   assert.equal(choiceCountText(1, 1, true), "1 מתוך 1");
 });
 
@@ -95,8 +95,8 @@ test("no range: nothing to say until something is wrong, and then the word alone
   assert.equal(numberRangeForm(num({ ref: 0.1 })), null);
 });
 
-test("reference ± tolerance: the COPY-PENDING wording, inclusive like the evaluator", () => {
-  const { rangeRef, rangeTolerance } = WORKER_COPY_PENDING;
+test("reference ± tolerance: the undrawn wording, inclusive like the evaluator", () => {
+  const { rangeRef, rangeTolerance } = WORKER_UNDRAWN_TEXT;
   const refTol = num({ ref: 0.1, tol_pct: 10 });
   assert.equal(numberRangeLine(refTol, "", false).text, `טווח מותר · ${rangeRef} 0.1 Ω · ${rangeTolerance} ±10%`);
   assert.deepEqual(numberRangeForm(refTol)?.filter((s) => s.ltr).map((s) => s.text), ["0.1 Ω", "±10%"]);

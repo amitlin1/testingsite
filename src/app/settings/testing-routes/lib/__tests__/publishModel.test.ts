@@ -5,9 +5,9 @@ import type { FieldsContextJson, PublishImpactJson, PublishImpactRouteJson } fro
 import { KIT_ROUTE_LABEL, routeOfTypeLabel } from "@/app/lib/station-fields/labels";
 import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "../draftModel";
 import { buildFieldsMap } from "../mapModel";
-import { COPY_PENDING, routeOptionText } from "../labels";
+import { UNDRAWN_TEXT, routeOptionText } from "../labels";
 import {
-  PUBLISH_COPY_PENDING, countTagsText, filledWarnText, infoNoteText, publishButtonText, publishTitleText,
+  PUBLISH_UNDRAWN_TEXT, countTagsText, filledWarnText, infoNoteText, publishButtonText, publishTitleText,
   publishedSnackText, replacesVersionText, scopeLabelText, scopeNewSubText, scopePendingSubText, scopePendingTitleText,
   setFilledText,
 } from "../publishLabels";
@@ -88,7 +88,7 @@ test("artboard 10: the groups of 'מה השתנה' — map order, titles, subs, 
     [["add", "נוסף 'בדיקת בידוד'", null], ["edit", "'מאוורר ספק הכוח': נוספה אפשרות 'רעש חריג'", null]],
     [["edit", "'ציר המעמד' סומן כחובה", null], ["del", "נמחק 'ברגי VESA'", "מולא ב-38 בדיקות, הערכים יישמרו בהיסטוריה"]],
     [["add", "4 תאים מולאו מהערכה 'קבלת פריט במארז'", null]],
-    // The layout row has no wording of its own yet (COPY-PENDING): the badge and the station's name.
+    // The layout row has no wording of its own yet (undrawn): the badge and the station's name.
     [["edit", "'פתיחת מארז'", null]],
   ]);
   assert.deepEqual(groups.map((g) => g.key), ["101:s_pcelec00", "102:s_momech00", "100:s_kitclos1", "100:s_kitopen1:layout"]);
@@ -104,8 +104,8 @@ test("groups without the map fall back to the route's steps, and a removed step 
     "מכניקה · מסך", "סגירת מארז", "חשמל · מחשב", "בדיקה ישנה · מחשב", "פריסת החלון · פתיחת מארז",
   ]);
   assert.deepEqual(groups[3].lines, [{ badge: "del", text: "'בדיקה ישנה'", warn: null }]);
-  // No set name: the COPY-PENDING line without it.
-  assert.equal(groups[1].lines[0].text, "4 תאים מולאו" + PUBLISH_COPY_PENDING.setFilledUnnamed);
+  // No set name: the undrawn line without it.
+  assert.equal(groups[1].lines[0].text, "4 תאים מולאו" + PUBLISH_UNDRAWN_TEXT.setFilledUnnamed);
 });
 
 test("a single item route's screen: the item route's groups carry the item", () => {
@@ -139,9 +139,9 @@ test("groupLines: generic rows once per field and cell, removals without fills, 
     ["edit", "'שם חדש' סומן כחובה", null],
     ["edit", "'אחר'", null],
     ["del", "נמחק 'ריק'", null],
-    ["del", "נמחק 'פעם'", PUBLISH_COPY_PENDING.filledOnce],
+    ["del", "נמחק 'פעם'", PUBLISH_UNDRAWN_TEXT.filledOnce],
     ["del", "נמחק 'אפס'", null],
-    ["add", PUBLISH_COPY_PENDING.setFilledOneCell + " מהערכה 'בסיסית'", null],
+    ["add", PUBLISH_UNDRAWN_TEXT.setFilledOneCell + " מהערכה 'בסיסית'", null],
     ["add", "נוסף 'חדש'", null],
   ]);
 });
@@ -170,14 +170,14 @@ test("the head: title, count tags, the version it replaces, the button", () => {
   const ctx = artboard1();
   assert.equal(publishTitleText(5, routeOptionText(ctx.subject.desc, ctx.subject.route_number)), "פרסום גרסה 5 · מארז עמדת עבודה · מסלול 1");
   assert.deepEqual(countTagsText({ changes: 6, stations: 3, routes: 3 }), ["6 שינויים", "3 עמדות", "3 מסלולים"]);
-  assert.deepEqual(countTagsText({ changes: 1, stations: 1, routes: 1 }), ["שינוי אחד", COPY_PENDING.stationsOne, COPY_PENDING.routesOne]);
+  assert.deepEqual(countTagsText({ changes: 1, stations: 1, routes: 1 }), ["שינוי אחד", UNDRAWN_TEXT.stationsOne, UNDRAWN_TEXT.routesOne]);
   assert.equal(replacesVersionText(4), "מחליפה את גרסה 4 המפורסמת");
   assert.equal(replacesVersionText(0), null);
   assert.equal(publishButtonText(5), "פרסם גרסה 5");
   assert.equal(publishedSnackText(5), "גרסה 5 פורסמה");
 });
 
-test("the warning note: artboard 10's sentence, one kit per route, and the COPY-PENDING forms", () => {
+test("the warning note: artboard 10's sentence, one kit per route, and the undrawn forms", () => {
   const ctx = artboard1();
   assert.equal(
     sharedNoteText(artboard10Impact(), ctx),
@@ -194,7 +194,7 @@ test("the warning note: artboard 10's sentence, one kit per route, and the COPY-
     "השינויים יחולו גם מחוץ למארז הזה: מסלול 1 של א משמש גם ב'ק1', ב'ק2' וב'ק3', מסלול 2 של ב משמש גם ב'ק1', ומסלול 3 של ג משמש גם ב'ק1'.",
   );
   const itemCtx: FieldsContextJson = { ...ctx, kind: "item" };
-  assert.equal(sharedNoteText({ shared_outside: [three.shared_outside[1]] }, itemCtx), PUBLISH_COPY_PENDING.sharedLeadItemRoute + "מסלול 2 של ב משמש גם ב'ק1'.");
+  assert.equal(sharedNoteText({ shared_outside: [three.shared_outside[1]] }, itemCtx), PUBLISH_UNDRAWN_TEXT.sharedLeadItemRoute + "מסלול 2 של ב משמש גם ב'ק1'.");
 });
 
 test("the info note and the scope cards: artboard 10's two texts", () => {
@@ -209,28 +209,28 @@ test("the info note and the scope cards: artboard 10's two texts", () => {
   assert.equal(scopePendingSubText(5), "יעברו לגרסה 5 בעמדה הבאה שלהם; תוצאות שכבר נשמרו לא ישתנו");
 });
 
-test("the info note's COPY-PENDING forms: none, one, all moving, nothing moving, a first publish", () => {
+test("the info note's undrawn forms: none, one, all moving, nothing moving, a first publish", () => {
   const tail = "פריטים שייקלטו מעכשיו יקבלו גרסה 5.";
-  assert.equal(infoNoteText({ pending: true, items: 0, notReached: 0, version: 5, fromVersion: 4 }), PUBLISH_COPY_PENDING.noItemsHead + " " + tail);
+  assert.equal(infoNoteText({ pending: true, items: 0, notReached: 0, version: 5, fromVersion: 4 }), PUBLISH_UNDRAWN_TEXT.noItemsHead + " " + tail);
   assert.equal(infoNoteText({ pending: false, items: 1, notReached: 1, version: 5, fromVersion: 4 }),
-    PUBLISH_COPY_PENDING.oneItemHead + " הוא ימשיך לפי גרסה 4 עד סוף המסלול; " + tail);
+    PUBLISH_UNDRAWN_TEXT.oneItemHead + " הוא ימשיך לפי גרסה 4 עד סוף המסלול; " + tail);
   assert.equal(infoNoteText({ pending: true, items: 1, notReached: 1, version: 5, fromVersion: 4 }),
-    PUBLISH_COPY_PENDING.oneItemHead + " " + PUBLISH_COPY_PENDING.onlyItemMovesPrefix + "5 בעמדה הבאה שלו. " + tail);
+    PUBLISH_UNDRAWN_TEXT.oneItemHead + " " + PUBLISH_UNDRAWN_TEXT.onlyItemMovesPrefix + "5 בעמדה הבאה שלו. " + tail);
   // Nothing to move: the pending note is the new one.
   assert.equal(infoNoteText({ pending: true, items: 9, notReached: 0, version: 5, fromVersion: 4 }),
     infoNoteText({ pending: false, items: 9, notReached: 0, version: 5, fromVersion: 4 }));
   assert.equal(infoNoteText({ pending: true, items: 3, notReached: 3, version: 5, fromVersion: 4 }),
     "3 פריטים נמצאים כעת במסלולים האלה. 3 מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה 5 בעמדה הבאה שלהם. " + tail);
   assert.equal(infoNoteText({ pending: true, items: 3, notReached: 1, version: 5, fromVersion: 4 }),
-    "3 פריטים נמצאים כעת במסלולים האלה. " + PUBLISH_COPY_PENDING.oneMovedPrefix + "5" + PUBLISH_COPY_PENDING.oneMovedSuffix + "; 2 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. " + tail);
+    "3 פריטים נמצאים כעת במסלולים האלה. " + PUBLISH_UNDRAWN_TEXT.oneMovedPrefix + "5" + PUBLISH_UNDRAWN_TEXT.oneMovedSuffix + "; 2 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. " + tail);
   assert.equal(infoNoteText({ pending: true, items: 3, notReached: 2, version: 5, fromVersion: 4 }),
-    "3 פריטים נמצאים כעת במסלולים האלה. 2 מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה 5 בעמדה הבאה שלהם; " + PUBLISH_COPY_PENDING.oneOtherContinues + " לפי גרסה 4 עד סוף המסלול. " + tail);
+    "3 פריטים נמצאים כעת במסלולים האלה. 2 מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה 5 בעמדה הבאה שלהם; " + PUBLISH_UNDRAWN_TEXT.oneOtherContinues + " לפי גרסה 4 עד סוף המסלול. " + tail);
   assert.equal(infoNoteText({ pending: false, items: 2, notReached: 0, version: 1, fromVersion: 0 }),
-    "2 פריטים נמצאים כעת במסלולים האלה. הם ימשיכו " + PUBLISH_COPY_PENDING.noVersionPhrase + " עד סוף המסלול; פריטים שייקלטו מעכשיו יקבלו גרסה 1.");
-  assert.equal(scopeNewSubText(0), "פריטים שכבר בדרך ממשיכים " + PUBLISH_COPY_PENDING.noVersionPhrase + " עד סוף המסלול");
-  assert.equal(scopePendingTitleText(1), "גם לפריטים שטרם הגיעו לעמדה ששונתה · " + PUBLISH_COPY_PENDING.oneItem);
+    "2 פריטים נמצאים כעת במסלולים האלה. הם ימשיכו " + PUBLISH_UNDRAWN_TEXT.noVersionPhrase + " עד סוף המסלול; פריטים שייקלטו מעכשיו יקבלו גרסה 1.");
+  assert.equal(scopeNewSubText(0), "פריטים שכבר בדרך ממשיכים " + PUBLISH_UNDRAWN_TEXT.noVersionPhrase + " עד סוף המסלול");
+  assert.equal(scopePendingTitleText(1), "גם לפריטים שטרם הגיעו לעמדה ששונתה · " + PUBLISH_UNDRAWN_TEXT.oneItem);
   assert.equal(filledWarnText(0), null);
-  assert.equal(setFilledText(2, null), "2 תאים מולאו" + PUBLISH_COPY_PENDING.setFilledUnnamed);
+  assert.equal(setFilledText(2, null), "2 תאים מולאו" + PUBLISH_UNDRAWN_TEXT.setFilledUnnamed);
 });
 
 test("requests: the preview body names the kit on screen; publish sends the previewed revs", () => {

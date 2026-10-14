@@ -6,7 +6,7 @@ import type {
   PhotoField, SectionField, Tone,
 } from "@/app/lib/station-fields/schema";
 import {
-  BLOCK_COPY_PENDING, BLOCK_TITLE, CHOICE_HINT, CHOICE_PROMPT, NOTE_TEXT, TEXT_VALUE_MAX, VARIANT_SPEC,
+  BLOCK_UNDRAWN_TEXT, BLOCK_TITLE, CHOICE_HINT, CHOICE_PROMPT, NOTE_TEXT, TEXT_VALUE_MAX, VARIANT_SPEC,
   addShot, blockItems, blockStatus, draftsFieldsState, fieldCountText, fieldRowIds, groupFields,
   hasLabelledControl, isItemChecked, kitItemFieldGroups, noteEditorTitle, noteLabelText, notePlaceholder,
   removeShot, rowState, settleShot, stationBlockTitle, statusRuns, toggleChecklistItem,
@@ -108,7 +108,7 @@ test("titles and the field count", () => {
   assert.equal(stationBlockTitle(null), "בדיקות העמדה");
   assert.equal(fieldCountText(4), "4 שדות");
   assert.equal(fieldCountText(0), "0 שדות");
-  assert.equal(fieldCountText(1), BLOCK_COPY_PENDING.fieldCountOne);
+  assert.equal(fieldCountText(1), BLOCK_UNDRAWN_TEXT.fieldCountOne);
 });
 
 test("rows and their separators: a line between rows, none under a group label or a section title", () => {

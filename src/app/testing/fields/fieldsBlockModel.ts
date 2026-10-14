@@ -73,17 +73,16 @@ export function stationBlockTitle(kind: string | null | undefined): string {
   return k ? "בדיקות " + k : BLOCK_TITLE.dialog;
 }
 
-/** Drafts for text the block's artboards never draw. Listed in the PR under "טקסט לאישור"; do
- *  not treat as approved copy. */
-export const BLOCK_COPY_PENDING = {
-  // COPY-PENDING: the count of a block with a single field. Every artboard writes "{n} שדות"
+/** Text the block's artboards never draw, worded here and approved on 2026-10-14. */
+export const BLOCK_UNDRAWN_TEXT = {
+  // the count of a block with a single field. Every artboard writes "{n} שדות"
   // (n ≥ 2 in all of them); "1 שדות" is not Hebrew.
   fieldCountOne: "שדה אחד",
 } as const;
 
 /** "{n} שדות" beside the title (artboards 12–18, `fieldCount`). */
 export function fieldCountText(n: number): string {
-  return n === 1 ? BLOCK_COPY_PENDING.fieldCountOne : n + " שדות";
+  return n === 1 ? BLOCK_UNDRAWN_TEXT.fieldCountOne : n + " שדות";
 }
 
 // ---- per variant -------------------------------------------------------------------------------

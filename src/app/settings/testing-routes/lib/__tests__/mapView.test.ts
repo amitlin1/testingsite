@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import type { Issue } from "@/app/lib/station-fields/validate";
-import { COPY_PENDING as SF_COPY_PENDING, LINT_TEXT } from "@/app/lib/station-fields/labels";
+import { UNDRAWN_TEXT as SF_UNDRAWN_TEXT, LINT_TEXT } from "@/app/lib/station-fields/labels";
 import {
   MAP_FILTERS, buildFieldsMap, cellMatchesFilter, columnNavKey, filterCounts, getCell, mapErrorBar, mapNavGrid, visibleRows,
 } from "../mapModel";
@@ -105,13 +105,13 @@ test("an error on no cell: named by its route's item and its step's station, wit
   const ctx: FieldsContextJson = {
     kind: "item", subject: { item_type_id: PC, desc: "מחשב", is_package: false, route_number: 2 }, stations: STATIONS, kit: null, item, lines: [],
   };
-  const unknown: Issue = { level: "error", code: "STEP_UNKNOWN", step_uid: "s_igone000", message: SF_COPY_PENDING.stepUnknown };
+  const unknown: Issue = { level: "error", code: "STEP_UNKNOWN", step_uid: "s_igone000", message: SF_UNDRAWN_TEXT.stepUnknown };
   const m = buildFieldsMap({ context: ctx, issues: { 300: [unknown] } });
   assert.equal(m.errors.length, 1);
   assert.equal(m.errors[0].cell, null);
   const bar = mapErrorBar(m, ctx);
-  assert.deepEqual(bar, { text: "מכניקה · מחשב: " + SF_COPY_PENDING.stepUnknown, cell: null, fieldId: null });
+  assert.deepEqual(bar, { text: "מכניקה · מחשב: " + SF_UNDRAWN_TEXT.stepUnknown, cell: null, fieldId: null });
   // A step the context's configs do not know either: the item and the message.
   const lost = buildFieldsMap({ context: ctx, issues: { 300: [{ ...unknown, step_uid: "s_nowhere0" }] } });
-  assert.equal(mapErrorBar(lost, ctx)?.text, "מחשב: " + SF_COPY_PENDING.stepUnknown);
+  assert.equal(mapErrorBar(lost, ctx)?.text, "מחשב: " + SF_UNDRAWN_TEXT.stepUnknown);
 });

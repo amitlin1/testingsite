@@ -6,7 +6,7 @@ import { SUGGEST_PREFIX } from "@/app/lib/station-fields/labels";
 import type { Field, FieldId } from "@/app/lib/station-fields/schema";
 import { FieldRow, type UploadFieldPhoto } from "./FieldRow";
 import { SuggestionLine } from "./SuggestionLine";
-import { WORKER_COPY_PENDING } from "./labels";
+import { WORKER_UNDRAWN_TEXT } from "./labels";
 import type { StationFieldsState } from "./useStationFields";
 import { inputFieldCount, type Drafts, type FieldDraft } from "./useFieldsState";
 import {
@@ -248,7 +248,7 @@ export function PackFieldsPending() {
 
 // ---- before the block can be drawn (spec §4.2) -------------------------------------------------
 /** In the block's place while the step's fields load — three 44px skeleton rows — or after the
- *  load failed — the error with "נסה שוב" (both strings COPY-PENDING, labels.ts). Nothing for
+ *  load failed — the error with "נסה שוב" (both strings undrawn, labels.ts). Nothing for
  *  "legacy" or "ready". */
 export function FieldsBlockFallback({ sf }: { sf: StationFieldsState }) {
   return sf.status === "loading" || sf.status === "error" ? <FallbackRegion sf={sf} /> : null;
@@ -319,9 +319,9 @@ function FallbackRegion({ sf }: { sf: Extract<StationFieldsState, { status: "loa
     <div ref={rootRef} tabIndex={-1} className="tst-fx-fallback" aria-busy={failed ? undefined : true}>
       {failed ? (
         <Alert severity="error" action={
-          <Button ref={retryRef} variant="outlined" color="error" className="tst-fx-retry" onClick={retry}>{WORKER_COPY_PENDING.retry}</Button>
+          <Button ref={retryRef} variant="outlined" color="error" className="tst-fx-retry" onClick={retry}>{WORKER_UNDRAWN_TEXT.retry}</Button>
         }>
-          {WORKER_COPY_PENDING.loadFailed}
+          {WORKER_UNDRAWN_TEXT.loadFailed}
         </Alert>
       ) : (
         <div className="tst-fx-skeleton">

@@ -5,7 +5,7 @@ import { ID_PATTERNS } from "@/app/lib/station-fields/schema";
 import { newOptionId } from "@/app/lib/station-fields/step-uids";
 import { LIMITS, optionListLine } from "@/app/lib/station-fields/validate";
 import {
-  COPY_PENDING, localOptionsNote, localOptionsTitle, optionDragLabel, optionKeyTitle, optionListTitle, optionNameLabel,
+  UNDRAWN_TEXT, localOptionsNote, localOptionsTitle, optionDragLabel, optionKeyTitle, optionListTitle, optionNameLabel,
   optionRemoveLabel, optionRowLabel, optionsCountText, toneButtonLabel,
 } from "../labels";
 import {
@@ -90,7 +90,7 @@ test("artboard 4's texts", () => {
   );
   assert.equal(
     localOptionsNote("נורית מתח", null),
-    COPY_PENDING.optionsCopiedFromSharedList + " שינוי כאן חל רק על נורית מתח ולא ישפיע על שדות אחרים.",
+    UNDRAWN_TEXT.optionsCopiedFromSharedList + " שינוי כאן חל רק על נורית מתח ולא ישפיע על שדות אחרים.",
   );
   assert.equal(optionsCountText(4, true), "אפשרויות לשדה הזה · 4");
   assert.equal(optionsCountText(4, false), "אפשרויות · 4");

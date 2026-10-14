@@ -1,4 +1,4 @@
-import { COPY_PENDING as SCREEN_COPY_PENDING, changesText, routesCountText } from "./labels";
+import { UNDRAWN_TEXT as SCREEN_UNDRAWN_TEXT, changesText, routesCountText } from "./labels";
 
 /**
  * Strings of the publish dialog "פרסום גרסה N" (artboard 10, route-fields spec §5.11). Copied
@@ -8,60 +8,59 @@ import { COPY_PENDING as SCREEN_COPY_PENDING, changesText, routesCountText } fro
  *
  * What artboard 10 does not draw — a singular it never shows, a first publish (no version to
  * replace), the dialog's loading and failure states, the Snackbar after a publish — lives in
- * COPY_PENDING until it is approved (spec "העיצוב סגור" rule 2, §10.4), listed in the PR under
- * "טקסט לאישור".
+ * PUBLISH_UNDRAWN_TEXT (spec "העיצוב סגור" rule 2, §10.4; wording approved on 2026-10-14).
  */
 
 // ---- not drawn in artboard 10 ----------------------------------------------------------------------
-/** Drafts for text artboard 10 never draws. Do not treat as approved copy. */
-export const PUBLISH_COPY_PENDING = {
-  // COPY-PENDING: the Snackbar after a publish (spec §5.11: "Snackbar — הטקסט לא מצויר").
+/** Text artboard 10 never draws, worded here and approved on 2026-10-14. */
+export const PUBLISH_UNDRAWN_TEXT = {
+  // the Snackbar after a publish (spec §5.11: "Snackbar — הטקסט לא מצויר").
   publishedPrefix: "גרסה ",
   publishedSuffix: " פורסמה",
-  // COPY-PENDING: publish-preview failed (network, 5xx, an answer that is not an impact) — the
+  // publish-preview failed (network, 5xx, an answer that is not an impact) — the
   // dialog has nothing to show (spec §10.4 "מצבי שגיאה"). The retry reuses artboard 11's "נסה שוב".
   previewFailed: "טעינת פרטי הפרסום נכשלה",
-  // COPY-PENDING: publish failed (network, 5xx, a refusal other than 409 / 422).
+  // publish failed (network, 5xx, a refusal other than 409 / 422).
   publishFailed: "הפרסום נכשל. הטיוטה לא השתנתה.",
-  // COPY-PENDING: publish answered 409 DRAFT_CONFLICT — a draft changed since the preview (another
+  // publish answered 409 DRAFT_CONFLICT — a draft changed since the preview (another
   // tab or admin; spec §3.4.3 step 2). The action reuses the header's "טען מחדש" and loads the
   // preview again.
   publishConflict: "הטיוטה עודכנה בינתיים במקום אחר — יש לטעון את הפרסום מחדש",
-  // COPY-PENDING: a first publish — no published version the items on the way follow. Replaces
+  // a first publish — no published version the items on the way follow. Replaces
   // "לפי גרסה {v-1}" in the scope card and the info note ("ימשיכו ללא שדות עד סוף המסלול"),
   // in the words of artboard 1's legend ("ללא שדות — העובד יראה את החלון הקבוע").
   noVersionPhrase: "ללא שדות",
-  // COPY-PENDING: the info note with no item on the routes (artboard 10 draws 9).
+  // the info note with no item on the routes (artboard 10 draws 9).
   noItemsHead: "אין כעת פריטים במסלולים האלה.",
-  // COPY-PENDING: the info note with a single item on the routes (artboard 10 draws 9).
+  // the info note with a single item on the routes (artboard 10 draws 9).
   oneItemHead: "פריט אחד נמצא כעת במסלולים האלה.",
   oneItemContinues: "הוא ימשיך",
-  // COPY-PENDING: "גם לפריטים שטרם הגיעו…" with a single item to move — the card's tail and the info
+  // "גם לפריטים שטרם הגיעו…" with a single item to move — the card's tail and the info
   // note's clause (artboard 10 draws 4).
   oneItem: "פריט אחד",
   oneMovedPrefix: "אחד מהם, שטרם הגיע לעמדה ששונתה, יעבור לגרסה ",
   oneMovedSuffix: " בעמדה הבאה שלו",
-  // COPY-PENDING: the only item on the routes is the one that moves.
+  // the only item on the routes is the one that moves.
   onlyItemMovesPrefix: "הוא טרם הגיע לעמדה ששונתה, ולכן יעבור לגרסה ",
-  // COPY-PENDING: a single item stays on its version (artboard 10 draws "5 האחרים ימשיכו").
+  // a single item stays on its version (artboard 10 draws "5 האחרים ימשיכו").
   oneOtherContinues: "האחר ימשיך",
-  // COPY-PENDING: a removed field filled in a single test (artboard 10 draws "מולא ב-38 בדיקות").
+  // a removed field filled in a single test (artboard 10 draws "מולא ב-38 בדיקות").
   filledOnce: "מולא בבדיקה אחת, הערכים יישמרו בהיסטוריה",
-  // COPY-PENDING: a field set that filled a single cell (artboard 10 draws "4 תאים מולאו").
+  // a field set that filled a single cell (artboard 10 draws "4 תאים מולאו").
   setFilledOneCell: "תא אחד מולא",
-  // COPY-PENDING: a field set whose name the screen could not read (archived, or the library could
+  // a field set whose name the screen could not read (archived, or the library could
   // not be loaded) — the line without the quoted name.
   setFilledUnnamed: " מערכת שדות",
-  // COPY-PENDING: a change artboard 10 has no wording for — rename, tone, notes mode, a removed
+  // a change artboard 10 has no wording for — rename, tone, notes mode, a removed
   // option, "חובה" turned off, a list link, a section, the note length, a removed step, the layout
   // (spec §5.11 table, last row): the "שונה" / "נמחק" badge and the field's (or station's) name in
   // quotes, until the wording is approved.
   genericQuoteOpen: "'",
   genericQuoteClose: "'",
-  // COPY-PENDING: the shared-route note on a single item route's screen — artboard 10's "מחוץ למארז
+  // the shared-route note on a single item route's screen — artboard 10's "מחוץ למארז
   // הזה" assumes a kit on screen.
   sharedLeadItemRoute: "השינויים יחולו גם במארזים: ",
-  // COPY-PENDING: a route that more than one other kit runs, and more than two such routes —
+  // a route that more than one other kit runs, and more than two such routes —
   // artboard 10 draws one kit per route and two routes ("ב'…', ומסלול … משמש גם ב'…'").
   kitsAnd: " וב",
   kitsComma: ", ב",
@@ -102,11 +101,11 @@ export function publishButtonText(version: number): string {
 }
 
 /** The count tags (artboard 10): "{n} שינויים" · "{n} עמדות" · "{n} מסלולים". Singulars: the
- *  script's "שינוי אחד", and the screen's (COPY-PENDING) "עמדה אחת" / "מסלול אחד". */
+ *  script's "שינוי אחד", and the screen's (undrawn) "עמדה אחת" / "מסלול אחד". */
 export function countTagsText(totals: { changes: number; stations: number; routes: number }): string[] {
   return [
     changesText(totals.changes),
-    totals.stations === 1 ? SCREEN_COPY_PENDING.stationsOne : totals.stations + " עמדות",
+    totals.stations === 1 ? SCREEN_UNDRAWN_TEXT.stationsOne : totals.stations + " עמדות",
     routesCountText(totals.routes),
   ];
 }
@@ -153,47 +152,47 @@ export function fieldRemovedText(label: string): string {
 }
 
 /** The warning after a removed field (artboard 10): "מולא ב-{n} בדיקות, הערכים יישמרו בהיסטוריה";
- *  one test is COPY-PENDING; nothing filled, no warning. */
+ *  one test is undrawn; nothing filled, no warning. */
 export function filledWarnText(filled: number): string | null {
   if (filled <= 0) return null;
-  return filled === 1 ? PUBLISH_COPY_PENDING.filledOnce : "מולא ב-" + filled + " בדיקות, הערכים יישמרו בהיסטוריה";
+  return filled === 1 ? PUBLISH_UNDRAWN_TEXT.filledOnce : "מולא ב-" + filled + " בדיקות, הערכים יישמרו בהיסטוריה";
 }
 
 /** Cells a field set filled (artboard 10): "{n} תאים מולאו מהערכה '{set}'". One cell, and a set
- *  whose name is unknown, are COPY-PENDING. */
+ *  whose name is unknown, are undrawn. */
 export function setFilledText(cells: number, setName: string | null): string {
-  const head = cells === 1 ? PUBLISH_COPY_PENDING.setFilledOneCell : cells + " תאים מולאו";
-  return setName != null ? head + " מהערכה '" + setName + "'" : head + PUBLISH_COPY_PENDING.setFilledUnnamed;
+  const head = cells === 1 ? PUBLISH_UNDRAWN_TEXT.setFilledOneCell : cells + " תאים מולאו";
+  return setName != null ? head + " מהערכה '" + setName + "'" : head + PUBLISH_UNDRAWN_TEXT.setFilledUnnamed;
 }
 
-/** A change without its own wording (COPY-PENDING, spec §5.11): the name in quotes. */
+/** A change without its own wording (undrawn, spec §5.11): the name in quotes. */
 export function genericChangeText(label: string): string {
-  return PUBLISH_COPY_PENDING.genericQuoteOpen + label + PUBLISH_COPY_PENDING.genericQuoteClose;
+  return PUBLISH_UNDRAWN_TEXT.genericQuoteOpen + label + PUBLISH_UNDRAWN_TEXT.genericQuoteClose;
 }
 
 // ---- notes ---------------------------------------------------------------------------------------------
 /** One route of the warning note (artboard 10): "מסלול {r} של {item} משמש גם ב'{kit}'". More than
- *  one kit is joined "ב'א', ב'ב' וב'ג'" (COPY-PENDING). */
+ *  one kit is joined "ב'א', ב'ב' וב'ג'" (undrawn). */
 export function sharedRoutePart(routeNumber: number, itemDesc: string, kits: readonly string[]): string {
   const quoted = kits.map((k) => "'" + k + "'");
   let where = quoted[quoted.length - 1] ?? "";
-  if (quoted.length > 1) where = quoted.slice(0, -1).join(PUBLISH_COPY_PENDING.kitsComma) + PUBLISH_COPY_PENDING.kitsAnd + where;
+  if (quoted.length > 1) where = quoted.slice(0, -1).join(PUBLISH_UNDRAWN_TEXT.kitsComma) + PUBLISH_UNDRAWN_TEXT.kitsAnd + where;
   return "מסלול " + routeNumber + " של " + itemDesc + " משמש גם ב" + where;
 }
 
 /** The warning note (artboard 10): "השינויים יחולו גם מחוץ למארז הזה: {part}, ו{part}." — two
- *  routes as drawn; more are joined ", " with "ו" before the last (COPY-PENDING). On a single item
- *  route's screen the lead is COPY-PENDING. */
+ *  routes as drawn; more are joined ", " with "ו" before the last (undrawn). On a single item
+ *  route's screen the lead is undrawn. */
 export function sharedOutsideText(parts: readonly string[], kitOnScreen: boolean): string {
-  const lead = kitOnScreen ? "השינויים יחולו גם מחוץ למארז הזה: " : PUBLISH_COPY_PENDING.sharedLeadItemRoute;
+  const lead = kitOnScreen ? "השינויים יחולו גם מחוץ למארז הזה: " : PUBLISH_UNDRAWN_TEXT.sharedLeadItemRoute;
   if (parts.length <= 1) return lead + (parts[0] ?? "") + ".";
-  return lead + parts.slice(0, -1).join(PUBLISH_COPY_PENDING.routesComma) + ", ו" + parts[parts.length - 1] + ".";
+  return lead + parts.slice(0, -1).join(PUBLISH_UNDRAWN_TEXT.routesComma) + ", ו" + parts[parts.length - 1] + ".";
 }
 
-/** "לפי גרסה {v}" — what items already on the way follow; on a first publish the COPY-PENDING
+/** "לפי גרסה {v}" — what items already on the way follow; on a first publish the undrawn
  *  "ללא שדות". */
 function followPhrase(fromVersion: number): string {
-  return fromVersion > 0 ? "לפי גרסה " + fromVersion : PUBLISH_COPY_PENDING.noVersionPhrase;
+  return fromVersion > 0 ? "לפי גרסה " + fromVersion : PUBLISH_UNDRAWN_TEXT.noVersionPhrase;
 }
 
 export type InfoNoteInput = {
@@ -215,25 +214,25 @@ export type InfoNoteInput = {
  *            בעמדה הבאה שלהם; 5 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. פריטים שייקלטו מעכשיו
  *            יקבלו גרסה 5."
  * With nothing to move the pending note is the new one. 0 / 1 items, 1 to move or 1 left, all of
- * them moving and a first publish are COPY-PENDING forms.
+ * them moving and a first publish are undrawn forms.
  */
 export function infoNoteText({ pending, items, notReached, version, fromVersion }: InfoNoteInput): string {
   const tail = "פריטים שייקלטו מעכשיו יקבלו גרסה " + version + ".";
-  if (items <= 0) return PUBLISH_COPY_PENDING.noItemsHead + " " + tail;
-  const head = items === 1 ? PUBLISH_COPY_PENDING.oneItemHead : items + " פריטים נמצאים כעת במסלולים האלה.";
+  if (items <= 0) return PUBLISH_UNDRAWN_TEXT.noItemsHead + " " + tail;
+  const head = items === 1 ? PUBLISH_UNDRAWN_TEXT.oneItemHead : items + " פריטים נמצאים כעת במסלולים האלה.";
   const follow = followPhrase(fromVersion);
   const moved = Math.min(Math.max(0, notReached), items);
   if (!pending || moved === 0) {
-    const they = items === 1 ? PUBLISH_COPY_PENDING.oneItemContinues : "הם ימשיכו";
+    const they = items === 1 ? PUBLISH_UNDRAWN_TEXT.oneItemContinues : "הם ימשיכו";
     return head + " " + they + " " + follow + " עד סוף המסלול; " + tail;
   }
-  if (items === 1) return head + " " + PUBLISH_COPY_PENDING.onlyItemMovesPrefix + version + PUBLISH_COPY_PENDING.oneMovedSuffix + ". " + tail;
+  if (items === 1) return head + " " + PUBLISH_UNDRAWN_TEXT.onlyItemMovesPrefix + version + PUBLISH_UNDRAWN_TEXT.oneMovedSuffix + ". " + tail;
   const movedText = moved === 1
-    ? PUBLISH_COPY_PENDING.oneMovedPrefix + version + PUBLISH_COPY_PENDING.oneMovedSuffix
+    ? PUBLISH_UNDRAWN_TEXT.oneMovedPrefix + version + PUBLISH_UNDRAWN_TEXT.oneMovedSuffix
     : moved + " מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה " + version + " בעמדה הבאה שלהם";
   const rest = items - moved;
   if (rest === 0) return head + " " + movedText + ". " + tail;
-  const restText = (rest === 1 ? PUBLISH_COPY_PENDING.oneOtherContinues : rest + " האחרים ימשיכו") + " " + follow + " עד סוף המסלול";
+  const restText = (rest === 1 ? PUBLISH_UNDRAWN_TEXT.oneOtherContinues : rest + " האחרים ימשיכו") + " " + follow + " עד סוף המסלול";
   return head + " " + movedText + "; " + restText + ". " + tail;
 }
 
@@ -250,7 +249,7 @@ export function scopeNewSubText(fromVersion: number): string {
 
 /** The second card's title (artboard 10): "גם לפריטים שטרם הגיעו לעמדה ששונתה · {n} פריטים". */
 export function scopePendingTitleText(notReached: number): string {
-  return "גם לפריטים שטרם הגיעו לעמדה ששונתה · " + (notReached === 1 ? PUBLISH_COPY_PENDING.oneItem : notReached + " פריטים");
+  return "גם לפריטים שטרם הגיעו לעמדה ששונתה · " + (notReached === 1 ? PUBLISH_UNDRAWN_TEXT.oneItem : notReached + " פריטים");
 }
 
 /** The second card's line (artboard 10): "יעברו לגרסה {v} בעמדה הבאה שלהם; תוצאות שכבר נשמרו לא ישתנו". */
@@ -259,7 +258,7 @@ export function scopePendingSubText(version: number): string {
 }
 
 // ---- after publishing ------------------------------------------------------------------------------------
-/** The Snackbar after a publish — COPY-PENDING: "גרסה {v} פורסמה". */
+/** The Snackbar after a publish — undrawn: "גרסה {v} פורסמה". */
 export function publishedSnackText(version: number): string {
-  return PUBLISH_COPY_PENDING.publishedPrefix + version + PUBLISH_COPY_PENDING.publishedSuffix;
+  return PUBLISH_UNDRAWN_TEXT.publishedPrefix + version + PUBLISH_UNDRAWN_TEXT.publishedSuffix;
 }

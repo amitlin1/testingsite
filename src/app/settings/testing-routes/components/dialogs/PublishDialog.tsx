@@ -9,9 +9,9 @@ import { VERSION_NOTE_MAX } from "@/app/lib/station-fields/admin-types";
 import type { ApplyMode, FieldsContextJson, PublishImpactJson } from "@/app/lib/station-fields/admin-types";
 import { useDraftSnapshot, useDraftStore } from "../../lib/draftStore";
 import type { FieldsMapModel } from "../../lib/mapModel";
-import { COPY_PENDING, HEADER_TEXT, MAP_STATE_TEXT, routeOptionText } from "../../lib/labels";
+import { UNDRAWN_TEXT, HEADER_TEXT, MAP_STATE_TEXT, routeOptionText } from "../../lib/labels";
 import {
-  CHANGE_BADGE_TEXT, PUBLISH_COPY_PENDING, PUBLISH_TEXT, countTagsText, infoNoteText, publishButtonText, publishTitleText,
+  CHANGE_BADGE_TEXT, PUBLISH_UNDRAWN_TEXT, PUBLISH_TEXT, countTagsText, infoNoteText, publishButtonText, publishTitleText,
   publishedSnackText, replacesVersionText, scopeLabelText, scopeNewSubText, scopePendingSubText, scopePendingTitleText,
 } from "../../lib/publishLabels";
 import {
@@ -28,7 +28,7 @@ import "./publish-dialog.css";
  * from the header's "פרסום לעמדות" (only with a draft and no blocking error):
  *
  *   1. store.flushAll() — every pending edit is saved first; a save that fails or is in conflict
- *      stops here (the header's COPY-PENDING save-failed / conflict words, with their actions);
+ *      stops here (the header's undrawn save-failed / conflict words, with their actions);
  *   2. POST …/fields/publish-preview { route_ids: the context's routes with a draft, context_kit_id }
  *      — 422 LINT_ERRORS closes the dialog and reloads the context: the header turns to "בעיה אחת
  *      לתיקון";
@@ -36,8 +36,8 @@ import "./publish-dialog.css";
  *      the count tags, "מה השתנה" grouped by (route, station), the shared-kits warning, the info note
  *      for the chosen scope, the scope radiogroup and "הערת גרסה";
  *   4. "פרסם גרסה {v}" → POST …/fields/publish { route_ids, base_revs (the preview's), apply_mode,
- *      note }: 200 → close, reload the context (drafts gone, versions up) and a COPY-PENDING Snackbar;
- *      409 DRAFT_CONFLICT → a COPY-PENDING note with "טען מחדש" (context and preview again); 422 →
+ *      note }: 200 → close, reload the context (drafts gone, versions up) and an undrawn Snackbar;
+ *      409 DRAFT_CONFLICT → an undrawn note with "טען מחדש" (context and preview again); 422 →
  *      as in 2.
  *
  * Not drawn here: "היסטוריית גרסאות" (artboard 10's footer ghost button) — its screen is not drawn
@@ -332,18 +332,18 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
         return (
           <Alert
             severity="error"
-            action={<Button variant="text" size="small" color="inherit" onClick={retrySave}>{COPY_PENDING.saveRetry}</Button>}
+            action={<Button variant="text" size="small" color="inherit" onClick={retrySave}>{UNDRAWN_TEXT.saveRetry}</Button>}
           >
-            {COPY_PENDING.saveFailed}
+            {UNDRAWN_TEXT.saveFailed}
           </Alert>
         );
       case "saveConflict":
         return (
           <Alert
             severity="warning"
-            action={<Button variant="text" size="small" color="inherit" onClick={() => void reloadConflicts()}>{COPY_PENDING.conflictReload}</Button>}
+            action={<Button variant="text" size="small" color="inherit" onClick={() => void reloadConflicts()}>{UNDRAWN_TEXT.conflictReload}</Button>}
           >
-            {COPY_PENDING.conflict}
+            {UNDRAWN_TEXT.conflict}
           </Alert>
         );
       case "previewFailed":
@@ -352,7 +352,7 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
             severity="error"
             action={<Button variant="text" size="small" color="inherit" onClick={again}>{MAP_STATE_TEXT.retry}</Button>}
           >
-            {PUBLISH_COPY_PENDING.previewFailed}
+            {PUBLISH_UNDRAWN_TEXT.previewFailed}
           </Alert>
         );
       case "ready":
@@ -504,12 +504,12 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
             {publishError === "conflict" && (
               <Alert
                 severity="warning"
-                action={<Button variant="text" size="small" color="inherit" onClick={reloadAfterConflict}>{COPY_PENDING.conflictReload}</Button>}
+                action={<Button variant="text" size="small" color="inherit" onClick={reloadAfterConflict}>{UNDRAWN_TEXT.conflictReload}</Button>}
               >
-                {PUBLISH_COPY_PENDING.publishConflict}
+                {PUBLISH_UNDRAWN_TEXT.publishConflict}
               </Alert>
             )}
-            {publishError === "failed" && <Alert severity="error">{PUBLISH_COPY_PENDING.publishFailed}</Alert>}
+            {publishError === "failed" && <Alert severity="error">{PUBLISH_UNDRAWN_TEXT.publishFailed}</Alert>}
           </>
         )}
       </DialogContent>

@@ -5,7 +5,7 @@ import { BULK_TEXT, openKitText, sharedFilledText } from "./labels";
  * Strings of the onboarding card of a route that holds no fields of its own (route-fields spec
  * §5.12; artboard 11, top), copied character for character from artboard 11's DOM ("·" is U+00B7,
  * "…" is U+2026). The info bar's sentence and its link are labels.ts's sharedFilledText /
- * openKitText (their singular is COPY-PENDING there); "החל ערכת שדות…" is the selection bar's
+ * openKitText (their singular is undrawn there); "החל ערכת שדות…" is the selection bar's
  * button text (artboards 1, 11 write it the same) — imported, never re-typed.
  *
  * "העתק ממסלול אחר…" (artboard 11's outlined button) has no string here: its dialog is not drawn

@@ -1,6 +1,6 @@
 import { TONE_WORD } from "@/app/lib/station-fields/schema";
 import type { Tone } from "@/app/lib/station-fields/schema";
-import { COPY_PENDING as SCREEN_COPY_PENDING, fieldsText } from "./labels";
+import { UNDRAWN_TEXT as SCREEN_UNDRAWN_TEXT, fieldsText } from "./labels";
 
 /**
  * Strings of "ערכות ורשימות" — the field sets and option lists library (artboard 8, spec §5.9) — and
@@ -9,16 +9,16 @@ import { COPY_PENDING as SCREEN_COPY_PENDING, fieldsText } from "./labels";
  *
  * Copied character for character from the artboard scripts and DOM ("·" is U+00B7, "…" is U+2026,
  * "›" is U+203A, "—" is U+2014). Each count keeps the singular/plural rule of the artboard script
- * that draws it. A form no artboard draws lives in LIBRARY_COPY_PENDING until it is approved (spec
- * "העיצוב סגור" rule 2, §10.4) — listed in the PR under "טקסט לאישור".
+ * that draws it. A form no artboard draws lives in LIBRARY_UNDRAWN_TEXT (spec
+ * "העיצוב סגור" rule 2, §10.4; wording approved on 2026-10-14).
  */
 
 // ---- not drawn in any artboard --------------------------------------------------------------
-/** Drafts for library text the artboards never draw. Do not treat as approved copy. */
-export const LIBRARY_COPY_PENDING = {
-  // COPY-PENDING: relative times of the set meta line. Artboard 8 draws "עכשיו" ("עודכנה עכשיו",
-  // "נוצרה עכשיו") and "לפני יומיים"; the other spans are worded like the header's pending
-  // "נשמר אוטומטית לפני …" (lib/labels.ts COPY_PENDING.saved*).
+/** Library text the artboards never draw, worded here and approved on 2026-10-14. */
+export const LIBRARY_UNDRAWN_TEXT = {
+  // relative times of the set meta line. Artboard 8 draws "עכשיו" ("עודכנה עכשיו",
+  // "נוצרה עכשיו") and "לפני יומיים"; the other spans are worded like the header's
+  // "נשמר אוטומטית לפני …" (lib/labels.ts UNDRAWN_TEXT.saved*).
   agoMinute: "לפני דקה",
   agoPrefix: "לפני ",
   agoMinutesSuffix: " דקות",
@@ -26,42 +26,42 @@ export const LIBRARY_COPY_PENDING = {
   agoHoursSuffix: " שעות",
   agoDay: "לפני יום",
   agoDaysSuffix: " ימים",
-  // COPY-PENDING: singulars the artboards never draw — a list of one option, a list linked to one
+  // singulars the artboards never draw — a list of one option, a list linked to one
   // field, a change that reaches one route (artboards 4 and 8 draw "{n} אפשרויות", "בשימוש ב-{n}
   // שדות", "ב-{R} מסלולים" with n ≥ 2). Worded like artboard 8's "בשימוש בתא אחד".
   optionsOne: "אפשרות אחת",
   usedInFieldsOne: "בשימוש בשדה אחד",
   inRoutesOne: " במסלול אחד",
-  // COPY-PENDING: "שכפל" on an option list (spec §5.9 lists the button, its result is not drawn): the
+  // "שכפל" on an option list (spec §5.9 lists the button, its result is not drawn): the
   // copy is named like artboard 8's duplicated set, "{name} · עותק".
   copySuffix: " · עותק",
-  // COPY-PENDING: the delete confirms (spec §5.9: "אישור לא מצויר"). The confirm button is the
+  // the delete confirms (spec §5.9: "אישור לא מצויר"). The confirm button is the
   // drawn "מחק"; ConfirmDialog's own "ביטול" cancels.
   deleteSetTitle: "למחוק את הערכה?",
   deleteSetMessage: "הערכה תוסר מהספרייה. תאים שהשדות שלה כבר הועתקו אליהם לא ישתנו.",
   deleteListTitle: "למחוק את הרשימה?",
   deleteListMessage: "הרשימה תוסר מהספרייה.",
-  // COPY-PENDING: DELETE answered 409 IN_USE (spec §3.2 / §5.9: "טקסט ההודעה לא מצויר").
+  // DELETE answered 409 IN_USE (spec §3.2 / §5.9: "טקסט ההודעה לא מצויר").
   setInUse: "אי אפשר למחוק ערכה שמוחלת על תאים. הסירו אותה מהתאים במפת השדות ונסו שוב.",
   listInUse: "אי אפשר למחוק רשימה שמקושרת לשדות. נתקו אותה מהשדות ונסו שוב.",
-  // COPY-PENDING: a library write that failed (network, 5xx, a refusal). The retry button reuses
+  // a library write that failed (network, 5xx, a refusal). The retry button reuses
   // artboard 11's "נסה שוב".
   saveFailed: "השמירה נכשלה",
   createFailed: "היצירה נכשלה",
   deleteFailed: "המחיקה נכשלה",
   updateFailed: "העדכון נכשל",
-  retry: SCREEN_COPY_PENDING.saveRetry,
-  // COPY-PENDING: PUT answered 409 VERSION_CONFLICT — the set / list was saved elsewhere meanwhile
-  // (worded like the draft conflict, lib/labels.ts COPY_PENDING.conflict). The action reloads it.
+  retry: SCREEN_UNDRAWN_TEXT.saveRetry,
+  // PUT answered 409 VERSION_CONFLICT — the set / list was saved elsewhere meanwhile
+  // (worded like the draft conflict, lib/labels.ts UNDRAWN_TEXT.conflict). The action reloads it.
   setConflict: "הערכה עודכנה בינתיים במקום אחר — יש לטעון אותה מחדש",
   listConflict: "הרשימה עודכנה בינתיים במקום אחר — יש לטעון אותה מחדש",
-  conflictReload: SCREEN_COPY_PENDING.conflictReload,
-  // COPY-PENDING: GET /api/settings/field-sets or /option-lists failed — the library is never shown
+  conflictReload: SCREEN_UNDRAWN_TEXT.conflictReload,
+  // GET /api/settings/field-sets or /option-lists failed — the library is never shown
   // as empty then (artboard 11's rule for the map). "נסה שוב" as artboard 11.
   loadFailed: "טעינת הספרייה נכשלה",
-  // COPY-PENDING: GET …/field-sets/[id]/usage failed.
+  // GET …/field-sets/[id]/usage failed.
   usageFailed: "טעינת התאים שמשתמשים בערכה נכשלה",
-  // COPY-PENDING: the options popover opened from the library (no field to apply to): its primary
+  // the options popover opened from the library (no field to apply to): its primary
   // button for a NEW list — artboard 4's footer words without the ellipsis (the name is typed in the
   // popover itself). An existing list saves with artboard 8's "שמירה כגרסה {v+1}".
   saveAsNewList: "שמור כרשימה חדשה",
@@ -78,14 +78,14 @@ export function usedInCellsText(n: number): string {
   return n === 1 ? "בשימוש בתא אחד" : "בשימוש ב-" + n + " תאים";
 }
 
-/** "{n} אפשרויות" (artboards 4, 8); one option is COPY-PENDING. */
+/** "{n} אפשרויות" (artboards 4, 8); one option is undrawn. */
 export function optionsText(n: number): string {
-  return n === 1 ? LIBRARY_COPY_PENDING.optionsOne : n + " אפשרויות";
+  return n === 1 ? LIBRARY_UNDRAWN_TEXT.optionsOne : n + " אפשרויות";
 }
 
-/** "בשימוש ב-{n} שדות" (artboards 4, 8); one field is COPY-PENDING. */
+/** "בשימוש ב-{n} שדות" (artboards 4, 8); one field is undrawn. */
 export function usedInFieldsText(n: number): string {
-  return n === 1 ? LIBRARY_COPY_PENDING.usedInFieldsOne : "בשימוש ב-" + n + " שדות";
+  return n === 1 ? LIBRARY_UNDRAWN_TEXT.usedInFieldsOne : "בשימוש ב-" + n + " שדות";
 }
 
 // ---- the library pane (artboard 8, the list) ---------------------------------------------------
@@ -181,7 +181,7 @@ export function saveAsVersionText(nextVersion: number): string {
 
 /** Artboard 8 `addSet(base)`: "{name} · עותק". */
 export function copyNameText(name: string): string {
-  return name + LIBRARY_COPY_PENDING.copySuffix;
+  return name + LIBRARY_UNDRAWN_TEXT.copySuffix;
 }
 
 /** A usage chip's accessible name (artboard 8 `aria`): "{full}[ · גרסה {n}]". */
@@ -302,7 +302,7 @@ export function willLinkHelpText(field: string): string {
 /** The impact note (artboard 4 `impact`): "שינוי ברשימה המשותפת יחול על {N} שדות[ ב-{R} מסלולים] לאחר
  *  פרסום. תוצאות שכבר נשמרו לא ישתנו." — the routes part only when R > 0, as the script has it. */
 export function sharedImpactText(fields: number, routes: number): string {
-  const r = routes <= 0 ? "" : routes === 1 ? LIBRARY_COPY_PENDING.inRoutesOne : " ב-" + routes + " מסלולים";
+  const r = routes <= 0 ? "" : routes === 1 ? LIBRARY_UNDRAWN_TEXT.inRoutesOne : " ב-" + routes + " מסלולים";
   return "שינוי ברשימה המשותפת יחול על " + fieldsText(fields) + r + " לאחר פרסום. תוצאות שכבר נשמרו לא ישתנו.";
 }
 

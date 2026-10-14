@@ -1,7 +1,7 @@
 import { numberInRange } from "@/app/lib/station-fields/evaluate";
 import type { NumberField } from "@/app/lib/station-fields/schema";
 import { RANGE_WORD, numberRangeForm, type RangeSegment } from "@/app/testing/fields/labels";
-import { COPY_PENDING, FIELD_TYPE_TEXT, NUMBER_PREVIEW_TEXT, NUMBER_SUMMARY_TEXT } from "./labels";
+import { UNDRAWN_TEXT, FIELD_TYPE_TEXT, NUMBER_PREVIEW_TEXT, NUMBER_SUMMARY_TEXT } from "./labels";
 
 /**
  * A number field's settings as the admin types and reads them (artboard 3, spec §5.6): parsing
@@ -73,13 +73,13 @@ export function toleranceNegative(field: Pick<NumberField, "tol_pct">): boolean 
 
 // ---- the row's summary button ------------------------------------------------------------------
 /** Artboard 3 `rangeShort`: "{min}–{max}" / "מקס׳ {max}" / "מינ׳ {min}" / "ללא טווח". A field limited
- *  only by a reference ± tolerance reads "ייחוס {ref} ±{tol}%" (COPY-PENDING) rather than "ללא טווח". */
+ *  only by a reference ± tolerance reads "ייחוס {ref} ±{tol}%" (undrawn) rather than "ללא טווח". */
 export function numberRangeShort(field: Pick<NumberField, "min" | "max" | "ref" | "tol_pct">): string {
   const { min, max, ref, tol_pct } = field;
   if (min != null && max != null) return `${min}${DASH}${max}`;
   if (max != null) return NUMBER_SUMMARY_TEXT.maxShort + max;
   if (min != null) return NUMBER_SUMMARY_TEXT.minShort + min;
-  if (ref != null && tol_pct != null) return `${COPY_PENDING.numberRefShort} ${ref} ±${tol_pct}%`;
+  if (ref != null && tol_pct != null) return `${UNDRAWN_TEXT.numberRefShort} ${ref} ±${tol_pct}%`;
   return NUMBER_SUMMARY_TEXT.noRange;
 }
 

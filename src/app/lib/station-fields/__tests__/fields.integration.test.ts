@@ -35,7 +35,7 @@ import * as H from "../../metrics/__tests__/write-path-helpers";
 import type { AdminFieldsError, RouteIssue } from "../admin";
 import type { RouteStepsError } from "../route-steps";
 import { GATE_FINISH_ON_REQUIRED } from "../evaluate";
-import { COPY_PENDING, KIT_ROUTE_LABEL, fieldsGateText, routeOfTypeLabel } from "../labels";
+import { UNDRAWN_TEXT, KIT_ROUTE_LABEL, fieldsGateText, routeOfTypeLabel } from "../labels";
 import { FIELDS_EDIT_ROLES, PUBLISH_ROLES } from "../roles";
 import { ID_PATTERNS } from "../schema";
 import type { ChoiceOption, ChoiceRowField, Field, FieldGroup, RouteFieldsConfig, StepConfig, Tone } from "../schema";
@@ -758,7 +758,7 @@ describe(
       const rev = await saveDraft(R.second, config(itemStep(UID.s1, [INSULATION])));
       // A script rewrote the route without step_uids (spec §1.3): no step has a usable uid now.
       await H.q("UPDATE testing_routes SET step_uids = '{}' WHERE test_route_id = $1", [R.second]);
-      const issue = { level: "error", code: "STEP_UNKNOWN", step_uid: UID.s1, message: COPY_PENDING.stepUnknown };
+      const issue = { level: "error", code: "STEP_UNKNOWN", step_uid: UID.s1, message: UNDRAWN_TEXT.stepUnknown };
 
       const preview = await rejectsAdmin(A.previewPublish(prisma, { route_ids: [R.second] }), 422, "LINT_ERRORS");
       assert.deepEqual(preview.extra.issues, [{ route_id: R.second, ...issue }]);
@@ -1213,7 +1213,7 @@ describe(
       const before = await footprint(6101);
       const stale = await submitAt(6101, H.STATION_FUNC_A, { Details: { schema: itemSchema(), fields: validFields() } });
       assert.equal(stale.status, 409);
-      assert.deepEqual(stale.body, { error: COPY_PENDING.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" });
+      assert.deepEqual(stale.body, { error: UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" });
       assert.deepEqual(await footprint(6101), before);
 
       const details = {
@@ -1329,7 +1329,7 @@ describe(
       for (const { label, extra } of refused) {
         const r = await submitAt(6201, H.STATION_FUNC_A, extra);
         assert.equal(r.status, 409, label);
-        assert.deepEqual(r.body, { error: COPY_PENDING.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" }, label);
+        assert.deepEqual(r.body, { error: UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" }, label);
       }
       assert.deepEqual(await footprint(6201), before);
       const accepted = await submitAt(6201, H.STATION_FUNC_A, { Details: { schema: good, fields: validFields() } });
@@ -1423,7 +1423,7 @@ describe(
       ]) {
         const r = await submitAt(6501, H.STATION_FUNC_A, { sendToResearch: true, Details: { schema: itemSchema(), fields } });
         assert.equal(r.status, 400);
-        assert.deepEqual(r.body, { error: COPY_PENDING.noteTooLong, code: "NOTE_TOO_LONG" });
+        assert.deepEqual(r.body, { error: UNDRAWN_TEXT.noteTooLong, code: "NOTE_TOO_LONG" });
       }
       assert.deepEqual(await footprint(6501), before);
       assert.equal((await H.routeRow(6501)).current_status, H.STATUS.testing, "still in test, not in research");

@@ -10,7 +10,7 @@ import { failCount, setsUsingList, toneRows } from "../../lib/libraryModel";
 import { withLibrary } from "../../lib/routeQuery";
 import type { RouteQuery } from "../../lib/routeQuery";
 import {
-  LIBRARY_COPY_PENDING, LIBRARY_TEXT, LIST_DETAIL_TEXT, listAlertText, listDetailLabel, listMetaText,
+  LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT, LIST_DETAIL_TEXT, listAlertText, listDetailLabel, listMetaText,
   listOptionLabel, listOptionsTitle, listSummaryText, setUsesListText,
 } from "../../lib/libraryLabels";
 import { deleteOptionList, saveOptionList } from "../../lib/useLibrary";
@@ -20,7 +20,7 @@ import { RenameInput } from "./FieldSetEditor";
  * "פרטי רשימה" — a shared option list in the library (artboard 8, spec §5.9 OptionListDetail):
  *   head      h2 with Pencil ("שינוי שם הרשימה": the name in place; a new name is a new version, PUT),
  *             Tag "רשימה משותפת"; "בשימוש ב-{N} שדות · {M} אפשרויות"; ghost "שכפל", red ghost "מחק"
- *             (confirm and 409 IN_USE: COPY-PENDING), outlined "עריכת האפשרויות" (artboard 4)
+ *             (confirm and 409 IN_USE: undrawn), outlined "עריכת האפשרויות" (artboard 4)
  *   options   "אפשרויות · {n}" + "המספר הוא מקש הבחירה המהירה בחלון העובד"; 36px chips: the mono key
  *             box ("1"–"4", then "–" as artboard 4), dot, label, tone word; "{n} אפשרויות · אחת נחשבת
  *             'כשל'"
@@ -66,7 +66,7 @@ export function OptionListDetail({
     const r = await saveOptionList(list.id, { name: next, options: list.options, base_version: list.version });
     setBusy(null);
     if (r.ok) await reloadLists();
-    else setNotice({ text: r.error.kind === "conflict" ? LIBRARY_COPY_PENDING.listConflict : LIBRARY_COPY_PENDING.saveFailed, reload: r.error.kind === "conflict" });
+    else setNotice({ text: r.error.kind === "conflict" ? LIBRARY_UNDRAWN_TEXT.listConflict : LIBRARY_UNDRAWN_TEXT.saveFailed, reload: r.error.kind === "conflict" });
   };
 
   const remove = async () => {
@@ -79,7 +79,7 @@ export function OptionListDetail({
       await reloadLists();
       onNavigate(withLibrary(query, "lists", null));
     } else {
-      setNotice({ text: r.error.kind === "in_use" ? LIBRARY_COPY_PENDING.listInUse : LIBRARY_COPY_PENDING.deleteFailed, reload: false });
+      setNotice({ text: r.error.kind === "in_use" ? LIBRARY_UNDRAWN_TEXT.listInUse : LIBRARY_UNDRAWN_TEXT.deleteFailed, reload: false });
     }
   };
 
@@ -156,7 +156,7 @@ export function OptionListDetail({
           severity="error"
           action={notice.reload ? (
             <Button variant="text" size="small" color="inherit" onClick={() => { setNotice(null); void reloadLists(); }}>
-              {LIBRARY_COPY_PENDING.conflictReload}
+              {LIBRARY_UNDRAWN_TEXT.conflictReload}
             </Button>
           ) : undefined}
         >
@@ -263,8 +263,8 @@ export function OptionListDetail({
 
       <ConfirmDialog
         open={confirmDelete}
-        title={LIBRARY_COPY_PENDING.deleteListTitle}
-        message={LIBRARY_COPY_PENDING.deleteListMessage}
+        title={LIBRARY_UNDRAWN_TEXT.deleteListTitle}
+        message={LIBRARY_UNDRAWN_TEXT.deleteListMessage}
         confirmText={LIBRARY_TEXT.remove}
         destructive
         draggable={false}

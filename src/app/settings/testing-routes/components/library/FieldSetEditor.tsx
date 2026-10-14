@@ -17,7 +17,7 @@ import type { RouteIndexRow, SetDraft, SetOrigin } from "../../lib/libraryModel"
 import { routeQueryHref, withLibrary, withView } from "../../lib/routeQuery";
 import type { RouteQuery } from "../../lib/routeQuery";
 import {
-  LIBRARY_COPY_PENDING, LIBRARY_TEXT, moreUsesText, outdatedText, saveAsVersionText, setEditorLabel,
+  LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT, moreUsesText, outdatedText, saveAsVersionText, setEditorLabel,
   setFieldsTitle, setFootStats, unsavedVersionText, updateAllText, usedInCellsText, versionText,
 } from "../../lib/libraryLabels";
 import { deleteFieldSet, fetchFieldSetUsage, propagateSetToDrafts, saveFieldSet } from "../../lib/useLibrary";
@@ -32,7 +32,7 @@ import { ADD_ROW_ID, AddFieldBar } from "../editor/AddFieldBar";
  *      leaving it keeps it, Escape drops it), Tag "גרסה {v}", "לא בשימוש"; the meta line, or while the
  *      working copy differs "שינויים שלא נשמרו · יישמרו כגרסה {v+1}" with primary small "שמירה כגרסה
  *      {v+1}" (aria-disabled while a field has no name); ghost "שכפל", red ghost "מחק" (confirm and
- *      409 IN_USE: COPY-PENDING); outlined "החל על תאים…" (`onApplyToCells`, artboard 9): the page
+ *      409 IN_USE: undrawn); outlined "החל על תאים…" (`onApplyToCells`, artboard 9): the page
  *      opens the map with the set kept for the apply dialog — the cells are chosen there. The saved
  *      version applies, not the working copy.
  *   2. usage (pearl): "בשימוש ב-{n} תאים" / "לא בשימוש"; a chip per cell (Link2; "… › {item}" after a
@@ -168,9 +168,9 @@ export function FieldSetEditor(props: FieldSetEditorProps) {
       onDraftChange(null);
       setUsageTick((t) => t + 1);
     } else if (r.error.kind === "conflict") {
-      setNotice({ text: LIBRARY_COPY_PENDING.setConflict, action: "reload" });
+      setNotice({ text: LIBRARY_UNDRAWN_TEXT.setConflict, action: "reload" });
     } else {
-      setNotice({ text: LIBRARY_COPY_PENDING.saveFailed, action: "retry-save" });
+      setNotice({ text: LIBRARY_UNDRAWN_TEXT.saveFailed, action: "retry-save" });
     }
     setBusy(null);
   };
@@ -186,7 +186,7 @@ export function FieldSetEditor(props: FieldSetEditorProps) {
       await props.reloadSets();
       onNavigate(withLibrary(query, "sets", null));
     } else {
-      setNotice({ text: r.error.kind === "in_use" ? LIBRARY_COPY_PENDING.setInUse : LIBRARY_COPY_PENDING.deleteFailed, action: null });
+      setNotice({ text: r.error.kind === "in_use" ? LIBRARY_UNDRAWN_TEXT.setInUse : LIBRARY_UNDRAWN_TEXT.deleteFailed, action: null });
     }
   };
 
@@ -200,7 +200,7 @@ export function FieldSetEditor(props: FieldSetEditorProps) {
       setUsageTick((t) => t + 1);
       void props.reloadSets();
     } else {
-      setNotice({ text: LIBRARY_COPY_PENDING.updateFailed, action: "retry-update" });
+      setNotice({ text: LIBRARY_UNDRAWN_TEXT.updateFailed, action: "retry-update" });
     }
   };
 
@@ -295,7 +295,7 @@ export function FieldSetEditor(props: FieldSetEditorProps) {
           severity="error"
           action={notice.action ? (
             <Button variant="text" size="small" color="inherit" disabled={busy != null} onClick={onNoticeAction}>
-              {notice.action === "reload" ? LIBRARY_COPY_PENDING.conflictReload : LIBRARY_COPY_PENDING.retry}
+              {notice.action === "reload" ? LIBRARY_UNDRAWN_TEXT.conflictReload : LIBRARY_UNDRAWN_TEXT.retry}
             </Button>
           ) : undefined}
         >
@@ -340,8 +340,8 @@ export function FieldSetEditor(props: FieldSetEditorProps) {
         )}
         {cells > 0 && usageFailed && (
           <div className="rf-lib-inline-error">
-            <span>{LIBRARY_COPY_PENDING.usageFailed}</span>
-            <Button variant="text" size="small" onClick={() => setUsageTick((t) => t + 1)}>{LIBRARY_COPY_PENDING.retry}</Button>
+            <span>{LIBRARY_UNDRAWN_TEXT.usageFailed}</span>
+            <Button variant="text" size="small" onClick={() => setUsageTick((t) => t + 1)}>{LIBRARY_UNDRAWN_TEXT.retry}</Button>
           </div>
         )}
         {cells === 0 && <p className="rf-lib-block__para">{LIBRARY_TEXT.usageNone}</p>}
@@ -419,8 +419,8 @@ export function FieldSetEditor(props: FieldSetEditorProps) {
 
       <ConfirmDialog
         open={confirmDelete}
-        title={LIBRARY_COPY_PENDING.deleteSetTitle}
-        message={LIBRARY_COPY_PENDING.deleteSetMessage}
+        title={LIBRARY_UNDRAWN_TEXT.deleteSetTitle}
+        message={LIBRARY_UNDRAWN_TEXT.deleteSetMessage}
         confirmText={LIBRARY_TEXT.remove}
         destructive
         draggable={false}

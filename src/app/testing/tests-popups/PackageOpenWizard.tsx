@@ -14,7 +14,7 @@ import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import {
   AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, RED, RED_BG, seq2,
 } from "@/app/components/packages/packageUi";
-import { COPY_PENDING, SUGGEST_PREFIX, fieldsGateText } from "@/app/lib/station-fields/labels";
+import { UNDRAWN_TEXT, SUGGEST_PREFIX, fieldsGateText } from "@/app/lib/station-fields/labels";
 import type { DraftShot } from "@/app/lib/station-fields/evaluate";
 import type { Field } from "@/app/lib/station-fields/schema";
 import { FieldsBlock, FieldsBlockFallback } from "@/app/testing/fields/FieldsBlock";
@@ -22,7 +22,7 @@ import { NotesField } from "@/app/testing/fields/NotesField";
 import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
 import { shouldReloadFields } from "@/app/testing/fields/errors";
 import { BLOCK_TITLE, VARIANT_SPEC, draftsFieldsState, kitItemFieldGroups, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
-import { WORKER_COPY_PENDING } from "@/app/testing/fields/labels";
+import { WORKER_UNDRAWN_TEXT } from "@/app/testing/fields/labels";
 import { buildFieldsBlock, inputFieldCount, useFieldsState, type Drafts } from "@/app/testing/fields/useFieldsState";
 import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
 import "@/app/packages/packages.css";
@@ -308,11 +308,11 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     // Nor before the station fields have answered, nor with their gate shut
     // (spec §4.11.3) — artboard 14's message, for the box and the items together.
     if (sf.status === "loading") return; // "הדפס וסיים" waits for the answer; what is on screen stays
-    if (sf.status === "error") { setError(WORKER_COPY_PENDING.loadFailed); return; }
+    if (sf.status === "error") { setError(WORKER_UNDRAWN_TEXT.loadFailed); return; }
     const blocked = fieldsToSend.filter((f) => f.fx.blocking(fieldsGateOn));
     if (blocked.length > 0) {
       const missing = (k: "missingRequired" | "missingNotes") => (fieldsGateOn ? blocked.reduce((n, f) => n + f.fx.ev[k].length, 0) : 0);
-      setError(fieldsGateText(missing("missingRequired"), missing("missingNotes")) ?? COPY_PENDING.noteTooLong);
+      setError(fieldsGateText(missing("missingRequired"), missing("missingNotes")) ?? UNDRAWN_TEXT.noteTooLong);
       return;
     }
     setSubmitting(true); setError(null);

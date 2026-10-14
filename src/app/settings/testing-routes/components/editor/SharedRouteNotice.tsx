@@ -4,7 +4,7 @@ import { Info } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui";
 import type { ForkResultJson } from "@/app/lib/station-fields/admin-types";
 import { sharedNoticeText } from "../../lib/labels";
-import { FORK_COPY_PENDING, FORK_TEXT, forkConfirmMessage, forkErrorText } from "../../lib/forkLabels";
+import { FORK_UNDRAWN_TEXT, FORK_TEXT, forkConfirmMessage, forkErrorText } from "../../lib/forkLabels";
 import { useFork } from "../../lib/useFork";
 
 /**
@@ -14,7 +14,7 @@ import { useFork } from "../../lib/useFork";
  * package-level step.
  *
  * With `fork`, the text ends with artboard 2's link "צור מסלול נפרד למארז הזה" (spec §3.2.1): a
- * ConfirmDialog (not drawn — its text is COPY-PENDING, forkLabels.ts), then POST …/[id]/fork after
+ * ConfirmDialog (not drawn — its text is in forkLabels.ts), then POST …/[id]/fork after
  * every pending autosave is written (useFork). Success calls `onForked`, and the dialog stays busy
  * until the promise it returns (if any) settles; the host reloads the fields context, after which the
  * kit's line runs the new route and the notice is gone (the route is no longer shared). A refusal is
@@ -130,7 +130,7 @@ function ForkLink({ fork, routeNumber, item, kits }: ForkLinkProps) {
       </button>
       <ConfirmDialog
         open={open}
-        title={FORK_COPY_PENDING.title}
+        title={FORK_UNDRAWN_TEXT.title}
         message={message}
         confirmText={FORK_TEXT.link}
         busy={busy}

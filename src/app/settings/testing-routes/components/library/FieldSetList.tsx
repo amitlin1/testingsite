@@ -7,7 +7,7 @@ import type { ResourceState } from "../../lib/useLibrary";
 import type { LibraryTab } from "../../lib/routeQuery";
 import { filterByName, setCounts } from "../../lib/libraryModel";
 import {
-  LIBRARY_COPY_PENDING, LIBRARY_TEXT, listRowLine, listsSegText, setRowLine, setsSegText,
+  LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT, listRowLine, listsSegText, setRowLine, setsSegText,
 } from "../../lib/libraryLabels";
 
 /**
@@ -23,7 +23,7 @@ import {
  *   - "אין תוצאות" + "אין ערכה בשם הזה. אפשר ליצור ערכה חדשה." / "אין רשימה בשם הזה." when no row is
  *     left (artboard 8 `noResults`: whenever the rows are empty);
  *   - the pearl footer with the tab's one-line explanation.
- * A load that failed is never an empty library: COPY-PENDING text and "נסה שוב".
+ * A load that failed is never an empty library: undrawn text and "נסה שוב".
  */
 
 export type FieldSetListProps = {
@@ -132,9 +132,9 @@ export function FieldSetList({
 
       {state.status === "error" && (
         <div className="rf-lib-empty">
-          <span className="rf-lib-empty__title">{LIBRARY_COPY_PENDING.loadFailed}</span>
+          <span className="rf-lib-empty__title">{LIBRARY_UNDRAWN_TEXT.loadFailed}</span>
           <Button variant="outlined" color="inherit" size="small" loading={state.retrying} onClick={() => onRetry(tab)}>
-            {LIBRARY_COPY_PENDING.retry}
+            {LIBRARY_UNDRAWN_TEXT.retry}
           </Button>
         </div>
       )}

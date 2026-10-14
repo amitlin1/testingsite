@@ -5,7 +5,7 @@ import type { LibraryTab, RouteQuery } from "../../lib/routeQuery";
 import { withLibrary } from "../../lib/routeQuery";
 import { copyName, copySetFields, setDraftDirty } from "../../lib/libraryModel";
 import type { SetDraft, SetOrigin } from "../../lib/libraryModel";
-import { LIBRARY_COPY_PENDING, LIBRARY_TEXT } from "../../lib/libraryLabels";
+import { LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT } from "../../lib/libraryLabels";
 import { createFieldSet, createOptionList, useFieldSets, useOptionLists, useRouteIndex } from "../../lib/useLibrary";
 import { OptionListPopover } from "../editor/OptionListPopover";
 import { FieldSetList } from "./FieldSetList";
@@ -91,7 +91,7 @@ export function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibrary
     const r = await createFieldSet({ name: LIBRARY_TEXT.newSetName, fields: [] });
     setCreating(null);
     if (!r.ok) {
-      setCreateError(LIBRARY_COPY_PENDING.createFailed);
+      setCreateError(LIBRARY_UNDRAWN_TEXT.createFailed);
       return;
     }
     setOrigins((o) => ({ ...o, [r.data.id]: { kind: "created" } }));
@@ -108,7 +108,7 @@ export function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibrary
     const r = await createFieldSet({ name: copyName(from.name), fields: copySetFields(from.fields, () => newFieldId()) });
     setCreating(null);
     if (!r.ok) {
-      setCreateError(LIBRARY_COPY_PENDING.createFailed);
+      setCreateError(LIBRARY_UNDRAWN_TEXT.createFailed);
       return;
     }
     setOrigins((o) => ({ ...o, [r.data.id]: { kind: "duplicated", from: from.name } }));
@@ -124,7 +124,7 @@ export function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibrary
     const r = await createOptionList({ name: copyName(openList.name), options: openList.options.map((o) => ({ ...o })) });
     setCreating(null);
     if (!r.ok) {
-      setCreateError(LIBRARY_COPY_PENDING.createFailed);
+      setCreateError(LIBRARY_UNDRAWN_TEXT.createFailed);
       return;
     }
     setSearch((s) => ({ ...s, lists: "" }));

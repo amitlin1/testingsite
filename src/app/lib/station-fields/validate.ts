@@ -3,7 +3,7 @@ import type {
   ChecklistItem, ChecklistItemId, ChoiceOption, Field, FieldGroup, FieldId, FieldType, GroupTarget, OptionId,
   RouteFieldsConfig, StepConfig, StepUid, VersionRef,
 } from "./schema";
-import { COPY_PENDING, LINT_TEXT, optionsOkText } from "./labels";
+import { UNDRAWN_TEXT, LINT_TEXT, optionsOkText } from "./labels";
 
 /**
  * Validation without zod (route-fields spec §2.3), shared by the editor and the API.
@@ -42,7 +42,7 @@ export type Issue = {
   field_id?: FieldId;
   option_id?: OptionId;
   item_id?: ChecklistItemId;
-  message: string;               // Hebrew — labels.ts (artboard text, or COPY_PENDING)
+  message: string;               // Hebrew — labels.ts (artboard text, or UNDRAWN_TEXT)
 };
 
 /** Hard limits of the shape check. The editor stays inside them; anything beyond is a ShapeError. */
@@ -396,7 +396,7 @@ export function lintFields(
     if (!name) {
       out.push({ level: "error", code: "FIELD_LABEL_EMPTY", ...loc, message: LINT_TEXT.fieldLabelEmpty });
     } else {
-      if (names.has(name)) out.push({ level: "warning", code: "DUPLICATE_LABEL_IN_CELL", ...loc, message: COPY_PENDING.duplicateLabel });
+      if (names.has(name)) out.push({ level: "warning", code: "DUPLICATE_LABEL_IN_CELL", ...loc, message: UNDRAWN_TEXT.duplicateLabel });
       names.add(name);
     }
     if (f.type === "choice_row" || f.type === "multi_choice") {
@@ -408,7 +408,7 @@ export function lintFields(
       // The count checks in exactly the order of artboard 4's validation line.
       const n = f.options.length;
       const fails = f.options.filter((o) => o.tone === "fail").length;
-      if (n === 0) out.push({ level: "error", code: "OPTIONS_EMPTY", ...loc, message: COPY_PENDING.optionsEmpty });
+      if (n === 0) out.push({ level: "error", code: "OPTIONS_EMPTY", ...loc, message: UNDRAWN_TEXT.optionsEmpty });
       else if (n > 6) out.push({ level: "warning", code: "OPTIONS_TOO_MANY", ...loc, message: LINT_TEXT.optionsTooMany });
       else if (n < 2) out.push({ level: "warning", code: "OPTIONS_TOO_FEW", ...loc, message: LINT_TEXT.optionsTooFew });
       else if (fails === 0) out.push({ level: "warning", code: "OPTIONS_NO_FAIL", ...loc, message: LINT_TEXT.optionsNoFail });
@@ -418,18 +418,18 @@ export function lintFields(
     if (f.type === "checklist") {
       for (const it of f.items) {
         if (!it.label.trim()) {
-          out.push({ level: "error", code: "CHECKLIST_ITEM_LABEL_EMPTY", ...loc, item_id: it.id, message: COPY_PENDING.checklistItemLabelEmpty });
+          out.push({ level: "error", code: "CHECKLIST_ITEM_LABEL_EMPTY", ...loc, item_id: it.id, message: UNDRAWN_TEXT.checklistItemLabelEmpty });
         }
       }
-      if (f.items.length === 0) out.push({ level: "error", code: "CHECKLIST_EMPTY", ...loc, message: COPY_PENDING.checklistEmpty });
+      if (f.items.length === 0) out.push({ level: "error", code: "CHECKLIST_EMPTY", ...loc, message: UNDRAWN_TEXT.checklistEmpty });
     }
     if (f.type === "photo" && !f.photo_type.trim()) {
-      out.push({ level: "error", code: "PHOTO_TYPE_EMPTY", ...loc, message: COPY_PENDING.photoTypeEmpty });
+      out.push({ level: "error", code: "PHOTO_TYPE_EMPTY", ...loc, message: UNDRAWN_TEXT.photoTypeEmpty });
     }
     if (f.type === "number") {
       const inverted = f.min != null && f.max != null && f.min > f.max;
       const negativeTolerance = f.tol_pct != null && f.tol_pct < 0;
-      if (inverted || negativeTolerance) out.push({ level: "error", code: "NUMBER_RANGE", ...loc, message: COPY_PENDING.numberRange });
+      if (inverted || negativeTolerance) out.push({ level: "error", code: "NUMBER_RANGE", ...loc, message: UNDRAWN_TEXT.numberRange });
     }
   }
   return out;
@@ -472,7 +472,7 @@ export function checkConfigAgainstRoute(
     }
     const scope = packageLevelTypeIds.has(routeSteps[i]) ? "package" : "item";
     if (step.scope !== scope) {
-      issues.push({ level: "error", code: "STEP_SCOPE_MISMATCH", step_uid: uid, message: COPY_PENDING.stepScopeMismatch });
+      issues.push({ level: "error", code: "STEP_SCOPE_MISMATCH", step_uid: uid, message: UNDRAWN_TEXT.stepScopeMismatch });
     }
   }
   return { unknownUids, issues };
@@ -481,5 +481,5 @@ export function checkConfigAgainstRoute(
 /** checkConfigAgainstRoute's unknownUids as publish-blocking errors: the issues publish and its
  *  preview answer 422 with (spec §3.4.3 step 3), and the ones the editor lists next to them. */
 export function unknownStepIssues(unknownUids: readonly StepUid[]): Issue[] {
-  return unknownUids.map((uid) => ({ level: "error", code: "STEP_UNKNOWN", step_uid: uid, message: COPY_PENDING.stepUnknown }));
+  return unknownUids.map((uid) => ({ level: "error", code: "STEP_UNKNOWN", step_uid: uid, message: UNDRAWN_TEXT.stepUnknown }));
 }

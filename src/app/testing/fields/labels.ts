@@ -7,24 +7,23 @@ import type { NumberField } from "@/app/lib/station-fields/schema";
  * src/app/lib/station-fields/labels.ts: import them from there, never re-type them here.
  *
  * Copied character for character from the artboards ("·" is U+00B7, "–" is U+2013). Text that no
- * artboard draws lives in WORKER_COPY_PENDING until it is approved (spec "העיצוב סגור" rule 2).
+ * artboard draws lives in WORKER_UNDRAWN_TEXT (spec "העיצוב סגור" rule 2; approved on 2026-10-14).
  */
 
 // ---- not drawn in any worker artboard ---------------------------------------------------
-/** Drafts for text the worker artboards never draw. Listed in the PR under "טקסט לאישור"; do not
- *  treat as approved copy. */
-export const WORKER_COPY_PENDING = {
-  // COPY-PENDING: the station fields failed to load (useStationFields "error", spec §4.2, §10.4) —
+/** Text the worker artboards never draw, worded here and approved on 2026-10-14. */
+export const WORKER_UNDRAWN_TEXT = {
+  // the station fields failed to load (useStationFields "error", spec §4.2, §10.4) —
   // the heading of the admin screen's load-failure state (artboard 11).
   loadFailed: "טעינת הגדרות השדות נכשלה",
-  // COPY-PENDING: the retry button of that state (artboard 11 `retryLabel`).
+  // the retry button of that state (artboard 11 `retryLabel`).
   retry: "נסה שוב",
-  // COPY-PENDING: a number field ranged by a reference value ± a tolerance (ref + tol_pct) — no
+  // a number field ranged by a reference value ± a tolerance (ref + tol_pct) — no
   // artboard draws it (spec §4.7, §10.4). Worded after the package-open wizard's weight strip
   // ("ייחוס … גר׳", "סטייה תקנית ±5%"): "ייחוס 0.05 Ω · סטייה תקנית ±10%".
   rangeRef: "ייחוס",
   rangeTolerance: "סטייה תקנית",
-  // COPY-PENDING: the list footer's count for a choice field with a single option (lint only
+  // the list footer's count for a choice field with a single option (lint only
   // warns below two, so one can be published). Every artboard writes "{N} אפשרויות" with N ≥ 2;
   // "1 אפשרויות" is not Hebrew.
   optionCountOne: "אפשרות אחת",
@@ -32,10 +31,10 @@ export const WORKER_COPY_PENDING = {
 
 // ---- choice field: the list footer's count (spec §4.6) --------------------------------
 /** Artboards 12/14/17 (`countLabel`): "{N} אפשרויות", or "{k} מתוך {N}" while a search filters;
- *  a single option: WORKER_COPY_PENDING.optionCountOne. */
+ *  a single option: WORKER_UNDRAWN_TEXT.optionCountOne. */
 export function choiceCountText(shown: number, total: number, searching: boolean): string {
   if (searching) return shown + " מתוך " + total;
-  return total === 1 ? WORKER_COPY_PENDING.optionCountOne : total + " אפשרויות";
+  return total === 1 ? WORKER_UNDRAWN_TEXT.optionCountOne : total + " אפשרויות";
 }
 
 // ---- number field: the range line (spec §4.7) ---------------------------------------
@@ -88,7 +87,7 @@ function withUnit(n: number, unit: string): string {
 }
 
 /** The field's range as artboard 3 writes it, then — when the field has one — its reference ±
- *  tolerance (COPY-PENDING), joined " · ". null when the field defines no range at all. */
+ *  tolerance (undrawn), joined " · ". null when the field defines no range at all. */
 export function numberRangeForm(def: Pick<NumberField, "unit" | "min" | "max" | "ref" | "tol_pct">): RangeSegment[] | null {
   const unit = def.unit?.trim() ?? "";
   const { min, max, ref, tol_pct } = def;
@@ -98,8 +97,8 @@ export function numberRangeForm(def: Pick<NumberField, "unit" | "min" | "max" | 
   else if (min != null) parts.push([{ text: ABOVE }, { text: withUnit(min, unit), ltr: true }]);
   if (ref != null && tol_pct != null) {
     parts.push([
-      { text: WORKER_COPY_PENDING.rangeRef + " " }, { text: withUnit(ref, unit), ltr: true },
-      { text: SEP + WORKER_COPY_PENDING.rangeTolerance + " " }, { text: `±${tol_pct}%`, ltr: true },
+      { text: WORKER_UNDRAWN_TEXT.rangeRef + " " }, { text: withUnit(ref, unit), ltr: true },
+      { text: SEP + WORKER_UNDRAWN_TEXT.rangeTolerance + " " }, { text: `±${tol_pct}%`, ltr: true },
     ]);
   }
   if (parts.length === 0) return null;

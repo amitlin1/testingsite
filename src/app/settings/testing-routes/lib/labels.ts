@@ -11,29 +11,29 @@ import type { Issue } from "@/app/lib/station-fields/validate";
  * Copied character for character from the artboard scripts and DOM ("·" is U+00B7, "–" is U+2013,
  * "—" is U+2014, "×" is U+00D7). Each count keeps the singular/plural rule of the artboard script
  * that draws it (`n === 1 ? 'שדה אחד' : n + ' שדות'`). A form no artboard draws (a singular, a
- * second error, a save that failed) lives in COPY_PENDING until it is approved (spec "העיצוב סגור"
- * rule 2, §10.4) — listed in the PR under "טקסט לאישור".
+ * second error, a save that failed) lives in UNDRAWN_TEXT (spec "העיצוב סגור"
+ * rule 2, §10.4; wording approved on 2026-10-14).
  */
 
 // ---- not drawn in any artboard --------------------------------------------------------------
-/** Drafts for text the admin artboards never draw. Do not treat as approved copy. */
-export const COPY_PENDING = {
-  // COPY-PENDING: the header count for a single route — artboards 1–11 draw "14 מסלולים" only.
+/** Text the admin artboards never draw, worded here and approved on 2026-10-14. */
+export const UNDRAWN_TEXT = {
+  // the header count for a single route — artboards 1–11 draw "14 מסלולים" only.
   routesOne: "מסלול אחד",
-  // COPY-PENDING: the context card's kit tag with a single item type / a single unit — artboards 1
+  // the context card's kit tag with a single item type / a single unit — artboards 1
   // and 11 draw "{k} סוגי פריטים · {u} יחידות" with k, u ≥ 3.
   kitKindsOne: "סוג פריט אחד",
   kitUnitsOne: "יחידה אחת",
-  // COPY-PENDING: a map row whose route has a single station — artboards 1 and 11 draw
+  // a map row whose route has a single station — artboards 1 and 11 draw
   // "מסלול {r} · {n} עמדות" with n ≥ 3.
   stationsOne: "עמדה אחת",
-  // COPY-PENDING: the header pill of a published route without a draft (spec §5.2 table, from the
+  // the header pill of a published route without a draft (spec §5.2 table, from the
   // old spec — no artboard draws it). Dot --color-status-approved.
   publishedPrefix: "מפורסם · גרסה ",
-  // COPY-PENDING: the header while an autosave is in flight and nothing was saved yet (spec §5.2:
+  // the header while an autosave is in flight and nothing was saved yet (spec §5.2:
   // the artboards draw only "נשמר אוטומטית לפני רגע").
   saving: "שומר…",
-  // COPY-PENDING: "נשמר אוטומטית לפני רגע" as a relative time once a minute has passed (spec §5.2
+  // "נשמר אוטומטית לפני רגע" as a relative time once a minute has passed (spec §5.2
   // "מתעדכן כזמן יחסי"; the artboards draw only "לפני רגע").
   savedAgoPrefix: "נשמר אוטומטית לפני ",
   savedMinuteAgo: "נשמר אוטומטית לפני דקה",
@@ -41,49 +41,51 @@ export const COPY_PENDING = {
   savedHourAgo: "נשמר אוטומטית לפני שעה",
   savedHoursAgoSuffix: " שעות",
   savedDayAgo: "נשמר אוטומטית לפני יום",
+  // two days: artboard 8's "לפני יומיים" (the set meta line, libraryLabels LIBRARY_TEXT.twoDaysAgo).
+  savedTwoDaysAgo: "נשמר אוטומטית לפני יומיים",
   savedDaysAgoSuffix: " ימים",
-  // COPY-PENDING: an autosave (PUT …/fields/draft) or a discard (DELETE) that failed — network or
+  // an autosave (PUT …/fields/draft) or a discard (DELETE) that failed — network or
   // 5xx (spec §3.2 "שמירה נכשלה", §5.2, §10.4). The retry button reuses artboard 11's "נסה שוב".
   saveFailed: "השמירה האוטומטית נכשלה",
   saveRetry: "נסה שוב",
-  // COPY-PENDING: 409 DRAFT_CONFLICT — the draft changed since this screen loaded it (another tab
+  // 409 DRAFT_CONFLICT — the draft changed since this screen loaded it (another tab
   // or another admin; spec §5.2, §10.4). The action reloads the route from the server.
   conflict: "הטיוטה עודכנה בינתיים במקום אחר — יש לטעון אותה מחדש",
   conflictReload: "טען מחדש",
-  // COPY-PENDING: the ConfirmDialog of "ביטול הטיוטה" (spec §5.2: "הטקסט שלו לא מצויר"). The
+  // the ConfirmDialog of "ביטול הטיוטה" (spec §5.2: "הטקסט שלו לא מצויר"). The
   // confirm button repeats the header button; ConfirmDialog's default "ביטול" would read as the
   // same action, hence a cancel text of its own.
   discardTitle: "לבטל את הטיוטה?",
   discardMessage: "כל השינויים שלא פורסמו יימחקו, וכל המסלולים במפה יחזרו לגרסה המפורסמת.",
   discardConfirm: "ביטול הטיוטה",
   discardCancel: "המשך לערוך",
-  // COPY-PENDING: a cell with more than one error — artboard 1 draws "שגיאה אחת" only (spec §5.4.3,
+  // a cell with more than one error — artboard 1 draws "שגיאה אחת" only (spec §5.4.3,
   // §10.4 "{n} שגיאות בתא"); also the map footer's error count.
   errorsSuffix: " שגיאות",
-  // COPY-PENDING: the map footer with a single empty cell / a single shared field — artboards 1 and
+  // the map footer with a single empty cell / a single shared field — artboards 1 and
   // 11 draw "{n} תאים ללא שדות" and "{n} שדות משותפים" with n ≥ 5.
   emptyCellsOne: "תא אחד ללא שדות",
   sharedFieldsOne: "שדה משותף אחד",
-  // COPY-PENDING: artboard 11's info bar with a single filled shared cell (drawn with 3).
+  // artboard 11's info bar with a single filled shared cell (drawn with 3).
   sharedFilledOne: "תא אחד כבר מלא",
-  // COPY-PENDING: a single-item route's map (kind "item", spec §5.4.1 "לא אומת"): a package-level
+  // a single-item route's map (kind "item", spec §5.4.1 "לא אומת"): a package-level
   // step's fields live on the kit's route, so its cell is "—" with this tooltip.
   packageLevelOnItemRoute: "השדות של עמדה ברמת מארז מוגדרים במפת המארז",
-  // COPY-PENDING: the group line under each option of the "מסלול" combobox. The spec groups the
+  // the group line under each option of the "מסלול" combobox. The spec groups the
   // list "מארזים" / "פריטים" (§5.2, not drawn — the artboards draw the closed field only); a
   // subtitle per option carries it, in the words the app already uses for a kit and an item ("מארז"
   // — the kit Tag of the item-types and packages screens; "פריט").
   routeGroupKit: "מארז",
   routeGroupItem: "פריט",
-  // COPY-PENDING: a number setting (מינימום / מקסימום / ערך ייחוס / סטייה מותרת ±%) holding text that
+  // a number setting (מינימום / מקסימום / ערך ייחוס / סטייה מותרת ±%) holding text that
   // is not a number (spec §5.15 "ערך לא מספרי", not drawn) — the worker's own words for the same
   // case under a number field (artboards 14 and 6, RANGE_WORD.nan in src/app/testing/fields/labels.ts).
   numberNotNumeric: "יש להזין מספר",
-  // COPY-PENDING: the number row's summary when only a reference ± tolerance limits the value
+  // the number row's summary when only a reference ± tolerance limits the value
   // (artboard 3's `rangeShort` knows min / max only and would read "ללא טווח"): "ייחוס {ref} ±{tol}%",
-  // in the word of the worker's own (COPY-PENDING) reference line, WORKER_COPY_PENDING.rangeRef.
+  // in the word of the worker's own (undrawn) reference line, WORKER_UNDRAWN_TEXT.rangeRef.
   numberRefShort: "ייחוס",
-  // COPY-PENDING: the note of local options copied from a shared list whose name this screen does
+  // the note of local options copied from a shared list whose name this screen does
   // not hold yet (the option-lists API arrives in session 2d). Artboard 4 draws the named form
   // 'הועתקו מהרשימה "{list}".' — localOptionsNote uses it as soon as the name is known.
   optionsCopiedFromSharedList: "הועתקו מהרשימה המשותפת.",
@@ -119,7 +121,7 @@ export function issuesToFixText(n: number): string {
 
 /** The header count beside "מסלולי בדיקה", artboards 1–11: "{n} מסלולים". */
 export function routesCountText(n: number): string {
-  return n === 1 ? COPY_PENDING.routesOne : n + " מסלולים";
+  return n === 1 ? UNDRAWN_TEXT.routesOne : n + " מסלולים";
 }
 
 /** The context card's count tag, artboards 1, 11: "כיסוי {defined}/{relevant}". */
@@ -129,14 +131,14 @@ export function coverageText(defined: number, relevant: number): string {
 
 /** The context card's kit tag, artboards 1, 11: "מארז · {k} סוגי פריטים · {u} יחידות". */
 export function kitSummaryText(kinds: number, units: number): string {
-  const k = kinds === 1 ? COPY_PENDING.kitKindsOne : kinds + " סוגי פריטים";
-  const u = units === 1 ? COPY_PENDING.kitUnitsOne : units + " יחידות";
+  const k = kinds === 1 ? UNDRAWN_TEXT.kitKindsOne : kinds + " סוגי פריטים";
+  const u = units === 1 ? UNDRAWN_TEXT.kitUnitsOne : units + " יחידות";
   return "מארז · " + k + " · " + u;
 }
 
-/** The header pill of a published route without a draft — COPY-PENDING (spec §5.2). */
+/** The header pill of a published route without a draft — undrawn (spec §5.2). */
 export function publishedPillText(version: number): string {
-  return COPY_PENDING.publishedPrefix + version;
+  return UNDRAWN_TEXT.publishedPrefix + version;
 }
 
 // ---- header -------------------------------------------------------------------------------------
@@ -156,19 +158,20 @@ export const HEADER_TEXT = {
 export const SAVED_JUST_NOW = "נשמר אוטומטית לפני רגע";
 
 /** The header's save time as a relative time (spec §5.2). Under a minute it is the artboards'
- *  "נשמר אוטומטית לפני רגע"; later ones are COPY-PENDING. A time in the future (clock skew between
+ *  "נשמר אוטומטית לפני רגע"; later ones are undrawn. A time in the future (clock skew between
  *  the server's draft_updated_at and this browser) reads as just now. */
 export function savedAgoText(savedAtMs: number, nowMs: number): string {
   const minutes = Math.floor(Math.max(0, nowMs - savedAtMs) / 60_000);
   if (minutes < 1) return SAVED_JUST_NOW;
-  if (minutes === 1) return COPY_PENDING.savedMinuteAgo;
-  if (minutes < 60) return COPY_PENDING.savedAgoPrefix + minutes + COPY_PENDING.savedMinutesAgoSuffix;
+  if (minutes === 1) return UNDRAWN_TEXT.savedMinuteAgo;
+  if (minutes < 60) return UNDRAWN_TEXT.savedAgoPrefix + minutes + UNDRAWN_TEXT.savedMinutesAgoSuffix;
   const hours = Math.floor(minutes / 60);
-  if (hours === 1) return COPY_PENDING.savedHourAgo;
-  if (hours < 24) return COPY_PENDING.savedAgoPrefix + hours + COPY_PENDING.savedHoursAgoSuffix;
+  if (hours === 1) return UNDRAWN_TEXT.savedHourAgo;
+  if (hours < 24) return UNDRAWN_TEXT.savedAgoPrefix + hours + UNDRAWN_TEXT.savedHoursAgoSuffix;
   const days = Math.floor(hours / 24);
-  if (days === 1) return COPY_PENDING.savedDayAgo;
-  return COPY_PENDING.savedAgoPrefix + days + COPY_PENDING.savedDaysAgoSuffix;
+  if (days === 1) return UNDRAWN_TEXT.savedDayAgo;
+  if (days === 2) return UNDRAWN_TEXT.savedTwoDaysAgo;
+  return UNDRAWN_TEXT.savedAgoPrefix + days + UNDRAWN_TEXT.savedDaysAgoSuffix;
 }
 
 // ---- view tabs and context card -----------------------------------------------------------------
@@ -214,7 +217,7 @@ export function qtyText(quantity: number): string {
 
 /** A line's sub-line, artboards 1, 11: "מסלול {r} · {n} עמדות" — n counts every step of the route. */
 export function lineSubText(routeNumber: number, stations: number): string {
-  return "מסלול " + routeNumber + " · " + (stations === 1 ? COPY_PENDING.stationsOne : stations + " עמדות");
+  return "מסלול " + routeNumber + " · " + (stations === 1 ? UNDRAWN_TEXT.stationsOne : stations + " עמדות");
 }
 
 /** A line without its item route: the existing reason text of the package route rules
@@ -288,9 +291,9 @@ export function emptyCellLabel(station: string, row: string): string {
   return cellLabel(station, row) + " · " + MAP_TEXT.empty;
 }
 
-/** A cell's error line (artboard 1): "שגיאה אחת"; more than one is COPY-PENDING. */
+/** A cell's error line (artboard 1): "שגיאה אחת"; more than one is undrawn. */
 export function cellErrorsText(n: number): string {
-  return n === 1 ? MAP_TEXT.oneError : n + COPY_PENDING.errorsSuffix;
+  return n === 1 ? MAP_TEXT.oneError : n + UNDRAWN_TEXT.errorsSuffix;
 }
 
 /** A cell linked to a field set (artboard 1 `setTag`): "ערכה: {name}" — the full name, ellipsed by
@@ -318,9 +321,9 @@ export function sharedCellTooltip(routeNumber: number, item: string, kits: reado
 }
 
 /** Artboard 11's info bar: "{n} תאים כבר מלאים: {item} משתמש במסלול {r} שלו, שמוגדר גם ב{kit}." and
- *  its link "פתח את {kit}". The artboard draws n = 3; a single cell is COPY-PENDING. */
+ *  its link "פתח את {kit}". The artboard draws n = 3; a single cell is undrawn. */
 export function sharedFilledText(cells: number, item: string, routeNumber: number, kits: readonly string[]): string {
-  const head = cells === 1 ? COPY_PENDING.sharedFilledOne : cells + " תאים כבר מלאים";
+  const head = cells === 1 ? UNDRAWN_TEXT.sharedFilledOne : cells + " תאים כבר מלאים";
   return head + ": " + item + " משתמש במסלול " + routeNumber + " שלו, שמוגדר גם ב" + kits.join(", ") + ".";
 }
 export function openKitText(kit: string): string {
@@ -333,10 +336,10 @@ export function openKitText(kit: string): string {
 export function mapFooterText(t: { fields: number; emptyCells: number; errors: number; sharedOnly: boolean }): string {
   const parts: string[] = [];
   if (t.fields > 0) {
-    if (t.sharedOnly) parts.push(t.fields === 1 ? COPY_PENDING.sharedFieldsOne : t.fields + " שדות משותפים");
+    if (t.sharedOnly) parts.push(t.fields === 1 ? UNDRAWN_TEXT.sharedFieldsOne : t.fields + " שדות משותפים");
     else parts.push(fieldsText(t.fields));
   }
-  if (t.emptyCells > 0) parts.push(t.emptyCells === 1 ? COPY_PENDING.emptyCellsOne : t.emptyCells + " תאים ללא שדות");
+  if (t.emptyCells > 0) parts.push(t.emptyCells === 1 ? UNDRAWN_TEXT.emptyCellsOne : t.emptyCells + " תאים ללא שדות");
   if (t.errors > 0) parts.push(cellErrorsText(t.errors));
   return parts.join(" · ");
 }
@@ -518,9 +521,9 @@ export function localOptionsTitle(station: string, item: string): string {
 }
 
 /** Local mode's note (artboard 4 `localNote`): 'הועתקו מהרשימה "{list}". שינוי כאן חל רק על {field} ולא
- *  ישפיע על שדות אחרים.' Without the list's name, the first sentence is COPY-PENDING. */
+ *  ישפיע על שדות אחרים.' Without the list's name, the first sentence is undrawn. */
 export function localOptionsNote(field: string, listName: string | null): string {
-  const copied = listName != null ? "הועתקו מהרשימה \"" + listName + "\"." : COPY_PENDING.optionsCopiedFromSharedList;
+  const copied = listName != null ? "הועתקו מהרשימה \"" + listName + "\"." : UNDRAWN_TEXT.optionsCopiedFromSharedList;
   return copied + " שינוי כאן חל רק על " + field + " ולא ישפיע על שדות אחרים.";
 }
 
@@ -563,31 +566,30 @@ export function optionRemoveLabel(label: string): string {
 }
 
 // ---- the station field editor (artboard 2, spec §5.5) -----------------------------------------------
-/** Text of the editor no artboard draws (spec §5.5, §10.3, §10.4). Listed in the PR under "טקסט
- *  לאישור"; do not treat as approved copy. */
-export const EDITOR_COPY_PENDING = {
-  // COPY-PENDING: the row ⋯ menu (spec §5.5.2: "התפריט לא מצויר"; the proposal is two words artboard 8
+/** Text of the editor no artboard draws (spec §5.5, §10.3, §10.4), approved on 2026-10-14. */
+export const EDITOR_UNDRAWN_TEXT = {
+  // the row ⋯ menu (spec §5.5.2: "התפריט לא מצויר"; the proposal is two words artboard 8
   // already has).
   rowDuplicate: "שכפל",
   rowDelete: "מחק",
-  // COPY-PENDING: the confirm of the card's ⋯ "נקה את התא" (spec §10.4 "אישורים: … 'נקה'"). The cancel
+  // the confirm of the card's ⋯ "נקה את התא" (spec §10.4 "אישורים: … 'נקה'"). The cancel
   // button reuses the discard confirm's "המשך לערוך".
   clearTitle: "לנקות את התא?",
   clearMessage: "כל השדות של התא יוסרו מהטיוטה. ביטול הטיוטה מחזיר אותם.",
-  clearCancel: COPY_PENDING.discardCancel,
-  // COPY-PENDING: the shared notice when the route runs in more than one other kit — artboard 2's
+  clearCancel: UNDRAWN_TEXT.discardCancel,
+  // the shared notice when the route runs in more than one other kit — artboard 2's
   // "בשניהם" is right for two kits only (spec §5.5.2 ⚠, §10.4).
   sharedAll: "שינוי כאן יחול בכולם.",
-  // COPY-PENDING: a field linked to a shared option list whose name this screen does not hold yet
+  // a field linked to a shared option list whose name this screen does not hold yet
   // (the option-lists API arrives in session 2d): "רשימה: רשימה משותפת" — artboard 4's own word for a
   // shared list.
   listUnnamed: "רשימה משותפת",
-  // COPY-PENDING: the locked rows of a station that opens PopUpTestDialog (spec §10.3: artboard 2 draws
+  // the locked rows of a station that opens PopUpTestDialog (spec §10.3: artboard 2 draws
   // the VerdictStation / PhotoStation wording; the dialog has no "בדיקה תקינה?"). The words are the
   // dialog's own labels ("תוצאת בדיקה", "עובד מבצע", "הערות נוספות", "שמור וסיים").
   lockedTopDialog: "תוצאת בדיקה · עובד מבצע",
   lockedBottomDialog: "הערות נוספות · 'שמור וסיים' · תמיד אחרון",
-  // COPY-PENDING: the locked rows of a package-level step (spec §5.5.2 ב/ה "לא אומת לעורך"), in the
+  // the locked rows of a package-level step (spec §5.5.2 ב/ה "לא אומת לעורך"), in the
   // package wizards' own step names and questions. Opening wizard: the box fields sit in "צילום הקופסה"
   // before "האריזה תקינה?"; an item's in its photo phase before "הפריט תקין?".
   lockedTopOpenBox: "סריקת מק״ט המארז · צילום הקופסה · חלק קבוע",
@@ -734,30 +736,29 @@ export function targetChipText(lead: string, named: number): string {
 }
 
 /** The shared notice (artboard 2): "השדות נשמרים במסלול {r} של {item} ומשמשים גם ב: {kits}. שינוי כאן
- *  יחול בשניהם." — more than one other kit ends COPY-PENDING. */
+ *  יחול בשניהם." — more than one other kit ends undrawn. */
 export function sharedNoticeText(routeNumber: number, item: string, kits: readonly string[]): string {
-  const tail = kits.length > 1 ? EDITOR_COPY_PENDING.sharedAll : "שינוי כאן יחול בשניהם.";
+  const tail = kits.length > 1 ? EDITOR_UNDRAWN_TEXT.sharedAll : "שינוי כאן יחול בשניהם.";
   return "השדות נשמרים במסלול " + routeNumber + " של " + item + " ומשמשים גם ב: " + kits.join(", ") + ". " + tail;
 }
 
 /** The settings of a checklist row and of a photo row. No artboard draws them (spec §5.5.2: "photo:
- *  photo_type … ו-min. checklist: items[]" — "לא אומת"), so every word here is pending approval. Each
- *  is patterned on the drawn wording of the option chips (artboard 2), the option list's add input
- *  (artboard 4) and the type picker's descriptions (artboard 3). Listed in the PR under "טקסט
- *  לאישור"; do not treat as approved copy. */
-export const FIELD_SETTINGS_COPY_PENDING = {
-  // COPY-PENDING: the checklist row's add input — artboard 4's "הוסף אפשרות (Enter)" / "אפשרות חדשה"
+ *  photo_type … ו-min. checklist: items[]" — "לא אומת"), so every word here is our own (approved on
+ *  2026-10-14). Each is patterned on the drawn wording of the option chips (artboard 2), the option list's add input
+ *  (artboard 4) and the type picker's descriptions (artboard 3). */
+export const FIELD_SETTINGS_UNDRAWN_TEXT = {
+  // the checklist row's add input — artboard 4's "הוסף אפשרות (Enter)" / "אפשרות חדשה"
   // with the checklist's own word ("תיבת סימון", the lint messages').
   checklistAddPlaceholder: "הוסף תיבת סימון (Enter)",
   checklistAddLabel: "תיבת סימון חדשה",
-  // COPY-PENDING: a checklist box's rename input — artboard 2's "שם האפשרות".
+  // a checklist box's rename input — artboard 2's "שם האפשרות".
   checklistItemName: "שם תיבת הסימון",
-  // COPY-PENDING: the accessible names of the boxes' group, a box chip and its × — artboard 2's
+  // the accessible names of the boxes' group, a box chip and its × — artboard 2's
   // "אפשרויות לשדה {name}", "עריכת האפשרות {label}", "הסרת האפשרות {label}".
   checklistGroupPrefix: "תיבות סימון לשדה ",
   checklistItemEditPrefix: "עריכת תיבת הסימון ",
   checklistItemRemovePrefix: "הסרת תיבת הסימון ",
-  // COPY-PENDING: the photo row — artboard 3's description of the type, "סוג צילום ומינימום תמונות":
+  // the photo row — artboard 3's description of the type, "סוג צילום ומינימום תמונות":
   // the photo type combobox (its name and placeholder, worded like the packages screen's "בחר סוג
   // פריט…") and the minimum ("מינ׳", the short form artboard 3 uses for a minimum; the input's title
   // spells it out).
@@ -767,19 +768,19 @@ export const FIELD_SETTINGS_COPY_PENDING = {
   photoMinTitle: "מינימום תמונות",
 } as const;
 
-/** The checklist row's boxes (COPY-PENDING): "תיבות סימון לשדה {name}". */
+/** The checklist row's boxes (undrawn): "תיבות סימון לשדה {name}". */
 export function checklistGroupLabel(fieldLabel: string): string {
-  return FIELD_SETTINGS_COPY_PENDING.checklistGroupPrefix + rowNameText(fieldLabel);
+  return FIELD_SETTINGS_UNDRAWN_TEXT.checklistGroupPrefix + rowNameText(fieldLabel);
 }
 
-/** A checklist box chip (COPY-PENDING): "עריכת תיבת הסימון {label}". */
+/** A checklist box chip (undrawn): "עריכת תיבת הסימון {label}". */
 export function checklistItemEditLabel(label: string): string {
-  return FIELD_SETTINGS_COPY_PENDING.checklistItemEditPrefix + label;
+  return FIELD_SETTINGS_UNDRAWN_TEXT.checklistItemEditPrefix + label;
 }
 
-/** A checklist box's × (COPY-PENDING): "הסרת תיבת הסימון {label}". */
+/** A checklist box's × (undrawn): "הסרת תיבת הסימון {label}". */
 export function checklistItemRemoveLabel(label: string): string {
-  return FIELD_SETTINGS_COPY_PENDING.checklistItemRemovePrefix + label;
+  return FIELD_SETTINGS_UNDRAWN_TEXT.checklistItemRemovePrefix + label;
 }
 
 /** The drag handle (artboard 2 `gripLabel`): "גרירה לשינוי סדר: {name}". */
@@ -803,10 +804,10 @@ export function optionEditLabel(label: string, tone: Tone): string {
 }
 
 /** The list link under the chips (artboard 2 `listText`): "רשימה: {name}" / "רשימה: מותאמת לשדה". A
- *  linked list whose name is unknown is COPY-PENDING. */
+ *  linked list whose name is unknown is undrawn. */
 export function listLinkText(linked: boolean, listName: string | null): string {
   if (!linked) return EDITOR_TEXT.listCustom;
-  return "רשימה: " + (listName ?? EDITOR_COPY_PENDING.listUnnamed);
+  return "רשימה: " + (listName ?? EDITOR_UNDRAWN_TEXT.listUnnamed);
 }
 
 /** NotesModeSelect's button (artboard 2 `notesAria`): "הערות: {mode}". */
@@ -856,10 +857,9 @@ export const PREVIEW_SAMPLE = {
   sku: "PC-7040",
 } as const;
 
-/** Text of the preview no artboard draws. Listed in the PR under "טקסט לאישור"; do not treat as
- *  approved copy. */
-export const PREVIEW_COPY_PENDING = {
-  // COPY-PENDING: the mini footer's finish button at a package-level station. Artboard 2 draws the
+/** Text of the preview no artboard draws, approved on 2026-10-14. */
+export const PREVIEW_UNDRAWN_TEXT = {
+  // the mini footer's finish button at a package-level station. Artboard 2 draws the
   // VerdictStation's "סיום בדיקת {station}" only, and the two package wizards end in different
   // buttons; the word is the last step of both wizards' stepper ("סיום").
   finishPackage: "סיום",

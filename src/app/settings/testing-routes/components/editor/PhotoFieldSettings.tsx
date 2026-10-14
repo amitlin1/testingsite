@@ -3,15 +3,15 @@ import * as React from "react";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { apiFetch } from "@/lib/api/client";
 import type { PhotoField } from "@/app/lib/station-fields/schema";
-import { FIELD_SETTINGS_COPY_PENDING } from "../../lib/labels";
+import { FIELD_SETTINGS_UNDRAWN_TEXT } from "../../lib/labels";
 import { parsePhotoMin, withPhotoType } from "../../lib/editorModel";
 
 /**
  * The settings of a photo row (spec §5.5.2: "photo: photo_type מ-GET /api/settings/photo-types
  * (קיים) ו-min"; no artboard draws them), in the options column: the photo type — a dense 38px
  * SearchableCombobox over the active photo types, by `code` — and "מינ׳", a 38px whole number
- * 0..20 (how many shots the worker must take). Every word is COPY-PENDING (labels.ts
- * FIELD_SETTINGS_COPY_PENDING).
+ * 0..20 (how many shots the worker must take). Every word is undrawn (labels.ts
+ * FIELD_SETTINGS_UNDRAWN_TEXT).
  *
  * A code the list does not hold (a type deactivated after it was chosen) still shows, as its code —
  * the reference-items screen's rule for the same case. A row without a type is the lint's
@@ -109,20 +109,20 @@ export function PhotoFieldSettings({ field, minId, typeMissing, onChange }: Phot
           getOptionLabel={(t) => t.label}
           isOptionEqualToValue={(a, b) => a.code === b.code}
           disableClearable
-          placeholder={FIELD_SETTINGS_COPY_PENDING.photoTypePlaceholder}
-          ariaLabel={FIELD_SETTINGS_COPY_PENDING.photoTypeLabel}
+          placeholder={FIELD_SETTINGS_UNDRAWN_TEXT.photoTypePlaceholder}
+          ariaLabel={FIELD_SETTINGS_UNDRAWN_TEXT.photoTypeLabel}
           error={typeMissing}
           inputAttributes={{ "aria-invalid": typeMissing || undefined }}
         />
       </div>
-      <label htmlFor={minId}>{FIELD_SETTINGS_COPY_PENDING.photoMinLabel}</label>
+      <label htmlFor={minId}>{FIELD_SETTINGS_UNDRAWN_TEXT.photoMinLabel}</label>
       <input
         id={minId}
         dir="ltr"
         inputMode="numeric"
         autoComplete="off"
         className="stp-input stp-input--num sfe-photo__min"
-        title={FIELD_SETTINGS_COPY_PENDING.photoMinTitle}
+        title={FIELD_SETTINGS_UNDRAWN_TEXT.photoMinTitle}
         value={minText ?? String(field.min)}
         onChange={(e) => {
           const n = parsePhotoMin(e.target.value);

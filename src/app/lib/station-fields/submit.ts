@@ -2,7 +2,7 @@ import type { TransactionClient } from "@/app/lib/prisma";
 import { isPackageLevelStationType, loadPackageContext, type PackageContext } from "@/app/lib/packages/context";
 import { GATE_FINISH_ON_REQUIRED, evaluateFields, toResultBlock } from "./evaluate";
 import type { Drafts, FieldDraft } from "./evaluate";
-import { COPY_PENDING, fieldsGateText } from "./labels";
+import { UNDRAWN_TEXT, fieldsGateText } from "./labels";
 import { resolveStationFields } from "./resolve";
 import type { ResolveKitItem, ResolveRoute } from "./resolve";
 import type {
@@ -300,7 +300,7 @@ export class FieldsSubmissionError extends Error {
   }
 }
 
-const schemaMismatch = () => new FieldsSubmissionError(409, "FIELDS_SCHEMA_MISMATCH", COPY_PENDING.schemaMismatch);
+const schemaMismatch = () => new FieldsSubmissionError(409, "FIELDS_SCHEMA_MISMATCH", UNDRAWN_TEXT.schemaMismatch);
 // Technical detail in English, like the route's other client-bug errors: a popup built from the
 // config never triggers it.
 const invalid = (detail: string) => new FieldsSubmissionError(400, "FIELDS_INVALID", `Invalid station fields: ${detail}`);
@@ -496,7 +496,7 @@ export function checkFieldsSubmission(target: FieldsTarget | null, input: { deta
 
   const evaluated = answers.map((a) => ({ answer: a, ev: evaluateFields(a.defs, a.values) }));
   if (evaluated.some(({ ev }) => ev.noteTooLong.length > 0)) {
-    throw new FieldsSubmissionError(400, "NOTE_TOO_LONG", COPY_PENDING.noteTooLong);
+    throw new FieldsSubmissionError(400, "NOTE_TOO_LONG", UNDRAWN_TEXT.noteTooLong);
   }
   if (gate) {
     const missing: MissingField[] = [];

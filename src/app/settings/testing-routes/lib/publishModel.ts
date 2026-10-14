@@ -30,8 +30,8 @@ import {
  *   field_changed + option_added     "'{field}': נוספה אפשרות '{opt}'"          badge edit
  *   field_changed + required: true   "'{field}' סומן כחובה"                     badge edit
  *   field_removed                    "נמחק '{label}'" + "מולא ב-{n} בדיקות, …"  badge del
- *   anything else (COPY-PENDING)     "'{label}'" — once per field and cell      badge edit
- *   step_removed (COPY-PENDING)      "'{station}'"                              badge del
+ *   anything else (undrawn)     "'{label}'" — once per field and cell      badge edit
+ *   step_removed (undrawn)      "'{station}'"                              badge del
  * A group's count is its lines ("שינוי אחד" / "{n} שינויים", artboard 10 `count`).
  */
 
@@ -305,7 +305,7 @@ export type PublishGroupsInput = {
   context: FieldsContextJson;
   /** The fields map on screen (useFieldsMap): the stations' names and their order. */
   map: FieldsMapModel | null;
-  /** Field set names by id (GET /api/settings/field-sets); a missing one is COPY-PENDING. */
+  /** Field set names by id (GET /api/settings/field-sets); a missing one is undrawn. */
   setNames?: Readonly<Record<number, string>>;
 };
 

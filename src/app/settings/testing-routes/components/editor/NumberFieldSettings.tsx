@@ -2,10 +2,10 @@
 import * as React from "react";
 import { ChevronUp } from "lucide-react";
 import { Button, MenuItem, Select, Switch, cn } from "@/components/ui";
-import { COPY_PENDING as FIELDS_COPY_PENDING } from "@/app/lib/station-fields/labels";
+import { UNDRAWN_TEXT as FIELDS_UNDRAWN_TEXT } from "@/app/lib/station-fields/labels";
 import type { NumberField } from "@/app/lib/station-fields/schema";
 import { LIMITS } from "@/app/lib/station-fields/validate";
-import { COPY_PENDING, NUMBER_SETTINGS_TEXT, NUMBER_UNITS } from "../../lib/labels";
+import { UNDRAWN_TEXT, NUMBER_SETTINGS_TEXT, NUMBER_UNITS } from "../../lib/labels";
 import {
   formatDecimal, numberPreviewMessage, numberRangeInverted, parseDecimalText, toleranceNegative, withHelp,
   withNumberSetting, withUnit, type NumberSettingKey,
@@ -23,7 +23,7 @@ export type { NumberPreviewMessage } from "../../lib/numberText";
  *
  * Every edit is reported at once (onChange with the whole field). Numbers are typed as text: a ","
  * reads as "."; an emptied input removes the setting (undefined); text that is not a number removes
- * it too and says so under the input once focus leaves it (COPY-PENDING). Clearing the reference
+ * it too and says so under the input once focus leaves it (undrawn). Clearing the reference
  * value removes the tolerance with it (tol_pct only exists next to ref).
  *
  * `id` is the panel's id — the row's summary button points at it (aria-controls) — and the prefix
@@ -137,7 +137,7 @@ export function NumberFieldSettings({ id, field, onChange, onClose }: NumberFiel
       <div className="rf-nfs__cell">
         <label htmlFor={ids.min} className="rf-nfs__label">{NUMBER_SETTINGS_TEXT.min}</label>
         {rangeInput("min", min, min.notNumeric, min.notNumeric && err("min"))}
-        {min.notNumeric && <span id={err("min")} className="rf-nfs__help rf-nfs__help--error">{COPY_PENDING.numberNotNumeric}</span>}
+        {min.notNumeric && <span id={err("min")} className="rf-nfs__help rf-nfs__help--error">{UNDRAWN_TEXT.numberNotNumeric}</span>}
       </div>
 
       {/* מקסימום */}
@@ -145,9 +145,9 @@ export function NumberFieldSettings({ id, field, onChange, onClose }: NumberFiel
         <label htmlFor={ids.max} className="rf-nfs__label">{NUMBER_SETTINGS_TEXT.max}</label>
         {rangeInput("max", max, max.notNumeric || inverted, (max.notNumeric || inverted) && err("max"))}
         {max.notNumeric ? (
-          <span id={err("max")} className="rf-nfs__help rf-nfs__help--error">{COPY_PENDING.numberNotNumeric}</span>
+          <span id={err("max")} className="rf-nfs__help rf-nfs__help--error">{UNDRAWN_TEXT.numberNotNumeric}</span>
         ) : inverted ? (
-          <span id={err("max")} className="rf-nfs__help rf-nfs__help--error">{FIELDS_COPY_PENDING.numberRange}</span>
+          <span id={err("max")} className="rf-nfs__help rf-nfs__help--error">{FIELDS_UNDRAWN_TEXT.numberRange}</span>
         ) : null}
       </div>
 
@@ -168,7 +168,7 @@ export function NumberFieldSettings({ id, field, onChange, onClose }: NumberFiel
           aria-invalid={ref.notNumeric || undefined}
           aria-describedby={describedBy(ref.notNumeric && err("ref"))}
         />
-        {ref.notNumeric && <span id={err("ref")} className="rf-nfs__help rf-nfs__help--error">{COPY_PENDING.numberNotNumeric}</span>}
+        {ref.notNumeric && <span id={err("ref")} className="rf-nfs__help rf-nfs__help--error">{UNDRAWN_TEXT.numberNotNumeric}</span>}
       </div>
 
       {/* סטייה מותרת ±% — only next to a reference value */}
@@ -205,7 +205,7 @@ export function NumberFieldSettings({ id, field, onChange, onClose }: NumberFiel
         </span>
         {hasRef && (tol.notNumeric || tolNegative) && (
           <span id={err("tol")} className="rf-nfs__help rf-nfs__help--error">
-            {tol.notNumeric ? COPY_PENDING.numberNotNumeric : FIELDS_COPY_PENDING.numberRange}
+            {tol.notNumeric ? UNDRAWN_TEXT.numberNotNumeric : FIELDS_UNDRAWN_TEXT.numberRange}
           </span>
         )}
       </div>

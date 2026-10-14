@@ -8,7 +8,7 @@ import { LIMITS } from "@/app/lib/station-fields/validate";
 import type { Issue } from "@/app/lib/station-fields/validate";
 import { bindingKey, columnCells } from "./mapModel";
 import type { FieldsMapModel, MapCell, MapRow } from "./mapModel";
-import { DEFAULT_CHOICE_OPTIONS, EDITOR_COPY_PENDING, EDITOR_TEXT, stopSubText } from "./labels";
+import { DEFAULT_CHOICE_OPTIONS, EDITOR_UNDRAWN_TEXT, EDITOR_TEXT, stopSubText } from "./labels";
 import { findDefaultCheckList } from "./libraryModel";
 
 /**
@@ -281,9 +281,9 @@ export function packageWizardAt(index: number, steps: number): PackageWizard {
 }
 
 /** The locked rows above and below the fields table (artboard 2 ב/ה). Artboard 2's wording is
- *  VerdictStation's and PhotoStation's; the others are COPY-PENDING (spec §10.3). */
+ *  VerdictStation's and PhotoStation's; the others are undrawn (spec §10.3). */
 export function lockedRowTexts(kind: PopupKind, wizard: PackageWizard | null, target: GroupTarget): { top: string; bottom: string } {
-  const c = EDITOR_COPY_PENDING;
+  const c = EDITOR_UNDRAWN_TEXT;
   switch (kind) {
     case "verdict":
     case "photo":

@@ -13,7 +13,7 @@ import {
 } from "@/app/testing/fields/fieldsBlockModel";
 import { inputFieldCount, type Drafts, type FieldDraft } from "@/app/testing/fields/useFieldsState";
 import {
-  PREVIEW_COPY_PENDING, PREVIEW_SAMPLE, PREVIEW_TEXT, previewStepText, previewSubText, stationFinishText,
+  PREVIEW_UNDRAWN_TEXT, PREVIEW_SAMPLE, PREVIEW_TEXT, previewStepText, previewSubText, stationFinishText,
 } from "../../lib/labels";
 import type { PackageWizard } from "../../lib/editorModel";
 // PassFail's looks live in the testing page's stylesheet (stationKit: "Stateful styling … lives in
@@ -34,7 +34,7 @@ import "./preview.css";
  *   status ג), the rows, and its suggestion line closing them; the finish is "שמור וסיים". No step,
  *   no system note, no "בדיקה תקינה?".
  * - "package" (the package wizards): artboard 2's frame without the scan step's parts (the step and
- *   the system note); the finish is COPY-PENDING. The rows take the opening wizard's variant, or —
+ *   the system note); the finish is undrawn. The rows take the opening wizard's variant, or —
  *   `packageWizard` "close", the kit's closing step — the closing wizard's compact pick-only one
  *   (artboards 17/18).
  *
@@ -171,7 +171,7 @@ export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
   const blocked = missing > 0 || fx.blocking(GATE_FINISH_ON_REQUIRED);
   const finishLabel = popupKind === "dialog"
     ? PREVIEW_TEXT.finishDialog
-    : popupKind === "package" ? PREVIEW_COPY_PENDING.finishPackage : stationFinishText(stationTypeName);
+    : popupKind === "package" ? PREVIEW_UNDRAWN_TEXT.finishPackage : stationFinishText(stationTypeName);
   const named = inputFieldCount(fields) - unnamed.size;
   const scanStep = popupKind === "verdict" || popupKind === "photo";
 

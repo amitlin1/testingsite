@@ -5,12 +5,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { SharedRouteNotice } from "../../components/editor/SharedRouteNotice";
 import { DraftStoreProvider } from "../draftStore";
 import type { FlushResult } from "../draftStore";
-import { FORK_COPY_PENDING, FORK_TEXT, forkConfirmMessage, forkErrorText } from "../forkLabels";
+import { FORK_UNDRAWN_TEXT, FORK_TEXT, forkConfirmMessage, forkErrorText } from "../forkLabels";
 import { sharedNoticeText } from "../labels";
 import { forkOutcome, forkRoute, forkUrl, parseForkResult } from "../useFork";
 
 // "צור מסלול נפרד למארז הזה" (artboard 2, spec §3.2.1) on the client: the answer's meaning, the
-// flush before the request, the dialog's (COPY-PENDING) words, and the link in the notice.
+// flush before the request, the dialog's (undrawn) words, and the link in the notice.
 
 const OK: FlushResult = { ok: true };
 
@@ -89,25 +89,25 @@ test("forkRoute asks nothing of the server when the source route's edits could n
   assert.deepEqual(await forkRoute({ flushAll: async () => OK, fetch: fakeFetch(500, undefined).fetch }, 17, 5), { ok: false, error: { kind: "failed" } });
 });
 
-test("the dialog's words (COPY-PENDING): the message names the item, the kit and the kits that stay — one kit 'ימשיך', more 'ימשיכו'; each error has its line", () => {
+test("the dialog's words (undrawn): the message names the item, the kit and the kits that stay — one kit 'ימשיך', more 'ימשיכו'; each error has its line", () => {
   assert.equal(
     forkConfirmMessage({ item: "מסך", kit: "מארז עמדת עבודה", otherKits: ["מארז ציוד היקפי"], routeNumber: 1 }),
-    "ייווצר מסלול חדש של מסך עם אותן עמדות ואותם שדות, ומארז עמדת עבודה יעבור אליו. מארז ציוד היקפי ימשיך במסלול 1. " + FORK_COPY_PENDING.tail,
+    "ייווצר מסלול חדש של מסך עם אותן עמדות ואותם שדות, ומארז עמדת עבודה יעבור אליו. מארז ציוד היקפי ימשיך במסלול 1. " + FORK_UNDRAWN_TEXT.tail,
   );
   assert.equal(
     forkConfirmMessage({ item: "מסך", kit: "מארז עמדת עבודה", otherKits: ["מארז מחשב", "מארז ציוד היקפי"], routeNumber: 2 }),
-    "ייווצר מסלול חדש של מסך עם אותן עמדות ואותם שדות, ומארז עמדת עבודה יעבור אליו. מארז מחשב, מארז ציוד היקפי ימשיכו במסלול 2. " + FORK_COPY_PENDING.tail,
+    "ייווצר מסלול חדש של מסך עם אותן עמדות ואותם שדות, ומארז עמדת עבודה יעבור אליו. מארז מחשב, מארז ציוד היקפי ימשיכו במסלול 2. " + FORK_UNDRAWN_TEXT.tail,
   );
   assert.equal(
     forkConfirmMessage({ item: "מסך", kit: "מארז עמדת עבודה", otherKits: [], routeNumber: 1 }),
-    "ייווצר מסלול חדש של מסך עם אותן עמדות ואותם שדות, ומארז עמדת עבודה יעבור אליו. " + FORK_COPY_PENDING.tail,
+    "ייווצר מסלול חדש של מסך עם אותן עמדות ואותם שדות, ומארז עמדת עבודה יעבור אליו. " + FORK_UNDRAWN_TEXT.tail,
   );
 
-  assert.equal(forkErrorText({ kind: "unsaved" }), FORK_COPY_PENDING.unsaved);
-  assert.equal(forkErrorText({ kind: "shape", reason: "מסך: מסלול הפריט ריק" }), FORK_COPY_PENDING.shapePrefix + "מסך: מסלול הפריט ריק");
-  assert.equal(forkErrorText({ kind: "shape", reason: null }), FORK_COPY_PENDING.failed);
-  assert.equal(forkErrorText({ kind: "stale" }), FORK_COPY_PENDING.stale);
-  assert.equal(forkErrorText({ kind: "failed" }), FORK_COPY_PENDING.failed);
+  assert.equal(forkErrorText({ kind: "unsaved" }), FORK_UNDRAWN_TEXT.unsaved);
+  assert.equal(forkErrorText({ kind: "shape", reason: "מסך: מסלול הפריט ריק" }), FORK_UNDRAWN_TEXT.shapePrefix + "מסך: מסלול הפריט ריק");
+  assert.equal(forkErrorText({ kind: "shape", reason: null }), FORK_UNDRAWN_TEXT.failed);
+  assert.equal(forkErrorText({ kind: "stale" }), FORK_UNDRAWN_TEXT.stale);
+  assert.equal(forkErrorText({ kind: "failed" }), FORK_UNDRAWN_TEXT.failed);
   assert.equal(FORK_TEXT.link, "צור מסלול נפרד למארז הזה", "artboard 2");
 });
 
@@ -127,5 +127,5 @@ test("the notice ends with the link only when the host passes `fork` (a kit cont
   const withFork = render({ routeId: 17, packageTypeId: 5, kitName: "מארז עמדת עבודה", onForked: () => {} });
   assert.ok(withFork.includes(text + " <button"), "the link follows the text, after a space");
   assert.match(withFork, /<button type="button" class="sfe-notice__link" aria-haspopup="dialog">צור מסלול נפרד למארז הזה<\/button>/);
-  assert.ok(!withFork.includes(FORK_COPY_PENDING.title), "the dialog is closed until the link is pressed");
+  assert.ok(!withFork.includes(FORK_UNDRAWN_TEXT.title), "the dialog is closed until the link is pressed");
 });

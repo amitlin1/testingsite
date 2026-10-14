@@ -8,7 +8,7 @@ import { columnNavKey, filterCounts, findCell, mapErrorBar, mapNavGrid, visibleR
 import type { CellBinding, FieldsMapModel, MapCell, MapColumn, MapFilter, MapRow } from "../../lib/mapModel";
 import type { RouteQuery } from "../../lib/routeQuery";
 import { BULK_TEXT, MAP_TEXT, columnCoverageText, columnPickLabel, sharedRowTitle } from "../../lib/labels";
-import { BULK_COPY_PENDING, clearCellsMessage, clearCellsTitle, copiedText, pastedText } from "../../lib/bulkLabels";
+import { BULK_UNDRAWN_TEXT, clearCellsMessage, clearCellsTitle, copiedText, pastedText } from "../../lib/bulkLabels";
 import FieldsMapBulkBar, { PasteTextDialog, readClipboardText, useBulkActions, writeClipboardText } from "./FieldsMapBulkBar";
 import FieldsMapCell from "./FieldsMapCell";
 import FieldsMapErrorBar from "./FieldsMapErrorBar";
@@ -44,12 +44,12 @@ import "./map.css";
  * selection.
  *
  * Actions (FieldsMapBulkBar, bulkModel): "העתק" / Ctrl C, "הדבק" / Ctrl V, "נקה" (after a confirm —
- * COPY-PENDING) and "החל ערכת שדות…" (`onApplySet`, artboard 9). They act on the selected cells; with
+ * undrawn) and "החל ערכת שדות…" (`onApplySet`, artboard 9). They act on the selected cells; with
  * none selected, Ctrl C / Ctrl V act on the focused cell, like a spreadsheet. Ctrl C writes the TSV
  * through the copy event and Ctrl V reads the paste event (both work on plain http); when a browser
  * sends no such event for a focused button, the clipboard API is the fallback. Every change is a
  * draft edit, one per route touched (autosave per route). A message after a copy or a paste is
- * COPY-PENDING (spec §10.4).
+ * undrawn (spec §10.4).
  */
 
 export type FieldsMapProps = {
@@ -199,7 +199,7 @@ export default function FieldsMap({ context, model, query, onOpenCell, onSelectC
     const counts = bulk.paste(cells, text);
     if (counts) setNotice(pastedText(counts));
     else if (text == null) setPasteBox({ open: true, cells });   // nothing of ours, and the clipboard unread
-    else setNotice(BULK_COPY_PENDING.nothingToPaste);
+    else setNotice(BULK_UNDRAWN_TEXT.nothingToPaste);
   }, [bulk, setNotice]);
 
   const pasteFromClipboard = React.useCallback((cells: MapCell[]) => {
@@ -356,7 +356,7 @@ export default function FieldsMap({ context, model, query, onOpenCell, onSelectC
         title={clearCellsTitle(clearCount)}
         message={clearCellsMessage(clearCount)}
         confirmText={BULK_TEXT.clear}
-        cancelText={BULK_COPY_PENDING.clearCancel}
+        cancelText={BULK_UNDRAWN_TEXT.clearCancel}
         destructive
         draggable={false}
         onCancel={() => {

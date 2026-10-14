@@ -8,7 +8,7 @@ import { LIMITS } from "@/app/lib/station-fields/validate";
 import type { Issue } from "@/app/lib/station-fields/validate";
 import { LINT_TEXT, PASS_FAIL_WORD } from "@/app/lib/station-fields/labels";
 import {
-  EDITOR_COPY_PENDING, EDITOR_TEXT, FIELD_TYPE_TEXT, NUMBER_SETTINGS_TEXT, listLinkText, optionsGroupLabel, requiredAria,
+  EDITOR_UNDRAWN_TEXT, EDITOR_TEXT, FIELD_TYPE_TEXT, NUMBER_SETTINGS_TEXT, listLinkText, optionsGroupLabel, requiredAria,
   rowGripLabel, rowMoreLabel,
 } from "../../lib/labels";
 import { LIBRARY_TEXT } from "../../lib/libraryLabels";
@@ -35,7 +35,7 @@ import { PhotoFieldSettings } from "./PhotoFieldSettings";
  *   and every other type — the help text and the type's name in the picker. No artboard draws the
  *   settings of the other types (spec §5.5.2 "לא אומת"): the checklist's and the photo's are the
  *   minimum a publish needs (the lint blocks an empty checklist, an unnamed box, a photo without a
- *   type), worded COPY-PENDING. A field new in the draft carries "חדש בטיוטה".
+ *   type). A field new in the draft carries "חדש בטיוטה".
  * The popovers of the row share the editor's one-at-a-time state (EditorPopover).
  */
 
@@ -149,7 +149,7 @@ export function FieldRowEditor(props: FieldRowEditorProps) {
             props.onDuplicate();
           }}
         >
-          {EDITOR_COPY_PENDING.rowDuplicate}
+          {EDITOR_UNDRAWN_TEXT.rowDuplicate}
         </MenuItem>
         <MenuItem
           danger
@@ -158,7 +158,7 @@ export function FieldRowEditor(props: FieldRowEditorProps) {
             props.onRemove();
           }}
         >
-          {EDITOR_COPY_PENDING.rowDelete}
+          {EDITOR_UNDRAWN_TEXT.rowDelete}
         </MenuItem>
       </Menu>
     </>

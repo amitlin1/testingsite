@@ -7,8 +7,8 @@
  * each popup keeps its own artboard's wording (spec §4.4) — hence statusA / statusB /
  * statusC / missLabel side by side.
  *
- * Text no artboard draws lives in COPY_PENDING until it is approved (spec "העיצוב סגור"
- * rule 2). The admin screen keeps its own labels file.
+ * Text no artboard draws lives in UNDRAWN_TEXT (spec "העיצוב סגור" rule 2; its wording was
+ * approved on 2026-10-14). The admin screen keeps its own labels file.
  */
 
 // ---- lint (spec §2.3) ---------------------------------------------------------
@@ -107,28 +107,27 @@ export function routeOfTypeLabel(routeNumber: number, itemTypeDesc: string): str
 export const KIT_ROUTE_LABEL = "מסלול המארז";
 
 // ---- not drawn in any artboard ----------------------------------------------------
-/** Drafts for text the artboards never draw. Listed in the PR under "טקסט לאישור"; do not
- *  treat as approved copy. */
-export const COPY_PENDING = {
-  // COPY-PENDING: OPTIONS_EMPTY — a choice field with 0 options (spec §2.3, §5.15).
+/** Text the artboards never draw, worded here and approved on 2026-10-14. */
+export const UNDRAWN_TEXT = {
+  // OPTIONS_EMPTY — a choice field with 0 options (spec §2.3, §5.15).
   optionsEmpty: "אין אפשרויות — הוסיפו אפשרות",
-  // COPY-PENDING: NUMBER_RANGE — minimum above maximum / negative tolerance (spec §2.3, §5.15).
+  // NUMBER_RANGE — minimum above maximum / negative tolerance (spec §2.3, §5.15).
   numberRange: "טווח לא תקין",
-  // COPY-PENDING: DUPLICATE_LABEL_IN_CELL lint warning — same field name twice in one cell (spec §5.15).
+  // DUPLICATE_LABEL_IN_CELL lint warning — same field name twice in one cell (spec §5.15).
   duplicateLabel: "שם השדה כבר קיים בתא",
-  // COPY-PENDING: CHECKLIST_EMPTY — a checklist field with 0 items (the item editor is not drawn, spec §5.5.2).
+  // CHECKLIST_EMPTY — a checklist field with 0 items (the item editor is not drawn, spec §5.5.2).
   checklistEmpty: "אין תיבות סימון — הוסיפו תיבת סימון",
-  // COPY-PENDING: CHECKLIST_ITEM_LABEL_EMPTY — a checklist item without a name (worded like LINT_TEXT.optionLabelEmpty).
+  // CHECKLIST_ITEM_LABEL_EMPTY — a checklist item without a name (worded like LINT_TEXT.optionLabelEmpty).
   checklistItemLabelEmpty: "תיבת סימון ריקה — מלאו או הסירו",
-  // COPY-PENDING: PHOTO_TYPE_EMPTY — a photo field without a photo type (the photo settings are not drawn, spec §5.5.2).
+  // PHOTO_TYPE_EMPTY — a photo field without a photo type (the photo settings are not drawn, spec §5.5.2).
   photoTypeEmpty: "יש לבחור סוג צילום",
-  // COPY-PENDING: STEP_SCOPE_MISMATCH — the step's station type changed level (package / item) under its fields (spec §3.5).
+  // STEP_SCOPE_MISMATCH — the step's station type changed level (package / item) under its fields (spec §3.5).
   stepScopeMismatch: "השדות לא תואמים לרמת העמדה",
-  // COPY-PENDING: STEP_UNKNOWN — the config names a step the route does not have (or the route's
+  // STEP_UNKNOWN — the config names a step the route does not have (or the route's
   // step uids no longer line up with its steps); publish refuses it with the other errors (spec §3.4.3).
   stepUnknown: "השלב לא נמצא במסלול",
-  // COPY-PENDING: server 400 NOTE_TOO_LONG (spec §3.4 step 4, §10.4).
+  // server 400 NOTE_TOO_LONG (spec §3.4 step 4, §10.4).
   noteTooLong: "ההערה ארוכה מהאורך המרבי",
-  // COPY-PENDING: server 409 FIELDS_SCHEMA_MISMATCH — the config changed while the popup was open (spec §3.4 step 2, §10.4).
+  // server 409 FIELDS_SCHEMA_MISMATCH — the config changed while the popup was open (spec §3.4 step 2, §10.4).
   schemaMismatch: "הגדרות השדות עודכנו — יש לבדוק ולשמור שוב",
 } as const;

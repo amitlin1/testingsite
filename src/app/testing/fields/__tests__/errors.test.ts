@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { COPY_PENDING, fieldsGateText } from "@/app/lib/station-fields/labels";
+import { UNDRAWN_TEXT, fieldsGateText } from "@/app/lib/station-fields/labels";
 import { FIELDS_ERROR_CODES, fieldsErrorText, isFieldsError, isFieldsErrorCode, shouldReloadFields } from "../errors";
 
 /** What page.tsx's handleSubmitTestResult throws for an error answer: its message, and its code. */
@@ -9,8 +9,8 @@ const thrown = (message: string, code?: string) => Object.assign(new Error(messa
 const FALLBACK = "שגיאה בשמירת הבדיקה";
 /** The server's messages (submit.ts). */
 const GATE = fieldsGateText(1, 0) ?? "";
-const MISMATCH = COPY_PENDING.schemaMismatch;
-const TOO_LONG = COPY_PENDING.noteTooLong;
+const MISMATCH = UNDRAWN_TEXT.schemaMismatch;
+const TOO_LONG = UNDRAWN_TEXT.noteTooLong;
 
 test("the codes are D5's, all five", () => {
   assert.deepEqual(FIELDS_ERROR_CODES, [

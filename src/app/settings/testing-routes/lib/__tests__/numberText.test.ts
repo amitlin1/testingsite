@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { NumberField } from "@/app/lib/station-fields/schema";
 import { parseRouteFieldsConfig } from "@/app/lib/station-fields/validate";
-import { COPY_PENDING } from "../labels";
+import { UNDRAWN_TEXT } from "../labels";
 import {
   formatDecimal, numberPreviewMessage, numberRangeInverted, numberRangeShort, numberSummaryParts, numberSummaryText,
   parseDecimalText, toleranceNegative, withHelp, withNumberSetting, withUnit,
@@ -72,7 +72,7 @@ test("the summary button (artboard 3 rangeShort)", () => {
   assert.equal(numberRangeShort(num({ max: 0.1 })), "מקס׳ 0.1");
   assert.equal(numberRangeShort(num({ min: 3 })), "מינ׳ 3");
   assert.equal(numberRangeShort(num({ min: 1, max: 2 })), "1–2");
-  assert.equal(numberRangeShort(num({ ref: 0.05, tol_pct: 10 })), COPY_PENDING.numberRefShort + " 0.05 ±10%");
+  assert.equal(numberRangeShort(num({ ref: 0.05, tol_pct: 10 })), UNDRAWN_TEXT.numberRefShort + " 0.05 ±10%");
   assert.equal(numberRangeShort(num({ ref: 0.05 })), "ללא טווח", "a reference without a tolerance is no range");
   assert.equal(numberSummaryText(num({ unit: "Ω", max: 0.1 })), "יחידה Ω · מקס׳ 0.1 · מספר");
   assert.equal(numberSummaryText(num({ unit: "Ω" })), "יחידה Ω · ללא טווח · מספר");

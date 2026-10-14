@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import type { ChecklistField, ChecklistItem, ChecklistItemId } from "@/app/lib/station-fields/schema";
 import { LIMITS } from "@/app/lib/station-fields/validate";
 import {
-  FIELD_SETTINGS_COPY_PENDING, checklistGroupLabel, checklistItemEditLabel, checklistItemRemoveLabel,
+  FIELD_SETTINGS_UNDRAWN_TEXT, checklistGroupLabel, checklistItemEditLabel, checklistItemRemoveLabel,
 } from "../../lib/labels";
 import { addChecklistItem, canAddChecklistItem, removeChecklistItem, renameChecklistItem } from "../../lib/editorModel";
 import type { EditorPopover } from "../../lib/editorModel";
@@ -14,7 +14,7 @@ import type { EditorPopover } from "../../lib/editorModel";
  * per box in the options column, drawn like the option chips of artboard 2 without a tone. A press
  * renames the box in place — Enter or Escape end it and give the chip its focus back, leaving the
  * input ends it too; × removes the box; the dashed input after the chips adds one on Enter (an id of
- * its own, newChecklistItemId). Every word is COPY-PENDING (labels.ts FIELD_SETTINGS_COPY_PENDING).
+ * its own, newChecklistItemId). Every word is undrawn (labels.ts FIELD_SETTINGS_UNDRAWN_TEXT).
  *
  * A box in rename is the editor's one open popover (EditorPopover "checkItem"), so opening anything
  * else ends it. What blocks a publish — no box at all, a box without a name — is the lint's, shown
@@ -62,8 +62,8 @@ export function ChecklistItemsEditor({ field, popover, setPopover, onChange }: C
       <input
         ref={addRef}
         className="sfe-check-add"
-        aria-label={FIELD_SETTINGS_COPY_PENDING.checklistAddLabel}
-        placeholder={FIELD_SETTINGS_COPY_PENDING.checklistAddPlaceholder}
+        aria-label={FIELD_SETTINGS_UNDRAWN_TEXT.checklistAddLabel}
+        placeholder={FIELD_SETTINGS_UNDRAWN_TEXT.checklistAddPlaceholder}
         dir="auto"
         autoComplete="off"
         value={draft}
@@ -146,7 +146,7 @@ function ChecklistItemChip({ item, editing, onEdit, onClose, onRename, onRemove 
         <input
           ref={inputRef}
           className="sfe-chip__input"
-          aria-label={FIELD_SETTINGS_COPY_PENDING.checklistItemName}
+          aria-label={FIELD_SETTINGS_UNDRAWN_TEXT.checklistItemName}
           dir="auto"
           value={item.label}
           maxLength={LIMITS.checklistLabel}

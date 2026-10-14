@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import { buildFieldsMap } from "../mapModel";
-import { COPY_PENDING, MAP_TEXT } from "../labels";
+import { UNDRAWN_TEXT, MAP_TEXT } from "../labels";
 import { ONBOARDING_STEPS, ONBOARDING_TEXT, sharedFilledLines } from "../onboardingLabels";
 import { CLOSE, ELEC, KIT_A, KIT_B, MON, OPEN, STATIONS, artboard1, artboard11, config, fields, line, route, step } from "./fixtures";
 
@@ -49,12 +49,12 @@ const filledScreen = (shared: { package_type_id: number; desc: string }[], cells
     shared,
   });
 
-test("one filled cell takes the COPY-PENDING singular; every other kit gets its own link", () => {
+test("one filled cell takes the undrawn singular; every other kit gets its own link", () => {
   const m = buildFieldsMap({ context: kitWith([line(1, MON, "מסך", 1, 1, 1, filledScreen([KIT_A, KIT_B]))]) });
   assert.equal(m.onboarding, true);
   const lines = sharedFilledLines(m);
   assert.equal(lines.length, 1);
-  assert.equal(lines[0].text, COPY_PENDING.sharedFilledOne + ": מסך משתמש במסלול 1 שלו, שמוגדר גם במארז עמדת עבודה, מארז ציוד היקפי.");
+  assert.equal(lines[0].text, UNDRAWN_TEXT.sharedFilledOne + ": מסך משתמש במסלול 1 שלו, שמוגדר גם במארז עמדת עבודה, מארז ציוד היקפי.");
   assert.deepEqual(lines[0].links, [
     { packageTypeId: KIT_A.package_type_id, text: "פתח את מארז עמדת עבודה" },
     { packageTypeId: KIT_B.package_type_id, text: "פתח את מארז ציוד היקפי" },

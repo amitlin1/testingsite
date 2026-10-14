@@ -10,7 +10,7 @@ import type { BulkClipboard, PasteCounts, RouteEdit } from "../../lib/bulkModel"
 import type { FieldsMapModel, MapCell } from "../../lib/mapModel";
 import { useOptionLists } from "../../lib/useLibrary";
 import { BULK_TEXT, selectedCellsText } from "../../lib/labels";
-import { BULK_COPY_PENDING, PASTE_TSV_TEXT } from "../../lib/bulkLabels";
+import { BULK_UNDRAWN_TEXT, PASTE_TSV_TEXT } from "../../lib/bulkLabels";
 
 /**
  * The selection bar of the fields map (route-fields spec §5.4.4, §5.14; artboard 1), drawn under the
@@ -150,7 +150,7 @@ export async function writeClipboardText(text: string): Promise<boolean> {
 // ---- the paste box (the clipboard cannot be read) -----------------------------------------------------
 export type PasteTextDialogProps = {
   open: boolean;
-  /** The dialog's title: the button that opened it ("הדבק מאקסל"), else COPY-PENDING "הדבקה". */
+  /** The dialog's title: the button that opened it ("הדבק מאקסל"), else undrawn "הדבקה". */
   title?: string;
   onCancel: () => void;
   /** The pasted (or typed) text. */
@@ -158,12 +158,12 @@ export type PasteTextDialogProps = {
 };
 
 /**
- * Where to paste when the page may not read the clipboard (spec §5.14 fallback — COPY-PENDING; no
+ * Where to paste when the page may not read the clipboard (spec §5.14 fallback — undrawn; no
  * artboard draws it): a box that takes Ctrl V — the paste event carries the text even on plain
  * http — and applies it at once; text typed into it goes with "הדבק".
  */
 export function PasteTextDialog({ open, title, onCancel, onPaste }: PasteTextDialogProps) {
-  const C = BULK_COPY_PENDING;
+  const C = BULK_UNDRAWN_TEXT;
   const [text, setText] = React.useState("");
   const helpId = React.useId();
   const done = (t: string | null) => {

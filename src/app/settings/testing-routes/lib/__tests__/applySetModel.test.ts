@@ -16,7 +16,7 @@ import {
 } from "../applySetModel";
 import type { ApplySetSource } from "../applySetModel";
 import {
-  APPLY_SET_COPY_PENDING, applyButtonText, applySubText, applyTitleText, fieldMetaText, previewCountText, previewTitleText,
+  APPLY_SET_UNDRAWN_TEXT, applyButtonText, applySubText, applyTitleText, fieldMetaText, previewCountText, previewTitleText,
   savedAsSetText,
 } from "../applySetLabels";
 import { EDITOR_TEXT, cellMenuText } from "../labels";
@@ -237,11 +237,11 @@ test("the set to start on, and the search", () => {
 });
 
 // ---- strings ---------------------------------------------------------------------------------------------
-test("artboard 9's strings, and the COPY-PENDING singulars", () => {
+test("artboard 9's strings, and the undrawn singulars", () => {
   assert.equal(applyTitleText(4), "החלת ערכת שדות · 4 תאים");
-  assert.equal(applyTitleText(1), APPLY_SET_COPY_PENDING.titleOne);
+  assert.equal(applyTitleText(1), APPLY_SET_UNDRAWN_TEXT.titleOne);
   assert.equal(applyButtonText(4), "החל על 4 תאים");
-  assert.equal(applyButtonText(1), APPLY_SET_COPY_PENDING.applyOne);
+  assert.equal(applyButtonText(1), APPLY_SET_UNDRAWN_TEXT.applyOne);
   assert.equal(applySubText("מארז עמדת עבודה", 1, ["סגירת מארז"]), "מארז עמדת עבודה · מסלול 1 · עמדת סגירת מארז");
   assert.equal(applySubText("מארז עמדת עבודה", 1, ["חשמל", "מכניקה"]), "מארז עמדת עבודה · מסלול 1 · 2 עמדות");
   assert.equal(previewTitleText("add", "קבלת פריט במארז"), "מה יתווסף לכל תא · קבלת פריט במארז");

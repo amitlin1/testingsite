@@ -20,7 +20,7 @@ import { setCounts } from "../../lib/libraryModel";
 import { setRowLine, versionText } from "../../lib/libraryLabels";
 import { rowNameText } from "../../lib/labels";
 import {
-  APPLY_SET_COPY_PENDING, APPLY_SET_TEXT, applyButtonText, applySubText, applyTitleText, fieldMetaText, previewCountText,
+  APPLY_SET_UNDRAWN_TEXT, APPLY_SET_TEXT, applyButtonText, applySubText, applyTitleText, fieldMetaText, previewCountText,
   previewTitleText,
 } from "../../lib/applySetLabels";
 import { useFieldSets, useOptionLists } from "../../lib/useLibrary";
@@ -193,11 +193,11 @@ function ApplySession({ open, cells, context, model, preferredSetId, onClose, on
           severity="error"
           action={(
             <Button variant="text" size="small" color="inherit" disabled={sets.state.retrying} onClick={() => void reloadSets()}>
-              {APPLY_SET_COPY_PENDING.retry}
+              {APPLY_SET_UNDRAWN_TEXT.retry}
             </Button>
           )}
         >
-          {APPLY_SET_COPY_PENDING.loadFailed}
+          {APPLY_SET_UNDRAWN_TEXT.loadFailed}
         </Alert>
       );
     }

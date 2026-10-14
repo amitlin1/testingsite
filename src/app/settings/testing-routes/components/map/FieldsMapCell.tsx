@@ -4,7 +4,7 @@ import { Check, CircleAlert, Link2, Plus } from "lucide-react";
 import { Tooltip, cn } from "@/components/ui";
 import type { AnyMapCell, MapCell, MapColumn, MapNaCell, MapRow } from "../../lib/mapModel";
 import {
-  COPY_PENDING, MAP_TEXT, cellErrorsText, cellLabel, emptyCellLabel, fieldsText, notOnRouteTooltip, setTagText,
+  UNDRAWN_TEXT, MAP_TEXT, cellErrorsText, cellLabel, emptyCellLabel, fieldsText, notOnRouteTooltip, setTagText,
   sharedCellLabel, sharedCellTooltip,
 } from "../../lib/labels";
 
@@ -78,7 +78,7 @@ export function naTooltip(cell: MapNaCell): string | null {
   if (cell.reason === "not_on_route" && cell.tooltip) {
     return notOnRouteTooltip(cell.tooltip.item, cell.tooltip.station, cell.tooltip.routeNumber);
   }
-  if (cell.reason === "package_level") return COPY_PENDING.packageLevelOnItemRoute;
+  if (cell.reason === "package_level") return UNDRAWN_TEXT.packageLevelOnItemRoute;
   return null;
 }
 
