@@ -7,6 +7,7 @@ import {
   EMPTY_DRAFT_MODEL, contextRouteIds, copyConfig, currentConfigs, draftReducer, emptyConfig, entryHasDraft, jsonEqual, mergeRoute,
   routeChanges, routeIssues, setGroupFields, stepsOutOfContextKey, summarize,
 } from "../draftModel";
+import { diffConfigs } from "@/app/lib/station-fields/diff";
 import { groupFieldsOf } from "../mapModel";
 import { ELEC, MON, OPEN, PC, artboard1, artboard11, choice, config, fields, step } from "./fixtures";
 
@@ -273,13 +274,17 @@ test("derived values are cached per entry: an untouched route is not recomputed"
   assert.notEqual(summarize(m1).changesByRoute[101], summarize(m0).changesByRoute[101]);
 });
 
-test("setGroupFields: creates the step from the column, replaces a group in place, prunes what empties", () => {
+test("setGroupFields: creates the step from the column, replaces a group in place, keeps an emptied step", () => {
   const meta = { station_type_id: ELEC, station_label: "חשמל", scope: "item" as const };
   const f = fields(2, ["pass", "fail"]);
   const cfg = setGroupFields(emptyConfig(), { step_uid: "s_new00000", target: "item" }, meta, f);
   assert.deepEqual(Object.keys(cfg.steps), ["s_new00000"]);
   assert.deepEqual(cfg.steps.s_new00000, { uid: "s_new00000", station_type_id: ELEC, station_label: "חשמל", scope: "item", groups: [{ target: "item", fields: f }] });
-  assert.deepEqual(setGroupFields(cfg, { step_uid: "s_new00000", target: "item" }, meta, []), emptyConfig());
+  // Emptying the cell keeps the step (groups []), so the diff reports removed fields, not a step removal.
+  const cleared = setGroupFields(copyConfig(cfg), { step_uid: "s_new00000", target: "item" }, meta, []);
+  assert.deepEqual(cleared.steps.s_new00000.groups, []);
+  // Clearing a step the config never had adds nothing.
+  assert.deepEqual(setGroupFields(emptyConfig(), { step_uid: "s_new00000", target: "item" }, meta, []), emptyConfig());
 
   const kitMeta = { station_type_id: OPEN, station_label: "פתיחת מארז", scope: "package" as const };
   const kit = artboard1().kit!.published!;
@@ -294,6 +299,15 @@ test("setGroupFields: creates the step from the column, replaces a group in plac
   const withLayout = setGroupFields(emptyConfig(), { step_uid: "s_new00000", target: "item" }, meta, f);
   withLayout.steps.s_new00000.layout = { density: "compact" };
   assert.ok(setGroupFields(withLayout, { step_uid: "s_new00000", target: "item" }, meta, []).steps.s_new00000);
+});
+
+test("clearing a published cell diffs as removed fields (keeps the publish dialog's 'מולא ב-N' warning)", () => {
+  const meta = { station_type_id: ELEC, station_label: "חשמל", scope: "item" as const };
+  const f = fields(2, ["pass", "fail"]);
+  const published = setGroupFields(emptyConfig(), { step_uid: "s_new00000", target: "item" }, meta, f);
+  const cleared = setGroupFields(copyConfig(published), { step_uid: "s_new00000", target: "item" }, meta, []);
+  const kinds = diffConfigs(published, cleared, 1).map((c) => c.kind);
+  assert.deepEqual(kinds, ["field_removed", "field_removed"]);
 });
 
 test("jsonEqual ignores key order and undefined members", () => {

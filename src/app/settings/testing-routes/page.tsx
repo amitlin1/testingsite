@@ -19,6 +19,7 @@ import FieldsMap from "./components/map/FieldsMap";
 import { MAP_ERROR_ACTION_ID } from "./components/map/FieldsMapErrorBar";
 import StationFieldEditor from "./components/editor/StationFieldEditor";
 import { EditorBreadcrumb } from "./components/editor/EditorBreadcrumb";
+import PublishDialog from "./components/dialogs/PublishDialog";
 import { DraftStoreProvider, useFieldsMap, useStepsOutOfContextKey } from "./lib/draftStore";
 import { findCell } from "./lib/mapModel";
 import type { CellBinding } from "./lib/mapModel";
@@ -344,6 +345,13 @@ function RouteFieldsScreen({
     [navigate, query],
   );
   const toMap = useCallback(() => navigate(backToMap(query)), [navigate, query]);
+
+  // ---- "פרסום לעמדות" → the publish dialog (artboard 10; session 2c) ------------------------------
+  const [publishOpen, setPublishOpen] = useState(false);
+  const openPublish = useCallback(() => setPublishOpen(true), []);
+  const closePublish = useCallback(() => setPublishOpen(false), []);
+  const reloadAfterPublish = useCallback(() => reloadContext?.(), [reloadContext]);
+
   // The cell the editor is open on, once the map is drawn: its breadcrumb goes in the tabs' row
   // (artboard 2). A cell the map does not have gets none — the editor sends the URL back to the map.
   const mapReady = view === "map" && ctx.status === "ready" && map != null && map.emptyState == null;
@@ -396,8 +404,10 @@ function RouteFieldsScreen({
         routeChosen={ref != null}
         context={context}
         map={map}
+        onPublish={openPublish}
         onShowIssues={showIssues}
       />
+      <PublishDialog open={publishOpen} onClose={closePublish} context={context} map={map} onReloadContext={reloadAfterPublish} />
 
       {optionsError && (
         <div className="settings-card settings-error">

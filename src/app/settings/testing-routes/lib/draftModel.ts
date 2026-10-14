@@ -364,11 +364,12 @@ export function setGroupFields(cfg: RouteFieldsConfig, binding: Pick<CellBinding
     if (at >= 0) groups.splice(Math.min(at, groups.length), 0, group);
     else groups.push(group);
   }
-  if (groups.length === 0 && (step.layout == null || Object.keys(step.layout).length === 0)) {
-    delete cfg.steps[uid];
-  } else {
-    cfg.steps[uid] = { ...step, groups };
-  }
+  // Nothing to clear in a step the config never had.
+  if (!existing && fields.length === 0) return cfg;
+  // An emptied step is KEPT (groups []), never deleted: deleting it would make the diff report a
+  // step removal instead of the removed fields, and the publish dialog would lose their
+  // "מולא ב-N בדיקות" warning. An empty step resolves to the fixed popup like an absent one.
+  cfg.steps[uid] = { ...step, groups };
   return cfg;
 }
 

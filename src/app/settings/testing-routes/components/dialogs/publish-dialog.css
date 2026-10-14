@@ -1,0 +1,271 @@
+/* =========================================================================
+   "פרסום גרסה N" — the publish dialog (artboard 10, route-fields spec §5.11).
+   Dialog maxWidth "sm" (600; the artboard draws 640 — spec §10.3). rf-pub-*
+   classes only, tokens only (src/styles/tokens.css). The count tags reuse
+   .settings-count, the scope cards .pkg-choice (packages.css).
+   ========================================================================= */
+
+/* ------------------------------------------------------------ head --- */
+/* Title and tags in a column, the close button at the inline end. */
+.rf-pub__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: 22px 24px 14px;
+}
+.rf-pub__head-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sh-dialog-title.rf-pub__title {
+  display: block;
+  padding: 0;
+  font-size: var(--text-title);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+}
+.rf-pub__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+/* "מחליפה את גרסה 4 המפורסמת": 12px muted. */
+.rf-pub__replaces {
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+}
+.sh-iconbtn.rf-pub__close {
+  flex: none;
+  color: var(--color-ink-muted-48);
+}
+
+/* ------------------------------------------------------------ body --- */
+.sh-dialog-body.rf-pub__body {
+  padding: 0 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rf-pub__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rf-pub__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+/* "מה השתנה", "על מי תחול גרסה N", "הערת גרסה": 13 / 600. */
+.rf-pub__label {
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-80);
+}
+/* "כווץ הכל" / "הרחב הכל": a 32px ghost, 13 / 600 blue. */
+.sh-btn.rf-pub__toggle {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+}
+
+/* Loading: the body's place, a spinner in the middle. */
+.rf-pub__state {
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ------------------------------------------------------- "מה השתנה" --- */
+.rf-pub__list {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--color-canvas);
+}
+.rf-pub__group + .rf-pub__group { border-top: 1px solid var(--color-hairline); }
+
+/* The group's pearl header button: title, route, "משותף", count, chevron. */
+.rf-pub__group-btn {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  border: 0;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  background: var(--color-surface-pearl);
+  color: var(--color-ink);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rf-pub__group-btn:hover { background: var(--color-canvas-parchment); }
+}
+.rf-pub__group-btn:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: -2px;
+}
+.rf-pub__group-title {
+  font-size: var(--text-small);
+  font-weight: var(--fw-bold);
+}
+.rf-pub__group-sub {
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+}
+.rf-pub__group-count {
+  margin-inline-start: auto;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rf-pub__chevron {
+  flex: none;
+  color: var(--color-ink-muted-48);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.rf-pub__group-btn[aria-expanded="true"] .rf-pub__chevron { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .rf-pub__chevron, .rf-pub__group-btn { transition: none; }
+}
+
+.rf-pub__panel {
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+}
+.rf-pub__panel[hidden] { display: none; }
+
+/* A change: the 22px round badge, the text, and its warning tail. */
+.rf-pub__line {
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 4px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-body-sm);
+}
+.rf-pub__badge {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.rf-pub__badge--add { background: var(--color-success-bg); color: var(--color-success-ink); }
+.rf-pub__badge--edit { background: var(--color-primary-soft); color: var(--color-primary); }
+.rf-pub__badge--del { background: var(--color-danger-bg); color: var(--color-destructive); }
+.rf-pub__line-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.rf-pub__warn { color: var(--color-warning-ink); }
+
+/* --------------------------------------------------------- notes --- */
+.rf-pub__notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* ------------------------------------------- "על מי תחול גרסה N" --- */
+.rf-pub__scopes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.pkg-choice.rf-pub__scope {
+  min-height: 58px;
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.rf-pub__radio {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: var(--r-full);
+  border: 1.5px solid var(--color-field-border);
+  background: var(--color-canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rf-pub__radio-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-full);
+}
+.rf-pub__scope[aria-checked="true"] .rf-pub__radio { border-color: var(--color-primary); }
+.rf-pub__scope[aria-checked="true"] .rf-pub__radio-dot { background: var(--color-primary); }
+.rf-pub__scope-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rf-pub__scope-title {
+  font-size: var(--text-body);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.rf-pub__scope-sub {
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-48);
+}
+
+/* ---------------------------------------------------- "הערת גרסה" --- */
+.rf-pub__note-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.rf-pub__help {
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+}
+.rf-pub__textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 60px;
+  margin: 0;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+  padding: 10px 14px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: var(--text-body);
+  line-height: 1.4;
+  resize: vertical;
+}
+.rf-pub__textarea:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 0;
+  border-color: var(--color-primary);
+}
