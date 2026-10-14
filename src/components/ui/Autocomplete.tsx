@@ -83,6 +83,10 @@ export interface AutocompleteProps<
    *  <li role="presentation"> the keyboard never highlights — e.g. a count and
    *  key hints. */
   listFooter?: React.ReactNode;
+  /** Highlight the first row whenever the list opens, so Enter right after
+   *  opening picks it (the route-fields worker lists). Off by default: every
+   *  other list opens with nothing highlighted, exactly as before. */
+  autoHighlight?: boolean;
   disableClearable?: boolean;
   size?: "small" | "medium";
   popupIcon?: React.ReactNode;
@@ -124,7 +128,7 @@ export function Autocomplete<
     isOptionEqualToValue = (a: T, b: T) => a === b,
     renderInput, renderOption, filterOptions, multiple, freeSolo, disabled, fullWidth,
     loading, loadingText = "טוען…", noOptionsText = "אין אפשרויות", disableClearable, size, sx, id,
-    listFooter,
+    listFooter, autoHighlight,
   } = props;
 
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -163,10 +167,10 @@ export function Autocomplete<
   // onOpen / onClose callbacks, and the highlight reset when the list closes.
   const prevOpen = useRef(open);
   useEffect(() => {
-    if (open && !prevOpen.current) onOpen?.();
+    if (open && !prevOpen.current) { onOpen?.(); if (autoHighlight) setHighlight(0); }
     else if (!open && prevOpen.current) { onClose?.(); setHighlight(-1); lockedPlacement.current = null; }
     prevOpen.current = open;
-  }, [open, onOpen, onClose]);
+  }, [open, onOpen, onClose, autoHighlight]);
 
   // Closed ⇒ the text is the selected option's label (or empty). This is what
   // discards a partial search on Esc / Tab / outside click, and follows a

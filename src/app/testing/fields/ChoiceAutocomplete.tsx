@@ -99,17 +99,6 @@ function clickRow(input: HTMLInputElement | null, index: number): boolean {
   return true;
 }
 
-/**
- * Highlights the row the list `listbox` shows at `index` as a pointer resting
- * on it does. The primitive then holds that highlight as its own: the row's
- * tint, aria-activedescendant, ↓ / ↑ from there, and Enter. It opens a list on
- * no row, and only `listFooter` may be added to it (route-fields conventions),
- * so the control moves the highlight through the row's own pointer handler.
- */
-function highlightRow(listbox: HTMLElement, index: number) {
-  document.getElementById(listbox.id + "-" + index)?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
-}
-
 /** A press anywhere on the field box (the dot, the padding, between chips) goes
  *  to the input, so the whole 44px box opens the list. The input and the arrow
  *  keep their own handling; presses inside the portaled list are not ours. */
@@ -144,21 +133,15 @@ function OptionRow({ option, index, search, selected }: {
 }
 
 /** The list footer: the count, and the key hint at the inline end. */
-function ListFooter({ listLabel, count, hint, highlightFirst = false }: {
-  listLabel: string; count: string; hint: string; highlightFirst?: boolean;
-}) {
+function ListFooter({ listLabel, count, hint }: { listLabel: string; count: string; hint: string }) {
   // The primitive's listbox has no name of its own, and this row is the one
   // node the control renders inside it: it names the list after the field
-  // (spec §4.6) each time the list mounts — and, with `highlightFirst`, puts
-  // the highlight on its first row once that commit is over.
+  // (spec §4.6) each time the list mounts.
   const listShown = React.useCallback(
     (el: HTMLDivElement | null) => {
-      const listbox = el?.closest<HTMLElement>('[role="listbox"]');
-      if (!listbox) return;
-      listbox.setAttribute("aria-label", listLabel);
-      if (highlightFirst) queueMicrotask(() => highlightRow(listbox, 0));
+      el?.closest<HTMLElement>('[role="listbox"]')?.setAttribute("aria-label", listLabel);
     },
-    [listLabel, highlightFirst],
+    [listLabel],
   );
   return (
     <div ref={listShown} className="tst-fx-choice-foot">
@@ -337,10 +320,10 @@ export default function ChoiceAutocomplete({
         renderOptionContent={(o, isSelected) => (
           <OptionRow option={o} index={options.indexOf(o)} search={search} selected={isSelected} />
         )}
-        listFooter={
-          <ListFooter listLabel={label} count={choiceCountText(shown.length, options.length, search !== "")} hint={footerHint}
-            highlightFirst={highlightFirst && selected == null} />
-        }
+        listFooter={<ListFooter listLabel={label} count={choiceCountText(shown.length, options.length, search !== "")} hint={footerHint} />}
+        // An empty field's list opens on its first row, so Enter picks it at once (artboards
+        // 12/13/15/16). A filled field opens on nothing: Enter must not swap its value.
+        autoHighlight={highlightFirst && selected == null}
         inputAttributes={{
           readOnly: typeToFilter ? undefined : true,
           "aria-required": required || undefined,
