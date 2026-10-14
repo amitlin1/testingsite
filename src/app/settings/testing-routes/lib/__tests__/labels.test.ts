@@ -46,7 +46,7 @@ test("the map's rows, cells and tooltips", () => {
   assert.equal(cellErrorsText(1), "שגיאה אחת");
   assert.equal(cellErrorsText(2), "2" + UNDRAWN_TEXT.errorsSuffix);
   assert.equal(setTagText("חזותית בסיסית"), "ערכה: חזותית בסיסית");
-  assert.equal(notOnRouteTooltip("מקלדת", "חשמל", 1), "מקלדת לא עוברת בעמדת חשמל במסלול 1");
+  assert.equal(notOnRouteTooltip("מקלדת", "חשמל", 1), "עמדת חשמל לא נמצאת במסלול 1 של מקלדת");
   assert.equal(sharedRowTitle(["מארז ציוד היקפי"]), "משותף ל: מארז ציוד היקפי");
   assert.equal(sharedCellTooltip(1, "מסך", ["מארז עמדת עבודה"]), "הוגדר במסלול 1 של מסך · משותף עם מארז עמדת עבודה");
   assert.equal(sharedFilledText(3, "מסך", 1, ["מארז עמדת עבודה"]), "3 תאים כבר מלאים: מסך משתמש במסלול 1 שלו, שמוגדר גם במארז עמדת עבודה.");

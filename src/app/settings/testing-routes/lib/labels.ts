@@ -302,11 +302,12 @@ export function setTagText(setName: string): string {
   return "ערכה: " + setName;
 }
 
-/** The "—" cell of an item that does not pass the station (artboard 1 `tip`):
- *  "{item} לא עוברת בעמדת {station} במסלול {r}". The artboard's feminine "עוברת" is kept for every
- *  item name (spec §5.4.1, §10.3, §10.4 — the conjugation is pending approval). */
+/** The "—" cell of an item that does not pass the station: "עמדת {station} לא נמצאת במסלול {r} של
+ *  {item}". Artboard 1's `tip` reads "{item} לא עוברת בעמדת {station} במסלול {r}", whose feminine verb
+ *  is wrong for most item names (spec §10.4); the station leads instead, so the verb always agrees
+ *  (approved on 2026-10-14). */
 export function notOnRouteTooltip(item: string, station: string, routeNumber: number): string {
-  return item + " לא עוברת בעמדת " + station + " במסלול " + routeNumber;
+  return "עמדת " + station + " לא נמצאת במסלול " + routeNumber + " של " + item;
 }
 
 /** A shared row's Link2 title (artboards 1, 11): "משותף ל: {kits}". Several kits are joined with

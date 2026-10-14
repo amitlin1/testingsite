@@ -76,7 +76,7 @@ type CellBase = {
 export type MapNaCell = CellBase & {
   na: true;
   reason: NaReason;
-  /** reason "not_on_route": "{item} לא עוברת בעמדת {station} במסלול {r}" (notOnRouteTooltip). */
+  /** reason "not_on_route": "עמדת {station} לא נמצאת במסלול {r} של {item}" (notOnRouteTooltip). */
   tooltip: { item: string; station: string; routeNumber: number } | null;
 };
 

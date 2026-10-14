@@ -110,7 +110,7 @@ test("'—': aria-label 'לא במסלול', out of the tab order, artboard 1's 
   const m = mapOf(artboard1());
   const kb = getCell(m, "line:3", elec)!;
   assert.ok(kb.na);
-  assert.equal(naTooltip(kb), "מקלדת לא עוברת בעמדת חשמל במסלול 1");
+  assert.equal(naTooltip(kb), "עמדת חשמל לא נמצאת במסלול 1 של מקלדת");
   const out = cellHtml(m, "line:3", elec);
   assert.match(out, /^<div role="gridcell" aria-label="לא במסלול" class="rf-map__slot"><div class="rf-map__na" aria-hidden="true" data-state="closed">—<\/div><\/div>$/);
   assert.doesNotMatch(out, /tabindex/);
