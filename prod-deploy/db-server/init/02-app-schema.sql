@@ -8,7 +8,7 @@
 -- against the application database. It is NOT idempotent — run it once, on an
 -- empty database.
 --
--- Migrations included (25):
+-- Migrations included (26):
 --   0_init
 --   20260217140614_add_poc_and_stokekeeper
 --   20260218000000_dashboard_optimization
@@ -34,6 +34,7 @@
 --   20260915120000_package_model
 --   20261006120000_package_contents_drop_manufacturer_sku
 --   20261013120000_route_station_fields
+--   20261014120000_route_fields_apply_modes
 -- ===========================================================================
 
 
@@ -3030,6 +3031,38 @@ ALTER TABLE "item_routes" ADD COLUMN IF NOT EXISTS "fields_version" INTEGER;
 UPDATE metrics_schema_version SET version = GREATEST(version, 4), applied_at = now() WHERE id = 1;
 
 
+-- ---------------------------------------------------------------------------
+-- migration: 20261014120000_route_fields_apply_modes
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- route_field_versions.apply_mode: the publish dialog's three scopes.
+--
+-- WHY: a publish used to move either no item in progress ('new_only') or the
+-- ones that had not reached the changed step ('not_reached'), and never an
+-- item taken in before station fields. Items already taken in had to be
+-- received again to see a new version. The dialog now offers:
+--   'not_started'  items that have not started their route (the default)
+--   'not_reached'  those, and items before the changed step
+--   'all'          every unfinished item, in test too
+-- and each moves items taken in before station fields as well
+-- (src/app/lib/station-fields/admin.ts, APPLY_MODES / movableRows).
+-- 'new_only' stays valid: versions already published carry it, and scripts
+-- still publish with it.
+--
+-- Only the CHECK changes; no data moves. The previous image keeps working
+-- after it (it writes 'new_only' / 'not_reached' only), so this can run any
+-- time before the new image. No metrics_schema_version bump: the worker write
+-- path does not read apply_mode, and only the admin publish writes it.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database.
+-- ============================================================================
+
+ALTER TABLE "route_field_versions" DROP CONSTRAINT IF EXISTS "route_field_versions_apply_chk";
+ALTER TABLE "route_field_versions" ADD CONSTRAINT "route_field_versions_apply_chk"
+    CHECK ("apply_mode" IN ('new_only', 'not_started', 'not_reached', 'all'));
+
+
 -- ===========================================================================
 -- Prisma migration bookkeeping
 -- ===========================================================================
@@ -3149,3 +3182,7 @@ INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
 SELECT gen_random_uuid()::text, 'c0a9720b302e9de29cf3b78fb749dcb81df258de695a68a8a0e7b4b200f878dd', now(), '20261013120000_route_station_fields', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261013120000_route_station_fields');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '2abaa84a3a0b070c04bba3b6fdd44c3cae74326842febe067eabfceb5857c636', now(), '20261014120000_route_fields_apply_modes', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261014120000_route_fields_apply_modes');

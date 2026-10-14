@@ -34,7 +34,9 @@ export type RouteFieldsJson = {
 /** PUT …/[id]/fields/draft → 200. */
 export type DraftSavedJson = { draft_rev: number; draft_updated_at: string; issues: Issue[] };
 
-export const APPLY_MODES = ["new_only", "not_reached"] as const;
+/** Which unfinished items a publish moves to the new version (admin.ts APPLY_MODES): none, the
+ *  ones that have not started their route, those plus the ones before the changed step, or all. */
+export const APPLY_MODES = ["new_only", "not_started", "not_reached", "all"] as const;
 export type ApplyMode = (typeof APPLY_MODES)[number];
 
 /** "הערת גרסה" (artboard 10): at most 2000 characters (spec §3.2). */
@@ -61,6 +63,9 @@ export type PublishImpactJson = {
   shared_outside: { route_id: number; item_type_desc: string; route_number: number; kits: SharedKitJson[] }[];
   items_on_routes: number;
   by_version: { route_id: number; version: number | null; count: number }[];
+  /** The rows apply_mode "not_started" moves; "all" moves items_on_routes. */
+  not_started: number;
+  /** The rows apply_mode "not_reached" moves (not_started's among them). */
   not_reached: number;
   /** Warnings (errors answer 422 instead). */
   issues: RouteIssueJson[];

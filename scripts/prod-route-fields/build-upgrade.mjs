@@ -1,6 +1,7 @@
-// Builds 1-route-station-fields.sql — the production upgrade for "שדות בעמדות" —
-// from prisma/migrations/20261013120000_route_station_fields/migration.sql, so the
-// SQL that runs in production is byte-for-byte the migration Prisma knows, and the
+// Builds the production upgrades for "שדות בעמדות", one per migration, run in order:
+//   1-route-station-fields.sql      ← prisma/migrations/20261013120000_route_station_fields
+//   2-route-fields-apply-modes.sql  ← prisma/migrations/20261014120000_route_fields_apply_modes
+// so the SQL that runs in production is byte-for-byte the migration Prisma knows, and the
 // _prisma_migrations row carries its real checksum (a later `prisma migrate deploy`
 // then sees it as applied and never runs it again).
 //
@@ -91,3 +92,67 @@ SELECT 'רישום המיגרציה', count(*)::text FROM _prisma_migrations WHE
 const outPath = path.join(here, "1-route-station-fields.sql");
 writeFileSync(outPath, out.replace(/\r\n/g, "\n"));
 console.log(`wrote ${path.relative(repo, outPath)} (${out.split("\n").length} lines, migration sha256 ${checksum})`);
+
+// ---- 2: the publish dialog's three scopes (20261014120000_route_fields_apply_modes) ----------------
+const modesName = "20261014120000_route_fields_apply_modes";
+const modes = readFileSync(path.join(repo, "prisma", "migrations", modesName, "migration.sql"), "utf8");
+const modesChecksum = createHash("sha256").update(Buffer.from(modes, "utf8")).digest("hex");
+
+const out2 = `-- =============================================================================
+-- שדות בעמדות — שלוש אפשרויות "על מי תחול הגרסה" בחלון הפרסום
+-- =============================================================================
+-- נבנה אוטומטית על ידי build-upgrade.mjs מתוך:
+--   prisma/migrations/${modesName}/migration.sql
+--
+-- מה קורה כשמריצים (בטרנזקציה אחת, הכול או כלום):
+--   א. בדיקות מקדימות: שדות בעמדות כבר הותקנו (1-route-station-fields.sql הורץ,
+--      ${migrationName} רשומה), והמיגרציה הזו עוד לא רשומה.
+--   ב. המיגרציה: האילוץ route_field_versions_apply_chk מתרחב — apply_mode יכול
+--      להיות גם 'not_started' (פריטים שעוד לא התחילו את המסלול, ברירת המחדל) ו-'all'
+--      (כל הפריטים, גם בבדיקה). שום נתון לא משתנה.
+--   ג. רישום המיגרציה ב-_prisma_migrations (checksum זהה לקובץ המיגרציה).
+--   ד. בסוף: שאילתות בדיקה (קריאה בלבד).
+--
+-- סדר פריסה: להריץ לפני העלאת ה-image החדש. בלי הקובץ הזה, פרסום מה-image החדש
+-- נכשל (500) — שאר המערכת עובדת. ה-image הקודם ממשיך לעבוד גם אחרי ההרצה.
+-- גרסת הסכמה (metrics_schema_version) לא משתנה.
+--
+-- לפני ההרצה: גיבוי של ה-DB.
+-- הרצה ב-DBeaver: לפתוח את הקובץ, Alt+X (Execute script).
+-- ב-psql:  psql -U <user> -d <db> -v ON_ERROR_STOP=1 -f 2-route-fields-apply-modes.sql
+-- הרצה חוזרת נעצרת בבדיקה המקדימה ("כבר הוחלה") ולא משנה דבר — זה תקין.
+-- =============================================================================
+
+BEGIN;
+
+-- ===================================================================== א. בדיקות
+DO $check$
+BEGIN
+  IF EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '${modesName}') THEN
+    RAISE EXCEPTION 'מיגרציית אפשרויות הפרסום כבר הוחלה. לא בוצע כלום.';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM _prisma_migrations WHERE migration_name = '${migrationName}') THEN
+    RAISE EXCEPTION 'שדות בעמדות עוד לא הותקנו (${migrationName} חסרה) — להריץ קודם את 1-route-station-fields.sql. לא בוצע כלום.';
+  END IF;
+END
+$check$;
+
+-- ================================================================= ב. המיגרציה
+${modes.trimEnd()}
+
+-- ================================================================= ג. רישום
+INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
+VALUES (gen_random_uuid()::text, '${modesChecksum}', now(), '${modesName}', NULL, NULL, now(), 1);
+
+COMMIT;
+
+-- ============================================================ ד. בדיקה (קריאה בלבד)
+SELECT 'האילוץ על apply_mode' AS בדיקה, pg_get_constraintdef(oid) AS תוצאה FROM pg_constraint
+ WHERE conname = 'route_field_versions_apply_chk'
+UNION ALL
+SELECT 'רישום המיגרציה', count(*)::text FROM _prisma_migrations WHERE migration_name = '${modesName}';
+`;
+
+const outPath2 = path.join(here, "2-route-fields-apply-modes.sql");
+writeFileSync(outPath2, out2.replace(/\r\n/g, "\n"));
+console.log(`wrote ${path.relative(repo, outPath2)} (${out2.split("\n").length} lines, migration sha256 ${modesChecksum})`);

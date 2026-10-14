@@ -398,7 +398,8 @@ model route_field_versions {
   /// Structured "what changed" vs the previous version, for the history view.
   changes           Json?
   note              String?        @db.Text
-  /// 'new_only' | 'not_reached' — the choice made in the publish dialog.
+  /// 'not_started' | 'not_reached' | 'all' — the publish dialog's scope; 'new_only' from
+  /// scripts and older versions (station-fields/admin.ts APPLY_MODES).
   apply_mode        String         @db.VarChar(20)
   /// One publish action can cover several routes (kit + its item routes).
   publish_batch     String         @db.Uuid

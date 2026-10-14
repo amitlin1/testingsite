@@ -7,13 +7,14 @@ import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "../d
 import { buildFieldsMap } from "../mapModel";
 import { UNDRAWN_TEXT, routeOptionText } from "../labels";
 import {
-  PUBLISH_UNDRAWN_TEXT, countTagsText, filledWarnText, infoNoteText, publishButtonText, publishTitleText,
-  publishedSnackText, replacesVersionText, scopeLabelText, scopeNewSubText, scopePendingSubText, scopePendingTitleText,
-  setFilledText,
+  PUBLISH_UNDRAWN_TEXT, SCOPE_UNDRAWN_TEXT, countTagsText, filledWarnText, infoNoteText, publishButtonText, publishTitleText,
+  publishedSnackText, replacesVersionText, scopeAllSubText, scopeAllTitleText, scopeLabelText, scopeNotStartedSubText,
+  scopeNotStartedTitleText, scopePendingSubText, scopePendingTitleText, setFilledText,
 } from "../publishLabels";
 import {
-  buildPublishGroups, contextKitId, errorCode, fromSetIds, groupLines, ownRouteId, parsePublishImpact, parsePublishResult,
-  parseSetNames, pendingVersion, previewRequestBody, publishRequestBody, publishVersion, publishedVersionOf, sharedNoteText,
+  APPLY_MODE_DEFAULT, PUBLISH_SCOPES, buildPublishGroups, contextKitId, errorCode, fromSetIds, groupLines, ownRouteId,
+  parsePublishImpact, parsePublishResult, parseSetNames, pendingVersion, previewRequestBody, publishRequestBody, publishVersion,
+  publishedVersionOf, scopeCount, sharedNoteText,
 } from "../publishModel";
 import { KIT_A, KIT_B, MON, PC, artboard1, wire } from "./fixtures";
 
@@ -64,6 +65,7 @@ function artboard10Impact(): PublishImpactJson {
     ],
     items_on_routes: 9,
     by_version: [{ route_id: 100, version: 4, count: 9 }],
+    not_started: 2,
     not_reached: 4,
     issues: [],
     base_revs: { 100: 7, 101: 4, 102: 3 },
@@ -198,39 +200,63 @@ test("the warning note: artboard 10's sentence, one kit per route, and the undra
 });
 
 test("the info note and the scope cards: artboard 10's two texts", () => {
-  const v = { items: 9, notReached: 4, version: 5, fromVersion: 4 };
-  assert.equal(infoNoteText({ ...v, pending: false }),
+  const v = { items: 9, version: 5, fromVersion: 4 };
+  assert.equal(infoNoteText({ ...v, scope: "not_started", moved: 0 }),
     "9 פריטים נמצאים כעת במסלולים האלה. הם ימשיכו לפי גרסה 4 עד סוף המסלול; פריטים שייקלטו מעכשיו יקבלו גרסה 5.");
-  assert.equal(infoNoteText({ ...v, pending: true }),
+  assert.equal(infoNoteText({ ...v, scope: "not_reached", moved: 4 }),
     "9 פריטים נמצאים כעת במסלולים האלה. 4 מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה 5 בעמדה הבאה שלהם; 5 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. פריטים שייקלטו מעכשיו יקבלו גרסה 5.");
   assert.equal(scopeLabelText(5), "על מי תחול גרסה 5");
-  assert.equal(scopeNewSubText(4), "פריטים שכבר בדרך ממשיכים לפי גרסה 4 עד סוף המסלול");
+  assert.equal(scopeNotStartedSubText(4), SCOPE_UNDRAWN_TEXT.notStartedSubLead + "פריטים שכבר בדרך ממשיכים לפי גרסה 4 עד סוף המסלול");
   assert.equal(scopePendingTitleText(4), "גם לפריטים שטרם הגיעו לעמדה ששונתה · 4 פריטים");
   assert.equal(scopePendingSubText(5), "יעברו לגרסה 5 בעמדה הבאה שלהם; תוצאות שכבר נשמרו לא ישתנו");
 });
 
 test("the info note's undrawn forms: none, one, all moving, nothing moving, a first publish", () => {
   const tail = "פריטים שייקלטו מעכשיו יקבלו גרסה 5.";
-  assert.equal(infoNoteText({ pending: true, items: 0, notReached: 0, version: 5, fromVersion: 4 }), PUBLISH_UNDRAWN_TEXT.noItemsHead + " " + tail);
-  assert.equal(infoNoteText({ pending: false, items: 1, notReached: 1, version: 5, fromVersion: 4 }),
+  assert.equal(infoNoteText({ scope: "not_reached", items: 0, moved: 0, version: 5, fromVersion: 4 }), PUBLISH_UNDRAWN_TEXT.noItemsHead + " " + tail);
+  assert.equal(infoNoteText({ scope: "not_reached", items: 1, moved: 0, version: 5, fromVersion: 4 }),
     PUBLISH_UNDRAWN_TEXT.oneItemHead + " הוא ימשיך לפי גרסה 4 עד סוף המסלול; " + tail);
-  assert.equal(infoNoteText({ pending: true, items: 1, notReached: 1, version: 5, fromVersion: 4 }),
+  assert.equal(infoNoteText({ scope: "not_reached", items: 1, moved: 1, version: 5, fromVersion: 4 }),
     PUBLISH_UNDRAWN_TEXT.oneItemHead + " " + PUBLISH_UNDRAWN_TEXT.onlyItemMovesPrefix + "5 בעמדה הבאה שלו. " + tail);
-  // Nothing to move: the pending note is the new one.
-  assert.equal(infoNoteText({ pending: true, items: 9, notReached: 0, version: 5, fromVersion: 4 }),
-    infoNoteText({ pending: false, items: 9, notReached: 0, version: 5, fromVersion: 4 }));
-  assert.equal(infoNoteText({ pending: true, items: 3, notReached: 3, version: 5, fromVersion: 4 }),
+  // Nothing to move: every scope gives the same note.
+  assert.equal(infoNoteText({ scope: "not_reached", items: 9, moved: 0, version: 5, fromVersion: 4 }),
+    infoNoteText({ scope: "not_started", items: 9, moved: 0, version: 5, fromVersion: 4 }));
+  assert.equal(infoNoteText({ scope: "not_reached", items: 3, moved: 3, version: 5, fromVersion: 4 }),
     "3 פריטים נמצאים כעת במסלולים האלה. 3 מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה 5 בעמדה הבאה שלהם. " + tail);
-  assert.equal(infoNoteText({ pending: true, items: 3, notReached: 1, version: 5, fromVersion: 4 }),
+  assert.equal(infoNoteText({ scope: "not_reached", items: 3, moved: 1, version: 5, fromVersion: 4 }),
     "3 פריטים נמצאים כעת במסלולים האלה. " + PUBLISH_UNDRAWN_TEXT.oneMovedPrefix + "5" + PUBLISH_UNDRAWN_TEXT.oneMovedSuffix + "; 2 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. " + tail);
-  assert.equal(infoNoteText({ pending: true, items: 3, notReached: 2, version: 5, fromVersion: 4 }),
+  assert.equal(infoNoteText({ scope: "not_reached", items: 3, moved: 2, version: 5, fromVersion: 4 }),
     "3 פריטים נמצאים כעת במסלולים האלה. 2 מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה 5 בעמדה הבאה שלהם; " + PUBLISH_UNDRAWN_TEXT.oneOtherContinues + " לפי גרסה 4 עד סוף המסלול. " + tail);
-  assert.equal(infoNoteText({ pending: false, items: 2, notReached: 0, version: 1, fromVersion: 0 }),
+  assert.equal(infoNoteText({ scope: "not_started", items: 2, moved: 0, version: 1, fromVersion: 0 }),
     "2 פריטים נמצאים כעת במסלולים האלה. הם ימשיכו " + PUBLISH_UNDRAWN_TEXT.noVersionPhrase + " עד סוף המסלול; פריטים שייקלטו מעכשיו יקבלו גרסה 1.");
-  assert.equal(scopeNewSubText(0), "פריטים שכבר בדרך ממשיכים " + PUBLISH_UNDRAWN_TEXT.noVersionPhrase + " עד סוף המסלול");
+  assert.equal(scopeNotStartedSubText(0), SCOPE_UNDRAWN_TEXT.notStartedSubLead + "פריטים שכבר בדרך ממשיכים " + PUBLISH_UNDRAWN_TEXT.noVersionPhrase + " עד סוף המסלול");
   assert.equal(scopePendingTitleText(1), "גם לפריטים שטרם הגיעו לעמדה ששונתה · " + PUBLISH_UNDRAWN_TEXT.oneItem);
   assert.equal(filledWarnText(0), null);
   assert.equal(setFilledText(2, null), "2 תאים מולאו" + PUBLISH_UNDRAWN_TEXT.setFilledUnnamed);
+});
+
+test("the three scopes: order, default, counts, cards and the notes of not_started and all", () => {
+  assert.deepEqual([...PUBLISH_SCOPES], ["not_started", "not_reached", "all"]);
+  assert.equal(APPLY_MODE_DEFAULT, "not_started");
+  const impact = artboard10Impact();
+  assert.deepEqual(PUBLISH_SCOPES.map((s) => scopeCount(s, impact)), [2, 4, 9]);
+  assert.equal(scopeNotStartedTitleText(2), SCOPE_UNDRAWN_TEXT.notStartedTitle + "2 פריטים");
+  assert.equal(scopeNotStartedTitleText(1), SCOPE_UNDRAWN_TEXT.notStartedTitle + PUBLISH_UNDRAWN_TEXT.oneItem);
+  assert.equal(scopeAllTitleText(9), SCOPE_UNDRAWN_TEXT.allTitle + "9 פריטים");
+  assert.equal(scopeAllSubText(), SCOPE_UNDRAWN_TEXT.allSub);
+
+  const tail = "פריטים שייקלטו מעכשיו יקבלו גרסה 5.";
+  const v = { version: 5, fromVersion: 4 };
+  assert.equal(infoNoteText({ ...v, scope: "not_started", items: 9, moved: 2 }),
+    "9 פריטים נמצאים כעת במסלולים האלה. 2" + SCOPE_UNDRAWN_TEXT.notStartedMoved + "5; 7 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. " + tail);
+  assert.equal(infoNoteText({ ...v, scope: "not_started", items: 3, moved: 1 }),
+    "3 פריטים נמצאים כעת במסלולים האלה. " + SCOPE_UNDRAWN_TEXT.notStartedOneMovedPrefix + "5; 2 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. " + tail);
+  assert.equal(infoNoteText({ ...v, scope: "not_started", items: 1, moved: 1 }),
+    PUBLISH_UNDRAWN_TEXT.oneItemHead + " " + SCOPE_UNDRAWN_TEXT.notStartedOnlyItemPrefix + "5. " + tail);
+  assert.equal(infoNoteText({ ...v, scope: "all", items: 9, moved: 9 }),
+    "9 פריטים נמצאים כעת במסלולים האלה. " + SCOPE_UNDRAWN_TEXT.allMovedPrefix + "5" + SCOPE_UNDRAWN_TEXT.allMovedSuffix + ". " + tail);
+  assert.equal(infoNoteText({ ...v, scope: "all", items: 1, moved: 1 }),
+    PUBLISH_UNDRAWN_TEXT.oneItemHead + " " + SCOPE_UNDRAWN_TEXT.allOnlyItemPrefix + "5" + SCOPE_UNDRAWN_TEXT.allOnlyItemSuffix + ". " + tail);
 });
 
 test("requests: the preview body names the kit on screen; publish sends the previewed revs", () => {
@@ -245,6 +271,7 @@ test("answers: the impact and the result are checked; set names and error codes 
   const impact = wire(artboard10Impact());
   assert.deepEqual(parsePublishImpact(impact), impact);
   assert.equal(parsePublishImpact({ ...impact, totals: null }), null);
+  assert.equal(parsePublishImpact({ ...impact, not_started: undefined }), null, "an answer without the not_started count");
   assert.equal(parsePublishImpact({ ...impact, routes: [{ ...impact.routes[0], changes: [{ kind: "field_added" }] }] }), null);
   assert.equal(parsePublishImpact({ ...impact, base_revs: { 100: -1 } }), null);
   assert.equal(parsePublishImpact([]), null);

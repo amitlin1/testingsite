@@ -78,7 +78,21 @@ export type PublishInput = { route_ids?: unknown; base_revs?: unknown; apply_mod
 
 export type DraftSaved = { draft_rev: number; draft_updated_at: Date; issues: Issue[] };
 
-export const APPLY_MODES = ["new_only", "not_reached"] as const;
+/**
+ * Which unfinished item_routes rows a publish moves to the new version ("על מי תחול גרסה N").
+ * Items taken in from now on always freeze the new one.
+ *   new_only     none — only new intakes (the dialog no longer offers it; scripts and tests do)
+ *   not_started  rows that have not started their route: queued at step 1 — a kit taken in but
+ *                not opened yet, its items, an item waiting at its first station (the default)
+ *   not_reached  those, and every row queued or waiting (status 2 / 6) at or before the first
+ *                changed step
+ *   all          every unfinished row, in test and in research too. A popup open on a moved row
+ *                is refused on save (409 FIELDS_SCHEMA_MISMATCH) and reloads with the new fields,
+ *                keeping what the worker typed.
+ * Every mode moves rows taken in before station fields (fields_version NULL) as well (decided
+ * 2026-10-14, replacing spec §8.1's "a NULL row keeps the fixed popups"). See movableRows.
+ */
+export const APPLY_MODES = ["new_only", "not_started", "not_reached", "all"] as const;
 export type ApplyMode = (typeof APPLY_MODES)[number];
 
 /** "הערת גרסה" (artboard 10): at most 2000 characters (spec §3.2). */
@@ -117,7 +131,9 @@ export type PublishImpact = {
   items_on_routes: number;
   /** The same rows by the version they froze (null = before station fields). */
   by_version: { route_id: number; version: number | null; count: number }[];
-  /** Exactly the rows apply_mode "not_reached" would move ("· 4 פריטים"). */
+  /** Exactly the rows apply_mode "not_started" would move; "all" moves items_on_routes. */
+  not_started: number;
+  /** Exactly the rows apply_mode "not_reached" would move ("· 4 פריטים"), not_started's among them. */
   not_reached: number;
   /** Warnings (errors answer 422 instead). */
   issues: RouteIssue[];
@@ -423,21 +439,43 @@ function firstChangedPosition(changes: readonly Change[], route: RouteRow): numb
 }
 
 /**
- * The item_routes rows "גם לפריטים שטרם הגיעו לעמדה ששונתה" moves to the new version (spec §3.4.3
- * step 6): unfinished rows of the route, at or before the first changed step, whose popup is not
- * open yet — status 2 (ממתין) or 6 (ממתין לפריטי המארז) on BOTH sides of the step test, never 1
- * (in test) or 4/5 (research), whose submit would otherwise fail on a changed schema.v. Only rows
- * that froze a version: a row taken in before station fields (NULL) keeps the fixed popups even
- * when its route is published later (spec §8.1, §1.1). One predicate for the UPDATE and the
- * preview count, so the dialog's number is what publish moves.
+ * The item_routes rows a publish of `route` moves to the new version under `mode` (APPLY_MODES;
+ * spec §3.4.3 step 6) — whatever version they froze, NULL included. One predicate for the UPDATE
+ * and the preview count, so the dialog's number is what publish moves. null: nothing moves.
+ *   not_started  unfinished, status 2 (ממתין) at step 1: nothing of the route has started.
+ *   not_reached  unfinished, status 2 or 6 (ממתין לפריטי המארז) at or before the first changed
+ *                step — never 1 (in test) or 4/5 (research). The first changed step is ≥ 1, so
+ *                not_started's rows are always among them; with no changed step on the route
+ *                (minChangedPos null) it is not_started alone.
+ *   all          unfinished, any status and step.
  */
-function notReachedRows(route: RouteRow, minChangedPos: number): Prisma.Sql {
-  return Prisma.sql`ir.item_type_id = ${route.item_type_id}
+function movableRows(route: RouteRow, mode: ApplyMode, minChangedPos: number | null): Prisma.Sql | null {
+  const ofRoute = Prisma.sql`ir.item_type_id = ${route.item_type_id}
      AND ir.route_number = ${route.route_number}
-     AND ir.finished_at IS NULL
-     AND ir.fields_version IS NOT NULL
+     AND ir.finished_at IS NULL`;
+  const notStarted = Prisma.sql`${ofRoute}
+     AND ir.current_status = ${STATUS_QUEUED}
+     AND ir.current_route_step = 1`;
+  switch (mode) {
+    case "new_only":
+      return null;
+    case "not_started":
+      return notStarted;
+    case "not_reached":
+      if (minChangedPos === null) return notStarted;
+      return Prisma.sql`${ofRoute}
      AND ir.current_status IN (${STATUS_QUEUED}, ${STATUS_WAITING_FOR_PACKAGE_ITEMS})
      AND ir.current_route_step <= ${minChangedPos}`;
+    case "all":
+      return ofRoute;
+  }
+}
+
+/** How many rows movableRows names (0 when it names none). */
+async function countMovable(db: Db, where: Prisma.Sql | null): Promise<number> {
+  if (where === null) return 0;
+  const rows = await db.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM item_routes ir WHERE ${where}`;
+  return rows[0]?.n ?? 0;
 }
 
 /**
@@ -585,6 +623,7 @@ export async function previewPublish(db: PrismaClient, input: PublishPreviewInpu
       shared_outside: [],
       items_on_routes: 0,
       by_version: [],
+      not_started: 0,
       not_reached: 0,
       issues,
       base_revs: Object.fromEntries(routes.map((r) => [r.test_route_id, r.draft_rev])),
@@ -617,11 +656,8 @@ export async function previewPublish(db: PrismaClient, input: PublishPreviewInpu
         impact.items_on_routes += row.count;
       }
       const pos = firstChangedPosition(changes, route);
-      if (pos !== null) {
-        const rows = await tx.$queryRaw<{ n: number }[]>`
-          SELECT count(*)::int AS n FROM item_routes ir WHERE ${notReachedRows(route, pos)}`;
-        impact.not_reached += rows[0]?.n ?? 0;
-      }
+      impact.not_started += await countMovable(tx, movableRows(route, "not_started", pos));
+      impact.not_reached += await countMovable(tx, movableRows(route, "not_reached", pos));
     }
     impact.totals.stations = stations.size;
     impact.totals.routes = impact.routes.length;
@@ -633,7 +669,7 @@ export async function previewPublish(db: PrismaClient, input: PublishPreviewInpu
  * POST …/fields/publish (spec §3.4.3) — one transaction for the whole batch. Every route is locked
  * (ascending ids) and its draft_rev checked against base_revs before anything is read; each route
  * with a draft becomes version fields_version + 1, all under one publish_batch, and its draft is
- * cleared. apply_mode "not_reached" also moves the rows of notReachedRows to the new version.
+ * cleared. Every mode but "new_only" also moves the rows of movableRows to the new version.
  *
  * Every read comes first — the "מולא ב-N בדיקות" counts scan test_results — and the item_routes
  * rows are moved last: a worker's start-test or results submit on such a row waits for its lock,
@@ -689,15 +725,11 @@ export async function publishFields(db: PrismaClient, input: PublishInput, actor
       versions[id] = v;
     }
 
-    // Last: the rows that have not reached a changed step yet.
+    // Last: the rows the chosen mode moves.
     let bumped = 0;
-    if (applyMode === "not_reached") {
-      for (const { p, v, changes } of planned) {
-        const pos = firstChangedPosition(changes, p.route);
-        if (pos !== null) {
-          bumped += await tx.$executeRaw`UPDATE item_routes ir SET fields_version = ${v} WHERE ${notReachedRows(p.route, pos)}`;
-        }
-      }
+    for (const { p, v, changes } of planned) {
+      const where = movableRows(p.route, applyMode, firstChangedPosition(changes, p.route));
+      if (where !== null) bumped += await tx.$executeRaw`UPDATE item_routes ir SET fields_version = ${v} WHERE ${where}`;
     }
     return { publish_batch: publishBatch, versions, bumped_items: bumped };
   }, TX_OPTIONS);

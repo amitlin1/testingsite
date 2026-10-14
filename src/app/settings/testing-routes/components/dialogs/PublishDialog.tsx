@@ -6,20 +6,21 @@ import {
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import { VERSION_NOTE_MAX } from "@/app/lib/station-fields/admin-types";
-import type { ApplyMode, FieldsContextJson, PublishImpactJson } from "@/app/lib/station-fields/admin-types";
+import type { FieldsContextJson, PublishImpactJson } from "@/app/lib/station-fields/admin-types";
 import { useDraftSnapshot, useDraftStore } from "../../lib/draftStore";
 import type { FieldsMapModel } from "../../lib/mapModel";
 import { UNDRAWN_TEXT, HEADER_TEXT, MAP_STATE_TEXT, routeOptionText } from "../../lib/labels";
 import {
   CHANGE_BADGE_TEXT, PUBLISH_UNDRAWN_TEXT, PUBLISH_TEXT, countTagsText, infoNoteText, publishButtonText, publishTitleText,
-  publishedSnackText, replacesVersionText, scopeLabelText, scopeNewSubText, scopePendingSubText, scopePendingTitleText,
+  publishedSnackText, replacesVersionText, scopeAllSubText, scopeAllTitleText, scopeLabelText, scopeNotStartedSubText,
+  scopeNotStartedTitleText, scopePendingSubText, scopePendingTitleText,
 } from "../../lib/publishLabels";
 import {
   APPLY_MODE_DEFAULT, FIELD_SETS_URL, PUBLISH_PREVIEW_URL, PUBLISH_URL, buildPublishGroups, contextKitId, errorCode,
   fromSetIds, ownRouteId, parsePublishImpact, parsePublishResult, parseSetNames, pendingVersion, previewRequestBody,
-  publishRequestBody, publishVersion, publishedVersionOf, sharedNoteText,
+  publishRequestBody, publishVersion, publishedVersionOf, scopeCount, sharedNoteText,
 } from "../../lib/publishModel";
-import type { PublishBadge } from "../../lib/publishModel";
+import type { PublishBadge, PublishScope } from "../../lib/publishModel";
 import "@/app/packages/packages.css";
 import "./publish-dialog.css";
 
@@ -132,7 +133,7 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
   const [load, setLoad] = React.useState<Load>({ kind: "loading" });
   const [publishing, setPublishing] = React.useState(false);
   const [publishError, setPublishError] = React.useState<"failed" | "conflict" | null>(null);
-  const [mode, setMode] = React.useState<ApplyMode>(APPLY_MODE_DEFAULT);
+  const [mode, setMode] = React.useState<PublishScope>(APPLY_MODE_DEFAULT);
   const [note, setNote] = React.useState("");
   const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set());
   const [setNames, setSetNames] = React.useState<Record<number, string>>({});
@@ -304,10 +305,11 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
   };
 
   // ---- the scope radiogroup (arrows move and choose, as PackageDecisionDialog) ----------------------
-  const scopes: { mode: ApplyMode; title: string; sub: string }[] = ready && view
+  const scopes: { mode: PublishScope; title: string; sub: string }[] = ready && view
     ? [
-        { mode: "new_only", title: PUBLISH_TEXT.scopeNewTitle, sub: scopeNewSubText(view.fromVersion) },
+        { mode: "not_started", title: scopeNotStartedTitleText(ready.impact.not_started), sub: scopeNotStartedSubText(view.fromVersion) },
         { mode: "not_reached", title: scopePendingTitleText(ready.impact.not_reached), sub: scopePendingSubText(view.version) },
+        { mode: "all", title: scopeAllTitleText(ready.impact.items_on_routes), sub: scopeAllSubText() },
       ]
     : [];
   const onScopeKey = (e: React.KeyboardEvent, i: number) => {
@@ -363,9 +365,9 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
   const sharedNote = ready ? sharedNoteText(ready.impact, context) : null;
   const infoText = ready && view
     ? infoNoteText({
-        pending: mode === "not_reached",
+        scope: mode,
         items: ready.impact.items_on_routes,
-        notReached: ready.impact.not_reached,
+        moved: scopeCount(mode, ready.impact),
         version: view.version,
         fromVersion: view.fromVersion,
       })

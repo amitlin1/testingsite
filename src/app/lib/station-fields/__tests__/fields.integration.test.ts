@@ -856,24 +856,25 @@ describe(
       assert.deepEqual((await A.listFieldVersions(prisma, R.fields)).map((v) => v.version), [2, 1]);
     });
 
+    type Mode = "not_started" | "not_reached" | "all";
     /**
-     * Rows on the FIELDS route (one on SECOND), each a case of the "not_reached" predicate for a
-     * draft whose first changed step is position 2. `moves`: the row takes the new version.
+     * Rows on the FIELDS route (one on SECOND), each a case of movableRows for a draft whose first
+     * changed step is position 2. `moves`: the modes under which the row takes the new version.
      */
-    const IN_PROGRESS: { id: number; type: number; step: number; status: number; version: number | null; finished?: true; moves: boolean }[] = [
-      { id: 7001, type: ITEM_TYPE_FIELDS, step: 1, status: 2, version: 1, moves: true },      // waiting before the change
-      { id: 7002, type: ITEM_TYPE_FIELDS, step: 2, status: 2, version: 1, moves: true },      // waiting AT the changed step
-      { id: 7003, type: ITEM_TYPE_FIELDS, step: 2, status: 6, version: 1, moves: true },      // waiting for its kit's items
-      // Taken in before station fields: keeps the fixed popup even when its route is published
-      // later (spec §8.1), whatever the apply_mode.
-      { id: 7004, type: ITEM_TYPE_FIELDS, step: 1, status: 2, version: null, moves: false },
-      { id: 7005, type: ITEM_TYPE_FIELDS, step: 2, status: 1, version: 1, moves: false },     // in test: its popup is open
-      { id: 7006, type: ITEM_TYPE_FIELDS, step: 1, status: 4, version: 1, moves: false },     // waiting for research
-      { id: 7007, type: ITEM_TYPE_FIELDS, step: 1, status: 5, version: 1, moves: false },     // in research
-      { id: 7008, type: ITEM_TYPE_FIELDS, step: 3, status: 2, version: 1, moves: false },     // already past the change
-      { id: 7009, type: ITEM_TYPE_FIELDS, step: 1, status: 2, version: 1, finished: true, moves: false },   // finished_at alone
-      { id: 7010, type: ITEM_TYPE_FIELDS, step: 3, status: 3, version: 1, finished: true, moves: false },   // done
-      { id: 7011, type: ITEM_TYPE_SECOND, step: 1, status: 2, version: null, moves: false },  // another route
+    const IN_PROGRESS: { id: number; type: number; step: number; status: number; version: number | null; finished?: true; moves: Mode[] }[] = [
+      { id: 7001, type: ITEM_TYPE_FIELDS, step: 1, status: 2, version: 1, moves: ["not_started", "not_reached", "all"] }, // not started
+      // Taken in before station fields: moves like any other row (decided 2026-10-14).
+      { id: 7004, type: ITEM_TYPE_FIELDS, step: 1, status: 2, version: null, moves: ["not_started", "not_reached", "all"] },
+      { id: 7002, type: ITEM_TYPE_FIELDS, step: 2, status: 2, version: 1, moves: ["not_reached", "all"] },   // waiting AT the changed step
+      { id: 7003, type: ITEM_TYPE_FIELDS, step: 2, status: 6, version: 1, moves: ["not_reached", "all"] },   // waiting for its kit's items
+      { id: 7005, type: ITEM_TYPE_FIELDS, step: 2, status: 1, version: 1, moves: ["all"] },                  // in test: its popup is open
+      { id: 7012, type: ITEM_TYPE_FIELDS, step: 1, status: 1, version: null, moves: ["all"] },               // in test at step 1, before station fields
+      { id: 7006, type: ITEM_TYPE_FIELDS, step: 1, status: 4, version: 1, moves: ["all"] },                  // waiting for research
+      { id: 7007, type: ITEM_TYPE_FIELDS, step: 1, status: 5, version: 1, moves: ["all"] },                  // in research
+      { id: 7008, type: ITEM_TYPE_FIELDS, step: 3, status: 2, version: 1, moves: ["all"] },                  // already past the change
+      { id: 7009, type: ITEM_TYPE_FIELDS, step: 1, status: 2, version: 1, finished: true, moves: [] },   // finished_at alone
+      { id: 7010, type: ITEM_TYPE_FIELDS, step: 3, status: 3, version: 1, finished: true, moves: [] },   // done
+      { id: 7011, type: ITEM_TYPE_SECOND, step: 1, status: 2, version: null, moves: [] },                // another route
     ];
 
     /** Publishes version 1 of FIELDS, seeds IN_PROGRESS, and drafts a version 2 that changes the
@@ -911,28 +912,62 @@ describe(
       assert.deepEqual(await versionsOfInProgress(), before);
     });
 
-    it("publish: 'not_reached' moves exactly the unfinished rows that froze a version and wait (status 2 or 6) at or before the first changed step — never 1, 4, 5, finished ones or rows taken in before station fields — and the preview counts those same rows", async () => {
+    it("publish-preview: not_started ⊂ not_reached ⊂ items_on_routes, each counted by the predicate publish moves by", async () => {
       await seedInProgress();
-      const before = await versionsOfInProgress();
       const impact = await A.previewPublish(prisma, { route_ids: [R.fields] });
-      const moving = IN_PROGRESS.filter((r) => r.moves).length;
-      assert.equal(moving, 3, "fixture: 7001, 7002 and 7003");
-      assert.equal(impact.not_reached, moving);
+      const count = (m: Mode) => IN_PROGRESS.filter((r) => r.moves.includes(m)).length;
+      assert.deepEqual([count("not_started"), count("not_reached"), count("all")], [2, 4, 9], "fixture");
+      assert.equal(impact.not_started, count("not_started"));
+      assert.equal(impact.not_reached, count("not_reached"));
+      assert.equal(impact.items_on_routes, count("all"));
       // Every unfinished row of the route, by the version it froze.
-      assert.equal(impact.items_on_routes, 8);
       assert.deepEqual(impact.by_version, [
-        { route_id: R.fields, version: null, count: 1 },
+        { route_id: R.fields, version: null, count: 2 },
         { route_id: R.fields, version: 1, count: 7 },
       ]);
+    });
 
-      const published = await A.publishFields(prisma, { route_ids: [R.fields], base_revs: impact.base_revs, apply_mode: "not_reached" }, ACTOR);
-      assert.equal(published.bumped_items, impact.not_reached);
-      assert.deepEqual(
-        await versionsOfInProgress(),
-        Object.fromEntries(IN_PROGRESS.map((r) => [r.id, r.moves ? 2 : before[r.id]])),
-      );
-      const v2 = await H.one("SELECT apply_mode FROM route_field_versions WHERE test_route_id = $1 AND version = 2", [R.fields]);
-      assert.equal(v2.apply_mode, "not_reached");
+    for (const mode of ["not_started", "not_reached", "all"] as const) {
+      it(`publish: '${mode}' moves exactly its rows — rows taken in before station fields too — and records the mode`, async () => {
+        await seedInProgress();
+        const before = await versionsOfInProgress();
+        const impact = await A.previewPublish(prisma, { route_ids: [R.fields] });
+        const published = await A.publishFields(prisma, { route_ids: [R.fields], base_revs: impact.base_revs, apply_mode: mode }, ACTOR);
+        assert.equal(published.bumped_items, IN_PROGRESS.filter((r) => r.moves.includes(mode)).length);
+        assert.deepEqual(
+          await versionsOfInProgress(),
+          Object.fromEntries(IN_PROGRESS.map((r) => [r.id, r.moves.includes(mode) ? 2 : before[r.id]])),
+        );
+        const v2 = await H.one("SELECT apply_mode FROM route_field_versions WHERE test_route_id = $1 AND version = 2", [R.fields]);
+        assert.equal(v2.apply_mode, mode);
+      });
+    }
+
+    it("publish: 'all' with popups open — a save from the old popup (no version, or version 1) is a 409, and the popup's reload gets the new version", async () => {
+      await publish(R.fields, ITEM_CONFIG);
+      await seedFrozenItem(6301, null);   // the fixed popup is open
+      await seedFrozenItem(6302, 1);      // version 1's popup is open
+      await H.q("UPDATE item_routes SET current_status = 1 WHERE item_id = ANY($1::bigint[])", [[6301, 6302]]);
+      assert.deepEqual((await stationFields(6301, H.STATION_FUNC_A)).body, { mode: "legacy" });
+
+      await saveDraft(R.fields, config(itemStep(UID.f1, [LED, GND])));
+      const impact = await A.previewPublish(prisma, { route_ids: [R.fields] });
+      const published = await A.publishFields(prisma, { route_ids: [R.fields], base_revs: impact.base_revs, apply_mode: "all" }, ACTOR);
+      assert.equal(published.bumped_items, 2);
+      assert.deepEqual([await versionOf(6301), await versionOf(6302)], [2, 2]);
+
+      const mismatch = { error: UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" };
+      const fromFixed = await submitAt(6301, H.STATION_FUNC_A, { Details: { sku: "MK-1" } });
+      assert.equal(fromFixed.status, 409);
+      assert.deepEqual(fromFixed.body, mismatch);
+      const fromV1 = await submitAt(6302, H.STATION_FUNC_A, { Details: { schema: itemSchema(), fields: {} } });
+      assert.equal(fromV1.status, 409);
+      assert.deepEqual(fromV1.body, mismatch);
+
+      const reloaded = await stationFields(6301, H.STATION_FUNC_A);
+      assert.equal(reloaded.status, 200);
+      assert.equal(reloaded.body.mode, "item");
+      assert.deepEqual(reloaded.body.schema, { route_id: R.fields, v: 2, step_uid: UID.f1, target: "item" });
     });
 
     it("publish: filled_count of a removed field counts the saved results holding it — in details.fields and in a close-wizard decision's fields — on that route and step only", async () => {

@@ -122,7 +122,7 @@ export function parsePublishImpact(raw: unknown): PublishImpactJson | null {
   if (!Array.isArray(raw.shared_outside) || !raw.shared_outside.every((s) => isObj(s) && isId(s.route_id)
     && typeof s.item_type_desc === "string" && isId(s.route_number) && Array.isArray(s.kits)
     && s.kits.every((k) => isObj(k) && isId(k.package_type_id) && typeof k.desc === "string"))) return null;
-  if (!isCount(raw.items_on_routes) || !isCount(raw.not_reached) || !Array.isArray(raw.by_version) || !Array.isArray(raw.issues)) return null;
+  if (!isCount(raw.items_on_routes) || !isCount(raw.not_started) || !isCount(raw.not_reached) || !Array.isArray(raw.by_version) || !Array.isArray(raw.issues)) return null;
   const revs = raw.base_revs;
   if (!isObj(revs) || !Object.values(revs).every(isCount)) return null;
   return raw as unknown as PublishImpactJson;
@@ -183,8 +183,23 @@ export function pendingVersion(model: DraftModel, ownId: number | null): number 
   return best;
 }
 
-/** The scope the dialog opens with: "רק לפריטים חדשים (מומלץ)" (artboard 10, spec §5.11). */
-export const APPLY_MODE_DEFAULT: ApplyMode = "new_only";
+/** The scopes the dialog offers, in order — each moves the rows of the one before it and more
+ *  (admin.ts APPLY_MODES). Artboard 10 draws two cards, "רק לפריטים חדשים" and "גם לפריטים שטרם
+ *  הגיעו לעמדה ששונתה"; the first became "not_started" and "all" was added (2026-10-14). */
+export const PUBLISH_SCOPES = ["not_started", "not_reached", "all"] as const satisfies readonly ApplyMode[];
+export type PublishScope = (typeof PUBLISH_SCOPES)[number];
+
+/** The scope the dialog opens with: items that have not started their route. */
+export const APPLY_MODE_DEFAULT: PublishScope = "not_started";
+
+/** How many items a scope moves, from the preview: "all" moves every item on the routes. */
+export function scopeCount(scope: PublishScope, impact: Pick<PublishImpactJson, "not_started" | "not_reached" | "items_on_routes">): number {
+  switch (scope) {
+    case "not_started": return impact.not_started;
+    case "not_reached": return impact.not_reached;
+    case "all": return impact.items_on_routes;
+  }
+}
 
 // ---- the warning note ---------------------------------------------------------------------------------
 /** The warning note (artboard 10), or null when no route of the batch runs in another kit. */

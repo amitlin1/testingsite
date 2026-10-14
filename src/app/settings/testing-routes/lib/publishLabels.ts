@@ -1,4 +1,5 @@
 import { UNDRAWN_TEXT as SCREEN_UNDRAWN_TEXT, changesText, routesCountText } from "./labels";
+import type { PublishScope } from "./publishModel";
 
 /**
  * Strings of the publish dialog "פרסום גרסה N" (artboard 10, route-fields spec §5.11). Copied
@@ -67,6 +68,27 @@ export const PUBLISH_UNDRAWN_TEXT = {
   routesComma: ", ",
 } as const;
 
+/** The scope cards and info-note clauses of "not_started" and "all" (publishModel.PUBLISH_SCOPES):
+ *  artboard 10 draws neither — proposed 2026-10-14, awaiting approval. */
+export const SCOPE_UNDRAWN_TEXT = {
+  // the first card: items that have not started their route (it replaces artboard 10's
+  // "רק לפריטים חדשים (מומלץ)").
+  notStartedTitle: "רק לפריטים שעוד לא התחילו את המסלול (מומלץ) · ",
+  notStartedSubLead: "כולל מארזים שנקלטו ועוד לא נפתחו. ",
+  // the third card: every unfinished item.
+  allTitle: "לכל הפריטים, גם אלה שבבדיקה · ",
+  allSub: "חלון שכבר פתוח ייטען מחדש עם השדות החדשים כשהעובד ישמור; תוצאות שכבר נשמרו לא ישתנו",
+  // the info note under "not_started" — artboard 10's "pending" sentence with this card's reason.
+  notStartedMoved: " מהם, שעוד לא התחילו את המסלול, יעברו לגרסה ",
+  notStartedOneMovedPrefix: "אחד מהם, שעוד לא התחיל את המסלול, יעבור לגרסה ",
+  notStartedOnlyItemPrefix: "הוא עוד לא התחיל את המסלול, ולכן יעבור לגרסה ",
+  // the info note under "all".
+  allMovedPrefix: "כולם יעברו לגרסה ",
+  allMovedSuffix: ", גם פריטים שכבר בבדיקה",
+  allOnlyItemPrefix: "הוא יעבור לגרסה ",
+  allOnlyItemSuffix: ", גם אם הוא כבר בבדיקה",
+} as const;
+
 // ---- fixed text (artboard 10 DOM) --------------------------------------------------------------------
 export const PUBLISH_TEXT = {
   /** The list's label (its id is the list's aria-labelledby). */
@@ -82,8 +104,6 @@ export const PUBLISH_TEXT = {
   /** Footer and header. */
   cancel: "ביטול",
   close: "סגירה",
-  /** The first scope card's title. */
-  scopeNewTitle: "רק לפריטים חדשים (מומלץ)",
 } as const;
 
 /** A change row's round badge: its title and the glyph's aria-label (artboard 10 `KIND`). */
@@ -196,40 +216,64 @@ function followPhrase(fromVersion: number): string {
 }
 
 export type InfoNoteInput = {
-  /** "גם לפריטים שטרם הגיעו…" is chosen. */
-  pending: boolean;
+  /** The chosen scope. */
+  scope: PublishScope;
   /** items_on_routes. */
   items: number;
-  /** not_reached — the rows "not_reached" moves. */
-  notReached: number;
+  /** The rows the chosen scope moves (publishModel.scopeCount). */
+  moved: number;
   version: number;
   fromVersion: number;
 };
 
+/** "{k} מהם, …, יעברו לגרסה {v}…" — the moving part of the note, in the chosen scope's words. */
+function movedClause(scope: PublishScope, moved: number, version: number): string {
+  const S = SCOPE_UNDRAWN_TEXT;
+  switch (scope) {
+    case "not_started":
+      return moved === 1 ? S.notStartedOneMovedPrefix + version : moved + S.notStartedMoved + version;
+    case "not_reached":
+      return moved === 1
+        ? PUBLISH_UNDRAWN_TEXT.oneMovedPrefix + version + PUBLISH_UNDRAWN_TEXT.oneMovedSuffix
+        : moved + " מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה " + version + " בעמדה הבאה שלהם";
+    case "all":
+      return S.allMovedPrefix + version + S.allMovedSuffix;
+  }
+}
+
+/** The note when the only item on the routes is the one that moves. */
+function onlyItemClause(scope: PublishScope, version: number): string {
+  const S = SCOPE_UNDRAWN_TEXT;
+  switch (scope) {
+    case "not_started": return S.notStartedOnlyItemPrefix + version;
+    case "not_reached": return PUBLISH_UNDRAWN_TEXT.onlyItemMovesPrefix + version + PUBLISH_UNDRAWN_TEXT.oneMovedSuffix;
+    case "all": return S.allOnlyItemPrefix + version + S.allOnlyItemSuffix;
+  }
+}
+
 /**
- * The info note (artboard 10 `infoText`), by the chosen scope:
- *   new:     "9 פריטים נמצאים כעת במסלולים האלה. הם ימשיכו לפי גרסה 4 עד סוף המסלול; פריטים
- *            שייקלטו מעכשיו יקבלו גרסה 5."
- *   pending: "9 פריטים נמצאים כעת במסלולים האלה. 4 מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה 5
- *            בעמדה הבאה שלהם; 5 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. פריטים שייקלטו מעכשיו
- *            יקבלו גרסה 5."
- * With nothing to move the pending note is the new one. 0 / 1 items, 1 to move or 1 left, all of
- * them moving and a first publish are undrawn forms.
+ * The info note (artboard 10 `infoText`), by the chosen scope and how many items it moves:
+ *   none:        "9 פריטים נמצאים כעת במסלולים האלה. הם ימשיכו לפי גרסה 4 עד סוף המסלול; פריטים
+ *                שייקלטו מעכשיו יקבלו גרסה 5."
+ *   not_reached: "9 פריטים נמצאים כעת במסלולים האלה. 4 מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה 5
+ *                בעמדה הבאה שלהם; 5 האחרים ימשיכו לפי גרסה 4 עד סוף המסלול. פריטים שייקלטו מעכשיו
+ *                יקבלו גרסה 5."
+ * "not_started" and "all" say the same with their own reason (SCOPE_UNDRAWN_TEXT). With nothing
+ * to move the note is the first one. 0 / 1 items, 1 to move or 1 left, all of them moving and a
+ * first publish are undrawn forms.
  */
-export function infoNoteText({ pending, items, notReached, version, fromVersion }: InfoNoteInput): string {
+export function infoNoteText({ scope, items, moved: rawMoved, version, fromVersion }: InfoNoteInput): string {
   const tail = "פריטים שייקלטו מעכשיו יקבלו גרסה " + version + ".";
   if (items <= 0) return PUBLISH_UNDRAWN_TEXT.noItemsHead + " " + tail;
   const head = items === 1 ? PUBLISH_UNDRAWN_TEXT.oneItemHead : items + " פריטים נמצאים כעת במסלולים האלה.";
   const follow = followPhrase(fromVersion);
-  const moved = Math.min(Math.max(0, notReached), items);
-  if (!pending || moved === 0) {
+  const moved = Math.min(Math.max(0, rawMoved), items);
+  if (moved === 0) {
     const they = items === 1 ? PUBLISH_UNDRAWN_TEXT.oneItemContinues : "הם ימשיכו";
     return head + " " + they + " " + follow + " עד סוף המסלול; " + tail;
   }
-  if (items === 1) return head + " " + PUBLISH_UNDRAWN_TEXT.onlyItemMovesPrefix + version + PUBLISH_UNDRAWN_TEXT.oneMovedSuffix + ". " + tail;
-  const movedText = moved === 1
-    ? PUBLISH_UNDRAWN_TEXT.oneMovedPrefix + version + PUBLISH_UNDRAWN_TEXT.oneMovedSuffix
-    : moved + " מהם, שטרם הגיעו לעמדה ששונתה, יעברו לגרסה " + version + " בעמדה הבאה שלהם";
+  if (items === 1) return head + " " + onlyItemClause(scope, version) + ". " + tail;
+  const movedText = movedClause(scope, moved, version);
   const rest = items - moved;
   if (rest === 0) return head + " " + movedText + ". " + tail;
   const restText = (rest === 1 ? PUBLISH_UNDRAWN_TEXT.oneOtherContinues : rest + " האחרים ימשיכו") + " " + follow + " עד סוף המסלול";
@@ -242,19 +286,40 @@ export function scopeLabelText(version: number): string {
   return "על מי תחול גרסה " + version;
 }
 
-/** The first card's line (artboard 10): "פריטים שכבר בדרך ממשיכים לפי גרסה {v-1} עד סוף המסלול". */
-export function scopeNewSubText(fromVersion: number): string {
-  return "פריטים שכבר בדרך ממשיכים " + followPhrase(fromVersion) + " עד סוף המסלול";
+/** "{n} פריטים" after a card's title, "פריט אחד" for one. */
+function itemsCountText(n: number): string {
+  return n === 1 ? PUBLISH_UNDRAWN_TEXT.oneItem : n + " פריטים";
+}
+
+/** The first card's title: "רק לפריטים שעוד לא התחילו את המסלול (מומלץ) · {n} פריטים". */
+export function scopeNotStartedTitleText(notStarted: number): string {
+  return SCOPE_UNDRAWN_TEXT.notStartedTitle + itemsCountText(notStarted);
+}
+
+/** The first card's line: what it includes, then artboard 10's "פריטים שכבר בדרך ממשיכים לפי גרסה
+ *  {v-1} עד סוף המסלול". */
+export function scopeNotStartedSubText(fromVersion: number): string {
+  return SCOPE_UNDRAWN_TEXT.notStartedSubLead + "פריטים שכבר בדרך ממשיכים " + followPhrase(fromVersion) + " עד סוף המסלול";
 }
 
 /** The second card's title (artboard 10): "גם לפריטים שטרם הגיעו לעמדה ששונתה · {n} פריטים". */
 export function scopePendingTitleText(notReached: number): string {
-  return "גם לפריטים שטרם הגיעו לעמדה ששונתה · " + (notReached === 1 ? PUBLISH_UNDRAWN_TEXT.oneItem : notReached + " פריטים");
+  return "גם לפריטים שטרם הגיעו לעמדה ששונתה · " + itemsCountText(notReached);
 }
 
 /** The second card's line (artboard 10): "יעברו לגרסה {v} בעמדה הבאה שלהם; תוצאות שכבר נשמרו לא ישתנו". */
 export function scopePendingSubText(version: number): string {
   return "יעברו לגרסה " + version + " בעמדה הבאה שלהם; תוצאות שכבר נשמרו לא ישתנו";
+}
+
+/** The third card's title: "לכל הפריטים, גם אלה שבבדיקה · {n} פריטים". */
+export function scopeAllTitleText(items: number): string {
+  return SCOPE_UNDRAWN_TEXT.allTitle + itemsCountText(items);
+}
+
+/** The third card's line: what happens to a popup already open. */
+export function scopeAllSubText(): string {
+  return SCOPE_UNDRAWN_TEXT.allSub;
 }
 
 // ---- after publishing ------------------------------------------------------------------------------------
