@@ -32,7 +32,9 @@ import { ADD_ROW_ID, AddFieldBar } from "../editor/AddFieldBar";
  *      leaving it keeps it, Escape drops it), Tag "גרסה {v}", "לא בשימוש"; the meta line, or while the
  *      working copy differs "שינויים שלא נשמרו · יישמרו כגרסה {v+1}" with primary small "שמירה כגרסה
  *      {v+1}" (aria-disabled while a field has no name); ghost "שכפל", red ghost "מחק" (confirm and
- *      409 IN_USE: COPY-PENDING). "החל על תאים…" (artboard 9) is session 2e's.
+ *      409 IN_USE: COPY-PENDING); outlined "החל על תאים…" (`onApplyToCells`, artboard 9): the page
+ *      opens the map with the set kept for the apply dialog — the cells are chosen there. The saved
+ *      version applies, not the working copy.
  *   2. usage (pearl): "בשימוש ב-{n} תאים" / "לא בשימוש"; a chip per cell (Link2; "… › {item}" after a
  *      chip of the same kit and station; an older version as a warning chip "גרסה {n}") that opens the
  *      cell editor; past five, "+{n} נוספים" → the map; unused: the paragraph.
@@ -60,6 +62,8 @@ export type FieldSetEditorProps = {
   duplicating: boolean;
   /** Reload the sets (after a save, a delete, an update of the cells). */
   reloadSets: () => Promise<boolean>;
+  /** "החל על תאים…" (artboard 8 → 9). Without it the button is not drawn. */
+  onApplyToCells?: () => void;
 };
 
 const PAGE = "/settings/testing-routes";
@@ -279,6 +283,9 @@ export function FieldSetEditor(props: FieldSetEditorProps) {
             >
               {saveAsVersionText(nextVersion)}
             </Button>
+          )}
+          {props.onApplyToCells && (
+            <Button variant="outlined" onClick={props.onApplyToCells}>{LIBRARY_TEXT.applyToCells}</Button>
           )}
         </div>
       </div>

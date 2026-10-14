@@ -116,9 +116,10 @@ export const LIBRARY_TEXT = {
   duplicatedFrom: "שוכפלה מ: ",
   now: "עכשיו",
   twoDaysAgo: "לפני יומיים",
-  /** The set's actions (artboard 8 DOM). "החל על תאים…" is session 2e's (artboard 9). */
+  /** The set's actions (artboard 8 DOM); "החל על תאים…" leads to artboard 9. */
   duplicate: "שכפל",
   remove: "מחק",
+  applyToCells: "החל על תאים…",
   renameSet: "שינוי שם הערכה",
   renameList: "שינוי שם הרשימה",
   /** The usage block. */

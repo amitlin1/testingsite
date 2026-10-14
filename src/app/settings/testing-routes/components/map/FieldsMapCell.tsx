@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { CircleAlert, Link2, Plus } from "lucide-react";
+import { Check, CircleAlert, Link2, Plus } from "lucide-react";
 import { Tooltip, cn } from "@/components/ui";
 import type { AnyMapCell, MapCell, MapColumn, MapNaCell, MapRow } from "../../lib/mapModel";
 import {
@@ -34,8 +34,12 @@ import {
  * tile shows (count, error, unpublished, the set) is its description (aria-describedby), so a
  * screen reader hears it too. The tone dots are decoration: the editor names every tone in words.
  *
- * Selection (artboard 1's 2px primary frame and Check badge, aria-pressed) is session 2e's: a click
- * hands the event to `onActivate`, which FieldsMap turns into "open the editor" (spec §10.3).
+ * Selected (artboard 1): a 2px primary frame on tint over whatever the tile shows, and an 18px blue
+ * badge with a white Check (a 2px white ring) in the inline-end top corner. Artboard 1 marks it with
+ * aria-pressed because its demo toggles on click; here a click OPENS the editor (spec §10.3), so the
+ * state is the grid's own — aria-selected on the gridcell (the grid is aria-multiselectable) —
+ * and the button is not announced as a toggle it is not. A click hands its event to `onActivate`:
+ * FieldsMap opens the editor, or with Ctrl / ⌘ / Shift changes the selection.
  */
 
 export type FieldsMapCellProps = {
@@ -53,9 +57,11 @@ export type FieldsMapCellProps = {
   /** useGridNavigation: the cell's key and its roving tabindex. */
   navKey: string;
   tabIndex: 0 | -1;
-  /** A click (or Enter) on the cell. FieldsMap opens the editor; the event is there for session
-   *  2e's Ctrl / ⌘ + click. */
+  /** A click (or Enter) on the cell. FieldsMap opens the editor, or with Ctrl / ⌘ / Shift changes
+   *  the selection. */
   onActivate: (cell: MapCell, e: React.MouseEvent<HTMLButtonElement>) => void;
+  /** The cell is in the map's selection. Omitted: the map has no selection (no aria-selected). */
+  selected?: boolean;
 };
 
 type CellState = "defined" | "empty" | "error";
@@ -98,7 +104,7 @@ function sharedTooltipText(cell: MapCell, row: MapRow): string | null {
 const tipContent = (text: string) => <span className="rf-map__tip">{text}</span>;
 
 export default function FieldsMapCell({
-  cell, row, column, firstRow, lastRow, sharedState, setName, navKey, tabIndex, onActivate,
+  cell, row, column, firstRow, lastRow, sharedState, setName, navKey, tabIndex, onActivate, selected,
 }: FieldsMapCellProps) {
   const descId = React.useId();
   const kit = column.packageLevel;
@@ -133,9 +139,13 @@ export default function FieldsMapCell({
       type="button"
       data-nav-key={navKey}
       tabIndex={tabIndex}
-      className={cn("rf-cell", `rf-cell--${state}`, kit && "rf-cell--kit")}
+      className={cn("rf-cell", `rf-cell--${state}`, kit && "rf-cell--kit", selected && "rf-cell--selected")}
       aria-label={cellAccessibleName(cell, sharedState)}
       aria-describedby={state === "empty" ? undefined : descId}
+      // Shift + click selects a range: keep the press from selecting the page's text on the way.
+      onMouseDown={(e) => {
+        if (e.shiftKey) e.preventDefault();
+      }}
       onClick={(e) => onActivate(cell, e)}
     >
       <span id={descId} className="rf-cell__body">
@@ -173,11 +183,16 @@ export default function FieldsMapCell({
           <span className="rf-cell__unpub" role="img" aria-label={MAP_TEXT.unpublished} title={MAP_TEXT.unpublished} />
         )}
       </span>
+      {selected && (
+        <span className="rf-cell__check" aria-hidden="true">
+          <Check size={11} strokeWidth={1.75} aria-hidden />
+        </span>
+      )}
     </button>
   );
 
   return (
-    <div role="gridcell" className={slotClass}>
+    <div role="gridcell" aria-selected={selected} className={slotClass}>
       {caption}
       {sharedTip ? <Tooltip title={tipContent(sharedTip)} placement="top">{button}</Tooltip> : button}
     </div>

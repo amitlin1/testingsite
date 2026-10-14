@@ -35,13 +35,16 @@ import "./library.css";
 export type FieldLibraryProps = {
   query: RouteQuery;
   onNavigate: (q: RouteQuery) => void;
+  /** The set editor's "החל על תאים…" (artboard 8 → 9): the page takes the set to the map. Without it
+   *  the button is not drawn. */
+  onApplyToCells?: (setId: number) => void;
 };
 
 /** The artboard-4 popover: a new list (against "+ רשימה חדשה") or the open list's options. Kept after
  *  it closes, so the focus goes back to the button that opened it. */
 type ListPopover = { listId: number | null; open: boolean };
 
-export function FieldLibrary({ query, onNavigate }: FieldLibraryProps) {
+export function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibraryProps) {
   const sets = useFieldSets();
   const lists = useOptionLists();
   const routes = useRouteIndex();
@@ -172,6 +175,7 @@ export function FieldLibrary({ query, onNavigate }: FieldLibraryProps) {
           onDuplicate={duplicateSet}
           duplicating={creating === "dup-set"}
           reloadSets={reloadSets}
+          onApplyToCells={onApplyToCells ? () => onApplyToCells(openSet.id) : undefined}
         />
       )}
 

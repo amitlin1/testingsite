@@ -1,0 +1,431 @@
+/* =========================================================================
+   "החלת ערכת שדות" — the apply-set dialog (artboard 9, route-fields spec
+   §5.10). Dialog maxWidth "sm" (600, the artboard's width). rf-afs-*
+   classes only, tokens only (src/styles/tokens.css); logical properties
+   (the dialog is RTL). The set and mode cards reuse .pkg-choice
+   (packages.css: hairline edge, blue edge + tint once chosen).
+   ========================================================================= */
+
+/* ------------------------------------------------------------ head --- */
+.rf-afs__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: 22px 24px 14px;
+}
+.rf-afs__head-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+.sh-dialog-title.rf-afs__title {
+  display: block;
+  padding: 0;
+  font-size: var(--text-title);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  font-variant-numeric: tabular-nums;
+}
+.rf-afs__sub {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-48);
+}
+.sh-iconbtn.rf-afs__close {
+  flex: none;
+  color: var(--color-ink-muted-48);
+}
+
+/* ------------------------------------------------------------ body --- */
+.sh-dialog-body.rf-afs__body {
+  padding: 4px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-ml);
+  font-size: var(--text-body);
+}
+.rf-afs__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+/* "ערכת שדות", "יעד", "אופן ההחלה": 13 / 600. */
+.rf-afs__label {
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-80);
+}
+
+/* ---------------------------------------------------- the search pill --- */
+.rf-afs__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.rf-afs__search-icon {
+  position: absolute;
+  inset-inline-start: 16px;
+  color: var(--color-ink-muted-48);
+  pointer-events: none;
+}
+.rf-afs__search-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-pill);
+  padding-block: 0;
+  padding-inline: 46px 16px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: var(--text-body);
+}
+.rf-afs__search-input::placeholder { color: var(--color-ink-muted-40); }
+.rf-afs__search-input:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 0;
+  border-color: var(--color-primary);
+}
+
+/* -------------------------------------------------------- the set cards --- */
+.rf-afs__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.pkg-choice.rf-afs__card {
+  min-height: 56px;
+  border-radius: var(--r-md);
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+/* The artboard's cards are 56px with two lines: snug lines, not the body's 1.47. */
+.rf-afs__card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.25;
+}
+.rf-afs__card-name {
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+.rf-afs__card-line {
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+}
+.rf-afs__card-tag { font-variant-numeric: tabular-nums; }
+.rf-afs__card-icon {
+  flex: none;
+  color: var(--color-ink-muted-48);
+}
+/* No card left by the search: a dashed 56px box. */
+.rf-afs__none {
+  box-sizing: border-box;
+  min-height: 56px;
+  border-radius: var(--r-md);
+  border: 1.5px dashed var(--color-border-strong);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-48);
+}
+.rf-afs__state {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The radio of a card (20px): a field-border ring; chosen, a blue disc
+   with a white 8px dot. */
+.rf-afs__radio {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: var(--r-full);
+  border: 1px solid var(--color-field-border);
+  background: var(--color-canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rf-afs__radio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--color-on-primary);
+}
+[aria-checked="true"] > .rf-afs__radio {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+/* -------------------------------------------------------------- preview --- */
+.rf-afs__preview {
+  background: var(--color-surface-pearl);
+  border: 1px solid var(--color-divider-soft);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rf-afs__pv-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.rf-afs__pv-icon { flex: none; color: var(--color-ink-muted-48); }
+.rf-afs__pv-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-80);
+}
+.rf-afs__pv-count {
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rf-afs__pv-row {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.rf-afs__pv-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+.rf-afs__pv-name {
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+}
+.rf-afs__pv-meta {
+  margin-inline-start: auto;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+}
+.rf-afs__pv-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rf-afs__pv-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+  color: var(--color-ink);
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  padding: 4px 9px;
+}
+/* A section header of the set: it is copied too (12 / 600, as the worker
+   preview's section headers). */
+.rf-afs__pv-section {
+  font-size: var(--text-fine);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink-muted-70);
+}
+/* The tone dot of an option (6px), the four tone tokens. */
+.rf-afs__dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--r-full);
+}
+.rf-afs__dot[data-tone="pass"] { background: var(--rf-tone-pass); }
+.rf-afs__dot[data-tone="warn"] { background: var(--rf-tone-warn); }
+.rf-afs__dot[data-tone="fail"] { background: var(--rf-tone-fail); }
+.rf-afs__dot[data-tone="neutral"] { background: var(--rf-tone-neutral); }
+
+/* ---------------------------------------------------------------- "יעד" --- */
+.rf-afs__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rf-afs__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  padding: 5px 10px;
+}
+.rf-afs__chip-muted {
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-muted-48);
+}
+.rf-afs__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+}
+.rf-afs__note-icon { flex: none; color: var(--color-primary); }
+
+/* ---------------------------------------------------------- "אופן ההחלה" --- */
+.rf-afs__modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-xs);
+}
+.pkg-choice.rf-afs__mode {
+  min-height: 56px;
+  border-radius: var(--r-md);
+  padding: 9px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.rf-afs__mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rf-afs__mode-title {
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+}
+.rf-afs__mode-sub {
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  line-height: 1.4;
+}
+.rf-afs__warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+  font-size: var(--text-small);
+  color: var(--color-ink);
+}
+.rf-afs__warning-icon { flex: none; color: var(--color-warning-ink); }
+
+/* ------------------------------------------------ "השאר מקושר לערכה" --- */
+.rf-afs__linked-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rf-afs__linked {
+  min-height: 32px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--color-ink);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  border-radius: var(--r-xs);
+}
+.rf-afs__linked:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
+}
+.rf-afs__box {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--color-field-border);
+  background: var(--color-canvas);
+  color: var(--color-on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rf-afs__linked[aria-checked="true"] .rf-afs__box {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+.rf-afs__linked-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rf-afs__linked-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+}
+.rf-afs__linked-icon { flex: none; color: var(--color-primary); }
+.rf-afs__linked-help {
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+}
+/* "שדה '…' כבר קיים ב'…' — יידלג כדי למנוע כפילות": 12 muted, the
+   warning-ink icon. */
+.rf-afs__dup {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  line-height: 1.45;
+}
+.rf-afs__dup-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-warning-ink);
+}
+
+/* -------------------------------------------------------------- footer --- */
+/* "ספריית הערכות" at the inline start; "ביטול" and the primary at the end. */
+.sh-btn.rf-afs__library { margin-inline-end: auto; }
+
+/* =========================================================================
+   "שמור כערכה…" (SaveAsSetDialog) — not drawn: the name, a muted line on
+   what the save does, the error.
+   ========================================================================= */
+.rf-save-set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.rf-save-set__help {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-48);
+}

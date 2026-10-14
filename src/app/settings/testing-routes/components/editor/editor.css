@@ -273,6 +273,28 @@
 }
 .sfe-notice__icon { flex: none; margin-top: 1px; color: var(--color-primary); }
 .sfe-notice__text { flex: 1; }
+/* "צור מסלול נפרד למארז הזה" (artboard 2: a link, 600, no underline) — a button, it acts. */
+.sfe-notice__link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sfe-notice__link:hover { color: var(--color-primary-hover); }
+}
+/* The fork dialog's error line, under its message (COPY-PENDING text). */
+.sfe-notice__fork-error {
+  display: block;
+  margin-top: 10px;
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-destructive);
+}
 
 /* The locked rows (parchment, radius 11, min-height 40, Lock 15px, 14px muted). */
 .sfe-locked {

@@ -615,9 +615,11 @@ export const EDITOR_TEXT = {
    *  station types screen's Tag). */
   perItem: MAP_TEXT.perItem,
   packageLevel: "עמדה ברמת מארז",
-  /** The card's ⋯ (artboard 2 aria-label) and its one item for now ("שמור כערכה…" / "החל ערכה…" come
-   *  with sessions 2d / 2e). */
+  /** The card's ⋯ (artboard 2 aria-label, every item there) — cellMenuText names the items a menu
+   *  really has. Its items: "שמור כערכה…", "החל ערכה…" (spec §5.5.1), "נקה את התא". */
   cellMenuLabel: "פעולות נוספות לתא: שמור כערכה, החל ערכה, נקה את התא",
+  saveAsSet: "שמור כערכה…",
+  applySet: "החל ערכה…",
   clearCell: "נקה את התא",
   /** The target chips (artboard 2; a package-level column's from artboard 7). */
   targetsLabel: "הפריט שעבורו מגדירים שדות",
@@ -687,6 +689,17 @@ export const DEFAULT_CHOICE_OPTIONS: readonly { label: string; tone: Tone }[] = 
 /** A row's name in the accessible names below — its label, or "שורה ללא שם" (artboard 2 `label`). */
 export function rowNameText(label: string): string {
   return label.trim() || EDITOR_TEXT.unnamedRow;
+}
+
+/** The words of artboard 2's ⋯ aria-label, one per menu item, in the menu's order. */
+export const CELL_MENU_WORDS = { saveAsSet: "שמור כערכה", applySet: "החל ערכה", clear: "נקה את התא" } as const;
+export type CellMenuItem = keyof typeof CELL_MENU_WORDS;
+
+/** The ⋯'s aria-label (artboard 2): "פעולות נוספות לתא: {items}" — only the items the menu has, in
+ *  its order ("פעולות נוספות לתא: שמור כערכה, החל ערכה, נקה את התא" with all three). */
+export function cellMenuText(items: readonly CellMenuItem[]): string {
+  const order: CellMenuItem[] = ["saveAsSet", "applySet", "clear"];
+  return "פעולות נוספות לתא: " + order.filter((i) => items.includes(i)).map((i) => CELL_MENU_WORDS[i]).join(", ");
 }
 
 /** The card's h2 (artboard 2): "שלב {n} מתוך {total} · {station}". */

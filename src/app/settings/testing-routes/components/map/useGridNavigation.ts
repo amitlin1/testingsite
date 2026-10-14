@@ -17,8 +17,10 @@ import * as React from "react";
  *   Home / End              the first / last in the row; with Ctrl, the first / last cell of the body
  *   Enter                   not handled here: every focusable place is a <button>, whose own Enter
  *                           click opens the cell (FieldsMap)
- * Shift + arrows (a range), Space, Escape and Ctrl C / Ctrl V are the selection's — session 2e —
- * and pass through untouched.
+ *   Shift + the keys above  the same move inside the body (never onto a header), reported to
+ *                           `onExtend(from, to)` — the selection's range (useGridSelection). Without
+ *                           `onExtend` they pass through untouched.
+ * Space, Escape and Ctrl C / Ctrl V are the selection's (FieldsMap) and pass through untouched.
  */
 
 /** Rows × columns of navigation keys; null = nothing to focus there. */
@@ -104,6 +106,8 @@ export type GridNavigationOptions = {
   initialKey?: string | null;
   /** The first row of the body in the grid (1 when row 0 is the column headers). */
   bodyStart?: number;
+  /** Shift + a navigation key moved the focus from `from` to `to` (both in the body). */
+  onExtend?: (from: string, to: string) => void;
 };
 
 export type GridNavigation = {
@@ -132,6 +136,7 @@ export function useGridNavigation(
   options: GridNavigationOptions = {},
 ): GridNavigation {
   const bodyStart = options.bodyStart ?? 0;
+  const onExtend = options.onExtend;
   const [active, setActive] = React.useState<string | null>(options.initialKey ?? null);
   // A key the grid no longer has (a filter hid its row, the context changed) gives way to the first.
   const activeKey = React.useMemo(
@@ -152,7 +157,8 @@ export function useGridNavigation(
   }, [gridRef]);
 
   const onKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLElement>) => {
-    if (!NAV_KEYS.has(e.key) || e.altKey || e.metaKey || e.shiftKey) return;
+    if (!NAV_KEYS.has(e.key) || e.altKey || e.metaKey) return;
+    if (e.shiftKey && !onExtend) return;
     if (e.ctrlKey && e.key !== "Home" && e.key !== "End") return;
     const from = navKeyOf(e.target) ?? activeKey;
     if (from == null) return;
@@ -160,8 +166,17 @@ export function useGridNavigation(
     const rtl = root ? getComputedStyle(root).direction === "rtl" : true;
     e.preventDefault();
     const next = navTarget(grid, from, e.key, { rtl, ctrlKey: e.ctrlKey, bodyStart });
-    if (next != null && next !== from) focusKey(next);
-  }, [gridRef, grid, activeKey, bodyStart, focusKey]);
+    if (next == null || next === from) return;
+    if (e.shiftKey) {
+      // A range grows inside the body only: from a header, or onto one, nothing moves.
+      const inBody = (k: string) => (navPosition(grid, k)?.row ?? -1) >= bodyStart;
+      if (!inBody(from) || !inBody(next)) return;
+      focusKey(next);
+      onExtend?.(from, next);
+      return;
+    }
+    focusKey(next);
+  }, [gridRef, grid, activeKey, bodyStart, focusKey, onExtend]);
 
   const onFocus = React.useCallback((e: React.FocusEvent<HTMLElement>) => {
     const key = navKeyOf(e.target);

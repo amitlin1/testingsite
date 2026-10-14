@@ -2,7 +2,7 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Route } from "lucide-react";
-import { Alert, Button, cn } from "@/components/ui";
+import { Alert, Button, Snackbar, cn } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import type { FieldId } from "@/app/lib/station-fields/schema";
@@ -16,20 +16,25 @@ import {
   MapLoadErrorState, MapLoadingState, MapNoContentsState, MapNoStepsState,
 } from "./components/map/MapViewStates";
 import FieldsMap from "./components/map/FieldsMap";
+import FieldsOnboarding from "./components/map/FieldsOnboarding";
 import { MAP_ERROR_ACTION_ID } from "./components/map/FieldsMapErrorBar";
 import StationFieldEditor from "./components/editor/StationFieldEditor";
 import { EditorBreadcrumb } from "./components/editor/EditorBreadcrumb";
 import PublishDialog from "./components/dialogs/PublishDialog";
+import ApplyFieldSetDialog from "./components/dialogs/ApplyFieldSetDialog";
 import FieldLibrary from "./components/library/FieldLibrary";
 import { useFieldSetNames, useFieldSetVersions } from "./lib/useLibrary";
 import { DraftStoreProvider, useFieldsMap, useStepsOutOfContextKey } from "./lib/draftStore";
-import { findCell } from "./lib/mapModel";
-import type { CellBinding } from "./lib/mapModel";
+import { findCell, relevantCells } from "./lib/mapModel";
+import type { CellBinding, MapCell } from "./lib/mapModel";
+import { firstColumnCells } from "./lib/applySetModel";
+import type { PasteCounts } from "./lib/bulkModel";
+import { pastedText } from "./lib/bulkLabels";
 import { useFieldsContext } from "./lib/useFieldsContext";
 import type { FieldsContextState, FieldsContextSubject } from "./lib/useFieldsContext";
 import {
   backToMap, isEditorOpen, parseRouteQuery, readLastRoute, routeQueryHref, routeRefOf, sameRouteQuery,
-  withEditor, withLastRoute, withRoute, withView, writeLastRoute,
+  withEditor, withLastRoute, withLibrary, withRoute, withView, writeLastRoute,
 } from "./lib/routeQuery";
 import type { RouteQuery, RouteRef, RouteView } from "./lib/routeQuery";
 import { HEADER_TEXT, NO_ROUTE_TEXT } from "./lib/labels";
@@ -39,11 +44,19 @@ import "./route-fields.css";
  * /settings/testing-routes — "מסלולי בדיקה" (route-fields spec §5.1, §5.2; D6): the shell of the
  * route-fields screen. Header (RouteFieldsHeader) → context card "מסלול נבחר" (hidden on the
  * library) → the view tabs → the view:
- *   map      the fields map (FieldsMap, artboard 1) and, with ?step=&target=, its cell editor
- *            (StationFieldEditor, artboard 2 — its breadcrumb in the tabs' row); session 2e adds the
- *            onboarding; this shell draws the map's other states (artboard 11)
+ *   map      the fields map (FieldsMap, artboard 1) — under the onboarding card while the route holds
+ *            no fields of its own (FieldsOnboarding, artboard 11) — and, with ?step=&target=, its cell
+ *            editor (StationFieldEditor, artboard 2 — its breadcrumb in the tabs' row); this shell
+ *            draws the map's other states (artboard 11)
  *   steps    "שלבי המסלול" (RouteStepsTab)
- *   library  "ערכות ורשימות" — session 2d
+ *   library  "ערכות ורשימות" (FieldLibrary, artboard 8)
+ *
+ * "החלת ערכת שדות" (ApplyFieldSetDialog, artboard 9) is the page's: the selection bar's "החל ערכת
+ * שדות…" (the selected cells), the editor's ⋯ "החל ערכה…" (its cell) and the onboarding's "החל ערכת
+ * שדות…" (the cells of the map's first column — artboard 11 selects none) open it. The library's
+ * "החל על תאים…" cannot pick cells there (spec §5.10: "לא מצויר"), so it opens the map of the route
+ * on screen and remembers its set: the next opening of the dialog starts on it — no undrawn UI. After
+ * an apply, the paste's COPY-PENDING message tells what went in.
  *
  * ALL view state is in the URL (lib/routeQuery.ts), changed with router.replace. Without a route
  * in the URL the page opens the route last opened in this browser (localStorage), else the empty
@@ -357,6 +370,48 @@ function RouteFieldsScreen({
   const closePublish = useCallback(() => setPublishOpen(false), []);
   const reloadAfterPublish = useCallback(() => reloadContext?.(), [reloadContext]);
 
+  // ---- "החלת ערכת שדות" (artboard 9; session 2e) ---------------------------------------------------
+  // The cells stay with a closed dialog, so its text does not change while it closes. `returnFocus`:
+  // ui/Dialog has no trigger to give the focus back to — the control that opened it takes it, or the
+  // map region when that control is gone (the onboarding card leaves once a cell has fields).
+  const [applyBox, setApplyBox] = useState<{ open: boolean; cells: MapCell[]; returnFocus: HTMLElement | null }>(
+    { open: false, cells: [], returnFocus: null },
+  );
+  // The library's "החל על תאים…": the set the next opening starts on.
+  const [pendingSetId, setPendingSetId] = useState<number | null>(null);
+  // The message after an apply (the paste's COPY-PENDING words); a new one restarts the Snackbar.
+  const [applyNotice, setApplyNotice] = useState<{ text: string; seq: number } | null>(null);
+  const openApply = useCallback((cells: MapCell[], returnFocus?: HTMLElement | null) => {
+    if (cells.length === 0) return;
+    const active = typeof document === "undefined" ? null : document.activeElement;
+    const opener = active instanceof HTMLElement && active !== document.body ? active : null;
+    setApplyBox({ open: true, cells, returnFocus: returnFocus ?? opener });
+  }, []);
+  const closeApply = useCallback(() => {
+    const back = applyBox.returnFocus;
+    setApplyBox((b) => ({ ...b, open: false }));
+    window.setTimeout(() => {
+      if (back?.isConnected) back.focus({ preventScroll: true });
+      else mapRegionRef.current?.focus({ preventScroll: true });
+    }, 0);
+  }, [applyBox.returnFocus]);
+  const onApplied = useCallback((counts: PasteCounts) => {
+    setPendingSetId(null);
+    setApplyNotice((n) => ({ text: pastedText(counts), seq: (n?.seq ?? 0) + 1 }));
+  }, []);
+  const openSetsLibrary = useCallback((setId: number | null) => navigate(withLibrary(query, "sets", setId)), [navigate, query]);
+  const applyToCellsFromLibrary = useCallback((setId: number) => {
+    setPendingSetId(setId);
+    navigate(withView(query, "map"));
+  }, [navigate, query]);
+  // A route change leaves the dialog's cells behind: they belong to the map that was on screen.
+  const routeKey = ref ? `${ref.type}:${ref.route}` : "";
+  const [applyRouteKey, setApplyRouteKey] = useState(routeKey);
+  if (applyRouteKey !== routeKey) {
+    setApplyRouteKey(routeKey);
+    if (applyBox.open) setApplyBox((b) => ({ ...b, open: false }));
+  }
+
   // The cell the editor is open on, once the map is drawn: its breadcrumb goes in the tabs' row
   // (artboard 2). A cell the map does not have gets none — the editor sends the URL back to the map.
   const mapReady = view === "map" && ctx.status === "ready" && map != null && map.emptyState == null;
@@ -391,14 +446,47 @@ function RouteFieldsScreen({
         return <MapNoStepsState onGoToSteps={() => navigate(withView(query, "steps"))} />;
       case "no_contents":
         return <MapNoContentsState packagesHref={packagesHref} />;
-      default:
-        // With ?step=&target= the cell editor, else the map (its error bar, toolbar and footer).
-        // Session 2e adds the onboarding card (map.onboarding) and the bulk actions.
-        return editorOpen ? (
-          <StationFieldEditor context={ctx.data} model={map} query={query} onNavigate={navigate} breadcrumbOutside />
-        ) : (
-          <FieldsMap context={ctx.data} model={map} query={query} onOpenCell={openCell} setNames={setNames} />
+      default: {
+        // With ?step=&target= the cell editor, else the map (its error bar, toolbar, selection bar and
+        // footer) under the onboarding card while the route holds no fields of its own.
+        if (editorOpen) {
+          return (
+            <StationFieldEditor
+              context={ctx.data}
+              model={map}
+              query={query}
+              onNavigate={navigate}
+              breadcrumbOutside
+              onApplySet={openApply}
+              reloadContext={ctx.reload}
+            />
+          );
+        }
+        const model = map;
+        return (
+          <>
+            <FieldsOnboarding
+              context={ctx.data}
+              model={model}
+              onStart={() => {
+                // "התחל בעמדה הראשונה": the first relevant cell (a kit's: its first step, the box).
+                const first = relevantCells(model)[0];
+                if (first) openCell(first.binding);
+              }}
+              onApplySet={() => openApply(firstColumnCells(model))}
+              onOpenKit={(id) => navigate(withRoute(query, { type: id, route: 1 }))}
+            />
+            <FieldsMap
+              context={ctx.data}
+              model={model}
+              query={query}
+              onOpenCell={openCell}
+              setNames={setNames}
+              onApplySet={(cells) => openApply(cells)}
+            />
+          </>
         );
+      }
     }
   };
 
@@ -413,6 +501,26 @@ function RouteFieldsScreen({
         onShowIssues={showIssues}
       />
       <PublishDialog open={publishOpen} onClose={closePublish} context={context} map={map} onReloadContext={reloadAfterPublish} />
+      {context && map && (
+        <ApplyFieldSetDialog
+          open={applyBox.open}
+          cells={applyBox.cells}
+          context={context}
+          model={map}
+          preferredSetId={pendingSetId}
+          onClose={closeApply}
+          onApplied={onApplied}
+          onOpenLibrary={openSetsLibrary}
+        />
+      )}
+      <Snackbar
+        key={applyNotice?.seq ?? 0}
+        open={applyNotice != null}
+        message={applyNotice?.text}
+        autoHideDuration={5000}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        onClose={() => setApplyNotice(null)}
+      />
 
       {optionsError && (
         <div className="settings-card settings-error">
@@ -456,7 +564,7 @@ function RouteFieldsScreen({
       )}
 
       {/* "ערכות ורשימות" (artboard 8): global, independent of the chosen route. */}
-      {view === "library" && <FieldLibrary query={query} onNavigate={navigate} />}
+      {view === "library" && <FieldLibrary query={query} onNavigate={navigate} onApplyToCells={applyToCellsFromLibrary} />}
     </div>
   );
 }

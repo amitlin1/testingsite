@@ -142,6 +142,10 @@ export type FieldSetSavedJson = { version: number };
 /** POST …/[id]/propagate → 200: how many route drafts were written (drafts only; nothing is published). */
 export type PropagateResultJson = { updated_drafts: number };
 
+/** POST /api/settings/testing-routes/[id]/fork { package_type_id } → 201 (spec §3.2.1, session 2e):
+ *  the new route of the item type, which the kit's template line now runs. */
+export type ForkResultJson = { test_route_id: number; route_number: number };
+
 /** The reason a context route is null: no testing_routes row for (item_type_id, route_number). */
 export const ROUTE_MISSING = "ROUTE_MISSING";
 

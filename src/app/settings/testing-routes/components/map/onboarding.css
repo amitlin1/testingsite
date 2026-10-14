@@ -1,0 +1,154 @@
+/* =========================================================================
+   The onboarding card of a route without fields of its own and its info
+   bar (route-fields spec §5.12; artboard 11, top). Tokens only
+   (src/styles/tokens.css); logical properties — the page is RTL.
+   ========================================================================= */
+
+/* The card, then the info bar, 16 apart; 16 down to the map that follows
+   in the (block) map region. */
+.rf-onb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-block-end: var(--space-md);
+}
+
+/* ------------------------------------------------------------- card --- */
+/* <section aria-labelledby>: white, hairline, radius 16, padding 40; the
+   content centred in at most 760, 24 apart. */
+.rf-onb-card {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  padding: 40px;
+  display: flex;
+  justify-content: center;
+}
+.rf-onb-card__inner {
+  width: 760px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  text-align: center;
+}
+/* ListChecks 34px, the title, the line — 12 apart. */
+.rf-onb-card__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.rf-onb-card__icon { flex: none; color: var(--color-primary); }
+.rf-onb-card__title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  color: var(--color-ink);
+}
+.rf-onb-card__text {
+  margin: 0;
+  max-width: 600px;
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--color-ink-muted-48);
+}
+
+/* <ol aria-label="שלושה צעדים">: three pearl tiles, 12 apart. */
+.rf-onb-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-sm);
+  text-align: start;
+}
+.rf-onb-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: 14px 16px;
+  background: var(--color-surface-pearl);
+  border: 1px solid var(--color-divider-soft);
+  border-radius: var(--r-md);
+}
+/* The number: a 26px blue circle, 13/700. */
+.rf-onb-step__n {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--text-small);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Title over line, 3 apart, set tight (artboard 11 draws them at the
+   font's normal leading, not the page's 1.5). */
+.rf-onb-step__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  line-height: var(--lh-snug);
+}
+.rf-onb-step__title {
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink);
+}
+.rf-onb-step__line {
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-48);
+}
+
+/* Primary, then the ghost — centred, 12 apart, wrapping. */
+.rf-onb-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+/* --------------------------------------------------------- info bar --- */
+/* Alert "info" (primary tint, primary-border edge, radius 11), padding
+   6px 14px and min-height 46 set on the element; a sentence per line with
+   its "פתח את {kit}" at the inline end, the × last. */
+.rf-onb-info__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+.rf-onb-info__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 10px;
+}
+.rf-onb-info__text { flex: 1 1 auto; min-width: 0; }
+/* The link: 14/600, padding 6px 8px. */
+.rf-onb-info .sh-btn.rf-onb-info__link {
+  padding: 6px 8px;
+  min-height: 32px;
+  font-size: var(--text-body-sm);
+}
+/* × "סגירה": a 32px square, radius 8, inside the bar's padding. */
+.rf-onb-info .sh-alert-close {
+  margin: 0;
+  border-radius: var(--r-sm);
+}
+
+/* Narrow: the tiles stack, the card's padding eases. */
+@media (max-width: 720px) {
+  .rf-onb-card { padding: var(--space-lg) var(--space-md); }
+  .rf-onb-steps { grid-template-columns: minmax(0, 1fr); }
+}

@@ -6,7 +6,7 @@
    Logical properties throughout: the page is RTL.
    ========================================================================= */
 
-/* Error bar → toolbar → [selection bar, session 2e] → the map card, 16 apart. */
+/* Error bar → toolbar → selection bar → the map card, 16 apart. */
 .rf-map-view {
   display: flex;
   flex-direction: column;
@@ -62,6 +62,48 @@
 }
 .rf-filter-chip:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
 .rf-filter-chip:disabled { color: var(--color-ink-muted-48); cursor: default; }
+
+/* ---------------------------------------------------- selection bar --- */
+/* role="toolbar": min-height 48, tint, primary-border, radius 11, padding
+   6px 14px, 6 apart (artboard 1). */
+.rf-bulk {
+  min-height: 48px;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-primary-tint);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--r-md);
+  padding: 6px 14px;
+}
+/* "{n} תאים נבחרו" (14/600), 8 before the buttons. */
+.rf-bulk__count {
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  margin-inline-end: 8px;
+}
+/* Ghost buttons: 32px, 6px 12px, radius 8, 14/600 (small text buttons). */
+.sh-btn.rf-bulk__btn { padding: 6px 12px; gap: 6px; }
+/* "בטל בחירה" at the far end. */
+.sh-btn.rf-bulk__deselect { margin-inline-start: auto; }
+/* "Ctrl V": 11px, read left to right, hairline frame on white. */
+.rf-bulk__key {
+  font-size: var(--text-micro);
+  font-weight: var(--fw-regular);
+  color: var(--color-ink-muted-48);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  padding: 0 5px;
+  background: var(--color-canvas);
+  unicode-bidi: isolate;
+}
+/* The paste box (the clipboard could not be read): the rows keep their
+   tabs on one line. */
+.rf-paste-box { margin-top: var(--space-sm); }
+.rf-paste-box textarea { white-space: pre; overflow-x: auto; tab-size: 4; }
 
 /* --------------------------------------------------------- map card --- */
 /* <section aria-label="מפת שדות">: white, hairline, radius 16. */
@@ -325,6 +367,39 @@
   }
   .rf-cell--empty:hover .rf-cell__empty { display: none; }
   .rf-cell--empty:hover .rf-cell__define { display: inline-flex; }
+}
+
+/* Selected (artboard 1): 2px primary on tint over every other look — the
+   padding gives back the extra pixel, so nothing moves. */
+.rf-cell.rf-cell--selected,
+.rf-cell.rf-cell--selected:focus-visible {
+  background: var(--color-primary-tint);
+  border: 2px solid var(--color-primary);
+  padding: 7px 9px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rf-cell.rf-cell--selected:hover {
+    background: var(--color-primary-tint);
+    border: 2px solid var(--color-primary);
+    padding: 7px 9px;
+  }
+}
+/* The badge: 18px blue, a white Check, a 2px white ring, on the inline-end
+   top corner. */
+.rf-cell__check {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: 0 0 0 2px var(--color-canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
 /* "{N} שדות" / "שדה אחד" (14/600). */
