@@ -117,6 +117,22 @@ Bucket `MINIO_BUCKET`, registered in `file_objects`:
   `src/app/lib/item-report/roles.ts`).
 - Download: any signed-in user.
 
+## Tests
+
+- `src/app/lib/item-report/__tests__/variables.test.ts` — pure: values, catalog,
+  verdict, starter template (`npm test`).
+- `src/app/lib/item-report/__tests__/item-report.integration.test.ts` — the whole
+  flow through the real handlers: an item runs its route with station fields, the
+  report freezes at the finish (also via research, also a kit item with kit-level
+  fields), signature, roles, reopen, delete, lost blob, concurrent downloads,
+  template edits after the freeze, preview, logos, escaping. MinIO is an
+  in-process S3 stand-in; it needs a scratch database and a Chromium:
+
+  ```
+  TEST_DATABASE_URL=postgresql://…/scratch PUPPETEER_EXECUTABLE_PATH=/path/to/chrome \
+    node --import tsx --test src/app/lib/item-report/__tests__/item-report.integration.test.ts
+  ```
+
 ## Deploy
 
 1. Run `scripts/prod-item-reports/1-item-reports.sql` (additive; the old image keeps working).
