@@ -1,0 +1,14 @@
+# Package-model test environment on the dev machine (docs/packages/SESSION_SUMMARY.md §6).
+# Runs the image built from the working tree against the upgraded test database
+# testingsite_pkgtest instead of the live dev database. Use together with the base file:
+#   docker build -t testingsite-next-app:packages .
+#   docker compose -p testingsite -f prod-deploy/app-server/docker-compose.yml -f prod-deploy/app-server/docker-compose.pkgtest.yml up -d --no-deps next-app
+#   docker restart nginx
+# Revert to the live database: the same command without this file.
+# No secrets here: the credentials come from prod-deploy/app-server/.env like the base file.
+services:
+  next-app:
+    image: testingsite-next-app:packages
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-5432}/testingsite_pkgtest
+      - MINIO_PUBLIC_ENDPOINT=http://10.10.200.120:9000

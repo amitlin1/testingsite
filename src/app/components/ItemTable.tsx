@@ -415,7 +415,7 @@ export default function ItemTable() {
         />
       )}
 
-      <PackageIntakeDialog open={insertOpen} onClose={() => setInsertOpen(false)} onCreated={onPackageCreated} />
+      <PackageIntakeDialog open={insertOpen} onClose={() => setInsertOpen(false)} onCreated={onPackageCreated} onDeleted={() => loadItems()} />
 
       <EditItemDialog
         open={!!editingItem}

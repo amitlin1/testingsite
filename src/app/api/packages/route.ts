@@ -4,6 +4,7 @@ import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { createPackage, PackageInput, PackageItemInput } from "@/app/lib/packages/create-package";
 import { packageErrorResponse } from "@/app/lib/packages/errors";
 import { loadPackages, PackageStatusKey } from "@/app/lib/packages/read";
+import { assertSerialsFree } from "@/app/lib/packages/serials";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,8 @@ const str = (v: unknown): string => (v == null ? "" : String(v));
  *   items: [{ itemType, serialNumber, makat, model, manufacturer, manufacturerNo?, routeNumber? }]
  *
  * Answers 201 { ok, packageId, itemIds } — ids as numbers (16 digits, exact).
+ * A serial twice in the box, or already on an item of the same type in this
+ * shipment, answers 409 with `itemIndex` (lib/packages/serials.ts).
  */
 export async function POST(req: Request) {
   // createPackage emits item_created into the metrics ledger, so refuse
@@ -114,7 +117,10 @@ export async function POST(req: Request) {
       items,
     };
 
-    const created = await prisma.$transaction((tx) => createPackage(tx, input));
+    const created = await prisma.$transaction(async (tx) => {
+      await assertSerialsFree(tx, shipment, items);
+      return createPackage(tx, input);
+    });
     return NextResponse.json({ ok: true, ...created }, { status: 201 });
   } catch (error) {
     return packageErrorResponse(error, "יצירת המארז נכשלה");

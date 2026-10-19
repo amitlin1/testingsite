@@ -354,7 +354,7 @@ function PackagesPageInner() {
         </div>
       </div>
 
-      <PackageIntakeDialog open={intakeOpen} onClose={() => setIntakeOpen(false)} onCreated={(id) => { load(); setSelectedId(String(id)); }} initialShipmentId={shipment ? Number(shipment) : null} />
+      <PackageIntakeDialog open={intakeOpen} onClose={() => setIntakeOpen(false)} onCreated={(id) => { load(); setSelectedId(String(id)); }} onDeleted={(id) => { load(); setSelectedId((s) => (s === String(id) ? null : s)); }} initialShipmentId={shipment ? Number(shipment) : null} />
       <PackageEditDialog open={editOpen} pkg={sel} onClose={() => setEditOpen(false)} onChanged={load} onDeleteRequest={() => { setEditOpen(false); setDeleteOpen(true); }} />
       <PackageDeleteDialog open={deleteOpen} pkg={sel} onClose={() => setDeleteOpen(false)} onDeleted={() => { setDeleteOpen(false); setSelectedId(null); load(); }} />
       {relabelOpen && (

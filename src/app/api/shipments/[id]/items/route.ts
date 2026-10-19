@@ -30,6 +30,7 @@ export async function GET(
         si.shipment_id,
         si.item_type_id,
         TRIM(it.item_type_desc) AS item_type_desc,
+        it.is_package,
         si.quantity AS total_quantity,
         si.makat,
         COALESCE(route_counts.sample_count, 0) AS sample_count

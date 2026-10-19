@@ -4,6 +4,7 @@ import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { parseBarcode } from "@/app/lib/barcode-parser";
 import { addPackageItem, PackageItemInput } from "@/app/lib/packages/create-package";
 import { packageErrorResponse } from "@/app/lib/packages/errors";
+import { assertSerialsFree } from "@/app/lib/packages/serials";
 
 export const runtime = "nodejs";
 
@@ -49,7 +50,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       routeNumber: body.routeNumber == null || body.routeNumber === "" ? null : Number(body.routeNumber),
     };
 
-    const added = await prisma.$transaction((tx) => addPackageItem(tx, packageId, item));
+    const added = await prisma.$transaction(async (tx) => {
+      // Same serial rule as the intake. A missing package falls through to
+      // addPackageItem, which explains it.
+      const pkg = await tx.items.findUnique({ where: { item_id: packageId }, select: { shipment_id: true } });
+      if (pkg) await assertSerialsFree(tx, pkg.shipment_id, [item]);
+      return addPackageItem(tx, packageId, item);
+    });
     return NextResponse.json({ ok: true, ...added }, { status: 201 });
   } catch (error) {
     return packageErrorResponse(error, "הוספת הפריט למארז נכשלה");

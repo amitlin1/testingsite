@@ -15,6 +15,8 @@ import { checkItemRouteAgainstPackage, loadPackageLevelTypeIds, loadRouteShape }
 import { recheckPackageReadiness } from "@/app/lib/packages/readiness";
 import { resetPackageToOpening } from "@/app/lib/packages/reset";
 import { loadPackage } from "@/app/lib/packages/read";
+import { assertSerialFreeForItem } from "@/app/lib/packages/serials";
+import { workDoneOn } from "@/app/lib/packages/untouched";
 
 export const runtime = "nodejs";
 
@@ -250,6 +252,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       if (!ctx.isPackage && (!serialNumber || !model || !manufacturer)) {
         throw new PackageError("MISSING_FIELDS", "יש למלא את כל השדות");
       }
+      if (!ctx.isPackage) await assertSerialFreeForItem(tx, itemIdBig, nextTypeId, String(serialNumber));
 
       const route = await tx.item_routes.findUnique({
         where: { item_id: itemIdBig },
@@ -427,9 +430,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const itemIdBig = BigInt(itemId);
 
     let cascade = false;
+    // The intake's "בטל מארז אחרון": delete only what nobody has worked on yet.
+    let onlyUntouched = false;
     try {
       const body = await req.json();
       cascade = !!body?.cascade;
+      onlyUntouched = !!body?.onlyUntouched;
     } catch {
       // no JSON body sent — plain delete, cascade stays false
     }
@@ -472,6 +478,11 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const idsToDelete = [itemIdBig, ...children.map((c) => c.item_id)];
 
     await prisma.$transaction(async (tx) => {
+      if (onlyUntouched) {
+        const why = await workDoneOn(tx, idsToDelete);
+        if (why) throw new PackageError("PACKAGE_TOUCHED", `${why} — אי אפשר לבטל אותו מכאן. אפשר למחוק אותו מעמוד המארז.`, 409);
+      }
+
       // Ledger first. The metrics tables hold no FK to `items` -- deliberately,
       // so that no read query has to join it -- which means deleting the item
       // raises nothing and simply strands its runs, events and intervals. The
@@ -500,6 +511,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
     return NextResponse.json({ ok: true, deletedConnectedCount: children.length });
   } catch (error: any) {
+    if (error instanceof PackageError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       return NextResponse.json({ error: "הפריט לא נמצא" }, { status: 404 });
     }
