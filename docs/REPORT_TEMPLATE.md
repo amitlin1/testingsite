@@ -1,5 +1,10 @@
 # תבנית דוחות אחידה — TESTINGSITE
 
+> The per-item test report (דוח פריט) is NOT built with this kit: it is a
+> template per route, edited in the app and rendered by the server — see
+> [ITEM_REPORTS.md](ITEM_REPORTS.md). This kit remains for the shipment
+> certificates.
+
 Every printed document (תעודות, דוחות) is built from the kit in
 `src/app/components/reports/`. Design reference (canvas):
 https://claude.ai/artifact/PSd4Grmi3YkKawD6H55fxj

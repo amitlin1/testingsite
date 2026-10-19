@@ -133,6 +133,14 @@ export async function getObjectStream(key: string, bucket: string = BUCKET): Pro
   return minioClient.getObject(bucket, key);
 }
 
+/** Read a whole object into memory (small objects: signatures, report PDFs, photos). */
+export async function getObjectBuffer(key: string, bucket: string = BUCKET): Promise<Buffer> {
+  const stream = await getObjectStream(key, bucket);
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return Buffer.concat(chunks);
+}
+
 /** Stat an object; returns null if it does not exist. */
 export async function statObject(key: string, bucket: string = BUCKET) {
   await ensureBucket(bucket);

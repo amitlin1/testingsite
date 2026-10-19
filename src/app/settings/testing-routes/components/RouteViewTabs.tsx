@@ -1,14 +1,14 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { LayoutGrid, Library, Route } from "lucide-react";
+import { FileText, LayoutGrid, Library, Route } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { VIEW_TAB_TEXT } from "../lib/labels";
 import type { RouteView } from "../lib/routeQuery";
 
 /**
  * The view tabs of /settings/testing-routes (route-fields spec §5.2; artboards 1, 8, 11):
- * <nav aria-label="תצוגות"> with "מפת שדות" | "שלבי המסלול" | "ערכות ורשימות". Each tab is a link to
+ * <nav aria-label="תצוגות"> with "מפת שדות" | "שלבי המסלול" | "ערכות ורשימות" | "דוח PDF". Each tab is a link to
  * the same page with another `view` (the URL holds the state, routeQuery.ts) — it replaces the
  * history entry, like every other change of the screen's state.
  *
@@ -39,6 +39,7 @@ const TABS: readonly { view: RouteView; label: string; Icon: LucideIcon }[] = [
   { view: "map", label: VIEW_TAB_TEXT.map, Icon: LayoutGrid },
   { view: "steps", label: VIEW_TAB_TEXT.steps, Icon: Route },
   { view: "library", label: VIEW_TAB_TEXT.library, Icon: Library },
+  { view: "report", label: VIEW_TAB_TEXT.report, Icon: FileText },
 ];
 
 export default function RouteViewTabs({ view, editorOpen = false, hrefOf, stepsCount, trailing }: RouteViewTabsProps) {

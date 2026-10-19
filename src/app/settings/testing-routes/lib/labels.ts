@@ -181,6 +181,7 @@ export const VIEW_TAB_TEXT = {
   map: "מפת שדות",
   steps: "שלבי המסלול",
   library: "ערכות ורשימות",
+  report: "דוח PDF",
 } as const;
 
 /** Spec §5.2: the context card (artboards 1, 11). */

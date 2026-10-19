@@ -14,6 +14,7 @@ import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/Su
 import MyPackageCard from "@/app/components/packages/MyPackageCard";
 import type { PackageView } from "@/app/lib/packages/read";
 import { formatDay, formatMoment } from "../../format";
+import ItemReportControl from "./ItemReportControl";
 import "@/components/items.css";
 
 /*
@@ -530,6 +531,7 @@ export default function ItemHistoryPage() {
             {totalSteps > 0 ? `שלב ${currentStep} מתוך ${totalSteps}` : "ללא מסלול בדיקה"}
             {item.item_type_desc ? ` · ${trim(item.item_type_desc)}` : ""}
           </span>
+          <ItemReportControl itemId={String(item.item_id)} />
         </div>
       </div>
 

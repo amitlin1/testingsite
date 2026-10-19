@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso, getCurrentUtcIso } from "@/app/lib/datetime";
@@ -9,6 +9,7 @@ import { loadPackageContext } from "@/app/lib/packages/context";
 import { recheckPackageReadiness } from "@/app/lib/packages/readiness";
 import { GATE_FINISH_ON_REQUIRED } from "@/app/lib/station-fields/evaluate";
 import { FieldsSubmissionError, checkFieldsSubmission, resolveForSubmission } from "@/app/lib/station-fields/submit";
+import { freezeReportIfFinal } from "@/app/lib/item-report/generate";
 
 
 export const runtime = "nodejs";
@@ -952,6 +953,17 @@ export async function POST(req: Request) {
     }
     if (txResult.packageGate) {
       responseData.packageGate = txResult.packageGate;
+    }
+
+    // The item may have just finished its route: freeze its PDF report now,
+    // while the data is exactly what it finished with (docs/ITEM_REPORTS.md).
+    // After the response and best-effort — it never delays or fails the submit.
+    // (Called directly, outside a request — the integration tests — after()
+    // throws; the freeze then just runs detached.)
+    try {
+      after(() => freezeReportIfFinal(itemIdBig));
+    } catch {
+      void freezeReportIfFinal(itemIdBig);
     }
 
     return NextResponse.json(responseData);

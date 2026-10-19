@@ -496,6 +496,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       }
 
       await tx.test_results.deleteMany({ where: { item_id: { in: idsToDelete } } });
+      // The report pointer goes with its results (the PDF blob stays in the
+      // versioned bucket, like the item's other files).
+      await tx.item_reports.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_route_history.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_routes.deleteMany({ where: { item_id: { in: idsToDelete } } });
       // Items inside the box first — they hold the FK (package_id) to it.
