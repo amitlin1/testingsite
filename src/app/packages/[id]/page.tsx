@@ -109,8 +109,10 @@ export default function PackagePage() {
 
   const st = PKG_STATUS[pkg.status];
   const blocked = pkg.status === "waitItems" && pkg.blocked_by.length > 0;
+  // A box waiting for intake has its label but no route yet: nothing waits at a station.
+  const pending = pkg.status === "pending";
   const milestones = [
-    { label: "נפתח", note: pkg.opened_at ? fmtDateTime(pkg.opened_at) : "ממתין בעמדת הפתיחה", bar: pkg.opened_at ? GREEN : HAIR_2, tone: pkg.opened_at ? INK : MUTED },
+    { label: "נפתח", note: pkg.opened_at ? fmtDateTime(pkg.opened_at) : pending ? "ממתין לקליטה — יש לסרוק את המדבקה בקליטת מארזים" : "ממתין בעמדת הפתיחה", bar: pkg.opened_at ? GREEN : HAIR_2, tone: pkg.opened_at ? INK : MUTED },
     { label: "נסגר", note: pkg.closed_at ? fmtDateTime(pkg.closed_at) : blocked ? "ממתין לפריטי המארז" : "טרם נסגר", bar: pkg.closed_at ? GREEN : blocked ? AMBER : HAIR_2, tone: pkg.closed_at ? INK : MUTED },
   ];
   const progress = (it: PackageView["items"][number]) => {
@@ -141,7 +143,7 @@ export default function PackagePage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap", fontSize: 13.5, color: INK_2 }}>
               <span>{pkg.customer_name ?? pkg.customer_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
               <span>משלוח {pkg.shipment_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
-              <span>נקלט {fmtDate(pkg.created_at)}</span><span aria-hidden style={{ color: MUTED }}>·</span>
+              <span>{pending ? "טרם נקלט" : `נקלט ${fmtDate(pkg.created_at)}`}</span><span aria-hidden style={{ color: MUTED }}>·</span>
               <span>{pkg.items.length} פריטים</span>
             </div>
           </div>

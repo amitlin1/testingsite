@@ -8,7 +8,7 @@ import { apiFetch } from "@/lib/api/client";
 import { Alert, Skeleton } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import PackageIdText, { MiniItems, StatusPill } from "@/app/components/packages/PackageIdText";
-import PackageIntakeDialog from "@/app/components/packages/PackageIntakeDialog";
+import PackageScanIntakeDialog from "@/app/components/packages/PackageScanIntakeDialog";
 import PackageDeleteDialog from "@/app/components/packages/PackageDeleteDialog";
 import PackageEditDialog from "@/app/components/packages/PackageEditDialog";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
@@ -249,7 +249,7 @@ function PackagesPageInner() {
                       style={{ borderTop: `1px solid ${HAIR_2}` }}>
                       <td style={{ padding: "11px 16px", whiteSpace: "nowrap" }}>
                         <PackageIdText id={p.item_id} />
-                        <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>נקלט {fmtDate(p.created_at)}</div>
+                        <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{p.status === "pending" ? "טרם נקלט" : `נקלט ${fmtDate(p.created_at)}`}</div>
                       </td>
                       <td style={{ padding: "11px 12px", whiteSpace: "nowrap" }}>
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{p.item_type_desc}</div>
@@ -301,7 +301,7 @@ function PackagesPageInner() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 11.5, color: MUTED, fontWeight: 600 }}>{sel.item_type_desc}</div>
                     <div style={{ marginTop: 3 }}><PackageIdText id={sel.item_id} size={17} headColor={INK} letterSpacing=".4px" /></div>
-                    <div style={{ fontSize: 12.5, color: MUTED, marginTop: 5 }}>{sel.customer_name ?? sel.customer_code ?? "—"} · משלוח {sel.shipment_code ?? "—"} · נקלט {fmtDate(sel.created_at)}</div>
+                    <div style={{ fontSize: 12.5, color: MUTED, marginTop: 5 }}>{sel.customer_name ?? sel.customer_code ?? "—"} · משלוח {sel.shipment_code ?? "—"} · {sel.status === "pending" ? "טרם נקלט" : `נקלט ${fmtDate(sel.created_at)}`}</div>
                   </div>
                   <StatusPill label={PKG_STATUS[sel.status].label} dot={PKG_STATUS[sel.status].dot} />
                 </div>
@@ -354,7 +354,7 @@ function PackagesPageInner() {
         </div>
       </div>
 
-      <PackageIntakeDialog open={intakeOpen} onClose={() => setIntakeOpen(false)} onCreated={(id) => { load(); setSelectedId(String(id)); }} onDeleted={(id) => { load(); setSelectedId((s) => (s === String(id) ? null : s)); }} initialShipmentId={shipment ? Number(shipment) : null} />
+      <PackageScanIntakeDialog open={intakeOpen} onClose={() => setIntakeOpen(false)} onChanged={load} />
       <PackageEditDialog open={editOpen} pkg={sel} onClose={() => setEditOpen(false)} onChanged={load} onDeleteRequest={() => { setEditOpen(false); setDeleteOpen(true); }} />
       <PackageDeleteDialog open={deleteOpen} pkg={sel} onClose={() => setDeleteOpen(false)} onDeleted={() => { setDeleteOpen(false); setSelectedId(null); load(); }} />
       {relabelOpen && (

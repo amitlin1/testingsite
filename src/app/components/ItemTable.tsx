@@ -7,7 +7,7 @@ import ItemsToolbar from "@/components/ItemsToolbar";
 import DataTable, { StatusPill, ProgressCell, RowActions, IconAction, type Column } from "@/components/DataTable";
 import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import ItemDialog from "./ItemDialog";
-import PackageIntakeDialog from "./packages/PackageIntakeDialog";
+import PackageScanIntakeDialog from "./packages/PackageScanIntakeDialog";
 import EditItemDialog from "@/components/EditItemDialog";
 import BarcodeDialog from "./BarcodeDialog";
 import { ItemRow, StatusOption, ItemTypeOption, Customers, Shipment } from "@/types";
@@ -204,13 +204,6 @@ export default function ItemTable() {
   // for a finished item (?status=3) — no second mechanism.
   const showFinished = () => setStatusFilter(String(FINISHED_STATUS));
   const hideFinished = () => setStatusFilter("");
-
-  const onPackageCreated = () => {
-    setSnackbarMessage("המארז נקלט בהצלחה");
-    setSnackbarSeverity("success");
-    setSnackbarOpen(true);
-    loadItems();
-  };
 
   const onEditResult = (success: boolean, message?: string) => {
     setSnackbarMessage(success ? "הפריט עודכן בהצלחה" : (message || "עדכון הפריט נכשל"));
@@ -415,7 +408,7 @@ export default function ItemTable() {
         />
       )}
 
-      <PackageIntakeDialog open={insertOpen} onClose={() => setInsertOpen(false)} onCreated={onPackageCreated} onDeleted={() => loadItems()} />
+      <PackageScanIntakeDialog open={insertOpen} onClose={() => setInsertOpen(false)} onChanged={() => loadItems()} />
 
       <EditItemDialog
         open={!!editingItem}

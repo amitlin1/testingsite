@@ -38,6 +38,8 @@ LEFT JOIN test_stations ts ON ts.test_station_id = ir.test_station_id
 LEFT JOIN customers c ON c.id = i.customer_id
 LEFT JOIN testing_routes tr ON tr.item_type_id = i.item_type_id AND tr.route_number = ir.route_number
 LEFT JOIN shipments sh ON sh.id = i.shipment_id
+-- Taken in only: a box waiting for intake has no route yet (lib/packages/boxes.ts).
+WHERE ir.item_id IS NOT NULL
 ORDER BY i.item_id DESC
     `;
 

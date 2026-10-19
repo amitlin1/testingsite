@@ -68,7 +68,7 @@ export type CreatedPackage = {
   itemIds: number[];
 };
 
-type TemplateLine = {
+export type TemplateLine = {
   item_type_id: number;
   quantity: number;
   makat: string | null;
@@ -79,9 +79,9 @@ type TemplateLine = {
   sort_order: number;
 };
 
-const CHAR50 = (s: string | null | undefined) => (s ?? "").trim().slice(0, 50);
+export const CHAR50 = (s: string | null | undefined) => (s ?? "").trim().slice(0, 50);
 
-async function nextDailyPackageCounter(tx: TransactionClient, dateKey: string): Promise<number> {
+export async function nextDailyPackageCounter(tx: TransactionClient, dateKey: string): Promise<number> {
   // The row lock this upsert takes is held to commit, so two intakes running
   // at once queue behind each other and can never mint the same prefix.
   const rows = await tx.$queryRaw<{ counter: number }[]>`
@@ -99,7 +99,7 @@ async function nextDailyPackageCounter(tx: TransactionClient, dateKey: string): 
   return counter;
 }
 
-async function loadTemplate(tx: TransactionClient, packageTypeId: number): Promise<TemplateLine[]> {
+export async function loadTemplate(tx: TransactionClient, packageTypeId: number): Promise<TemplateLine[]> {
   const rows = await tx.package_contents.findMany({
     where: { package_type_id: packageTypeId },
     orderBy: [{ sort_order: "asc" }, { id: "asc" }],
@@ -113,7 +113,7 @@ async function loadTemplate(tx: TransactionClient, packageTypeId: number): Promi
 
 /** Resolves and validates one item's route against the package route.
  *  Returns the route number actually used. */
-async function resolveItemRoute(
+export async function resolveItemRoute(
   tx: TransactionClient,
   item: PackageItemInput,
   template: TemplateLine[],
@@ -131,30 +131,28 @@ async function resolveItemRoute(
   return routeNumber;
 }
 
-async function insertRoutedRow(
-  tx: TransactionClient,
-  args: {
-    itemId: bigint;
-    customer: number;
-    shipment: number;
-    itemType: number;
-    serialNumber: string | null;
-    makat: string;
-    model: string;
-    manufacturer: string;
-    manufacturerNo: string;
-    packageId: bigint | null;
-    packageSeq: number | null;
-    templateSnapshot: TemplateLine[] | null;
-    routeNumber: number;
-    firstStepTypeId: number | null;
-  },
-): Promise<void> {
+export type ItemRowArgs = {
+  itemId: bigint;
+  customer: number;
+  shipment: number;
+  itemType: number;
+  serialNumber: string | null;
+  makat: string;
+  model: string;
+  manufacturer: string;
+  manufacturerNo: string;
+  packageId: bigint | null;
+  packageSeq: number | null;
+  templateSnapshot: TemplateLine[] | null;
+};
+
+/** The items row alone. Without routeRow it is a box waiting for intake
+ *  (boxes.ts) — no route, nothing in the ledger. */
+export async function insertItemRow(tx: TransactionClient, args: ItemRowArgs): Promise<void> {
   const {
     itemId, customer, shipment, itemType, serialNumber, makat, model, manufacturer, manufacturerNo,
-    packageId, packageSeq, templateSnapshot, routeNumber, firstStepTypeId,
+    packageId, packageSeq, templateSnapshot,
   } = args;
-
   await tx.$executeRaw`
     INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model, manufacturer_name,
                        manufacturer_no, shipment_id, package_id, package_seq, template_snapshot)
@@ -162,6 +160,23 @@ async function insertRoutedRow(
             ${manufacturerNo}, ${shipment}, ${packageId}, ${packageSeq}::smallint,
             ${templateSnapshot == null ? null : JSON.stringify(templateSnapshot)}::jsonb)
   `;
+}
+
+async function insertRoutedRow(
+  tx: TransactionClient,
+  args: ItemRowArgs & { routeNumber: number; firstStepTypeId: number | null },
+): Promise<void> {
+  await insertItemRow(tx, args);
+  await routeRow(tx, args);
+}
+
+/** An existing items row enters step 1 of its route: the route row, and the
+ *  ledger's item_created in the same transaction. */
+export async function routeRow(
+  tx: TransactionClient,
+  args: { itemId: bigint; itemType: number; routeNumber: number; firstStepTypeId: number | null },
+): Promise<void> {
+  const { itemId, itemType, routeNumber, firstStepTypeId } = args;
 
   // Step 1 is the opening station type for both the package and its items;
   // items are hidden there (package-level) until the wizard submits for them.

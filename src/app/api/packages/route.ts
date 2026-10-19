@@ -8,7 +8,7 @@ import { assertSerialsFree } from "@/app/lib/packages/serials";
 
 export const runtime = "nodejs";
 
-const STATUS_KEYS: PackageStatusKey[] = ["queue", "test", "waitItems", "readyClose", "done"];
+const STATUS_KEYS: PackageStatusKey[] = ["pending", "queue", "test", "waitItems", "readyClose", "done"];
 
 /**
  * GET /api/packages?shipment&customer&type&status&q — the packages list

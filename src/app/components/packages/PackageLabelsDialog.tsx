@@ -126,6 +126,9 @@ export type PackageLabelsDialogProps = {
   sourceId?: number | null;
   items: LabelItem[];
   onPrinted?: () => void;
+  /** Whether the box label starts ticked. The opening station starts with it
+   *  off: the box wears its label since the shipment. Default on. */
+  boxFirst?: boolean;
 };
 
 /** Fake barcode bars for the on-screen cards (the real barcode prints). */
@@ -139,8 +142,8 @@ function Bars({ n, seed, height }: { n: number; seed: number; height: number }) 
   );
 }
 
-export default function PackageLabelsDialog({ open, onClose, packageId, packageType, customerLine, sourceId, items, onPrinted }: PackageLabelsDialogProps) {
-  const [boxOn, setBoxOn] = React.useState(true);
+export default function PackageLabelsDialog({ open, onClose, packageId, packageType, customerLine, sourceId, items, onPrinted, boxFirst = true }: PackageLabelsDialogProps) {
+  const [boxOn, setBoxOn] = React.useState(boxFirst);
   const [itemsOn, setItemsOn] = React.useState<boolean[]>(() => items.map(() => true));
   const [copies, setCopies] = React.useState(1);
   const [preview, setPreview] = React.useState(false);
@@ -153,7 +156,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
   // not the array identity, because callers build `items` inline each render.
   React.useEffect(() => {
     if (!open) return;
-    setBoxOn(true); setItemsOn(items.map(() => true)); setCopies(1); setPreview(false);
+    setBoxOn(boxFirst); setItemsOn(items.map(() => true)); setCopies(1); setPreview(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, items.length]);
 

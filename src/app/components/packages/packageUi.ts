@@ -51,6 +51,7 @@ export const ITEM_STATE_INK: Record<PackageItemState, string> = {
 
 /** Box status → pill label + dot colour (design: PKG_STATUS, plus readyClose). */
 export const PKG_STATUS: Record<PackageStatusKey, { label: string; dot: string }> = {
+  pending: { label: "ממתין לקליטה", dot: GREY },
   queue: { label: "ממתין לפתיחה", dot: AMBER },
   test: { label: "בבדיקה", dot: BLUE },
   waitItems: { label: "ממתין לפריטי המארז", dot: AMBER },

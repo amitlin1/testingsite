@@ -65,6 +65,15 @@ async function locate(itemIdBig: bigint): Promise<Located> {
     `;
 
     if (!rows.length) {
+        // A box whose label printed with its shipment but that was not taken
+        // in yet has no route (lib/packages/boxes.ts) — say so, not "not found".
+        const pending = await prisma.$queryRaw<{ ok: boolean }[]>`
+            SELECT true AS ok FROM items i JOIN item_types t ON t.item_type_id = i.item_type_id
+            WHERE i.item_id = ${itemIdBig} AND i.package_id IS NULL AND t.is_package
+        `;
+        if (pending.length > 0) {
+            return { status: 404, body: { error: "המארז עוד לא נקלט — יש לסרוק אותו בקליטת מארזים", notFound: true, pendingIntake: true } };
+        }
         return { status: 404, body: { error: "פריט לא נמצא", notFound: true } };
     }
 

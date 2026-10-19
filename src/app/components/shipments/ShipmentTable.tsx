@@ -333,7 +333,7 @@ export default function ShipmentTable() {
                     <IconAction title={r.is_sent ? "המשלוח כבר נשלח" : "החזר משלוח"} disabled={!!r.is_sent} onClick={() => { setSelectedShipment(r); setSendOpen(true); }}><Send size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title="היסטוריה" onClick={() => { setSelectedShipment(r); setHistoryOpen(true); }}><History size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title="הורד PDF" onClick={() => handlePDFClick(r)}><FileText size={16} strokeWidth={1.75} /></IconAction>
-                    <IconAction title="הדפס ברקודים לכל הפריטים" onClick={() => { setSelectedShipment(r); setBarcodesOpen(true); }}><Barcode size={16} strokeWidth={1.75} /></IconAction>
+                    <IconAction title="הדפס מדבקות למארזי המשלוח" onClick={() => { setSelectedShipment(r); setBarcodesOpen(true); }}><Barcode size={16} strokeWidth={1.75} /></IconAction>
                 </RowActions>
             ),
         },

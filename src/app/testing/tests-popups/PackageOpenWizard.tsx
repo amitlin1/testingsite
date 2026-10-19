@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Check, Plus, CircleAlert } from "lucide-react";
+import { Check, CircleAlert } from "lucide-react";
 import type { StationTestDialogProps } from "@/types";
 import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
@@ -10,7 +10,8 @@ import PackageWizardShell, { type ItemStepperRow, type WizardStep } from "./Pack
 import { PhotoUploader, PassFail, emptyPhotos, type Photos, type RefImg } from "./stationKit";
 import { NO_REF, ScanField, useReferenceLookup } from "./referenceScan";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
+import { OpeningContents, contentsProblem, rowsFromItems, saveContents, type ContentRow } from "./OpeningContents";
+import { playCue } from "@/app/components/packages/scanSound";
 import {
   AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, RED, RED_BG, seq2,
 } from "@/app/components/packages/packageUi";
@@ -30,8 +31,10 @@ import "@/app/packages/packages.css";
 /**
  * אשף פתיחת מארז — design/Package Stations.dc.html (open). Runs on a
  * package-level opening station for a PACKAGE row (item.package is its view).
- * Six steps: scan → box photos → items (scan → photo → weigh each) →
- * count → labels → done. On "הדפס וסיים" every item gets its own result at this
+ * Six steps: scan → box photos → contents (OpeningContents: what is really in
+ * the box, a serial for every item — saved before going on) → items (scan →
+ * photo → weigh each) → labels (one per item; the box wears its label since
+ * the shipment) → done. On "הדפס וסיים" every item gets its own result at this
  * station and then the box does, all under one submit id
  * (docs/packages/PLAN.md §4). Reference images / weights come from what the
  * worker scans: the box label is looked up among the package type's
@@ -54,9 +57,9 @@ const TOLERANCE_PCT = 5;
 const STEPS: WizardStep[] = [
   { key: "scan", label: "סריקת מק״ט המארז", note: "מדבקת הקופסה" },
   { key: "boxPhoto", label: "צילום הקופסה", note: "3 זוויות + תקינות" },
+  { key: "contents", label: "תכולה וסריאליים", note: "מה בקופסה, סריאלי לכל פריט" },
   { key: "items", label: "פריטים במארז", note: "סריקה, צילום ושקילה לכל פריט" },
-  { key: "count", label: "ספירה", note: "הוזן מול רשום" },
-  { key: "labels", label: "מדבקות", note: "קופסה + פריטים" },
+  { key: "labels", label: "מדבקות", note: "מדבקה לכל פריט" },
   { key: "done", label: "סיום", note: "" },
 ];
 
@@ -101,14 +104,19 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const [work, setWork] = React.useState<Record<string, ItemWork>>({});
   const [itemIdx, setItemIdx] = React.useState<number | null>(null);
   const [itemPhase, setItemPhase] = React.useState<"scan" | "photo" | "weigh">("scan");
-  const [countInput, setCountInput] = React.useState("");
+  // The contents step: its rows, whether they are saved as they stand, and
+  // the save's refusal on its row.
+  const [contentRows, setContentRowsRaw] = React.useState<ContentRow[]>(() => rowsFromItems(pkg?.items ?? []));
+  const [contentsSaved, setContentsSaved] = React.useState(false);
+  const [contentsError, setContentsError] = React.useState<{ text: string; rowIndex: number | null } | null>(null);
+  const setContentRows = React.useCallback((next: ContentRow[] | ((rs: ContentRow[]) => ContentRow[])) => {
+    setContentRowsRaw(next); setContentsSaved(false); setContentsError(null);
+  }, []);
   const [labelsOpen, setLabelsOpen] = React.useState(false);
   const [labelsPrinted, setLabelsPrinted] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [addOpen, setAddOpen] = React.useState(false);
-  const [add, setAdd] = React.useState({ itemType: "", serialNumber: "", makat: "", model: "", manufacturer: "" });
   const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
   const submitIdRef = React.useRef<string | null>(null);
   const committedRef = React.useRef<Set<string>>(new Set());
@@ -132,8 +140,9 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   React.useEffect(() => {
     if (!open || !pkg) return;
     setStep(0); setScan(""); setBoxPhotos(emptyPhotos());
-    setItems(pkg.items); setWork({}); setItemIdx(null); setItemPhase("scan"); setCountInput("");
-    setLabelsOpen(false); setLabelsPrinted(false); setSubmitting(false); setError(null); setAddOpen(false);
+    setItems(pkg.items); setWork({}); setItemIdx(null); setItemPhase("scan");
+    setContentRowsRaw(rowsFromItems(pkg.items)); setContentsSaved(false); setContentsError(null);
+    setLabelsOpen(false); setLabelsPrinted(false); setSubmitting(false); setError(null);
     submitIdRef.current = null; committedRef.current = new Set();
     resetBoxFields();
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
@@ -184,30 +193,22 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     setItemIdx(idx); setItemPhase("scan"); setError(null);
   };
 
-  const reloadItems = async () => {
-    const res = await apiFetch(`/api/packages/${item.item_id}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (Array.isArray(data?.package?.items)) setItems(data.package.items);
-  };
-
-  const addMissing = async () => {
-    if (!add.itemType || !add.serialNumber.trim() || !add.makat.trim() || !add.model.trim() || !add.manufacturer.trim()) {
-      setError("להוספת פריט יש למלא סוג, סריאלי, מק״ט, דגם ויצרן"); return;
-    }
-    setBusy(true); setError(null);
+  // The contents step's "המשך": what is in the box, with its serials, is saved
+  // before anything else happens to the items; the items step works on the box
+  // as the server now has it. Added items can bring station fields of their own.
+  const saveContentsStep = async (): Promise<boolean> => {
+    if (contentsSaved) return true;
+    setBusy(true); setContentsError(null);
     try {
-      const res = await apiFetch(`/api/packages/${item.item_id}/items`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemType: Number(add.itemType), serialNumber: add.serialNumber, makat: add.makat, model: add.model, manufacturer: add.manufacturer }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(d?.error || "הוספת הפריט נכשלה"); return; }
-      setAdd({ itemType: "", serialNumber: "", makat: "", model: "", manufacturer: "" }); setAddOpen(false);
-      await reloadItems();
-      reloadFields();
-    } catch {
-      setError("שגיאה בתקשורת");
+      const result = await saveContents(item.item_id, contentRows);
+      if ("error" in result) { setContentsError({ text: result.error, rowIndex: result.rowIndex }); playCue("error"); return false; }
+      const added = contentRows.some((r) => !r.gone && r.itemId == null);
+      setItems(result.items);
+      setContentRowsRaw(rowsFromItems(result.items));
+      setContentsSaved(true);
+      playCue("ok");
+      if (added) reloadFields();
+      return true;
     } finally {
       setBusy(false);
     }
@@ -224,8 +225,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const templateCount = Array.isArray(pkg.template_snapshot)
     ? (pkg.template_snapshot as { quantity?: number }[]).reduce((n, l) => n + Math.max(1, Number(l.quantity ?? 1)), 0)
     : items.length;
-  const counted = countInput.trim() === "" ? null : Number(countInput);
-  const countMismatch = (counted != null && counted !== items.length) || items.length !== templateCount;
+  const contentsGap = contentsProblem(contentRows);
+  const contentsIdx = STEPS.findIndex((s) => s.key === "contents");
   const stepKey = STEPS[step].key;
   const wr = curWork ? weightResult(curWork.refWeight, curWork.meas) : null;
   const boxPass = boxPhotos.ok === "pass";
@@ -262,9 +263,13 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     else { stepTitle = `${cur.item_type_desc} · שקילה`; stepSubtitle = `פריט ${seq2(cur.package_seq)} · משקל ייחוס מהקטלוג`; systemMsg = "נא לשקול את הפריט ולהזין את המשקל שנמדד."; }
   } else if (stepKey === "scan") { stepSubtitle = "סרוק את מדבקת הקופסה כדי לפתוח את המארז בעמדה."; systemMsg = "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה."; }
   else if (stepKey === "boxPhoto") { stepSubtitle = "שלוש זוויות של הקופסה, ואז קביעת תקינות."; systemMsg = "נא לצלם את הקופסה בדיוק לפי תמונות הייחוס."; }
+  else if (stepKey === "contents") {
+    stepSubtitle = "פתח את הקופסה: סמן מה לא הגיע, הוסף מה שלא היה בתבנית, והזן סריאלי לכל פריט.";
+    systemMsg = contentsError ? `לא נשמר — ${contentsError.text}`
+      : contentsGap ? `כדי להמשיך: ${contentsGap}` : contentsSaved ? "התכולה נשמרה." : "הכול מולא — שמור והמשך.";
+  }
   else if (stepKey === "items") { stepSubtitle = "כל פריט עובר סריקה, צילום ושקילה. אפשר לעבוד בכל סדר."; }
-  else if (stepKey === "count") { stepSubtitle = "מה שנספר בעמדה מול מה שנרשם בקליטה ומול התבנית."; }
-  else if (stepKey === "labels") { stepSubtitle = "בחר מה להדפיס. מדבקת הקופסה נדרשת תמיד."; }
+  else if (stepKey === "labels") { stepSubtitle = "מדבקה לכל פריט — הדבק כל אחת על הפריט שלה. מדבקת הקופסה כבר עליה מהמשלוח (אפשר להדפיס שוב)."; }
 
   let nextLabel = "המשך";
   let nextEnabled = true;
@@ -284,8 +289,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     nextEnabled = boxPhotos.ok !== "" && !boxPhotos.photos.some((s) => s.uploading || s.failed) && !boxGate;
     if (boxPhotos.photos.some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
   }
-  else if (stepKey === "items") { nextEnabled = items.length > 0 && doneCount === items.length; nextLabel = nextEnabled ? "המשך לספירה" : `נותרו ${items.length - doneCount} פריטים`; }
-  else if (stepKey === "count") nextEnabled = counted != null;
+  else if (stepKey === "items") { nextEnabled = items.length > 0 && doneCount === items.length; nextLabel = nextEnabled ? "המשך למדבקות" : `נותרו ${items.length - doneCount} פריטים`; }
+  else if (stepKey === "contents") { nextEnabled = contentsGap == null; nextLabel = contentsSaved ? "המשך" : "שמור והמשך"; }
   // Finishing waits while the station fields load (spec §4.2) — e.g. reloading after a 409.
   else if (stepKey === "labels") { nextLabel = "הדפס וסיים"; nextEnabled = sf.status !== "loading"; }
   else if (stepKey === "done") nextLabel = "חזרה לתור";
@@ -351,7 +356,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         Details: {
           sku: scan.trim(), hasRU: boxHasRU,
           pkg: { ok: boxPhotos.ok, note: boxPhotos.note, photos: keysOf(boxPhotos) },
-          itemCount: counted ?? items.length, registeredCount: items.length, templateCount, labelsPrinted,
+          itemCount: items.length, registeredCount: pkg.items.length, templateCount, labelsPrinted,
           packageItemIds: items.map((it) => it.item_id), opening: true,
           ...(fieldsCfg ? boxFx.toBlock({ ...fieldsCfg.schema, target: "box" }, { ok: boxPhotos.ok }) : {}),
         },
@@ -384,6 +389,10 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     }
     if (stepKey === "labels") { setLabelsOpen(true); return; }
     if (stepKey === "done") { onClose(); return; }
+    if (stepKey === "contents") {
+      void saveContentsStep().then((ok) => { if (ok) setStep((s) => Math.min(STEPS.length - 2, s + 1)); });
+      return;
+    }
     setStep((s) => Math.min(STEPS.length - 2, s + 1));
   };
   const onBack = () => {
@@ -410,7 +419,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         open={open} onClose={onClose}
         stationName={station.test_station_desc} stationCode={String(station.test_station_id)}
         title="פתיחת מארז" pkg={pkg} workerName={workerName}
-        steps={STEPS} stepIndex={step} onStep={(i) => { if (!doneStep && !submitting && i < STEPS.length - 1 && (i <= step || nextEnabled)) { setItemIdx(null); setStep(i); } }}
+        // Past the contents only once they are saved: the items behind it are the server's.
+        steps={STEPS} stepIndex={step} onStep={(i) => { if (!doneStep && !submitting && i < STEPS.length - 1 && (i <= step || nextEnabled) && (i <= contentsIdx || contentsSaved)) { setItemIdx(null); setStep(i); } }}
         itemStepper={itemStepper} itemProgress={`${doneCount}/${items.length}`}
         stepTitle={stepTitle} stepSubtitle={stepSubtitle}
         stepCounter={inItemFlow ? `פריט ${itemIdx! + 1} מתוך ${items.length}` : `שלב ${step + 1} מתוך ${STEPS.length}`}
@@ -531,65 +541,16 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
                 );
               })}
             </div>
-            {addOpen ? (
-              <div style={{ marginTop: 16, border: `1px solid ${HAIR}`, borderRadius: 14, padding: 14, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, maxWidth: 620 }}>
-                {/* The inputs take the field height (44) so they line up with the type field. */}
-                <SearchableCombobox<ItemTypeOption>
-                  dense
-                  options={memberTypes}
-                  value={memberTypes.find((t) => String(t.item_type_id) === add.itemType) ?? null}
-                  onChange={(t) => setAdd({ ...add, itemType: t ? String(t.item_type_id) : "" })}
-                  getOptionLabel={(t) => t.item_type_desc}
-                  isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
-                  placeholder="סוג פריט…"
-                />
-                <input placeholder="מספר סריאלי" aria-label="מספר סריאלי" dir="ltr" value={add.serialNumber} onChange={(e) => setAdd({ ...add, serialNumber: e.target.value })} className="pkg-field pkg-field--code" />
-                <input placeholder="מק״ט" aria-label="מק״ט" dir="ltr" value={add.makat} onChange={(e) => setAdd({ ...add, makat: e.target.value })} className="pkg-field pkg-field--code" />
-                <input placeholder="דגם" aria-label="דגם" value={add.model} onChange={(e) => setAdd({ ...add, model: e.target.value })} className="pkg-field" />
-                <input placeholder="יצרן" aria-label="יצרן" value={add.manufacturer} onChange={(e) => setAdd({ ...add, manufacturer: e.target.value })} className="pkg-field" />
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <button type="button" onClick={() => setAddOpen(false)} className="pkg-pill pkg-pill--ghost" style={{ minHeight: 40, padding: "9px 16px" }}>ביטול</button>
-                  <button type="button" onClick={addMissing} disabled={busy} aria-busy={busy || undefined} className="pkg-pill pkg-pill--primary" style={{ minHeight: 40, padding: "9px 18px" }}>הוסף</button>
-                </div>
-              </div>
-            ) : (
-              <button type="button" onClick={() => setAddOpen(true)} className="pkg-link pkg-link--hit" style={{ marginTop: 8, gap: 7, fontSize: 14 }}>
-                <Plus size={16} strokeWidth={2} aria-hidden />הוסף פריט שלא נרשם בקליטה
-              </button>
-            )}
           </div>
-        ) : stepKey === "count" ? (
-          <div style={{ marginTop: 20 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, maxWidth: 620 }}>
-              {/* The number is typed straight into the card, so the card carries the focus ring. */}
-              <div className="pkg-focus-within" style={{ border: `1px solid ${counted != null && counted !== items.length ? AMBER_BORDER : HAIR}`, borderRadius: 14, padding: "16px 18px", background: counted != null && counted !== items.length ? AMBER_BG : "var(--color-canvas)" }}>
-                <input id={`${uid}-count`} value={countInput} onChange={(e) => setCountInput(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" autoFocus placeholder="—"
-                  className="pkg-bare-input" style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, fontVariantNumeric: "tabular-nums" }} />
-                <label htmlFor={`${uid}-count`} style={{ display: "block", fontSize: 12.5, color: MUTED, marginTop: 7 }}>נספר בעמדה</label>
-              </div>
-              <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, padding: "16px 18px", background: "var(--color-canvas)" }}>
-                <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, color: INK, fontVariantNumeric: "tabular-nums" }}>{items.length}</div>
-                <div style={{ fontSize: 12.5, color: MUTED, marginTop: 7 }}>נרשם בקליטה</div>
-              </div>
-              <div style={{ border: `1px solid ${items.length !== templateCount ? AMBER_BORDER : HAIR}`, borderRadius: 14, padding: "16px 18px", background: items.length !== templateCount ? AMBER_BG : "var(--color-canvas)" }}>
-                <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1, color: items.length !== templateCount ? AMBER_INK : INK, fontVariantNumeric: "tabular-nums" }}>{templateCount}</div>
-                <div style={{ fontSize: 12.5, color: MUTED, marginTop: 7 }}>תכולת המארז (תבנית)</div>
-              </div>
-            </div>
-            {countMismatch && counted != null && (
-              <div style={{ display: "flex", gap: 11, alignItems: "flex-start", background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 12, padding: "13px 15px", marginTop: 16, maxWidth: 620 }}>
-                <span style={{ color: AMBER_INK, marginTop: 1, display: "inline-flex" }}><CircleAlert size={18} strokeWidth={2} aria-hidden /></span>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: AMBER_INK }}>{counted !== items.length ? `נרשמו ${items.length} פריטים, בעמדה נספרו ${counted}` : `התבנית מצפה ל-${templateCount} פריטים, נרשמו ${items.length}`}</div>
-                  <div style={{ fontSize: 13, color: INK_2, marginTop: 3, lineHeight: 1.5 }}>הוסף את הפריט החסר, או המשך והפער יירשם על המארז ויופיע בעמוד המארז.</div>
-                </div>
-              </div>
-            )}
-          </div>
+        ) : stepKey === "contents" ? (
+          <OpeningContents
+            rows={contentRows} onRows={setContentRows} memberTypes={memberTypes} templateCount={templateCount}
+            shipmentId={pkg.shipment_id} packageId={String(item.item_id)} error={contentsError}
+            onDone={() => { if (contentsGap == null) onNext(); }}
+          />
         ) : stepKey === "labels" ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 20 }}>
-            {[{ kind: "מדבקת קופסה", title: pkg.item_type_desc, note: `${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`, id: item.item_id }]
-              .concat(items.map((it) => ({ kind: "מדבקת פריט", title: it.item_type_desc, note: `פריט ${seq2(it.package_seq)} מתוך ${seq2(items.length)}`, id: Number(it.item_id) })))
+            {items.map((it) => ({ kind: "מדבקת פריט", title: it.item_type_desc, note: `פריט ${seq2(it.package_seq)} מתוך ${seq2(items.length)}${it.serial_no ? ` · ${it.serial_no}` : ""}`, id: Number(it.item_id) }))
               .map((l, i) => (
                 <div key={`${l.id}-${i}`} style={{ width: 214, border: `1px solid ${BLUE}`, background: "var(--color-primary-tint)", borderRadius: 14, padding: "15px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -631,6 +592,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           customerLine={`${pkg.customer_name ?? pkg.customer_code ?? ""} · משלוח ${pkg.shipment_code ?? ""}`}
           sourceId={item.source_id ?? null}
           items={items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
+          boxFirst={false}
         />
       )}
     </>

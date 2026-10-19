@@ -10,14 +10,17 @@ import { computePackageGate } from "./readiness";
  *
  * Vocabulary (design/Packages.dc.html):
  *   item state   new (טרם נפתח) · queue (ממתין) · test (בבדיקה) · done (הושלם) · missing (חסר במארז)
- *   box status   queue (ממתין לפתיחה) · test (בבדיקה) · waitItems (ממתין לפריטי המארז) ·
- *                readyClose (ממתין לסגירה) · done (הושלם)
+ *   box status   pending (ממתין לקליטה) · queue (ממתין לפתיחה) · test (בבדיקה) ·
+ *                waitItems (ממתין לפריטי המארז) · readyClose (ממתין לסגירה) · done (הושלם)
+ *
+ * A pending box is minted with its shipment and has no route yet (boxes.ts).
  */
 
 export type PackageItemState = "new" | "queue" | "test" | "done" | "missing";
-export type PackageStatusKey = "queue" | "test" | "waitItems" | "readyClose" | "done";
+export type PackageStatusKey = "pending" | "queue" | "test" | "waitItems" | "readyClose" | "done";
 
 export const PACKAGE_STATUS_LABEL: Record<PackageStatusKey, string> = {
+  pending: "ממתין לקליטה",
   queue: "ממתין לפתיחה",
   test: "בבדיקה",
   waitItems: "ממתין לפריטי המארז",
@@ -128,6 +131,8 @@ type PkgRow = {
   template_snapshot: unknown;
   closing_details: unknown;
   opening_sku: string | null;
+  /** Has a route row: taken in. */
+  routed: boolean;
 };
 
 type MemberRow = {
@@ -180,6 +185,7 @@ function stationText(m: MemberRow): string | null {
 }
 
 function packageStatus(pkg: PkgRow, blocked: number): PackageStatusKey {
+  if (!pkg.routed) return "pending";
   if (pkg.is_finished || pkg.current_status === 3) return "done";
   if (pkg.current_status === 1 || pkg.current_status === 5) return "test";
   if (pkg.current_status === 6) return "waitItems";
@@ -212,7 +218,8 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
              ORDER BY r.test_result_id DESC LIMIT 1) AS closing_details,
            (SELECT NULLIF(TRIM(r.details->>'sku'), '') FROM test_results r
              WHERE r.item_id = i.item_id AND r.route_step = 1
-             ORDER BY r.test_result_id DESC LIMIT 1) AS opening_sku
+             ORDER BY r.test_result_id DESC LIMIT 1) AS opening_sku,
+           (ir.item_id IS NOT NULL) AS routed
     FROM items i
     JOIN item_types it ON it.item_type_id = i.item_type_id
     LEFT JOIN customers c ON c.id = i.customer_id
@@ -384,6 +391,13 @@ export async function loadPackageTimeline(v: PackageView): Promise<PackageTimeli
   const opened = history.find((h) => h.current_route_step === 1 && h.processing_end_time);
   const closed = v.route_length > 0 ? history.find((h) => h.current_route_step === v.route_length && h.processing_end_time && v.route_length > 1) : undefined;
 
+  if (v.status === "pending") {
+    return [
+      { key: "intake", title: "ממתין לקליטה", at: null, worker_id: null, state: "pending", note: "המדבקה הודפסה מהמשלוח" },
+      { key: "open", title: "פתיחת מארז", at: null, worker_id: null, state: "pending", note: "טרם התחיל" },
+      { key: "close", title: "סגירת מארז", at: null, worker_id: null, state: "pending", note: "טרם התחיל" },
+    ];
+  }
   const out: PackageTimelineEntry[] = [
     { key: "intake", title: "נקלט מהמשלוח", at: v.created_at, worker_id: null, state: "done", note: null },
   ];

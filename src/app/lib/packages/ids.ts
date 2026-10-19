@@ -7,7 +7,8 @@
  *   │ │   │      │    └─ position inside the package: 00 = the package itself,
  *   │ │   │      │       01..99 = items in the order they were added
  *   │ │   │      └────── daily package counter (0001..9999)
- *   │ │   └───────────── intake date, server clock (TZ=Asia/Jerusalem)
+ *   │ │   └───────────── date the box was minted — its shipment's save
+ *   │ │                  (boxes.ts) — server clock (TZ=Asia/Jerusalem)
  *   │ └───────────────── customer id, zero-padded to 3 digits
  *   └─────────────────── constant leading digit, so the customer's leading
  *                        zeros survive numeric storage and the width is fixed

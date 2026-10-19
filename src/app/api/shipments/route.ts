@@ -5,6 +5,8 @@ import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { withAuth } from "@/lib/auth/withAuth";
 import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
 import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
+import { syncShipmentBoxes } from "@/app/lib/packages/boxes";
+import { PackageError, packageErrorResponse } from "@/app/lib/packages/errors";
 
 // GET: Fetch all shipments
 export async function GET() {
@@ -223,11 +225,16 @@ export const POST = withAuth(async (request, { session }) => {
         }
       }
 
+      // A box per declared unit, its id minted now: the labels print from
+      // the shipment and the intake scans them (lib/packages/boxes.ts).
+      await syncShipmentBoxes(tx, created.id);
+
       return created;
     });
 
     return NextResponse.json(newShipment, { status: 201 });
   } catch (error) {
+    if (error instanceof PackageError) return packageErrorResponse(error, "");
     console.error("Error creating shipment:", error);
     return NextResponse.json(
       { error: "Failed to create shipment" },

@@ -103,7 +103,7 @@ try {
   await closeDialog(page);
   await goto(page, "/packages");
   await clickExact(page, "קליטת מארז");
-  check("intake dialog opens on step 1", await waitText(page, "בחר משלוח, ואז סוג מארז", 8000));
+  check("intake dialog opens: scan box labels", await waitText(page, "קליטת מארזים", 8000) && await page.$('input[aria-label="מדבקת מארז"]') != null);
   await shot(page, "32-intake-dialog");
   await closeDialog(page);
 
@@ -139,7 +139,13 @@ try {
   check("box photo uploaded and next enabled", await waitEnabled(page, "המשך", 20000));
   await shot(page, "41-open-box-photo");
   await clickExact(page, "המשך");
-  check("items step", await waitText(page, "הוסף פריט שלא נרשם בקליטה", 8000));
+  // Contents: this fixture was created with its serials and details, so the
+  // rows are full — saving them as they are moves on.
+  check("contents step", await waitText(page, "פתח את הקופסה", 8000));
+  check("contents full → שמור והמשך", await waitEnabled(page, "שמור והמשך", 8000));
+  await shot(page, "41b-open-contents");
+  await clickExact(page, "שמור והמשך");
+  check("items step", await waitText(page, "כל פריט עובר סריקה, צילום ושקילה", 15000));
   await shot(page, "42-open-items");
   for (let i = 0; i < 2; i++) {
     await clickExact(page, "התחל");
@@ -159,13 +165,9 @@ try {
     if (i === 0) await shot(page, "44-open-item-weigh");
     await clickExact(page, "סיום פריט");
   }
-  check("both items done → count step available", await waitEnabled(page, "המשך לספירה", 8000));
-  await clickExact(page, "המשך לספירה");
-  check("count step", await waitText(page, "נספר בעמדה", 8000));
-  await typeInto(page, "—", "2");
-  await shot(page, "45-open-count");
-  await clickExact(page, "המשך");
-  check("labels step", await waitText(page, "מדבקת קופסה", 8000));
+  check("both items done → labels available", await waitEnabled(page, "המשך למדבקות", 8000));
+  await clickExact(page, "המשך למדבקות");
+  check("labels step: one per item", await waitText(page, "מדבקת פריט", 8000));
   await shot(page, "46-open-labels");
   await clickExact(page, "הדפס וסיים");
   check("labels dialog from the wizard", await waitText(page, "הדפסת מדבקות", 8000));
@@ -217,6 +219,8 @@ try {
   check("clicked התחל סגירת מארז", startedClose);
   check("closing wizard opened", await waitText(page, "סגירת מארז", 15000) && await waitText(page, "סריקת מק״ט המארז", 15000));
   await typeInto(page, "סרוק את מדבקת הקופסה", makat);
+  // "המשך" waits for the reference lookup of the scan, as at the opening.
+  check("closing scan continues", await waitEnabled(page, "המשך", 10000));
   await clickExact(page, "המשך");
   check("arrival step lists both items as arrived", await waitText(page, "הגיע לסגירה", 8000));
   await shot(page, "51-close-arrival");

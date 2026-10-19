@@ -4,6 +4,8 @@ import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
 import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
 import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
+import { dropShipmentBoxes, syncShipmentBoxes } from "@/app/lib/packages/boxes";
+import { PackageError, packageErrorResponse } from "@/app/lib/packages/errors";
 
 /** withAuth passes only (req, ctx); recover the [id] from the path. */
 function idFromReq(req: NextRequest): number {
@@ -102,11 +104,16 @@ export const PUT = withAuth(async (request: NextRequest, { session }: WithAuthCt
                 }
             }
 
+            // The boxes follow the lines: new units get boxes, dropped units
+            // lose their pending ones; fewer than were taken in is refused.
+            await syncShipmentBoxes(tx, shipmentId);
+
             return updateResult[0];
         });
 
         return NextResponse.json(result);
     } catch (e: any) {
+        if (e instanceof PackageError) return packageErrorResponse(e, "");
         if (e.message === "SHIPMENT_NOT_FOUND") {
             return NextResponse.json(
                 { error: "Shipment not found" },
@@ -138,22 +145,19 @@ export async function DELETE(
             return NextResponse.json({ error: "המשלוח לא נמצא" }, { status: 404 });
         }
 
-        // 2. בדיקה: האם המשלוח כבר בשימוש?
-        // נבדוק האם קיימים פריטים בטבלת items שמשויכים למשלוח הזה
-        const itemsCount = await prisma.items.count({
-            where: { shipment_id: shipmentId },
-        });
-
-        // חסימת מחיקה אם: המשלוח נשלח או שיש פריטים משויכים
-        if (shipment.is_sent || itemsCount > 0) {
+        // 2. משלוח שנשלח לא נמחק
+        if (shipment.is_sent) {
             return NextResponse.json(
-                { error: "לא ניתן למחוק משלוח שכבר נכנס לניהול פריטים או שנשלח" },
+                { error: "לא ניתן למחוק משלוח שנשלח" },
                 { status: 400 }
             );
         }
 
-        // 3. מחיקה בטרנזקציה (בטוחה)
+        // 3. מחיקה בטרנזקציה (בטוחה). המארזים שממתינים לקליטה נמחקים איתו;
+        // מארז שכבר נקלט חוסם את המחיקה (lib/packages/boxes.ts).
         await prisma.$transaction(async (tx) => {
+            await dropShipmentBoxes(tx, shipmentId);
+
             // מחיקת כל הפריטים המשויכים למשלוח בטבלת shipment_items
             await tx.shipment_items.deleteMany({
                 where: { shipment_id: shipmentId },
@@ -168,6 +172,7 @@ export async function DELETE(
         return NextResponse.json({ message: "המשלוח נמחק בהצלחה" }, { status: 200 });
 
     } catch (e: any) {
+        if (e instanceof PackageError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });
         console.error("Error deleting shipment:", e);
         return NextResponse.json(
             { error: "שגיאה בביצוע המחיקה" },

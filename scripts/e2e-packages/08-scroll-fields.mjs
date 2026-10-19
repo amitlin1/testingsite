@@ -185,7 +185,7 @@ try {
   await statusInput.click();
   await sleep(300);
   let l = await list();
-  check("status filter opens a panel under the field", l && l.items.length === 5 && Math.round(l.rect.top) >= Math.round((await page.evaluate((w) => w.getBoundingClientRect().bottom, status))), JSON.stringify(l?.items));
+  check("status filter opens a panel under the field", l && l.items.length === 6 && Math.round(l.rect.top) >= Math.round((await page.evaluate((w) => w.getBoundingClientRect().bottom, status))), JSON.stringify(l?.items));
   check("panel radius 10 / padding 5", l?.radius === "10px" && l?.padding === "5px", `${l?.radius} ${l?.padding}`);
   const gapBelow = Math.round(l.rect.top - (await page.evaluate((w) => w.getBoundingClientRect().bottom, status)));
   check("panel 6px under the field, at most 264px tall", gapBelow === 6 && l.maxHeight === "264px", `gap ${gapBelow}, max ${l.maxHeight}`);
@@ -203,7 +203,7 @@ try {
   await statusInput.click();
   await sleep(300);
   l = await list();
-  check("click reopens with a value: full list, value kept, selected row tinted", l?.items.length === 5 && (await geo(status)).value === "בבדיקה" && l.selectedBg === "rgb(243, 248, 255)", `${l?.items.length} ${l?.selectedBg}`);
+  check("click reopens with a value: full list, value kept, selected row tinted", l?.items.length === 6 && (await geo(status)).value === "בבדיקה" && l.selectedBg === "rgb(243, 248, 255)", `${l?.items.length} ${l?.selectedBg}`);
   const checkWidth = await page.evaluate(() => document.querySelector("li[aria-selected=true] .sh-combo-check")?.getBoundingClientRect().width);
   check("selected row has the 15px blue check", checkWidth === 15, String(checkWidth));
   await page.keyboard.press("ArrowDown");
@@ -224,7 +224,7 @@ try {
   await statusInput.click();
   await sleep(300);
   const reopened = await list();
-  check("Esc with a partial search returns to the value, not empty", g.value === "בבדיקה" && !!reopened && reopened.items.length === 5 && (await geo(status)).value === "בבדיקה", `${g.value} / reopen ${reopened?.items.length}`);
+  check("Esc with a partial search returns to the value, not empty", g.value === "בבדיקה" && !!reopened && reopened.items.length === 6 && (await geo(status)).value === "בבדיקה", `${g.value} / reopen ${reopened?.items.length}`);
   await page.keyboard.press("Escape");
   await sleep(200);
 
@@ -265,72 +265,14 @@ try {
   await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.innerText.trim() === "ביטול")?.click());
   await sleep(300);
 
-  // ---- intake dialog ----------------------------------------------------------
-  // a shipment that still has a declared package left to receive
-  const pkgTypeIds = new Set(((await api(page, "/api/itemTypes")).json || []).filter((t) => t.is_package).map((t) => t.item_type_id));
-  let open = null;
-  for (const s of ships) {
-    const d = (await api(page, `/api/shipments/${s.id}/items`)).json || [];
-    const left = d.find((x) => pkgTypeIds.has(x.item_type_id) && Number(x.total_quantity) > Number(x.sample_count));
-    if (left) { open = { code: s.shipment_code, typeDesc: left.item_type_desc }; break; }
-  }
-  check("test data: a shipment with a package left to receive", !!open, JSON.stringify(open));
-
+  // ---- intake: box labels are scanned (the old shipment/type/serials form is gone) ----
   await clickByText(page, "קליטת מארז");
   await sleep(800);
-  const shipWrap = (await dialogFields())[0];
-  const shipInput = await shipWrap.$("input");
-  await shipInput.click();
-  await sleep(300);
-  const allShips = (await list())?.items.length ?? 0;
-  await page.keyboard.type(open.code);
-  await sleep(250);
-  l = await list();
-  check("intake: shipment field filters as you type", allShips > 0 && l && l.items.length >= 1 && l.items.length < allShips && l.items[0].includes(open.code), `${allShips} → ${l?.items.length}`);
-  await page.keyboard.press("Enter");
-  await sleep(800);
-  await page.evaluate((desc) => [...document.querySelectorAll("tr")].find((tr) => tr.innerText.includes(desc) && tr.innerText.includes("בחר"))?.click(), open.typeDesc);
-  await sleep(800);
-  await clickByText(page, "הבא");
-  await sleep(800);
-  const detailWraps = await dialogFields();
-  const dg = [];
-  for (const w of detailWraps) dg.push(await geo(w));
-  const [routeG, typeG] = dg;
-  check("intake details: route and locked type share height, radius and the arrow/lock inset", dg.length === 2 && routeG.h === typeG.h && routeG.radius === typeG.radius && routeG.arrow === 12 && typeG.lock === 12 && typeG.arrow == null && typeG.clear == null, JSON.stringify(dg));
-  await shot(page, "84-intake-details");
-
-  await clickByText(page, "הבא");
-  await sleep(600);
-  for (let i = 0; i < 6; i++) await clickByText(page, "הוסף פריט");
-  // 800px tall: the last row ends ~260px above the window's bottom — inside the
-  // contract's "under 280px ⇒ open upward".
-  await page.setViewport({ width: 1440, height: 800 });
-  await sleep(400);
-  const rowWraps = await page.$$("td .sh-combo--dense");
-  const lastRow = rowWraps.at(-1);
-  await page.evaluate((w) => { let el = w; while (el && getComputedStyle(el).overflowY !== "auto") el = el.parentElement; el.scrollTop = el.scrollHeight; }, lastRow);
-  await sleep(300);
-  check("intake row type field is 38px", (await geo(lastRow)).h === 38, String((await geo(lastRow)).h));
-  await (await lastRow.$("input")).click();
-  await sleep(350);
-  const bottomField = await page.evaluate((w) => { const r = w.getBoundingClientRect(); const ul = document.querySelector("ul[role=listbox]").getBoundingClientRect(); return { fieldTop: r.top, fieldBottom: r.bottom, below: innerHeight - r.bottom, ulTop: ul.top, ulBottom: ul.bottom }; }, lastRow);
-  check("intake bottom field opens upward (contract: under 280px below)", bottomField.below >= 280 || bottomField.ulBottom <= bottomField.fieldTop, `room below ${Math.round(bottomField.below)}px; list ${Math.round(bottomField.ulTop)}–${Math.round(bottomField.ulBottom)}, field ${Math.round(bottomField.fieldTop)}–${Math.round(bottomField.fieldBottom)}`);
-  await shot(page, "85-intake-bottom-field");
+  const scanField = await page.$('input[aria-label="מדבקת מארז"]');
+  const scanGeo = scanField && await page.evaluate((el) => ({ focused: document.activeElement === el, dir: el.dir, h: Math.round(el.getBoundingClientRect().height) }), scanField);
+  check("intake: one scan field, focused, left-to-right, 52px", !!scanGeo && scanGeo.focused && scanGeo.dir === "ltr" && scanGeo.h === 52, JSON.stringify(scanGeo));
+  await shot(page, "84-intake-scan");
   await page.keyboard.press("Escape");
-  await sleep(200);
-  // panel stays glued to a field while the dialog scrolls
-  const midRow = rowWraps[Math.max(0, rowWraps.length - 4)];
-  await page.evaluate((w) => w.scrollIntoView({ block: "center" }), midRow);
-  await (await midRow.$("input")).click();
-  await sleep(300);
-  const gap0 = await page.evaluate((w) => { const u = document.querySelector("ul[role=listbox]").getBoundingClientRect(); const r = w.getBoundingClientRect(); return Math.round(u.top - r.bottom); }, midRow);
-  await page.evaluate((w) => { let el = w; while (el && getComputedStyle(el).overflowY !== "auto") el = el.parentElement; el.scrollTop -= 40; }, midRow);
-  await sleep(300);
-  const gap1 = await page.evaluate((w) => { const u = document.querySelector("ul[role=listbox]"); if (!u) return null; const r = w.getBoundingClientRect(); return Math.round(u.getBoundingClientRect().top - r.bottom); }, midRow);
-  check("list stays glued to the field while the dialog scrolls", gap1 != null && gap0 === gap1, `gap ${gap0} → ${gap1}`);
-  await page.keyboard.press("Escape");
-  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.innerText.trim() === "ביטול")?.click());
   await sleep(300);
 
   // ---- /settings/packages: row field opens over the following rows ---------
