@@ -358,10 +358,12 @@ export function buildStepResults(
   return out;
 }
 
-/** The overall verdict: fail if any step failed, pass if all decided passed. */
-export function overallVerdict(results: readonly ReportStepResult[]): "pass" | "fail" | null {
+/** The overall verdict: fail as soon as any step failed; pass only once the
+ *  route has FINISHED and every decided step passed — an item halfway through
+ *  its route is not "תקין" yet. */
+export function overallVerdict(results: readonly ReportStepResult[], finished = true): "pass" | "fail" | null {
   if (results.some((r) => r.verdict === "fail")) return "fail";
-  if (results.length > 0 && results.every((r) => r.verdict === "pass")) return "pass";
+  if (finished && results.length > 0 && results.every((r) => r.verdict === "pass")) return "pass";
   return null;
 }
 
@@ -373,10 +375,11 @@ export function buildValues(
   item: Record<string, string>,
   results: readonly ReportStepResult[],
   report: Record<string, string> = {},
+  opts: { finished?: boolean } = {},
 ): Record<string, string> {
   const values: Record<string, string> = {};
   for (const [k, v] of Object.entries(item)) values[`item.${k}`] = v;
-  const overall = overallVerdict(results);
+  const overall = overallVerdict(results, opts.finished ?? true);
   if (values["item.verdict"] == null) values["item.verdict"] = overall ? VERDICT_WORD[overall] : "";
   for (const [k, v] of Object.entries(report)) values[`report.${k}`] = v;
   for (const r of results) {

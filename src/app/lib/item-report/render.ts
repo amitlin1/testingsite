@@ -66,6 +66,13 @@ async function getBrowser(): Promise<Browser> {
   return browser;
 }
 
+/** Close the shared browser (test suites and scripts — the server keeps it). */
+export async function closeBrowser(): Promise<void> {
+  const pending = globalForPdf.__pdfBrowser;
+  globalForPdf.__pdfBrowser = undefined;
+  if (pending) await (await pending.catch(() => null))?.close().catch(() => {});
+}
+
 // Open a page, retrying once if the pooled browser turned out to be dead
 // ("Connection closed" / "Target closed") — hardens against a stale singleton.
 async function newPage() {

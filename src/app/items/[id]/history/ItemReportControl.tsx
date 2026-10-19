@@ -124,7 +124,13 @@ function SignReportDialog({ itemId, onClose, onSigned }: { itemId: string; onClo
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { code?: string } | null;
         throw new Error(
-          body?.code === "ALREADY_SIGNED" ? "הדוח כבר נחתם." : body?.code === "NOT_FINISHED" ? "הפריט עוד לא סיים את המסלול." : "החתימה לא נשמרה. נסה שוב.",
+          body?.code === "ALREADY_SIGNED"
+            ? "הדוח כבר נחתם."
+            : body?.code === "ALREADY_FINAL"
+              ? "הדוח כבר סופי ונעול."
+              : body?.code === "NOT_FINISHED"
+                ? "הפריט עוד לא סיים את המסלול."
+                : "החתימה לא נשמרה. נסה שוב.",
         );
       }
       onSigned();

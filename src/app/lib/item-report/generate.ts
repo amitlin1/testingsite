@@ -261,7 +261,7 @@ export async function buildReportHtml(
     generated_at: formatReportDate(new Date()),
     signer: sig?.name ?? "",
     signed_at: sig ? formatReportDate(sig.at) : "",
-  });
+  }, { finished: src.item.finished_at != null });
 
   // Photos: only when the template prints them.
   const photos: Record<string, string> = {};
@@ -377,14 +377,18 @@ function stateOf(src: ReportSource, row: ReportRow | null): ReportStatus {
   const hasTemplate = !!src.template && templateHasContent(src.template);
   const needsSignature = hasTemplate && requiresFinalSignature(src.template);
   const sig = validSignature(row, src.item.finished_at);
-  const state: ReportState = !hasTemplate
-    ? "no_template"
-    : !finished
-      ? "in_progress"
-      : needsSignature && !sig
-        ? "awaiting_signature"
-        : "final";
-  const frozen = row?.storage_key && sameInstant(row.route_finished_at, src.item.finished_at);
+  // A copy frozen for THIS finish is the final document whatever the template
+  // says now — edited (a signature block added later) or deleted.
+  const frozen = !!row?.storage_key && sameInstant(row.route_finished_at, src.item.finished_at);
+  const state: ReportState = frozen
+    ? "final"
+    : !hasTemplate
+      ? "no_template"
+      : !finished
+        ? "in_progress"
+        : needsSignature && !sig
+          ? "awaiting_signature"
+          : "final";
   return {
     state,
     finished,
@@ -444,9 +448,9 @@ export async function getItemReport(itemId: bigint, opts: { force?: boolean } = 
   // needs the item and its template alone.
   const head = await loadReportSource(itemId, { rows: false });
   if (!head) return { kind: "not_found" };
-  if (!head.template || !templateHasContent(head.template)) return { kind: "no_template" };
   const row = await loadReportRow(itemId);
   const status = stateOf(head, row);
+  if (status.state === "no_template") return { kind: "no_template" };
   const sig = validSignature(row, head.item.finished_at);
   const full = async (): Promise<ReportSource> => (await loadReportSource(itemId)) ?? head;
 
@@ -462,6 +466,8 @@ export async function getItemReport(itemId: bigint, opts: { force?: boolean } = 
         console.error(`[item-report] stored report of item ${itemId} is missing — rebuilding`, e);
       }
     }
+    // Nothing to rebuild from once the template is gone too.
+    if (!head.template || !templateHasContent(head.template)) return { kind: "no_template" };
     const { bytes, version } = await freeze(await full(), row, sig);
     return { kind: "pdf", bytes, final: true, version, filename: `item-${itemId}.pdf` };
   }
@@ -525,8 +531,10 @@ export async function signItemReport(
   const status = stateOf(src, row);
   if (status.state === "no_template") throw new ReportSignError(409, "NO_TEMPLATE", "The item's route has no report template");
   if (!status.finished) throw new ReportSignError(409, "NOT_FINISHED", "The item has not finished its route");
-  if (!status.needsSignature) throw new ReportSignError(409, "NO_SIGNATURE_BLOCK", "The template has no signature to sign");
   if (status.signedBy) throw new ReportSignError(409, "ALREADY_SIGNED", "The report is already signed");
+  if (!status.needsSignature) throw new ReportSignError(409, "NO_SIGNATURE_BLOCK", "The template has no signature to sign");
+  // Frozen before the template gained its signature block: it stays as it was.
+  if (status.state === "final") throw new ReportSignError(409, "ALREADY_FINAL", "The report is already final");
 
   const key = ReportKeys.signature(itemId);
   const stored = await putObject(key, png, "image/png");

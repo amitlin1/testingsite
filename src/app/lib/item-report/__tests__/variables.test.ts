@@ -58,6 +58,10 @@ test("buildStepResults: latest row per step, route order, research and foreign r
   assert.equal(res[2]!.verdict, "fail");
   assert.deepEqual(res[2]!.fields, [{ id: "f_w0000001", label: "משקל", value: "2 kg", tone: "fail", note: "כבד" }]);
   assert.equal(overallVerdict(res), "fail");
+  const passed = res.filter((r) => r.verdict === "pass");
+  assert.equal(overallVerdict(passed, true), "pass");
+  assert.equal(overallVerdict(passed, false), null, "not תקין while the route is still running");
+  assert.equal(overallVerdict(res, false), "fail", "a failed step shows at once");
 
   const values = buildValues({ item_id: "123", serial_no: "SN1" }, res, { generated_at: "01.10.2026" });
   assert.equal(values["item.item_id"], "123");
