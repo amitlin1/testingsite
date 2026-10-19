@@ -13,8 +13,11 @@ try {
   const pk = await api(page, "/api/packages");
   check("GET /api/packages", pk.ok && Array.isArray(pk.json), `status ${pk.status}, ${Array.isArray(pk.json) ? pk.json.length : "?"} packages`);
   const pkgs = Array.isArray(pk.json) ? pk.json : [];
-  check("packages have 16-digit ids and items", pkgs.length > 0 && pkgs.every((p) => String(p.item_id).length === 16 && Array.isArray(p.items) && p.items.length > 0));
-  check("package status keys valid", pkgs.every((p) => ["queue", "test", "waitItems", "readyClose", "done"].includes(p.status)), [...new Set(pkgs.map((p) => p.status))].join(","));
+  // A box waiting for intake (minted with its shipment, PLAN.md §6) has no items yet.
+  const takenIn = pkgs.filter((p) => p.status !== "pending");
+  check("packages have 16-digit ids; boxes taken in have items", takenIn.length > 0 && pkgs.every((p) => String(p.item_id).length === 16) && takenIn.every((p) => Array.isArray(p.items) && p.items.length > 0),
+    `${pkgs.length} boxes, ${pkgs.length - takenIn.length} waiting for intake`);
+  check("package status keys valid", pkgs.every((p) => ["pending", "queue", "test", "waitItems", "readyClose", "done"].includes(p.status)), [...new Set(pkgs.map((p) => p.status))].join(","));
 
   const pt = await api(page, "/api/settings/package-types");
   check("GET /api/settings/package-types", pt.ok && Array.isArray(pt.json) && pt.json.length >= 1, `status ${pt.status}, ${pt.json?.length} types: ${(pt.json || []).map((t) => t.item_type_desc + "(" + t.health + ")").join(", ")}`);
@@ -28,7 +31,7 @@ try {
   const withBoxes = (sh.json || []).filter((s) => (s.sampled_amount || 0) > 0);
   check("some shipment counts intake boxes", withBoxes.length > 0, withBoxes.map((s) => `${s.shipment_code}: ${s.amount}/${s.sampled_amount}`).join(", "));
 
-  const first = pkgs[0];
+  const first = takenIn[0];
   const det = await api(page, `/api/packages/${first.item_id}`);
   check("GET /api/packages/[id] returns view + timeline", det.ok && det.json?.package?.item_id === String(first.item_id) && Array.isArray(det.json?.timeline), `status ${det.status}`);
 
@@ -72,7 +75,7 @@ try {
   await shot(page, "07-shipments");
 
   await goto(page, `/items/${item0.item_id}/history`);
-  check("item history shows המארז שלי", await bodyHas(page, "המארז שלי") && await bodyHas(page, "הפריט הזה"));
+  check("item history shows its box (היסטוריית המארז)", await bodyHas(page, "היסטוריית המארז") && await bodyHas(page, "הפריט הזה"));
   await shot(page, "08-item-history");
 
   await goto(page, "/");

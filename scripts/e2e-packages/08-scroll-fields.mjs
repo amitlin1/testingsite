@@ -217,7 +217,7 @@ try {
   await page.keyboard.type("zz");
   await sleep(200);
   l = await list();
-  check("no match → אין תוצאה תואמת in #9a9aa0", l?.items[0] === "אין תוצאה תואמת" && l.emptyColor === "rgb(154, 154, 160)", `${l?.items[0]} ${l?.emptyColor}`);
+  check("no match → אין תוצאה תואמת in #6e6e73", l?.items[0] === "אין תוצאה תואמת" && l.emptyColor === "rgb(110, 110, 115)", `${l?.items[0]} ${l?.emptyColor}`);
   await page.keyboard.press("Escape");
   await sleep(300);
   g = await geo(status);
@@ -257,7 +257,7 @@ try {
   const locked = await page.$$(".sh-combo--locked");
   const lk = [];
   for (const w of locked) lk.push(await geo(w));
-  check("edit dialog: 4 locked comboboxes (lock, no arrow, no ×, #f5f5f7 / #7a7a7a)", locked.length === 4 && lk.every((x) => x.lock === 12 && x.lockSize === 15 && Math.abs(x.lockDy) <= 1 && x.arrow == null && x.clear == null && x.bg === "rgb(245, 245, 247)" && x.color === "rgb(122, 122, 122)" && x.padEnd === "36px" && x.h === 44), JSON.stringify(lk[0]));
+  check("edit dialog: 4 locked comboboxes (lock, no arrow, no ×, #f5f5f7 / #6e6e73)", locked.length === 4 && lk.every((x) => x.lock === 12 && x.lockSize === 15 && Math.abs(x.lockDy) <= 1 && x.arrow == null && x.clear == null && x.bg === "rgb(245, 245, 247)" && x.color === "rgb(110, 110, 115)" && x.padEnd === "36px" && x.h === 44), JSON.stringify(lk[0]));
   await (await locked[0].$("input")).click();
   await sleep(300);
   check("locked package type does not open", !(await list()));
@@ -298,15 +298,18 @@ try {
   await page.keyboard.press("Escape");
 
   // ---- other screens keep their metrics, gain the keyboard ------------------
-  await goto(page, "/settings/testing-routes");
-  const other = (await page.$$(".sh-input-wrap"))[0];
+  // The steps tab's item-type field: a default (not dense) combobox. The route
+  // picker above the tabs is dense on purpose (route-fields §5.2).
+  await goto(page, "/settings/testing-routes?view=steps");
+  await sleep(1500);
+  const other = await (await page.$('input[placeholder="בחר סוג פריט…"]'))?.evaluateHandle((el) => el.closest(".sh-input-wrap"));
   const og = await geo(other);
   await (await other.$("input")).click();
   await sleep(300);
   await page.keyboard.press("ArrowDown");
   await sleep(150);
   const ol = await list();
-  check("testing-routes combobox: default metrics unchanged, ArrowDown highlights", og.font === "17px" && ol?.highlighted === 0, `${og.h}px ${og.font} highlight ${ol?.highlighted}`);
+  check("testing-routes combobox: default metrics unchanged, ArrowDown highlights", og.font === "15px" && ol?.highlighted === 0, `${og.h}px ${og.font} highlight ${ol?.highlighted}`);
 
   check("no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (e) {

@@ -92,6 +92,13 @@ try {
   let undone = false;
   for (let t0 = Date.now(); !undone && Date.now() - t0 < 15000; await sleep(500)) undone = (await api(page, `/api/packages/${ids[1]}`)).json?.package?.status === "pending";
   check("undo the newest: pending again", undone);
+  // The testing screen never shows a box waiting for intake: its queues come from
+  // item_routes, which such a box does not have yet.
+  const openSt0 = ((await api(page, `/api/testing/test-stations?typeId=${OPENING_TYPE}`)).json || []).find((s) => !s.is_research);
+  const queue = (await api(page, `/api/testing/items?stationId=${openSt0?.test_station_id}`)).json;
+  const inQueue = (Array.isArray(queue) ? queue : []).map((r) => String(r.item_id));
+  check("the opening station's queue has the box taken in, not the one waiting for intake",
+    inQueue.includes(ids[0]) && !inQueue.includes(ids[1]), `${inQueue.length} in queue`);
   await page.keyboard.press("Escape");
   await sleep(400);
   r = await put(0);

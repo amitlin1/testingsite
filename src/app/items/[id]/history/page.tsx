@@ -719,10 +719,11 @@ export default function ItemHistoryPage() {
           </SectionCard>
 
           {/* Package model: the box this item is in (or is). It is its own
-              card, so it sits here directly — not wrapped in a second card.
+              card, so it sits here directly — not wrapped in a second card —
+              and carries the section title itself, like the cards around it.
               A loose legacy item keeps the connected-items list. */}
           {pkg ? (
-            <MyPackageCard pkg={pkg} currentItemId={item.item_id} />
+            <MyPackageCard pkg={pkg} currentItemId={item.item_id} title="היסטוריית המארז" />
           ) : (
             <SectionCard title="פריטים מחוברים">
               {accessories.length > 0 ? (

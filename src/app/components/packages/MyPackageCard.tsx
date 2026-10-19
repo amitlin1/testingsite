@@ -15,12 +15,18 @@ import "@/app/packages/packages.css";
  * and the siblings with the current one marked "הפריט הזה". An item without a
  * box never renders this (docs/packages/PLAN.md §9).
  */
-export default function MyPackageCard({ pkg, currentItemId }: { pkg: PackageView; currentItemId: string | number }) {
+export default function MyPackageCard({ pkg, currentItemId, title }: {
+  pkg: PackageView;
+  currentItemId: string | number;
+  /** A section title inside the card (the item history page); the item dialog shows none. */
+  title?: string;
+}) {
   const status = PKG_STATUS[pkg.status];
   const me = String(currentItemId);
   const isBox = me === String(pkg.item_id);
   return (
     <div style={{ border: `1px solid ${HAIR}`, borderRadius: 14, background: "var(--color-canvas)", padding: "14px 16px", color: INK }}>
+      {title && <h2 style={{ margin: "0 0 var(--space-sm)", fontSize: "var(--text-lead)", fontWeight: 600, lineHeight: "var(--lh-snug)", color: INK }}>{title}</h2>}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <Tag tone="primary">מארז</Tag>
         <PackageIdText id={pkg.item_id} size={15} headColor={INK} weight={600} />

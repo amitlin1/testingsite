@@ -10,6 +10,22 @@ const uuid = () => crypto.randomUUID();
 const tag = Date.now().toString().slice(-6);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const W = { WorkerID: 9902, WorkerName: "pkgtest" };
+// A wizard button can be disabled while it waits for the server (the closing scan
+// step waits for the box label's reference lookup): wait for it, never click blind.
+async function waitEnabled(page, label, timeout = 20000) {
+  for (const t0 = Date.now(); Date.now() - t0 < timeout; await sleep(300)) {
+    if (await page.evaluate((t) => [...document.querySelectorAll("button")].some((e) => (e.innerText || "").trim() === t && !e.disabled), label)) return true;
+  }
+  return false;
+}
+async function clickEnabled(page, label) {
+  await waitEnabled(page, label);
+  await page.evaluate((t) => { const b = [...document.querySelectorAll("button")].filter((e) => (e.innerText || "").trim() === t && !e.disabled); b.at(-1)?.click(); }, label);
+}
+async function waitText(page, needle, timeout = 15000) {
+  for (const t0 = Date.now(); Date.now() - t0 < timeout; await sleep(300)) if (await bodyHas(page, needle)) return true;
+  return false;
+}
 
 const { browser, page, errors } = await launch();
 try {
@@ -128,25 +144,25 @@ try {
   check("E: closing wizard started from the card", startedClose);
   await sleep(1500);
   await page.type('input[placeholder="סרוק את מדבקת הקופסה"]', "RULES-E-" + tag);
-  await page.evaluate(() => { const b = [...document.querySelectorAll("button")].filter((e) => (e.innerText || "").trim() === "המשך"); b[b.length - 1]?.click(); });
-  await sleep(800);
-  check("E: arrival step shows the stray item as לא הגיע with a decision button", await bodyHas(page, "לא הגיע") && await bodyHas(page, "נדרשת החלטה"));
+  await clickEnabled(page, "המשך");
+  check("E: arrival step shows the stray item as לא הגיע with a decision button", await waitText(page, "לא הגיע") && await bodyHas(page, "נדרשת החלטה"));
   await shot(page, "61-close-arrival-missing");
   await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => (b.innerText || "").trim() === "נדרשת החלטה")?.click());
   await sleep(600);
-  check("E: decision dialog opened", await bodyHas(page, "פריט שלא הגיע לסגירה"));
-  await page.evaluate(() => [...document.querySelectorAll("div")].find((d) => (d.innerText || "").trim() === "חסר במארז")?.click());
+  check("E: decision dialog opened", await waitText(page, "פריט שלא הגיע לסגירה"));
+  // The decision's options are radio buttons (PackageDecisionDialog).
+  await page.evaluate(() => [...document.querySelectorAll('[role="radio"]')].find((b) => (b.innerText || "").includes("חסר במארז"))?.click());
   await page.type('textarea[placeholder="מה קרה לפריט?"]', "נשאר במעבדת המחקר");
   await shot(page, "62-close-decision");
-  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => (b.innerText || "").trim() === "שמור החלטה")?.click());
+  await clickEnabled(page, "שמור החלטה");
   await sleep(600);
   await page.evaluate(() => { [...document.querySelectorAll("span")].filter((s) => (s.innerText || "").trim() === "נארז").forEach((s) => s.click()); });
   await sleep(300);
-  await page.evaluate(() => { const b = [...document.querySelectorAll("button")].filter((e) => (e.innerText || "").trim() === "המשך"); b[b.length - 1]?.click(); });
+  await clickEnabled(page, "המשך");
   await sleep(600);
   await page.evaluate(() => { [...document.querySelectorAll("span")].filter((s) => ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת הקופסה קריאה"].includes((s.innerText || "").trim())).forEach((s) => s.click()); });
   await sleep(300);
-  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => (b.innerText || "").trim() === "סגור מארז")?.click());
+  await clickEnabled(page, "סגור מארז");
   let closed = false; for (let i = 0; i < 60 && !closed; i++) { await sleep(500); closed = await bodyHas(page, "המארז נסגר"); }
   check("E: closing finished with a recorded decision", closed);
   await shot(page, "63-close-done-missing");
