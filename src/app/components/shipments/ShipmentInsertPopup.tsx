@@ -19,6 +19,7 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
 import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat } from '@/app/lib/qrParser';
+import { fromHebrewLayout, typeAsUsKeyboard } from '@/app/lib/scannerKeys';
 import { formatDate } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
 import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
@@ -31,6 +32,11 @@ type ShipmentInsertPopupProps = {
     onCreate: (success: boolean) => void;
     existingShipments?: Shipment[];
 };
+
+// POC details are English only. The certificate tool (shipment-QR_CODE-)
+// lets English letters, digits and contact punctuation into the POC, so
+// everything it can put in the barcode passes here too.
+const POC_ALLOWED = /^[A-Za-z0-9\s.,!?'()/@&+-]*$/;
 
 const defaultShipment: NewShipment = {
     shipment_code: "",
@@ -94,6 +100,11 @@ export default function ShipmentInsertPopup({
     // When a shipment is filled from a scanned barcode its details are locked for
     // manual editing — only the fields the barcode does not provide stay editable.
     const [scanned, setScanned] = useState(false);
+    // Each barcode field locks only when the barcode gave a value the form
+    // accepts: a refused value in a locked field would leave no way to save.
+    const [locked, setLocked] = useState({ poc: false, code: false, customer: false });
+    // Fields the barcode brought but the form could not take, for the banner.
+    const [scanProblems, setScanProblems] = useState<string[]>([]);
     // The date is locked only when the barcode actually supplied a valid one.
     const [scannedDate, setScannedDate] = useState(false);
 
@@ -110,7 +121,9 @@ export default function ShipmentInsertPopup({
 
     // Handle QR scan result
     const handleQrScan = useCallback((decodedText: string) => {
-        const parsedData = parseShipmentQr(decodedText);
+        // The scan field reads physical keys; text that still went through a
+        // Hebrew layout (pasted, say) is turned back the same way.
+        const parsedData = parseShipmentQr(fromHebrewLayout(decodedText));
 
         if (!parsedData) {
             setScanError('פורמט QR לא תקין');
@@ -133,19 +146,21 @@ export default function ShipmentInsertPopup({
         }
 
         // Fill shipment number
-        setValue('shipment_code', parsedData.shipmentNumber);
+        const code = parsedData.shipmentNumber.trim();
+        setValue('shipment_code', code, { shouldValidate: true });
 
         // Find and set customer by customer_code
         const matchingCustomer = customers.find(
-            c => c.customer_code === parsedData.customer
+            c => c.customer_code?.trim() === parsedData.customer.trim()
         );
         if (matchingCustomer) {
-            setValue('customer_id', matchingCustomer.id);
+            setValue('customer_id', matchingCustomer.id, { shouldValidate: true });
         }
 
         // Set POC details
-        if (parsedData.poc) {
-            setValue('poc_details', parsedData.poc);
+        const poc = parsedData.poc.trim();
+        if (poc) {
+            setValue('poc_details', poc, { shouldValidate: true });
         }
 
         // Convert and set shipment date
@@ -155,7 +170,17 @@ export default function ShipmentInsertPopup({
         }
         setScannedDate(!!convertedDate);
 
-        // Lock the barcode-derived fields against manual editing.
+        // Lock the barcode-derived fields against manual editing — each only
+        // when its value is one the form accepts.
+        const pocOk = POC_ALLOWED.test(poc);
+        const codeOk = code !== "" && code.length <= 20 && !existingShipments.some((s) => s.shipment_code?.trim() === code);
+        setLocked({ poc: pocOk, code: codeOk, customer: !!matchingCustomer });
+        setScanProblems([
+            ...(codeOk ? [] : ["מס׳ המשלוח"]),
+            ...(matchingCustomer ? [] : [`קוד הלקוח (${parsedData.customer.trim() || "ריק"} לא נמצא במערכת)`]),
+            ...(convertedDate ? [] : ["תאריך המשלוח"]),
+            ...(pocOk ? [] : ["פרטי איש הקשר (באנגלית בלבד)"]),
+        ]);
         setScanned(true);
         setScanError(null);
         setScannerOpen(false);
@@ -209,6 +234,8 @@ export default function ShipmentInsertPopup({
             reset({ ...defaultShipment, source_id: 1, shipment_items: [{ item_type_id: 0, quantity: 0 }] });
             setScanned(false);
             setScannedDate(false);
+            setLocked({ poc: false, code: false, customer: false });
+            setScanProblems([]);
             setDuplicate(null);
             setIsSigned(false);
             setSubmitError(null);
@@ -325,10 +352,16 @@ export default function ShipmentInsertPopup({
                                 }, 300);
                             }}
                             onKeyDown={(e) => {
-                                if (e.key === 'Enter' && manualBarcodeInput.trim()) {
-                                    handleQrScan(manualBarcodeInput.trim());
-                                    setManualBarcodeInput('');
+                                if (e.key === 'Enter') {
+                                    if (manualBarcodeInput.trim()) {
+                                        handleQrScan(manualBarcodeInput.trim());
+                                        setManualBarcodeInput('');
+                                    }
+                                    return;
                                 }
+                                // The scanner presses keys; on a Hebrew layout they would
+                                // come out as Hebrew letters (lib/scannerKeys.ts).
+                                typeAsUsKeyboard(e);
                             }}
                             // A barcode is a code: typed left to right.
                             inputProps={{ dir: "ltr", style: { textAlign: "center", fontSize: "var(--text-lead)" } }}
@@ -398,6 +431,11 @@ export default function ShipmentInsertPopup({
                             הנתונים מולאו מסריקת ברקוד ונעולים לעריכה. ניתן להזין ידנית רק את שדות המארזים שאינם כלולים בברקוד.
                         </Alert>
                     )}
+                    {scanned && scanProblems.length > 0 && (
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                            מהברקוד לא הגיעו תקינים: {scanProblems.join(" · ")}. השדות האלה נשארו פתוחים — יש לתקן אותם ידנית.
+                        </Alert>
+                    )}
                     {receiver.blocked && (
                         <Alert severity="error" sx={{ mb: 2 }}>
                             לא ניתן לזהות אותך — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
@@ -410,13 +448,7 @@ export default function ShipmentInsertPopup({
                                 name="poc_details"
                                 control={control}
                                 rules={{
-                                    validate: (value) => {
-                                        const englishOnlyRegex = /^[A-Za-z0-9\s\.,!\?'-]*$/;
-                                        if (!value || englishOnlyRegex.test(value)) {
-                                            return true;
-                                        }
-                                        return "ניתן להזין באנגלית בלבד";
-                                    }
+                                    validate: (value) => (!value || POC_ALLOWED.test(value) ? true : "ניתן להזין באנגלית בלבד")
                                 }}
                                 render={({ field, fieldState: { error } }) => (
                                     <TextField
@@ -427,7 +459,7 @@ export default function ShipmentInsertPopup({
                                         size="small"
                                         multiline
                                         rows={2}
-                                        disabled={scanned}
+                                        disabled={locked.poc}
                                         error={!!error}
                                         helperText={error?.message}
                                     />
@@ -456,7 +488,7 @@ export default function ShipmentInsertPopup({
                                         placeholder="מס' משלוח"
                                         fullWidth
                                         size="small"
-                                        disabled={scanned}
+                                        disabled={locked.code}
                                         error={!!error}
                                         helperText={error?.message}
                                         // A code reads left to right; aligned with the Hebrew fields.
@@ -475,7 +507,7 @@ export default function ShipmentInsertPopup({
                                         label="קוד לקוח"
                                         required
                                         options={customers}
-                                        disabled={scanned}
+                                        disabled={locked.customer}
                                         getOptionLabel={(option) => option.customer_code}
                                         isOptionEqualToValue={(o, v) => o.id === v.id}
                                         value={customers.find((c) => c.id === value) || null}

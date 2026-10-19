@@ -9,6 +9,7 @@ import PackageBatchLabelsDialog from "./PackageBatchLabelsDialog";
 import { PackageDialog } from "./PackageDialog";
 import { serialKey, type SerialMatch } from "@/app/lib/packages/serial-key";
 import { playCue, setSoundOn, soundOn, subscribeSound } from "./scanSound";
+import { typeAsUsKeyboard } from "@/app/lib/scannerKeys";
 import {
   BLUE, HAIR, HAIR_2, INK, INK_2, MUTED, RED, RED_BG, AMBER_INK, AMBER_BG, AMBER_BORDER,
   fmtId, seq2,
@@ -804,7 +805,8 @@ export default function PackageIntakeDialog({
                                   onChange={(e) => patchRow(i, { serial: e.target.value })}
                                   onPaste={(e) => onSerialPaste(i, e)}
                                   onKeyDown={(e) => {
-                                    if (e.key !== "Enter") return;
+                                    // Scanned on a Hebrew layout, "ab12" would arrive as "שנ12".
+                                    if (e.key !== "Enter") { typeAsUsKeyboard(e); return; }
                                     e.preventDefault();
                                     // A repeated serial stays put, selected, so the next scan replaces it.
                                     if (flag?.tone === "error") { e.currentTarget.select(); playCue("error"); return; }
