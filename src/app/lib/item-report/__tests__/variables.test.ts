@@ -132,3 +132,17 @@ test("template-utils: final signature and logo keys", () => {
   assert.equal(requiresFinalSignature({ content: [] }), false);
   assert.deepEqual(collectLogoKeys(sig([])), ["logos/a.png"]);
 });
+
+test("officialStarterTemplate: known blocks only, every variable in the catalog, wants the final signature", async () => {
+  const { officialStarterTemplate } = await import("../starter");
+  const { puckConfig } = await import("../puck-config");
+  const { ITEM_VARS, REPORT_VARS } = await import("../variables");
+  const t = officialStarterTemplate();
+  const known = new Set(Object.keys(puckConfig.components));
+  for (const n of t.content) assert.ok(known.has(n.type), `unknown block ${n.type}`);
+  const names = new Set([...ITEM_VARS.map((v) => `item.${v.key}`), ...REPORT_VARS.map((v) => `report.${v.key}`)]);
+  const used = JSON.stringify(t).match(/"v":"([^"]+)"/g)!.map((m) => m.slice(5, -1));
+  for (const v of used) assert.ok(names.has(v), `unknown variable ${v}`);
+  assert.equal(requiresFinalSignature(t), true);
+  assert.notStrictEqual(officialStarterTemplate().root, t.root, "a fresh copy every time");
+});

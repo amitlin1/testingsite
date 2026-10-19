@@ -162,6 +162,19 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
     resolveFields: (data: any) => tableFields(data?.props?.columns ?? []),
   };
 
+  // DetailsTable: each row's value takes variables.
+  const dt: any = components.DetailsTable;
+  components.DetailsTable = {
+    ...dt,
+    fields: {
+      ...dt.fields,
+      rows: {
+        ...dt.fields.rows,
+        arrayFields: { label: dt.fields.rows.arrayFields.label, value: richField("ערך", 36) },
+      },
+    },
+  };
+
   // FieldValue: one variable, from the grouped list.
   const fv: any = components.FieldValue;
   components.FieldValue = {
@@ -224,13 +237,12 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
         ...root.fields.header,
         objectFields: {
           ...root.fields.header.objectFields,
-          title: richField("כותרת", 40),
+          org: richField("הגוף המוציא (שורה לכל רמה)", 64),
+          meta: richField("פרטי המסמך (מספר, תאריך, סימוכין)", 64),
+          title: richField("כותרת המסמך", 40),
           subtitle: richField("כותרת משנה", 40),
-          cornerRight: richField("טקסט עליון — ימין", 36),
-          cornerCenter: richField("טקסט עליון — מרכז", 36),
-          cornerLeft: richField("טקסט עליון — שמאל", 36),
-          rightLogo: logoField("לוגו ימין"),
-          leftLogo: logoField("לוגו שמאל"),
+          rightLogo: logoField("סמל ימין"),
+          leftLogo: logoField("סמל שמאל"),
         },
       },
     },

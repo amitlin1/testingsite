@@ -16,11 +16,32 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 | Variables: catalog + values | `src/app/lib/item-report/variables.ts` (pure, unit-tested) |
 | Route catalog (server) | `src/app/lib/item-report/catalog.ts` |
 | Render + freeze + sign | `src/app/lib/item-report/generate.ts` |
-| Chromium | `src/app/lib/item-report/render.ts`, `html.ts` (Rubik inlined — air-gap safe) |
+| Chromium | `src/app/lib/item-report/render.ts`, `html.ts` (fonts inlined — air-gap safe) |
+| Fonts | `src/app/lib/item-report/fonts.ts`, `public/fonts/` |
+| Starter template | `src/app/lib/item-report/starter.ts` |
 | Editor UI | `src/app/settings/testing-routes/components/report/` |
 | APIs | `src/app/api/item-reports/` |
 | DB | `report_templates`, `item_reports` (migration `20261020120000_item_reports`) |
 | Production SQL | `scripts/prod-item-reports/1-item-reports.sql` |
+
+## The look — an official document
+
+Reports print as an official document (מסמך רשמי), black ink only, so a
+black-and-white copy loses nothing:
+
+- **Font**: David Libre (the David face of official documents; SIL OFL,
+  `public/fonts/david-libre/`). Rubik can be chosen per template.
+- **Letterhead**: emblems on both sides of the issuing body's lines
+  ("מדינת ישראל / שם היחידה / …"), a double rule, the document's particulars
+  on the left (מספר / תאריך / סימוכין), then the title — bold, centred, underlined.
+- **Classification** (בלמ"ס / שמור / סודי / סודי ביותר) at the top and bottom of
+  every page, when set.
+- **Numbered sections** (1. 2. 3.), **ruled tables** with grey label cells, the
+  **טבלת פרטים** block for particulars, verdicts as words (✓ תקין / ✕ לא תקין).
+- A section heading never ends a page; it moves with what follows it.
+
+A new template starts from `officialStarterTemplate()` (`starter.ts`): פרטי
+הפריט, תוצאות הבדיקות, סיכום, אישור with the approver's signature.
 
 ## Template = one per route
 
@@ -48,9 +69,10 @@ else from today's Keycloak directory.
 
 ## Blocks
 
-Ticketflow's blocks (טקסט, כותרת, ערך ממשתנה, רשימה, טבלה, שורת ערך, רווח, קו
+Ticketflow's blocks (טקסט, כותרת — numbered by default, ערך ממשתנה, רשימה, טבלה, שורת ערך, רווח, קו
 מפריד, מעבר עמוד) plus:
 
+- **טבלת פרטים** — label / value rows, one or two pairs per row.
 - **טבלת תוצאות** — every step the item passed: עמדה, עובד, תאריך, תוצאה,
   הערות, and optionally the fields under each row.
 - **שדות של עמדה** — one step's fields as שדה / ערך / סטטוס / הערה.

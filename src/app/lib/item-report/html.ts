@@ -1,8 +1,9 @@
 // Print HTML shell (ported from ticketflow lib/pdf/html.ts).
 //
 // Wraps the Puck-rendered body in a full `<html dir="rtl">` document with:
-//   - the bundled Rubik font INLINED as base64 @font-face (read off disk at
-//     runtime) so Chromium needs zero network access — the system is air-gapped.
+//   - the report fonts INLINED as base64 @font-face (fonts.ts, read off
+//     public/fonts at runtime) so Chromium needs zero network access — the
+//     system is air-gapped.
 //   - the shared report stylesheet (pdf-styles).
 //   - an @page rule that owns A4 size + margins.
 //
@@ -11,35 +12,32 @@
 import fs from "fs";
 import path from "path";
 import { PDF_CSS } from "./pdf-styles";
+import { FONT_FILES, fontFaceRules, type FontFile, type ReportFont } from "./fonts";
 
-// The variable font carries every weight in one file (300–900). Read from
-// public/fonts — the copy of src/app/fonts that the standalone image keeps
-// (src/ is not in it). If a file is missing the report silently drops to
-// Arial, so a missing font is logged.
-const FONT_FILES = [
-  { file: "Rubik-VariableFont_wght.ttf", style: "normal" },
-  { file: "Rubik-Italic-VariableFont_wght.ttf", style: "italic" },
-];
+const cache = new Map<string, string>();
 
-let cachedFontCss: string | null = null;
-
-export function getFontFaceCss(): string {
-  if (cachedFontCss !== null) return cachedFontCss;
-  const dir = path.join(process.cwd(), "public", "fonts");
-  const parts: string[] = [];
-  for (const f of FONT_FILES) {
+/** The @font-face rules of one font (or all), with the files inlined. Logged,
+ *  not thrown, when a file is missing — the report then falls back to the
+ *  next family of the stack. */
+export function getFontFaceCss(font?: ReportFont): string {
+  const key = font ?? "all";
+  const hit = cache.get(key);
+  if (hit != null) return hit;
+  const family = font === "rubik" ? "Rubik" : font === "david" ? "David Libre" : null;
+  const files = FONT_FILES.filter((f) => family == null || f.family === family);
+  const present: FontFile[] = [];
+  const data = new Map<FontFile, string>();
+  for (const f of files) {
     try {
-      const bytes = fs.readFileSync(path.join(dir, f.file));
-      parts.push(
-        `@font-face{font-family:'Rubik';font-style:${f.style};font-weight:300 900;` +
-          `src:url(data:font/ttf;base64,${bytes.toString("base64")}) format('truetype')}`,
-      );
+      data.set(f, fs.readFileSync(path.join(process.cwd(), "public", f.file)).toString("base64"));
+      present.push(f);
     } catch (e) {
-      console.error(`[item-report] font ${f.file} not found in public/fonts — reports fall back to Arial`, e);
+      console.error(`[item-report] font ${f.file} not found in public/ — reports fall back to the next font`, e);
     }
   }
-  cachedFontCss = parts.join("");
-  return cachedFontCss;
+  const css = fontFaceRules(present, (f) => `data:font/${f.format === "woff2" ? "woff2" : "ttf"};base64,${data.get(f)}`);
+  cache.set(key, css);
+  return css;
 }
 
 export interface BuildHtmlOptions {
@@ -47,6 +45,7 @@ export interface BuildHtmlOptions {
   marginMm?: { top: number; right: number; bottom: number; left: number };
   /** Embedded as the PDF's /Title (the browser tab title of the opened PDF). */
   title?: string;
+  font?: ReportFont;
 }
 
 function escapeHtml(s: string): string {
@@ -63,7 +62,7 @@ export function buildHtml(bodyHtml: string, opts: BuildHtmlOptions = {}): string
   const titleTag = opts.title ? `<title>${escapeHtml(opts.title)}</title>` : "";
   return (
     `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8"/>${titleTag}` +
-    `<style>${getFontFaceCss()}\n` +
+    `<style>${getFontFaceCss(opts.font)}\n` +
     `@page{size:A4;margin:${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm;}\n` +
     `html,body{margin:0;padding:0;background:#fff;}\n` +
     `${PDF_CSS}</style></head><body>${bodyHtml}</body></html>`

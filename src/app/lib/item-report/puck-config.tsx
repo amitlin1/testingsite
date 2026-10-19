@@ -30,6 +30,12 @@ import type {
   ReportTone,
 } from "./types";
 import { FINAL_SIGNATURE_BIND } from "./types";
+import { FONT_STACK, REPORT_FONT_OPTIONS, fontOf, type ReportFont } from "./fonts";
+
+/** The page's font, as the --pdf-font the stylesheet reads. */
+export function pageFontStyle(font: unknown): React.CSSProperties {
+  return { ["--pdf-font" as string]: FONT_STACK[fontOf(font)] } as React.CSSProperties;
+}
 
 // ---------------------------------------------------------------- widths
 
@@ -274,15 +280,7 @@ export function HeaderBand({
   h,
   meta,
 }: {
-  h: {
-    title: string | RichValue;
-    subtitle: string | RichValue;
-    cornerRight?: string | RichValue;
-    cornerCenter?: string | RichValue;
-    cornerLeft?: string | RichValue;
-    rightLogo: string;
-    leftLogo: string;
-  };
+  h: Partial<HeaderSettings> & { rightLogo?: string; leftLogo?: string };
   meta: PdfRenderMeta;
 }) {
   const right = logoSrc(meta, h.rightLogo);
@@ -293,6 +291,9 @@ export function HeaderBand({
   const cR = h.cornerRight;
   const cC = h.cornerCenter;
   const cL = h.cornerLeft;
+  // The official letterhead (מסמך רשמי): emblems either side of the issuing
+  // body's lines, a double rule, the document's particulars on the left
+  // (מספר / תאריך / סימוכין), then the title — bold, centred, underlined.
   return (
     <div className="pdf-headerband">
       {has(cR) || has(cC) || has(cL) ? (
@@ -308,17 +309,30 @@ export function HeaderBand({
           {right ? <img className="pdf-header__logo" src={right} alt="" /> : null}
         </div>
         <div className="pdf-header__center">
-          {has(h.title) ? <div className="pdf-title">{renderText(h.title, meta.values)}</div> : null}
-          {has(h.subtitle) ? <div className="pdf-subtitle">{renderText(h.subtitle, meta.values)}</div> : null}
+          {has(h.org) ? <div className="pdf-org">{renderText(h.org, meta.values)}</div> : null}
         </div>
         <div className="pdf-header__side pdf-header__side--left">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {left ? <img className="pdf-header__logo" src={left} alt="" /> : null}
         </div>
       </div>
+      <div className="pdf-rule" aria-hidden="true" />
+      {has(h.meta) ? <div className="pdf-docmeta">{renderText(h.meta, meta.values)}</div> : null}
+      {has(h.title) ? <div className="pdf-title">{renderText(h.title, meta.values)}</div> : null}
+      {has(h.subtitle) ? <div className="pdf-subtitle">{renderText(h.subtitle, meta.values)}</div> : null}
     </div>
   );
 }
+
+/** The classification marking (בלמ"ס / שמור / …) — printed on every page by
+ *  Chromium's header/footer; drawn at the top and bottom of each sheet in the editor. */
+export const CLASSIFICATION_OPTIONS = [
+  { label: "ללא סימון", value: "" },
+  { label: "בלמ\"ס", value: "בלמ\"ס" },
+  { label: "שמור", value: "שמור" },
+  { label: "סודי", value: "סודי" },
+  { label: "סודי ביותר", value: "סודי ביותר" },
+];
 
 // ---------------------------------------------------------------- step-bound helpers
 
@@ -355,7 +369,8 @@ interface WidthProp {
 }
 export interface SectionProps extends WidthProp {
   heading: string | RichValue;
-  variant: "plain" | "box";
+  /** numbered = an official document's numbered section (CSS counter). */
+  variant: "numbered" | "plain" | "box";
   align: "right" | "center" | "left";
 }
 export interface TextProps extends WidthProp {
@@ -374,6 +389,12 @@ export interface TableProps extends WidthProp {
   columns: { header: string; width: number }[];
   rows: { cells: { content: string | RichValue }[] }[];
   headerBackground: boolean;
+}
+export interface DetailsTableProps extends WidthProp {
+  /** label → value rows; the value takes variables. */
+  rows: { label: string; value: string | RichValue }[];
+  /** Label/value pairs per table row: 1 = two columns, 2 = four. */
+  perRow: number;
 }
 export interface FieldLineProps extends WidthProp {
   value: string | RichValue;
@@ -419,11 +440,16 @@ export interface PageBreakProps {}
 
 export interface HeaderSettings {
   show: boolean;
+  /** The issuing body, one per line ("מדינת ישראל / משרד … / מעבדת הבדיקות"). */
+  org: string | RichValue;
+  /** The document's particulars, top-left ("מספר: … / תאריך: … / סימוכין: …"). */
+  meta: string | RichValue;
   title: string | RichValue;
   subtitle: string | RichValue;
-  cornerRight: string | RichValue;
-  cornerCenter: string | RichValue;
-  cornerLeft: string | RichValue;
+  /** @deprecated superseded by org / meta; still printed when set. */
+  cornerRight?: string | RichValue;
+  cornerCenter?: string | RichValue;
+  cornerLeft?: string | RichValue;
   rightLogo: string;
   leftLogo: string;
 }
@@ -440,6 +466,10 @@ export interface RootProps {
   footer: FooterSettings;
   /** A frame drawn on EVERY page. */
   border: "none" | "solid" | "dashed";
+  /** The document font (fonts.ts). */
+  font: ReportFont;
+  /** The classification marking, top and bottom of every page; "" = none. */
+  classification: string;
 }
 
 export interface PdfComponentProps {
@@ -449,6 +479,7 @@ export interface PdfComponentProps {
   List: ListProps;
   Table: TableProps;
   FieldLine: FieldLineProps;
+  DetailsTable: DetailsTableProps;
   ResultsTable: ResultsTableProps;
   StepFields: StepFieldsProps;
   Photos: PhotosProps;
@@ -461,16 +492,21 @@ export interface PdfComponentProps {
 export const DEFAULT_ROOT_PROPS: RootProps = {
   header: {
     show: true,
-    title: "דוח בדיקה",
+    org: [{ text: "מדינת ישראל", b: true }, { text: "\nשם היחידה\nמעבדת הבדיקות" }],
+    meta: [
+      { text: "מספר: " }, { v: "item.item_id" },
+      { text: "\nתאריך: " }, { v: "report.generated_at" },
+      { text: "\nסימוכין: " }, { v: "item.shipment_code" },
+    ],
+    title: [{ text: "דוח בדיקה", b: true, u: true }],
     subtitle: [{ v: "item.item_type" }, { text: " · מק\"ט " }, { v: "item.makat" }],
-    cornerRight: "",
-    cornerCenter: "",
-    cornerLeft: [{ text: "פריט " }, { v: "item.item_id" }],
     rightLogo: "/report-logos/emblem-navy.png",
     leftLogo: "/report-logos/emblem-atom.jpg",
   },
-  footer: { show: true, text: "הופק אוטומטית ממערכת TESTINGSITE", textAlign: "center", pageNumbers: true, pageNumberStyle: "of", pageNumberAlign: "center" },
+  footer: { show: true, text: "", textAlign: "center", pageNumbers: true, pageNumberStyle: "of", pageNumberAlign: "center" },
   border: "none",
+  font: "david",
+  classification: "",
 };
 
 // ---------------------------------------------------------------- config
@@ -484,13 +520,12 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
         label: "כותרת עליונה",
         objectFields: {
           show: { type: "radio", label: "להציג כותרת עליונה", options: BOOL_OPTIONS },
-          title: { type: "text", label: "כותרת" },
+          org: { type: "textarea", label: "הגוף המוציא (שורה לכל רמה)" },
+          meta: { type: "textarea", label: "פרטי המסמך (מספר, תאריך, סימוכין)" },
+          title: { type: "text", label: "כותרת המסמך" },
           subtitle: { type: "text", label: "כותרת משנה" },
-          cornerRight: { type: "text", label: "טקסט עליון — ימין" },
-          cornerCenter: { type: "text", label: "טקסט עליון — מרכז" },
-          cornerLeft: { type: "text", label: "טקסט עליון — שמאל" },
-          rightLogo: { type: "text", label: "לוגו ימין" },
-          leftLogo: { type: "text", label: "לוגו שמאל" },
+          rightLogo: { type: "text", label: "סמל ימין" },
+          leftLogo: { type: "text", label: "סמל שמאל" },
         },
       },
       footer: {
@@ -505,16 +540,18 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
           pageNumberAlign: { type: "radio", label: "מיקום המספור (שורה נפרדת)", options: ALIGN3_OPTIONS },
         },
       },
+      classification: { type: "select", label: "סיווג (בראש ובתחתית כל עמוד)", options: CLASSIFICATION_OPTIONS },
+      font: { type: "select", label: "גופן", options: REPORT_FONT_OPTIONS },
       border: { type: "select", label: "מסגרת לכל העמודים", options: BORDER_OPTIONS },
     },
     defaultProps: DEFAULT_ROOT_PROPS,
-    render: ({ header, border, children, puck }) => {
+    render: ({ header, border, font, children, puck }) => {
       const meta = readMeta(puck);
       const h = header ?? ({} as HeaderSettings);
       // The footer is drawn per printed page by Chromium (render.ts), and per
       // sheet in the editor by PageCanvas — NOT here.
       return (
-        <div className="pdf-page">
+        <div className="pdf-page" style={pageFontStyle(font)}>
           {border && border !== "none" ? (
             <div className={`pdf-frame pdf-frame--${border}`} aria-hidden="true" />
           ) : null}
@@ -526,7 +563,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     },
   },
   categories: {
-    "תוכן": { title: "תוכן", components: ["Text", "Section", "FieldValue", "List", "Table"] },
+    "תוכן": { title: "תוכן", components: ["Section", "Text", "DetailsTable", "FieldValue", "List", "Table"] },
     "תוצאות": { title: "תוצאות הבדיקות", components: ["ResultsTable", "StepFields", "Photos"] },
     "חתימות": { title: "חתימות וערכים", components: ["Signature", "FieldLine"] },
     "עיצוב": { title: "מרווחים ומפרידים", components: ["Spacer", "Divider"] },
@@ -541,16 +578,19 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
           type: "select",
           label: "סגנון",
           options: [
+            { label: "סעיף ממוספר (1. 2. 3.)", value: "numbered" },
             { label: "רגיל", value: "plain" },
             { label: "מסגרת", value: "box" },
           ],
         },
         align: { type: "radio", label: "יישור", options: ALIGN3_OPTIONS },
       },
-      defaultProps: { heading: [{ text: "כותרת", b: true }], variant: "plain", align: "right", width: "full" },
+      defaultProps: { heading: [{ text: "כותרת", b: true }], variant: "numbered", align: "right", width: "full" },
       render: ({ heading, variant, align, width, puck }) => {
         const meta = readMeta(puck);
-        const cls = ["pdf-section", variant === "box" ? "pdf-section--box" : ""].filter(Boolean).join(" ");
+        const cls = ["pdf-section", variant === "box" ? "pdf-section--box" : variant === "numbered" ? "pdf-section--num" : ""]
+          .filter(Boolean)
+          .join(" ");
         return (
           <Block width={width}>
             <div className={cls} style={{ textAlign: (align as "right" | "center" | "left") || "right" }}>
@@ -703,6 +743,70 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                     {cols.map((_c, ci) => (
                       <td key={ci}>{renderText(r.cells?.[ci]?.content ?? "", meta.values)}</td>
                     ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Block>
+        );
+      },
+    },
+
+    // An official document's particulars table: a grey label cell next to
+    // each value, one or two pairs per row.
+    DetailsTable: {
+      label: "טבלת פרטים",
+      fields: {
+        perRow: {
+          type: "radio",
+          label: "זוגות בשורה",
+          options: [
+            { label: "1", value: 1 },
+            { label: "2", value: 2 },
+          ],
+        },
+        rows: {
+          type: "array",
+          label: "שורות",
+          arrayFields: {
+            label: { type: "text", label: "תווית" },
+            value: { type: "text", label: "ערך" },
+          },
+          defaultItemProps: { label: "תווית", value: "" },
+          getItemSummary: (item: { label: string }) => item.label || "שורה",
+        },
+      },
+      defaultProps: {
+        perRow: 2,
+        rows: [
+          { label: "מספר פריט", value: [{ v: "item.item_id" }] },
+          { label: "מספר סידורי", value: [{ v: "item.serial_no" }] },
+          { label: "סוג פריט", value: [{ v: "item.item_type" }] },
+          { label: "מק\"ט", value: [{ v: "item.makat" }] },
+        ],
+        width: "full",
+      },
+      render: ({ rows, perRow, width, puck }) => {
+        const meta = readMeta(puck);
+        const n = Number(perRow) === 1 ? 1 : 2;
+        const list = rows ?? [];
+        const lines: (typeof list)[] = [];
+        for (let i = 0; i < list.length; i += n) lines.push(list.slice(i, i + n));
+        return (
+          <Block width={width}>
+            <table className="pdf-table pdf-details">
+              <tbody>
+                {lines.map((line, li) => (
+                  <tr key={li}>
+                    {Array.from({ length: n }, (_, ci) => {
+                      const r = line[ci];
+                      return (
+                        <React.Fragment key={ci}>
+                          <th scope="row" style={{ width: n === 1 ? "32%" : "18%" }}>{r?.label ?? ""}</th>
+                          <td>{r ? renderText(r.value, meta.values) : null}</td>
+                        </React.Fragment>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -954,7 +1058,8 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
       defaultProps: {
         bind: FINAL_SIGNATURE_BIND,
         cells: [
-          { kind: "fullName", label: "שם", text: "", weight: 1 },
+          { kind: "fullName", label: "שם ושם משפחה", text: "", weight: 1 },
+          { kind: "number", label: "מספר עובד", text: "", weight: 1 },
           { kind: "date", label: "תאריך", text: "", weight: 1 },
           { kind: "signature", label: "חתימה", text: "", weight: 1 },
         ],

@@ -5,13 +5,17 @@
 //   - the server print HTML (html.ts) → Chromium → PDF
 //   - the template editor canvas (so the editor looks like the output)
 //
-// The Rubik @font-face is injected separately (base64 font data, server-side
-// only — html.ts); the editor page already has Rubik via next/font
-// (--font-rubik). Colours follow the report theme
-// (components/reports/reportTheme.ts). Layout is RTL-first.
+// The look is an official document (מסמך רשמי): black ink, the David face,
+// a letterhead with the issuing body and the document's particulars, numbered
+// sections, ruled tables with grey label cells, verdicts as words — no colour
+// carries meaning, so the page survives a black-and-white copier.
+//
+// The @font-face rules are injected separately (fonts.ts: inlined by html.ts
+// for print, loaded from /fonts by the editor). --pdf-font is set on .pdf-page
+// from the document's font setting.
 
 export const PDF_CSS = `
-:root { --pdf-ink:#141826; --pdf-line:#2A3350; --pdf-soft:#4A5266; --pdf-head:#EEF1F7; --pdf-navy:#1B2F6B; --pdf-border:#C9D0DE; --pdf-font:'Rubik', Arial, sans-serif; }
+:root { --pdf-ink:#000; --pdf-line:#000; --pdf-soft:#333; --pdf-head:#e6e6e6; --pdf-navy:#000; --pdf-border:#000; --pdf-font:'David Libre', 'David', 'Times New Roman', serif; }
 
 * { box-sizing: border-box; }
 
@@ -28,8 +32,9 @@ export const PDF_CSS = `
   font-family: var(--pdf-font);
   direction: rtl;
   text-align: right;
-  font-size: 11pt;
-  line-height: 1.55;
+  font-size: 12pt;
+  line-height: 1.5;
+  counter-reset: pdfsec;
   /* let the footer preview sink to the bottom of the A4 sheet in the editor */
   display: flex;
   flex-direction: column;
@@ -236,4 +241,50 @@ export const PDF_CSS = `
 
 /* numbers/latin inside RTL flow keep their own direction */
 bdi { unicode-bidi: isolate; }
+
+/* ================================================================ official document */
+
+/* letterhead */
+.pdf-headerband { margin-bottom: 4mm; }
+.pdf-header { margin-inline: 0; align-items: center; }
+.pdf-header__side { width: 26mm; }
+.pdf-header__logo { max-height: 22mm; max-width: 24mm; }
+.pdf-org { white-space: pre-wrap; text-align: center; font-size: 12.5pt; line-height: 1.35; }
+.pdf-rule { border-top: 2.2pt solid #000; border-bottom: .6pt solid #000; height: 3.2pt; margin: 2.5mm 0 3mm; }
+.pdf-docmeta { white-space: pre-wrap; font-size: 11pt; line-height: 1.45; width: fit-content; margin-inline-start: auto; text-align: right; }
+.pdf-title { font-size: 16pt; font-weight: 700; text-align: center; margin-top: 5mm; color: #000; }
+.pdf-subtitle { font-size: 12pt; color: #000; text-align: center; margin-top: 1mm; }
+
+/* numbered sections: "1. פרטי הפריט" */
+.pdf-section { font-size: 13pt; margin: 6mm 0 2mm; }
+.pdf-section--num { font-weight: 700; }
+.pdf-section--num::before { counter-increment: pdfsec; content: counter(pdfsec) ".\\00a0"; }
+.pdf-section--box { border: .75pt solid #000; background: var(--pdf-head); border-radius: 0; padding: 1mm 2.5mm; }
+
+/* A heading never ends a page: it moves with the block after it. */
+.pdf-block:has(> .pdf-section), .pdf-block:has(> .pdf-spacer) { break-after: avoid; page-break-after: avoid; }
+.pdf-block:has(> .pdf-sigrow), .pdf-block:has(> .pdf-sign) { break-inside: avoid; }
+
+/* ruled tables */
+.pdf-table th, .pdf-table td { border: .75pt solid #000; padding: 1.2mm 2mm; font-size: 11pt; }
+.pdf-table th { background: var(--pdf-head); font-weight: 700; }
+.pdf-results td, .pdf-stepfields td { font-size: 10.5pt; }
+.pdf-results__fieldsrow td { background: #fff; }
+.pdf-results__fields { font-size: 9.5pt; }
+.pdf-details th { text-align: right; vertical-align: top; }
+.pdf-details td { text-align: right; }
+.pdf-details .pdf-fill { border-bottom: 0; min-width: 0; padding: 0; }
+.pdf-table .pdf-fill { border-bottom: 0; min-width: 0; padding: 0; }
+
+/* verdicts are words, in black: ✓ תקין / ✕ לא תקין (underlined) */
+.pdf-chip, .pdf-chip--pass, .pdf-chip--warn, .pdf-chip--fail, .pdf-chip--none, .pdf-chip--neutral { background: none; color: #000; padding: 0; border-radius: 0; font-size: inherit; }
+.pdf-chip--fail { text-decoration: underline; }
+
+/* fill-ins and signature lines */
+.pdf-fill { border-bottom: .75pt dotted #000; }
+.pdf-sign__box, .pdf-sigrow__box { border-bottom: .75pt solid #000; }
+.pdf-sign__label { color: #000; font-size: 9.5pt; }
+.pdf-photo__frame { border: .75pt solid #000; }
+.pdf-photo figcaption { color: #000; }
+.pdf-draftmark { color: rgba(0, 0, 0, .07); }
 `;

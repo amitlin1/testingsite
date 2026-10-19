@@ -29,7 +29,8 @@ import { formatReportDate } from "@/app/components/reports/reportTheme";
 import { contentTypeFromName, getObjectBuffer, putObject, removeObject } from "@/lib/storage";
 import { registerFileObject, markFileObjectDeleted } from "@/lib/file-registry";
 import { buildHtml } from "./html";
-import { renderPdf } from "./render";
+import { renderPdf, type PageLine } from "./render";
+import { fontOf, type ReportFont } from "./fonts";
 import { renderTemplateBody } from "./render-react";
 import { DEFAULT_ROOT_PROPS, pageNumberTemplate } from "./puck-config";
 import { collectLogoKeys, isTemplate, requiresFinalSignature, templateHasContent, templateUsesPhotos } from "./template-utils";
@@ -239,7 +240,9 @@ type Signature = { key: string; name: string; number: string; at: Date } | null;
 
 export interface BuiltReport {
   html: string;
-  footerLines?: { text: string; align: "right" | "center" | "left" }[];
+  font: ReportFont;
+  headerLines?: PageLine[];
+  footerLines?: PageLine[];
   filename: string;
 }
 
@@ -302,21 +305,31 @@ export async function buildReportHtml(
   const border = root.border;
   const marginMm = border && border !== "none" ? { top: 0, right: 0, bottom: 0, left: 0 } : undefined;
   const title = `דוח פריט ${src.item.item_id}${opts.draft ? " (טיוטה)" : ""}`;
-  const html = buildHtml(body, { marginMm, title });
+  const font = fontOf(root.font);
+  const html = buildHtml(body, { marginMm, title, font });
 
+  // Every page: the classification top and bottom, then the footer text and
+  // the page number (Chromium's header/footer — render.ts).
+  const classification = (root.classification || "").trim();
+  const headerLines: PageLine[] = classification ? [{ text: classification, align: "center", bold: true }] : [];
   const f = root.footer ?? DEFAULT_ROOT_PROPS.footer;
-  const footerLines: { text: string; align: "right" | "center" | "left" }[] = [];
+  const footerLines: PageLine[] = [];
   if (f.show !== false) {
     const txt = (f.text || "").trim();
     if (txt) footerLines.push({ text: txt, align: f.textAlign || "center" });
     if (f.pageNumbers) footerLines.push({ text: pageNumberTemplate(f.pageNumberStyle), align: f.pageNumberAlign || "center" });
   }
+  if (classification) footerLines.push({ text: classification, align: "center", bold: true });
   return {
     html,
+    font,
+    headerLines: headerLines.length ? headerLines : undefined,
     footerLines: footerLines.length ? footerLines : undefined,
     filename: `item-${src.item.item_id}${opts.draft ? "-draft" : ""}.pdf`,
   };
 }
+
+const pdfOpts = (b: BuiltReport) => ({ headerLines: b.headerLines, footerLines: b.footerLines, font: b.font });
 
 async function bundledLogo(publicPath: string): Promise<string | null> {
   const { readFile } = await import("fs/promises");
@@ -398,7 +411,7 @@ export type ReportDocument =
 /** Render, store and point at the final copy. */
 async function freeze(src: ReportSource, row: ReportRow | null, sig: Signature): Promise<{ bytes: Buffer; version: number }> {
   const built = await buildReportHtml(src, { draft: false, signature: sig });
-  const bytes = await renderPdf(built.html, { footerLines: built.footerLines });
+  const bytes = await renderPdf(built.html, pdfOpts(built));
   const itemId = src.item.item_id;
   const version = (row?.version ?? 0) + 1;
   const key = ReportKeys.pdf(itemId, version);
@@ -454,7 +467,7 @@ export async function getItemReport(itemId: bigint, opts: { force?: boolean } = 
   }
 
   const built = await buildReportHtml(await full(), { draft: true, signature: sig });
-  const bytes = await renderPdf(built.html, { footerLines: built.footerLines });
+  const bytes = await renderPdf(built.html, pdfOpts(built));
   return { kind: "pdf", bytes, final: false, version: 0, filename: built.filename };
 }
 
@@ -550,7 +563,7 @@ export async function previewTemplatePdf(
     const src = await loadReportSource(opts.itemId);
     if (!src) return null;
     const built = await buildReportHtml({ ...src, template }, { draft: true, signature: null });
-    return renderPdf(built.html, { footerLines: built.footerLines });
+    return renderPdf(built.html, pdfOpts(built));
   }
   const values = Object.fromEntries(opts.sample.vars.map((v) => [v.name, v.label]));
   const src: ReportSource = {
@@ -564,7 +577,7 @@ export async function previewTemplatePdf(
     rows: [],
   };
   const built = await buildReportHtml(src, { draft: true, signature: null, values });
-  return renderPdf(built.html, { footerLines: built.footerLines });
+  return renderPdf(built.html, pdfOpts(built));
 }
 
 async function logosOf(template: Data): Promise<Record<string, string>> {

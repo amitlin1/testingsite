@@ -10,12 +10,19 @@
 
 import puppeteer, { type Browser } from "puppeteer-core";
 import { getFontFaceCss } from "./html";
+import { FONT_STACK, type ReportFont } from "./fonts";
+
+export type PageLine = { text: string; align: "right" | "center" | "left"; bold?: boolean };
 
 export interface RenderPdfOptions {
-  /** When set, every page gets a footer built from these lines (top to bottom),
-   *  each with its own alignment. `{page}` / `{pages}` tokens are replaced by
-   *  the live page number / total. Rendered RTL in Rubik. */
-  footerLines?: { text: string; align: "right" | "center" | "left" }[];
+  /** Lines printed at the top of EVERY page (the classification marking). */
+  headerLines?: PageLine[];
+  /** Lines printed at the bottom of every page, top to bottom, each with its
+   *  own alignment. `{page}` / `{pages}` become the live page number / total. */
+  footerLines?: PageLine[];
+  /** The document font — Chromium's header/footer render in their own context,
+   *  without the page's @font-face, so the font is inlined there too. */
+  font?: ReportFont;
 }
 
 const globalForPdf = globalThis as unknown as {
@@ -70,6 +77,10 @@ async function newPage() {
   }
 }
 
+function escapeHtml(t: string): string {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 export async function renderPdf(
   html: string,
   opts: RenderPdfOptions = {},
@@ -78,31 +89,33 @@ export async function renderPdf(
   try {
     await page.setContent(html, { waitUntil: "load" });
 
-    if (opts.footerLines && opts.footerLines.length > 0) {
-      // Chromium's footer renders in its own context WITHOUT the page's
-      // @font-face, so inline Rubik here too (otherwise Hebrew page numbers
-      // fall back to a non-Hebrew system font). {page}/{pages} → live spans.
-      // Each line is its own <div> with its own alignment (text line, then the
-      // page-number line beneath it).
-      const linesHtml = opts.footerLines
-        .map((l) => {
-          const inner = l.text
-            .replace(/\{page\}/g, '<span class="pageNumber"></span>')
-            .replace(/\{pages\}/g, '<span class="totalPages"></span>');
-          return `<div style="width:100%;text-align:${l.align};">${inner}</div>`;
-        })
-        .join("");
-      const footerTemplate =
-        `<style>${getFontFaceCss()}</style>` +
-        `<div style="width:100%;font-family:'Rubik',Arial,sans-serif;font-size:9px;` +
-        `line-height:1.4;direction:rtl;color:#444;padding:0 16mm;">${linesHtml}</div>`;
+    const header = opts.headerLines ?? [];
+    const footer = opts.footerLines ?? [];
+    if (header.length > 0 || footer.length > 0) {
+      // Chromium's header/footer render in their own context WITHOUT the
+      // page's @font-face, so the font is inlined here too (otherwise Hebrew
+      // falls back to a system font). {page}/{pages} → live spans.
+      const lines = (ls: PageLine[]) =>
+        ls
+          .map((l) => {
+            const inner = escapeHtml(l.text)
+              .replace(/\{page\}/g, '<span class="pageNumber"></span>')
+              .replace(/\{pages\}/g, '<span class="totalPages"></span>');
+            return `<div style="width:100%;text-align:${l.align};${l.bold ? "font-weight:700;font-size:11px;letter-spacing:.5px;color:#000;" : ""}">${inner}</div>`;
+          })
+          .join("");
+      const font = opts.font ?? "david";
+      const box = (inner: string) =>
+        `<style>${getFontFaceCss(font)}</style>` +
+        `<div style="width:100%;font-family:${FONT_STACK[font].replace(/"/g, "'")};font-size:9px;` +
+        `line-height:1.4;direction:rtl;color:#333;padding:0 16mm;">${inner}</div>`;
       const pdf = await page.pdf({
         format: "A4",
         printBackground: true,
         displayHeaderFooter: true,
-        headerTemplate: "<div></div>",
-        footerTemplate,
-        margin: { top: "14mm", right: "16mm", bottom: "18mm", left: "16mm" },
+        headerTemplate: header.length > 0 ? box(lines(header)) : "<div></div>",
+        footerTemplate: footer.length > 0 ? box(lines(footer)) : "<div></div>",
+        margin: { top: header.length > 0 ? "16mm" : "14mm", right: "16mm", bottom: "18mm", left: "16mm" },
       });
       return Buffer.from(pdf);
     }

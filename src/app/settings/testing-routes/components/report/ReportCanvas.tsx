@@ -17,7 +17,7 @@
 import * as React from "react";
 import { usePuck } from "@measured/puck";
 import { Copy, GripVertical, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
-import { puckConfig, HeaderBand, WIDTH_MM, pageNumberTemplate } from "@/app/lib/item-report/puck-config";
+import { puckConfig, HeaderBand, WIDTH_MM, pageFontStyle, pageNumberTemplate } from "@/app/lib/item-report/puck-config";
 import type { ReportRenderMeta as PdfRenderMeta } from "@/app/lib/item-report/types";
 import { Button, ConfirmDialog } from "@/components/ui";
 
@@ -139,6 +139,7 @@ export function PageCanvas({ metadata }: { metadata: PdfRenderMeta }) {
   const header = rootProps.header ?? {};
   const footer = rootProps.footer ?? {};
   const border: string = rootProps.border ?? "none";
+  const classification: string = typeof rootProps.classification === "string" ? rootProps.classification.trim() : "";
   const selIdx = (appState?.ui?.itemSelector?.index ?? null) as number | null;
 
   const setContent = React.useCallback(
@@ -396,7 +397,8 @@ export function PageCanvas({ metadata }: { metadata: PdfRenderMeta }) {
 
       {pages.map((page, pi) => (
         <div key={pi} className="pdfed-sheet-wrap">
-          <div className="pdf-page pdfed-sheet" style={frameStyle}>
+          <div className="pdf-page pdfed-sheet" style={{ ...pageFontStyle(rootProps.font), ...frameStyle }}>
+            {classification ? <div className="pdfed-classif pdfed-classif--top" aria-label="סיווג">{classification}</div> : null}
             {border && border !== "none" ? (
               <div className={`pdfed-frame pdfed-frame--${border}`} aria-hidden="true" />
             ) : null}
@@ -500,6 +502,7 @@ export function PageCanvas({ metadata }: { metadata: PdfRenderMeta }) {
                 {footer.text ? (
                   <div style={{ textAlign: footer.textAlign || "center" }}>{footer.text}</div>
                 ) : null}
+            {classification ? <div className="pdfed-classif pdfed-classif--bottom">{classification}</div> : null}
                 {footer.pageNumbers ? (
                   <div style={{ textAlign: footer.pageNumberAlign || "center" }}>{pageNumStr(pi)}</div>
                 ) : null}

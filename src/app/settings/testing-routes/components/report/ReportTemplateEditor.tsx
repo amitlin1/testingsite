@@ -24,19 +24,21 @@ import { Puck, usePuck, type Data } from "@measured/puck";
 import "@measured/puck/no-external.css";
 import { Check, Eye, GripVertical, LayoutGrid, List, SlidersHorizontal } from "lucide-react";
 import { buildEditorConfig } from "./editorConfig";
-import { DEFAULT_ROOT_PROPS, puckConfig } from "@/app/lib/item-report/puck-config";
+import { puckConfig } from "@/app/lib/item-report/puck-config";
+import { officialStarterTemplate } from "@/app/lib/item-report/starter";
 import { PageCanvas, BlockPalette } from "./ReportCanvas";
 import { PDF_CSS } from "@/app/lib/item-report/pdf-styles";
 import { sampleValues } from "@/app/lib/item-report/variables";
 import type { ReportRenderMeta, ReportStepRef, ReportVar } from "@/app/lib/item-report/types";
 import { Button, ConfirmDialog } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
+import { withBasePath } from "@/lib/base-path";
+import { FONT_FILES, fontFaceRules } from "@/app/lib/item-report/fonts";
 
 // New templates start empty — the header/footer are document-level (rendered
 // from the page settings), so a header is always present by default.
-function emptyTemplate(): Data {
-  return { root: { props: DEFAULT_ROOT_PROPS }, content: [], zones: {} } as unknown as Data;
-}
+// A new template starts as an official document, ready to adjust.
+const emptyTemplate = officialStarterTemplate;
 
 
 // Custom "מבנה המסמך" (layers) panel — Puck's Outline isn't drag-sortable, so
@@ -218,7 +220,18 @@ function WidthQuickBar() {
   );
 }
 
+// The report fonts under the same names as in the PDF (fonts.ts), from /fonts.
+const FONT_CSS = fontFaceRules(FONT_FILES, (f) => withBasePath(`/${f.file}`));
+
 const EDITOR_CSS = `
+/* the classification marking, top and bottom of each sheet (print: every page) */
+.pdfed-classif { text-align: center; font-weight: 700; font-size: 11pt; letter-spacing: .5px; }
+.pdfed-classif--top { margin: -8mm 0 4mm; }
+.pdfed-classif--bottom { margin-top: 2mm; }
+/* numbered sections count across ALL sheets, as in the printed document */
+.pdfed__center { counter-reset: pdfsec; }
+.pdfed-sheet { counter-reset: none; }
+
 /* width quick-bar (above the selected block's properties) */
 .pdfed__wbar { padding: 8px 2px 10px; margin-bottom: 8px; border-bottom: 1px solid var(--color-divider-soft); }
 .pdfed__wbar-label { display: block; font-size: var(--text-fine); font-weight: 600; color: var(--color-ink-muted-70); margin-bottom: 6px; }
@@ -236,8 +249,6 @@ const EDITOR_CSS = `
    dark mode no longer leaves white cards in a dark rail. Puck defines these
    on :root; the document CSS (PDF_CSS) doesn't use them. */
 .pdf-editor-root {
-  /* The app loads Rubik through next/font (--font-rubik); the print HTML inlines it as 'Rubik'. */
-  --pdf-font: var(--font-rubik), "Rubik", Arial, sans-serif;
   --puck-font-family: var(--font-rubik), "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
   --puck-color-white: var(--color-canvas);
   --puck-color-black: var(--color-ink);
@@ -581,7 +592,7 @@ export function ReportTemplateEditor({
       aria-labelledby="pdfed-title"
       tabIndex={-1}
     >
-      <style>{PDF_CSS + EDITOR_CSS}</style>
+      <style>{FONT_CSS + PDF_CSS + EDITOR_CSS}</style>
 
       <div className="pdfed-toolbar">
         <h2 id="pdfed-title" className="pdfed-toolbar-title">
