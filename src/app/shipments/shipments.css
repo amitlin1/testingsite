@@ -100,6 +100,13 @@
   color: var(--color-ink-muted-48);
 }
 .shp-items-row + .shp-items-row { margin-top: var(--space-xs); }
+/* Under a line scanned from the certificate: where it came from. */
+.shp-items-cert {
+  margin-top: 4px;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  overflow-wrap: anywhere;
+}
 /* The remove button sits on the 40px field line, not on the helper text. */
 .shp-items-row > .sh-iconbtn { margin-top: 4px; }
 @media (max-width: 640px) {
