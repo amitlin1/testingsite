@@ -17,6 +17,13 @@ import { HAIR, HAIR_2, INK_2, MUTED, RED, seq2 } from "./packageUi";
  */
 type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
 
+/** An added item starts with the box's details (its shipment certificate's);
+ *  only its type and serial are required. */
+const blankAdd = (pkg: PackageView | null) => ({
+  itemType: "", serialNumber: "",
+  makat: pkg?.makat?.trim() ?? "", model: pkg?.model?.trim() ?? "", manufacturer: pkg?.manufacturer_name?.trim() ?? "",
+});
+
 /** Hoisted (not defined inside the dialog) so its inputs keep focus across re-renders.
  *  Locked fields are the selection fields fixed at intake, so they are the
  *  locked combobox rather than a text box. */
@@ -56,13 +63,13 @@ export default function PackageEditDialog({
   const [removing, setRemoving] = React.useState<string | null>(null);
   const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
   const [addOpen, setAddOpen] = React.useState(false);
-  const [add, setAdd] = React.useState({ itemType: "", serialNumber: "", makat: "", model: "", manufacturer: "" });
+  const [add, setAdd] = React.useState(() => blankAdd(pkg));
   const [adding, setAdding] = React.useState(false);
 
   React.useEffect(() => {
     if (!open || !pkg) return;
     setMakat(pkg.makat ?? ""); setModel(pkg.model ?? ""); setManufacturer(pkg.manufacturer_name ?? "");
-    setError(null); setAddOpen(false); setAdd({ itemType: "", serialNumber: "", makat: "", model: "", manufacturer: "" });
+    setError(null); setAddOpen(false); setAdd(blankAdd(pkg));
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
   }, [open, pkg]);
 
@@ -106,8 +113,8 @@ export default function PackageEditDialog({
   };
 
   const addItem = async () => {
-    if (!add.itemType || !add.serialNumber.trim() || !add.makat.trim() || !add.model.trim() || !add.manufacturer.trim()) {
-      setError("להוספת פריט יש למלא סוג, סריאלי, מק״ט, דגם ויצרן"); return;
+    if (!add.itemType || !add.serialNumber.trim()) {
+      setError("להוספת פריט יש למלא סוג וסריאלי"); return;
     }
     setAdding(true); setError(null);
     try {
@@ -117,7 +124,7 @@ export default function PackageEditDialog({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data?.error || "הוספת הפריט נכשלה"); return; }
-      setAdd({ itemType: "", serialNumber: "", makat: "", model: "", manufacturer: "" }); setAddOpen(false);
+      setAdd(blankAdd(pkg)); setAddOpen(false);
       onChanged();
     } catch {
       setError("שגיאה בתקשורת");

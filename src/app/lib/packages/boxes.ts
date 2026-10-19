@@ -22,20 +22,25 @@ import { workDoneOn } from "./untouched";
  * changed on 2026-10-19):
  *
  *   shipment saved  → syncShipmentBoxes: one PENDING box per declared unit —
- *                     the package row with its id minted, no route, nothing
+ *                     the package row with its id minted and its line's
+ *                     details (the certificate row), no route, nothing
  *                     inside. Its label prints from the shipment.
  *   intake scan     → intakeBox: the box enters its route and its items are
  *                     created from the package type's template, without
- *                     serials. undoIntake takes it back while untouched.
+ *                     serials, with the box's details. undoIntake takes it
+ *                     back while untouched.
  *   opening station → saveOpeningContents: the items that are really in the
- *                     box, each with its serial and details.
+ *                     box, each with its serial (details as the worker left
+ *                     them — the box's unless changed).
  *
  * "Pending" is exactly: a package row (item type is_package, package_id NULL)
  * with no item_routes row. Nothing reads the ledger for it: item_created is
  * recorded at intake, when the box gets its route.
  */
 
-type BoxRow = {
+type DetailCols = { makat: string | null; model: string | null; manufacturer_name: string | null; manufacturer_no: string | null };
+
+type BoxRow = DetailCols & {
   item_id: bigint;
   customer_id: number;
   shipment_id: number;
@@ -47,11 +52,25 @@ type BoxRow = {
   is_sent: boolean | null;
 };
 
+/** What a box says about its contents: its shipment line's certificate row. */
+type BoxDetails = { makat: string; model: string; manufacturer: string; manufacturerNo: string };
+
+const NO_DETAILS: BoxDetails = { makat: "", model: "", manufacturer: "", manufacturerNo: "" };
+const boxDetails = (r: DetailCols): BoxDetails => ({
+  makat: (r.makat ?? "").trim(),
+  model: CHAR50(r.model),
+  manufacturer: CHAR50(r.manufacturer_name),
+  manufacturerNo: (r.manufacturer_no ?? "").trim(),
+});
+const sameDetails = (a: BoxDetails, b: BoxDetails) =>
+  a.makat === b.makat && a.model === b.model && a.manufacturer === b.manufacturer && a.manufacturerNo === b.manufacturerNo;
+
 /** The package row for an intake / undo, locked; refusals name the problem. */
 async function lockBox(tx: TransactionClient, packageId: bigint): Promise<BoxRow> {
   const rows = await tx.$queryRaw<BoxRow[]>`
     SELECT i.item_id, i.customer_id, i.shipment_id, i.item_type_id, TRIM(t.item_type_desc) AS item_type_desc,
-           t.is_package, i.package_id, (ir.item_id IS NOT NULL) AS routed, s.is_sent
+           t.is_package, i.package_id, (ir.item_id IS NOT NULL) AS routed, s.is_sent,
+           i.makat, i.model, i.manufacturer_name, i.manufacturer_no
     FROM items i
     JOIN item_types t ON t.item_type_id = i.item_type_id
     LEFT JOIN item_routes ir ON ir.item_id = i.item_id
@@ -67,10 +86,10 @@ async function lockBox(tx: TransactionClient, packageId: bigint): Promise<BoxRow
   return box;
 }
 
-/** One pending box: the package row and its id, nothing else. */
+/** One pending box: the package row, its id and its line's details, nothing else. */
 async function mintPendingBox(
   tx: TransactionClient,
-  args: { customer: number; shipment: number; packageType: number; makat: string },
+  args: { customer: number; shipment: number; packageType: number; details: BoxDetails },
 ): Promise<bigint> {
   const { datePart, dateKey } = localDateParts();
   const counter = await nextDailyPackageCounter(tx, dateKey);
@@ -81,10 +100,7 @@ async function mintPendingBox(
     shipment: args.shipment,
     itemType: args.packageType,
     serialNumber: null,
-    makat: args.makat,
-    model: "",
-    manufacturer: "",
-    manufacturerNo: "",
+    ...args.details,
     packageId: null,
     packageSeq: null,
     templateSnapshot: null,
@@ -97,7 +113,9 @@ async function mintPendingBox(
  * missing unit gets a pending box, an extra pending box (newest first) goes.
  * Boxes already taken in are never touched — declaring fewer than were taken
  * in is refused. A sent shipment is left alone. Pending boxes follow the
- * shipment's customer (their ids keep the one they were minted with).
+ * shipment's customer (their ids keep the one they were minted with) and
+ * their line's details: the k-th box of a type, in minting order, is the k-th
+ * unit of that type's lines, in line order.
  */
 export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: number): Promise<{ created: number; removed: number }> {
   const ship = await tx.shipments.findUnique({ where: { id: shipmentId }, select: { customer_id: true, makat: true, is_sent: true } });
@@ -105,20 +123,23 @@ export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: numbe
 
   const lines = await tx.shipment_items.findMany({
     where: { shipment_id: shipmentId },
-    select: { item_type_id: true, quantity: true, makat: true },
+    select: { item_type_id: true, quantity: true, makat: true, model: true, manufacturer_name: true, manufacturer_no: true },
     orderBy: { id: "asc" },
   });
-  const wanted = new Map<number, { qty: number; makat: string }>();
+  // Per package type, one entry per declared unit: the details its box
+  // carries (a line without a makat takes the shipment's).
+  const wanted = new Map<number, BoxDetails[]>();
   for (const l of lines) {
     if (l.item_type_id == null || !(l.quantity > 0)) continue;
-    const w = wanted.get(l.item_type_id) ?? { qty: 0, makat: "" };
-    w.qty += l.quantity;
-    if (!w.makat && l.makat?.trim()) w.makat = l.makat.trim();
-    wanted.set(l.item_type_id, w);
+    const details = boxDetails({ ...l, makat: l.makat?.trim() || ship.makat });
+    const units = wanted.get(l.item_type_id) ?? [];
+    for (let n = 0; n < l.quantity; n++) units.push(details);
+    wanted.set(l.item_type_id, units);
   }
 
-  const boxes = await tx.$queryRaw<{ item_id: bigint; item_type_id: number; item_type_desc: string; routed: boolean }[]>`
-    SELECT i.item_id, i.item_type_id, TRIM(t.item_type_desc) AS item_type_desc, (ir.item_id IS NOT NULL) AS routed
+  const boxes = await tx.$queryRaw<(DetailCols & { item_id: bigint; item_type_id: number; item_type_desc: string; routed: boolean })[]>`
+    SELECT i.item_id, i.item_type_id, TRIM(t.item_type_desc) AS item_type_desc, (ir.item_id IS NOT NULL) AS routed,
+           i.makat, i.model, i.manufacturer_name, i.manufacturer_no
     FROM items i
     JOIN item_types t ON t.item_type_id = i.item_type_id AND t.is_package
     LEFT JOIN item_routes ir ON ir.item_id = i.item_id
@@ -129,8 +150,9 @@ export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: numbe
   let created = 0;
   let removed = 0;
   for (const type of new Set([...wanted.keys(), ...boxes.map((b) => b.item_type_id)])) {
-    const target = wanted.get(type)?.qty ?? 0;
-    const have = boxes.filter((b) => b.item_type_id === type);
+    const units = wanted.get(type) ?? [];
+    const target = units.length;
+    let have = boxes.filter((b) => b.item_type_id === type);
     const takenIn = have.filter((b) => b.routed).length;
     if (target < takenIn) {
       throw new PackageError(
@@ -140,15 +162,23 @@ export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: numbe
       );
     }
     if (have.length < target) {
-      const makat = wanted.get(type)?.makat || (ship.makat ?? "").trim();
       for (let n = have.length; n < target; n++) {
-        await mintPendingBox(tx, { customer: ship.customer_id, shipment: shipmentId, packageType: type, makat });
+        await mintPendingBox(tx, { customer: ship.customer_id, shipment: shipmentId, packageType: type, details: units[n] });
         created++;
       }
     } else if (have.length > target) {
       const excess = have.filter((b) => !b.routed).slice(target - have.length).map((b) => b.item_id);
       await tx.items.deleteMany({ where: { item_id: { in: excess } } });
       removed += excess.length;
+      have = have.filter((b) => !excess.includes(b.item_id));
+    }
+    for (let k = 0; k < have.length; k++) {
+      const d = units[k];
+      if (have[k].routed || sameDetails(boxDetails(have[k]), d)) continue;
+      await tx.$executeRaw`
+        UPDATE items SET makat = ${d.makat}, model = ${d.model}, manufacturer_name = ${d.manufacturer}, manufacturer_no = ${d.manufacturerNo}
+        WHERE item_id = ${have[k].item_id}
+      `;
     }
   }
 
@@ -177,7 +207,9 @@ export async function dropShipmentBoxes(tx: TransactionClient, shipmentId: numbe
  * The intake scan: a pending box enters its route (the package type's
  * default route) and its items are created from the template, one per unit,
  * in the template's order — without serials, which the opening station
- * records. Same routing rules as createPackage.
+ * records. Each item takes the box's details (its certificate row), unless
+ * the template line describes that item itself. Same routing rules as
+ * createPackage.
  */
 export async function intakeBox(tx: TransactionClient, packageId: bigint): Promise<CreatedPackage> {
   const box = await lockBox(tx, packageId);
@@ -220,9 +252,11 @@ export async function intakeBox(tx: TransactionClient, packageId: bigint): Promi
   await routeRow(tx, { itemId: packageId, itemType: box.item_type_id, routeNumber, firstStepTypeId: firstStep(pkgShape) });
 
   const base = baseOfId(packageId);
+  const fromBox = boxDetails(box);
   const itemIds: number[] = [];
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
+    const own = boxDetails(u);
     const itemId = itemIdFromBase(base, i + 1);
     await insertItemRow(tx, {
       itemId,
@@ -230,10 +264,7 @@ export async function intakeBox(tx: TransactionClient, packageId: bigint): Promi
       shipment: box.shipment_id,
       itemType: u.item_type_id,
       serialNumber: null,
-      makat: (u.makat ?? "").trim(),
-      model: CHAR50(u.model),
-      manufacturer: CHAR50(u.manufacturer_name),
-      manufacturerNo: (u.manufacturer_no ?? "").trim(),
+      ...(sameDetails(own, NO_DETAILS) ? fromBox : own),
       packageId,
       packageSeq: i + 1,
       templateSnapshot: null,
@@ -263,8 +294,9 @@ export type OpeningItem = { itemId: string; serialNumber: string; makat: string;
 
 /**
  * The opening station records what is really in the box: every item kept
- * gets its serial and details, items that did not come are removed, items
- * the template did not foresee are added. Serials follow the intake rule
+ * gets its serial and details (the box's unless the worker changed them;
+ * none is required), items that did not come are removed, items the
+ * template did not foresee are added. Serials follow the intake rule
  * (lib/packages/serials.ts): not twice in the box, not on another item of
  * the same type in this shipment. Refusals carry `itemIndex` into the list
  * `items` then `add`, as the wizard shows them.
@@ -311,9 +343,6 @@ export async function saveOpeningContents(
     const { it, itemType } = entries[i];
     const desc = types.get(itemType) ?? "פריט";
     if (!it.serialNumber?.trim()) throw new PackageError("ITEM_SERIAL_REQUIRED", `${desc}: חסר מספר סריאלי`, 400, i);
-    if (!it.makat?.trim() || !it.model?.trim() || !it.manufacturer?.trim()) {
-      throw new PackageError("MISSING_FIELDS", `${desc}: יש למלא מק״ט, דגם ויצרן`, 400, i);
-    }
     const key = serialKey(it.serialNumber);
     const first = seen.get(key);
     if (first != null) throw new PackageError("ITEM_SERIAL_DUPLICATE", `${desc}: הסריאלי ${it.serialNumber.trim()} כבר הוזן בשורה ${first + 1}`, 409, i);

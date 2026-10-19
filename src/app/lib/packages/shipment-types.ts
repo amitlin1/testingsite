@@ -18,3 +18,27 @@ export async function nonPackageTypeIds(
   const packageIds = new Set(rows.filter((r) => r.is_package).map((r) => r.item_type_id));
   return ids.filter((id) => !packageIds.has(id));
 }
+
+/** A line's columns as sent by the shipment forms: the makat, and the whole
+ *  certificate row it was scanned from (lib/itemQrParser.ts). The line's boxes
+ *  are minted with makat / model / manufacturer and pass them to their items
+ *  (boxes.ts); the rest is kept as the certificate says. Blank = not given. */
+export function lineDetails(line: Record<string, unknown>) {
+  const text = (v: unknown) => {
+    const s = typeof v === "string" ? v.trim() : typeof v === "number" && Number.isFinite(v) ? String(v) : "";
+    return s || null;
+  };
+  const qty = Number(line.qty_to_test);
+  return {
+    makat: text(line.makat),
+    model: text(line.model),
+    manufacturer_name: text(line.manufacturer_name),
+    manufacturer_no: text(line.manufacturer_no),
+    cert_row_no: text(line.cert_row_no),
+    serial_no: text(line.serial_no),
+    batch_size: text(line.batch_size),
+    qty_to_test: line.qty_to_test != null && Number.isInteger(qty) && qty > 0 ? qty : null,
+    purchase_order: text(line.purchase_order),
+    cert_row_raw: text(line.cert_row_raw),
+  };
+}

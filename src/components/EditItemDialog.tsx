@@ -29,7 +29,9 @@ type EditItemForm = {
   serialNumber: string; makat: string; model: string; manufacturer: string; manufacturerNo: string;
 };
 
-const REQUIRED: (keyof EditItemForm)[] = ["customer", "itemType", "serialNumber", "makat", "model", "manufacturer", "manufacturerNo"];
+// Makat, model, manufacturer and its number are optional: an item in a box
+// takes the box's (the shipment certificate's), which may leave them empty.
+const REQUIRED: (keyof EditItemForm)[] = ["customer", "itemType", "serialNumber"];
 const empty: EditItemForm = { customer: "", itemType: "", serialNumber: "", makat: "", model: "", manufacturer: "", manufacturerNo: "" };
 
 /** The form as the item stands — the baseline the unsaved-edits check compares to. */

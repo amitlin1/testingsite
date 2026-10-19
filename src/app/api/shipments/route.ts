@@ -4,7 +4,7 @@ import { saveSignature } from "../../../lib/file-utils";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { withAuth } from "@/lib/auth/withAuth";
 import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
-import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
+import { lineDetails, nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 import { syncShipmentBoxes } from "@/app/lib/packages/boxes";
 import { PackageError, packageErrorResponse } from "@/app/lib/packages/errors";
 
@@ -81,6 +81,15 @@ export async function GET() {
                 'item_type_id', si.item_type_id,
                 'quantity', si.quantity,
                 'makat', si.makat,
+                'model', si.model,
+                'manufacturer_name', si.manufacturer_name,
+                'manufacturer_no', si.manufacturer_no,
+                'cert_row_no', si.cert_row_no,
+                'serial_no', si.serial_no,
+                'batch_size', si.batch_size,
+                'qty_to_test', si.qty_to_test,
+                'purchase_order', si.purchase_order,
+                'cert_row_raw', si.cert_row_raw,
                 'item_type_desc', sit.item_type_desc
             ))
             FROM shipment_items si
@@ -219,7 +228,7 @@ export const POST = withAuth(async (request, { session }) => {
               shipment_id: created.id,
               item_type_id: item.item_type_id,
               quantity: item.quantity,
-              makat: item.makat || null,
+              ...lineDetails(item),
             },
           });
         }

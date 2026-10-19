@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { CircleAlert, Plus, RotateCcw, Trash2 } from "lucide-react";
-import type { PackageItemView } from "@/app/lib/packages/read";
+import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { AMBER_BG, AMBER_BORDER, AMBER_INK, HAIR, HAIR_2, INK_2, MUTED, RED, RED_BG, seq2 } from "@/app/components/packages/packageUi";
@@ -16,8 +16,10 @@ import { isValidShipmentQr } from "@/app/lib/qrParser";
  * box (PUT /api/packages/[id]/contents). The rows start from the items the
  * intake created from the template; the worker opens the box, marks what did
  * not come, adds what the template did not foresee, and gives every item its
- * serial and details. Scanning the certificate's equipment-row barcode into a
- * serial field fills the serial and the details. No serial, no going on.
+ * serial. The details (makat, model, manufacturer) are the box's — its
+ * shipment certificate row — and open under "פרטים" only to be changed.
+ * Scanning the certificate's equipment-row barcode into a serial field fills
+ * the serial and the details. No serial, no going on.
  */
 
 export type ContentRow = {
@@ -40,17 +42,25 @@ export type ContentRow = {
 
 type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
 
-let addedKey = 1;
-const detailsDone = (r: ContentRow) => !!(r.makat.trim() && r.model.trim() && r.manufacturer.trim());
+/** The details an item takes when nobody changes them: the box's. */
+export type BoxDetails = Pick<ContentRow, "makat" | "model" | "manufacturer" | "manufacturerNo">;
 
-export function rowsFromItems(items: PackageItemView[]): ContentRow[] {
+export function boxDetailsOf(pkg: Pick<PackageView, "makat" | "model" | "manufacturer_name" | "manufacturer_no">): BoxDetails {
+  return { makat: pkg.makat?.trim() ?? "", model: pkg.model?.trim() ?? "", manufacturer: pkg.manufacturer_name?.trim() ?? "", manufacturerNo: pkg.manufacturer_no?.trim() ?? "" };
+}
+
+let addedKey = 1;
+
+/** An item without any details (taken in before items inherited them) shows
+ *  the box's; without `box`, the items exactly as saved. */
+export function rowsFromItems(items: PackageItemView[], box?: BoxDetails): ContentRow[] {
   return items.map((it) => {
-    const row: ContentRow = {
+    const own: BoxDetails = { makat: it.makat ?? "", model: it.model ?? "", manufacturer: it.manufacturer_name ?? "", manufacturerNo: it.manufacturer_no ?? "" };
+    const blank = !Object.values(own).some((v) => v.trim());
+    return {
       key: it.item_id, itemId: it.item_id, itemType: it.item_type_id, typeDesc: it.item_type_desc, seq: it.package_seq,
-      serial: it.serial_no ?? "", makat: it.makat ?? "", model: it.model ?? "", manufacturer: it.manufacturer_name ?? "",
-      manufacturerNo: it.manufacturer_no ?? "", gone: false, open: false,
+      serial: it.serial_no ?? "", ...(blank && box ? box : own), gone: false, open: false,
     };
-    return { ...row, open: !detailsDone(row) && !!row.serial };
   });
 }
 
@@ -68,7 +78,6 @@ export function contentsProblem(rows: ContentRow[]): string | null {
     const key = serialKey(r.serial);
     if (seen.has(key)) return `${label} · הסריאלי ${r.serial.trim()} כבר הוזן בשורה ${seen.get(key)! + 1}`;
     seen.set(key, i);
-    if (!detailsDone(r)) return `${label} · יש למלא מק״ט, דגם ויצרן בפרטים`;
   }
   return null;
 }
@@ -103,7 +112,7 @@ export async function saveContents(packageId: string | number, rows: ContentRow[
 }
 
 export function OpeningContents({
-  rows, onRows, memberTypes, templateCount, shipmentId, packageId, error, onDone,
+  rows, onRows, memberTypes, templateCount, shipmentId, packageId, box, error, onDone,
 }: {
   rows: ContentRow[];
   onRows: (next: ContentRow[] | ((rs: ContentRow[]) => ContentRow[])) => void;
@@ -111,6 +120,8 @@ export function OpeningContents({
   templateCount: number;
   shipmentId: number;
   packageId: string;
+  /** What an added item starts with. */
+  box: BoxDetails;
   /** The save's refusal, on its row. */
   error: { text: string; rowIndex: number | null } | null;
   /** Enter in the last serial with everything filled: go on, as "המשך". */
@@ -181,7 +192,7 @@ export function OpeningContents({
       makat: it.makat || r.makat, model: it.model ?? r.model, manufacturer: it.manufacturer || r.manufacturer, manufacturerNo: it.manufacturerNo || r.manufacturerNo,
     };
     setNote(null);
-    onRows((rs) => rs.map((x, j) => (j === i ? { ...filled, open: !detailsDone(filled) } : x)));
+    onRows((rs) => rs.map((x, j) => (j === i ? filled : x)));
     focusSerial.current = filled.serial ? nextOpen(i) : i;
     return true;
   };
@@ -193,7 +204,7 @@ export function OpeningContents({
   const addRow = () => {
     focusSerial.current = rows.length;
     onRows((rs) => rs.concat([{
-      key: `new-${addedKey++}`, itemId: null, itemType: "", typeDesc: "", seq: null, serial: "", makat: "", model: "", manufacturer: "", manufacturerNo: "", gone: false, open: true,
+      key: `new-${addedKey++}`, itemId: null, itemType: "", typeDesc: "", seq: null, serial: "", ...box, gone: false, open: false,
     }]));
   };
 
@@ -285,7 +296,7 @@ export function OpeningContents({
                     <td style={{ padding: "10px 12px" }}>
                       {!r.gone && (
                         <button type="button" onClick={() => patch(i, { open: !r.open })} aria-expanded={r.open} aria-controls={r.open ? `${id}-d` : undefined}
-                          className="pkg-link pkg-link--hit" style={{ fontSize: 13, color: detailsDone(r) ? undefined : AMBER_INK }}>{r.open ? "סגור" : "פרטים"}</button>
+                          className="pkg-link pkg-link--hit" style={{ fontSize: 13 }}>{r.open ? "סגור" : "פרטים"}</button>
                       )}
                     </td>
                     <td style={{ padding: "10px 14px", textAlign: "end" }}>
@@ -335,7 +346,7 @@ export function OpeningContents({
         </div>
       )}
       <div style={{ marginTop: 12, fontSize: 12.5, color: INK_2, lineHeight: 1.5, maxWidth: 720 }}>
-        Enter עובר לשורה הבאה. ברקוד השורה מתעודת המשלוח ממלא גם מק״ט, דגם ויצרן. פריט שלא הגיע מסמנים בפח.
+        Enter עובר לשורה הבאה. מק״ט, דגם ויצרן נלקחים מהמארז (מתעודת המשלוח) — לשינוי לוחצים "פרטים". ברקוד השורה מהתעודה ממלא סריאלי ופרטים. פריט שלא הגיע מסמנים בפח.
       </div>
     </div>
   );

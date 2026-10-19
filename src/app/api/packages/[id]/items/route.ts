@@ -36,8 +36,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const makat = body.makat == null ? "" : String(body.makat).trim();
     const model = body.model == null ? "" : String(body.model).trim();
     const manufacturer = body.manufacturer == null ? "" : String(body.manufacturer).trim();
-    if (!Number.isFinite(itemType) || !serialNumber || !makat || !model || !manufacturer) {
-      return NextResponse.json({ error: "יש למלא סוג, מספר סריאלי, מק\"ט, דגם ויצרן" }, { status: 400 });
+    // Makat, model and manufacturer are optional (the certificate may not have them).
+    if (!Number.isFinite(itemType) || !serialNumber) {
+      return NextResponse.json({ error: "יש למלא סוג ומספר סריאלי" }, { status: 400 });
     }
 
     const item: PackageItemInput = {

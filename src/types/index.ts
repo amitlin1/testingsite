@@ -64,6 +64,25 @@ export type ItemTypeOption = { item_type_id: number; item_type_desc: string };
 export type Customers = { id: number; name: string; customer_code: string };
 export type StatusOption = { id: number; label: string };
 
+/** A shipment line's makat and the whole certificate row it was scanned from
+ *  (lib/itemQrParser.ts); its boxes are minted with makat / model /
+ *  manufacturer (lib/packages/boxes.ts). NULL on a line typed by hand. */
+export type ShipmentLineDetails = {
+  makat?: string | null;
+  model?: string | null;
+  manufacturer_name?: string | null;
+  manufacturer_no?: string | null;
+  /** מס"ד — the row's number on the certificate. */
+  cert_row_no?: string | null;
+  serial_no?: string | null;
+  /** גודל אצווה, as printed. */
+  batch_size?: string | null;
+  qty_to_test?: number | null;
+  purchase_order?: string | null;
+  /** The row exactly as in the barcode. */
+  cert_row_raw?: string | null;
+};
+
 export type Shipment = {
   id: number;
   shipment_code: string;
@@ -81,7 +100,7 @@ export type Shipment = {
   item_type_id: number | null; // Legacy
   item_type_desc: string | null; // Legacy
   signature_path?: string | null;
-  shipment_items?: { item_type_id: number; quantity: number; item_type_desc?: string; makat?: string | null }[];
+  shipment_items?: ({ item_type_id: number; quantity: number; item_type_desc?: string } & ShipmentLineDetails)[];
   source_id: number | null;
   source_desc: string | null;
   sending_worker_id: number | null;
@@ -109,7 +128,7 @@ export type NewShipment = {
   recieving_worker_id?: number | null;
   recieving_worker_name?: string | null;
   item_type_id?: number | null;
-  shipment_items?: { item_type_id: number; quantity: number; makat?: string | null }[];
+  shipment_items?: ({ item_type_id: number; quantity: number } & ShipmentLineDetails)[];
   source_id?: number | null;
   sending_worker_id: number | null;
   sending_worker_name?: string | null;

@@ -25,6 +25,17 @@ test("parseItemQr: every row of a whole-table barcode; an empty quantity is one"
   assert.equal(rows?.[1].manufacturer, "LG");
 });
 
+test("parseItemQr: no column is required — an all-empty row still reads", () => {
+  const [row] = parseItemQr("2^||||||||") ?? [];
+  assert.ok(row);
+  assert.equal(row.makat, "");
+  assert.equal(row.model, null);
+  assert.equal(row.manufacturer, "");
+  assert.equal(row.serialNumber, null);
+  assert.equal(row.qtyToTest, 1);
+  assert.equal(row.purchaseOrder, "");
+});
+
 test("parseItemQr: anything else is not an equipment barcode", () => {
   assert.equal(parseItemQr("1|SH-15|323|19/10/2026|Dani"), null);
   assert.equal(parseItemQr("2^1|123|SONY"), null);

@@ -10,7 +10,7 @@ import PackageWizardShell, { type ItemStepperRow, type WizardStep } from "./Pack
 import { PhotoUploader, PassFail, emptyPhotos, type Photos, type RefImg } from "./stationKit";
 import { NO_REF, ScanField, useReferenceLookup } from "./referenceScan";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
-import { OpeningContents, contentsProblem, rowsFromItems, saveContents, type ContentRow } from "./OpeningContents";
+import { OpeningContents, boxDetailsOf, contentsProblem, rowsFromItems, saveContents, type ContentRow } from "./OpeningContents";
 import { playCue } from "@/app/components/packages/scanSound";
 import {
   AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, RED, RED_BG, seq2,
@@ -106,7 +106,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const [itemPhase, setItemPhase] = React.useState<"scan" | "photo" | "weigh">("scan");
   // The contents step: its rows, whether they are saved as they stand, and
   // the save's refusal on its row.
-  const [contentRows, setContentRowsRaw] = React.useState<ContentRow[]>(() => rowsFromItems(pkg?.items ?? []));
+  const [contentRows, setContentRowsRaw] = React.useState<ContentRow[]>(() => (pkg ? rowsFromItems(pkg.items, boxDetailsOf(pkg)) : []));
   const [contentsSaved, setContentsSaved] = React.useState(false);
   const [contentsError, setContentsError] = React.useState<{ text: string; rowIndex: number | null } | null>(null);
   const setContentRows = React.useCallback((next: ContentRow[] | ((rs: ContentRow[]) => ContentRow[])) => {
@@ -141,7 +141,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     if (!open || !pkg) return;
     setStep(0); setScan(""); setBoxPhotos(emptyPhotos());
     setItems(pkg.items); setWork({}); setItemIdx(null); setItemPhase("scan");
-    setContentRowsRaw(rowsFromItems(pkg.items)); setContentsSaved(false); setContentsError(null);
+    setContentRowsRaw(rowsFromItems(pkg.items, boxDetailsOf(pkg))); setContentsSaved(false); setContentsError(null);
     setLabelsOpen(false); setLabelsPrinted(false); setSubmitting(false); setError(null);
     submitIdRef.current = null; committedRef.current = new Set();
     resetBoxFields();
@@ -545,7 +545,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         ) : stepKey === "contents" ? (
           <OpeningContents
             rows={contentRows} onRows={setContentRows} memberTypes={memberTypes} templateCount={templateCount}
-            shipmentId={pkg.shipment_id} packageId={String(item.item_id)} error={contentsError}
+            shipmentId={pkg.shipment_id} packageId={String(item.item_id)} box={boxDetailsOf(pkg)} error={contentsError}
             onDone={() => { if (contentsGap == null) onNext(); }}
           />
         ) : stepKey === "labels" ? (

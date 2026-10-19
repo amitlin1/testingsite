@@ -43,9 +43,30 @@ const POC_ALLOWED = /^[A-Za-z0-9\s.,!?'()/@&+-]*$/;
  * A row of the certificate's equipment table, scanned into "מארזים במשלוח"
  * and waiting for the worker's OK. Everything it can fill is filled and
  * editable; the package type stays the worker's choice. A row with a serial
- * is one unit, so one box — the serial itself belongs to the intake.
+ * is one unit, so one box. The confirmed line keeps the whole row; the
+ * item's own serial is still recorded at the opening station.
  */
 type LineDraft = { row: ParsedItemData; quantity: number; makat: string; itemTypeId: number | null };
+
+/** The package line a confirmed draft becomes: the whole certificate row goes
+ *  with it, and the boxes minted from it pass makat / model / manufacturer to
+ *  their items. */
+function draftLine(d: LineDraft) {
+    return {
+        item_type_id: d.itemTypeId ?? 0,
+        quantity: d.quantity,
+        makat: d.makat.trim() || null,
+        model: d.row.model?.trim() || null,
+        manufacturer_name: d.row.manufacturer.trim() || null,
+        manufacturer_no: d.row.manufacturerNo.trim() || null,
+        cert_row_no: d.row.rowNum.trim() || null,
+        serial_no: d.row.serialNumber?.trim() || null,
+        batch_size: d.row.batchSize.trim() || null,
+        qty_to_test: d.row.qtyToTest,
+        purchase_order: d.row.purchaseOrder.trim() || null,
+        cert_row_raw: d.row.raw,
+    };
+}
 
 /** Under a line that came from the certificate: "מהתעודה · שורה 2 · SONY 145DL · מק״ט 16321545 · הזמנה PO-778". */
 function certSummary(row: ParsedItemData, makat: string | null | undefined): string {
@@ -269,12 +290,12 @@ export default function ShipmentInsertPopup({
         const last = items[lastIdx];
         if (last && !last.item_type_id && !last.quantity && drafts.length > 0) {
             const [first, ...rest] = drafts;
-            update(lastIdx, { item_type_id: first.itemTypeId ?? 0, quantity: first.quantity, makat: first.makat.trim() || null });
+            update(lastIdx, draftLine(first));
             certs[lastIdx] = first.row;
             drafts = rest;
         }
         for (const d of drafts) {
-            append({ item_type_id: d.itemTypeId ?? 0, quantity: d.quantity, makat: d.makat.trim() || null });
+            append(draftLine(d));
             certs.push(d.row);
         }
         setLineCerts(certs);

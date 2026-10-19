@@ -88,9 +88,10 @@ export async function POST(req: Request) {
       const makat = str(raw.makat).trim();
       const model = str(raw.model).trim();
       const manufacturer = str(raw.manufacturer).trim();
-      if (itemType == null || !serialNumber || !makat || !model || !manufacturer) {
+      // Makat, model and manufacturer are optional (the certificate may not have them).
+      if (itemType == null || !serialNumber) {
         return NextResponse.json(
-          { error: `פריט ${i + 1}: יש למלא סוג, מספר סריאלי, מק"ט, דגם ויצרן`, itemIndex: i },
+          { error: `פריט ${i + 1}: יש למלא סוג ומספר סריאלי`, itemIndex: i },
           { status: 400 },
         );
       }

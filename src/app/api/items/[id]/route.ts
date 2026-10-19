@@ -237,8 +237,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const workerName: string | null =
       typeof body.workerName === "string" && body.workerName ? body.workerName : null;
 
-    if (!customer || !itemType || !makat) {
-      return NextResponse.json({ error: "יש למלא לקוח, סוג ומק\"ט" }, { status: 400 });
+    // Makat, model and manufacturer are optional: an item takes its box's
+    // (the shipment certificate's), which may leave any of them empty.
+    if (!customer || !itemType) {
+      return NextResponse.json({ error: "יש למלא לקוח וסוג" }, { status: 400 });
     }
 
     const nextTypeId = Number(itemType);
@@ -247,10 +249,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       const ctx = await loadPackageContext(tx, itemIdBig);
       if (!ctx) throw new PackageError("ITEM_NOT_FOUND", "הפריט לא נמצא", 404);
 
-      // A package has no serial and may leave model / manufacturer empty; an
-      // item inside a box must carry all of them, as before.
-      if (!ctx.isPackage && (!serialNumber || !model || !manufacturer)) {
-        throw new PackageError("MISSING_FIELDS", "יש למלא את כל השדות");
+      // A package has no serial; an item inside a box must carry one.
+      if (!ctx.isPackage && !serialNumber) {
+        throw new PackageError("MISSING_FIELDS", "חסר מספר סריאלי");
       }
       if (!ctx.isPackage) await assertSerialFreeForItem(tx, itemIdBig, nextTypeId, String(serialNumber));
 
@@ -283,7 +284,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           customer_id: Number(customer),
           item_type_id: nextTypeId,
           serial_no: ctx.isPackage ? (serialNumber ? String(serialNumber) : null) : String(serialNumber),
-          makat: String(makat),
+          makat: String(makat ?? "").trim(),
           model: String(model ?? ""),
           manufacturer_name: String(manufacturer ?? ""),
           manufacturer_no: manufacturerNo != null ? String(manufacturerNo) : "",

@@ -3,7 +3,7 @@ import { prisma } from "@/app/lib/prisma";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
 import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
-import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
+import { lineDetails, nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 import { dropShipmentBoxes, syncShipmentBoxes } from "@/app/lib/packages/boxes";
 import { PackageError, packageErrorResponse } from "@/app/lib/packages/errors";
 
@@ -98,7 +98,7 @@ export const PUT = withAuth(async (request: NextRequest, { session }: WithAuthCt
                             shipment_id: shipmentId,
                             item_type_id: item.item_type_id,
                             quantity: item.quantity,
-                            makat: item.makat || null,
+                            ...lineDetails(item),
                         },
                     });
                 }
