@@ -3,6 +3,15 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { parseBarcode } from "@/app/lib/barcode-parser";
+
+/** The item id of the route segment ("itemId" or "itemId-sourceId"), or null
+ *  when it is not one — a 400, never a 500 from parseBarcode / BigInt. */
+function itemIdOf(id: string): bigint | null {
+  if (!/^\d{1,19}(-\d*)?$/.test(id)) return null;
+  return BigInt(parseBarcode(id).itemId);
+}
+
+const BAD_ID = () => NextResponse.json({ error: "מזהה פריט לא תקין" }, { status: 400 });
 import { getWorkersDirectory } from "@/lib/keycloak-admin";
 import { randomUUID } from "crypto";
 import { findStationForRouteStep } from "@/app/lib/station-assignment";
@@ -34,8 +43,8 @@ function serializeBigInts(obj: unknown): unknown {
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { itemId } = parseBarcode(id);
-    const itemIdBig = BigInt(itemId);
+    const itemIdBig = itemIdOf(id);
+    if (itemIdBig == null) return BAD_ID();
 
     const [itemResult, connectedResult, historyResult, workersDirectory] = await Promise.all([
       prisma.$queryRaw<any[]>`
@@ -227,8 +236,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { itemId } = parseBarcode(id);
-    const itemIdBig = BigInt(itemId);
+    const itemIdBig = itemIdOf(id);
+    if (itemIdBig == null) return BAD_ID();
 
     const body = await req.json();
     const { customer, itemType, serialNumber, makat, model, manufacturer, manufacturerNo } = body;
@@ -375,7 +384,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           // item_routes row updated just above). station_type_id is the type the
           // fresh queued interval waits for — step 1 of the new route.
           await recordTransition(tx, {
-            eventKey: `retype:${itemId}:${randomUUID()}`,
+            eventKey: `retype:${itemIdBig}:${randomUUID()}`,
             itemId: itemIdBig,
             toState: "queued",
             stepNo: 1,
@@ -427,8 +436,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { itemId } = parseBarcode(id);
-    const itemIdBig = BigInt(itemId);
+    const itemIdBig = itemIdOf(id);
+    if (itemIdBig == null) return BAD_ID();
 
     let cascade = false;
     // The intake's "בטל מארז אחרון": delete only what nobody has worked on yet.
@@ -496,6 +505,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       }
 
       await tx.test_results.deleteMany({ where: { item_id: { in: idsToDelete } } });
+      // The report pointer goes with its results (the PDF blob stays in the
+      // versioned bucket, like the item's other files).
+      await tx.item_reports.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_route_history.deleteMany({ where: { item_id: { in: idsToDelete } } });
       await tx.item_routes.deleteMany({ where: { item_id: { in: idsToDelete } } });
       // Items inside the box first — they hold the FK (package_id) to it.

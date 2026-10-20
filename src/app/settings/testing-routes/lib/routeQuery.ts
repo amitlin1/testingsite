@@ -20,7 +20,7 @@ import type { FieldId, GroupTarget, StepUid } from "@/app/lib/station-fields/sch
  * is gone is the page's to send back to the map (backToMap).
  */
 
-export const ROUTE_VIEWS = ["map", "steps", "library"] as const;
+export const ROUTE_VIEWS = ["map", "steps", "library", "report"] as const;
 export type RouteView = (typeof ROUTE_VIEWS)[number];
 
 export const LIBRARY_TABS = ["sets", "lists"] as const;

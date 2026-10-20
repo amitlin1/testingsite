@@ -58,6 +58,16 @@ FROM node:${NODE_VERSION}-bullseye-slim AS runner
 
 WORKDIR /app
 
+# Chromium renders the item PDF reports (src/app/lib/item-report/render.ts,
+# docs/ITEM_REPORTS.md). Installed at BUILD time, while the build machine is
+# online — the image then carries it into the air-gap. Fonts are not needed:
+# the report HTML inlines the bundled Rubik (public/fonts).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends chromium && \
+    rm -rf /var/lib/apt/lists/* && \
+    /usr/bin/chromium --version
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
 # Create non-root user for security
 RUN groupadd --system --gid 1001 nodejs && \
     useradd --system --uid 1001 --gid 1001 nextjs

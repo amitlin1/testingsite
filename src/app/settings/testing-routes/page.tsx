@@ -12,6 +12,7 @@ import RouteContextCard, { sortRouteOptions } from "./components/RouteContextCar
 import type { RouteOption } from "./components/RouteContextCard";
 import RouteViewTabs from "./components/RouteViewTabs";
 import RouteStepsTab from "./components/steps/RouteStepsTab";
+import RouteReportTab from "./components/report/RouteReportTab";
 import {
   MapLoadErrorState, MapLoadingState, MapNoContentsState, MapNoStepsState,
 } from "./components/map/MapViewStates";
@@ -50,6 +51,7 @@ import "./route-fields.css";
  *            draws the map's other states (artboard 11)
  *   steps    "שלבי המסלול" (RouteStepsTab)
  *   library  "ערכות ורשימות" (FieldLibrary, artboard 8)
+ *   report   "דוח PDF" (RouteReportTab) — the report template of each item route on screen
  *
  * "החלת ערכת שדות" (ApplyFieldSetDialog, artboard 9) is the page's: the selection bar's "החל ערכת
  * שדות…" (the selected cells), the editor's ⋯ "החל ערכה…" (its cell) and the onboarding's "החל ערכת
@@ -561,6 +563,10 @@ function RouteFieldsScreen({
           onRouteChange={onRouteChange}
           onSaved={onStepsSaved}
         />
+      )}
+
+      {view === "report" && (
+        <RouteReportTab context={context} loading={ref != null && (ctx.status === "loading" || ctx.status === "idle")} />
       )}
 
       {/* "ערכות ורשימות" (artboard 8): global, independent of the chosen route. */}

@@ -3,6 +3,21 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
 
+  // Item PDF reports (docs/ITEM_REPORTS.md) — the same settings ticketflow's
+  // PDF pipeline runs with:
+  // puppeteer-core must not be bundled — it is required at runtime against the
+  // system Chromium the Dockerfile installs in the runner stage — and Next's
+  // standalone tracing does not pick all of it up, so it is included by hand.
+  serverExternalPackages: ["puppeteer-core"],
+  outputFileTracingIncludes: {
+    "/api/item-reports/**": ["./node_modules/puppeteer-core/**"],
+    "/api/testing/results": ["./node_modules/puppeteer-core/**"],
+  },
+  // Puck (the report template editor) ships ESM that Next must transpile
+  // through its own module pipeline; otherwise Puck's React context / dnd-kit
+  // hooks resolve against a mismatched module copy.
+  transpilePackages: ["@measured/puck", "@dnd-kit/react", "@dnd-kit/dom", "@dnd-kit/helpers"],
+
   experimental: {
     // Body ceiling for every route the middleware touches — which is ALL of
     // /api (src/middleware.ts matches them deliberately: most route handlers

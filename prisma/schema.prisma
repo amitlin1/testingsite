@@ -399,6 +399,46 @@ model testing_routes {
   item_types           item_types         @relation(fields: [item_type_id], references: [item_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_testing_routes_item_type")
   test_stations_type   test_stations_type @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_testing_routes_test_station_type")
   field_versions       route_field_versions[]
+  report_template      report_templates?
+}
+
+/// The PDF report template of a route (docs/ITEM_REPORTS.md): a Puck document
+/// (src/app/lib/item-report/puck-config.tsx) whose variables are the item's
+/// details and the fields of the route's steps. One per route; an item gets the
+/// template of the route it runs. Editing it never touches a frozen report.
+model report_templates {
+  id              Int            @id @default(autoincrement())
+  test_route_id   Int            @unique
+  template        Json
+  updated_at      DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  updated_by      String?        @db.VarChar(255)
+  updated_by_name String?        @db.Text
+  route           testing_routes @relation(fields: [test_route_id], references: [test_route_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_report_templates_route")
+}
+
+/// The FINAL report of an item (docs/ITEM_REPORTS.md). One row per item, only
+/// once the document is final: the route finished (item_routes.finished_at)
+/// and, when the template asks for one, the report was signed. The PDF lives
+/// in MinIO; this row points at it. It is valid only while finished_at still
+/// equals route_finished_at — a reopened / retyped item no longer matches and
+/// gets a live draft again, so no reopen path has to remember to clear it.
+model item_reports {
+  item_id                BigInt    @id
+  /// MinIO key of the frozen PDF; NULL while only a signature is recorded.
+  storage_key            String?   @db.VarChar(1024)
+  size_bytes             BigInt    @default(0)
+  version                Int       @default(0)
+  generated_at           DateTime? @db.Timestamptz(6)
+  /// item_routes.finished_at the PDF was frozen against.
+  route_finished_at      DateTime? @db.Timestamp(6)
+  /// The hand-drawn signature of whoever signed the finished report.
+  signature_key          String?   @db.VarChar(1024)
+  signed_by              String?   @db.VarChar(255)
+  signed_by_name         String?   @db.Text
+  signed_by_number       String?   @db.VarChar(64)
+  signed_at              DateTime? @db.Timestamptz(6)
+  /// item_routes.finished_at the signature was given for.
+  signed_finished_at     DateTime? @db.Timestamp(6)
 }
 
 /// Immutable history of published field configs, one row per (route, version).
