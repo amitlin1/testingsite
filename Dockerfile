@@ -62,7 +62,10 @@ WORKDIR /app
 # docs/ITEM_REPORTS.md). Installed at BUILD time, while the build machine is
 # online — the image then carries it into the air-gap. Fonts are not needed:
 # the report HTML inlines the bundled Rubik (public/fonts).
-RUN apt-get update && \
+# Bullseye's LTS ended: deb.debian.org still serves the bullseye-security index
+# but 404s its packages, which now live only on archive.debian.org.
+RUN sed -i 's|http://deb.debian.org/debian-security|http://archive.debian.org/debian-security|' /etc/apt/sources.list && \
+    apt-get update && \
     apt-get install -y --no-install-recommends chromium && \
     rm -rf /var/lib/apt/lists/* && \
     /usr/bin/chromium --version
