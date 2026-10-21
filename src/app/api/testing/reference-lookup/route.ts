@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { serializeReferenceItem, referenceItemInclude } from "@/lib/reference-items";
+import { serializeReferenceItem, referenceItemWithMembersInclude } from "@/lib/reference-items";
 
 export const runtime = "nodejs";
 
@@ -11,6 +11,11 @@ export const runtime = "nodejs";
  * (`hasRU`), its reference weight, and its reference images — sourced from the
  * `reference_items` / `reference_item_images` tables (the /settings/reference-items
  * infrastructure). Used by the RU-check, photo-by-reference, and weighing steps.
+ *
+ * A package reference's members are never found on their own. When the item
+ * found IS a package reference (the box label at the opening station),
+ * `packageMembers` carries its members — one per content line — so the
+ * wizard knows what should be in the box and what each item compares against.
  */
 export async function GET(req: Request) {
   try {
@@ -29,9 +34,10 @@ export async function GET(req: Request) {
     const row = await prisma.reference_items.findFirst({
       where: {
         manufacturer_sku: sku,
+        parent_reference_id: null,
         ...(itemTypeId != null ? { item_type_id: itemTypeId } : {}),
       },
-      include: referenceItemInclude,
+      include: referenceItemWithMembersInclude,
       orderBy: { updated_at: "desc" },
     });
 
@@ -39,7 +45,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ hasRU: false, referenceItem: null });
     }
 
-    const ref = serializeReferenceItem(row as Parameters<typeof serializeReferenceItem>[0]);
+    const { members, ...ref } = serializeReferenceItem(row);
     return NextResponse.json({
       hasRU: true,
       referenceItem: ref,
@@ -49,6 +55,14 @@ export async function GET(req: Request) {
       // screen pulls only its own reference set.
       imagesByType: ref.images_by_type,
       coverUrl: ref.cover_url,
+      packageMembers: members.map((m) => ({
+        item_type_id: m.item_type_id,
+        item_type_desc: m.item_type_desc,
+        referenceItem: { ...m, members: undefined },
+        referenceWeight: m.reference_weight,
+        imagesByType: m.images_by_type,
+        coverUrl: m.cover_url,
+      })),
     });
   } catch (error) {
     console.error("Error in reference-lookup:", error);

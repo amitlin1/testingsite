@@ -241,6 +241,14 @@ function legacyPhotos(d: Obj): string[] {
   return out;
 }
 
+/** Details.refSource of a package item's opening (testing/tests-popups/packageReference.ts). */
+const REF_SOURCE_LABEL: Record<string, string> = {
+  package: "מייחוס המארז",
+  scan: "לפי הסריקה",
+  package_fallback: "מייחוס המארז · המק״ט לא תאם",
+  none: "ללא ייחוס",
+};
+
 /** The fields of a row: the station-fields block when present, else what the
  *  legacy popups saved (weight / photos / the documented `fields` array). */
 function rowFields(d: Obj | null): ReportFieldResult[] {
@@ -263,6 +271,17 @@ function rowFields(d: Obj | null): ReportFieldResult[] {
       const value = typeof val === "boolean" ? (val ? "כן" : "לא") : val == null ? "" : `${String(val)}${unit}`;
       const tone: ReportTone | null = typeof raw.passed === "boolean" ? (raw.passed ? "pass" : "fail") : null;
       out.push({ id: `legacy_${i}`, label, value, tone });
+    });
+  }
+  // An item opened against its package reference: where its reference came
+  // from, and the SKU that was expected when the scan differed from it.
+  if (typeof d.refSource === "string" && d.refSource in REF_SOURCE_LABEL) {
+    const differs = typeof d.expectedSku === "string" && d.expectedSku !== "" && d.expectedSku !== d.sku;
+    out.push({
+      id: "legacy_reference",
+      label: "ייחוס",
+      value: `${REF_SOURCE_LABEL[d.refSource]}${differs ? ` · צפוי ${d.expectedSku}` : ""}`,
+      tone: d.refSource === "package" ? "pass" : differs ? "warn" : null,
     });
   }
   if (isObj(d.weight)) {

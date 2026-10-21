@@ -44,10 +44,6 @@ type ServerLine = {
   item_type_id: number;
   item_type_desc: string;
   quantity: number;
-  makat: string | null;
-  model: string | null;
-  manufacturer_name: string | null;
-  manufacturer_no: string | null;
   route_number: number;
   sort_order: number;
   route_warning: string | null;
@@ -67,10 +63,6 @@ type DraftLine = {
   key: number;
   item_type_id: number | "";
   quantity: string;
-  makat: string;
-  model: string;
-  manufacturer_name: string;
-  manufacturer_no: string;
   route_number: string;
   route_warning: string | null;
 };
@@ -86,10 +78,6 @@ const toDraft = (l: ServerLine): DraftLine => ({
   key: keySeq++,
   item_type_id: l.item_type_id,
   quantity: String(l.quantity),
-  makat: l.makat ?? "",
-  model: l.model ?? "",
-  manufacturer_name: l.manufacturer_name ?? "",
-  manufacturer_no: l.manufacturer_no ?? "",
   route_number: l.route_number === 1 ? "" : String(l.route_number),
   route_warning: l.route_warning,
 });
@@ -213,7 +201,7 @@ export default function PackagesSettingsPage() {
     });
   const addRow = () =>
     setDraft((rows) => rows.concat([{
-      key: keySeq++, item_type_id: "", quantity: "1", makat: "", model: "", manufacturer_name: "", manufacturer_no: "", route_number: "", route_warning: null,
+      key: keySeq++, item_type_id: "", quantity: "1", route_number: "", route_warning: null,
     }]));
   const revert = () => {
     if (!contents) return;
@@ -246,10 +234,6 @@ export default function PackagesSettingsPage() {
           lines: draft.map((r, i) => ({
             item_type_id: r.item_type_id,
             quantity: Number(r.quantity),
-            makat: r.makat || null,
-            model: r.model || null,
-            manufacturer_name: r.manufacturer_name || null,
-            manufacturer_no: r.manufacturer_no || null,
             route_number: r.route_number === "" ? 1 : Number(r.route_number),
             sort_order: i,
           })),
@@ -425,6 +409,7 @@ export default function PackagesSettingsPage() {
               <div style={{ fontSize: "var(--text-micro)", fontWeight: 600, color: MUTED }}>תכולת מארז</div>
               <h2 style={{ margin: "5px 0 0", fontSize: "var(--text-title)", fontWeight: 700, letterSpacing: "var(--ls-display)" }}>{contents.item_type_desc || selected.item_type_desc}</h2>
               <div style={{ fontSize: "var(--text-small)", color: MUTED, marginTop: 4 }}>{draft.length} סוגי פריטים · {total} פריטים בקופסה · השורות האלה נפרשות אוטומטית בטופס הקליטה</div>
+              <div style={{ fontSize: "var(--text-small)", color: MUTED, marginTop: 2 }}>מק״ט, דגם ויצרן של הפריטים נלקחים מהמשלוח — משורת התעודה של המארז.</div>
             </div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap" }}>
               <div>
@@ -447,16 +432,12 @@ export default function PackagesSettingsPage() {
 
           {draft.length > 0 && (
             <div style={{ overflowX: "auto" }}>
-              <table className="sh-table sh-table--sm" style={{ minWidth: 900 }}>
+              <table className="sh-table sh-table--sm" style={{ minWidth: 560 }}>
                 <thead>
                   <tr>
                     <th style={{ width: 64, textAlign: "center" }}>סדר</th>
                     <th>סוג פריט</th>
                     <th style={{ width: 84, textAlign: "center" }}>כמות</th>
-                    <th>מק״ט</th>
-                    <th>דגם</th>
-                    <th>יצרן</th>
-                    <th>מספר יצרן</th>
                     <th style={{ width: 120, textAlign: "center" }}>מסלול ברירת מחדל</th>
                     <th style={{ width: 56 }} aria-label="פעולות" />
                   </tr>
@@ -504,10 +485,6 @@ export default function PackagesSettingsPage() {
                             value={r.quantity} onChange={(e) => { patchRow(i, { quantity: digits(e.target.value) }); clearRowError(r.key, "qty"); }}
                             inputMode="numeric" style={{ minWidth: 56 }} />
                         </td>
-                        <td style={td}><input aria-label={`מק״ט, ${row}`} dir="ltr" className="stp-input stp-input--code" style={{ textAlign: "right" }} value={r.makat} onChange={(e) => patchRow(i, { makat: e.target.value })} /></td>
-                        <td style={td}><input aria-label={`דגם, ${row}`} className="stp-input" value={r.model} onChange={(e) => patchRow(i, { model: e.target.value })} /></td>
-                        <td style={td}><input aria-label={`יצרן, ${row}`} className="stp-input" value={r.manufacturer_name} onChange={(e) => patchRow(i, { manufacturer_name: e.target.value })} /></td>
-                        <td style={td}><input aria-label={`מספר יצרן, ${row}`} dir="ltr" className="stp-input stp-input--code" style={{ textAlign: "right" }} value={r.manufacturer_no} onChange={(e) => patchRow(i, { manufacturer_no: e.target.value })} /></td>
                         <td style={td}>
                           <input aria-label={`מסלול ברירת מחדל, ${row}`} value={r.route_number} onChange={(e) => patchRow(i, { route_number: digits(e.target.value), route_warning: null })} placeholder="1" inputMode="numeric"
                             className={"stp-input stp-input--num stp-input--route" + (r.route_number === "" ? "" : " stp-input--route-set")} style={{ minWidth: 76 }} />

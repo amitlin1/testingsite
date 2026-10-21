@@ -363,6 +363,77 @@
   .ri-drop:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
 }
 .ri-drop:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+/* The package reference dialog: the box and its content lines in a rail
+   beside the form. The rail stacks above the form on narrow screens. */
+.ri-pkg { display: flex; flex-wrap: wrap; min-height: 560px; }
+.ri-pkg-nav {
+  flex: 1 1 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 12px;
+  background: var(--color-surface-pearl);
+  border-inline-end: 1px solid var(--color-hairline);
+}
+.ri-pkg-pane { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-ml); padding: 20px 24px 24px; }
+.ri-pkg-group { padding: 6px 12px 4px; font-size: var(--text-fine); font-weight: var(--fw-bold); color: var(--color-ink-muted-48); }
+.ri-pkg-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ri-pkg-row:hover { background: var(--color-canvas-parchment); }
+}
+.ri-pkg-row[aria-current="true"] { background: var(--color-canvas); border-color: var(--color-primary); }
+.ri-pkg-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.ri-pkg-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  font-size: var(--text-small);
+  font-weight: var(--fw-bold);
+  color: var(--color-ink-muted-70);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+}
+.ri-pkg-sub { display: block; font-size: var(--text-fine); color: var(--color-ink-muted-48); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ri-pkg-progress { height: 6px; margin-top: 8px; overflow: hidden; background: var(--color-hairline); border-radius: var(--r-pill); }
+.ri-pkg-progress > span { display: block; height: 100%; border-radius: var(--r-pill); }
+.ri-pkg-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 24px;
+  text-align: center;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--r-lg);
+}
+.ri-pkg-note {
+  padding: 12px 14px;
+  font-size: var(--text-small);
+  background: var(--color-primary-tint);
+  border: 1px solid var(--color-primary-soft);
+  border-radius: var(--r-md);
+}
+/* A package reference's card: one chip per content line. */
+.ri-lines { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* ------------------------------------------------------------- users --- */
 .users-kpis {

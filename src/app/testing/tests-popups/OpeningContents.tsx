@@ -10,16 +10,18 @@ import { serialKey, type SerialMatch } from "@/app/lib/packages/serial-key";
 import { typeAsUsKeyboard } from "@/app/lib/scannerKeys";
 import { parseItemQr } from "@/app/lib/itemQrParser";
 import { isValidShipmentQr } from "@/app/lib/qrParser";
+import type { RefMember } from "./packageReference";
 
 /**
  * "תכולה וסריאליים" — the opening station's record of what is really in the
  * box (PUT /api/packages/[id]/contents). The rows start from the items the
  * intake created from the template; the worker opens the box, marks what did
  * not come, adds what the template did not foresee, and gives every item its
- * serial. The details (makat, model, manufacturer) are the box's — its
- * shipment certificate row — and open under "פרטים" only to be changed.
- * Scanning the certificate's equipment-row barcode into a serial field fills
- * the serial and the details. No serial, no going on.
+ * serial — the only thing typed here. The details (makat, model,
+ * manufacturer) are the shipment's — the box's certificate row — and open
+ * under "פרטים" to be read, not changed. Scanning the certificate's
+ * equipment-row barcode into a serial field fills the serial. No serial, no
+ * going on.
  */
 
 export type ContentRow = {
@@ -42,7 +44,7 @@ export type ContentRow = {
 
 type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
 
-/** The details an item takes when nobody changes them: the box's. */
+/** The details the box's items take from the shipment: the box's. */
 export type BoxDetails = Pick<ContentRow, "makat" | "model" | "manufacturer" | "manufacturerNo">;
 
 export function boxDetailsOf(pkg: Pick<PackageView, "makat" | "model" | "manufacturer_name" | "manufacturer_no">): BoxDetails {
@@ -86,14 +88,13 @@ export function contentsProblem(rows: ContentRow[]): string | null {
 export async function saveContents(packageId: string | number, rows: ContentRow[]): Promise<{ items: PackageItemView[] } | { error: string; rowIndex: number | null }> {
   const kept = rows.filter((r) => !r.gone && r.itemId != null);
   const added = rows.filter((r) => !r.gone && r.itemId == null);
-  const detail = (r: ContentRow) => ({ serialNumber: r.serial.trim(), makat: r.makat.trim(), model: r.model.trim(), manufacturer: r.manufacturer.trim(), manufacturerNo: r.manufacturerNo.trim() || null });
   try {
     const res = await apiFetch(`/api/packages/${packageId}/contents`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: kept.map((r) => ({ itemId: r.itemId, ...detail(r) })),
+        items: kept.map((r) => ({ itemId: r.itemId, serialNumber: r.serial.trim() })),
         remove: rows.filter((r) => r.gone && r.itemId != null).map((r) => r.itemId),
-        add: added.map((r) => ({ itemType: r.itemType, ...detail(r) })),
+        add: added.map((r) => ({ itemType: r.itemType, serialNumber: r.serial.trim() })),
       }),
     });
     const d = await res.json().catch(() => ({}));
@@ -112,7 +113,7 @@ export async function saveContents(packageId: string | number, rows: ContentRow[
 }
 
 export function OpeningContents({
-  rows, onRows, memberTypes, templateCount, shipmentId, packageId, box, error, onDone,
+  rows, onRows, memberTypes, templateCount, shipmentId, packageId, box, error, onDone, expectedOf,
 }: {
   rows: ContentRow[];
   onRows: (next: ContentRow[] | ((rs: ContentRow[]) => ContentRow[])) => void;
@@ -126,6 +127,8 @@ export function OpeningContents({
   error: { text: string; rowIndex: number | null } | null;
   /** Enter in the last serial with everything filled: go on, as "המשך". */
   onDone: () => void;
+  /** With a package reference found: the reference item expected for a type, shown under it. */
+  expectedOf?: (itemTypeId: number) => RefMember | null;
 }) {
   const uid = React.useId();
   const serialRefs = React.useRef<(HTMLInputElement | null)[]>([]);
@@ -176,8 +179,8 @@ export function OpeningContents({
     return m ? { tone: "warn", text: `קיים במערכת · ${m.item_type_desc}${m.shipment_code ? ` · משלוח ${m.shipment_code}` : ""}` } : null;
   };
 
-  // The certificate's equipment-row barcode in serial field i fills the row:
-  // serial (a batch row has none — it is typed after) and details.
+  // The certificate's equipment-row barcode in serial field i fills its
+  // serial (a batch row has none — it is typed after). Details stay the box's.
   const applyBarcode = (i: number, text: string): boolean => {
     const value = text.trim();
     const refuse = (msg: string) => { setNote({ rowIndex: i, text: msg }); playCue("error"); serialRefs.current[i]?.select(); return true; };
@@ -186,11 +189,7 @@ export function OpeningContents({
     const parsed = parseItemQr(value);
     if (!parsed) return refuse("ברקוד הפריט לא נקרא במלואו — סרוק שוב");
     const it = parsed[0];
-    const r = rows[i];
-    const filled: ContentRow = {
-      ...r, serial: it.serialNumber ?? "", fromQr: true,
-      makat: it.makat || r.makat, model: it.model ?? r.model, manufacturer: it.manufacturer || r.manufacturer, manufacturerNo: it.manufacturerNo || r.manufacturerNo,
-    };
+    const filled: ContentRow = { ...rows[i], serial: it.serialNumber ?? "", fromQr: true };
     setNote(null);
     onRows((rs) => rs.map((x, j) => (j === i ? filled : x)));
     focusSerial.current = filled.serial ? nextOpen(i) : i;
@@ -261,6 +260,14 @@ export function OpeningContents({
                         </div>
                       )}
                       {r.gone && <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>לא הגיע — יוסר מהמארז</div>}
+                      {!r.gone && expectedOf && r.itemType !== "" && (() => {
+                        const m = expectedOf(r.itemType);
+                        return (
+                          <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>
+                            {m ? <>ייחוס צפוי: {m.name && <>{m.name} · </>}<bdi dir="ltr">{m.sku}</bdi></> : "אין ייחוס בייחוס המארז"}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: "10px 12px" }}>
                       {!r.gone && (
@@ -284,10 +291,9 @@ export function OpeningContents({
                             style={flag?.tone === "error" || rowError ? { borderColor: RED } : undefined} />
                           {(rowError || flag) ? (
                             <div id={`${id}-sn`} style={{ fontSize: 11.5, lineHeight: 1.35, marginTop: 4, color: rowError || flag?.tone === "error" ? RED : AMBER_INK }}>{rowError ?? flag?.text}</div>
-                          ) : r.fromQr && (
+                          ) : r.fromQr && !r.serial.trim() && (
                             <div style={{ fontSize: 11.5, lineHeight: 1.35, marginTop: 4, color: MUTED }}>
-                              מהברקוד: {[r.manufacturer, r.model].filter(Boolean).join(" ")}{r.makat ? ` · מק״ט ${r.makat}` : ""}
-                              {!r.serial.trim() && " — סרוק או הקלד את הסריאלי"}
+                              בברקוד אין סריאלי — סרוק או הקלד את הסריאלי
                             </div>
                           )}
                         </>
@@ -321,9 +327,10 @@ export function OpeningContents({
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, maxWidth: 720 }}>
                           {([["מק״ט", "makat", true], ["דגם", "model", false], ["יצרן", "manufacturer", false], ["מק״ט יצרן", "manufacturerNo", true]] as const).map(([label, field, code]) => (
                             <div key={field}>
-                              <label htmlFor={`${id}-${field}`} style={{ display: "block", fontSize: 11.5, color: MUTED, marginBottom: 5 }}>{label}</label>
-                              <input id={`${id}-${field}`} value={r[field]} dir={code ? "ltr" : undefined} onChange={(e) => patch(i, { [field]: e.target.value } as Partial<ContentRow>)}
-                                className={code ? "pkg-field pkg-field--xs pkg-field--code" : "pkg-field pkg-field--xs"} />
+                              <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 5 }}>{label}</div>
+                              <div style={{ fontSize: 13.5, color: INK_2 }}>
+                                {r[field] ? (code ? <bdi dir="ltr">{r[field]}</bdi> : r[field]) : <span style={{ color: MUTED }}>—</span>}
+                              </div>
                             </div>
                           ))}
                         </div>

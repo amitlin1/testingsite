@@ -13,7 +13,9 @@ import { Check as CheckIcon } from "@/components/ui/icons";
 import { Info as InfoIcon } from "@/components/ui/icons";
 import type { ItemRow } from "../../../types";
 import { apiFetch } from "@/lib/api/client";
+import { deleteItemFile } from "@/lib/api/direct-upload";
 import { NotesField, type NoteLook } from "../fields/NotesField";
+import { SkuPrefillNote } from "./referenceScan";
 
 /**
  * stationKit — the shared visual language for the testing-station wizards
@@ -38,6 +40,28 @@ export const PRODUCT_SHADOW = "var(--shadow-modal)";
 
 export type RefImg = { id: number; url: string };
 export type Shot = { previewUrl: string; objectKey?: string; uploading?: boolean; failed?: boolean };
+
+/**
+ * Removing a shot on screen takes its file back from the item (deleteItemFile):
+ * a landed shot at once, one still uploading as soon as it lands. Otherwise the
+ * removed photo stays among the item's attachments — and at the opening an item
+ * with one can no longer be marked "did not come".
+ */
+export function useShotDiscard(workerId?: string | number | null) {
+  const dropped = React.useRef<Set<string>>(new Set());
+  const discard = React.useCallback((targetId: string | number, shot: Shot | undefined) => {
+    if (!shot) return;
+    if (shot.objectKey) void deleteItemFile(targetId, shot.objectKey, workerId);
+    else if (shot.uploading) dropped.current.add(shot.previewUrl);
+  }, [workerId]);
+  /** True when the shot that just landed was removed meanwhile: its file is taken back, nothing to show. */
+  const landed = React.useCallback((targetId: string | number, previewUrl: string, key: string | null) => {
+    if (!dropped.current.delete(previewUrl)) return false;
+    if (key) void deleteItemFile(targetId, key, workerId);
+    return true;
+  }, [workerId]);
+  return { discard, landed };
+}
 export type Photos = { photos: Shot[]; ok: "" | "pass" | "fail"; note: string };
 export const emptyPhotos = (): Photos => ({ photos: [], ok: "", note: "" });
 
@@ -143,13 +167,20 @@ export function VerdictCard({ ok, note, onOk, onNote, rows = 3, suggestion, note
 }
 
 /** The manufacturer-SKU scan screen body — shared by every station's first step.
- *  A code, so the field is LTR, kept at the reading edge. */
-export function SkuScreen({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+ *  A code, so the field is LTR, kept at the reading edge. The station starts it
+ *  from the item's last scanned SKU (`prev`, ItemRow.last_sku); the item's
+ *  serial shows under it. */
+export function SkuScreen({ value, onChange, prev, serial }: {
+  value: string; onChange: (v: string) => void; prev?: string | null; serial?: string | null;
+}) {
   return (
     <Stack spacing={1.5}>
       <SystemNote>יש לסרוק את מק״ט היצרן של המוצר. פרטי הסריקה נשמרים במערכת ובדו״ח.</SystemNote>
-      <TextField autoFocus label="מק״ט יצרן" value={value} onChange={(e) => onChange(e.target.value)} placeholder="סרוק או הזן מק״ט…" fullWidth
-        dir="ltr" inputProps={{ style: { textAlign: "right" } }} />
+      <div>
+        <TextField autoFocus label="מק״ט יצרן" value={value} onChange={(e) => onChange(e.target.value)} placeholder="סרוק או הזן מק״ט…" fullWidth
+          dir="ltr" inputProps={{ style: { textAlign: "right" } }} />
+        <SkuPrefillNote value={value} prev={prev} serial={serial} />
+      </div>
     </Stack>
   );
 }

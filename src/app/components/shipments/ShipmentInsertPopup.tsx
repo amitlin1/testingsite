@@ -20,11 +20,11 @@ import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
 import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat } from '@/app/lib/qrParser';
 import { fromHebrewLayout, typeAsUsKeyboard } from '@/app/lib/scannerKeys';
-import { parseItemQr, type ParsedItemData } from '@/app/lib/itemQrParser';
 import { formatDate } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
 import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
 import ShipmentSignatureField from "./ShipmentSignatureField";
+import ShipmentLineScanDialog, { LineCertNote, placeScannedLines, scannedRows, type ShipmentLine } from "./ShipmentLineScanDialog";
 import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
 
 type ShipmentInsertPopupProps = {
@@ -38,46 +38,6 @@ type ShipmentInsertPopupProps = {
 // lets English letters, digits and contact punctuation into the POC, so
 // everything it can put in the barcode passes here too.
 const POC_ALLOWED = /^[A-Za-z0-9\s.,!?'()/@&+-]*$/;
-
-/**
- * A row of the certificate's equipment table, scanned into "מארזים במשלוח"
- * and waiting for the worker's OK. Everything it can fill is filled and
- * editable; the package type stays the worker's choice. A row with a serial
- * is one unit, so one box. The confirmed line keeps the whole row; the
- * item's own serial is still recorded at the opening station.
- */
-type LineDraft = { row: ParsedItemData; quantity: number; makat: string; itemTypeId: number | null };
-
-/** The package line a confirmed draft becomes: the whole certificate row goes
- *  with it, and the boxes minted from it pass makat / model / manufacturer to
- *  their items. */
-function draftLine(d: LineDraft) {
-    return {
-        item_type_id: d.itemTypeId ?? 0,
-        quantity: d.quantity,
-        makat: d.makat.trim() || null,
-        model: d.row.model?.trim() || null,
-        manufacturer_name: d.row.manufacturer.trim() || null,
-        manufacturer_no: d.row.manufacturerNo.trim() || null,
-        cert_row_no: d.row.rowNum.trim() || null,
-        serial_no: d.row.serialNumber?.trim() || null,
-        batch_size: d.row.batchSize.trim() || null,
-        qty_to_test: d.row.qtyToTest,
-        purchase_order: d.row.purchaseOrder.trim() || null,
-        cert_row_raw: d.row.raw,
-    };
-}
-
-/** Under a line that came from the certificate: "מהתעודה · שורה 2 · SONY 145DL · מק״ט 16321545 · הזמנה PO-778". */
-function certSummary(row: ParsedItemData, makat: string | null | undefined): string {
-    return [
-        "מהתעודה",
-        `שורה ${row.rowNum}`,
-        [row.manufacturer, row.model].filter(Boolean).join(" "),
-        makat ? `מק״ט ${makat}` : "",
-        row.purchaseOrder ? `הזמנה ${row.purchaseOrder}` : "",
-    ].filter(Boolean).join(" · ");
-}
 
 const defaultShipment: NewShipment = {
     shipment_code: "",
@@ -150,15 +110,8 @@ export default function ShipmentInsertPopup({
     // The date is locked only when the barcode actually supplied a valid one.
     const [scannedDate, setScannedDate] = useState(false);
 
-    // Scanning certificate rows into the package lines.
+    // Scanning certificate rows into the package lines (ShipmentLineScanDialog).
     const [lineScanOpen, setLineScanOpen] = useState(false);
-    const [lineScanInput, setLineScanInput] = useState('');
-    const [lineScanError, setLineScanError] = useState<string | null>(null);
-    const [lineDrafts, setLineDrafts] = useState<LineDraft[]>([]);
-    const lineScanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // Alongside `fields`, index for index: the certificate row a line came
-    // from, or null for a line added by hand.
-    const [lineCerts, setLineCerts] = useState<(ParsedItemData | null)[]>([null]);
 
     // Duplicate-shipment dialog (shown when a scanned shipment already exists).
     const [duplicate, setDuplicate] = useState<Shipment | null>(null);
@@ -238,69 +191,8 @@ export default function ShipmentInsertPopup({
         setScannerOpen(false);
     }, [customers, setValue, existingShipments]);
 
-    const closeLineScan = () => {
-        setLineScanOpen(false);
-        setLineScanInput('');
-        setLineScanError(null);
-        setLineDrafts([]);
-    };
-
-    // A scanned equipment barcode becomes drafts to confirm. A row already
-    // on the shipment or already waiting is not added twice.
-    const readLineScan = (text: string) => {
-        // Enter and the idle timer both read a scan; whichever comes first
-        // cancels the other, or the row would be read twice.
-        if (lineScanTimeoutRef.current) clearTimeout(lineScanTimeoutRef.current);
-        const value = fromHebrewLayout(text).trim();
-        setLineScanInput('');
-        if (isValidShipmentQr(value)) {
-            setLineScanError('זה ברקוד המשלוח — הוא נסרק ב"סרוק ברקוד" שבראש החלון. כאן סורקים את ברקוד השורה מטבלת הציוד.');
-            return;
-        }
-        const rows = parseItemQr(value);
-        if (!rows) {
-            setLineScanError('זה לא ברקוד של שורה מטבלת הציוד בתעודת המשלוח.');
-            return;
-        }
-        const seen = new Set([...lineCerts, ...lineDrafts.map((d) => d.row)].flatMap((r) => (r ? [r.raw] : [])));
-        const fresh = rows.filter((r) => !seen.has(r.raw));
-        if (fresh.length === 0) {
-            setLineScanError(`שורה ${rows[0].rowNum} בתעודה כבר נסרקה למשלוח הזה.`);
-            return;
-        }
-        setLineScanError(null);
-        setLineDrafts((d) => d.concat(fresh.map((row) => ({
-            row,
-            quantity: row.serialNumber ? 1 : row.qtyToTest,
-            makat: row.makat,
-            itemTypeId: null,
-        }))));
-    };
-
-    const patchDraft = (k: number, patch: Partial<LineDraft>) =>
-        setLineDrafts((d) => d.map((x, j) => (j === k ? { ...x, ...patch } : x)));
-
-    // The confirmed drafts become package lines; an untouched empty line (the
-    // form starts with one) takes the first instead of staying blank above it.
-    const confirmLineDrafts = () => {
-        const items = getValues('shipment_items') ?? [];
-        const certs = lineCerts.slice();
-        let drafts = lineDrafts;
-        const lastIdx = items.length - 1;
-        const last = items[lastIdx];
-        if (last && !last.item_type_id && !last.quantity && drafts.length > 0) {
-            const [first, ...rest] = drafts;
-            update(lastIdx, draftLine(first));
-            certs[lastIdx] = first.row;
-            drafts = rest;
-        }
-        for (const d of drafts) {
-            append(draftLine(d));
-            certs.push(d.row);
-        }
-        setLineCerts(certs);
-        closeLineScan();
-    };
+    const addScannedLines = (lines: ShipmentLine[]) =>
+        placeScannedLines(getValues('shipment_items'), lines, { update, append });
 
     // Auto-calculate total amount
     const shipmentItems = watch("shipment_items");
@@ -352,8 +244,6 @@ export default function ShipmentInsertPopup({
             setScannedDate(false);
             setLocked({ poc: false, code: false, customer: false });
             setScanProblems([]);
-            setLineCerts([null]);
-            setLineDrafts([]);
             setLineScanOpen(false);
             setDuplicate(null);
             setIsSigned(false);
@@ -534,114 +424,13 @@ export default function ShipmentInsertPopup({
                 </DialogActions>
             </Dialog>
 
-            {/* A certificate row → a package line: scan, look it over, confirm. */}
-            <Dialog open={lineScanOpen} onClose={closeLineScan} fullWidth maxWidth="sm">
-                <DialogTitle onClose={closeLineScan}>סריקת שורה מתעודת המשלוח</DialogTitle>
-                <DialogContent>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-                        {lineScanError && <Alert severity="error">{lineScanError}</Alert>}
-                        <TextField
-                            autoFocus
-                            fullWidth
-                            placeholder="סרוק את ה-QR של השורה בטבלת הציוד…"
-                            aria-label="ברקוד שורת הציוד"
-                            value={lineScanInput}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                setLineScanInput(val);
-                                if (lineScanTimeoutRef.current) clearTimeout(lineScanTimeoutRef.current);
-                                lineScanTimeoutRef.current = setTimeout(() => {
-                                    if (parseItemQr(fromHebrewLayout(val))) readLineScan(val);
-                                }, 300);
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    if (lineScanInput.trim()) readLineScan(lineScanInput);
-                                    return;
-                                }
-                                typeAsUsKeyboard(e);
-                            }}
-                            inputProps={{ dir: "ltr", style: { textAlign: "center" } }}
-                        />
-                        {lineDrafts.map((d, k) => (
-                            <div key={d.row.raw} style={{ border: "1px solid var(--color-hairline)", borderRadius: "var(--r-md)", padding: "var(--space-md)", display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-                                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--space-sm)" }}>
-                                    <div style={{ fontWeight: 600 }}>שורה {d.row.rowNum} בתעודה</div>
-                                    <Button size="small" color="inherit" onClick={() => setLineDrafts((x) => x.filter((_, j) => j !== k))}>הסר</Button>
-                                </div>
-                                <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: "4px 12px", fontSize: "var(--text-body-sm)" }}>
-                                    {([
-                                        ["מס׳ יצרן", d.row.manufacturerNo],
-                                        ["שם יצרן", d.row.manufacturer],
-                                        ["גרסת הציוד", d.row.model],
-                                        ["מק״ט צה״לי", d.row.makat],
-                                        ["מס׳ סריאלי", d.row.serialNumber],
-                                        ["גודל אצווה", d.row.batchSize],
-                                        ["כמות לבדיקה", String(d.row.qtyToTest)],
-                                        ["הזמנת רכש", d.row.purchaseOrder],
-                                    ] as const).map(([label, value]) => (
-                                        <React.Fragment key={label}>
-                                            <dt style={{ color: "var(--color-ink-muted-48)" }}>{label}</dt>
-                                            <dd style={{ margin: 0, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}><bdi>{value || "—"}</bdi></dd>
-                                        </React.Fragment>
-                                    ))}
-                                </dl>
-                                {d.row.serialNumber && (
-                                    <Alert severity="info">
-                                        בשורה יש מס׳ סריאלי — היא פריט אחד, ולכן מארז אחד. הסריאלי לא נשמר במשלוח; הוא נקלט בקליטת המארז.
-                                    </Alert>
-                                )}
-                                <div className="shp-form-grid shp-form-grid--3">
-                                    <SearchableCombobox<{ id: number; name: string }>
-                                        label="סוג מארז"
-                                        options={itemTypes}
-                                        getOptionLabel={(option) => option.name}
-                                        isOptionEqualToValue={(o, v) => o.id === v.id}
-                                        value={itemTypes.find((t) => t.id === d.itemTypeId) || null}
-                                        onChange={(t) => patchDraft(k, { itemTypeId: t?.id ?? null })}
-                                        placeholder="בחר סוג מארז…"
-                                    />
-                                    <div>
-                                        <FieldLabel htmlFor={`${fieldId}-draft-${k}-qty`}>כמות מארזים</FieldLabel>
-                                        <TextField
-                                            id={`${fieldId}-draft-${k}-qty`}
-                                            type="number"
-                                            size="small"
-                                            fullWidth
-                                            value={d.quantity || ''}
-                                            onChange={(e) => patchDraft(k, { quantity: e.target.value === '' ? 0 : Number(e.target.value) })}
-                                            inputProps={{ min: 1, style: { fontVariantNumeric: "tabular-nums" } }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <FieldLabel htmlFor={`${fieldId}-draft-${k}-makat`}>מק״ט</FieldLabel>
-                                        <TextField
-                                            id={`${fieldId}-draft-${k}-makat`}
-                                            size="small"
-                                            fullWidth
-                                            value={d.makat}
-                                            onChange={(e) => patchDraft(k, { makat: e.target.value })}
-                                            inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                        {lineDrafts.length > 0 && (
-                            <div style={{ fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-48)" }}>
-                                אפשר לסרוק עוד שורות ולאשר את כולן יחד. את סוג המארז אפשר לבחור גם אחר כך, בשורה עצמה.
-                            </div>
-                        )}
-                    </div>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={closeLineScan} variant="outlined" color="inherit">ביטול</Button>
-                    <Button variant="contained" disabled={lineDrafts.length === 0} onClick={confirmLineDrafts}>
-                        {lineDrafts.length > 1 ? `הוסף ${lineDrafts.length} שורות למשלוח` : "הוסף למשלוח"}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <ShipmentLineScanDialog
+                open={lineScanOpen}
+                onClose={() => setLineScanOpen(false)}
+                itemTypes={itemTypes}
+                takenRows={scannedRows(shipmentItems)}
+                onConfirm={addScannedLines}
+            />
 
             {/* ה-form חייב להיות flex column כדי ש-DialogContent יגלול והכפתורים יישארו גלויים */}
             <form
@@ -826,7 +615,7 @@ export default function ShipmentInsertPopup({
                                 <Button variant="outlined" size="small" startIcon={<QrCodeScannerIcon fontSize={16} aria-hidden />} onClick={() => setLineScanOpen(true)}>
                                     סרוק שורה מהתעודה
                                 </Button>
-                                <Button variant="outlined" size="small" startIcon={<AddIcon fontSize={16} aria-hidden />} onClick={() => { append({ item_type_id: 0, quantity: 0 }); setLineCerts((c) => c.concat([null])); }}>
+                                <Button variant="outlined" size="small" startIcon={<AddIcon fontSize={16} aria-hidden />} onClick={() => append({ item_type_id: 0, quantity: 0 })}>
                                     הוסף סוג מארז
                                 </Button>
                             </div>
@@ -855,9 +644,7 @@ export default function ShipmentInsertPopup({
                                             />
                                         )}
                                     />
-                                    {lineCerts[index] && (
-                                        <div className="shp-items-cert">{certSummary(lineCerts[index]!, watch(`shipment_items.${index}.makat`))}</div>
-                                    )}
+                                    <LineCertNote line={shipmentItems?.[index]} />
                                 </div>
 
                                 <Controller
@@ -888,7 +675,7 @@ export default function ShipmentInsertPopup({
                                     )}
                                 />
                                 {fields.length > 1 ? (
-                                    <IconButton size="small" color="error" title="הסר שורה" onClick={() => { remove(index); setLineCerts((c) => c.filter((_, j) => j !== index)); }}>
+                                    <IconButton size="small" color="error" title="הסר שורה" onClick={() => remove(index)}>
                                         <DeleteIcon fontSize={16} aria-hidden />
                                     </IconButton>
                                 ) : <span />}

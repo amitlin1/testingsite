@@ -68,13 +68,11 @@ export type CreatedPackage = {
   itemIds: number[];
 };
 
+/** A template line: the type, how many, and their route. The item's details
+ *  are never the template's (lib/packages/boxes.ts intakeBox). */
 export type TemplateLine = {
   item_type_id: number;
   quantity: number;
-  makat: string | null;
-  model: string | null;
-  manufacturer_name: string | null;
-  manufacturer_no: string | null;
   route_number: number;
   sort_order: number;
 };
@@ -103,10 +101,7 @@ export async function loadTemplate(tx: TransactionClient, packageTypeId: number)
   const rows = await tx.package_contents.findMany({
     where: { package_type_id: packageTypeId },
     orderBy: [{ sort_order: "asc" }, { id: "asc" }],
-    select: {
-      item_type_id: true, quantity: true, makat: true, model: true, manufacturer_name: true,
-      manufacturer_no: true, route_number: true, sort_order: true,
-    },
+    select: { item_type_id: true, quantity: true, route_number: true, sort_order: true },
   });
   return rows;
 }

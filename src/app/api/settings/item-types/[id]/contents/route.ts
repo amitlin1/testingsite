@@ -17,15 +17,16 @@ export const runtime = "nodejs";
  *
  * Route-shape violations are WARNINGS here (a template may be saved before
  * its routes are drawn) and hard errors at package creation.
+ *
+ * A line names an item type, its quantity and its route — nothing about the
+ * item itself: makat / model / manufacturer come from the box's shipment line
+ * at intake (lib/packages/boxes.ts intakeBox). The table's detail columns
+ * stay, unused; a save leaves them NULL.
  */
 
 type LineIn = {
   item_type_id: number;
   quantity: number;
-  makat?: string | null;
-  model?: string | null;
-  manufacturer_name?: string | null;
-  manufacturer_no?: string | null;
   route_number?: number | null;
   sort_order?: number | null;
 };
@@ -77,10 +78,6 @@ async function describe(packageTypeId: number) {
       item_type_id: l.item_type_id,
       item_type_desc: l.item_type.item_type_desc.trim(),
       quantity: l.quantity,
-      makat: l.makat,
-      model: l.model,
-      manufacturer_name: l.manufacturer_name,
-      manufacturer_no: l.manufacturer_no,
       route_number: l.route_number,
       sort_order: l.sort_order,
       route_warning: routeWarning,
@@ -149,10 +146,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       lines.push({
         item_type_id: itemTypeId,
         quantity,
-        makat: l.makat == null ? null : String(l.makat).trim() || null,
-        model: l.model == null ? null : String(l.model).trim() || null,
-        manufacturer_name: l.manufacturer_name == null ? null : String(l.manufacturer_name).trim() || null,
-        manufacturer_no: l.manufacturer_no == null ? null : String(l.manufacturer_no).trim() || null,
         route_number: routeNumber,
         sort_order: Number.isInteger(Number(l.sort_order)) ? Number(l.sort_order) : i,
       });
@@ -202,10 +195,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             package_type_id: typeId,
             item_type_id: l.item_type_id,
             quantity: l.quantity,
-            makat: l.makat ?? null,
-            model: l.model ?? null,
-            manufacturer_name: l.manufacturer_name ?? null,
-            manufacturer_no: l.manufacturer_no ?? null,
             route_number: l.route_number ?? 1,
             sort_order: l.sort_order ?? 0,
           })),

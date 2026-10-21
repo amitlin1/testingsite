@@ -84,6 +84,16 @@ test("buildStepResults: legacy popups' photos and weight become fields", () => {
   assert.deepEqual(res[0]!.fields[1]!.photos, ["items/1/p.jpg"]);
 });
 
+test("buildStepResults: an item opened against its package reference shows where its reference came from", () => {
+  const at = (details: Record<string, unknown>) =>
+    buildStepResults([row({ details })], ROUTE, fmt)[0]!.fields.find((f) => f.id === "legacy_reference");
+  assert.deepEqual(at({ sku: "PC-1", refSource: "package", expectedSku: "PC-1" }), { id: "legacy_reference", label: "ייחוס", value: "מייחוס המארז", tone: "pass" });
+  assert.deepEqual(at({ sku: "PC-9", refSource: "package_fallback", expectedSku: "PC-1" }), { id: "legacy_reference", label: "ייחוס", value: "מייחוס המארז · המק״ט לא תאם · צפוי PC-1", tone: "warn" });
+  assert.deepEqual(at({ sku: "PC-6", refSource: "scan", expectedSku: "PC-1" }), { id: "legacy_reference", label: "ייחוס", value: "לפי הסריקה · צפוי PC-1", tone: "warn" });
+  assert.deepEqual(at({ sku: "PC-6", refSource: "scan", expectedSku: null }), { id: "legacy_reference", label: "ייחוס", value: "לפי הסריקה", tone: null });
+  assert.equal(at({ sku: "PC-6", hasRU: true }), undefined, "results saved before it show no such field");
+});
+
 test("buildCatalog: item steps + the kit's package-level steps with the item's groups", () => {
   const itemCfg: RouteFieldsConfig = {
     schema: 1,

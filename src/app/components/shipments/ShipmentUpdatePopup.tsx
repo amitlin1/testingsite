@@ -10,7 +10,7 @@ import {
     IconButton,
     Alert
 } from "@/components/ui";
-import { Add as AddIcon, Delete as DeleteIcon } from "@/components/ui/icons";
+import { Add as AddIcon, Delete as DeleteIcon, QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
@@ -18,6 +18,7 @@ import { Shipment, NewShipment, Customers } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
 import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
+import ShipmentLineScanDialog, { LineCertNote, placeScannedLines, scannedRows, type ShipmentLine } from "./ShipmentLineScanDialog";
 import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
 
 type ShipmentUpdatePopupProps = {
@@ -54,17 +55,23 @@ export default function ShipmentUpdatePopup({
         reset,
         watch,
         setValue,
+        getValues,
         formState: { errors, isValid, isSubmitting },
     } = useForm<NewShipment>({
         mode: "onChange",
     });
 
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, update } = useFieldArray({
         control,
         name: "shipment_items"
     });
 
-
+    // Scanning more certificate rows into the package lines — same dialog as
+    // ShipmentInsertPopup. A row already on the shipment (saved with its
+    // cert_row_raw) is not added twice.
+    const [lineScanOpen, setLineScanOpen] = useState(false);
+    const addScannedLines = (lines: ShipmentLine[]) =>
+        placeScannedLines(getValues('shipment_items'), lines, { update, append });
 
     // Auto-calculate total amount
     const shipmentItems = watch("shipment_items");
@@ -128,6 +135,7 @@ export default function ShipmentUpdatePopup({
                 recieving_worker_name: shipment.recieving_worker_name,
             });
             setSubmitError(null);
+            setLineScanOpen(false);
         }
     }, [open, shipment, reset]);
 
@@ -201,6 +209,13 @@ export default function ShipmentUpdatePopup({
             <DialogTitle onClose={onClose}>
                 עדכון משלוח
             </DialogTitle>
+            <ShipmentLineScanDialog
+                open={lineScanOpen}
+                onClose={() => setLineScanOpen(false)}
+                itemTypes={itemTypes}
+                takenRows={scannedRows(shipmentItems)}
+                onConfirm={addScannedLines}
+            />
             <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
                     {receiverBlocked && (
@@ -326,9 +341,14 @@ export default function ShipmentUpdatePopup({
                     <div style={{ marginTop: "var(--space-lg)", borderTop: "1px solid var(--color-hairline)", paddingTop: "var(--space-md)" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                             <div style={{ fontSize: "var(--text-body)", fontWeight: 600 }}>מארזים במשלוח</div>
-                            <Button variant="outlined" size="small" startIcon={<AddIcon fontSize={16} aria-hidden />} onClick={() => append({ item_type_id: 0, quantity: 0 })}>
-                                הוסף סוג מארז
-                            </Button>
+                            <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap" }}>
+                                <Button variant="outlined" size="small" startIcon={<QrCodeScannerIcon fontSize={16} aria-hidden />} onClick={() => setLineScanOpen(true)}>
+                                    סרוק שורה מהתעודה
+                                </Button>
+                                <Button variant="outlined" size="small" startIcon={<AddIcon fontSize={16} aria-hidden />} onClick={() => append({ item_type_id: 0, quantity: 0 })}>
+                                    הוסף סוג מארז
+                                </Button>
+                            </div>
                         </div>
                         <div className="shp-items-head" aria-hidden>
                             <span>סוג מארז</span>
@@ -337,22 +357,25 @@ export default function ShipmentUpdatePopup({
                         </div>
                         {fields.map((item, index) => (
                             <div key={item.id} className="shp-items-row">
-                                <Controller
-                                    name={`shipment_items.${index}.item_type_id` as const}
-                                    control={control}
-                                    rules={{ required: true }}
-                                    render={({ field: { onChange, value } }) => (
-                                        <SearchableCombobox<{ id: number; name: string }>
-                                            options={itemTypes}
-                                            getOptionLabel={(option) => option.name}
-                                            isOptionEqualToValue={(o, v) => o.id === v.id}
-                                            value={itemTypes.find((t) => t.id === value) || null}
-                                            onChange={(newValue) => onChange(newValue?.id ?? null)}
-                                            placeholder="סוג מארז"
-                                            error={!!errors.shipment_items?.[index]?.item_type_id}
-                                        />
-                                    )}
-                                />
+                                <div style={{ minWidth: 0 }}>
+                                    <Controller
+                                        name={`shipment_items.${index}.item_type_id` as const}
+                                        control={control}
+                                        rules={{ required: true }}
+                                        render={({ field: { onChange, value } }) => (
+                                            <SearchableCombobox<{ id: number; name: string }>
+                                                options={itemTypes}
+                                                getOptionLabel={(option) => option.name}
+                                                isOptionEqualToValue={(o, v) => o.id === v.id}
+                                                value={itemTypes.find((t) => t.id === value) || null}
+                                                onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                                placeholder="סוג מארז"
+                                                error={!!errors.shipment_items?.[index]?.item_type_id}
+                                            />
+                                        )}
+                                    />
+                                    <LineCertNote line={shipmentItems?.[index]} />
+                                </div>
 
                                 <Controller
                                     name={`shipment_items.${index}.quantity` as const}

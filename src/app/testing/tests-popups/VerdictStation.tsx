@@ -53,7 +53,8 @@ export default function VerdictStation({
 
   React.useEffect(() => {
     if (!open) return;
-    setPhaseIdx(0); setError(null); setSkuScan(""); setVerdict(emptyPhotos()); resetFields();
+    // The SKU carries on from the station before (ItemRow.last_sku).
+    setPhaseIdx(0); setError(null); setSkuScan(item.last_sku ?? ""); setVerdict(emptyPhotos()); resetFields();
   }, [open, item, resetFields]);
 
   // A photo field's shot goes straight to storage like any station photo, tagged
@@ -113,7 +114,7 @@ export default function VerdictStation({
       canFinish={canFinish} onFinish={onFinish} finishLabel={kind ? `סיום בדיקת ${kind}` : "סיום בדיקה"}
     >
       {phaseIdx === 0 ? (
-        <SkuScreen value={skuScan} onChange={setSkuScan} />
+        <SkuScreen value={skuScan} onChange={setSkuScan} prev={item.last_sku} serial={item.serial_no} />
       ) : (
         <Stack spacing={3}>
           {/* System instruction with the scanned SKU spliced in. */}

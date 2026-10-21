@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { CircleAlert, Check, Package } from "lucide-react";
 import {
   Alert,
   Button,
@@ -9,69 +10,21 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   Skeleton,
   Tag,
-  TextField,
 } from "@/components/ui";
 import { Add as AddIcon } from "@/components/ui/icons";
-import { Close as CloseIcon } from "@/components/ui/icons";
 import { EditOutlined as EditOutlinedIcon } from "@/components/ui/icons";
-import { CloudUploadOutlined as CloudUploadOutlinedIcon } from "@/components/ui/icons";
-import { Star as StarIcon } from "@/components/ui/icons";
 import { Inventory2Outlined as Inventory2OutlinedIcon } from "@/components/ui/icons";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import SettingsToolbar from "../components/SettingsToolbar";
 import { apiFetch } from "@/lib/api/client";
-import { uploadReferenceImages } from "@/lib/api/direct-upload";
-
-// ---- Types -----------------------------------------------------------------
-interface ItemType {
-  item_type_id: number;
-  item_type_desc: string;
-}
-
-interface RefImage {
-  id: number;
-  file_name: string;
-  sort_order: number;
-  /** photo_types.code — which group this image belongs to ("package" | "product" | ...). */
-  photo_type: string | null;
-  url: string;
-  is_primary: boolean;
-}
-
-interface PhotoType {
-  photo_type_id: number;
-  code: string;
-  photo_type_desc: string;
-  sort_order: number;
-}
-
-interface ReferenceItem {
-  reference_item_id: number;
-  reference_weight: string | null;
-  item_type_id: number;
-  item_type_desc: string | null;
-  manufacturer_sku: string;
-  manufacturer: string;
-  name: string | null;
-  notes: string | null;
-  primary_image_id: number | null;
-  images: RefImage[];
-  cover_url: string | null;
-  image_count: number;
-}
-
-// A form image is either one already stored on the server, or a freshly
-// selected File that hasn't been uploaded yet. `key` is stable within the form.
-// `photoType` is the photo_types.code of the group the image belongs to.
-type FormImage =
-  | { key: string; kind: "existing"; id: number; url: string; fileName: string; photoType: string }
-  | { key: string; kind: "new"; url: string; file: File; fileName: string; photoType: string };
-
-/** The form fields a save checks; each error is shown on its field. */
-type FieldKey = "type" | "sku" | "manu" | "weight" | "name";
+import ReferenceItemFields from "./ReferenceItemFields";
+import PackageReferenceDialog from "./PackageReferenceDialog";
+import {
+  checkDraft, draftOf, draftPayload, revokeDraftUrls, startUploadType,
+  type FieldErrors, type FieldKey, type ItemDraft, type ItemType, type PhotoType, type ReferenceItem, type TemplateLine,
+} from "./referenceForm";
 
 // ---- Design tokens (Shifthouse) --------------------------------------------
 // States (hover / focus / drag) live in settings.css (.ri-*): inline styles
@@ -90,9 +43,15 @@ const okJson = (r: Response) => {
   return r.json();
 };
 
-let keySeq = 0;
-const nextKey = () => `img_${Date.now()}_${keySeq++}`;
+/** The selected package type's contents: what its package references hold. */
+type LinesState = { status: "loading" } | { status: "error" } | { status: "ready"; lines: TemplateLine[] };
 
+/**
+ * הגדרות → פריטי ייחוס. A reference item of a regular type is edited in the
+ * dialog below; one of a package type is a package reference (ייחוס מארז) —
+ * the box plus a reference item per content line — edited in
+ * PackageReferenceDialog. Both fill the same form (ReferenceItemFields).
+ */
 export default function ReferenceItemsPage() {
   const [itemTypes, setItemTypes] = React.useState<ItemType[]>([]);
   const [selectedType, setSelectedType] = React.useState<ItemType | null>(null);
@@ -103,29 +62,24 @@ export default function ReferenceItemsPage() {
   // A failed load is not "no items": each gets an error band and a retry.
   const [itemsError, setItemsError] = React.useState(false);
   const [optionsError, setOptionsError] = React.useState(false);
+  const [lines, setLines] = React.useState<LinesState>({ status: "loading" });
 
   const [skuFilter, setSkuFilter] = React.useState<string | null>(null);
   const [manuFilter, setManuFilter] = React.useState<string | null>(null);
 
-  // dialog state
+  // regular dialog state
   const [formOpen, setFormOpen] = React.useState(false);
-  const [editingId, setEditingId] = React.useState<number | null>(null);
   const [formType, setFormType] = React.useState<ItemType | null>(null);
-  const [formSku, setFormSku] = React.useState("");
-  const [formManu, setFormManu] = React.useState("");
-  const [formName, setFormName] = React.useState("");
-  const [formreference_weight, setFormreference_weight] = React.useState("");
-  const [formNotes, setFormNotes] = React.useState("");
-  const [formImages, setFormImages] = React.useState<FormImage[]>([]);
-  const [primaryKey, setPrimaryKey] = React.useState<string | null>(null);
-  // Which photo group newly-added files go to (photo_types.code).
-  const [uploadType, setUploadType] = React.useState<string>("");
+  const [draft, setDraft] = React.useState<ItemDraft | null>(null);
   const [formError, setFormError] = React.useState("");
-  const [fieldErrors, setFieldErrors] = React.useState<Partial<Record<FieldKey, string>>>({});
+  const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
   const [saving, setSaving] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
-  const [dragOver, setDragOver] = React.useState(false);
-  const fileRef = React.useRef<HTMLInputElement | null>(null);
+
+  // package reference dialog: open with the reference being edited (null: new);
+  // a fresh key per opening, so its state starts from that reference
+  const [pkgDialog, setPkgDialog] = React.useState<{ key: number; editing: ReferenceItem | null } | null>(null);
+  const pkgOpenings = React.useRef(0);
 
   // ---- data loading --------------------------------------------------------
   const loadOptions = React.useCallback(() => {
@@ -136,11 +90,7 @@ export default function ReferenceItemsPage() {
       .catch(() => { setItemTypes([]); setOptionsError(true); });
     apiFetch("/api/settings/photo-types")
       .then(okJson)
-      .then((data: PhotoType[]) => {
-        const rows = Array.isArray(data) ? data : [];
-        setPhotoTypes(rows);
-        setUploadType((cur) => cur || rows[0]?.code || "");
-      })
+      .then((data: PhotoType[]) => setPhotoTypes(Array.isArray(data) ? data : []))
       .catch(() => { setPhotoTypes([]); setOptionsError(true); });
   }, []);
 
@@ -156,15 +106,27 @@ export default function ReferenceItemsPage() {
       .finally(() => setLoadingItems(false));
   }, []);
 
+  const loadLines = React.useCallback((typeId: number) => {
+    setLines({ status: "loading" });
+    apiFetch(`/api/settings/item-types/${typeId}/contents`)
+      .then(okJson)
+      .then((data: { lines?: TemplateLine[] }) => setLines({ status: "ready", lines: Array.isArray(data.lines) ? data.lines : [] }))
+      .catch(() => setLines({ status: "error" }));
+  }, []);
+
   React.useEffect(() => {
     if (selectedType) {
       loadItems(selectedType.item_type_id);
+      if (selectedType.is_package) loadLines(selectedType.item_type_id);
       setSkuFilter(null);
       setManuFilter(null);
     } else {
       setItems([]);
     }
-  }, [selectedType, loadItems]);
+  }, [selectedType, loadItems, loadLines]);
+
+  const isPackage = !!selectedType?.is_package;
+  const regularTypes = React.useMemo(() => itemTypes.filter((t) => !t.is_package), [itemTypes]);
 
   // ---- derived: mutually-filtering SKU / manufacturer options --------------
   const skuOptions = React.useMemo(() => {
@@ -196,53 +158,29 @@ export default function ReferenceItemsPage() {
     setSkuFilter(null);
     setManuFilter(null);
   };
+  const noun = isPackage ? "ייחוסי מארז" : "פריטים";
   const headerCount = anyFilter
     ? `${filtered.length} מתוך ${items.length}`
-    : `${items.length} פריטים`;
+    : `${items.length} ${noun}`;
 
-  // ---- dialog helpers ------------------------------------------------------
-  const revokeNewUrls = React.useCallback((imgs: FormImage[]) => {
-    imgs.forEach((img) => {
-      if (img.kind === "new") URL.revokeObjectURL(img.url);
-    });
-  }, []);
+  // ---- dialogs -------------------------------------------------------------
+  const fallbackPhoto = photoTypes[0]?.code ?? "";
+
+  const openPackage = (editing: ReferenceItem | null) => setPkgDialog({ key: ++pkgOpenings.current, editing });
 
   const openNew = () => {
-    setEditingId(null);
+    if (isPackage) { openPackage(null); return; }
     setFormType(selectedType);
-    setFormSku("");
-    setFormreference_weight("");
-    setFormManu("");
-    setFormName("");
-    setFormNotes("");
-    setFormImages([]);
-    setPrimaryKey(null);
-    setUploadType(photoTypes[0]?.code ?? "");
+    setDraft(draftOf(null, startUploadType(photoTypes, ""), fallbackPhoto));
     setFormError("");
     setFieldErrors({});
     setFormOpen(true);
   };
 
   const openEdit = (it: ReferenceItem) => {
-    setEditingId(it.reference_item_id);
+    if (itemTypes.find((t) => t.item_type_id === it.item_type_id)?.is_package) { openPackage(it); return; }
     setFormType(itemTypes.find((t) => t.item_type_id === it.item_type_id) ?? selectedType);
-    setFormSku(it.manufacturer_sku);
-    setFormManu(it.manufacturer);
-    setFormName(it.name ?? "");
-    setFormreference_weight(it.reference_weight ?? "");
-    setFormNotes(it.notes ?? "");
-    const imgs: FormImage[] = it.images.map((img) => ({
-      key: `e_${img.id}`,
-      kind: "existing",
-      id: img.id,
-      url: img.url,
-      fileName: img.file_name,
-      photoType: img.photo_type ?? photoTypes[0]?.code ?? "",
-    }));
-    setFormImages(imgs);
-    const primary = it.images.find((i) => i.is_primary) ?? it.images[0];
-    setPrimaryKey(primary ? `e_${primary.id}` : null);
-    setUploadType(photoTypes[0]?.code ?? "");
+    setDraft(draftOf(it, startUploadType(photoTypes, ""), fallbackPhoto));
     setFormError("");
     setFieldErrors({});
     setFormOpen(true);
@@ -252,116 +190,32 @@ export default function ReferenceItemsPage() {
     setFieldErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
 
   const closeForm = () => {
-    revokeNewUrls(formImages);
+    revokeDraftUrls(draft);
     setFormOpen(false);
   };
 
-  const addFiles = (files: File[]) => {
-    const imgs = files.filter((f) => f.type.startsWith("image/"));
-    if (!imgs.length) return;
-    if (!uploadType) {
-      setFormError("יש לבחור סוג תמונה לפני העלאה.");
-      return;
-    }
-    // Every added file is tagged with the currently selected photo group.
-    const tagType = uploadType;
-    setFormImages((prev) => {
-      const additions: FormImage[] = imgs.map((f) => ({
-        key: nextKey(),
-        kind: "new",
-        url: URL.createObjectURL(f),
-        file: f,
-        fileName: f.name,
-        photoType: tagType,
-      }));
-      const next = [...prev, ...additions];
-      setPrimaryKey((pk) => pk ?? next[0]?.key ?? null);
-      return next;
-    });
-    setFormError("");
-  };
-
-  const removeImage = (key: string) => {
-    setFormImages((prev) => {
-      const target = prev.find((i) => i.key === key);
-      if (target && target.kind === "new") URL.revokeObjectURL(target.url);
-      const next = prev.filter((i) => i.key !== key);
-      setPrimaryKey((pk) => (pk === key ? next[0]?.key ?? null : pk));
-      return next;
-    });
-  };
-
   const save = async () => {
+    if (!draft) return;
     // Every missing field is marked on itself, all at once.
-    const missing: Partial<Record<FieldKey, string>> = {};
+    const missing: FieldErrors = checkDraft(draft);
     if (!formType) missing.type = "יש לבחור סוג פריט";
-    if (!formSku.trim()) missing.sku = "יש להזין מק״ט יצרן";
-    if (!formManu.trim()) missing.manu = "יש להזין יצרן";
-    if (!formreference_weight.trim()) missing.weight = "יש להזין משקל";
-    if (!formName.trim()) missing.name = "יש להזין שם";
     setFieldErrors(missing);
     if (!formType || Object.keys(missing).length > 0) return;
-
-    // New files, in display order — the server appends them in this same order.
-    const newImages = formImages.filter((i) => i.kind === "new") as Extract<
-      FormImage,
-      { kind: "new" }
-    >[];
-
-    // Everything except the image bytes. `images` is filled in after the direct
-    // upload below, with the keys MinIO now holds.
-    const payload: Record<string, unknown> = {
-      item_type_id: formType.item_type_id,
-      manufacturer_sku: formSku.trim(),
-      manufacturer: formManu.trim(),
-      name: formName.trim(),
-      reference_weight: formreference_weight.trim(),
-      notes: formNotes.trim(),
-    };
-
-    if (editingId == null) {
-      payload.primaryIndex = Math.max(
-        0,
-        newImages.findIndex((i) => i.key === primaryKey),
-      );
-    } else {
-      payload.keepImageIds = formImages
-        .filter((i) => i.kind === "existing")
-        .map((i) => (i as Extract<FormImage, { kind: "existing" }>).id);
-
-      const primary = formImages.find((i) => i.key === primaryKey);
-      if (primary?.kind === "existing") {
-        payload.primaryKey = String(primary.id);
-      } else if (primary?.kind === "new") {
-        payload.primaryKey = `new:${newImages.findIndex((i) => i.key === primary.key)}`;
-      }
-    }
 
     setSaving(true);
     setFormError("");
     try {
-      // 1) New images go from the browser straight to MinIO. Nothing is saved on
-      //    the item yet, so a failed upload leaves no half-written item behind.
-      payload.images = await uploadReferenceImages(
-        newImages.map((img) => ({ file: img.file, fileName: img.fileName, photoType: img.photoType })),
-        editingId,
-      );
-      // 2) The form itself is plain JSON — the server verifies every key before
-      //    it touches the item.
-      const url =
-        editingId == null
-          ? "/api/settings/reference-items"
-          : `/api/settings/reference-items/${editingId}`;
-      const res = await apiFetch(url, {
-        method: editingId == null ? "POST" : "PUT",
+      const body = { item_type_id: formType.item_type_id, ...(await draftPayload(draft)) };
+      const res = await apiFetch(draft.id == null ? "/api/settings/reference-items" : `/api/settings/reference-items/${draft.id}`, {
+        method: draft.id == null ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "שגיאה בשמירה");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "שגיאה בשמירה");
       }
-      revokeNewUrls(formImages);
+      revokeDraftUrls(draft);
       setFormOpen(false);
       // Jump the browse view to the type we just saved under, and reload it.
       setSelectedType(formType);
@@ -377,16 +231,16 @@ export default function ReferenceItemsPage() {
 
   // Asked through the app's ConfirmDialog (below), not window.confirm.
   const deleteItem = async () => {
-    if (editingId == null) return;
+    if (draft?.id == null) return;
     setConfirmDelete(false);
     setSaving(true);
     try {
-      const res = await apiFetch(`/api/settings/reference-items/${editingId}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/settings/reference-items/${draft.id}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "שגיאה במחיקה");
       }
-      revokeNewUrls(formImages);
+      revokeDraftUrls(draft);
       setFormOpen(false);
       if (selectedType) loadItems(selectedType.item_type_id);
     } catch (e) {
@@ -398,6 +252,10 @@ export default function ReferenceItemsPage() {
 
   // ---- render --------------------------------------------------------------
   const typeName = selectedType?.item_type_desc ?? "";
+  const templateLines = isPackage && lines.status === "ready" ? lines.lines : null;
+  // A package type's dialog needs its contents; until they load it waits.
+  const canAdd = !isPackage || lines.status === "ready";
+  const newLabel = isPackage ? "ייחוס מארז חדש" : "פריט ייחוס חדש";
 
   // The settings layout owns the frame (scroll, padding, 1180 column).
   return (
@@ -406,8 +264,8 @@ export default function ReferenceItemsPage() {
         title="פריטי ייחוס"
         subtitle="בחר סוג פריט, ואז סנן לפי מק״ט יצרן או יצרן. פריט הייחוס משמש להשוואה אוטומטית בבדיקות."
         countText={selectedType && !loadingItems && !itemsError ? headerCount : undefined}
-        onAdd={openNew}
-        addLabel="פריט ייחוס חדש"
+        onAdd={canAdd ? openNew : undefined}
+        addLabel={newLabel}
       />
 
       {optionsError && (
@@ -435,6 +293,16 @@ export default function ReferenceItemsPage() {
             בחירת הסוג תציג את פריטי הייחוס המתאימים בלבד.
           </p>
         </div>
+        {isPackage && (
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 16, padding: "12px 14px", fontSize: "var(--text-small)", background: "var(--color-primary-tint)", border: "1px solid var(--color-primary-soft)", borderRadius: "var(--r-md)" }}>
+            <Package size={18} strokeWidth={1.75} aria-hidden style={{ color: C.accent, marginTop: 1, flexShrink: 0 }} />
+            <span>
+              <span style={{ fontWeight: 600 }}>{typeName} הוא סוג מארז.</span>{" "}
+              כל ייחוס שלו כולל את הקופסה עצמה ופריט ייחוס לכל פריט בתכולה
+              {templateLines && templateLines.length > 0 && <>: {templateLines.map((l) => `${l.item_type_desc} ×${l.quantity}`).join(", ")}</>}.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Step 2 + grid */}
@@ -469,6 +337,13 @@ export default function ReferenceItemsPage() {
             </div>
           </div>
 
+          {isPackage && lines.status === "error" && (
+            <div className="settings-card settings-error" style={{ marginTop: "var(--space-lg)" }}>
+              <Alert severity="error">טעינת התכולה של {typeName} נכשלה. בלעדיה אי אפשר לערוך ייחוסי מארז. בדוק את החיבור לשרת ונסה שוב.</Alert>
+              <Button variant="outlined" color="inherit" size="small" onClick={() => loadLines(selectedType.item_type_id)}>נסה שוב</Button>
+            </div>
+          )}
+
           {itemsError ? (
             <div className="settings-card settings-error" style={{ marginTop: "var(--space-lg)" }}>
               <Alert severity="error">טעינת פריטי הייחוס של {typeName} נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
@@ -491,21 +366,25 @@ export default function ReferenceItemsPage() {
           ) : filtered.length === 0 ? (
             anyFilter ? (
               <div className="settings-empty" style={{ padding: "64px 0" }}>
-                <div className="settings-empty__title">אין פריטי ייחוס שתואמים לסינון.</div>
-                <div>נקה את הסינון כדי לראות את כל פריטי הייחוס של {typeName}.</div>
+                <div className="settings-empty__title">אין {isPackage ? "ייחוסי מארז" : "פריטי ייחוס"} שתואמים לסינון.</div>
+                <div>נקה את הסינון כדי לראות את כל {isPackage ? "ייחוסי המארז" : "פריטי הייחוס"} של {typeName}.</div>
                 <Button variant="outlined" color="inherit" onClick={clearFilters}>נקה סינון</Button>
               </div>
             ) : (
               <div className="settings-empty" style={{ padding: "64px 0" }}>
-                <div className="settings-empty__title">עדיין אין פריטי ייחוס ל{typeName}.</div>
-                <div>צור פריט ייחוס כדי שהבדיקות של סוג זה יושוו אליו אוטומטית.</div>
-                <Button onClick={openNew} startIcon={<AddIcon fontSize={18} aria-hidden />}>פריט ייחוס חדש</Button>
+                <div className="settings-empty__title">עדיין אין {isPackage ? "ייחוסי מארז" : "פריטי ייחוס"} ל{typeName}.</div>
+                <div>
+                  {isPackage
+                    ? "צור ייחוס מארז כדי שעמדת הפתיחה תדע מה צריך להיות בקופסה ומול מה להשוות כל פריט."
+                    : "צור פריט ייחוס כדי שהבדיקות של סוג זה יושוו אליו אוטומטית."}
+                </div>
+                {canAdd && <Button onClick={openNew} startIcon={<AddIcon fontSize={18} aria-hidden />}>{newLabel}</Button>}
               </div>
             )
           ) : (
             <div className="ri-grid">
               {filtered.map((it) => (
-                <ReferenceCard key={it.reference_item_id} item={it} onEdit={() => openEdit(it)} />
+                <ReferenceCard key={it.reference_item_id} item={it} lines={templateLines} onEdit={() => openEdit(it)} />
               ))}
             </div>
           )}
@@ -535,7 +414,7 @@ export default function ReferenceItemsPage() {
         </div>
       )}
 
-      {/* Add / Edit dialog */}
+      {/* Add / Edit dialog of a regular reference item */}
       <Dialog
         open={formOpen}
         onClose={closeForm}
@@ -546,7 +425,7 @@ export default function ReferenceItemsPage() {
       >
         <DialogTitle onClose={closeForm}>
           <span style={{ minWidth: 0 }}>
-            {editingId == null ? "פריט ייחוס חדש" : "עריכת פריט ייחוס"}
+            {draft?.id == null ? "פריט ייחוס חדש" : "עריכת פריט ייחוס"}
             <span style={{ display: "block", fontSize: "var(--text-small)", fontWeight: 400, color: C.muted, marginTop: 4, fontFamily: "var(--font-text)" }}>
               פריט הייחוס ישמש להשוואה אוטומטית בבדיקות.
             </span>
@@ -554,262 +433,39 @@ export default function ReferenceItemsPage() {
         </DialogTitle>
 
         <DialogContent>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-ml)" }}>
-            <div className="ri-form-grid">
-              <SearchableCombobox<ItemType>
-                label="סוג פריט"
-                required
-                value={formType}
-                onChange={(v) => { setFormType(v); clearFieldError("type"); }}
-                options={itemTypes}
-                getOptionLabel={(o) => o.item_type_desc}
-                isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
-                placeholder="בחר סוג פריט…"
-                error={!!fieldErrors.type}
-                helperText={fieldErrors.type}
+          {draft && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-ml)" }}>
+              <ReferenceItemFields
+                idPrefix="ri"
+                draft={draft}
+                onDraft={setDraft}
+                errors={fieldErrors}
+                onClearError={clearFieldError}
+                photoTypes={photoTypes}
+                typeField={
+                  // Package types have their own dialog (a package reference).
+                  <SearchableCombobox<ItemType>
+                    label="סוג פריט"
+                    required
+                    value={formType}
+                    onChange={(v) => { setFormType(v); clearFieldError("type"); }}
+                    options={regularTypes}
+                    getOptionLabel={(o) => o.item_type_desc}
+                    isOptionEqualToValue={(a, b) => a.item_type_id === b.item_type_id}
+                    placeholder="בחר סוג פריט…"
+                    error={!!fieldErrors.type}
+                    helperText={fieldErrors.type}
+                  />
+                }
               />
-              <TextField
-                label="מק״ט יצרן"
-                required
-                fullWidth
-                value={formSku}
-                onChange={(e) => { setFormSku(e.target.value); clearFieldError("sku"); }}
-                placeholder="לדוגמה: 745781-4"
-                error={!!fieldErrors.sku}
-                helperText={fieldErrors.sku}
-                // A code: typed left-to-right, aligned with the Hebrew labels.
-                inputProps={{ dir: "ltr", style: { textAlign: "right", fontVariantNumeric: "tabular-nums" } }}
-              />
-              <TextField
-                label="משקל"
-                required
-                fullWidth
-                value={formreference_weight}
-                onChange={(e) => { setFormreference_weight(e.target.value); clearFieldError("weight"); }}
-                placeholder="לדוגמה: 0.5kg"
-                error={!!fieldErrors.weight}
-                helperText={fieldErrors.weight}
-                inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
-              />
+              {formError && <Alert severity="error">{formError}</Alert>}
             </div>
-
-            <div className="ri-form-grid">
-              <TextField
-                label="יצרן"
-                required
-                fullWidth
-                value={formManu}
-                onChange={(e) => { setFormManu(e.target.value); clearFieldError("manu"); }}
-                placeholder="לדוגמה: TE Connectivity"
-                error={!!fieldErrors.manu}
-                helperText={fieldErrors.manu}
-              />
-              <TextField
-                label="שם הפריט"
-                required
-                fullWidth
-                value={formName}
-                onChange={(e) => { setFormName(e.target.value); clearFieldError("name"); }}
-                placeholder="תיאור קצר"
-                error={!!fieldErrors.name}
-                helperText={fieldErrors.name}
-              />
-            </div>
-
-            {/* images */}
-            <div role="group" aria-labelledby="ri-images-label">
-              <div id="ri-images-label" className="sh-field-label">תמונות ייחוס</div>
-
-              {/* Photo-group selector: newly-added files are tagged with the
-                  active group ("צילום אריזה" / "צילום פריט" / ...). */}
-              {photoTypes.length > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", marginBottom: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "var(--text-small)", color: C.muted }}>העלאה אל:</span>
-                  {photoTypes.map((pt) => (
-                    <button
-                      key={pt.code}
-                      type="button"
-                      className="ri-chip"
-                      aria-pressed={pt.code === uploadType}
-                      onClick={() => setUploadType(pt.code)}
-                    >
-                      {pt.photo_type_desc}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Drop zone: a click or Enter / Space opens the file picker. */}
-              <div
-                role="button"
-                tabIndex={0}
-                aria-label="הוספת תמונות ייחוס: גרור תמונות לכאן או לחץ לבחירה"
-                className={"ri-drop" + (dragOver ? " ri-drop--over" : "")}
-                onClick={() => fileRef.current?.click()}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileRef.current?.click(); }
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOver(false);
-                  addFiles([...(e.dataTransfer?.files ?? [])]);
-                }}
-              >
-                <span
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: "var(--r-pill)",
-                    background: C.card,
-                    border: `1px solid ${C.hairline}`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: C.muted,
-                  }}
-                >
-                  <CloudUploadOutlinedIcon fontSize={20} aria-hidden />
-                </span>
-                <span style={{ fontSize: "var(--text-body-sm)", color: C.ink }}>
-                  גרור תמונות לכאן, או{" "}
-                  <span style={{ color: C.accent, fontWeight: 600 }}>לחץ לבחירה</span>
-                </span>
-                <span style={{ fontSize: "var(--text-fine)", color: C.muted }}>
-                  PNG או JPG · עד 50MB לתמונה · ניתן לבחור כמה
-                </span>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  tabIndex={-1}
-                  aria-hidden
-                  onChange={(e) => {
-                    addFiles([...(e.target.files ?? [])]);
-                    e.target.value = "";
-                  }}
-                  style={{ display: "none" }}
-                />
-              </div>
-
-              {/* Thumbnails grouped by photo type — one section per group so it's
-                  obvious which reference set each image belongs to. */}
-              {formImages.length > 0 && (() => {
-                const knownCodes = photoTypes.map((pt) => pt.code);
-                const groups: Array<{ code: string; label: string; images: FormImage[] }> = [
-                  ...photoTypes.map((pt) => ({
-                    code: pt.code,
-                    label: pt.photo_type_desc,
-                    images: formImages.filter((i) => i.photoType === pt.code),
-                  })),
-                  // Safety net: images whose code isn't in the active list (e.g. a
-                  // type deactivated after upload) still render, under their code.
-                  ...[...new Set(formImages.map((i) => i.photoType).filter((c) => !knownCodes.includes(c)))]
-                    .map((code) => ({ code, label: code, images: formImages.filter((i) => i.photoType === code) })),
-                ].filter((g) => g.images.length > 0);
-
-                return groups.map((group) => (
-                  <div key={group.code} style={{ marginTop: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", marginBottom: "var(--space-xs)" }}>
-                      <span style={{ fontSize: "var(--text-small)", fontWeight: 600, color: C.ink }}>{group.label}</span>
-                      <span style={{ fontSize: "var(--text-fine)", color: C.muted, fontVariantNumeric: "tabular-nums" }}>
-                        {group.images.length} תמונות
-                      </span>
-                      <span style={{ flex: 1, height: 1, background: "var(--color-divider-soft)" }} />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: "var(--space-sm)" }}>
-                      {group.images.map((img) => {
-                        const isPrimary = img.key === primaryKey;
-                        return (
-                          <div
-                            key={img.key}
-                            style={{
-                              position: "relative",
-                              aspectRatio: "1 / 1",
-                              borderRadius: "var(--r-sm)",
-                              overflow: "hidden",
-                              border: isPrimary ? `2px solid ${C.accent}` : `1px solid ${C.hairline}`,
-                              background: "var(--color-canvas-parchment)",
-                            }}
-                          >
-                            {/* contain so the full image is visible in the square preview */}
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={img.url}
-                              alt={img.fileName}
-                              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                            />
-                            <div style={{ position: "absolute", top: 4, insetInlineStart: 4, display: "flex", gap: 4 }}>
-                              <IconButton
-                                size="small"
-                                round
-                                color={isPrimary ? "primary" : "default"}
-                                title={isPrimary ? "תמונת הכריכה" : `הגדר את ${img.fileName} כתמונת כריכה`}
-                                aria-pressed={isPrimary}
-                                onClick={(e) => { e.stopPropagation(); setPrimaryKey(img.key); }}
-                              >
-                                <StarIcon fontSize={14} fill={isPrimary ? "currentColor" : "none"} aria-hidden />
-                              </IconButton>
-                              <IconButton
-                                size="small"
-                                round
-                                color="error"
-                                title={`הסר את ${img.fileName}`}
-                                onClick={(e) => { e.stopPropagation(); removeImage(img.key); }}
-                              >
-                                <CloseIcon fontSize={14} aria-hidden />
-                              </IconButton>
-                            </div>
-                            {isPrimary && (
-                              <span
-                                style={{
-                                  position: "absolute",
-                                  bottom: 0,
-                                  insetInline: 0,
-                                  background: C.accent,
-                                  color: "var(--color-on-primary)",
-                                  fontSize: "var(--text-micro)",
-                                  fontWeight: 600,
-                                  textAlign: "center",
-                                  padding: "2px 0",
-                                }}
-                              >
-                                כריכה
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ));
-              })()}
-            </div>
-
-            {/* notes */}
-            <TextField
-              label={<>הערות <span style={{ color: C.muted, fontWeight: 400 }}>· לא חובה</span></>}
-              value={formNotes}
-              onChange={(e) => setFormNotes(e.target.value)}
-              placeholder="נקודות לבדיקה, מאפיינים מיוחדים, או סטיות מותרות…"
-              multiline
-              minRows={3}
-              fullWidth
-            />
-
-            {formError && <Alert severity="error">{formError}</Alert>}
-          </div>
+          )}
         </DialogContent>
 
         {/* Standard footer: delete at the start, Cancel then Save at the end. */}
         <DialogActions>
-          {editingId != null && (
+          {draft?.id != null && (
             <Button
               variant="text"
               color="error"
@@ -833,12 +489,24 @@ export default function ReferenceItemsPage() {
         draggable={false}
         open={confirmDelete}
         title="מחיקת פריט ייחוס"
-        message={`למחוק את פריט הייחוס "${formName.trim() || formSku.trim() || "ללא שם"}"? פעולה זו אינה ניתנת לביטול.`}
+        message={`למחוק את פריט הייחוס "${draft?.name.trim() || draft?.sku.trim() || "ללא שם"}"? פעולה זו אינה ניתנת לביטול.`}
         confirmText="מחק"
         destructive
         onConfirm={deleteItem}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      {pkgDialog && selectedType && templateLines && (
+        <PackageReferenceDialog
+          key={pkgDialog.key}
+          packageType={selectedType}
+          editing={pkgDialog.editing}
+          lines={templateLines}
+          photoTypes={photoTypes}
+          onClose={() => setPkgDialog(null)}
+          onSaved={() => { setPkgDialog(null); loadItems(selectedType.item_type_id); }}
+        />
+      )}
     </div>
   );
 }
@@ -872,8 +540,12 @@ function StepBadge({ n, label }: { n: number; label: string }) {
   );
 }
 
-function ReferenceCard({ item, onEdit }: { item: ReferenceItem; onEdit: () => void }) {
+/** A reference item's card. With `lines` (a package type's contents) it is a
+ *  package reference's: which content lines have a reference item. */
+function ReferenceCard({ item, lines, onEdit }: { item: ReferenceItem; lines: TemplateLine[] | null; onEdit: () => void }) {
   const title = item.name || item.item_type_desc || "פריט ייחוס";
+  const lineState = lines?.map((l) => ({ ...l, has: item.members.some((m) => m.item_type_id === l.item_type_id) })) ?? null;
+  const missing = lineState?.filter((l) => !l.has).map((l) => l.item_type_desc) ?? [];
   return (
     // The whole card opens the item for editing: a real button (Tab, Enter /
     // Space), hover and focus in settings.css (.ri-card).
@@ -925,7 +597,10 @@ function ReferenceCard({ item, onEdit }: { item: ReferenceItem; onEdit: () => vo
       )}
       <span style={{ padding: "16px 18px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
         <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <Tag tone="neutral">{item.item_type_desc ?? "—"}</Tag>
+          <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <Tag tone="neutral">{item.item_type_desc ?? "—"}</Tag>
+            {lineState && <Tag tone="primary">ייחוס מארז</Tag>}
+          </span>
           <EditOutlinedIcon fontSize={16} color="var(--color-ink-muted-48)" aria-hidden />
         </span>
         <span style={{ fontSize: "var(--text-body)", fontWeight: 600, lineHeight: 1.25, color: C.ink }}>
@@ -942,6 +617,28 @@ function ReferenceCard({ item, onEdit }: { item: ReferenceItem; onEdit: () => vo
             יצרן · <bdi style={{ color: C.ink }}>{item.manufacturer}</bdi>
           </span>
         </span>
+        {lineState && lineState.length > 0 && (
+          <>
+            <span style={{ height: 1, background: "var(--color-divider-soft)" }} />
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "var(--text-fine)", color: C.muted }}>
+              <span>פריטי ייחוס בתכולה</span>
+              <span style={{ fontWeight: 600, color: C.ink, fontVariantNumeric: "tabular-nums" }}>{lineState.length - missing.length} מתוך {lineState.length}</span>
+            </span>
+            <span className="ri-lines">
+              {lineState.map((l) => (
+                <Tag key={l.item_type_id} tone={l.has ? "success" : "warning"} icon={l.has ? <Check size={12} strokeWidth={2.5} aria-hidden /> : undefined}>
+                  {l.item_type_desc}
+                </Tag>
+              ))}
+            </span>
+            {missing.length > 0 && (
+              <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--text-fine)", fontWeight: 500, color: "var(--color-warning-ink)" }}>
+                <CircleAlert size={14} strokeWidth={2} aria-hidden />
+                חסר פריט ייחוס: {missing.join(", ")}
+              </span>
+            )}
+          </>
+        )}
       </span>
     </button>
   );

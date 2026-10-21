@@ -240,6 +240,26 @@ export async function replaceItemFile(
   }
 }
 
+/**
+ * Take back an attachment the worker removed on screen (a wizard's shot):
+ * DELETE /api/items/[id]/files soft-deletes it — the registry row goes
+ * `deleted`, MinIO keeps the version. Best-effort: false when it did not go.
+ */
+export async function deleteItemFile(
+  itemId: number | string,
+  objectKey: string,
+  workerId?: string | number | null,
+): Promise<boolean> {
+  const qs = new URLSearchParams({ key: objectKey });
+  if (workerId != null) qs.set("worker_id", String(workerId));
+  try {
+    const res = await apiFetch(`${itemFilesBase(itemId)}?${qs.toString()}`, { method: "DELETE" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ---- file manager -----------------------------------------------------------
 
 /** Upload one file into a file-manager folder ('' = root). Throws on any failure. */

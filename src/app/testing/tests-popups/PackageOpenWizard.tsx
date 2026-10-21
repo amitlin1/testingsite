@@ -7,8 +7,10 @@ import { apiFetch } from "@/lib/api/client";
 import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { newActionId } from "@/app/lib/metrics/action-id";
 import PackageWizardShell, { type ItemStepperRow, type WizardStep } from "./PackageWizardShell";
-import { PhotoUploader, PassFail, emptyPhotos, type Photos, type RefImg } from "./stationKit";
+import { PhotoUploader, PassFail, emptyPhotos, useShotDiscard, type Photos, type RefImg } from "./stationKit";
 import { NO_REF, ScanField, useReferenceLookup } from "./referenceScan";
+import { resolveItemReference, type RefMember, type RefSource } from "./packageReference";
+import { ExpectedContents, ExpectedReference } from "./PackageReferenceViews";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import { OpeningContents, boxDetailsOf, contentsProblem, rowsFromItems, saveContents, type ContentRow } from "./OpeningContents";
 import { playCue } from "@/app/components/packages/scanSound";
@@ -39,7 +41,11 @@ import "@/app/packages/packages.css";
  * (docs/packages/PLAN.md §4). Reference images / weights come from what the
  * worker scans: the box label is looked up among the package type's
  * reference items, each item's label among its own type's. A scan that finds
- * nothing warns and lets the worker go on without a reference.
+ * nothing warns and lets the worker go on without a reference. When the box
+ * label finds a package reference, its members say what should be in the box
+ * and what each item compares against (packageReference.ts: the expected SKU,
+ * or another reference item, or the expected one when the scan finds none —
+ * the source is saved on the item's result).
  *
  * Station fields (route-fields spec §4.11.3): when the kit's route publishes
  * fields for this step, the box photo step holds the box's block (artboard 15)
@@ -55,7 +61,7 @@ const PT_PRODUCT = "product";
 const TOLERANCE_PCT = 5;
 
 const STEPS: WizardStep[] = [
-  { key: "scan", label: "סריקת מק״ט המארז", note: "מדבקת הקופסה" },
+  { key: "scan", label: "סריקת מק״ט המארז", note: "מדבקת המארז" },
   { key: "boxPhoto", label: "צילום הקופסה", note: "3 זוויות + תקינות" },
   { key: "contents", label: "תכולה וסריאליים", note: "מה בקופסה, סריאלי לכל פריט" },
   { key: "items", label: "פריטים במארז", note: "סריקה, צילום ושקילה לכל פריט" },
@@ -72,13 +78,16 @@ type ItemWork = {
   refImages: RefImg[];
   refWeight: number | null;
   hasRU: boolean | null;
+  /** Where the reference came from, and the SKU the package reference expected (null: none). */
+  refSource: RefSource | null;
+  expectedSku: string | null;
   meas: string;
   done: boolean;
   /** The item's station-field drafts, by FieldId (route-fields; empty without a config). */
   fields: Drafts;
 };
 
-const freshWork = (): ItemWork => ({ scan: "", sku: null, photos: emptyPhotos(), refImages: [], refWeight: null, hasRU: null, meas: "", done: false, fields: {} });
+const freshWork = (): ItemWork => ({ scan: "", sku: null, photos: emptyPhotos(), refImages: [], refWeight: null, hasRU: null, refSource: null, expectedSku: null, meas: "", done: false, fields: {} });
 
 /** The shots taken in the photo fields among `defs` (station fields). */
 const fieldShots = (defs: readonly Field[], drafts: Readonly<Drafts>): DraftShot[] =>
@@ -94,6 +103,10 @@ function weightResult(ref: number | null, meas: string) {
 }
 
 type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
+
+/** Step 1 is the opening for the box and its items alike (packages/create-package.ts
+ *  routeRow): an item past it already has its result here. */
+const leftOpening = (it: PackageItemView) => it.is_finished || (it.current_route_step ?? 1) > 1;
 
 export default function PackageOpenWizard({ open, onClose, item, station, workerId, workerName, onSubmit }: StationTestDialogProps) {
   const pkg = item.package as PackageView | null;
@@ -140,10 +153,15 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   React.useEffect(() => {
     if (!open || !pkg) return;
     setStep(0); setScan(""); setBoxPhotos(emptyPhotos());
-    setItems(pkg.items); setWork({}); setItemIdx(null); setItemPhase("scan");
+    setItems(pkg.items); setItemIdx(null); setItemPhase("scan");
     setContentRowsRaw(rowsFromItems(pkg.items, boxDetailsOf(pkg))); setContentsSaved(false); setContentsError(null);
     setLabelsOpen(false); setLabelsPrinted(false); setSubmitting(false); setError(null);
-    submitIdRef.current = null; committedRef.current = new Set();
+    // Items an earlier opening already submitted — it broke off before the
+    // box's own result — have left the opening step: they count as done and are
+    // not sent again, or each would move one more step and skip a station.
+    const sent = pkg.items.filter(leftOpening).map((it) => it.item_id);
+    setWork(Object.fromEntries(sent.map((id) => [id, { ...freshWork(), done: true }])));
+    submitIdRef.current = null; committedRef.current = new Set(sent);
     resetBoxFields();
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
   }, [open, pkg, resetBoxFields]);
@@ -170,26 +188,37 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     } catch { return null; }
   }, [workerId, station.test_station_type_id]);
 
+  // A shot removed on screen is taken back from storage too (useShotDiscard).
+  const { discard, landed } = useShotDiscard(workerId);
   const pickBoxPhoto = (file: File) => {
     const previewUrl = URL.createObjectURL(file);
     setBoxPhotos((p) => ({ ...p, photos: [...p.photos, { previewUrl, uploading: true }] }));
-    uploadTo(item.item_id, file, PT_PACKAGE).then((key) =>
-      setBoxPhotos((p) => ({ ...p, photos: p.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false, failed: key == null } : s)) })));
+    uploadTo(item.item_id, file, PT_PACKAGE).then((key) => {
+      if (landed(item.item_id, previewUrl, key)) return;
+      setBoxPhotos((p) => ({ ...p, photos: p.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false, failed: key == null } : s)) }));
+    });
   };
   const pickItemPhoto = (it: PackageItemView, file: File) => {
     const previewUrl = URL.createObjectURL(file);
     const w = workOf(it.item_id);
     patchWork(it.item_id, { photos: { ...w.photos, photos: [...w.photos.photos, { previewUrl, uploading: true }] } });
-    uploadTo(it.item_id, file, PT_PRODUCT).then((key) =>
+    uploadTo(it.item_id, file, PT_PRODUCT).then((key) => {
+      if (landed(it.item_id, previewUrl, key)) return;
       setWork((all) => {
         const cur = all[it.item_id] ?? freshWork();
         return { ...all, [it.item_id]: { ...cur, photos: { ...cur.photos, photos: cur.photos.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false, failed: key == null } : s)) } } };
-      }));
+      });
+    });
   };
 
-  // Every item starts at its scan screen; a reopened one shows its last scan,
-  // and moving on with it unchanged keeps the photos already taken.
+  // Every item starts at its scan screen with its reference item's SKU already
+  // in it — the member the package reference expects for its type — as its
+  // serial is. A reopened one shows its last scan, and moving on with it
+  // unchanged keeps the photos already taken.
   const startItem = (idx: number) => {
+    const it = items[idx];
+    if (!it || leftOpening(it)) return;
+    if (work[it.item_id] == null) patchWork(it.item_id, { scan: expectedOf(it)?.sku.trim() ?? "" });
     setItemIdx(idx); setItemPhase("scan"); setError(null);
   };
 
@@ -215,6 +244,21 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   };
 
   if (!open || !pkg) return null;
+
+  // ---- the package reference ------------------------------------------------
+  // Found by the box label: its members are what each item is expected to be.
+  // null = no package reference (not scanned yet, the label found none, or
+  // what it found holds no members yet — the opening then runs as before).
+  const kitMembers = boxLookup.ref?.hasRU && boxLookup.ref.members.length > 0 ? boxLookup.ref.members : null;
+  const expectedOf = (it: { item_type_id: number }): RefMember | null =>
+    kitMembers?.find((m) => m.itemTypeId === it.item_type_id) ?? null;
+  // The box's item types, in package order: what the package reference covers.
+  const boxTypes = items.reduce<{ id: number; desc: string; count: number }[]>((acc, it) => {
+    const row = acc.find((r) => r.id === it.item_type_id);
+    if (row) row.count++;
+    else acc.push({ id: it.item_type_id, desc: it.item_type_desc, count: 1 });
+    return acc;
+  }, []);
 
   // ---- derived -------------------------------------------------------------
   const inItemFlow = itemIdx != null;
@@ -261,7 +305,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     if (itemPhase === "scan") { stepTitle = `${cur.item_type_desc} · סריקה`; stepSubtitle = `פריט ${seq2(cur.package_seq)} · ${cur.makat ?? ""}`; systemMsg = "סרוק את מק״ט היצרן של הפריט — לפיו נטענים תמונות ומשקל הייחוס."; }
     else if (itemPhase === "photo") { stepTitle = `${cur.item_type_desc} · צילום`; stepSubtitle = `פריט ${seq2(cur.package_seq)} · ${cur.makat ?? ""}`; systemMsg = "נא לצלם את הפריט בדיוק לפי תמונות הייחוס."; }
     else { stepTitle = `${cur.item_type_desc} · שקילה`; stepSubtitle = `פריט ${seq2(cur.package_seq)} · משקל ייחוס מהקטלוג`; systemMsg = "נא לשקול את הפריט ולהזין את המשקל שנמדד."; }
-  } else if (stepKey === "scan") { stepSubtitle = "סרוק את מדבקת הקופסה כדי לפתוח את המארז בעמדה."; systemMsg = "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה."; }
+  } else if (stepKey === "scan") { stepSubtitle = "סרוק את מדבקת המארז כדי לפתוח את המארז בעמדה."; systemMsg = "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה."; }
   else if (stepKey === "boxPhoto") { stepSubtitle = "שלוש זוויות של הקופסה, ואז קביעת תקינות."; systemMsg = "נא לצלם את הקופסה בדיוק לפי תמונות הייחוס."; }
   else if (stepKey === "contents") {
     stepSubtitle = "פתח את הקופסה: סמן מה לא הגיע, הוסף מה שלא היה בתבנית, והזן סריאלי לכל פריט.";
@@ -269,7 +313,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
       : contentsGap ? `כדי להמשיך: ${contentsGap}` : contentsSaved ? "התכולה נשמרה." : "הכול מולא — שמור והמשך.";
   }
   else if (stepKey === "items") { stepSubtitle = "כל פריט עובר סריקה, צילום ושקילה. אפשר לעבוד בכל סדר."; }
-  else if (stepKey === "labels") { stepSubtitle = "מדבקה לכל פריט — הדבק כל אחת על הפריט שלה. מדבקת הקופסה כבר עליה מהמשלוח (אפשר להדפיס שוב)."; }
+  else if (stepKey === "labels") { stepSubtitle = "מדבקה לכל פריט — הדבק כל אחת על הפריט שלה. מדבקת המארז כבר עליו מהמשלוח (אפשר להדפיס שוב)."; }
 
   let nextLabel = "המשך";
   let nextEnabled = true;
@@ -281,7 +325,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     const itemShots = curWork.photos.photos;
     nextEnabled = itemPhase === "scan" ? curWork.scan.trim() !== "" && !itemLookup.checking
       : itemPhase === "photo" ? curWork.photos.ok !== "" && !itemShots.some((s) => s.uploading || s.failed) && !itemGate
-      : curWork.meas.trim() !== "";
+        : curWork.meas.trim() !== "";
     if (itemPhase === "photo" && itemShots.some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
   } else if (stepKey === "scan") nextEnabled = scan.trim() !== "" && !boxLookup.checking;
   else if (stepKey === "boxPhoto") {
@@ -333,9 +377,11 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ItemID: Number(it.item_id), StationID: station.test_station_id, WorkerID: workerId ?? undefined, WorkerName: workerName || undefined, SubmitID: submitId,
+            // The step this result is for: an item that already moved on is refused, never moved twice.
+            CurrentRouteStep: it.current_route_step ?? undefined,
             Result: passed ? 1 : 0, Passed: passed, Comments: w.photos.note || undefined,
             Details: {
-              sku: w.sku, hasRU: w.hasRU,
+              sku: w.sku, hasRU: w.hasRU, expectedSku: w.expectedSku, refSource: w.refSource,
               weight: r ? { reference: w.refWeight, measured: Number(w.meas), diffPct: Number(r.diffPct.toFixed(1)), pass: r.pass } : null,
               product: { ok: w.photos.ok, note: w.photos.note, photos: keysOf(w.photos) },
               package_id: String(item.item_id), opening: true,
@@ -355,6 +401,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         Result: boxPass ? 1 : 0, Passed: boxPass, Comments: boxPhotos.note || undefined, WorkerID: workerId ?? undefined, SubmitID: submitId,
         Details: {
           sku: scan.trim(), hasRU: boxHasRU,
+          packageReference: kitMembers ? { referenceItemId: boxLookup.ref?.referenceItemId ?? null, members: kitMembers.length } : null,
           pkg: { ok: boxPhotos.ok, note: boxPhotos.note, photos: keysOf(boxPhotos) },
           itemCount: items.length, registeredCount: pkg.items.length, templateCount, labelsPrinted,
           packageItemIds: items.map((it) => it.item_id), opening: true,
@@ -379,8 +426,11 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         const sku = curWork.scan.trim();
         // Same scan as last time: the reference is already in the work, keep it.
         if (sku !== curWork.sku) {
-          const ref = itemLookup.ref ?? NO_REF;
-          patchWork(cur.item_id, { sku, hasRU: ref.hasRU, refWeight: ref.refWeight, refImages: ref.imagesByType[PT_PRODUCT] ?? [] });
+          const ref = resolveItemReference(sku, expectedOf(cur), itemLookup.ref ?? NO_REF, cur.item_type_desc);
+          patchWork(cur.item_id, {
+            sku, hasRU: ref.hasRU, refWeight: ref.refWeight, refImages: ref.imagesByType[PT_PRODUCT] ?? [],
+            refSource: ref.source, expectedSku: ref.expectedSku,
+          });
         }
         setItemPhase("photo"); return;
       }
@@ -403,10 +453,10 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
 
   const itemStepper: ItemStepperRow[] | null = stepKey === "items" || inItemFlow
     ? items.map((it, i) => {
-        const w = workOf(it.item_id);
-        const active = itemIdx === i;
-        return { key: it.item_id, type: it.item_type_desc, badge: seq2(it.package_seq), stateLabel: w.done ? "הושלם" : active ? (itemPhase === "scan" ? "סריקה" : itemPhase === "photo" ? "צילום" : "שקילה") : "ממתין", active, done: w.done, onClick: () => startItem(i) };
-      })
+      const w = workOf(it.item_id);
+      const active = itemIdx === i;
+      return { key: it.item_id, type: it.item_type_desc, badge: seq2(it.package_seq), stateLabel: w.done ? "הושלם" : active ? (itemPhase === "scan" ? "סריקה" : itemPhase === "photo" ? "צילום" : "שקילה") : "ממתין", active, done: w.done, onClick: () => startItem(i) };
+    })
     : null;
 
   const choiceBox = (value: Photos["ok"], onPick: (v: "pass" | "fail") => void) => <PassFail value={value} onChange={onPick} />;
@@ -438,16 +488,22 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
 
         {inItemFlow && cur && curWork ? (
           itemPhase === "scan" ? (
-            <ScanField key={cur.item_id}
-              label="מק״ט יצרן של הפריט" placeholder="סרוק את מדבקת הפריט"
-              value={curWork.scan} onChange={(v) => patchWork(cur.item_id, { scan: v })} lookup={itemLookup} onSubmit={onNext}
-              found={(ref) => `נמצא פריט ייחוס${ref.name ? ` · ${ref.name}` : ""} · ${(ref.imagesByType[PT_PRODUCT] ?? []).length} תמונות ייחוס${ref.refWeight != null ? ` · ${ref.refWeight} גר׳` : ""}`}
-              missing={`לא נמצא פריט ייחוס של ${cur.item_type_desc} עם המק״ט הזה — אפשר להמשיך, הצילום והשקילה יהיו ללא ייחוס`} />
+            <>
+              <ExpectedReference member={expectedOf(cur)} kitFound={kitMembers != null} />
+              <ScanField key={cur.item_id}
+                label="מק״ט יצרן של הפריט" placeholder="סרוק את מק״ט היצרן של הפריט"
+                value={curWork.scan} onChange={(v) => patchWork(cur.item_id, { scan: v })} lookup={itemLookup} onSubmit={onNext}
+                found={(ref) => `נמצא פריט ייחוס${ref.name ? ` · ${ref.name}` : ""} · ${(ref.imagesByType[PT_PRODUCT] ?? []).length} תמונות ייחוס${ref.refWeight != null ? ` · ${ref.refWeight} גר׳` : ""}`}
+                missing={`לא נמצא פריט ייחוס של ${cur.item_type_desc} עם המק״ט הזה — אפשר להמשיך, הצילום והשקילה יהיו ללא ייחוס`}
+                verdict={(ref) => resolveItemReference(curWork.scan, expectedOf(cur), ref, cur.item_type_desc)}
+                // A changed SKU is already said by the verdict (resolveItemReference).
+                serial={cur.serial_no} prev={expectedOf(cur)?.sku} filledNote="הושלם ממק״ט פריט הייחוס של המארז" flagChange={false} />
+            </>
           ) : itemPhase === "photo" ? (
             <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
               {curWork.hasRU === false && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>לא נמצא פריט ייחוס למק״ט שנסרק ({curWork.sku}) — צלם לפי שיקול דעת והמשך.</div>}
               <PhotoUploader photos={curWork.photos.photos} refImages={curWork.refImages} onPick={(f) => pickItemPhoto(cur, f)}
-                onRemove={(i) => patchWork(cur.item_id, { photos: { ...curWork.photos, photos: curWork.photos.photos.filter((_, j) => j !== i) } })} />
+                onRemove={(i) => { discard(cur.item_id, curWork.photos.photos[i]); patchWork(cur.item_id, { photos: { ...curWork.photos, photos: curWork.photos.photos.filter((_, j) => j !== i) } }); }} />
               {/* Artboard 16: the item's fields before "הפריט תקין?" — a group label even for a lone group. */}
               {fieldsCfg ? curFx && (
                 <FieldsBlock key={cur.item_id} variant="kit-item" title={BLOCK_TITLE.kitItem}
@@ -495,15 +551,22 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
             </div>
           )
         ) : stepKey === "scan" ? (
-          <ScanField
-            label="מק״ט המארז" placeholder="סרוק את מדבקת הקופסה"
-            value={scan} onChange={setScan} lookup={boxLookup} onSubmit={onNext}
-            found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
-            missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה. אפשר להמשיך, צילום הקופסה יהיה ללא ייחוס`} />
+          <>
+            <ScanField
+              label="מק״ט המארז" placeholder="סרוק את מק״ט היצרן"
+              value={scan} onChange={setScan} lookup={boxLookup} onSubmit={onNext}
+              found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
+              missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה. אפשר להמשיך, צילום הקופסה יהיה ללא ייחוס`} />
+            {/* The package reference the label found: what should be in the box. */}
+            {kitMembers && !boxLookup.checking && scan.trim() !== "" && (
+              <ExpectedContents types={boxTypes} expectedOf={(id) => expectedOf({ item_type_id: id })} boxPhotos={boxRef.length} />
+            )}
+          </>
         ) : stepKey === "boxPhoto" ? (
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
             {boxHasRU === false && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>לא נמצא פריט ייחוס למק״ט המארז שנסרק — צלם את הקופסה משלוש זוויות והמשך.</div>}
-            <PhotoUploader photos={boxPhotos.photos} refImages={boxRef} onPick={pickBoxPhoto} onRemove={(i) => setBoxPhotos((p) => ({ ...p, photos: p.photos.filter((_, j) => j !== i) }))} />
+            <PhotoUploader photos={boxPhotos.photos} refImages={boxRef} onPick={pickBoxPhoto}
+              onRemove={(i) => { discard(item.item_id, boxPhotos.photos[i]); setBoxPhotos((p) => ({ ...p, photos: p.photos.filter((_, j) => j !== i) })); }} />
             {/* Artboard 15: the box's fields before "האריזה תקינה?". */}
             {fieldsCfg ? boxHasFields && (
               <FieldsBlock variant="wizard" title={BLOCK_TITLE.box} groups={[{ fields: fieldsCfg.box }]} fx={boxFx} idPrefix={`${uid}-fxbox`}
@@ -534,8 +597,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
                       <div style={{ fontSize: 15, fontWeight: 600 }}>{it.item_type_desc}</div>
                       <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{it.makat ?? "—"} · {it.serial_no ?? "ללא סריאלי"}{w.refWeight != null ? ` · ייחוס ${w.refWeight} גר׳` : ""}</div>
                     </div>
-                    <div style={{ fontSize: 12.5, color: w.done ? GREEN : MUTED, fontWeight: 600, whiteSpace: "nowrap" }}>{w.done ? "צולם ונשקל" : "ממתין"}</div>
-                    <button type="button" onClick={() => startItem(i)} disabled={busy} aria-label={`${w.done ? "פתח שוב" : "התחל"} · ${seq2(it.package_seq)} ${it.item_type_desc}`}
+                    <div style={{ fontSize: 12.5, color: w.done ? GREEN : MUTED, fontWeight: 600, whiteSpace: "nowrap" }}>{leftOpening(it) ? "נשמר בפתיחה קודמת" : w.done ? "צולם ונשקל" : "ממתין"}</div>
+                    <button type="button" onClick={() => startItem(i)} disabled={busy || leftOpening(it)} aria-label={`${w.done ? "פתח שוב" : "התחל"} · ${seq2(it.package_seq)} ${it.item_type_desc}`}
                       className={w.done ? "pkg-pill pkg-pill--ghost pkg-pill--station" : "pkg-pill pkg-pill--primary pkg-pill--station"} style={{ padding: "10px 20px" }}>{w.done ? "פתח שוב" : "התחל"}</button>
                   </div>
                 );
@@ -546,6 +609,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           <OpeningContents
             rows={contentRows} onRows={setContentRows} memberTypes={memberTypes} templateCount={templateCount}
             shipmentId={pkg.shipment_id} packageId={String(item.item_id)} box={boxDetailsOf(pkg)} error={contentsError}
+            expectedOf={kitMembers ? (id) => expectedOf({ item_type_id: id }) : undefined}
             onDone={() => { if (contentsGap == null) onNext(); }}
           />
         ) : stepKey === "labels" ? (

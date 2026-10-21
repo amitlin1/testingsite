@@ -37,6 +37,9 @@ export type ItemRow = {
   package_id: number | null;
   /** Serial of the parent item — only set for accessory items. */
   parent_serial_no?: string | null;
+  /** The manufacturer SKU the item was last scanned with at a station (its
+   *  reference item's) — the next station's SKU scan starts from it. */
+  last_sku?: string | null;
   source_id: number | null;
   connected_items?: {
     item_id: number;

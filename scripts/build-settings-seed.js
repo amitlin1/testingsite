@@ -20,6 +20,9 @@
 //   1. FK ORDER. pg_dump emits tables alphabetically, which would insert
 //      reference_item_images before reference_items and fail. TABLES below is in
 //      dependency order and each table is dumped separately to preserve it.
+//      Within reference_items too: a package reference's members point at it
+//      (parent_reference_id), and pg_dump emits rows in storage order — an
+//      updated parent can land after its members. Its rows are sorted by id.
 //
 //   2. SEQUENCE RESET. Rows carry explicit ids, but the sequences behind those
 //      id columns stay at 1. Without setval the first row a user adds in the UI
@@ -53,7 +56,7 @@ const MINIO_CONTAINER = arg("minio", "FileServiceDB");
 
 // ---- the settings tables, in FK dependency order ---------------------------
 // Verified against pg_constraint:
-//   reference_items       -> item_types
+//   reference_items       -> item_types, reference_items (a package reference's members)
 //   test_stations         -> test_stations_type
 //   testing_routes        -> item_types, test_stations_type
 //   route_field_versions  -> testing_routes
@@ -140,13 +143,22 @@ function insertsOnly(dump) {
     .join("\n");
 }
 
+// reference_items' rows by their id (the first column of a --column-inserts
+// row): a member is always created after its package reference, so ascending
+// ids insert every parent before the rows that point at it.
+function byLeadingId(body) {
+  const idOf = (l) => Number((/ VALUES \((\d+),/.exec(l) || [])[1] ?? Number.MAX_SAFE_INTEGER);
+  return body.split("\n").sort((a, b) => idOf(a) - idOf(b)).join("\n");
+}
+
 const parts = [];
 const counts = [];
 
 for (const t of TABLES) {
   const n = parseInt(psql(`SELECT count(*) FROM public."${t}";`), 10) || 0;
   counts.push({ table: t, rows: n });
-  const body = n > 0 ? insertsOnly(pgDumpTable(t)) : "";
+  let body = n > 0 ? insertsOnly(pgDumpTable(t)) : "";
+  if (t === "reference_items") body = byLeadingId(body);
   parts.push(
     `-- ---------------------------------------------------------------------------\n` +
     `-- ${t}  (${n} row${n === 1 ? "" : "s"})\n` +

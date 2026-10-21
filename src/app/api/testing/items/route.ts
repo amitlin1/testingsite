@@ -56,6 +56,16 @@ SELECT
     i.package_id,
     i.package_seq,
     (SELECT parent.serial_no FROM items parent WHERE parent.item_id = i.package_id) AS "parent_serial_no",
+    -- The manufacturer SKU the item was last scanned with (the first step of
+    -- every station; its reference item is found by it): the next station's
+    -- scan starts from it.
+    (
+        SELECT NULLIF(TRIM(tr.details->>'sku'), '')
+        FROM test_results tr
+        WHERE tr.item_id = i.item_id AND NULLIF(TRIM(tr.details->>'sku'), '') IS NOT NULL
+        ORDER BY tr.created_at DESC, tr.test_result_id DESC
+        LIMIT 1
+    ) AS "last_sku",
     (EXISTS (SELECT 1 FROM items child WHERE child.package_id = i.item_id)) AS "has_children",
     (
         SELECT json_agg(json_build_object(

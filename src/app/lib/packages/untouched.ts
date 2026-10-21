@@ -12,8 +12,12 @@ import { TransactionClient } from "@/app/lib/prisma";
  * `atOpening`: the box is open at its opening station, which starts its items
  * along with it (status 1 at step 1) — an item still there and with nothing
  * recorded on it is untouched for removing it as "did not come".
+ *
+ * `noun`: what the reason talks about — "מארז" (default) or "פריט", for the
+ * opening's single item. Both masculine, so the sentences read the same.
  */
-export async function workDoneOn(tx: TransactionClient, ids: bigint[], opts: { atOpening?: boolean } = {}): Promise<string | null> {
+export async function workDoneOn(tx: TransactionClient, ids: bigint[], opts: { atOpening?: boolean; noun?: "מארז" | "פריט" } = {}): Promise<string | null> {
+  const noun = opts.noun ?? "מארז";
   const routes = await tx.item_routes.findMany({
     where: { item_id: { in: ids } },
     select: { current_route_step: true, current_status: true, processing_start_time: true, is_finished: true },
@@ -22,14 +26,14 @@ export async function workDoneOn(tx: TransactionClient, ids: bigint[], opts: { a
     ? (r: (typeof routes)[number]) => r.current_route_step !== 1 || r.is_finished || (r.current_status !== 1 && r.current_status !== 2)
     : (r: (typeof routes)[number]) => r.current_route_step !== 1 || r.current_status !== 2 || r.processing_start_time != null || r.is_finished;
   if (routes.some(moved)) {
-    return "כבר התחילו לעבוד על המארז";
+    return `כבר התחילו לעבוד על ה${noun}`;
   }
-  if (await tx.item_route_history.count({ where: { item_id: { in: ids } } })) return "למארז כבר יש היסטוריית עמדות";
-  if (await tx.test_results.count({ where: { item_id: { in: ids } } })) return "למארז כבר יש תוצאות בדיקה";
-  if (await tx.research_history.count({ where: { item_id: { in: ids } } })) return "המארז כבר נשלח למחקר";
+  if (await tx.item_route_history.count({ where: { item_id: { in: ids } } })) return `ל${noun} כבר יש היסטוריית עמדות`;
+  if (await tx.test_results.count({ where: { item_id: { in: ids } } })) return `ל${noun} כבר יש תוצאות בדיקה`;
+  if (await tx.research_history.count({ where: { item_id: { in: ids } } })) return `ה${noun} כבר נשלח למחקר`;
   const files = await tx.file_objects.count({
     where: { entity_type: "item_attachment", entity_id: { in: ids.map(String) }, status: "active" },
   });
-  if (files) return "למארז כבר צורפו קבצים";
+  if (files) return `ל${noun} כבר צורפו קבצים`;
   return null;
 }

@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api/client";
 import { SUGGEST_PREFIX, SUGGEST_TAIL_WORKER_DECIDES } from "@/app/lib/station-fields/labels";
 import { NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
 import {
-  type Photos, type RefImg, emptyPhotos, lookupRU,
+  type Photos, type RefImg, emptyPhotos, lookupRU, useShotDiscard,
   SkuScreen, PhotoSection, PhotoUploader, VerdictCard,
   StationShell, type ShellPhase, SKU_TITLE, SKU_DESC,
 } from "./stationKit";
@@ -88,7 +88,8 @@ export default function PhotoStation({
 
   React.useEffect(() => {
     if (!open) return;
-    setPhaseIdx(0); setError(null); setSkuScan(""); setHasRU(null); setRefImages([]); setPhoto(emptyPhotos()); resetFields();
+    // The SKU carries on from the station before (ItemRow.last_sku).
+    setPhaseIdx(0); setError(null); setSkuScan(item.last_sku ?? ""); setHasRU(null); setRefImages([]); setPhoto(emptyPhotos()); resetFields();
   }, [open, item, resetFields]);
 
   const phases: ShellPhase[] = [
@@ -125,14 +126,19 @@ export default function PhotoStation({
     [item.item_id, workerId, station.test_station_type_id],
   );
 
+  const { discard, landed } = useShotDiscard(workerId);
   const pickPhoto = (file: File) => {
     const previewUrl = URL.createObjectURL(file);
     setPhoto((pk) => ({ ...pk, photos: [...pk.photos, { previewUrl, uploading: true }] }));
-    uploadToItem(item.item_id, file).then((key) =>
-      setPhoto((pk) => ({ ...pk, photos: pk.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false, failed: key == null } : s)) })));
+    uploadToItem(item.item_id, file).then((key) => {
+      if (landed(item.item_id, previewUrl, key)) return;
+      setPhoto((pk) => ({ ...pk, photos: pk.photos.map((s) => (s.previewUrl === previewUrl ? { ...s, objectKey: key ?? undefined, uploading: false, failed: key == null } : s)) }));
+    });
   };
-  const removePhoto = (idx: number) =>
+  const removePhoto = (idx: number) => {
+    discard(item.item_id, photo.photos[idx]);
     setPhoto((pk) => ({ ...pk, photos: pk.photos.filter((_, i) => i !== idx) }));
+  };
 
   // ---- navigation ----
   const runLookup = React.useCallback(async () => {
@@ -205,7 +211,7 @@ export default function PhotoStation({
       canFinish={canFinish} onFinish={onFinish} finishLabel={kind ? `סיום בדיקת ${kind}` : "סיום בדיקה"}
     >
       {phaseIdx === 0 ? (
-        <SkuScreen value={skuScan} onChange={setSkuScan} />
+        <SkuScreen value={skuScan} onChange={setSkuScan} prev={item.last_sku} serial={item.serial_no} />
       ) : (
         <Stack spacing={3}>
           {hasRU === false && (

@@ -45,13 +45,13 @@ import "@/app/packages/packages.css";
  */
 
 const STEPS: WizardStep[] = [
-  { key: "scan", label: "סריקת מק״ט המארז", note: "מדבקת הקופסה" },
+  { key: "scan", label: "סריקת מק״ט המארז", note: "מדבקת המארז" },
   { key: "arrival", label: "פריטים ואריזה", note: "מצב הגעה + נארז" },
   { key: "packOk", label: "תקינות האריזה", note: "אישור סופי" },
   { key: "done", label: "סיום", note: "" },
 ];
 
-const CHECKS = ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת הקופסה קריאה"];
+const CHECKS = ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת המארז קריאה"];
 /** The packing note's label; with station fields, also its editor's title (artboard 18 `pk`). */
 const PACK_NOTE_LABEL = "הערות אריזה";
 /** A field photo not stored yet when the box is closed — the opening wizard's words. */
@@ -123,7 +123,6 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   const checksAll = checks.every(Boolean);
   const stepKey = STEPS[step].key;
   const anyMissing = items.some((it) => decisions[it.item_id]?.decision === "missing");
-  const fromOpening = pkg.opening_sku != null && scan.trim() === pkg.opening_sku;
 
   // ---- station fields (artboards 17/18) ----------------------------------------
   const gate = kitFields?.gate ?? false;
@@ -163,7 +162,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
 
   let stepSubtitle = "";
   let systemMsg: string | null = null;
-  if (stepKey === "scan") { stepSubtitle = "סרוק את מדבקת הקופסה כדי לפתוח את המארז בעמדה."; systemMsg = "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה."; }
+  if (stepKey === "scan") { stepSubtitle = "סרוק את מדבקת המארז כדי לפתוח את המארז בעמדה."; systemMsg = "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה."; }
   else if (stepKey === "arrival") stepSubtitle = "סמן כל פריט שנארז. פריט שלא הגיע דורש החלטה מפורשת.";
   else if (stepKey === "packOk") stepSubtitle = "אישור סופי לפני סגירת המארז.";
 
@@ -276,14 +275,12 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
         )}
 
         {stepKey === "scan" && (
-          <>
-            <ScanField
-              label="מק״ט המארז" placeholder="סרוק את מדבקת הקופסה"
-              value={scan} onChange={setScan} lookup={boxLookup} onSubmit={onNext}
-              found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
-              missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה`} />
-            {fromOpening && <div style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>הושלם מסריקת הפתיחה</div>}
-          </>
+          <ScanField
+            label="מק״ט המארז" placeholder="סרוק את מק״ט היצרן"
+            value={scan} onChange={setScan} lookup={boxLookup} onSubmit={onNext}
+            found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
+            missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה`}
+            prev={pkg.opening_sku} filledNote="הושלם מסריקת הפתיחה" />
         )}
 
         {stepKey === "arrival" && (

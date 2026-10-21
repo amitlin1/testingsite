@@ -30,8 +30,8 @@ import { workDoneOn } from "./untouched";
  *                     serials, with the box's details. undoIntake takes it
  *                     back while untouched.
  *   opening station → saveOpeningContents: the items that are really in the
- *                     box, each with its serial (details as the worker left
- *                     them — the box's unless changed).
+ *                     box, each with its serial (details stay the
+ *                     shipment's — the worker does not change them).
  *
  * "Pending" is exactly: a package row (item type is_package, package_id NULL)
  * with no item_routes row. Nothing reads the ledger for it: item_created is
@@ -55,7 +55,6 @@ type BoxRow = DetailCols & {
 /** What a box says about its contents: its shipment line's certificate row. */
 type BoxDetails = { makat: string; model: string; manufacturer: string; manufacturerNo: string };
 
-const NO_DETAILS: BoxDetails = { makat: "", model: "", manufacturer: "", manufacturerNo: "" };
 const boxDetails = (r: DetailCols): BoxDetails => ({
   makat: (r.makat ?? "").trim(),
   model: CHAR50(r.model),
@@ -81,7 +80,7 @@ async function lockBox(tx: TransactionClient, packageId: bigint): Promise<BoxRow
   const box = rows[0];
   if (!box) throw new PackageError("PACKAGE_NOT_FOUND", "לא נמצא מארז עם המזהה הזה", 404);
   if (!box.is_package || box.package_id != null) {
-    throw new PackageError("NOT_A_PACKAGE", "זו מדבקה של פריט בתוך מארז — סרוק את מדבקת הקופסה", 409);
+    throw new PackageError("NOT_A_PACKAGE", "זו מדבקה של פריט בתוך מארז — סרוק את מדבקת המארז", 409);
   }
   return box;
 }
@@ -207,9 +206,9 @@ export async function dropShipmentBoxes(tx: TransactionClient, shipmentId: numbe
  * The intake scan: a pending box enters its route (the package type's
  * default route) and its items are created from the template, one per unit,
  * in the template's order — without serials, which the opening station
- * records. Each item takes the box's details (its certificate row), unless
- * the template line describes that item itself. Same routing rules as
- * createPackage.
+ * records. Each item takes the box's details (its shipment line's
+ * certificate row); the template names types, quantities and routes only.
+ * Same routing rules as createPackage.
  */
 export async function intakeBox(tx: TransactionClient, packageId: bigint): Promise<CreatedPackage> {
   const box = await lockBox(tx, packageId);
@@ -256,7 +255,6 @@ export async function intakeBox(tx: TransactionClient, packageId: bigint): Promi
   const itemIds: number[] = [];
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
-    const own = boxDetails(u);
     const itemId = itemIdFromBase(base, i + 1);
     await insertItemRow(tx, {
       itemId,
@@ -264,7 +262,7 @@ export async function intakeBox(tx: TransactionClient, packageId: bigint): Promi
       shipment: box.shipment_id,
       itemType: u.item_type_id,
       serialNumber: null,
-      ...(sameDetails(own, NO_DETAILS) ? fromBox : own),
+      ...fromBox,
       packageId,
       packageSeq: i + 1,
       templateSnapshot: null,
@@ -290,13 +288,16 @@ export async function undoIntake(tx: TransactionClient, packageId: bigint): Prom
   await tx.$executeRaw`UPDATE items SET template_snapshot = NULL, package_next_seq = 1 WHERE item_id = ${packageId}`;
 }
 
-export type OpeningItem = { itemId: string; serialNumber: string; makat: string; model: string; manufacturer: string; manufacturerNo?: string | null };
+export type OpeningItem = { itemId: string; serialNumber: string };
+export type OpeningAdd = { itemType: number; serialNumber: string };
 
 /**
  * The opening station records what is really in the box: every item kept
- * gets its serial and details (the box's unless the worker changed them;
- * none is required), items that did not come are removed, items the
- * template did not foresee are added. Serials follow the intake rule
+ * gets its serial, items that did not come are removed, items the template
+ * did not foresee are added. The serial is the only thing the worker gives:
+ * details are the shipment's — a kept item keeps its own (an item taken in
+ * before items inherited them, with none, gets the box's), an added item
+ * takes the box's. Serials follow the intake rule
  * (lib/packages/serials.ts): not twice in the box, not on another item of
  * the same type in this shipment. Refusals carry `itemIndex` into the list
  * `items` then `add`, as the wizard shows them.
@@ -304,20 +305,28 @@ export type OpeningItem = { itemId: string; serialNumber: string; makat: string;
 export async function saveOpeningContents(
   tx: TransactionClient,
   packageId: bigint,
-  input: { items: OpeningItem[]; remove: string[]; add: PackageItemInput[] },
+  input: { items: OpeningItem[]; remove: string[]; add: OpeningAdd[] },
 ): Promise<void> {
   const route = await tx.item_routes.findUnique({
     where: { item_id: packageId },
     select: { current_route_step: true, current_status: true, is_finished: true },
   });
-  const box = await tx.items.findUnique({ where: { item_id: packageId }, select: { shipment_id: true, package_id: true } });
+  const box = await tx.items.findUnique({
+    where: { item_id: packageId },
+    select: { shipment_id: true, package_id: true, makat: true, model: true, manufacturer_name: true, manufacturer_no: true },
+  });
   if (!box || box.package_id != null) throw new PackageError("PACKAGE_NOT_FOUND", "המארז לא נמצא", 404);
   if (!route) throw new PackageError("NOT_TAKEN_IN", "המארז עוד לא נקלט", 409);
   const opening = route.current_route_step === 1 && !route.is_finished && (route.current_status === 1 || route.current_status === 2);
   if (!opening) throw new PackageError("PACKAGE_NOT_OPENING", "את תכולת המארז מעדכנים רק בעמדת הפתיחה", 409);
 
-  const members = await tx.items.findMany({ where: { package_id: packageId }, select: { item_id: true, item_type_id: true } });
+  const members = await tx.items.findMany({
+    where: { package_id: packageId },
+    select: { item_id: true, item_type_id: true, makat: true, model: true, manufacturer_name: true, manufacturer_no: true },
+  });
   const memberType = new Map(members.map((m) => [m.item_id.toString(), m.item_type_id]));
+  const memberById = new Map(members.map((m) => [m.item_id.toString(), m]));
+  const fromBox = boxDetails(box);
   const removeIds = [...new Set(input.remove)];
   for (const id of removeIds) if (!memberType.has(id)) throw new PackageError("NOT_IN_PACKAGE", "פריט שאינו במארז", 400);
   for (const it of input.items) {
@@ -362,29 +371,32 @@ export async function saveOpeningContents(
   // recorded on them (the station started them along with the box).
   for (const id of removeIds) {
     const itemId = BigInt(id);
-    const why = await workDoneOn(tx, [itemId], { atOpening: true });
-    if (why) throw new PackageError("ITEM_TOUCHED", `${why} — אי אפשר להסיר את הפריט`, 409);
+    const why = await workDoneOn(tx, [itemId], { atOpening: true, noun: "פריט" });
+    if (why) throw new PackageError("ITEM_TOUCHED", `${why} — אי אפשר לסמן אותו כ״לא הגיע״`, 409);
     await forgetItem(tx, itemId);
     await tx.item_routes.deleteMany({ where: { item_id: itemId } });
     await tx.items.delete({ where: { item_id: itemId } });
   }
   for (const it of input.items) {
     const itemId = BigInt(it.itemId);
+    const blank = !Object.values(boxDetails(memberById.get(it.itemId)!)).some(Boolean);
     await tx.items.update({
       where: { item_id: itemId },
       data: {
         serial_no: it.serialNumber.trim(),
-        makat: it.makat.trim(),
-        model: CHAR50(it.model),
-        manufacturer_name: CHAR50(it.manufacturer),
-        manufacturer_no: (it.manufacturerNo ?? "").trim(),
+        ...(blank && {
+          makat: fromBox.makat,
+          model: fromBox.model,
+          manufacturer_name: fromBox.manufacturer,
+          manufacturer_no: fromBox.manufacturerNo,
+        }),
       },
     });
     await resyncItemDims(tx, itemId);
   }
   for (let k = 0; k < input.add.length; k++) {
     try {
-      await addPackageItem(tx, packageId, input.add[k]);
+      await addPackageItem(tx, packageId, { ...input.add[k], ...fromBox, routeNumber: null });
     } catch (e) {
       // On the added row it is about (after the kept ones, as the list runs).
       if (e instanceof PackageError && e.itemIndex == null) throw new PackageError(e.code, e.message, e.status, input.items.length + k);

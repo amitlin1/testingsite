@@ -8,7 +8,7 @@
 -- against the application database. It is NOT idempotent — run it once, on an
 -- empty database.
 --
--- Migrations included (26):
+-- Migrations included (32):
 --   0_init
 --   20260217140614_add_poc_and_stokekeeper
 --   20260218000000_dashboard_optimization
@@ -35,6 +35,12 @@
 --   20261006120000_package_contents_drop_manufacturer_sku
 --   20261013120000_route_station_fields
 --   20261014120000_route_fields_apply_modes
+--   20261019120000_shipment_items_certificate_details
+--   20261019130000_shipment_items_certificate_row
+--   20261020120000_item_reports
+--   20261020140000_photo_type_xray
+--   20261020150000_package_items_box_details
+--   20261021120000_reference_items_parent
 -- ===========================================================================
 
 
@@ -3063,6 +3069,242 @@ ALTER TABLE "route_field_versions" ADD CONSTRAINT "route_field_versions_apply_ch
     CHECK ("apply_mode" IN ('new_only', 'not_started', 'not_reached', 'all'));
 
 
+-- ---------------------------------------------------------------------------
+-- migration: 20261019120000_shipment_items_certificate_details
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- shipment_items: the certificate row's model, manufacturer and manufacturer
+-- number, next to the makat it already keeps.
+--
+-- WHY: a box is minted from its shipment line (lib/packages/boxes.ts) and its
+-- items take their details from the box at intake, so the opening station no
+-- longer types them. The line kept only the makat; the rest of the row
+-- scanned from the certificate was dropped on save, so a box had no model or
+-- manufacturer to pass on.
+--
+-- Additive only: three nullable columns, no data moves. The previous image
+-- keeps working after it (it never reads them), so this runs any time before
+-- the new image. No metrics_schema_version bump: the ledger does not read
+-- shipment lines.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database.
+-- ============================================================================
+
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "model" TEXT;
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "manufacturer_name" TEXT;
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "manufacturer_no" TEXT;
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261019130000_shipment_items_certificate_row
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- shipment_items: the rest of the certificate row a line was scanned from.
+--
+-- WHY: a line scanned from the certificate's equipment table kept only the
+-- makat, model, manufacturer and manufacturer number
+-- (20261019120000_shipment_items_certificate_details). The row has more:
+--   rowNum|manufacturerNo|manufacturerName|version|idfMakat|serialNum|batchSize|qtyToTest|orderNum
+-- and all of it is kept now (src/app/lib/itemQrParser.ts):
+--   cert_row_no     the row's number on the certificate (מס"ד)
+--   serial_no       the row's serial — a row with one is a single unit
+--   batch_size      גודל אצווה, as printed
+--   qty_to_test     how many of the row come to be tested
+--   purchase_order  the order number
+--   cert_row_raw    the row exactly as in the barcode, whatever it holds
+-- A line typed by hand leaves them NULL.
+--
+-- Additive only: six nullable columns, no data moves. The previous image keeps
+-- working after it (it never reads them), so this runs any time before the
+-- new image. No metrics_schema_version bump: the ledger does not read
+-- shipment lines.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database.
+-- ============================================================================
+
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "cert_row_no" TEXT;
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "serial_no" TEXT;
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "batch_size" TEXT;
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "qty_to_test" INTEGER;
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "purchase_order" TEXT;
+ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "cert_row_raw" TEXT;
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261020120000_item_reports
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- Item reports (docs/ITEM_REPORTS.md): a PDF report per item, built from a
+-- per-route template with the results of every station the item passed.
+--
+--   report_templates  one Puck document per route (testing_routes)
+--   item_reports      the item's FINAL report: the frozen PDF in MinIO and
+--                     the signature it carries. Valid only while
+--                     item_routes.finished_at still equals route_finished_at,
+--                     so reopening an item needs no cleanup here.
+--
+-- Additive only: two new tables, nothing existing changes. The previous image
+-- never reads them, so this runs any time before the new image. No
+-- metrics_schema_version bump: the ledger does not read them.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS "report_templates" (
+    "id"              SERIAL       NOT NULL,
+    "test_route_id"   INTEGER      NOT NULL,
+    "template"        JSONB        NOT NULL,
+    "updated_at"      TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_by"      VARCHAR(255),
+    "updated_by_name" TEXT,
+    CONSTRAINT "report_templates_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "report_templates_test_route_id_key" ON "report_templates"("test_route_id");
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_report_templates_route') THEN
+        ALTER TABLE "report_templates"
+            ADD CONSTRAINT "fk_report_templates_route"
+            FOREIGN KEY ("test_route_id") REFERENCES "testing_routes"("test_route_id") ON DELETE CASCADE ON UPDATE NO ACTION;
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "item_reports" (
+    "item_id"            BIGINT        NOT NULL,
+    "storage_key"        VARCHAR(1024),
+    "size_bytes"         BIGINT        NOT NULL DEFAULT 0,
+    "version"            INTEGER       NOT NULL DEFAULT 0,
+    "generated_at"       TIMESTAMPTZ(6),
+    "route_finished_at"  TIMESTAMP(6),
+    "signature_key"      VARCHAR(1024),
+    "signed_by"          VARCHAR(255),
+    "signed_by_name"     TEXT,
+    "signed_by_number"   VARCHAR(64),
+    "signed_at"          TIMESTAMPTZ(6),
+    "signed_finished_at" TIMESTAMP(6),
+    CONSTRAINT "item_reports_pkey" PRIMARY KEY ("item_id")
+);
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261020140000_photo_type_xray
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- photo_types: the 'assembly' photo type back on, named "צילום שיקוף".
+--
+-- WHY: the assembly station it was added for (20260719120000) is gone, and the
+-- type was switched off by hand in the database (no screen does that), so the
+-- reference-items screen stopped offering it. It returns for X-ray photos,
+-- under a new name. The code stays 'assembly': it is the stable key that
+-- captures and the station registry (src/app/testing/tests-popups/mainPopUp.ts)
+-- address it by.
+--
+-- Data only: one row, no schema change. No metrics_schema_version bump: the
+-- ledger does not read photo types.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database. A database without the row gets it.
+-- ============================================================================
+
+INSERT INTO "photo_types" ("code", "photo_type_desc", "sort_order", "is_active")
+VALUES ('assembly', 'צילום שיקוף', 4, true)
+ON CONFLICT ("code") DO UPDATE
+    SET "photo_type_desc" = EXCLUDED."photo_type_desc",
+        "is_active"       = true;
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261020150000_package_items_box_details
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- items: a box's items still at the opening, with no serial yet, take the
+-- box's details (its shipment line's certificate row).
+--
+-- WHY: intake used to give an item its template line's makat / model /
+-- manufacturer / manufacturer number when the line had any, and the box's only
+-- when it had none. Items now always take the box's (lib/packages/boxes.ts
+-- intakeBox); the template names types, quantities and routes only. Boxes
+-- taken in before that still carry the template's details on items the
+-- opening has not recorded yet — this moves them to the box's.
+--
+-- Only items whose contents are not recorded yet: no serial (the opening
+-- records serials and details together, PUT /api/packages/[id]/contents), in a
+-- box still at its opening step (route step 1, not finished). A box without
+-- any details of its own leaves its items as they are.
+--
+-- Data only, no schema change. No metrics_schema_version bump: the ledger
+-- does not read item details.
+--
+-- Idempotent: a second run finds nothing left to move.
+-- ============================================================================
+
+UPDATE "items" AS i
+   SET "makat"             = b."makat",
+       "model"             = b."model",
+       "manufacturer_name" = b."manufacturer_name",
+       "manufacturer_no"   = b."manufacturer_no"
+  FROM "items" AS b
+  JOIN "item_routes" AS r ON r."item_id" = b."item_id"
+ WHERE i."package_id" = b."item_id"
+   AND b."package_id" IS NULL
+   AND r."current_route_step" = 1
+   AND r."is_finished" = false
+   AND NULLIF(TRIM(COALESCE(i."serial_no", '')), '') IS NULL
+   AND COALESCE(NULLIF(TRIM(b."makat"), ''), NULLIF(TRIM(b."model"), ''),
+                NULLIF(TRIM(b."manufacturer_name"), ''), NULLIF(TRIM(b."manufacturer_no"), '')) IS NOT NULL
+   AND (i."makat", i."model", i."manufacturer_name", i."manufacturer_no")
+       IS DISTINCT FROM (b."makat", b."model", b."manufacturer_name", b."manufacturer_no");
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261021120000_reference_items_parent
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- reference_items: a package reference holds a reference item for each line
+-- of its package type's contents.
+--
+-- WHY: a reference item of a package type described only the box. The
+-- opening station now learns from the box label what should be inside it:
+-- each content line gets its own reference item (SKU, weight, images), made
+-- inside the package reference and owned by it — an "מחשב" in one package is
+-- not the "מחשב" in another, so they are not shared with the regular screen.
+--
+-- parent_reference_id: NULL on a regular reference item and on a package
+-- reference; set on a member, pointing at its package reference. Deleting the
+-- package reference deletes its members (the app removes their images from
+-- the RU bucket first; the cascade only drops rows). One member per content
+-- line: unique on (parent_reference_id, item_type_id) — NULLs are distinct,
+-- so regular items are not constrained by it.
+--
+-- Additive only: one nullable column, no data moves. Existing reference items
+-- of package types become package references without members, and the opening
+-- behaves as before for them. The previous image keeps working after it (it
+-- never reads the column), so this runs any time before the new image. No
+-- metrics_schema_version bump: the ledger does not read reference items.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database.
+-- ============================================================================
+
+ALTER TABLE "reference_items" ADD COLUMN IF NOT EXISTS "parent_reference_id" INTEGER;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_reference_items_parent') THEN
+        ALTER TABLE "reference_items"
+            ADD CONSTRAINT "fk_reference_items_parent"
+            FOREIGN KEY ("parent_reference_id") REFERENCES "reference_items"("reference_item_id") ON DELETE CASCADE ON UPDATE NO ACTION;
+    END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS "reference_items_parent_type_uq" ON "reference_items"("parent_reference_id", "item_type_id");
+
+
 -- ===========================================================================
 -- Prisma migration bookkeeping
 -- ===========================================================================
@@ -3186,3 +3428,27 @@ INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
 SELECT gen_random_uuid()::text, '2abaa84a3a0b070c04bba3b6fdd44c3cae74326842febe067eabfceb5857c636', now(), '20261014120000_route_fields_apply_modes', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261014120000_route_fields_apply_modes');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, 'c6d71df1ded9509f560e8b0e0853c51088cc4f8660cd4c8c73c2c791a1b9b809', now(), '20261019120000_shipment_items_certificate_details', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261019120000_shipment_items_certificate_details');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '1686dae337431ea4fde4216f61ae38b74533ebb23fbe9c86ccada562de1ccc2c', now(), '20261019130000_shipment_items_certificate_row', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261019130000_shipment_items_certificate_row');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, 'fac9d2fe74de415d5d2cac90e8fc21e441d3203152b240df4343f399cdcbd4ea', now(), '20261020120000_item_reports', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261020120000_item_reports');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '15c9b8af45c2cb8f25368c5c087a050da2fcaa19494ffa9e13cdc1ad2ff2c501', now(), '20261020140000_photo_type_xray', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261020140000_photo_type_xray');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '601151f9e6ba8b2252f1a3719867b36868dedfac89162c36c5a3c7aedb0f3add', now(), '20261020150000_package_items_box_details', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261020150000_package_items_box_details');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, 'e32c207ab4fb9a751227e79f7e88bf63c778d343416a408c1c72df95ca9586d2', now(), '20261021120000_reference_items_parent', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261021120000_reference_items_parent');

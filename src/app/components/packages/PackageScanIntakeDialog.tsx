@@ -50,7 +50,7 @@ export default function PackageScanIntakeDialog({
         : `"${value}" אינו ברקוד של מדבקת מארז.`);
       return;
     }
-    if (!value.split("-")[0].endsWith("00")) { fail("זו מדבקה של פריט בתוך מארז — סרוק את מדבקת הקופסה (המזהה מסתיים ב-00)."); return; }
+    if (!value.split("-")[0].endsWith("00")) { fail("זו מדבקה של פריט בתוך מארז — סרוק את מדבקת המארז (המזהה מסתיים ב-00)."); return; }
     setBusy(true);
     try {
       const res = await apiFetch("/api/packages/intake", {

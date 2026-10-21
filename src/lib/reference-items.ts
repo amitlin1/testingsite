@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/app/lib/prisma';
 import { REFERENCE_BUCKET, removeObjects } from '@/lib/storage';
 import {
@@ -30,7 +31,15 @@ import { issueTicket, newUploadId, verifyUploaded } from '@/lib/directUpload/ser
  *   2. browser POSTs each file to MinIO
  *   3. POST/PUT reference-items       → verifyReferenceImageUploads() checks every
  *                                       key BEFORE anything is created or deleted,
- *                                       attachReferenceImages() then makes the rows
+ *                                       createReferenceImageRows() makes the rows
+ *                                       (inside the save's transaction) and
+ *                                       registerReferenceImages() activates the
+ *                                       registry rows once it has committed
+ *
+ * A reference item of a package type is a PACKAGE REFERENCE: besides the box
+ * it holds one member reference item per content line (parent_reference_id),
+ * made and edited only inside it (lib/reference-items-save.ts). Members are
+ * never listed or looked up on their own.
  */
 
 export { REFERENCE_PREFIX };
@@ -65,14 +74,31 @@ type ReferenceItemRow = {
   name: string | null;
   notes: string | null;
   primary_image_id: number | null;
+  parent_reference_id: number | null;
   created_at: Date;
   updated_at: Date;
   item_types?: { item_type_desc: string } | null;
   images: ImageRow[];
+  members?: ReferenceItemRow[];
 };
 
-/** Shape the DB row into the JSON the page consumes (with image URLs + cover). */
-export function serializeReferenceItem(it: ReferenceItemRow) {
+export type SerializedReferenceItem = ReturnType<typeof serializeOne> & {
+  /** A package reference's members (empty for any other item). */
+  members: SerializedReferenceItem[];
+};
+
+/** Shape the DB row into the JSON the page consumes (with image URLs + cover),
+ *  a package reference's members included. */
+export function serializeReferenceItem(it: ReferenceItemRow): SerializedReferenceItem {
+  return {
+    ...serializeOne(it),
+    members: [...(it.members ?? [])]
+      .sort((a, b) => a.reference_item_id - b.reference_item_id)
+      .map(serializeReferenceItem),
+  };
+}
+
+function serializeOne(it: ReferenceItemRow) {
   const images = [...it.images]
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((img) => ({
@@ -104,6 +130,7 @@ export function serializeReferenceItem(it: ReferenceItemRow) {
     name: it.name,
     notes: it.notes,
     primary_image_id: it.primary_image_id,
+    parent_reference_id: it.parent_reference_id,
     images,
     images_by_type: imagesByType,
     cover_url: cover?.url ?? null,
@@ -118,6 +145,26 @@ export const referenceItemInclude = {
   item_types: { select: { item_type_desc: true } },
   images: { include: { photo_types: { select: { code: true } } } },
 } as const;
+
+/** The same, with a package reference's members (and their images). */
+export const referenceItemWithMembersInclude = {
+  ...referenceItemInclude,
+  members: { include: referenceItemInclude },
+} as const;
+
+/**
+ * A reference weight is grams: a plain positive number ("500", "12.5"). The
+ * stations read it with Number(), so a value like "0.5kg" never compared —
+ * every weighing against it failed. Empty is allowed (no reference weight).
+ */
+export function parseReferenceWeight(raw: string): { ok: true; value: string | null } | { ok: false; error: string } {
+  const s = raw.trim();
+  if (s === '') return { ok: true, value: null };
+  if (!/^\d+(\.\d+)?$/.test(s) || Number(s) <= 0) {
+    return { ok: false, error: 'המשקל הוא מספר בגרמים, למשל 500.' };
+  }
+  return { ok: true, value: String(Number(s)) };
+}
 
 /**
  * Resolve photo-type codes (the stable strings screens speak, e.g. "package")
@@ -285,19 +332,20 @@ export async function verifyReferenceImageUploads(
 
 /**
  * Insert `reference_item_images` rows for verified uploads (appended after
- * `startSort`) and activate their registry rows. Returns the created image rows.
+ * `startSort`), through `db` — the save's transaction. Returns the created
+ * rows in upload order. The registry rows are activated after the commit
+ * (registerReferenceImages), so a rolled-back save leaves them pending.
  */
-export async function attachReferenceImages(
+export async function createReferenceImageRows(
+  db: Prisma.TransactionClient,
   referenceItemId: number,
   images: VerifiedReferenceImage[],
   startSort = 0,
 ): Promise<{ reference_item_image_id: number }[]> {
   const created: { reference_item_image_id: number }[] = [];
-  let i = 0;
-
-  for (const img of images) {
-    const sortOrder = startSort + i;
-    const row = await prisma.reference_item_images.create({
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    created.push(await db.reference_item_images.create({
       data: {
         reference_item_id: referenceItemId,
         bucket: REFERENCE_BUCKET,
@@ -305,12 +353,18 @@ export async function attachReferenceImages(
         file_name: img.fileName.slice(0, 255),
         content_type: img.contentType,
         size_bytes: BigInt(img.size),
-        sort_order: sortOrder,
+        sort_order: startSort + i,
         photo_type_id: img.photoTypeId,
       },
       select: { reference_item_image_id: true },
-    });
+    }));
+  }
+  return created;
+}
 
+/** Activate the registry rows of images whose rows a save has committed. */
+export async function registerReferenceImages(referenceItemId: number, images: VerifiedReferenceImage[]) {
+  for (const img of images) {
     await registerFileObject({
       objectKey: img.objectKey,
       fileName: img.fileName,
@@ -323,26 +377,17 @@ export async function attachReferenceImages(
       metadata: { photoType: img.photoType, etag: img.etag, uploadedVia: 'direct' },
       bucket: REFERENCE_BUCKET,
     });
-
-    created.push(row);
-    i++;
   }
-
-  return created;
 }
 
 /**
- * Delete image rows + their bytes in the RU bucket + soft-delete the registry
- * rows. Best-effort on the object store so a MinIO hiccup can't strand the DB.
+ * Remove the bytes of images whose rows are already gone from the RU bucket,
+ * and soft-delete their registry rows. Best-effort on the object store so a
+ * MinIO hiccup can't strand the DB.
  */
-export async function deleteReferenceImages(images: { reference_item_image_id: number; object_key: string }[]) {
+export async function removeReferenceImageObjects(images: { object_key: string }[]) {
   if (images.length === 0) return;
   const keys = images.map((img) => img.object_key);
-
-  await prisma.reference_item_images.deleteMany({
-    where: { reference_item_image_id: { in: images.map((i) => i.reference_item_image_id) } },
-  });
-
   try {
     await removeObjects(keys, REFERENCE_BUCKET);
   } catch (err) {
