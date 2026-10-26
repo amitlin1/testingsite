@@ -2,7 +2,9 @@ import * as React from "react";
 import PopUpTestDialog from "../../components/PopUpTestDialog";
 import PhotoStation from "./PhotoStation";
 import VerdictStation from "./VerdictStation";
+import TemplateStation from "./TemplateStation";
 import { StationTestDialogProps } from "../../../types";
+import { CODE_POPUPS } from "@/app/lib/popup-templates/codePopups";
 
 /**
  * test_station_type_id values → their dedicated wizard. The ids match the real
@@ -10,6 +12,11 @@ import { StationTestDialogProps } from "../../../types";
  * every title from the station type's name in the DB, so no station name lives
  * in the code. TODO: switch to a stable key (e.g. a wizard_key column) so an id
  * edit in Settings can't unmap a wizard.
+ *
+ * A station type with a popup template (docs/popup-templates/PLAN.md §3.6) opens
+ * TemplateStation instead — `hasTemplate` from /api/testing/stations — and this
+ * registry is its fallback when the template is gone. An item in research keeps
+ * the registry's popup (PLAN §7, decision 3): the page passes hasTemplate false.
  *
  * Package-level station types (test_stations_type.package_level — opening /
  * closing) are NOT registered here: the testing page opens the package
@@ -24,16 +31,30 @@ const photoWizard = (photoTypeId: number) => {
 };
 
 // id (test_station_type_id) → the dialog opened on "התחל בדיקה"/"סיום ודיווח" for
-// that station type. Anything not registered falls back to the plain report dialog.
-const REGISTRY: Record<number, React.ComponentType<StationTestDialogProps>> = {
-  2: photoWizard(3),
-  3: VerdictStation,
-  4: VerdictStation,
-  5: photoWizard(4),
-};
+// that station type (lib/popup-templates/codePopups.ts — the seed reads the same list).
+// Anything not registered falls back to the plain report dialog.
+const REGISTRY: Record<number, React.ComponentType<StationTestDialogProps>> = Object.fromEntries(
+  Object.entries(CODE_POPUPS).map(([id, p]) => [Number(id), p.kind === "photo" ? photoWizard(p.photoTypeId) : VerdictStation]),
+);
+
+/** The popup the code gives a station type (no template). */
+const codeDialog = (typeId: number) => REGISTRY[typeId] ?? PopUpTestDialog;
+
+/** One template dialog per station type, made once: a new component type per render would
+ *  remount the popup and lose what the worker filled. */
+const templateDialogs = new Map<number, React.ComponentType<StationTestDialogProps>>();
+function templateDialog(typeId: number): React.ComponentType<StationTestDialogProps> {
+  const made = templateDialogs.get(typeId);
+  if (made) return made;
+  const fallback = codeDialog(typeId);
+  const TemplateDialog = (props: StationTestDialogProps) => React.createElement(TemplateStation, { ...props, fallback });
+  TemplateDialog.displayName = `TemplateDialog(${typeId})`;
+  templateDialogs.set(typeId, TemplateDialog);
+  return TemplateDialog;
+}
 
 /** True if a station type has a dedicated wizard (so "התחל בדיקה" opens it instead of starting a plain test). */
-export const hasStartTestDialog = (typeId: number) => typeId in REGISTRY;
+export const hasStartTestDialog = (typeId: number, hasTemplate = false) => hasTemplate || typeId in REGISTRY;
 
-export const getStartTestDialog = (typeId: number) =>
-  REGISTRY[typeId] ?? PopUpTestDialog;
+export const getStartTestDialog = (typeId: number, hasTemplate = false) =>
+  hasTemplate ? templateDialog(typeId) : codeDialog(typeId);

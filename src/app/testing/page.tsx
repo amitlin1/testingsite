@@ -1207,7 +1207,7 @@ function TestingPageView() {
   // The queue on screen belongs to another (or no) station yet: skeletons and
   // "—" until the selected station's queue answers.
   const itemsStale = selectedStation != null && itemsFor !== selectedStation.test_station_id;
-  const hasWizard = selectedStationType != null && hasStartTestDialog(selectedStationType.id);
+  const hasWizard = selectedStationType != null && hasStartTestDialog(selectedStationType.id, selectedStationType.popupTemplate != null);
 
   return (
     <Box
@@ -1448,7 +1448,9 @@ function TestingPageView() {
   // station type's flag (PLAN §4); everything else resolves from the registry.
   const StartDialog = packageLevel && selectedItem.is_package && selectedItem.package
     ? (packageKindOf(selectedItem) === "open" ? PackageOpenWizard : PackageCloseWizard)
-    : getStartTestDialog(selectedStationType.id);
+    // A type with a popup template opens it — except for an item in research, which keeps the
+    // code's popup (docs/popup-templates/PLAN.md §7, decision 3).
+    : getStartTestDialog(selectedStationType.id, selectedStationType.popupTemplate != null && selectedItem.current_status !== 5);
   return (
     <StartDialog
       open={dialogOpen}

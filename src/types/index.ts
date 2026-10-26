@@ -186,6 +186,8 @@ export interface TestStationType {
   name: string;
   /** Opening / closing station type: the queue holds packages, not items. */
   packageLevel?: boolean;
+  /** Its popup template (docs/popup-templates/PLAN.md §3.6); null = the code's popup. */
+  popupTemplate?: { base: string; version: number } | null;
 }
 
 /** Lightweight station used by the testing dock's all-stations picker (from /api/stations). */
