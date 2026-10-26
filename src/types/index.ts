@@ -169,6 +169,19 @@ export type TestResultData = {
   SubmitID?: string;
 };
 
+/** Where an item goes after a result — what POST /api/testing/results answers: the station picked
+ *  for its next route step, or the end of its route. Neither (a network-less replay, a research
+ *  send) = unknown here. */
+export type NextStationResult = {
+  isLastStation?: boolean;
+  nextStation?: {
+    testStationId: number;
+    testStationDesc: string;
+    stationTypeId: number;
+    routeStep: number;
+  };
+};
+
 export interface StationTestDialogProps {
   open: boolean;
   onClose: () => void;
@@ -178,8 +191,10 @@ export interface StationTestDialogProps {
   stationTypeName?: string;
   workerId: number | null;
   workerName: string;
-  /** Called with the test result — the page persists it and drives the follow-up dialogs. */
-  onSubmit: (data: TestResultData) => Promise<void>;
+  /** Called with the test result — the page persists it and drives the follow-up dialogs. It
+   *  resolves with the server's answer, so a wizard with its own done step (a package's) can say
+   *  where the row goes next. */
+  onSubmit: (data: TestResultData) => Promise<NextStationResult | void>;
 }
 export interface TestStationType {
   id: number;
