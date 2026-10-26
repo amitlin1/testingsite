@@ -109,7 +109,7 @@ details: {
   station: "type-N",
   template: { v: 3 },                      // הגרסה שהעובד מילא
   sku, hasRU,                              // כמו היום
-  components: { [componentId]: FieldValue },       // סריקה / צילום / שקילה, כותרת בזמן השמירה; ריקים לא נשמרים
+  components: [{ id, ...FieldValue }],             // סריקה / צילום / שקילה לפי סדר החלון, כותרת בזמן השמירה; ריקים לא נשמרים
   schema, fields,                          // שדות המסלול, כמו היום
   verdict: { ok, note, suggested, ... },   // כמו היום
 }

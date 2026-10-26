@@ -233,7 +233,9 @@ export default function ItemHistoryPage() {
           apiFetch(`/api/items/${encodeURIComponent(itemId)}/files`),
           apiFetch("/api/workers-directory"),
           apiFetch("/api/settings/test-stations-type"),
-          apiFetch("/api/settings/photo-types"),
+          // Inactive groups too: a photo taken under a group (or a template's photo component)
+          // that was retired since still shows its name.
+          apiFetch("/api/settings/photo-types?all=1"),
         ]);
 
         if (!itemRes.ok) throw new Error("שגיאה בטעינת הפריט");

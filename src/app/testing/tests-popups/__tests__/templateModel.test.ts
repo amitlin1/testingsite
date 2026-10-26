@@ -69,10 +69,10 @@ test("details keep today's keys: sku, hasRU, verdict — and add the components"
     template: { v: 4 },
     sku: "MK-1",
     hasRU: true,
-    components: {
-      [cfg.steps[0].components[0].id]: { t: "scan", label: "מק״ט יצרן", value: "MK-1" },
-      [photo.id]: { t: "photo", label: "תיעוד בתמונות", photo_type: "grp3", photos: ["k1"] },
-    },
+    components: [
+      { id: cfg.steps[0].components[0].id, t: "scan", label: "מק״ט יצרן", value: "MK-1" },
+      { id: photo.id, t: "photo", label: "תיעוד בתמונות", photo_type: "grp3", photos: ["k1"] },
+    ],
     verdict: { ok: "pass", note: "הערה" },
   });
 
@@ -83,6 +83,5 @@ test("details keep today's keys: sku, hasRU, verdict — and add the components"
   sv.weights[weightComp.id] = "420";
   const dv = buildTemplateDetails(v, CTX, sv);
   assert.equal(dv.sku, "", "a template with a SKU scan always saves the key");
-  assert.deepEqual((dv.components as Record<string, unknown>)[weightComp.id], { t: "number", label: "משקל", value: 420, unit: "גר׳", in_range: true });
-  assert.equal(Object.keys(dv.components as object).length, 1, "a blank SKU is left out of the components");
+  assert.deepEqual(dv.components, [{ id: weightComp.id, t: "number", label: "משקל", value: 420, unit: "גר׳", in_range: true }], "a blank SKU is left out");
 });

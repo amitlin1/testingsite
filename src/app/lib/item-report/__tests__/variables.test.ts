@@ -84,6 +84,27 @@ test("buildStepResults: legacy popups' photos and weight become fields", () => {
   assert.deepEqual(res[0]!.fields[1]!.photos, ["items/1/p.jpg"]);
 });
 
+test("buildStepResults: a popup template's components print before the route's fields, in popup order", () => {
+  const details = {
+    sku: "MK-1",
+    components: [
+      { id: "k_sku00001", t: "scan", label: "מק״ט יצרן", value: "MK-1" },
+      { id: "k_photo001", t: "photo", label: "תיעוד בתמונות", photo_type: "k_photo001", photos: ["items/1/a.jpg", "items/1/b.jpg"] },
+      { id: "k_weight01", t: "number", label: "משקל", value: 410, unit: "גר׳", in_range: false },
+    ],
+    fields: { f_v0000001: { t: "pass_fail", label: "בידוד", ok: "pass" } },
+    verdict: { ok: "pass", note: "" },
+  };
+  const res = buildStepResults([row({ route_step: 2, details })], ROUTE, fmt, undefined, new Map([["s_bbbbbbbb", ["f_v0000001"]]]));
+  assert.deepEqual(res[0]!.fields.map((f) => [f.id, f.value, f.tone]), [
+    ["k_sku00001", "MK-1", null],
+    ["k_photo001", "2 תמונות", null],
+    ["k_weight01", "410 גר׳", "fail"],
+    ["f_v0000001", "תקין", "pass"],
+  ]);
+  assert.equal(res[0]!.fields.filter((f) => f.photos).length, 1, "the template's photos are not repeated as legacy photos");
+});
+
 test("buildStepResults: an item opened against its package reference shows where its reference came from", () => {
   const at = (details: Record<string, unknown>) =>
     buildStepResults([row({ details })], ROUTE, fmt)[0]!.fields.find((f) => f.id === "legacy_reference");

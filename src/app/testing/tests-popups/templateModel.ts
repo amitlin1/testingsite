@@ -114,31 +114,36 @@ export function finishBlocker(cfg: PopupTemplateConfig, s: TemplateRunState, sta
   return null;
 }
 
+/** One component's answer as saved: its id and a FieldValue (the route fields' format, label at
+ *  save time). A list, not an object keyed by id: details is jsonb, which keeps an array's order
+ *  but not an object's keys', and the report prints the components in popup order. */
+export type SavedComponent = { id: string } & FieldValue;
+
 /**
  * The result's details (PLAN §3.5). `sku` / `hasRU` keep today's keys (the next station starts
  * from details.sku), `verdict` today's { ok, note }; every component's answer goes into
- * `components` as a FieldValue — the route fields' format, label at save time — so the item's
- * report prints it like a field. Blank answers are left out. The route's fields block is merged
- * on top by the popup (its verdict carries ok / note too).
+ * `components` (SavedComponent[], popup order), so the item's report prints it like a field.
+ * Blank answers are left out. The route's fields block is merged on top by the popup (its verdict
+ * carries ok / note too).
  */
 export function buildTemplateDetails(
   cfg: PopupTemplateConfig,
   ctx: { stationTypeId: number; version: number; station: string },
   s: TemplateRunState,
 ): Record<string, unknown> {
-  const components: Record<string, FieldValue> = {};
+  const components: SavedComponent[] = [];
   let hasSku = false;
   for (const c of cfg.steps.flatMap((st) => st.components)) {
     if (c.kind === "sku_scan") {
       hasSku = true;
-      if (s.sku.trim()) components[c.id] = { t: "scan", label: TEMPLATE_RUN_TEXT.skuLabel, value: s.sku.trim() };
+      if (s.sku.trim()) components.push({ id: c.id, t: "scan", label: TEMPLATE_RUN_TEXT.skuLabel, value: s.sku.trim() });
     } else if (c.kind === "photo") {
       const keys = stored(s.photos[c.id]).map((x) => x.objectKey as string);
-      if (keys.length > 0) components[c.id] = photoValue(c, keys, ctx.station);
+      if (keys.length > 0) components.push({ id: c.id, ...photoValue(c, keys, ctx.station) });
     } else if (c.kind === "weight") {
       const w = weightOutcome(c, s.refWeight, s.weights[c.id]);
       if (w.measured != null) {
-        components[c.id] = { t: "number", label: TEMPLATE_RUN_TEXT.weightLabel, value: w.measured, unit: TEMPLATE_RUN_TEXT.gramUnit, in_range: w.pass };
+        components.push({ id: c.id, t: "number", label: TEMPLATE_RUN_TEXT.weightLabel, value: w.measured, unit: TEMPLATE_RUN_TEXT.gramUnit, in_range: w.pass });
       }
     }
   }
