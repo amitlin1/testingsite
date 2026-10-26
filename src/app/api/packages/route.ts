@@ -11,9 +11,14 @@ export const runtime = "nodejs";
 const STATUS_KEYS: PackageStatusKey[] = ["pending", "queue", "test", "waitItems", "readyClose", "done"];
 
 /**
- * GET /api/packages?shipment&customer&type&status&q — the packages list
- * (design/Packages.dc.html): every box with its items' states, its own
- * status and, when it waits before closing, the items still out.
+ * GET /api/packages?shipment&customer&type&status&q&includeSent — the packages
+ * list: every box with its items' states, its own status and, when it waits
+ * before closing, the items still out.
+ *
+ * Boxes whose shipment already went out (shipments.is_sent) are left out —
+ * they are history, reachable from the package page. They come back when the
+ * list is narrowed to one shipment (the shipments screen links a sent
+ * shipment's boxes here) or with includeSent=1 (a scan of a box that left).
  */
 export async function GET(req: Request) {
   try {
@@ -31,6 +36,7 @@ export async function GET(req: Request) {
       packageTypeId: int("type"),
       status: status && (STATUS_KEYS as string[]).includes(status) ? (status as PackageStatusKey) : null,
       q: sp.get("q"),
+      excludeSent: int("shipment") == null && sp.get("includeSent") !== "1",
     });
     return NextResponse.json(rows);
   } catch (error) {

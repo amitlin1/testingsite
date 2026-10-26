@@ -52,6 +52,9 @@ SELECT
     TRIM(it.item_type_desc) AS "item_type_desc",
     it.is_package AS "is_package",
     TRIM(c.name) AS "customer_name",
+    i.customer_id,
+    i.shipment_id,
+    sh.shipment_code,
     t1.route_number,
     i.package_id,
     i.package_seq,
@@ -86,6 +89,8 @@ INNER JOIN items i
     ON i.item_id = t1.item_id
 LEFT JOIN customers c
     ON c.id = i.customer_id
+LEFT JOIN shipments sh
+    ON sh.id = i.shipment_id
 JOIN testing_routes t2
     ON t1.item_type_id = t2.item_type_id
    AND t1.route_number = t2.route_number

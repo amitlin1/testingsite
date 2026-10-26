@@ -1,7 +1,8 @@
 "use client";
 import React, { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Snackbar, Alert, ConfirmDialog, Button, Chip, TextField } from "@/components/ui";
-import { Search, Plus, X, Pencil, Trash2, Send, History, FileText, Barcode } from "lucide-react";
+import { Search, Plus, X, Pencil, Trash2, Send, History, FileText, Barcode, Boxes } from "lucide-react";
 import DataTable, { StatusPill, RowActions, IconAction, ProgressCell, type Column } from "@/components/DataTable";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
@@ -56,6 +57,7 @@ const KPI_ORDER: KpiKey[] = ["total", "pending", "waitingStart", "inProcess", "r
 const chipDate = (value: string) => formatDate(value);
 
 export default function ShipmentTable() {
+    const router = useRouter();
     const [rows, setRows] = useState<Shipment[]>([]);
     const [customers, setCustomers] = useState<{ id: number; customer_code: string }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -324,10 +326,14 @@ export default function ShipmentTable() {
             },
         },
         {
-            // Six 32px actions and their gaps — the artboard's actions column.
-            key: "actions", header: "פעולות", align: "center", width: 212,
+            // Seven 32px actions and their gaps.
+            key: "actions", header: "פעולות", align: "center", width: 250,
             cell: (r) => (
                 <RowActions>
+                    {/* Shortcut to the packages screen narrowed to this shipment. A sent
+                        shipment's boxes are not on that screen otherwise; through this
+                        link they show for their history. */}
+                    <IconAction title={r.is_sent ? "מארזי המשלוח (יצא — לצפייה בהיסטוריה)" : "מארזי המשלוח"} onClick={() => router.push(`/packages?shipment=${r.id}`)}><Boxes size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title={r.is_sent ? "המשלוח נשלח — לא ניתן לערוך" : "עריכת משלוח"} disabled={!!r.is_sent} onClick={() => handleRowClick(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title={deleteBlockedReason(r) ?? "מחיקת משלוח"} danger disabled={deleteBlockedReason(r) != null} onClick={() => setDeleteTarget(r)}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title={r.is_sent ? "המשלוח כבר נשלח" : "החזר משלוח"} disabled={!!r.is_sent} onClick={() => { setSelectedShipment(r); setSendOpen(true); }}><Send size={16} strokeWidth={1.75} /></IconAction>

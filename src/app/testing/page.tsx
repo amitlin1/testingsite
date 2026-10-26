@@ -1,6 +1,8 @@
 "use client";
 import * as React from "react";
-import { useSearchParams } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useUrlState, useUrlTextField } from "@/lib/hooks/useUrlState";
+import SearchableCombobox from "../components/common/SearchableCombobox";
 import {
   Typography,
   TextField,
@@ -550,42 +552,124 @@ function SummaryTile({
 }
 
 // --- Main Page Component ---
-function TestingPageView() {
-  // Command-palette deep link: /testing?type=<typeId>&station=<stationId>
-  // and optionally &item=<itemId>, which seeds the queue filter so the station
-  // opens narrowed to the one item the user searched for.
-  // Applied once, after the station-type list arrives (see the effect below).
-  const searchParams = useSearchParams();
-  const linkTypeId = Number(searchParams.get("type")) || null;
-  const linkStationId = Number(searchParams.get("station")) || null;
-  const linkItemId = searchParams.get("item")?.trim() || "";
-  /** Station staged by the deep link, consumed by the stations effect. */
-  const pendingLinkStationRef = React.useRef<number | null>(linkStationId);
-  /**
-   * Item filter staged by the deep link. Selecting a station clears the filter
-   * (see the items effect), and the linked station is selected asynchronously —
-   * so the seed has to survive that one clear, then behave normally.
-   */
-  const pendingLinkItemRef = React.useRef<string>(linkItemId);
-  /** Guards the one-shot type selection so it can't fight the user's later picks. */
-  const linkAppliedRef = React.useRef(false);
+/** Every filter of the screen lives in the URL: a refresh keeps the station
+ *  and the filters, and other screens deep link in (/testing?item=<id> from
+ *  the packages screen, ?station= from the command palette). */
+const URL_DEFAULTS = { station: "", item: "", q: "", customer: "", shipment: "", itype: "" };
 
-  const [stationTypes, setStationTypes] = React.useState<TestStationType[]>([]);
-  const [selectedStationType, setSelectedStationType] = React.useState<TestStationType | null>(null);
-  const [stations, setStations] = React.useState<TestStation[]>([]);
-  const [selectedStation, setSelectedStation] = React.useState<TestStation | null>(null);
-  const [items, setItems] = React.useState<ItemRow[]>([]);
-  const [stationTypesLoading, setStationTypesLoading] = React.useState(false);
-  const [stationsLoading, setStationsLoading] = React.useState(false);
-  const [itemsLoading, setItemsLoading] = React.useState(false);
-  // Which station the `items` on screen belong to (null = none yet). While a
-  // newly picked station's queue is on its way the board shows skeletons and
-  // the counts "—", not the previous station's list; a refresh of the SAME
-  // station keeps its list on screen (ST-7: no flash, no lost scroll).
-  const [itemsFor, setItemsFor] = React.useState<number | null>(null);
+async function getJson<T>(url: string): Promise<T> {
+  const res = await apiFetch(url);
+  if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+type FilterOption = { value: string; label: string };
+
+/** A queue filter: empty = everything (the placeholder says so); × goes back to it. */
+function QueueFilter({ value, onChange, options, allLabel, disabled }: { value: string; onChange: (v: string) => void; options: FilterOption[]; allLabel: string; disabled?: boolean }) {
+  return (
+    <SearchableCombobox<FilterOption>
+      dense
+      width={180}
+      disabled={disabled}
+      options={options}
+      value={options.find((o) => o.value === value) ?? null}
+      onChange={(o) => onChange(o ? o.value : "")}
+      getOptionLabel={(o) => o.label}
+      isOptionEqualToValue={(a, b) => a.value === b.value}
+      placeholder={allLabel}
+      ariaLabel={allLabel}
+    />
+  );
+}
+
+/** Distinct options from the queue on screen, keeping a selected value that left it. */
+function optionsOf(items: ItemRow[], key: (it: ItemRow) => number | null | undefined, label: (it: ItemRow) => string | null | undefined, selected: string): FilterOption[] {
+  const map = new Map<string, string>();
+  for (const it of items) {
+    const k = key(it);
+    if (k == null) continue;
+    if (!map.has(String(k))) map.set(String(k), (label(it) ?? "").trim() || String(k));
+  }
+  if (selected && !map.has(selected)) map.set(selected, `${selected} · לא בתור`);
+  return [...map.entries()].map(([value, l]) => ({ value, label: l })).sort((a, b) => a.label.localeCompare(b.label, "he"));
+}
+
+function TestingPageView() {
+  const queryClient = useQueryClient();
+  const [url, setUrl] = useUrlState(URL_DEFAULTS);
+  const stationId = Number(url.station) || null;
+
+  // Station types and the flat station list (the dock's all-stations search).
+  const stationTypesQ = useQuery({ queryKey: ["testing", "station-types"], queryFn: () => getJson<TestStationType[]>("/api/testing/stations"), staleTime: 5 * 60_000 });
+  const stationTypes = React.useMemo(() => (Array.isArray(stationTypesQ.data) ? stationTypesQ.data : []), [stationTypesQ.data]);
+  const allStationsQ = useQuery({ queryKey: ["stations"], queryFn: () => getJson<StationLite[]>("/api/stations"), staleTime: 5 * 60_000 });
+  const allStations = React.useMemo(() => (Array.isArray(allStationsQ.data) ? allStationsQ.data : []), [allStationsQ.data]);
+
+  // The station is the URL's; its type follows from the station list.
+  const stationLite = stationId != null ? allStations.find((s) => s.id === stationId) ?? null : null;
+  const selectedStation = React.useMemo<TestStation | null>(
+    () => (stationLite ? { test_station_id: stationLite.id, test_station_desc: stationLite.name, test_station_type_id: stationLite.typeId, status: 0, is_research: false } : null),
+    [stationLite],
+  );
+  const selectedStationType = selectedStation ? stationTypes.find((t) => t.id === selectedStation.test_station_type_id) ?? null : null;
+
+  // Package model (docs/packages/PLAN.md §4): opening / closing station types
+  // queue boxes, not items — the grid, the wizards and the empty texts switch
+  // on this flag (design/Testing Screen Packages.dc.html).
+  const packageLevel = !!selectedStationType?.packageLevel;
+
+  // The station's queue. Polled, refreshed on focus and after every action;
+  // a refresh of the same station keeps its list on screen (ST-7), a newly
+  // picked station shows skeletons until its own queue answers.
+  const itemsQ = useQuery({
+    queryKey: ["testing", "items", stationId],
+    enabled: stationId != null,
+    queryFn: () => getJson<ItemRow[]>(`/api/testing/items?stationId=${stationId}`),
+    refetchInterval: 20_000,
+  });
+  const items = React.useMemo(() => (Array.isArray(itemsQ.data) ? itemsQ.data : []), [itemsQ.data]);
+  const itemsLoading = itemsQ.isFetching;
   // A failed queue load is an error with "נסה שוב", never an empty queue (ST-1).
-  const [itemsError, setItemsError] = React.useState<string | null>(null);
-  // Start-test failures go to the page's error toast, not alert() (ST-13).
+  const itemsError = itemsQ.isError && !itemsQ.data ? QUEUE_LOAD_FAILED : null;
+
+  // "Completed today" — item_route_history rows for this station since local midnight.
+  const completedQ = useQuery({
+    queryKey: ["testing", "completed-today", stationId],
+    enabled: stationId != null,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const data = await getJson<{ count?: number }>(`/api/testing/completed-today?stationId=${stationId}&since=${encodeURIComponent(startOfDay.toISOString())}`);
+      return typeof data?.count === "number" ? data.count : 0;
+    },
+  });
+  const completedToday = completedQ.data ?? null;
+
+  // Boxes held before this closing station because items are still out.
+  const blockedQ = useQuery({
+    queryKey: ["testing", "blocked", stationId],
+    enabled: stationId != null && packageLevel,
+    queryFn: () => getJson<PackageView[]>(`/api/testing/blocked-packages?stationId=${stationId}`),
+  });
+  const blockedPackages = packageLevel && Array.isArray(blockedQ.data) ? blockedQ.data : [];
+
+  const handleRefreshItems = React.useCallback(() => {
+    if (stationId == null) return;
+    for (const k of ["items", "completed-today", "blocked"]) queryClient.invalidateQueries({ queryKey: ["testing", k, stationId] });
+  }, [queryClient, stationId]);
+
+  // The search / scan field and the three queue filters.
+  const writeQ = React.useCallback((v: string) => setUrl({ q: v }), [setUrl]);
+  const [filterText, setFilterText] = useUrlTextField(url.q, writeQ);
+  const filterRef = React.useRef<HTMLInputElement>(null);
+  const customerOptions = React.useMemo(() => optionsOf(items, (it) => it.customer_id, (it) => it.customer_name ?? it.customer_code, url.customer), [items, url.customer]);
+  const shipmentOptions = React.useMemo(() => optionsOf(items, (it) => it.shipment_id, (it) => it.shipment_code, url.shipment), [items, url.shipment]);
+  const itemTypeOptions = React.useMemo(() => optionsOf(items, (it) => it.item_type_id, (it) => it.item_type_desc, url.itype), [items, url.itype]);
+  const anyFilter = !!(filterText || url.customer || url.shipment || url.itype);
+  const clearFilters = () => { setFilterText(""); setUrl({ q: "", customer: "", shipment: "", itype: "" }); };
+
   const [startError, setStartError] = React.useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [selectedItem, setSelectedItem] = React.useState<ItemRow | null>(null);
@@ -616,48 +700,12 @@ function TestingPageView() {
     currentLoad: number;
   } | null>(null);
 
-  const [filterMakat, setFilterMakat] = React.useState("");
-
-  // Package model (docs/packages/PLAN.md §4): opening / closing station types
-  // queue boxes, not items — the grid, the wizards and the empty texts switch
-  // on this flag (design/Testing Screen Packages.dc.html).
-  const packageLevel = !!selectedStationType?.packageLevel;
-  // Boxes held before this closing station because items are still out.
-  const [blockedPackages, setBlockedPackages] = React.useState<PackageView[]>([]);
-  const fetchBlockedPackages = React.useCallback(async (stationId: number, isPackageLevel: boolean) => {
-    if (!isPackageLevel) { setBlockedPackages([]); return; }
-    try {
-      const res = await apiFetch(`/api/testing/blocked-packages?stationId=${stationId}`);
-      const data = res.ok ? await res.json() : [];
-      setBlockedPackages(Array.isArray(data) ? data : []);
-    } catch {
-      setBlockedPackages([]);
-    }
-  }, []);
-  React.useEffect(() => {
-    if (!selectedStation) { setBlockedPackages([]); return; }
-    fetchBlockedPackages(selectedStation.test_station_id, packageLevel);
-  }, [selectedStation, packageLevel, fetchBlockedPackages]);
-
-  // Flat list of every station (across all types) for the dock's all-stations
-  // search — picking one sets type + station in a single step.
-  const [allStations, setAllStations] = React.useState<StationLite[]>([]);
-  React.useEffect(() => {
-    let cancelled = false;
-    apiFetch("/api/stations")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => { if (!cancelled) setAllStations(Array.isArray(data) ? data : []); })
-      .catch(() => { if (!cancelled) setAllStations([]); });
-    return () => { cancelled = true; };
-  }, []);
-
   // Page-level "who's working" picker — single source of truth for any action
   // taken from this page (finish test, file upload, replace, edit). Persisted
   // to localStorage so a refresh doesn't lose the choice. Smart-card auth will
   // replace this in the future.
   const WORKER_STORAGE_KEY = "testing-page:active-worker-id";
   const [activeWorkerId, setActiveWorkerId] = React.useState<number | null>(null);
-  const [activeWorkerName, setActiveWorkerName] = React.useState<string>("");
   // Auth: the logged-in user's worker id, from their Keycloak employeeNumber.
   const tokenWorkerId = useTokenWorkerId();
   const { data: authSession } = useSession();
@@ -698,26 +746,17 @@ function TestingPageView() {
     }
   };
   // Resolve the worker_name for downstream consumers (OnlyOffice user.name etc.).
-  React.useEffect(() => {
-    if (activeWorkerId == null) {
-      setActiveWorkerName("");
-      return;
-    }
-    let cancelled = false;
-    apiFetch("/api/workers-directory")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: Array<{ worker_id: number; worker_name: string }>) => {
-        if (cancelled) return;
-        const match = Array.isArray(rows) ? rows.find((w) => w.worker_id === activeWorkerId) : null;
-        setActiveWorkerName(match?.worker_name ?? "");
-      })
-      .catch(() => {
-        if (!cancelled) setActiveWorkerName("");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeWorkerId]);
+  const workersQ = useQuery({
+    queryKey: ["workers-directory"],
+    // Only once a worker is chosen — as before the move to React Query.
+    enabled: activeWorkerId != null,
+    staleTime: 5 * 60_000,
+    queryFn: () => getJson<Array<{ worker_id: number; worker_name: string }>>("/api/workers-directory"),
+  });
+  const activeWorkerName = React.useMemo(() => {
+    if (activeWorkerId == null || !Array.isArray(workersQ.data)) return "";
+    return workersQ.data.find((w) => w.worker_id === activeWorkerId)?.worker_name ?? "";
+  }, [activeWorkerId, workersQ.data]);
 
   // Barcode scanner state
   const [scannerOpen, setScannerOpen] = React.useState(false);
@@ -736,26 +775,29 @@ function TestingPageView() {
   } | null>(null);
   const scanTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanInputRef = React.useRef<HTMLInputElement>(null);
-  // When a scan flow changes stationType, we hold the pending station here so the
-  // stationType effect doesn't blow it away with setSelectedStation(null).
-  const pendingScanStationRef = React.useRef<TestStation | null>(null);
 
   const filteredItems = React.useMemo(() => {
-    const base = filterMakat
-      ? items.filter((item) =>
-          item.makat?.toString().includes(filterMakat) ||
-          item.serial_no?.toString().includes(filterMakat) ||
-          item.item_id?.toString().includes(filterMakat) ||
-          (item.customer_name ?? "").includes(filterMakat)
-        )
-      : items;
+    const ql = filterText.trim().toLowerCase();
+    const has = (v: unknown) => v != null && String(v).toLowerCase().includes(ql);
+    const base = items.filter((item) =>
+      (url.customer === "" || String(item.customer_id) === url.customer) &&
+      (url.shipment === "" || String(item.shipment_id) === url.shipment) &&
+      (url.itype === "" || String(item.item_type_id) === url.itype) &&
+      (ql === "" ||
+        has(item.makat) || has(item.serial_no) || has(item.item_id) || has(item.customer_name) ||
+        has(item.shipment_code) || has(item.item_type_desc) || has(item.package_id) ||
+        // A box row is found by any of its items too (an item row's
+        // `package` is its parent box — siblings must not match).
+        (!!item.is_package && (item.package?.items ?? []).some((it) => has(it.item_id) || has(it.serial_no)))),
+    );
 
     // Hoist the scanned item to the front of the list (if present).
     if (highlightedItemId == null) return base;
     const idx = base.findIndex((it) => Number(it.item_id) === Number(highlightedItemId));
     if (idx <= 0) return base;
     return [base[idx], ...base.slice(0, idx), ...base.slice(idx + 1)];
-  }, [items, filterMakat, highlightedItemId]);
+  }, [items, filterText, url.customer, url.shipment, url.itype, highlightedItemId]);
+  const filterMakat = filterText.trim();
 
   // Priority ordering for the grid: waiting (longest wait first) → in-test →
   // rest. The scanned item stays hoisted to the very front regardless.
@@ -803,131 +845,6 @@ function TestingPageView() {
   }, [items]);
   const longestWait = useElapsedTime(longestWaitStart);
 
-  // "Completed today" — count of item_route_history rows for this station with
-  // processing_end_time since the start of the local day.
-  const [completedToday, setCompletedToday] = React.useState<number | null>(null);
-  const fetchCompletedToday = React.useCallback(async (stationId: number) => {
-    try {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const res = await apiFetch(
-        `/api/testing/completed-today?stationId=${stationId}&since=${encodeURIComponent(startOfDay.toISOString())}`
-      );
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const data = await res.json();
-      setCompletedToday(typeof data?.count === "number" ? data.count : 0);
-    } catch {
-      setCompletedToday(null);
-    }
-  }, []);
-  React.useEffect(() => {
-    if (!selectedStation) {
-      setCompletedToday(null);
-      return;
-    }
-    fetchCompletedToday(selectedStation.test_station_id);
-  }, [selectedStation, fetchCompletedToday]);
-
-  // Load effects
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setStationTypesLoading(true);
-      try {
-        const res = await apiFetch("/api/testing/stations");
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        if (!cancelled) setStationTypes(Array.isArray(data) ? data : []);
-      } catch (error) {
-        if (!cancelled) setStationTypes([]);
-      } finally {
-        if (!cancelled) setStationTypesLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  // Deep link, step 1: once the types are loaded, select the linked one. The
-  // station itself is staged in a ref and picked up by the stations effect
-  // below — same handoff the barcode-scan flow uses, so the type change can't
-  // clear the selection out from under us.
-  React.useEffect(() => {
-    if (linkAppliedRef.current || !linkTypeId || stationTypes.length === 0) return;
-    const match = stationTypes.find((t) => t.id === linkTypeId);
-    if (!match) return;
-    linkAppliedRef.current = true;
-    setSelectedStationType(match);
-  }, [stationTypes, linkTypeId]);
-
-  React.useEffect(() => {
-    if (!selectedStationType) {
-      setStations([]); setSelectedStation(null); setItems([]); return;
-    }
-    let cancelled = false;
-    (async () => {
-      setStationsLoading(true);
-      try {
-        const res = await apiFetch(`/api/testing/test-stations?typeId=${selectedStationType.id}`);
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        if (!cancelled) {
-          const list: TestStation[] = Array.isArray(data) ? data : [];
-          setStations(list);
-          // If a scan flow staged a target station for this type, honor it
-          // instead of clearing the selection (avoids a flicker / lost selection).
-          // Deep link, step 2: a ?station= from the palette resolves here,
-          // alongside the scan flow's staged station.
-          const linked = pendingLinkStationRef.current;
-          const linkedFresh =
-            linked != null ? list.find((s) => s.test_station_id === linked) : undefined;
-          const pending = pendingScanStationRef.current;
-          if (linkedFresh) {
-            pendingLinkStationRef.current = null;
-            setSelectedStation(linkedFresh);
-          } else if (pending && list.some((s) => s.test_station_id === pending.test_station_id)) {
-            const fresh = list.find((s) => s.test_station_id === pending.test_station_id)!;
-            pendingScanStationRef.current = null;
-            setSelectedStation(fresh);
-          } else {
-            setSelectedStation(null); setItems([]);
-          }
-        }
-      } catch (error) {
-        if (!cancelled) setStations([]);
-      } finally {
-        if (!cancelled) setStationsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedStationType]);
-
-  React.useEffect(() => {
-    if (!selectedStation) { setItems([]); setItemsFor(null); setItemsError(null); return; }
-    // Switching stations drops a now-meaningless filter — unless this is the
-    // station a ?item= deep link targeted, whose filter is the whole point.
-    const pendingItem = pendingLinkItemRef.current;
-    pendingLinkItemRef.current = "";
-    setFilterMakat(
-      pendingItem && selectedStation.test_station_id === pendingLinkStationRef.current ? pendingItem : "",
-    );
-    let cancelled = false;
-    const stationId = selectedStation.test_station_id;
-    (async () => {
-      setItemsLoading(true);
-      try {
-        const res = await apiFetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        if (!cancelled) { setItems(Array.isArray(data) ? data : []); setItemsFor(stationId); setItemsError(null); }
-      } catch (error) {
-        if (!cancelled) { setItems([]); setItemsFor(stationId); setItemsError(QUEUE_LOAD_FAILED); }
-      } finally {
-        if (!cancelled) setItemsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedStation]);
-
   const handleAddTestResult = (item: ItemRow) => {
     dialogSubmittedRef.current = false;
     setSelectedItem(item);
@@ -935,7 +852,11 @@ function TestingPageView() {
   };
 
   // Resolve a scanned barcode to a station and hoist the matching item.
-  const handleBarcodeScan = React.useCallback(async (raw: string) => {
+  // filterTo: also narrow the queue to that one item (the ?item= deep link
+  // from the packages screen); a plain scan only hoists and highlights it.
+  // Not memoized: the global scanner and the deep-link effect read it through
+  // a ref / a one-shot guard, so a fresh closure per render costs nothing.
+  const handleBarcodeScan = async (raw: string, opts?: { filterTo?: boolean }) => {
     const barcode = raw.trim();
     if (!barcode) return;
     setScanLoading(true);
@@ -963,6 +884,7 @@ function TestingPageView() {
         setFinishedDialogOpen(true);
         setScannerOpen(false);
         setScanInput("");
+        setFilterText("");
         return;
       }
 
@@ -978,34 +900,17 @@ function TestingPageView() {
         return;
       }
 
-      const typeOption = stationTypes.find((t) => t.id === data.stationTypeId);
-      if (!typeOption) {
+      if (!stationTypes.some((t) => t.id === data.stationTypeId)) {
         setScanError("סוג העמדה של הפריט לא נמצא");
         return;
       }
 
-      setFilterMakat("");
+      // The station goes into the URL; the queue query follows it. Filters
+      // that could hide the scanned item are dropped.
       setHighlightedItemId(Number(data.itemId));
-
-      if (selectedStationType?.id === typeOption.id) {
-        // Same type already selected: find the station in the loaded list and switch directly.
-        const stationOption = stations.find((s) => s.test_station_id === data.stationId);
-        if (!stationOption) {
-          setScanError("העמדה של הפריט לא נמצאה ברשימה הטעונה");
-          return;
-        }
-        setSelectedStation(stationOption);
-      } else {
-        // Stage the target station and let the stationType effect adopt it once stations load.
-        pendingScanStationRef.current = {
-          test_station_id: data.stationId,
-          test_station_desc: "",
-          test_station_type_id: data.stationTypeId,
-          status: 0,
-          is_research: false,
-        };
-        setSelectedStationType(typeOption);
-      }
+      const q = opts?.filterTo ? String(data.itemId) : "";
+      setFilterText(q);
+      setUrl({ station: String(data.stationId), item: "", q, customer: "", shipment: "", itype: "" });
 
       setScannerOpen(false);
       setScanInput("");
@@ -1015,7 +920,41 @@ function TestingPageView() {
     } finally {
       setScanLoading(false);
     }
-  }, [stationTypes, selectedStationType, stations]);
+  };
+
+  // Deep link ?item=<id> (the packages screen's "למסך הבדיקות"): find the
+  // item's station and open it narrowed to that item. With ?station= as well
+  // (the command palette) the station is already known: just filter.
+  const itemLinkDone = React.useRef(false);
+  React.useEffect(() => {
+    if (itemLinkDone.current || !url.item || stationTypes.length === 0) return;
+    itemLinkDone.current = true;
+    if (url.station) {
+      // The field follows the URL's q (useUrlTextField).
+      setUrl({ item: "", q: url.item });
+    } else {
+      // Off the effect's own tick: the lookup sets loading state.
+      void Promise.resolve().then(() => handleBarcodeScan(url.item, { filterTo: true }));
+    }
+    // One-shot (itemLinkDone): handleBarcodeScan is a fresh closure each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url.item, url.station, stationTypes.length]);
+
+  // Enter in the search field: a code that names an item in this queue
+  // highlights it; anything else is treated as a scan and located (it may
+  // live at another station). The field is focused on arrival and after every
+  // dialog, so a hardware scan needs no button press first.
+  const handleFilterEnter = () => {
+    const code = filterText.trim();
+    if (!code) return;
+    const id = code.split("-")[0];
+    const local = items.find((it) => String(it.item_id) === id || (it.serial_no ?? "") === code);
+    if (local) {
+      setHighlightedItemId(Number(local.item_id));
+      return;
+    }
+    handleBarcodeScan(code);
+  };
 
   // A scan with nothing focused (no field, no dialog) goes to the same handler
   // as the scan dialog — the document-level keyboard-wedge listener in
@@ -1079,29 +1018,6 @@ function TestingPageView() {
       console.error("Error releasing test:", error);
     } finally {
       handleRefreshItems();
-    }
-  };
-
-  const handleRefreshItems = async () => {
-    if (!selectedStation) return;
-    const stationId = selectedStation.test_station_id;
-    setItemsLoading(true);
-    fetchCompletedToday(selectedStation.test_station_id);
-    fetchBlockedPackages(selectedStation.test_station_id, packageLevel);
-    try {
-      const res = await apiFetch(`/api/testing/items?stationId=${selectedStation.test_station_id}`);
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
-      setItemsFor(stationId);
-      setItemsError(null);
-    } catch (error) {
-      console.error("Error loading items:", error);
-      setItems([]);
-      setItemsFor(stationId);
-      setItemsError(QUEUE_LOAD_FAILED);
-    } finally {
-      setItemsLoading(false);
     }
   };
 
@@ -1180,24 +1096,12 @@ function TestingPageView() {
     }
   };
 
-  // Dock all-stations pick: set type + station in one step. Mirrors the scan
-  // flow — when the type differs we stage the station and let the stationType
-  // effect adopt it once that type's stations load.
+  // Dock all-stations pick: the station goes into the URL.
   const handlePickAllStation = React.useCallback((station: StationLite | null) => {
-    if (!station) { setSelectedStationType(null); setSelectedStation(null); setItems([]); return; }
     setHighlightedItemId(null);
-    setFilterMakat("");
-    const typeOption = stationTypes.find((t) => t.id === station.typeId);
-    if (!typeOption) return;
-    const synthetic: TestStation = { test_station_id: station.id, test_station_desc: station.name, test_station_type_id: station.typeId, status: 0, is_research: false };
-    if (selectedStationType?.id === typeOption.id) {
-  const found = stations.find((s) => s. test_station_id=== station.id);
-      setSelectedStation(found ?? synthetic);
-    } else {
-      pendingScanStationRef.current = synthetic;
-      setSelectedStationType(typeOption);
-    }
-  }, [stationTypes, selectedStationType, stations]);
+    setFilterText("");
+    setUrl({ station: station ? String(station.id) : "", item: "", q: "" });
+  }, [setUrl, setFilterText]);
 
   const typeNameById = React.useCallback(
     (typeId: number) => stationTypes.find((t) => t.id === typeId)?.name ?? "",
@@ -1205,9 +1109,22 @@ function TestingPageView() {
   );
 
   // The queue on screen belongs to another (or no) station yet: skeletons and
-  // "—" until the selected station's queue answers.
-  const itemsStale = selectedStation != null && itemsFor !== selectedStation.test_station_id;
+  // "—" until the selected station's queue answers. A station id the station
+  // list does not know (yet) counts as loading, too.
+  const itemsStale = stationId != null && (itemsQ.isPending || (selectedStation == null && allStationsQ.isPending));
   const hasWizard = selectedStationType != null && hasStartTestDialog(selectedStationType.id);
+
+  // Keep the search field ready for the next scan: focus it whenever no
+  // dialog is open and nothing else holds the focus.
+  const anyDialogOpen = dialogOpen || scannerOpen || finishedDialogOpen || nextStationDialogOpen || researchDialogOpen || historyDialogOpen;
+  React.useEffect(() => {
+    if (anyDialogOpen) return;
+    const t = setTimeout(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body) filterRef.current?.focus();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [anyDialogOpen, stationId]);
 
   return (
     <Box
@@ -1252,7 +1169,44 @@ function TestingPageView() {
 
         {/* Main Content Area — same 1280 frame as the dock */}
         <div className="tst-frame" style={{ marginTop: 24, marginBottom: 40, flex: 1 }}>
-            {selectedStation ? (
+            {/* Search / scan + queue filters. The field is focused whenever no
+                dialog is open, so a hardware scan lands here without a button
+                press; Enter locates the code (at this or another station). */}
+            <div className="tst-filters" role="search" aria-label="חיפוש וסינון התור">
+                <div className="tst-scan">
+                    <QrCodeIcon fontSize={20} aria-hidden className="tst-scan-icon" />
+                    <input
+                        ref={filterRef}
+                        value={filterText}
+                        onChange={(e) => setFilterText(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !scanLoading) { e.preventDefault(); handleFilterEnter(); }
+                            if (e.key === "Escape") setFilterText("");
+                        }}
+                        placeholder={selectedStation ? "סרוק ברקוד, או חפש בתור לפי מזהה, סריאלי, מק״ט" : "סרוק ברקוד של פריט או מארז"}
+                        aria-label="סריקה או חיפוש בתור"
+                        aria-busy={scanLoading || undefined}
+                        autoComplete="off"
+                        dir="auto"
+                    />
+                    {scanLoading ? (
+                        <span className="tst-scan-end" aria-hidden><CircularProgress size={14} /></span>
+                    ) : filterText ? (
+                        <IconButton size="small" className="tst-scan-end" title="ניקוי החיפוש" onClick={() => { setFilterText(""); filterRef.current?.focus(); }}><ClearIcon fontSize={16} aria-hidden /></IconButton>
+                    ) : null}
+                </div>
+                <QueueFilter value={url.customer} onChange={(v) => setUrl({ customer: v })} options={customerOptions} allLabel="כל הלקוחות" disabled={!selectedStation} />
+                <QueueFilter value={url.shipment} onChange={(v) => setUrl({ shipment: v })} options={shipmentOptions} allLabel="כל המשלוחים" disabled={!selectedStation} />
+                <QueueFilter value={url.itype} onChange={(v) => setUrl({ itype: v })} options={itemTypeOptions} allLabel="כל סוגי הפריט" disabled={!selectedStation} />
+                {anyFilter && <button type="button" className="tst-clear" onClick={clearFilters}>ניקוי הסינון</button>}
+                {selectedStation && !itemsStale && (
+                    <span className="tst-filter-count" role="status">
+                        {anyFilter ? `מציג ${filteredItems.length} מתוך ${items.length}` : `${items.length} ${packageLevel ? "מארזים" : "פריטים"} בתור`}
+                    </span>
+                )}
+            </div>
+
+            {selectedStation || itemsStale ? (
                 <Box>
                     {/* Summary strip — station overview KPIs */}
                     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", mb: "22px" }}>
@@ -1309,22 +1263,6 @@ function TestingPageView() {
                             </span>
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <TextField
-                                aria-label={packageLevel ? "סינון המארזים בתור" : "סינון הפריטים בתור"}
-                                placeholder={packageLevel ? "סינון לפי מק״ט, מזהה או לקוח" : "סינון לפי מק״ט, סריאלי או מזהה"}
-                                size="small"
-                                value={filterMakat}
-                                onChange={(e) => setFilterMakat(e.target.value)}
-                                wrapClassName="tst-filter"
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16 }} aria-hidden /></InputAdornment>,
-                                    endAdornment: filterMakat && (
-                                       <InputAdornment position="end">
-                                           <IconButton size="small" title="ניקוי הסינון" onClick={() => setFilterMakat("")}><ClearIcon fontSize={18} aria-hidden /></IconButton>
-                                       </InputAdornment>
-                                    )
-                                }}
-                            />
                             <Button
                                variant="outlined"
                                color="inherit"
