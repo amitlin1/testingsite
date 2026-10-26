@@ -1,4 +1,5 @@
 import { NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
+import { newPrefixedId } from "@/app/lib/station-fields/step-uids";
 import type { RandomSource } from "@/app/lib/station-fields/step-uids";
 import { componentsOf } from "@/app/lib/popup-templates/schema";
 import type {
@@ -30,6 +31,13 @@ export function newComponent(kind: ComponentKind, random?: RandomSource): Templa
     case "weight": return { id, kind, required: true, tolerance_pct: 5 };
     case "route_fields": return { id, kind };
     case "verdict": return { id, kind, question: TEMPLATE_DEFAULTS.verdictQuestion, note_max: NOTE_MAX_DEFAULT };
+    case "checklist": return { id, kind, title: "רשימת סימון", items: [{ id: newPrefixedId("i_", random), label: "" }] };
+    case "notes": return { id, kind, label: "הערות" };
+    case "contents":
+    case "items":
+    case "labels":
+    case "arrival":
+      return { id, kind };
   }
 }
 

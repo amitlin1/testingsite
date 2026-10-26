@@ -89,6 +89,15 @@ export function componentSummary(c: TemplateComponent): string {
       return "מעמוד מסלולי בדיקה";
     case "verdict":
       return c.question || "(ללא שאלה)";
+    case "checklist":
+      return `${c.title || "(ללא כותרת)"} · ${c.items.length === 1 ? "שורה אחת" : `${c.items.length} שורות`}`;
+    case "notes":
+      return c.label || "(ללא כותרת)";
+    case "contents":
+    case "items":
+    case "labels":
+    case "arrival":
+      return "חלק קבוע של אשף המארז";
   }
 }
 

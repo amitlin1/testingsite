@@ -1,7 +1,8 @@
 "use client";
 import * as React from "react";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, CheckSquare, ChevronDown, Image as ImageIcon, Info, ListChecks, MessageSquare, Plus, ScanBarcode, Scale, Trash2,
+  AlertTriangle, ArrowDown, ArrowUp, Boxes, CheckSquare, ChevronDown, Image as ImageIcon, Info, ListChecks, ListTodo, MessageSquare,
+  PackageCheck, PackageOpen, Plus, ScanBarcode, Scale, StickyNote, Tag as TagIcon, Trash2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Checkbox, FormControlLabel, IconButton, MenuItem, Select, TextField } from "@/components/ui";
@@ -33,6 +34,12 @@ const KIND_ICON: Record<ComponentKind, LucideIcon> = {
   weight: Scale,
   route_fields: ListChecks,
   verdict: CheckSquare,
+  checklist: ListTodo,
+  notes: StickyNote,
+  contents: PackageOpen,
+  items: Boxes,
+  labels: TagIcon,
+  arrival: PackageCheck,
 };
 
 export function VariablesHint() {
@@ -201,6 +208,9 @@ function ComponentSettings({ c, onPatch }: { c: TemplateComponent; onPatch: (pat
     }
     case "route_fields":
       return <p className="pt-set__note"><Info size={14} strokeWidth={1.9} aria-hidden />{T.routeFields}</p>;
+    default:
+      // The package base's parts — their settings come with its editor (PLAN.md §5, step 2.5).
+      return null;
     case "verdict": {
       const v = c as VerdictComponent;
       return (

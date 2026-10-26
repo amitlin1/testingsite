@@ -15,6 +15,12 @@ export const COMPONENT_NAME: Record<ComponentKind, string> = {
   weight: "שקילה מול ייחוס",
   route_fields: "שדות המסלול",
   verdict: "פסק דין",
+  checklist: "רשימת סימון",
+  notes: "הערות",
+  contents: "תכולה וסריאליים",
+  items: "פריטים במארז",
+  labels: "מדבקות",
+  arrival: "פריטים ואריזה",
 };
 
 /** Worker-facing defaults — today's popups' own words. */
@@ -25,6 +31,14 @@ export const TEMPLATE_DEFAULTS = {
   finishLabel: "סיום בדיקת {עמדה}",
   photoTitle: "תיעוד בתמונות",
   noReference: "לא נמצא פריט ייחוס — נא להודיע לגורם אחראי",
+  // The package wizards' own words (PackageOpenWizard / PackageCloseWizard), so a template made
+  // "מהחלון של היום" reads exactly like them.
+  boxQuestion: "האריזה תקינה?",
+  itemQuestion: "הפריט תקין?",
+  openFinish: "הדפס וסיים",
+  closeFinish: "סגור מארז",
+  packNote: "הערות אריזה",
+  packChecks: ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת המארז קריאה"],
 } as const;
 
 /** Content rules (lintPopupTemplate). Every one blocks a save. */
@@ -47,4 +61,18 @@ export const TEMPLATE_LINT_TEXT = {
   photoTooMany: "בחלון יכולים להיות עד 8 רכיבי צילום",
   photoCodeDuplicate: "שני רכיבי צילום משתמשים באותה קבוצת תמונות",
   tolerance: "הסטייה המותרת צריכה להיות בין 0 ל-100 אחוז",
+  // the package base (PLAN.md §5)
+  roleMissing: "לתבנית של עמדה ברמת מארז חסר תפקיד: פתיחה או סגירה",
+  roleOnItem: "לתבנית של עמדת פריט אין תפקיד של מארז ואין תהליך לכל פריט",
+  kindNotAllowed: (name: string) => `הרכיב "${name}" לא מתאים כאן`,
+  systemMissing: (name: string) => `בתבנית הזו חייב להיות "${name}"`,
+  systemNotAlone: (name: string) => `"${name}" חייב להיות לבד בשלב שלו`,
+  systemOrder: "הסדר במארז: תכולה וסריאליים, אחריה הפריטים, ואחריהם המדבקות",
+  itemFlowEmpty: "בתהליך לכל פריט חייב להיות לפחות רכיב אחד",
+  skuNotFirstInFlow: "בתהליך לכל פריט, סריקת המק״ט חייבת להיות ראשונה",
+  verdictNotLastInStep: "פסק הדין חייב להיות הרכיב האחרון בשלב שלו",
+  checklistTitleEmpty: "לרשימת הסימון חסרה כותרת",
+  checklistEmpty: "ברשימת הסימון אין שורות",
+  checklistItemEmpty: "בשורה ברשימת הסימון חסר טקסט",
+  notesLabelEmpty: "לשדה ההערות חסרה כותרת",
 } as const;

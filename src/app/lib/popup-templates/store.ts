@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 import type { TransactionClient } from "@/app/lib/prisma";
-import { componentsOf, fillVariables } from "./schema";
+import { allComponentsOf, fillVariables } from "./schema";
 import type { PhotoComponent, PopupTemplateConfig, PopupTemplateJson, TemplateBase } from "./schema";
 import { TemplateShapeError, lintPopupTemplate, parsePopupTemplateConfig, parseTemplateBase } from "./validate";
 import type { TemplateIssue } from "./validate";
@@ -117,9 +117,6 @@ export async function saveTemplate(
   input: { base: TemplateBase; config: PopupTemplateConfig; expectedVersion: number | null },
   actor: Actor,
 ): Promise<PopupTemplateJson> {
-  const issues: TemplateIssue[] = lintPopupTemplate(input.config);
-  if (issues.length > 0) throw new TemplateStoreError(422, "TEMPLATE_INVALID", "בתבנית יש בעיות לתיקון", { issues });
-
   return prisma.$transaction(async (tx) => {
     const type = await tx.test_stations_type.findUnique({
       where: { test_station_type_id: typeId },
@@ -131,6 +128,9 @@ export async function saveTemplate(
       throw new TemplateStoreError(409, "BASE_MISMATCH", type.package_level ? "לעמדה ברמת מארז מתאים רק בסיס למארז" : "לעמדה של פריט מתאים רק בסיס לפריט");
     }
     if (wantsPackage) throw new TemplateStoreError(409, "PACKAGE_BASE_NOT_YET", "תבנית למארז תגיע בשלב הבא");
+    // The content, by the rules of its base — once the base itself fits the station type.
+    const issues: TemplateIssue[] = lintPopupTemplate(input.config, input.base);
+    if (issues.length > 0) throw new TemplateStoreError(422, "TEMPLATE_INVALID", "בתבנית יש בעיות לתיקון", { issues });
 
     // Row-locked, so two saves of one type queue rather than both read the same version.
     const current = await tx.$queryRaw<TemplateRow[]>`
@@ -163,7 +163,7 @@ export async function saveTemplate(
 /** The photo groups of a template's photo components: linked or created, named "{type} · {title}",
  *  active; the type's groups no component holds any more go inactive (still linked). */
 async function syncPhotoGroups(tx: TransactionClient, typeId: number, typeName: string, cfg: PopupTemplateConfig): Promise<void> {
-  const photos = componentsOf(cfg).filter((c): c is PhotoComponent => c.kind === "photo");
+  const photos = allComponentsOf(cfg).filter((c): c is PhotoComponent => c.kind === "photo");
   const descOf = (c: PhotoComponent) => `${typeName} · ${fillVariables(c.title, { station: typeName })}`.slice(0, 255);
   let nextSort = ((await tx.photo_types.aggregate({ _max: { sort_order: true } }))._max.sort_order ?? 0) + 1;
 

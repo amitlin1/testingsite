@@ -45,6 +45,72 @@ export function photoStationTemplate(photoCode: string, random?: RandomSource): 
   };
 }
 
+/**
+ * Today's opening wizard (tests-popups/PackageOpenWizard.tsx) as a package template (PLAN.md §5.2):
+ * the box's label → the box's photos, its fields and "האריזה תקינה?" → contents and serials → every
+ * item (scan → photo, its fields and "הפריט תקין?" → weigh, ±5%) → labels. `boxCode` / `itemCode`:
+ * the photo groups the wizard captures into today, so the reference images stay where they are.
+ */
+export function openingTemplate(boxCode: string, itemCode: string, random?: RandomSource): PopupTemplateConfig {
+  const c = (kind: "contents" | "items" | "labels") => ({ id: newComponentId(random), kind });
+  return {
+    role: "opening",
+    steps: [
+      { id: newTemplateStepId(random), title: "סריקת מק״ט המארז", desc: "מדבקת המארז", components: [
+        { id: newComponentId(random), kind: "sku_scan", required: true, carry_last: false, lookup_reference: true },
+      ] },
+      { id: newTemplateStepId(random), title: "צילום הקופסה", desc: "3 זוויות + תקינות", components: [
+        { id: newComponentId(random), kind: "photo", title: "צילום הקופסה", photo_code: boxCode, min: 0, show_reference: true },
+        { id: newComponentId(random), kind: "route_fields" },
+        { id: newComponentId(random), kind: "verdict", question: TEMPLATE_DEFAULTS.boxQuestion, note_max: NOTE_MAX_DEFAULT },
+      ] },
+      { id: newTemplateStepId(random), title: "תכולה וסריאליים", desc: "מה בקופסה, סריאלי לכל פריט", components: [c("contents")] },
+      { id: newTemplateStepId(random), title: "פריטים במארז", desc: "סריקה, צילום ושקילה לכל פריט", components: [c("items")] },
+      { id: newTemplateStepId(random), title: "מדבקות", desc: "מדבקה לכל פריט", components: [c("labels")] },
+    ],
+    item_flow: [
+      { id: newTemplateStepId(random), title: "סריקה", desc: "", components: [
+        { id: newComponentId(random), kind: "sku_scan", required: true, carry_last: false, lookup_reference: true },
+      ] },
+      { id: newTemplateStepId(random), title: "צילום", desc: "", components: [
+        { id: newComponentId(random), kind: "photo", title: "צילום הפריט", photo_code: itemCode, min: 0, show_reference: true },
+        { id: newComponentId(random), kind: "route_fields" },
+        { id: newComponentId(random), kind: "verdict", question: TEMPLATE_DEFAULTS.itemQuestion, note_max: NOTE_MAX_DEFAULT },
+      ] },
+      { id: newTemplateStepId(random), title: "שקילה", desc: "", components: [
+        { id: newComponentId(random), kind: "weight", required: true, tolerance_pct: 5 },
+      ] },
+    ],
+    finish_label: TEMPLATE_DEFAULTS.openFinish,
+  };
+}
+
+/**
+ * Today's closing wizard (tests-popups/PackageCloseWizard.tsx) as a package template: the box's
+ * label (starting from the one scanned at the opening) → arrival and packing → the box's fields,
+ * the three packing checks and the packing note.
+ */
+export function closingTemplate(random?: RandomSource): PopupTemplateConfig {
+  return {
+    role: "closing",
+    steps: [
+      { id: newTemplateStepId(random), title: "סריקת מק״ט המארז", desc: "מדבקת המארז", components: [
+        { id: newComponentId(random), kind: "sku_scan", required: true, carry_last: true, lookup_reference: true },
+      ] },
+      { id: newTemplateStepId(random), title: "פריטים ואריזה", desc: "מצב הגעה + נארז", components: [
+        { id: newComponentId(random), kind: "arrival" },
+      ] },
+      { id: newTemplateStepId(random), title: "תקינות האריזה", desc: "אישור סופי", components: [
+        { id: newComponentId(random), kind: "route_fields" },
+        { id: newComponentId(random), kind: "checklist", title: "בדיקות האריזה",
+          items: TEMPLATE_DEFAULTS.packChecks.map((label) => ({ id: newPrefixedId("i_", random), label })) },
+        { id: newComponentId(random), kind: "notes", label: TEMPLATE_DEFAULTS.packNote },
+      ] },
+    ],
+    finish_label: TEMPLATE_DEFAULTS.closeFinish,
+  };
+}
+
 /** Today's verdict popup (tests-popups/VerdictStation.tsx): SKU → the instruction with the SKU in
  *  it, the route's fields, the verdict. */
 export function verdictStationTemplate(random?: RandomSource): PopupTemplateConfig {
