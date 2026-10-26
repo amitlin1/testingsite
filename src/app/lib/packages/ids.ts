@@ -93,3 +93,15 @@ export function displayPackageIdOf(id: bigint | number | string): bigint | null 
 export function displaySeqOf(id: bigint | number | string): number | null {
   return isNewFormatId(id) ? Number(String(id).slice(-2)) : null;
 }
+
+/**
+ * Sorts ids in the order they were minted: yyMMdd + the day's counter. The id
+ * itself does not sort that way — its date is ddMMyy and it starts with the
+ * customer — so "the newest box" is never the largest id. Legacy ids sort
+ * before every new-format one, by their own value.
+ */
+export function mintOrderKey(id: bigint | number | string): string {
+  const s = String(id);
+  if (!isNewFormatId(s)) return `0${s.padStart(ID_TOTAL_DIGITS, "0")}`;
+  return `1${s.slice(8, 10)}${s.slice(6, 8)}${s.slice(4, 6)}${s.slice(10, 14)}`;
+}

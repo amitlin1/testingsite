@@ -59,12 +59,18 @@ const FROM_HEBREW: Record<string, string> = {
   "ז": "z", "ס": "x", "ב": "c", "ה": "v", "נ": "b", "מ": "n", "צ": "m", "ת": ",", "ץ": ".", ".": "/",
 };
 
+/** Does the text hold Hebrew letters? A scan that does was either typed
+ *  through the Hebrew layout where the key could not be read, or came from a
+ *  certificate printed with Hebrew in a barcode value — fromHebrewLayout
+ *  repairs the first and garbles the second, so the scan fields warn. */
+export const hasHebrew = (text: string): boolean => /[א-ת]/.test(text);
+
 /**
  * For text that already went through a Hebrew layout (pasted, or typed where
  * the key could not be read): when it holds Hebrew letters — which a barcode
  * of ours never does — every character goes back to the US key that typed it.
  */
 export function fromHebrewLayout(text: string): string {
-  if (!/[א-ת]/.test(text)) return text;
+  if (!hasHebrew(text)) return text;
   return [...text].map((c) => FROM_HEBREW[c] ?? c).join("");
 }

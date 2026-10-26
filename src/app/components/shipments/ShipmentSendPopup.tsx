@@ -201,6 +201,11 @@ export default function ShipmentSendPopup({
     // Available items options from the shipment
     const availableItems = shipment.shipment_items || [];
 
+    // The send counts boxes as declared, not as tested: say what is still not
+    // done before the shipment is closed by it.
+    const notTakenIn = Math.max(0, (shipment.total_items ?? 0) - (shipment.sampled_amount ?? 0));
+    const unfinished = Math.max(0, (shipment.sampled_amount ?? 0) - (shipment.finished_sampled_amount ?? 0));
+
     return (
         <Dialog
             open={open}
@@ -221,6 +226,15 @@ export default function ShipmentSendPopup({
                     <Alert severity="info" sx={{ mb: 2 }}>
                         הכמויות הן מספר מארזים. לכל סוג מארז אפשר לשלוח עד הכמות שהוצהרה פחות מה שכבר נשלח.
                     </Alert>
+                    {(notTakenIn > 0 || unfinished > 0) && (
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                            {[
+                                notTakenIn > 0 ? (notTakenIn === 1 ? "מארז אחד לא נקלט" : `${notTakenIn} מארזים לא נקלטו`) : null,
+                                unfinished > 0 ? (unfinished === 1 ? "מארז אחד עדיין בבדיקה" : `${unfinished} מארזים עדיין בבדיקה`) : null,
+                            ].filter(Boolean).join(" · ")}
+                            . שליחה שמשלימה את הכמות שהוצהרה סוגרת את המשלוח, והמארזים שלא נקלטו נמחקים איתה.
+                        </Alert>
+                    )}
                     <p style={{ margin: "0 0 var(--space-md)", fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-70)" }}>
                         משלוח מקור: <strong style={{ color: "var(--color-ink)", fontVariantNumeric: "tabular-nums" }}>{shipment.shipment_code}</strong>
                         {" · "}

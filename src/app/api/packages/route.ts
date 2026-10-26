@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { withAuth } from "@/lib/auth/withAuth";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { createPackage, PackageInput, PackageItemInput } from "@/app/lib/packages/create-package";
 import { packageErrorResponse } from "@/app/lib/packages/errors";
@@ -60,8 +61,12 @@ const str = (v: unknown): string => (v == null ? "" : String(v));
  * Answers 201 { ok, packageId, itemIds } — ids as numbers (16 digits, exact).
  * A serial twice in the box, or already on an item of the same type in this
  * shipment, answers 409 with `itemIndex` (lib/packages/serials.ts).
+ *
+ * Manager only: the screens take boxes in through the shipment's pending
+ * boxes (lib/packages/boxes.ts); a box made here bypasses the shipment's
+ * declared count. The seed and the e2e suites use it.
  */
-export async function POST(req: Request) {
+export const POST = withAuth(async (req: NextRequest) => {
   // createPackage emits item_created into the metrics ledger, so refuse
   // loudly when the DB is behind this image.
   const schemaDenied = await metricsSchemaGate();
@@ -126,4 +131,4 @@ export async function POST(req: Request) {
   } catch (error) {
     return packageErrorResponse(error, "יצירת המארז נכשלה");
   }
-}
+}, { role: "manager" });

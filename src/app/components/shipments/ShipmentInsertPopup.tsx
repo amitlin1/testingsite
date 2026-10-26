@@ -18,13 +18,13 @@ import { Add as AddIcon, Delete as DeleteIcon } from "@/components/ui/icons";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
-import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat } from '@/app/lib/qrParser';
-import { fromHebrewLayout, typeAsUsKeyboard } from '@/app/lib/scannerKeys';
-import { formatDate } from "@/app/lib/datetime";
+import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat, type ShipmentData } from '@/app/lib/qrParser';
+import { fromHebrewLayout, hasHebrew, typeAsUsKeyboard } from '@/app/lib/scannerKeys';
 import { apiFetch } from "@/lib/api/client";
 import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
 import ShipmentSignatureField from "./ShipmentSignatureField";
-import ShipmentLineScanDialog, { LineCertNote, placeScannedLines, scannedRows, type ShipmentLine } from "./ShipmentLineScanDialog";
+import ShipmentLineScanDialog, { BIG_SHIPMENT, LineCertNote, declaredBoxes, lineIsEmpty, lineProblem, placeScannedLines, scannedRows, type ShipmentLine } from "./ShipmentLineScanDialog";
+import ShipmentDuplicateDialog, { duplicateOf, type DuplicateShipment } from "./ShipmentDuplicateDialog";
 import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
 
 type ShipmentInsertPopupProps = {
@@ -38,6 +38,12 @@ type ShipmentInsertPopupProps = {
 // lets English letters, digits and contact punctuation into the POC, so
 // everything it can put in the barcode passes here too.
 const POC_ALLOWED = /^[A-Za-z0-9\s.,!?'()/@&+-]*$/;
+
+/** The same certificate = the same shipment number and customer (the server's SHIPMENT_DUPLICATE rule). */
+const sameCode = (a: string | null | undefined, b: string | null | undefined) =>
+    (a ?? "").trim().toUpperCase() === (b ?? "").trim().toUpperCase();
+const duplicateKey = (code: string | null | undefined, customerId: number | null | undefined) =>
+    `${(code ?? "").trim().toUpperCase()}|${customerId ?? ""}`;
 
 const defaultShipment: NewShipment = {
     shipment_code: "",
@@ -76,6 +82,7 @@ export default function ShipmentInsertPopup({
         watch,
         setValue,
         getValues,
+        trigger,
         formState: { errors, isValid, isSubmitting },
     } = useForm<NewShipment>({
         mode: "onChange",
@@ -113,93 +120,114 @@ export default function ShipmentInsertPopup({
     // Scanning certificate rows into the package lines (ShipmentLineScanDialog).
     const [lineScanOpen, setLineScanOpen] = useState(false);
 
-    // Duplicate-shipment dialog (shown when a scanned shipment already exists).
-    const [duplicate, setDuplicate] = useState<Shipment | null>(null);
+    // The same certificate is already in the system (a scan of it, or the
+    // server's refusal of the save). `parsed` = the scan to fill if the worker
+    // enters it anyway; null = the save to send again.
+    const [duplicate, setDuplicate] = useState<{ existing: DuplicateShipment; parsed: ShipmentData | null } | null>(null);
+    // A duplicate found by a scan opens once the scanner dialog has closed: the
+    // scanner hands focus back to the form a tick after it unmounts, and a
+    // dialog already open would read that as "focus left" and dismiss itself.
+    const [scannedDuplicate, setScannedDuplicate] = useState<{ existing: DuplicateShipment; parsed: ShipmentData } | null>(null);
+    useEffect(() => {
+        if (scannerOpen || !scannedDuplicate) return;
+        const t = setTimeout(() => { setDuplicate(scannedDuplicate); setScannedDuplicate(null); }, 0);
+        return () => clearTimeout(t);
+    }, [scannerOpen, scannedDuplicate]);
+    // The certificate (number|customer) the worker chose to enter again; the
+    // save carries allow_duplicate only while the form still holds it.
+    const allowDuplicateRef = useRef<string | null>(null);
+
+    // A save of more than BIG_SHIPMENT boxes asks once more (cleared when the count changes).
+    const [confirmBig, setConfirmBig] = useState(false);
 
     const [isSigned, setIsSigned] = useState(false);
 
+    const clearScanTimer = () => {
+        if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+        scanTimeoutRef.current = null;
+    };
+
     const closeScanner = () => {
+        clearScanTimer();
         setScannerOpen(false);
         setScanError(null);
         setManualBarcodeInput('');
     };
 
-    // Handle QR scan result
-    const handleQrScan = useCallback((decodedText: string) => {
-        // The scan field reads physical keys; text that still went through a
-        // Hebrew layout (pasted, say) is turned back the same way.
-        const parsedData = parseShipmentQr(fromHebrewLayout(decodedText));
-
-        if (!parsedData) {
-            setScanError('פורמט QR לא תקין');
-            return;
-        }
-
-        // Guard against scanning a shipment that is already in the system with the
-        // same identifying details (shipment number + customer).
-        const existingMatch = existingShipments.find(
-            (s) =>
-                s.shipment_code?.trim() === parsedData.shipmentNumber.trim() &&
-                s.customer_code?.trim() === parsedData.customer.trim()
-        );
-        if (existingMatch) {
-            setDuplicate(existingMatch);
-            setScanError(null);
-            setScannerOpen(false);
-            setManualBarcodeInput('');
-            return;
-        }
-
-        // Fill shipment number
+    // Fills the form from a shipment barcode. Every field the barcode carries
+    // is set again — a second scan must not leave the first one's customer or
+    // POC behind.
+    const fillFromScan = useCallback((parsedData: ShipmentData, hebrew: boolean) => {
         const code = parsedData.shipmentNumber.trim();
         setValue('shipment_code', code, { shouldValidate: true });
 
-        // Find and set customer by customer_code
         const matchingCustomer = customers.find(
             c => c.customer_code?.trim() === parsedData.customer.trim()
         );
-        if (matchingCustomer) {
-            setValue('customer_id', matchingCustomer.id, { shouldValidate: true });
-        }
+        setValue('customer_id', matchingCustomer?.id ?? null, { shouldValidate: true });
 
-        // Set POC details
         const poc = parsedData.poc.trim();
-        if (poc) {
-            setValue('poc_details', poc, { shouldValidate: true });
-        }
+        setValue('poc_details', poc, { shouldValidate: true });
 
-        // Convert and set shipment date
         const convertedDate = convertQrDateToInputFormat(parsedData.supplyDate);
-        if (convertedDate) {
-            setValue('shipment_date', new Date(convertedDate), { shouldValidate: true });
-        }
+        setValue('shipment_date', convertedDate ? new Date(convertedDate) : null, { shouldValidate: true });
         setScannedDate(!!convertedDate);
 
         // Lock the barcode-derived fields against manual editing — each only
-        // when its value is one the form accepts.
+        // when the barcode gave a value the form accepts.
         const pocOk = POC_ALLOWED.test(poc);
-        const codeOk = code !== "" && code.length <= 20 && !existingShipments.some((s) => s.shipment_code?.trim() === code);
-        setLocked({ poc: pocOk, code: codeOk, customer: !!matchingCustomer });
+        const codeOk = code !== "" && code.length <= 20;
+        setLocked({ poc: pocOk && poc !== "", code: codeOk, customer: !!matchingCustomer });
         setScanProblems([
-            ...(codeOk ? [] : ["מס׳ המשלוח"]),
+            ...(hebrew ? ["בברקוד הגיעו אותיות בעברית והן הומרו לאנגלית — בדוק שהפרטים תואמים לתעודה"] : []),
+            ...(codeOk ? [] : [code.length > 20 ? "מס׳ המשלוח (ארוך מ-20 תווים)" : "מס׳ המשלוח"]),
             ...(matchingCustomer ? [] : [`קוד הלקוח (${parsedData.customer.trim() || "ריק"} לא נמצא במערכת)`]),
             ...(convertedDate ? [] : ["תאריך המשלוח"]),
             ...(pocOk ? [] : ["פרטי איש הקשר (באנגלית בלבד)"]),
         ]);
         setScanned(true);
+    }, [customers, setValue]);
+
+    // Handle QR scan result
+    const handleQrScan = useCallback((decodedText: string) => {
+        clearScanTimer();
+        // The scan field reads physical keys; text that still went through a
+        // Hebrew layout (pasted, say) is turned back the same way.
+        const parsedData = parseShipmentQr(fromHebrewLayout(decodedText));
+
+        if (!parsedData) {
+            setScanError('פורמט QR לא תקין, או שהסריקה לא נקראה במלואה. סרוק שוב.');
+            return;
+        }
         setScanError(null);
         setScannerOpen(false);
-    }, [customers, setValue, existingShipments]);
+        setManualBarcodeInput('');
 
-    const addScannedLines = (lines: ShipmentLine[]) =>
+        // The same certificate already in the system: say so, and let the
+        // worker enter it anyway (a shipment can come again on it).
+        const existingMatch = existingShipments.find(
+            (s) => sameCode(s.shipment_code, parsedData.shipmentNumber) && s.customer_code?.trim() === parsedData.customer.trim()
+        );
+        if (existingMatch) {
+            setScannedDuplicate({ existing: existingMatch, parsed: parsedData });
+            return;
+        }
+        fillFromScan(parsedData, hasHebrew(decodedText));
+    }, [existingShipments, fillFromScan]);
+
+    const addScannedLines = (lines: ShipmentLine[]) => {
         placeScannedLines(getValues('shipment_items'), lines, { update, append });
+        // A row confirmed without a package type shows its error right away.
+        void trigger('shipment_items');
+    };
 
-    // Auto-calculate total amount
+    // The declared total = Σ quantities of the started lines.
     const shipmentItems = watch("shipment_items");
+    const total = declaredBoxes(shipmentItems);
     useEffect(() => {
-        const total = shipmentItems?.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0) || 0;
         setValue("amount", total);
-    }, [shipmentItems, setValue]);
+        setConfirmBig(false);
+    }, [total, setValue]);
 
     useEffect(() => {
         let cancelled = false;
@@ -246,10 +274,16 @@ export default function ShipmentInsertPopup({
             setScanProblems([]);
             setLineScanOpen(false);
             setDuplicate(null);
+            setScannedDuplicate(null);
+            allowDuplicateRef.current = null;
+            setConfirmBig(false);
             setIsSigned(false);
             setSubmitError(null);
             sigCanvas.current?.clear();
         }
+        return () => {
+            if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+        };
     }, [open, reset]);
 
     // Every new shipment starts from the logged-in worker (a manager may change it).
@@ -261,16 +295,30 @@ export default function ShipmentInsertPopup({
 
     const onSubmit = async (data: NewShipment) => {
         setSubmitError(null);
+        // A started line that is not whole stops the save — it is never
+        // dropped quietly; only the untouched blank row is left out.
+        const lines = data.shipment_items ?? [];
+        const bad = lines.findIndex((l) => lineProblem(l) != null);
+        if (bad >= 0) {
+            setSubmitError(`שורה ${bad + 1}: ${lineProblem(lines[bad])}`);
+            void trigger('shipment_items');
+            return;
+        }
+        const validItems = lines.filter((l) => !lineIsEmpty(l));
+        if (validItems.length === 0) {
+            setSubmitError("יש להוסיף לפחות סוג מארז אחד עם כמות.");
+            return;
+        }
+        const totalAmount = declaredBoxes(validItems);
+        if (totalAmount > BIG_SHIPMENT && !confirmBig) {
+            setConfirmBig(true);
+            return;
+        }
+
         // The dialog closes only once the server has accepted the shipment; a
         // refusal keeps the typed form and the signature, with the reason shown.
         let saved = false;
         try {
-            // Filter out empty rows
-            const validItems = data.shipment_items?.filter(i => i.item_type_id && i.quantity > 0) || [];
-
-            // Recalculate total amount
-            const totalAmount = validItems.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0);
-
             const signature_base64 = sigCanvas.current && !sigCanvas.current.isEmpty() ? sigCanvas.current.toDataURL() : null;
 
             const payload = {
@@ -280,7 +328,8 @@ export default function ShipmentInsertPopup({
                 shipment_items: validItems,
                 // Legacy support: set main item_type_id to the first item's type (or null)
                 item_type_id: validItems[0]?.item_type_id || null,
-                signature_base64
+                signature_base64,
+                allow_duplicate: allowDuplicateRef.current === duplicateKey(data.shipment_code, data.customer_id),
             };
 
             const res = await apiFetch("/api/shipments", {
@@ -292,7 +341,9 @@ export default function ShipmentInsertPopup({
             if (res.ok) {
                 saved = true;
             } else {
-                setSubmitError(await serverErrorMessage(res, "המשלוח לא נשמר. בדוק את הפרטים ונסה שוב."));
+                const existing = await duplicateOf(res);
+                if (existing) setDuplicate({ existing, parsed: null });
+                else setSubmitError(await serverErrorMessage(res, "המשלוח לא נשמר. בדוק את הפרטים ונסה שוב."));
             }
         } catch (error) {
             console.error(error);
@@ -302,6 +353,22 @@ export default function ShipmentInsertPopup({
                 onCreate(true);
                 onClose();
             }
+        }
+    };
+
+    // "הכנס בכל זאת": fill from the scan, or send the save again — either way
+    // the save now carries allow_duplicate for this certificate.
+    const enterDuplicateAnyway = () => {
+        const d = duplicate;
+        setDuplicate(null);
+        if (!d) return;
+        if (d.parsed) {
+            const match = customers.find((c) => c.customer_code?.trim() === d.parsed!.customer.trim());
+            allowDuplicateRef.current = duplicateKey(d.parsed.shipmentNumber, match?.id ?? null);
+            fillFromScan(d.parsed, false);
+        } else {
+            allowDuplicateRef.current = duplicateKey(getValues("shipment_code"), getValues("customer_id"));
+            void handleSubmit(onSubmit)();
         }
     };
 
@@ -352,20 +419,16 @@ export default function ShipmentInsertPopup({
                             onChange={(e) => {
                                 const val = e.target.value;
                                 setManualBarcodeInput(val);
-                                if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+                                clearScanTimer();
                                 scanTimeoutRef.current = setTimeout(() => {
-                                    if (val.trim() && isValidShipmentQr(val.trim())) {
-                                        handleQrScan(val.trim());
-                                        setManualBarcodeInput('');
-                                    }
+                                    if (val.trim() && isValidShipmentQr(fromHebrewLayout(val.trim()))) handleQrScan(val.trim());
                                 }, 300);
                             }}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                    if (manualBarcodeInput.trim()) {
-                                        handleQrScan(manualBarcodeInput.trim());
-                                        setManualBarcodeInput('');
-                                    }
+                                    // Enter and the idle timer both read a scan; Enter
+                                    // cancels the timer, or the scan is read twice.
+                                    if (manualBarcodeInput.trim()) handleQrScan(manualBarcodeInput.trim());
                                     return;
                                 }
                                 // The scanner presses keys; on a Hebrew layout they would
@@ -379,10 +442,7 @@ export default function ShipmentInsertPopup({
                             variant="contained"
                             fullWidth
                             onClick={() => {
-                                if (manualBarcodeInput.trim()) {
-                                    handleQrScan(manualBarcodeInput.trim());
-                                    setManualBarcodeInput('');
-                                }
+                                if (manualBarcodeInput.trim()) handleQrScan(manualBarcodeInput.trim());
                             }}
                             disabled={!manualBarcodeInput.trim()}
                         >
@@ -392,43 +452,18 @@ export default function ShipmentInsertPopup({
                 </DialogContent>
             </Dialog>
 
-            {/* Duplicate shipment dialog — the scanned shipment is already in the system */}
-            <Dialog
-                open={!!duplicate}
-                onClose={() => setDuplicate(null)}
-                fullWidth
-                maxWidth="xs"
-            >
-                <DialogTitle onClose={() => setDuplicate(null)}>המשלוח כבר קיים במערכת</DialogTitle>
-                <DialogContent>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
-                        <Alert severity="error">
-                            לא ניתן לקלוט את המשלוח — קיים כבר משלוח עם אותם הפרטים.
-                        </Alert>
-                        {duplicate && (
-                            <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 12px", fontSize: "var(--text-body-sm)" }}>
-                                <dt style={{ color: "var(--color-ink-muted-48)" }}>מס׳ משלוח</dt>
-                                <dd style={{ margin: 0, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{duplicate.shipment_code}</dd>
-                                <dt style={{ color: "var(--color-ink-muted-48)" }}>קוד לקוח</dt>
-                                <dd style={{ margin: 0, fontWeight: 600 }}>{duplicate.customer_code}</dd>
-                                <dt style={{ color: "var(--color-ink-muted-48)" }}>תאריך קבלה</dt>
-                                <dd style={{ margin: 0, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{formatDate(duplicate.shipment_date)}</dd>
-                            </dl>
-                        )}
-                    </div>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDuplicate(null)}>
-                        אישור
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <ShipmentDuplicateDialog
+                duplicate={duplicate?.existing ?? null}
+                onCancel={() => setDuplicate(null)}
+                onConfirm={enterDuplicateAnyway}
+            />
 
             <ShipmentLineScanDialog
                 open={lineScanOpen}
                 onClose={() => setLineScanOpen(false)}
                 itemTypes={itemTypes}
                 takenRows={scannedRows(shipmentItems)}
+                shipmentCode={watch("shipment_code")}
                 onConfirm={addScannedLines}
             />
 
@@ -491,12 +526,6 @@ export default function ShipmentInsertPopup({
                                 rules={{
                                     required: "שדה חובה",
                                     maxLength: { value: 20, message: "מקסימום 20 תווים" },
-                                    validate: (value) => {
-                                        const isExists = existingShipments.some(
-                                            (s) => s.shipment_code?.trim() === value.trim()
-                                        );
-                                        return isExists ? "משלוח עם מספר זה כבר קיים במערכת" : true;
-                                    }
                                 }}
                                 render={({ field, fieldState: { error } }) => (
                                     <TextField
@@ -631,16 +660,24 @@ export default function ShipmentInsertPopup({
                                     <Controller
                                         name={`shipment_items.${index}.item_type_id` as const}
                                         control={control}
-                                        rules={{ required: true }}
+                                        rules={{
+                                            // A started line needs its type; 0 is "none", not a type.
+                                            validate: (_v, values) => {
+                                                const line = values.shipment_items?.[index];
+                                                return lineIsEmpty(line) || line?.item_type_id ? true : "יש לבחור סוג מארז";
+                                            },
+                                            deps: [`shipment_items.${index}.quantity`],
+                                        }}
                                         render={({ field: { onChange, value } }) => (
                                             <SearchableCombobox<{ id: number; name: string }>
                                                 options={itemTypes}
                                                 getOptionLabel={(option) => option.name}
                                                 isOptionEqualToValue={(o, v) => o.id === v.id}
                                                 value={itemTypes.find((t) => t.id === value) || null}
-                                                onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                                onChange={(newValue) => onChange(newValue?.id ?? 0)}
                                                 placeholder="סוג מארז"
                                                 error={!!errors.shipment_items?.[index]?.item_type_id}
+                                                helperText={errors.shipment_items?.[index]?.item_type_id?.message}
                                             />
                                         )}
                                     />
@@ -651,12 +688,13 @@ export default function ShipmentInsertPopup({
                                     name={`shipment_items.${index}.quantity` as const}
                                     control={control}
                                     rules={{
-                                        validate: (value) => {
-                                            // Allow empty during input (value will be 0 or undefined)
-                                            if (value === undefined || value === 0) return true;
-                                            if (Number(value) < 1) return "מינימום 1";
-                                            return true;
-                                        }
+                                        validate: (_v, values) => {
+                                            const line = values.shipment_items?.[index];
+                                            if (lineIsEmpty(line)) return true;
+                                            const qty = Number(line?.quantity);
+                                            return Number.isInteger(qty) && qty >= 1 ? true : "מינימום 1";
+                                        },
+                                        deps: [`shipment_items.${index}.item_type_id`],
                                     }}
                                     render={({ field }) => (
                                         <TextField
@@ -685,7 +723,7 @@ export default function ShipmentInsertPopup({
                     {/* Auto-calculated total = Σ quantities */}
                     <div style={{ marginTop: "var(--space-md)", display: 'flex', justifyContent: 'flex-end', fontSize: "var(--text-body-sm)", fontWeight: 600 }}>
                         <span>
-                            סה״כ מארזים (מחושב): <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{watch("amount") || 0}</span>
+                            סה״כ מארזים (מחושב): <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{total}</span>
                         </span>
                     </div>
                     {/* Signature — required; the hint says so without alarming */}
@@ -699,9 +737,15 @@ export default function ShipmentInsertPopup({
                     </div>
 
                 </DialogContent>
-                {submitError && (
+                {(submitError || confirmBig) && (
                     <div style={{ padding: "0 var(--space-lg) var(--space-sm)" }}>
-                        <Alert severity="error">{submitError}</Alert>
+                        {submitError ? (
+                            <Alert severity="error">{submitError}</Alert>
+                        ) : (
+                            <Alert severity="warning">
+                                המשלוח ייצור {total} מארזים ו-{total} מדבקות. אם הכמות נכונה, לחץ שוב על &quot;הוספה&quot;.
+                            </Alert>
+                        )}
                     </div>
                 )}
                 <DialogActions>

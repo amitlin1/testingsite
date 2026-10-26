@@ -127,7 +127,7 @@ try {
   check("clicked התחל פתיחת מארז", started);
   check("opening wizard opened", await waitText(page, "סריקת מק״ט המארז", 15000));
   await shot(page, "40-open-scan");
-  await typeInto(page, "סרוק את מדבקת הקופסה", makat);
+  await typeInto(page, "סרוק את מק״ט היצרן", makat);
   // The scan is looked up among the package type's reference items; this
   // test box has none, so the answer is the warning that still lets it go on.
   check("scan looked up the box reference", await waitText(page, "בדוק שזו הקופסה הנכונה", 5000));
@@ -150,7 +150,7 @@ try {
   for (let i = 0; i < 2; i++) {
     await clickExact(page, "התחל");
     check(`item ${i + 1}: scan phase`, await waitText(page, "מק״ט יצרן של הפריט", 8000));
-    await typeInto(page, "סרוק את מדבקת הפריט", "MK-6130");
+    await typeInto(page, "סרוק את מק״ט היצרן של הפריט", "MK-6130");
     check(`item ${i + 1}: scan looked up`, await waitText(page, "פריט ייחוס", 5000));
     check(`item ${i + 1}: scan continues`, await waitEnabled(page, "המשך", 5000));
     await clickExact(page, "המשך");
@@ -218,7 +218,7 @@ try {
   }, pkgId.slice(0, 14));
   check("clicked התחל סגירת מארז", startedClose);
   check("closing wizard opened", await waitText(page, "סגירת מארז", 15000) && await waitText(page, "סריקת מק״ט המארז", 15000));
-  await typeInto(page, "סרוק את מדבקת הקופסה", makat);
+  await typeInto(page, "סרוק את מק״ט היצרן", makat);
   // "המשך" waits for the reference lookup of the scan, as at the opening.
   check("closing scan continues", await waitEnabled(page, "המשך", 10000));
   await clickExact(page, "המשך");

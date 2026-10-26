@@ -45,15 +45,20 @@ export async function shot(page, name) {
   return p;
 }
 
-/** Keycloak login through the app's own redirect. */
+/** Keycloak login through the app's own redirect. E2E_LOGIN_BASE: sign in
+ *  through another origin of the same host (a dev server on a port Keycloak
+ *  knows as a redirect) — the session cookie is per host, not per port, and
+ *  servers sharing AUTH_SECRET read it — then test on E2E_BASE. */
 export async function login(page) {
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle2" });
+  const loginBase = process.env.E2E_LOGIN_BASE ?? BASE;
+  await page.goto(`${loginBase}/`, { waitUntil: "networkidle2", timeout: 120000 });
   if (page.url().includes("/auth/realms/")) {
     await page.waitForSelector("#username");
     await page.type("#username", creds.username);
     await page.type("#password", creds.password);
     await Promise.all([page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }), page.click("#kc-login")]);
   }
+  if (loginBase !== BASE) await page.goto(`${BASE}/`, { waitUntil: "networkidle2", timeout: 120000 });
   return page.url();
 }
 

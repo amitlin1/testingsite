@@ -94,6 +94,12 @@ export type PackageView = {
   /** The box label scanned at the opening station (its step-1 result); the
    *  closing wizard starts from it. Null until opened. */
   opening_sku: string | null;
+  /** The shipment line the box was minted for (items.shipment_item_id), and
+   *  that line's certificate row: its number and serial. A line typed by hand
+   *  has neither; a box from before boxes were linked has no line. */
+  shipment_item_id: number | null;
+  cert_row_no: string | null;
+  cert_serial_no: string | null;
 };
 
 export type PackageListFilters = {
@@ -133,6 +139,9 @@ type PkgRow = {
   opening_sku: string | null;
   /** Has a route row: taken in. */
   routed: boolean;
+  shipment_item_id: number | null;
+  cert_row_no: string | null;
+  cert_serial_no: string | null;
 };
 
 type MemberRow = {
@@ -219,11 +228,13 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
            (SELECT NULLIF(TRIM(r.details->>'sku'), '') FROM test_results r
              WHERE r.item_id = i.item_id AND r.route_step = 1
              ORDER BY r.test_result_id DESC LIMIT 1) AS opening_sku,
-           (ir.item_id IS NOT NULL) AS routed
+           (ir.item_id IS NOT NULL) AS routed,
+           i.shipment_item_id, NULLIF(TRIM(si.cert_row_no), '') AS cert_row_no, NULLIF(TRIM(si.serial_no), '') AS cert_serial_no
     FROM items i
     JOIN item_types it ON it.item_type_id = i.item_type_id
     LEFT JOIN customers c ON c.id = i.customer_id
     LEFT JOIN shipments sh ON sh.id = i.shipment_id
+    LEFT JOIN shipment_items si ON si.id = i.shipment_item_id
     LEFT JOIN item_routes ir ON ir.item_id = i.item_id
     LEFT JOIN testing_routes tr ON tr.item_type_id = i.item_type_id AND tr.route_number = ir.route_number
     WHERE i.package_id IS NULL AND it.is_package = true
@@ -341,6 +352,9 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       blocked_by: blocked,
       template_snapshot: p.template_snapshot ?? null,
       opening_sku: p.opening_sku ?? null,
+      shipment_item_id: p.shipment_item_id ?? null,
+      cert_row_no: p.cert_row_no ?? null,
+      cert_serial_no: p.cert_serial_no ?? null,
     });
   }
 

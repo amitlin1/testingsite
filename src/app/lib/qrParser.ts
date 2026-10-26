@@ -18,6 +18,10 @@ export interface ShipmentData {
  * const data = parseShipmentQr(qr);
  * // Returns: { shipmentNumber: "345", customer: "45", supplyDate: "07/01/2026", poc: "אטו" }
  * 
+ * The certificate tool always writes all five fields (the POC may be empty,
+ * "…|"), so any other count is not a shipment barcode: a "|" inside a value,
+ * or a scan read before it finished.
+ *
  * @param qrPayload - The scanned QR code string
  * @returns ShipmentData object or null if invalid format
  */
@@ -28,8 +32,7 @@ export function parseShipmentQr(qrPayload: string): ShipmentData | null {
 
   const parts = qrPayload.split('|');
 
-  // Validate: must start with "1" and have at least 4 fields
-  if (parts.length < 4 || parts[0] !== '1') {
+  if (parts.length !== 5 || parts[0] !== '1') {
     return null;
   }
 
@@ -43,17 +46,19 @@ export function parseShipmentQr(qrPayload: string): ShipmentData | null {
 
 /**
  * Validate if a string is a valid shipment QR payload
- * 
+ *
  * @param qrPayload - The string to validate
  * @returns true if valid shipment QR format
  */
 export function isValidShipmentQr(qrPayload: string): boolean {
-  if (!qrPayload || typeof qrPayload !== 'string') {
-    return false;
-  }
+  return parseShipmentQr(qrPayload) != null;
+}
 
-  const parts = qrPayload.split('|');
-  return parts.length >= 4 && parts[0] === '1';
+/** Text that starts like the certificate's shipment barcode — for a field that
+ *  takes something else to say "that is the shipment barcode", even when the
+ *  scan was garbled. */
+export function looksLikeShipmentQr(text: string): boolean {
+  return typeof text === 'string' && text.trim().startsWith('1|');
 }
 
 /**

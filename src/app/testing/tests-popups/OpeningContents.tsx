@@ -4,12 +4,12 @@ import { CircleAlert, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
-import { AMBER_BG, AMBER_BORDER, AMBER_INK, HAIR, HAIR_2, INK_2, MUTED, RED, RED_BG, seq2 } from "@/app/components/packages/packageUi";
+import { AMBER_BG, AMBER_BORDER, AMBER_INK, GREEN, HAIR, HAIR_2, INK_2, MUTED, RED, RED_BG, seq2 } from "@/app/components/packages/packageUi";
 import { playCue } from "@/app/components/packages/scanSound";
-import { serialKey, type SerialMatch } from "@/app/lib/packages/serial-key";
+import { serialKey, serialProblem, type SerialMatch } from "@/app/lib/packages/serial-key";
 import { typeAsUsKeyboard } from "@/app/lib/scannerKeys";
 import { parseItemQr } from "@/app/lib/itemQrParser";
-import { isValidShipmentQr } from "@/app/lib/qrParser";
+import { looksLikeShipmentQr } from "@/app/lib/qrParser";
 import type { RefMember } from "./packageReference";
 
 /**
@@ -20,8 +20,10 @@ import type { RefMember } from "./packageReference";
  * serial — the only thing typed here. The details (makat, model,
  * manufacturer) are the shipment's — the box's certificate row — and open
  * under "פרטים" to be read, not changed. Scanning the certificate's
- * equipment-row barcode into a serial field fills the serial. No serial, no
- * going on.
+ * equipment-row barcode into a serial field fills the serial and ties the
+ * box to that row (POST /api/packages/[id]/cert-row): when the box's label
+ * was stuck on another row's box, the box and its items take the scanned
+ * row's details. No serial, no going on.
  */
 
 export type ContentRow = {
@@ -40,6 +42,8 @@ export type ContentRow = {
   gone: boolean;
   open: boolean;
   fromQr?: boolean;
+  /** The serial was filled from the box's certificate row. */
+  fromCert?: boolean;
 };
 
 type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
@@ -77,6 +81,8 @@ export function contentsProblem(rows: ContentRow[]): string | null {
     const label = `שורה ${i + 1}`;
     if (r.itemType === "") return `${label} · יש לבחור סוג פריט`;
     if (!r.serial.trim()) return `${label} · חסר מספר סריאלי`;
+    const notSerial = serialProblem(r.serial);
+    if (notSerial) return `${label} · ${notSerial}`;
     const key = serialKey(r.serial);
     if (seen.has(key)) return `${label} · הסריאלי ${r.serial.trim()} כבר הוזן בשורה ${seen.get(key)! + 1}`;
     seen.set(key, i);
@@ -112,8 +118,11 @@ export async function saveContents(packageId: string | number, rows: ContentRow[
   }
 }
 
+/** What POST /api/packages/[id]/cert-row answers about the scanned row (boxes.ts CertRowBinding). */
+type CertRowBinding = { matched: boolean; moved: boolean; rowNo: string; serialNumber: string | null; details: BoxDetails | null };
+
 export function OpeningContents({
-  rows, onRows, memberTypes, templateCount, shipmentId, packageId, box, error, onDone, expectedOf,
+  rows, onRows, memberTypes, templateCount, shipmentId, packageId, box, cert, error, onDone, expectedOf,
 }: {
   rows: ContentRow[];
   onRows: (next: ContentRow[] | ((rs: ContentRow[]) => ContentRow[])) => void;
@@ -123,6 +132,8 @@ export function OpeningContents({
   packageId: string;
   /** What an added item starts with. */
   box: BoxDetails;
+  /** The box's certificate row: its number and serial (none for a line typed by hand). */
+  cert?: { rowNo: string | null; serial: string | null };
   /** The save's refusal, on its row. */
   error: { text: string; rowIndex: number | null } | null;
   /** Enter in the last serial with everything filled: go on, as "המשך". */
@@ -135,13 +146,30 @@ export function OpeningContents({
   const focusSerial = React.useRef<number | null>(null);
   // serialKey → items already carrying it. No entry = not asked yet.
   const [known, setKnown] = React.useState<Record<string, SerialMatch[]>>({});
-  const [note, setNote] = React.useState<{ rowIndex: number; text: string } | null>(null);
+  const [note, setNote] = React.useState<{ rowIndex: number; text: string; tone: "error" | "info" } | null>(null);
+  // The box's details as they are now: a scanned certificate row can move the
+  // box to another row, and an item added after that takes the new ones.
+  const [boxNow, setBoxNow] = React.useState<BoxDetails>(box);
+  const scanTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
     if (focusSerial.current == null) return;
     serialRefs.current[focusSerial.current]?.focus();
     focusSerial.current = null;
   }, [rows]);
+
+  React.useEffect(() => () => { if (scanTimer.current) clearTimeout(scanTimer.current); }, []);
+
+  // A box of a row with a serial is that one unit: when it holds a single
+  // item still without a serial, the certificate's serial is filled in (once).
+  const prefilled = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!cert?.serial || prefilled.current === packageId) return;
+    prefilled.current = packageId;
+    const live = rows.filter((r) => !r.gone);
+    if (live.length !== 1 || live[0].serial.trim()) return;
+    onRows((rs) => rs.map((r) => (r === live[0] ? { ...r, serial: cert.serial!, fromCert: true } : r)));
+  }, [cert?.serial, packageId, rows, onRows]);
 
   // Ask about the serials once the typing pauses (amber elsewhere, red in this shipment).
   React.useEffect(() => {
@@ -171,6 +199,8 @@ export function OpeningContents({
     const r = rows[i];
     const key = serialKey(r.serial);
     if (!key || r.gone) return null;
+    const notSerial = serialProblem(r.serial);
+    if (notSerial) return { tone: "error", text: notSerial };
     const first = rows.findIndex((x) => !x.gone && serialKey(x.serial) === key);
     if (first < i) return { tone: "error", text: `כבר הוזן בשורה ${first + 1}` };
     const ms = known[key] ?? [];
@@ -179,31 +209,56 @@ export function OpeningContents({
     return m ? { tone: "warn", text: `קיים במערכת · ${m.item_type_desc}${m.shipment_code ? ` · משלוח ${m.shipment_code}` : ""}` } : null;
   };
 
-  // The certificate's equipment-row barcode in serial field i fills its
-  // serial (a batch row has none — it is typed after). Details stay the box's.
-  const applyBarcode = (i: number, text: string): boolean => {
-    const value = text.trim();
-    const refuse = (msg: string) => { setNote({ rowIndex: i, text: msg }); playCue("error"); serialRefs.current[i]?.select(); return true; };
-    if (isValidShipmentQr(value)) return refuse("זה הברקוד של המשלוח — סרוק את ברקוד השורה של הפריט בתעודה");
-    if (!value.startsWith("2^")) return false;
-    const parsed = parseItemQr(value);
-    if (!parsed) return refuse("ברקוד הפריט לא נקרא במלואו — סרוק שוב");
-    const it = parsed[0];
-    const filled: ContentRow = { ...rows[i], serial: it.serialNumber ?? "", fromQr: true };
-    setNote(null);
-    onRows((rs) => rs.map((x, j) => (j === i ? filled : x)));
-    focusSerial.current = filled.serial ? nextOpen(i) : i;
-    return true;
-  };
   const nextOpen = (i: number) => {
     const j = rows.findIndex((r, k) => k > i && !r.gone);
     return j >= 0 ? j : i;
   };
 
+  // The certificate's equipment-row barcode in serial field i: the server
+  // ties the box to that row (moving it there when its label was on another
+  // row's box) and the row's serial fills the field — a batch row has none,
+  // it is typed after. Answers whether the text was a certificate barcode.
+  const applyBarcode = (i: number, text: string): boolean => {
+    const value = text.trim();
+    const refuse = (msg: string) => { setNote({ rowIndex: i, text: msg, tone: "error" }); playCue("error"); serialRefs.current[i]?.select(); return true; };
+    if (looksLikeShipmentQr(value)) return refuse("זה הברקוד של המשלוח — סרוק את ברקוד השורה של הפריט בתעודה");
+    if (!value.startsWith("2^")) return false;
+    const parsed = parseItemQr(value);
+    if (!parsed) return refuse("ברקוד השורה לא נקרא במלואו — סרוק שוב");
+    setNote(null);
+    // The serial goes in at once: the worker may type on before the server answers.
+    const serial = parsed[0].serialNumber ?? "";
+    focusSerial.current = serial ? nextOpen(i) : i;
+    onRows((rs) => rs.map((x, j) => (j === i ? { ...x, serial, fromQr: true, fromCert: false } : x)));
+    void (async () => {
+      const res = await apiFetch(`/api/packages/${packageId}/cert-row`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ barcode: value }),
+      }).catch(() => null);
+      const d = res ? await res.json().catch(() => ({})) : null;
+      if (!res || !res.ok) {
+        // A row the box is not (another shipment, another type): its serial is not this item's.
+        onRows((rs) => rs.map((x, j) => (j === i && x.fromQr && x.serial === serial ? { ...x, serial: "" } : x)));
+        refuse(d?.error || "שגיאה בתקשורת — סרוק שוב");
+        return;
+      }
+      const b = d.binding as CertRowBinding;
+      if (b.moved && b.details) {
+        // The server gave the box and all its items the row's details.
+        const moved = b.details;
+        onRows((rs) => rs.map((x) => ({ ...x, ...moved })));
+        setBoxNow(moved);
+        setNote({ rowIndex: i, text: `המארז שויך לשורה ${b.rowNo} בתעודה, והפרטים שלו עודכנו לפיה`, tone: "info" });
+      } else if (!b.matched) {
+        setNote({ rowIndex: i, text: "השורה הזו לא נסרקה כשהמשלוח נקלט — מולא הסריאלי בלבד", tone: "info" });
+      }
+    })();
+    return true;
+  };
+
   const addRow = () => {
     focusSerial.current = rows.length;
     onRows((rs) => rs.concat([{
-      key: `new-${addedKey++}`, itemId: null, itemType: "", typeDesc: "", seq: null, serial: "", ...box, gone: false, open: false,
+      key: `new-${addedKey++}`, itemId: null, itemType: "", typeDesc: "", seq: null, serial: "", ...boxNow, gone: false, open: false,
     }]));
   };
 
@@ -215,6 +270,11 @@ export function OpeningContents({
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 13.5 }}>
         <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>בקופסה: {live}</span>
         <span style={{ color: MUTED, fontVariantNumeric: "tabular-nums" }}>· בתבנית: {templateCount}</span>
+        {(cert?.rowNo || cert?.serial) && (
+          <span style={{ color: MUTED }}>
+            · לפי התעודה: {cert.rowNo ? `שורה ${cert.rowNo}` : ""}{cert.rowNo && cert.serial ? " · " : ""}{cert.serial ? <>סריאלי <bdi dir="ltr">{cert.serial}</bdi></> : null}
+          </span>
+        )}
       </div>
       {mismatch && (
         <div role="status" style={{ marginTop: 10, fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px", maxWidth: 720 }}>
@@ -237,7 +297,8 @@ export function OpeningContents({
             {rows.map((r, i) => {
               const id = `${uid}-r${r.key}`;
               const flag = flagOf(i);
-              const rowError = (error?.rowIndex === i ? error.text : null) ?? (note?.rowIndex === i ? note.text : null);
+              const rowError = (error?.rowIndex === i ? error.text : null) ?? (note?.rowIndex === i && note.tone === "error" ? note.text : null);
+              const rowInfo = note?.rowIndex === i && note.tone === "info" ? note.text : null;
               const typeName = r.typeDesc || memberTypes.find((t) => t.item_type_id === r.itemType)?.item_type_desc || `שורה ${i + 1}`;
               return (
                 <React.Fragment key={r.key}>
@@ -276,11 +337,22 @@ export function OpeningContents({
                           <input ref={(el) => { serialRefs.current[i] = el; }} value={r.serial} placeholder="סרוק או הקלד" dir="ltr"
                             aria-label={`מספר סריאלי · שורה ${i + 1} · ${typeName}`}
                             aria-invalid={!!rowError || flag?.tone === "error" || undefined}
-                            aria-describedby={flag || rowError ? `${id}-sn` : undefined}
-                            onChange={(e) => { patch(i, { serial: e.target.value }); if (note?.rowIndex === i) setNote(null); }}
+                            aria-describedby={flag || rowError || rowInfo ? `${id}-sn` : undefined}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              patch(i, { serial: val, fromCert: false });
+                              if (note?.rowIndex === i) setNote(null);
+                              // A scanner that sends no Enter: a whole certificate row that
+                              // stops arriving is read as one.
+                              if (scanTimer.current) clearTimeout(scanTimer.current);
+                              if (val.trim().startsWith("2^")) {
+                                scanTimer.current = setTimeout(() => { if (parseItemQr(val.trim())) applyBarcode(i, val); }, 300);
+                              }
+                            }}
                             onKeyDown={(e) => {
                               if (e.key !== "Enter") { typeAsUsKeyboard(e); return; }
                               e.preventDefault();
+                              if (scanTimer.current) clearTimeout(scanTimer.current);
                               if (applyBarcode(i, e.currentTarget.value)) return;
                               if (flag?.tone === "error") { e.currentTarget.select(); playCue("error"); return; }
                               const j = nextOpen(i);
@@ -291,6 +363,10 @@ export function OpeningContents({
                             style={flag?.tone === "error" || rowError ? { borderColor: RED } : undefined} />
                           {(rowError || flag) ? (
                             <div id={`${id}-sn`} style={{ fontSize: 11.5, lineHeight: 1.35, marginTop: 4, color: rowError || flag?.tone === "error" ? RED : AMBER_INK }}>{rowError ?? flag?.text}</div>
+                          ) : rowInfo ? (
+                            <div id={`${id}-sn`} role="status" style={{ fontSize: 11.5, lineHeight: 1.35, marginTop: 4, color: GREEN }}>{rowInfo}</div>
+                          ) : r.fromCert ? (
+                            <div style={{ fontSize: 11.5, lineHeight: 1.35, marginTop: 4, color: MUTED }}>מתעודת המשלוח — בדוק מול הפריט</div>
                           ) : r.fromQr && !r.serial.trim() && (
                             <div style={{ fontSize: 11.5, lineHeight: 1.35, marginTop: 4, color: MUTED }}>
                               בברקוד אין סריאלי — סרוק או הקלד את הסריאלי
@@ -353,7 +429,7 @@ export function OpeningContents({
         </div>
       )}
       <div style={{ marginTop: 12, fontSize: 12.5, color: INK_2, lineHeight: 1.5, maxWidth: 720 }}>
-        Enter עובר לשורה הבאה. מק״ט, דגם ויצרן נלקחים מהמארז (מתעודת המשלוח) — לשינוי לוחצים "פרטים". ברקוד השורה מהתעודה ממלא סריאלי ופרטים. פריט שלא הגיע מסמנים בפח.
+        Enter עובר לשורה הבאה. מק״ט, דגם ויצרן הם של המארז, מתעודת המשלוח — "פרטים" מציג אותם. ברקוד השורה מהתעודה ממלא את הסריאלי, ואם המדבקה הודבקה על מארז של שורה אחרת — משייך את המארז לשורה שנסרקה ומעדכן את הפרטים. פריט שלא הגיע מסמנים בפח.
       </div>
     </div>
   );

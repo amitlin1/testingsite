@@ -77,7 +77,7 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                 ) : (
                     <>
                         <p style={{ margin: "var(--space-md) 0", fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-48)" }}>
-                            יודפסו {total} מדבקות — מדבקה לכל מארז, עם המזהה שלו. את המדבקה מדביקים על הקופסה, ובקליטת מארזים סורקים אותה.
+                            יודפסו {total} מדבקות — מדבקה לכל מארז, עם המזהה שלו. את המדבקה מדביקים על הקופסה של השורה שעליה (לפי הסריאלי או המק״ט בתעודה), ובקליטת מארזים סורקים אותה.
                             {takenIn > 0 && ` ${takenIn === 1 ? "מארז אחד כבר נקלט" : `${takenIn} מהמארזים כבר נקלטו`} — המדבקה שלו מודפסת שוב.`}
                         </p>
                         {/* Printable area: one label per box, each on its own page/label. */}
@@ -113,6 +113,15 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                                                     {head} <b>{suffix}</b>
                                                 </div>
                                                 <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{b.item_type_desc}</div>
+                                                {/* The certificate row the box was minted for: the label goes on the box
+                                                    that row describes (its serial, else its makat). */}
+                                                {(b.cert_row_no || b.cert_serial_no) && (
+                                                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                                                        {b.cert_row_no ? `שורה ${b.cert_row_no} בתעודה` : ""}
+                                                        {b.cert_row_no && (b.cert_serial_no || b.makat) ? " · " : ""}
+                                                        {b.cert_serial_no ? <>S/N <bdi dir="ltr">{b.cert_serial_no}</bdi></> : b.makat ? <>מק״ט <bdi dir="ltr">{b.makat}</bdi></> : null}
+                                                    </div>
+                                                )}
                                                 <div style={{ fontSize: 13 }}>משלוח: {shipment?.shipment_code} · לקוח: {shipment?.customer_code}</div>
                                                 <div style={{ fontSize: 13 }}>תאריך: {shipmentDate}</div>
                                                 <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>

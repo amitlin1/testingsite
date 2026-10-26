@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { saveSignature } from "../../../lib/file-utils";
+import { deleteSignature, saveSignature } from "../../../lib/file-utils";
 import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
 import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
 
@@ -46,7 +46,7 @@ export const POST = withAuth(async (request: NextRequest, { session }: WithAuthC
         // Basic validation
         if (!shipment_id || !sent_date || !sent_shipment_code || !items || !Array.isArray(items) || items.length === 0) {
             return NextResponse.json(
-                { error: "Missing required fields or valid items" },
+                { error: "חסרים פרטי השליחה: קוד משלוח יוצא, תאריך וכמויות" },
                 { status: 400 }
             );
         }
@@ -55,16 +55,17 @@ export const POST = withAuth(async (request: NextRequest, { session }: WithAuthC
         if (shipment.is_sent) return NextResponse.json({ error: "המשלוח כבר נשלח" }, { status: 409 });
         if (!signature_base64) {
             return NextResponse.json(
-                { error: "Signature is required" },
+                { error: "חסרה חתימה" },
                 { status: 400 } // Bad Request - הלקוח לא עמד בתנאים
             );
         }
 
+        // The signature is stored before the transaction (not inside it, where
+        // its upload held the transaction open), and removed again if the send
+        // does not commit.
+        const signaturePath = await saveSignature(signature_base64, 'send', shipment_id);
+
         await prisma.$transaction(async (tx) => {
-            let signaturePath = null;
-            if (signature_base64) {
-                signaturePath = await saveSignature(signature_base64, 'send', shipment_id);
-            }
 
             for (const item of items) {
                 if (!item.item_type_id || !item.amount) continue;
@@ -91,15 +92,28 @@ export const POST = withAuth(async (request: NextRequest, { session }: WithAuthC
                 await tx.$executeRaw`
                     UPDATE shipments SET is_sent = true, finished_at = ${new Date(sent_date)}::timestamp WHERE id = ${shipment_id}
                 `;
+                // A closed shipment takes no more intakes: its boxes still
+                // waiting for one go (they hold nothing and no ledger rows).
+                await tx.$executeRaw`
+                    DELETE FROM items i
+                    USING item_types t
+                    WHERE t.item_type_id = i.item_type_id AND t.is_package
+                      AND i.shipment_id = ${shipment_id} AND i.package_id IS NULL
+                      AND NOT EXISTS (SELECT 1 FROM item_routes ir WHERE ir.item_id = i.item_id)
+                      AND NOT EXISTS (SELECT 1 FROM items m WHERE m.package_id = i.item_id)
+                `;
             }
+        }).catch(async (error) => {
+            if (signaturePath) await deleteSignature(shipment_id, signaturePath);
+            throw error;
         });
 
         return NextResponse.json({ success: true }, { status: 201 });
     } catch (error) {
         console.error("Error creating shipment history:", error);
         return NextResponse.json(
-            { error: "Failed to create shipment history" },
+            { error: "השליחה לא נשמרה — שגיאה בשרת" },
             { status: 500 }
         );
     }
-});
+}, { role: ["manager", "storekeeper"] });

@@ -73,6 +73,7 @@ const GUARDED_NAMES = [
   "legacy_id_map", // old→new id map written by the production package upgrade (scripts/prod-package-model); not in schema.prisma, read by locate-by-barcode
   "testing_routes_type_number_uq",
   "ir_item_fk",
+  "idx_items_serial_key", // expression index UPPER(TRIM(serial_no)) for the serial checks (20261027100000_shipment_box_lines)
   // triggers
   "trg_ise_immutable",
   "trg_isi_apply",
