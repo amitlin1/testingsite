@@ -465,13 +465,20 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const listId = `${idBase}-list`;
   const optionId = (i: number) => `${idBase}-opt-${i}`;
 
-  // On every open: reset, refresh recents, focus the input, load the index.
+  // On every open: reset and refresh recents (during render), then focus the
+  // input and load the index (the effect).
+  const [wasOpen, setWasOpen] = React.useState(false);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) {
+      setQuery("");
+      setItems([]);
+      setActive(0);
+      setRecents(readRecents());
+    }
+  }
   React.useEffect(() => {
     if (!open) return;
-    setQuery("");
-    setItems([]);
-    setActive(0);
-    setRecents(readRecents());
     const t = setTimeout(() => inputRef.current?.focus(), 30);
     let cancelled = false;
     apiFetch("/api/search/index")
@@ -491,16 +498,24 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   // Debounced item search. The `cancelled` flag is what keeps results in sync
   // with the input: a slow response for "AB" must never overwrite the results
-  // for "ABC" that the user has already typed.
+  // for "ABC" that the user has already typed. A new query clears or raises
+  // the loading state during render; the effect only waits and fetches.
+  const [searchFor, setSearchFor] = React.useState({ query, open });
+  if (searchFor.query !== query || searchFor.open !== open) {
+    setSearchFor({ query, open });
+    if (open) {
+      if (query.trim().length < ITEM_MIN_QUERY) {
+        setItems([]);
+        setItemsLoading(false);
+      } else {
+        setItemsLoading(true);
+      }
+    }
+  }
   React.useEffect(() => {
     if (!open) return;
     const q = query.trim();
-    if (q.length < ITEM_MIN_QUERY) {
-      setItems([]);
-      setItemsLoading(false);
-      return;
-    }
-    setItemsLoading(true);
+    if (q.length < ITEM_MIN_QUERY) return;
     let cancelled = false;
     const t = setTimeout(() => {
       apiFetch(`/api/search/items?q=${encodeURIComponent(q)}`)
@@ -529,10 +544,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   );
   const flat = React.useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
-  // Keep the cursor in bounds as the result set changes under it.
-  React.useEffect(() => {
+  // Keep the cursor in bounds as the result set changes under it (during
+  // render, so a cursor past the end is never painted).
+  const [clampedFor, setClampedFor] = React.useState(flat.length);
+  if (clampedFor !== flat.length) {
+    setClampedFor(flat.length);
     setActive((a) => (flat.length === 0 ? 0 : Math.min(a, flat.length - 1)));
-  }, [flat.length]);
+  }
 
   // Scroll the active row into view WITHOUT scrollIntoView, which would also
   // scroll the page behind the modal.

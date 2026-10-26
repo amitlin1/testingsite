@@ -31,14 +31,18 @@ const KEEP_Y = 60;
  */
 export function useDraggable<T extends HTMLElement = HTMLDivElement>(open = true, enabled = true) {
   const ref = React.useRef<T>(null);
-  const [offset, setOffsetState] = React.useState({ x: 0, y: 0 });
+  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
   // Read by the pointer handlers, which outlive the render that made them.
   const offsetRef = React.useRef(offset);
-  const setOffset = React.useCallback((o: { x: number; y: number }) => { offsetRef.current = o; setOffsetState(o); }, []);
+  React.useEffect(() => { offsetRef.current = offset; }, [offset]);
 
-  React.useEffect(() => {
+  // Every opening starts in the middle; reset during render, so the old
+  // position is never painted.
+  const [wasOpen, setWasOpen] = React.useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (open) setOffset({ x: 0, y: 0 });
-  }, [open, setOffset]);
+  }
 
   React.useEffect(() => {
     const reset = () => setOffset({ x: 0, y: 0 });

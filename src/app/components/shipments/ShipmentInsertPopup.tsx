@@ -15,7 +15,7 @@ import FieldLabel from "../common/FieldLabel";
 import { QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
 import { Lock as LockIcon } from "@/components/ui/icons";
 import { Add as AddIcon, Delete as DeleteIcon } from "@/components/ui/icons";
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
 import { NewShipment, Customers, Shipment } from "@/types";
 import SignatureCanvas from 'react-signature-canvas';
 import { parseShipmentQr, isValidShipmentQr, convertQrDateToInputFormat, type ShipmentData } from '@/app/lib/qrParser';
@@ -79,7 +79,6 @@ export default function ShipmentInsertPopup({
         control,
         handleSubmit,
         reset,
-        watch,
         setValue,
         getValues,
         trigger,
@@ -222,12 +221,18 @@ export default function ShipmentInsertPopup({
     };
 
     // The declared total = Σ quantities of the started lines.
-    const shipmentItems = watch("shipment_items");
+    const shipmentItems = useWatch({ control, name: "shipment_items" });
+    const shipmentCode = useWatch({ control, name: "shipment_code" });
     const total = declaredBoxes(shipmentItems);
     useEffect(() => {
         setValue("amount", total);
-        setConfirmBig(false);
     }, [total, setValue]);
+    // A changed count asks again: cleared during render.
+    const [confirmedFor, setConfirmedFor] = useState(total);
+    if (confirmedFor !== total) {
+        setConfirmedFor(total);
+        setConfirmBig(false);
+    }
 
     useEffect(() => {
         let cancelled = false;
@@ -265,9 +270,12 @@ export default function ShipmentInsertPopup({
         };
     }, [setValue]);
 
-    useEffect(() => {
+    // Every opening starts clean: the screen state during render, the form,
+    // the ref and the signature pad in the effect below.
+    const [wasOpen, setWasOpen] = useState(false);
+    if (wasOpen !== open) {
+        setWasOpen(open);
         if (open) {
-            reset({ ...defaultShipment, source_id: 1, shipment_items: [{ item_type_id: 0, quantity: 0 }] });
             setScanned(false);
             setScannedDate(false);
             setLocked({ poc: false, code: false, customer: false });
@@ -275,10 +283,15 @@ export default function ShipmentInsertPopup({
             setLineScanOpen(false);
             setDuplicate(null);
             setScannedDuplicate(null);
-            allowDuplicateRef.current = null;
             setConfirmBig(false);
             setIsSigned(false);
             setSubmitError(null);
+        }
+    }
+    useEffect(() => {
+        if (open) {
+            reset({ ...defaultShipment, source_id: 1, shipment_items: [{ item_type_id: 0, quantity: 0 }] });
+            allowDuplicateRef.current = null;
             sigCanvas.current?.clear();
         }
         return () => {
@@ -463,13 +476,13 @@ export default function ShipmentInsertPopup({
                 onClose={() => setLineScanOpen(false)}
                 itemTypes={itemTypes}
                 takenRows={scannedRows(shipmentItems)}
-                shipmentCode={watch("shipment_code")}
+                shipmentCode={shipmentCode}
                 onConfirm={addScannedLines}
             />
 
             {/* ה-form חייב להיות flex column כדי ש-DialogContent יגלול והכפתורים יישארו גלויים */}
             <form
-                onSubmit={handleSubmit(onSubmit)}
+                onSubmit={(e) => handleSubmit(onSubmit)(e)}
                 noValidate
                 style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}
             >

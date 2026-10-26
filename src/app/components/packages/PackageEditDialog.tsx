@@ -66,10 +66,19 @@ export default function PackageEditDialog({
   const [add, setAdd] = React.useState(() => blankAdd(pkg));
   const [adding, setAdding] = React.useState(false);
 
+  // Opening, or the box reloaded from the server, seeds the form from it. Done
+  // during render; the effect below only fetches the item types.
+  const [seeded, setSeeded] = React.useState<{ open: boolean; pkg: PackageView | null }>({ open: false, pkg: null });
+  if (seeded.open !== open || seeded.pkg !== pkg) {
+    setSeeded({ open, pkg });
+    if (open && pkg) {
+      setMakat(pkg.makat ?? ""); setModel(pkg.model ?? ""); setManufacturer(pkg.manufacturer_name ?? "");
+      setError(null); setAddOpen(false); setAdd(blankAdd(pkg));
+    }
+  }
+
   React.useEffect(() => {
     if (!open || !pkg) return;
-    setMakat(pkg.makat ?? ""); setModel(pkg.model ?? ""); setManufacturer(pkg.manufacturer_name ?? "");
-    setError(null); setAddOpen(false); setAdd(blankAdd(pkg));
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
   }, [open, pkg]);
 

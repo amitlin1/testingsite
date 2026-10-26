@@ -37,24 +37,25 @@ export default function HolidayDialog({
   const [addingType, setAddingType] = React.useState(false);
   const [newType, setNewType] = React.useState("");
 
-  // Read through a ref, NOT a dependency: "+ סוג חדש" appends to holidayTypes in
-  // the parent, and a new array identity in the dep list would re-run this
-  // seeding effect mid-edit — blanking every field the user already filled in
-  // and overwriting the type just created with holidayTypes[0].
-  const typesRef = React.useRef(holidayTypes);
-  typesRef.current = holidayTypes;
-
-  React.useEffect(() => {
-    if (!open) return;
-    setName(editing?.name ?? "");
-    setStartDate(editing?.startDate ?? "");
-    setEndDate(editing?.endDate ?? "");
-    setTypeId(editing?.typeId ?? typesRef.current[0]?.id ?? null);
-    setIsHalf(editing?.isHalfDay ?? false);
-    setHalfEnd(editing?.halfDayEndTime ?? "12:00");
-    setAddingType(false);
-    setNewType("");
-  }, [open, editing]);
+  // Seeded during render when the dialog opens or another holiday is edited.
+  // Keyed on those two only, NOT on holidayTypes: "+ סוג חדש" appends to
+  // holidayTypes in the parent, and re-seeding on that mid-edit would blank
+  // every field the user already filled in and overwrite the type just created
+  // with holidayTypes[0].
+  const [seededFor, setSeededFor] = React.useState<{ open: boolean; editing: DepartmentHoliday | null } | null>(null);
+  if (!seededFor || seededFor.open !== open || seededFor.editing !== editing) {
+    setSeededFor({ open, editing });
+    if (open) {
+      setName(editing?.name ?? "");
+      setStartDate(editing?.startDate ?? "");
+      setEndDate(editing?.endDate ?? "");
+      setTypeId(editing?.typeId ?? holidayTypes[0]?.id ?? null);
+      setIsHalf(editing?.isHalfDay ?? false);
+      setHalfEnd(editing?.halfDayEndTime ?? "12:00");
+      setAddingType(false);
+      setNewType("");
+    }
+  }
 
   const rangeErr = !!startDate && !!endDate && endDate < startDate;
   const canSave = !!name.trim() && !!startDate && !!endDate && !rangeErr && typeId != null && (!isHalf || !!halfEnd);

@@ -21,6 +21,36 @@ const TOPBAR_HEIGHT = 56;
 const MOBILE_QUERY = "(max-width: 980px)";
 const COLLAPSED_STORAGE_KEY = "sidebarCollapsed";
 
+// The desktop collapsed preference, kept in localStorage so it survives reloads
+// and read through useSyncExternalStore, so the server render (expanded) never
+// guesses it. The in-memory copy keeps the toggle working when storage is
+// unavailable (private mode).
+let collapsedPref: boolean | null = null;
+const collapsedListeners = new Set<() => void>();
+function readCollapsed(): boolean {
+  if (collapsedPref === null) {
+    try {
+      collapsedPref = localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1";
+    } catch {
+      collapsedPref = false;
+    }
+  }
+  return collapsedPref;
+}
+function writeCollapsed(value: boolean) {
+  collapsedPref = value;
+  try {
+    localStorage.setItem(COLLAPSED_STORAGE_KEY, value ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  collapsedListeners.forEach((l) => l());
+}
+function subscribeCollapsed(onChange: () => void) {
+  collapsedListeners.add(onChange);
+  return () => { collapsedListeners.delete(onChange); };
+}
+
 /** Page title + icon resolved from the current route, shown in the top bar. */
 function usePageMeta(pathname: string | null) {
   if (pathname?.startsWith("/testing")) return { title: "מסך בדיקה", icon: <ScienceIcon fontSize={20} /> };
@@ -46,7 +76,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const [navOpen, setNavOpen] = React.useState(false); // mobile off-canvas drawer
-  const [collapsed, setCollapsed] = React.useState(false); // desktop icon-only rail
+  const collapsed = React.useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false); // desktop icon-only rail
   const { title, icon } = usePageMeta(pathname);
 
   // Idle-tab dead-session redirect (the third of the three redirect sites;
@@ -62,33 +92,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     window.location.href = `${withBasePath("/login")}?callbackUrl=${encodeURIComponent(cb)}`;
   }, [session?.error]);
 
-  // Restore the desktop collapsed preference once, on mount.
-  React.useEffect(() => {
-    try {
-      setCollapsed(localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1");
-    } catch {
-      /* localStorage unavailable (SSR/private mode) — keep default */
-    }
-  }, []);
-
-  // Persist the collapsed preference so it survives reloads.
-  React.useEffect(() => {
-    try {
-      localStorage.setItem(COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [collapsed]);
-
-  // Never keep the drawer "open" on desktop.
-  React.useEffect(() => {
-    if (!isMobile) setNavOpen(false);
-  }, [isMobile]);
-
-  // Close the drawer on navigation.
-  React.useEffect(() => {
-    setNavOpen(false);
-  }, [pathname]);
+  // Close the drawer on navigation, and never keep it "open" on desktop.
+  // Adjusted during render, so the stale state is never painted.
+  const [navSeen, setNavSeen] = React.useState({ pathname, isMobile });
+  if (navSeen.pathname !== pathname || navSeen.isMobile !== isMobile) {
+    setNavSeen({ pathname, isMobile });
+    if (navSeen.pathname !== pathname || !isMobile) setNavOpen(false);
+  }
 
   // Escape closes the open drawer, like every other overlay.
   React.useEffect(() => {
@@ -112,9 +122,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // way out.
   const isDashboard = pathname?.startsWith("/dashboard") ?? false;
   const [userExpandedOnDashboard, setUserExpandedOnDashboard] = React.useState(false);
-  React.useEffect(() => {
-    if (!isDashboard) setUserExpandedOnDashboard(false);
-  }, [isDashboard]);
+  if (!isDashboard && userExpandedOnDashboard) setUserExpandedOnDashboard(false);
 
   // The icon-only variant only applies on desktop; the mobile drawer is always
   // full-width.
@@ -132,7 +140,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
     if (isDashboard) setUserExpandedOnDashboard(desktopCollapsed);
-    setCollapsed(() => !desktopCollapsed);
+    writeCollapsed(!desktopCollapsed);
   };
 
   return (
@@ -144,7 +152,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onClose={() => setNavOpen(false)}
         onExpand={() => {
           if (isDashboard) setUserExpandedOnDashboard(true);
-          setCollapsed(false);
+          writeCollapsed(false);
         }}
         onToggle={handleToggle}
       />

@@ -37,7 +37,8 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
   const [copies, setCopies] = React.useState(1);
   const [preview, setPreview] = React.useState(false);
   const printRef = React.useRef<HTMLDivElement>(null);
-  const printedRef = React.useRef<string[]>([]);
+  // The boxes sent to the printer, named in the confirmation after it closes.
+  const [printed, setPrinted] = React.useState<string[]>([]);
   const copiesLabelId = React.useId();
   // The browser cannot tell a printed job from a cancelled dialog, so nothing
   // is marked until the operator confirms after the print dialog closes.
@@ -45,11 +46,12 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
 
   // Reset when the dialog opens or the set changes — keyed on the count, not
   // the array identity (the caller derives `packages` from two fetches).
-  React.useEffect(() => {
-    if (!open) return;
-    setOn(packages.map(() => true)); setCopies(1); setPreview(false); setAskConfirm(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, packages.length]);
+  // Done during render, so the stale selection is never painted.
+  const [resetFor, setResetFor] = React.useState({ open, count: packages.length });
+  if (resetFor.open !== open || resetFor.count !== packages.length) {
+    setResetFor({ open, count: packages.length });
+    if (open) { setOn(packages.map(() => true)); setCopies(1); setPreview(false); setAskConfirm(false); }
+  }
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -124,9 +126,9 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
 
         {askConfirm && (
           <div className="no-print" role="alertdialog" aria-label="אישור הדפסה" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", fontSize: 13.5, color: INK, background: "var(--color-primary-tint)", border: `1px solid ${BLUE}`, borderRadius: 10, padding: "12px 14px", marginTop: 18 }}>
-            <span style={{ flex: 1, minWidth: 220 }}>חלון ההדפסה נסגר. המדבקות של {printedRef.current.length} המארזים הודפסו? אישור מסמן אותם כמודבקים ומוריד אותם מהרשימה.</span>
+            <span style={{ flex: 1, minWidth: 220 }}>חלון ההדפסה נסגר. המדבקות של {printed.length} המארזים הודפסו? אישור מסמן אותם כמודבקים ומוריד אותם מהרשימה.</span>
             <button type="button" onClick={() => setAskConfirm(false)} className="pkg-pill pkg-pill--ghost pkg-pill--sm" style={{ paddingInline: 16 }}>לא, עדיין לא</button>
-            <button type="button" onClick={() => { setAskConfirm(false); onPrinted?.(printedRef.current); }} className="pkg-pill pkg-pill--primary pkg-pill--sm" style={{ paddingInline: 18 }}>כן, הודפסו</button>
+            <button type="button" onClick={() => { setAskConfirm(false); onPrinted?.(printed); }} className="pkg-pill pkg-pill--primary pkg-pill--sm" style={{ paddingInline: 18 }}>כן, הודפסו</button>
           </div>
         )}
 
@@ -139,7 +141,7 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
           <button type="button" onClick={onClose} className="pkg-pill pkg-pill--ghost" style={{ padding: "11px 20px" }}>ביטול</button>
           <button type="button" onClick={() => setPreview((p) => !p)} aria-pressed={preview} className="pkg-pill pkg-pill--ghost" style={{ padding: "11px 20px" }}>{preview ? "הסתר תצוגה מקדימה" : "תצוגה מקדימה"}</button>
           <button type="button" disabled={chosen.length === 0}
-            onClick={() => { printedRef.current = chosen.map((c) => c.pkg.item_id); setPreview(true); setTimeout(() => handlePrint(), 50); }}
+            onClick={() => { setPrinted(chosen.map((c) => c.pkg.item_id)); setPreview(true); setTimeout(() => handlePrint(), 50); }}
             className="pkg-pill pkg-pill--primary" style={{ padding: "11px 24px", fontSize: 15 }}>
             {chosen.length === 0 ? "הדפס" : `הדפס ${sheets} מדבקות`}
           </button>

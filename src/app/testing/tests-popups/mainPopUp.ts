@@ -40,21 +40,18 @@ const REGISTRY: Record<number, React.ComponentType<StationTestDialogProps>> = Ob
 /** The popup the code gives a station type (no template). */
 const codeDialog = (typeId: number) => REGISTRY[typeId] ?? PopUpTestDialog;
 
-/** One template dialog per station type, made once: a new component type per render would
- *  remount the popup and lose what the worker filled. */
-const templateDialogs = new Map<number, React.ComponentType<StationTestDialogProps>>();
-function templateDialog(typeId: number): React.ComponentType<StationTestDialogProps> {
-  const made = templateDialogs.get(typeId);
-  if (made) return made;
-  const fallback = codeDialog(typeId);
-  const TemplateDialog = (props: StationTestDialogProps) => React.createElement(TemplateStation, { ...props, fallback });
-  TemplateDialog.displayName = `TemplateDialog(${typeId})`;
-  templateDialogs.set(typeId, TemplateDialog);
-  return TemplateDialog;
-}
-
 /** True if a station type has a dedicated wizard (so "התחל בדיקה" opens it instead of starting a plain test). */
 export const hasStartTestDialog = (typeId: number, hasTemplate = false) => hasTemplate || typeId in REGISTRY;
 
-export const getStartTestDialog = (typeId: number, hasTemplate = false) =>
-  hasTemplate ? templateDialog(typeId) : codeDialog(typeId);
+/** The popup the code gives a station type; with a template, StartTestDialog opens TemplateStation instead. */
+export const getStartTestDialog = (typeId: number) => codeDialog(typeId);
+
+/** The dialog a station type opens: its template (TemplateStation, with the code's popup as the
+ *  fallback) when it has one, else the code's popup. Every one of them is a module-level component,
+ *  so nothing remounts the popup and loses what the worker filled. */
+export function StartTestDialog({ typeId, hasTemplate = false, ...props }: StationTestDialogProps & { typeId: number; hasTemplate?: boolean }) {
+  const fallback = codeDialog(typeId);
+  return hasTemplate
+    ? React.createElement(TemplateStation, { ...props, fallback })
+    : React.createElement(fallback, props);
+}

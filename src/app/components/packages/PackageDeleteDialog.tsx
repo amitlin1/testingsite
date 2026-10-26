@@ -25,7 +25,12 @@ export default function PackageDeleteDialog({
 }) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  React.useEffect(() => { if (open) setError(null); }, [open]);
+  // Opening starts without the last attempt's error.
+  const [wasOpen, setWasOpen] = React.useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) setError(null);
+  }
   if (!open || !pkg) return null;
 
   const count = pkg.items.length;

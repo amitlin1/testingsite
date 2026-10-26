@@ -172,31 +172,51 @@ export interface DashboardStateApi {
   activeFilterCount: number;
 }
 
+// The rail preference is read through useSyncExternalStore. The in-memory copy
+// stands in when storage is unavailable (private mode), so the toggle still
+// works for the rest of the visit.
+let railFallback = true;
+const railListeners = new Set<() => void>();
+function readRailOpen(): boolean {
+  try {
+    const stored = localStorage.getItem(RAIL_STORAGE_KEY);
+    if (stored !== null) return stored === "true";
+  } catch {
+    /* private mode — keep the default */
+  }
+  return railFallback;
+}
+function writeRailOpen(open: boolean) {
+  railFallback = open;
+  try {
+    localStorage.setItem(RAIL_STORAGE_KEY, String(open));
+  } catch {
+    /* ignore */
+  }
+  railListeners.forEach((l) => l());
+}
+function subscribeRail(onChange: () => void) {
+  railListeners.add(onChange);
+  return () => { railListeners.delete(onChange); };
+}
+
 export function useDashboardState(initial?: Partial<DashboardState>): DashboardStateApi {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [railOpen, setRailOpen] = React.useState(true);
-  const [state, setState] = React.useState<DashboardState>(() => {
+  // The server render (and hydration) uses the default, so the server and the
+  // first client paint agree; the rail's own CSS width transition covers the
+  // correction.
+  const railOpen = React.useSyncExternalStore(subscribeRail, readRailOpen, () => true);
+  const [baseState, setState] = React.useState<DashboardState>(() => {
     const sp = new URLSearchParams(searchParams?.toString() ?? "");
     return { ...stateFromParams(sp, true), ...initial };
   });
-
-  // localStorage is read after mount so the server and the first client paint
-  // agree; the rail's own CSS width transition covers the correction.
-  React.useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RAIL_STORAGE_KEY);
-      if (stored !== null) setRailOpen(stored === "true");
-    } catch {
-      /* private mode — keep the default */
-    }
-  }, []);
-
-  React.useEffect(() => {
-    setState((s) => (s.railOpen === railOpen ? s : { ...s, railOpen }));
-  }, [railOpen]);
+  const state = React.useMemo(
+    () => (baseState.railOpen === railOpen ? baseState : { ...baseState, railOpen }),
+    [baseState, railOpen],
+  );
 
   // The URL is a projection of the state, written back with `replace` so the
   // browser's back button still leaves the dashboard rather than walking every
@@ -237,17 +257,7 @@ export function useDashboardState(initial?: Partial<DashboardState>): DashboardS
     ),
     setPeriod: React.useCallback((period) => patch((s) => ({ ...s, period })), [patch]),
     setStuckHours: React.useCallback((stuckHours) => patch((s) => ({ ...s, stuckHours })), [patch]),
-    toggleRail: React.useCallback(() => {
-      setRailOpen((open) => {
-        const next = !open;
-        try {
-          localStorage.setItem(RAIL_STORAGE_KEY, String(next));
-        } catch {
-          /* ignore */
-        }
-        return next;
-      });
-    }, []),
+    toggleRail: React.useCallback(() => writeRailOpen(!readRailOpen()), []),
     // §6: `נקה הכל` resets everything except the date range.
     clearFilters: React.useCallback(
       () => patch((s) => ({ ...s, filters: { ...EMPTY_FILTERS } })),

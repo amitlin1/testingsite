@@ -86,11 +86,15 @@ export default function PhotoStation({
   const fieldsGate = sf.status === "loading" || sf.status === "error" || (hasFields && fx.blocking(ready.gate));
   const { reset: resetFields } = fx;
 
-  React.useEffect(() => {
-    if (!open) return;
-    // The SKU carries on from the station before (ItemRow.last_sku).
-    setPhaseIdx(0); setError(null); setSkuScan(item.last_sku ?? ""); setHasRU(null); setRefImages([]); setPhoto(emptyPhotos()); resetFields();
-  }, [open, item, resetFields]);
+  // Reset during render when the dialog opens or the item changes.
+  const [openedFor, setOpenedFor] = React.useState<{ open: boolean; item: typeof item } | null>(null);
+  if (!openedFor || openedFor.open !== open || openedFor.item !== item) {
+    setOpenedFor({ open, item });
+    if (open) {
+      // The SKU carries on from the station before (ItemRow.last_sku).
+      setPhaseIdx(0); setError(null); setSkuScan(item.last_sku ?? ""); setHasRU(null); setRefImages([]); setPhoto(emptyPhotos()); resetFields();
+    }
+  }
 
   const phases: ShellPhase[] = [
     { key: "sku", title: SKU_TITLE, desc: SKU_DESC },

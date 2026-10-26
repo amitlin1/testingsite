@@ -31,15 +31,20 @@ export default function WeekdayEditorDialog({
   const [bEnd, setBEnd] = React.useState(value.breakEnd ?? "13:00");
   const [saving, setSaving] = React.useState(false);
 
-  // Reseed from the row whenever the dialog (re)opens for a weekday.
-  React.useEffect(() => {
-    if (!open) return;
-    setWorking(value.isWorking);
-    setStart(value.start ?? "07:00");
-    setEnd(value.end ?? (weekday === 5 ? "12:00" : "15:35"));
-    setBStart(value.breakStart ?? "12:00");
-    setBEnd(value.breakEnd ?? "13:00");
-  }, [open, value, weekday]);
+  // Reseed from the row whenever the dialog (re)opens for a weekday; done
+  // during render, so the old values are never painted.
+  const seedInputs = [open, value, weekday] as const;
+  const [seededFor, setSeededFor] = React.useState<typeof seedInputs | null>(null);
+  if (!seededFor || seedInputs.some((v, i) => v !== seededFor[i])) {
+    setSeededFor(seedInputs);
+    if (open) {
+      setWorking(value.isWorking);
+      setStart(value.start ?? "07:00");
+      setEnd(value.end ?? (weekday === 5 ? "12:00" : "15:35"));
+      setBStart(value.breakStart ?? "12:00");
+      setBEnd(value.breakEnd ?? "13:00");
+    }
+  }
 
   const isFriday = weekday === 5;
   const endErr = working && isEndBeforeStart(start, end);

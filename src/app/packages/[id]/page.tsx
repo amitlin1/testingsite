@@ -21,6 +21,24 @@ type Timeline = (PackageTimelineEntry & { worker_name: string | null })[];
 
 const card: React.CSSProperties = { background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16 };
 
+type PackageRead =
+  | { kind: "notFound" }
+  | { kind: "error" }
+  | { kind: "ok"; pkg: PackageView | null; timeline: Timeline };
+
+/** The package and its timeline; any failure but a 404 is an error. */
+async function readPackage(id: string): Promise<PackageRead> {
+  try {
+    const res = await apiFetch(`/api/packages/${id}`);
+    if (res.status === 404) return { kind: "notFound" };
+    if (!res.ok) return { kind: "error" };
+    const data = await res.json();
+    return { kind: "ok", pkg: data.package ?? null, timeline: Array.isArray(data.timeline) ? data.timeline : [] };
+  } catch {
+    return { kind: "error" };
+  }
+}
+
 export default function PackagePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -35,31 +53,42 @@ export default function PackagePage() {
   const [labelsOpen, setLabelsOpen] = React.useState(false);
   const [sourceId, setSourceId] = React.useState<number | null>(null);
 
-  const load = React.useCallback(async () => {
-    if (!params?.id) return;
-    setLoading(true);
-    setLoadError(false);
-    try {
-      const res = await apiFetch(`/api/packages/${params.id}`);
-      if (res.status === 404) { setNotFound(true); setPkg(null); return; }
-      if (!res.ok) { setLoadError(true); return; }
-      const data = await res.json();
-      setPkg(data.package ?? null);
-      setTimeline(Array.isArray(data.timeline) ? data.timeline : []);
-      if (data.package?.shipment_id) {
+  const id = params?.id;
+
+  const applyPackage = React.useCallback((read: PackageRead) => {
+    if (read.kind === "notFound") { setNotFound(true); setPkg(null); }
+    else if (read.kind === "error") setLoadError(true);
+    else {
+      setPkg(read.pkg);
+      setTimeline(read.timeline);
+      const shipmentId = read.pkg?.shipment_id;
+      if (shipmentId) {
         apiFetch("/api/shipments").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => {
-          const s = (Array.isArray(d) ? d : []).find((x) => x.id === data.package.shipment_id);
+          const s = (Array.isArray(d) ? d : []).find((x) => x.id === shipmentId);
           setSourceId(s?.source_id ?? null);
         }).catch(() => {});
       }
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
     }
-  }, [params?.id]);
+    setLoading(false);
+  }, []);
 
-  React.useEffect(() => { load(); }, [load]);
+  const load = React.useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setLoadError(false);
+    applyPackage(await readPackage(id));
+  }, [id, applyPackage]);
+
+  // Another package starts its load during render; the effect only reads, and
+  // applies the reply. (`loading` starts true for the first one.)
+  const [loadingId, setLoadingId] = React.useState(id);
+  if (loadingId !== id) {
+    setLoadingId(id);
+    if (id) { setLoading(true); setLoadError(false); }
+  }
+  React.useEffect(() => {
+    if (id) readPackage(id).then(applyPackage);
+  }, [id, applyPackage]);
 
   const back = (
     <button type="button" onClick={() => router.push("/packages")} className="pkg-link" style={{ fontSize: 13.5 }}>

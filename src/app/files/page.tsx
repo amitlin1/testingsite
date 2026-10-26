@@ -59,11 +59,23 @@ interface UploadFileState {
   error?: string;
 }
 
+/** The folder's entries, or null when they could not be read. */
+async function readFiles(prefix: string): Promise<FileItem[] | null> {
+  try {
+    const res = await apiFetch(`/api/files?prefix=${encodeURIComponent(prefix)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return null;
+  }
+}
+
 export default function FilesPage() {
   // Core state
   const [currentPath, setCurrentPath] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   // A failed load is not an empty folder: it gets its own band and a retry.
   const [loadError, setLoadError] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
@@ -97,27 +109,29 @@ export default function FilesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Data fetching ────────────────────────────────────────────────────────────
+  const applyFiles = useCallback((list: FileItem[] | null) => {
+    setLoadError(list === null);
+    setFiles(list ?? []);
+    setLoading(false);
+  }, []);
+
   const fetchFiles = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
-    try {
-      const res = await apiFetch(
-        `/api/files?prefix=${encodeURIComponent(currentPath)}`
-      );
-      if (!res.ok) throw new Error("fetch failed");
-      const data = await res.json();
-      setFiles(Array.isArray(data) ? data : []);
-    } catch {
-      setLoadError(true);
-      setFiles([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentPath]);
+    applyFiles(await readFiles(currentPath));
+  }, [currentPath, applyFiles]);
 
+  // Opening a folder starts its load during render; the effect only reads, and
+  // applies the reply.
+  const [loadingPath, setLoadingPath] = useState(currentPath);
+  if (loadingPath !== currentPath) {
+    setLoadingPath(currentPath);
+    setLoading(true);
+    setLoadError(false);
+  }
   useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
+    readFiles(currentPath).then(applyFiles);
+  }, [currentPath, applyFiles]);
 
   // ── Breadcrumb ───────────────────────────────────────────────────────────────
   const pathSegments = currentPath

@@ -13,7 +13,7 @@ import {
 import { Add as AddIcon, Delete as DeleteIcon } from "@/components/ui/icons";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
 import { Shipment } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import SignatureCanvas from 'react-signature-canvas';
@@ -67,7 +67,6 @@ export default function ShipmentSendPopup({
         control,
         handleSubmit,
         reset,
-        watch,
         setValue,
         formState: { errors, isValid, isSubmitting },
     } = useForm<SendFormValues>({
@@ -86,7 +85,7 @@ export default function ShipmentSendPopup({
         name: "items"
     });
 
-    const items = watch("items");
+    const items = useWatch({ control, name: "items" });
 
     const sigCanvas = React.useRef<SignatureCanvas>(null);
 
@@ -106,6 +105,13 @@ export default function ShipmentSendPopup({
         return () => { cancelled = true; };
     }, []);
 
+    // Another shipment: one without an id has no history (cleared during
+    // render); one with an id loads its own.
+    const [historyFor, setHistoryFor] = useState(shipment);
+    if (historyFor !== shipment) {
+        setHistoryFor(shipment);
+        if (!shipment?.id) setHistory([]);
+    }
     useEffect(() => {
         if (shipment?.id) {
             apiFetch(`/api/shipment-history?shipment_id=${shipment.id}`)
@@ -116,11 +122,21 @@ export default function ShipmentSendPopup({
                     }
                 })
                 .catch(err => console.error("Error loading history:", err));
-        } else {
-            setHistory([]);
         }
     }, [shipment]);
 
+    // Every opening starts clean: the screen state during render, the form in
+    // the effect below.
+    const [openedFor, setOpenedFor] = useState<{ open: boolean; shipment: typeof shipment } | null>(null);
+    if (!openedFor || openedFor.open !== open || openedFor.shipment !== shipment) {
+        setOpenedFor({ open, shipment });
+        if (open && shipment) {
+            setSubmitError(null);
+            // The pad mounts empty with the dialog, so the form starts unsigned
+            // (as the receiving form does) — never "signed" from the last return.
+            setIsSigned(false);
+        }
+    }
     useEffect(() => {
         if (open && shipment) {
             reset({
@@ -130,10 +146,6 @@ export default function ShipmentSendPopup({
                 sending_worker_name: null,
                 items: [{ item_type_id: null, makat: null, amount: '' }],
             });
-            setSubmitError(null);
-            // The pad mounts empty with the dialog, so the form starts unsigned
-            // (as the receiving form does) — never "signed" from the last return.
-            setIsSigned(false);
         }
     }, [open, shipment, reset]);
 
@@ -216,7 +228,7 @@ export default function ShipmentSendPopup({
             <DialogTitle onClose={onClose}>
                 החזרת משלוח
             </DialogTitle>
-            <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+            <form onSubmit={(e) => handleSubmit(onSubmit)(e)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
                     {sender.blocked && (
                         <Alert severity="error" sx={{ mb: 2 }}>

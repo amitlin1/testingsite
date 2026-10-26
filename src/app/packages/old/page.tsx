@@ -58,6 +58,19 @@ function FilterSelect({ value, onChange, options, allLabel }: { value: string; o
 }
 
 /** useSearchParams needs a Suspense boundary (deep links: ?shipment= / ?status= / ?q=). */
+/** `list` null = keep what is on screen (the request itself failed). */
+type PackagesRead = { list: PackageView[] | null; failed: boolean };
+
+async function readPackages(): Promise<PackagesRead> {
+  try {
+    const res = await apiFetch("/api/packages");
+    const data = res.ok ? await res.json() : [];
+    return { list: Array.isArray(data) ? data : [], failed: !res.ok };
+  } catch {
+    return { list: null, failed: true };
+  }
+}
+
 export default function PackagesPage() {
   return (
     <React.Suspense fallback={null}>
@@ -112,22 +125,20 @@ function PackagesPageInner() {
   };
   const [types, setTypes] = React.useState<Option[]>([]);
 
+  const applyPackages = React.useCallback((read: PackagesRead) => {
+    if (read.failed) setLoadError(true);
+    if (read.list) setAll(read.list);
+    setLoading(false);
+  }, []);
+
   const load = React.useCallback(async () => {
     setLoading(true);
     setLoadError(false);
-    try {
-      const res = await apiFetch("/api/packages");
-      if (!res.ok) setLoadError(true);
-      const data = res.ok ? await res.json() : [];
-      setAll(Array.isArray(data) ? data : []);
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    applyPackages(await readPackages());
+  }, [applyPackages]);
 
-  React.useEffect(() => { load(); }, [load]);
+  // The first load: `loading` starts true, so only the reply sets state.
+  React.useEffect(() => { readPackages().then(applyPackages); }, [applyPackages]);
   React.useEffect(() => {
     apiFetch("/api/customers").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setCustomers((Array.isArray(d) ? d : []).map((c) => ({ value: String(c.id), label: c.customer_code ? `${c.name} (${c.customer_code})` : c.name })))).catch(() => {});
     apiFetch("/api/shipments").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setShipments((Array.isArray(d) ? d : []).map((s) => ({ value: String(s.id), label: s.shipment_code, source_id: s.source_id ?? null })))).catch(() => {});

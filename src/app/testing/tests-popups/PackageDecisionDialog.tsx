@@ -33,8 +33,13 @@ export default function PackageDecisionDialog({
   // re-renders every second (its elapsed-time clocks), which hands this dialog
   // a fresh `item` object each time — keying on the object wiped the worker's
   // choice and note mid-typing.
+  // Done during render, so the previous item's choice is never painted.
   const itemId = item?.item_id ?? null;
-  React.useEffect(() => { if (open) { setChoice(null); setNote(""); } }, [open, itemId]);
+  const [resetFor, setResetFor] = React.useState({ open, itemId });
+  if (resetFor.open !== open || resetFor.itemId !== itemId) {
+    setResetFor({ open, itemId });
+    if (open) { setChoice(null); setNote(""); }
+  }
   if (!open || !item) return null;
 
   const choices: { key: PackDecision; label: string; note: string; tone: string }[] = [

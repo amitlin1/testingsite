@@ -207,11 +207,20 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
     { capped: false, from: null, to: null },
   );
 
+  // Each load starts during render, when what the effect below reads changes;
+  // the effect only sets state from the replies. Only a shipment has a curve.
+  const loadKey = `${config.path}|${target.id}|${target.kind}|${preset}|${attempt}`;
+  const [seenLoadKey, setSeenLoadKey] = React.useState(loadKey);
+  if (seenLoadKey !== loadKey) {
+    setSeenLoadKey(loadKey);
+    setLoading(true);
+    setError(null);
+    if (target.kind !== "shipment") setCompletion(null);
+  }
+
   React.useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     async function load() {
       try {
@@ -256,10 +265,7 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
     }
 
     async function loadCompletion() {
-      if (target.kind !== "shipment") {
-        setCompletion(null);
-        return;
-      }
+      if (target.kind !== "shipment") return;
       // §8.5.1 — the completion CURVE has one definition and it lives in one
       // place. It is never recomputed here, and never against shipments.amount.
       const range = presetRange(preset);

@@ -56,6 +56,44 @@ function recordDateLabel(r: MonthRecord): string {
   return sm === em ? `${sd}–${ed}.${sm}` : `${sd}.${sm}–${ed}.${em}`;
 }
 
+/** The weekday defaults, holiday types and holidays (each null when not OK); null when unreachable. */
+async function readStatic(): Promise<{
+  defaults: WeekdayDefault[] | null; types: HolidayType[] | null; holidays: DepartmentHoliday[] | null;
+} | null> {
+  try {
+    const [d, t, h] = await Promise.all([
+      apiFetch("/api/settings/work-hours/defaults"),
+      apiFetch("/api/settings/work-hours/holiday-types"),
+      apiFetch("/api/settings/work-hours/holidays"),
+    ]);
+    return {
+      defaults: d.ok ? await d.json() : null,
+      types: t.ok ? await t.json() : null,
+      holidays: h.ok ? await h.json() : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** One month's calendar and overrides (each null when not OK); null when unreachable. */
+async function readMonth(from: string, to: string): Promise<{
+  calendar: { days: ResolvedDay[]; israeli: IsraeliHolidayInfo[] } | null; overrides: WorkdayOverride[] | null;
+} | null> {
+  try {
+    const [cal, ov] = await Promise.all([
+      apiFetch(`/api/settings/work-hours/calendar?from=${from}&to=${to}`),
+      apiFetch(`/api/settings/work-hours/overrides?from=${from}&to=${to}`),
+    ]);
+    return {
+      calendar: cal.ok ? ((await cal.json()) as { days: ResolvedDay[]; israeli: IsraeliHolidayInfo[] }) : null,
+      overrides: ov.ok ? await ov.json() : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function WorkHoursPage() {
   const now = React.useMemo(() => new Date(), []);
   const [view, setView] = React.useState({ y: now.getFullYear(), m: now.getMonth() });
@@ -90,45 +128,49 @@ export default function WorkHoursPage() {
   const from = monthStartISO(view.y, view.m);
   const to = monthEndISO(view.y, view.m);
 
-  const loadStatic = React.useCallback(async () => {
-    try {
-      const [d, t, h] = await Promise.all([
-        apiFetch("/api/settings/work-hours/defaults"),
-        apiFetch("/api/settings/work-hours/holiday-types"),
-        apiFetch("/api/settings/work-hours/holidays"),
-      ]);
-      if (d.ok) setDefaults(await d.json());
-      if (t.ok) setHolidayTypes(await t.json());
-      if (h.ok) setHolidays(await h.json());
-    } catch {
-      fail("שגיאה בטעינת נתונים");
-    }
-  }, []);
+  // Read, then applied in the promise's callback, so the effects below can run these.
+  const loadStatic = React.useCallback(
+    () =>
+      readStatic().then((read) => {
+        if (!read) { fail("שגיאה בטעינת נתונים"); return; }
+        if (read.defaults) setDefaults(read.defaults);
+        if (read.types) setHolidayTypes(read.types);
+        if (read.holidays) setHolidays(read.holidays);
+      }),
+    [],
+  );
 
-  const loadMonth = React.useCallback(async () => {
+  const fetchMonth = React.useCallback(
+    () =>
+      readMonth(from, to).then((read) => {
+        if (!read) fail("שגיאה בטעינת הלוח");
+        else {
+          if (read.calendar) {
+            setMonthDays(read.calendar.days ?? []);
+            setIsraeliCat(new Map((read.calendar.israeli ?? []).map((h) => [h.date, h.category])));
+          } else {
+            fail("שגיאה בטעינת הלוח");
+          }
+          if (read.overrides) setMonthOverrides(read.overrides);
+        }
+        setLoading(false);
+      }),
+    [from, to],
+  );
+  const loadMonth = React.useCallback(() => {
     setLoading(true);
-    try {
-      const [cal, ov] = await Promise.all([
-        apiFetch(`/api/settings/work-hours/calendar?from=${from}&to=${to}`),
-        apiFetch(`/api/settings/work-hours/overrides?from=${from}&to=${to}`),
-      ]);
-      if (cal.ok) {
-        const j = (await cal.json()) as { days: ResolvedDay[]; israeli: IsraeliHolidayInfo[] };
-        setMonthDays(j.days ?? []);
-        setIsraeliCat(new Map((j.israeli ?? []).map((h) => [h.date, h.category])));
-      } else {
-        fail("שגיאה בטעינת הלוח");
-      }
-      if (ov.ok) setMonthOverrides(await ov.json());
-    } catch {
-      fail("שגיאה בטעינת הלוח");
-    } finally {
-      setLoading(false);
-    }
-  }, [from, to]);
+    return fetchMonth();
+  }, [fetchMonth]);
+
+  // Another month starts its load during render (`loading` starts true for the first one).
+  const [loadingMonth, setLoadingMonth] = React.useState(from);
+  if (loadingMonth !== from) {
+    setLoadingMonth(from);
+    setLoading(true);
+  }
 
   React.useEffect(() => { void loadStatic(); }, [loadStatic]);
-  React.useEffect(() => { void loadMonth(); }, [loadMonth]);
+  React.useEffect(() => { void fetchMonth(); }, [fetchMonth]);
 
   const defByWeekday = React.useMemo(() => {
     const m = new Map<Weekday, WeekdayDefault>();

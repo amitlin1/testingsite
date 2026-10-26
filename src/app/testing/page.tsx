@@ -47,7 +47,7 @@ import { Star as StarIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
 import { Queue as QueueIcon } from "@/components/ui/icons";
 // MoreVertIcon removed
-import { getStartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
+import { StartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
 import StationHistoryDialog from "../components/StationHistoryDialog";
 import TestingDock from "../components/testing/TestingDock";
 import type { PackageView } from "@/app/lib/packages/read";
@@ -69,41 +69,44 @@ const packageKindOf = (it: ItemRow): "open" | "close" => {
 
 // Item / station types now live in src/types (ItemRow, TestStation, TestStationType, StationLite).
 
-// Custom hook for live elapsed time display
+// A one-second clock, read through useSyncExternalStore so render stays pure.
+// The server render has no clock (null), so it draws no time.
+const subscribeSecond = (onTick: () => void) => {
+  const interval = setInterval(onTick, 1000);
+  return () => clearInterval(interval);
+};
+const secondSnapshot = () => Math.floor(Date.now() / 1000) * 1000;
+const noClock = () => null;
+const noSubscribe = () => () => {};
+
+// Custom hook for live elapsed time display. The clock ticks only while there
+// is a valid start time.
 function useElapsedTime(createdAt: string | null | undefined): string {
-  const [elapsed, setElapsed] = React.useState<string>("");
-
-  React.useEffect(() => {
-    if (!createdAt) {
-      setElapsed("");
-      return;
-    }
-    const startTime = new Date(createdAt).getTime();
-    if (isNaN(startTime)) {
-      setElapsed("");
-      return;
-    }
-
-    const updateElapsed = () => {
-      const now = Date.now();
-      const diff = Math.floor((now - startTime) / 1000);
-      if (diff < 0) {
-        setElapsed("");
-        return;
-      }
-      const hours = Math.floor(diff / 3600);
-      const minutes = Math.floor((diff % 3600) / 60);
-      const seconds = diff % 60;
-      setElapsed(`${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`);
-    };
-
-    updateElapsed();
-    const interval = setInterval(updateElapsed, 1000);
-    return () => clearInterval(interval);
-  }, [createdAt]);
-
-  return elapsed;
+  const startTime = createdAt ? new Date(createdAt).getTime() : NaN;
+  const ticking = !isNaN(startTime);
+  const now = React.useSyncExternalStore(ticking ? subscribeSecond : noSubscribe, ticking ? secondSnapshot : noClock, noClock);
+  if (!ticking || now === null) return "";
+  const diff = Math.floor((now - startTime) / 1000);
+  if (diff < 0) return "";
+  const hours = Math.floor(diff / 3600);
+  const minutes = Math.floor((diff % 3600) / 60);
+  const seconds = diff % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
+
+// Page-level "who's working" choice, persisted to localStorage.
+const WORKER_STORAGE_KEY = "testing-page:active-worker-id";
+const readStoredWorkerId = (): number | null => {
+  try {
+    const raw = window.localStorage.getItem(WORKER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = parseInt(raw, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  } catch {
+    return null;
+  }
+};
+const noStoredWorkerId = (): number | null => null;
 
 /** Start-test failed (someone else took the item, or the server refused). */
 const START_FAILED_ITEM = "לא ניתן להתחיל בדיקה — ייתכן שפריט זה כבר נתפס על ידי עובד אחר.";
@@ -705,32 +708,28 @@ function TestingPageView() {
   // taken from this page (finish test, file upload, replace, edit). Persisted
   // to localStorage so a refresh doesn't lose the choice. Smart-card auth will
   // replace this in the future.
-  const WORKER_STORAGE_KEY = "testing-page:active-worker-id";
-  const [activeWorkerId, setActiveWorkerId] = React.useState<number | null>(null);
+  // Until the token or the picker sets one, the active worker is the stored
+  // choice (read after hydration, so the server render never guesses it).
+  const storedWorkerId = React.useSyncExternalStore(noSubscribe, readStoredWorkerId, noStoredWorkerId);
+  const [pickedWorker, setPickedWorker] = React.useState<{ id: number | null } | null>(null);
+  const activeWorkerId = pickedWorker ? pickedWorker.id : storedWorkerId;
   // Auth: the logged-in user's worker id, from their Keycloak employeeNumber.
   const tokenWorkerId = useTokenWorkerId();
   const { data: authSession } = useSession();
   // Same rule as the shipment worker fields (useShipmentWorker): everyone
   // starts as themselves; only a manager may switch to another worker.
   const workerLocked = tokenWorkerId != null && !isAdmin(authSession?.roles ?? []);
-  React.useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(WORKER_STORAGE_KEY);
-      if (raw) {
-        const parsed = parseInt(raw, 10);
-        if (!Number.isNaN(parsed)) setActiveWorkerId(parsed);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
   // When the token carries a worker id, THAT is the active worker on load — it
   // overrides any manual / localStorage choice. A non-manager stays on it
   // (workerLocked); a manager may then switch. Falls back to the manual picker
-  // when the user has no employeeNumber.
+  // when the user has no employeeNumber. Taken during render; stored below.
+  const [seenTokenWorkerId, setSeenTokenWorkerId] = React.useState<number | null>(null);
+  if (seenTokenWorkerId !== tokenWorkerId) {
+    setSeenTokenWorkerId(tokenWorkerId);
+    if (tokenWorkerId != null) setPickedWorker({ id: tokenWorkerId });
+  }
   React.useEffect(() => {
     if (tokenWorkerId == null) return;
-    setActiveWorkerId(tokenWorkerId);
     try {
       window.localStorage.setItem(WORKER_STORAGE_KEY, String(tokenWorkerId));
     } catch {
@@ -738,7 +737,7 @@ function TestingPageView() {
     }
   }, [tokenWorkerId]);
   const handleWorkerChange = (workerId: number | null) => {
-    setActiveWorkerId(workerId);
+    setPickedWorker({ id: workerId });
     try {
       if (workerId == null) window.localStorage.removeItem(WORKER_STORAGE_KEY);
       else window.localStorage.setItem(WORKER_STORAGE_KEY, String(workerId));
@@ -980,7 +979,7 @@ function TestingPageView() {
   const closeToast = React.useCallback(() => {
     setStartError(null);
     if (!scannerOpen) setScanError(null);
-  }, [scannerOpen]);
+  }, [scannerOpen, setStartError, setScanError]);
 
   const handleStartTest = async (itemId: number) => {
     if (!selectedStation) throw new Error("Station not selected");
@@ -1384,28 +1383,35 @@ function TestingPageView() {
         {/* Dialogs — the per-type finish/report dialog, resolved from the registry. */}
         {(() => {
   if (!dialogOpen || !selectedItem || !selectedStation || !selectedStationType) return null;
+  const dialogProps = {
+    open: dialogOpen,
+    onClose: () => {
+      setDialogOpen(false);
+      if (!dialogSubmittedRef.current) {
+        releaseTest(selectedItem.item_id, selectedStation.test_station_id);
+      }
+    },
+    item: selectedItem,
+    station: selectedStation,
+    stationTypeName: selectedStationType.name,
+    workerId: activeWorkerId,
+    workerName: activeWorkerName,
+    onSubmit: handleSubmitTestResult,
+  };
   // A box at a package-level station gets the opening / closing wizard by the
   // station type's flag (PLAN §4); everything else resolves from the registry.
-  const StartDialog = packageLevel && selectedItem.is_package && selectedItem.package
-    ? (packageKindOf(selectedItem) === "open" ? PackageOpenWizard : PackageCloseWizard)
-    // A type with a popup template opens it — except for an item in research, which keeps the
-    // code's popup (docs/popup-templates/PLAN.md §7, decision 3).
-    : getStartTestDialog(selectedStationType.id, selectedStationType.popupTemplate != null && selectedItem.current_status !== 5);
+  if (packageLevel && selectedItem.is_package && selectedItem.package) {
+    return packageKindOf(selectedItem) === "open"
+      ? <PackageOpenWizard {...dialogProps} />
+      : <PackageCloseWizard {...dialogProps} />;
+  }
+  // A type with a popup template opens it — except for an item in research, which keeps the
+  // code's popup (docs/popup-templates/PLAN.md §7, decision 3).
   return (
-    <StartDialog
-      open={dialogOpen}
-      onClose={() => {
-        setDialogOpen(false);
-        if (!dialogSubmittedRef.current) {
-          releaseTest(selectedItem.item_id, selectedStation.test_station_id);
-        }
-      }}
-      item={selectedItem}
-      station={selectedStation}
-      stationTypeName={selectedStationType.name}
-      workerId={activeWorkerId}
-      workerName={activeWorkerName}
-      onSubmit={handleSubmitTestResult}
+    <StartTestDialog
+      {...dialogProps}
+      typeId={selectedStationType.id}
+      hasTemplate={selectedStationType.popupTemplate != null && selectedItem.current_status !== 5}
     />
   );
 })()}

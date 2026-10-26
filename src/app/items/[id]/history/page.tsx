@@ -459,9 +459,8 @@ export default function ItemHistoryPage() {
   );
 
   // A tab can disappear when files reload (e.g. its last file was removed).
-  React.useEffect(() => {
-    if (fileTab !== "all" && !fileTabs.some((t) => t.key === fileTab)) setFileTab("all");
-  }, [fileTabs, fileTab]);
+  // Adjusted during render, so the empty tab is never painted.
+  if (fileTab !== "all" && !fileTabs.some((t) => t.key === fileTab)) setFileTab("all");
 
   /* ----- render ----- */
 

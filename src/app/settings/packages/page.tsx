@@ -86,6 +86,27 @@ const digits = (s: string) => s.replace(/[^0-9]/g, "");
 
 const td: React.CSSProperties = { padding: "9px 12px" };
 
+type ListRead<T> = { list: T[]; ok: boolean };
+
+/** A settings list; a non-OK answer reads as an empty list with `ok` false. */
+async function readList<T>(url: string): Promise<ListRead<T>> {
+  const res = await apiFetch(url);
+  const data = res.ok ? await res.json() : [];
+  return { list: Array.isArray(data) ? data : [], ok: res.ok };
+}
+
+/** A package type's contents; "unreachable" = no answer, "failed" = a non-OK one. */
+async function readContents(typeId: number): Promise<Contents | "unreachable" | "failed"> {
+  let res: Response;
+  try {
+    res = await apiFetch(`/api/settings/item-types/${typeId}/contents`);
+  } catch {
+    return "unreachable";
+  }
+  if (!res.ok) return "failed";
+  return (await res.json()) as Contents;
+}
+
 export default function PackagesSettingsPage() {
   const [types, setTypes] = React.useState<PackageTypeSummary[]>([]);
   const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
@@ -110,68 +131,69 @@ export default function PackagesSettingsPage() {
   const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: "success" | "error" }>({ open: false, message: "", severity: "success" });
   const say = (message: string, severity: "success" | "error" = "success") => setToast({ open: true, message, severity });
 
-  const loadTypes = React.useCallback(async (): Promise<PackageTypeSummary[]> => {
-    const res = await apiFetch("/api/settings/package-types");
-    const data = res.ok ? await res.json() : [];
-    const list: PackageTypeSummary[] = Array.isArray(data) ? data : [];
-    setTypesFailed(!res.ok);
-    setTypes(list);
-    return list;
+  const applyTypes = React.useCallback((read: ListRead<PackageTypeSummary>): PackageTypeSummary[] => {
+    setTypesFailed(!read.ok);
+    setTypes(read.list);
+    return read.list;
   }, []);
+  const loadTypes = React.useCallback(
+    (): Promise<PackageTypeSummary[]> => readList<PackageTypeSummary>("/api/settings/package-types").then(applyTypes),
+    [applyTypes],
+  );
 
   // The type whose contents the editor is meant to show. A response for any
   // other type (the user switched while it was in flight) is dropped, so a
   // late reply can never land under the wrong selection and be saved to it.
   const requestedTypeRef = React.useRef<number | null>(null);
 
-  const loadContents = React.useCallback(async (typeId: number) => {
+  // Read (readContents), then applied in the promise's callback, so nothing is
+  // set in an effect's own body.
+  const loadContents = React.useCallback((typeId: number) => {
     requestedTypeRef.current = typeId;
-    let res: Response;
-    try {
-      res = await apiFetch(`/api/settings/item-types/${typeId}/contents`);
-    } catch {
-      if (requestedTypeRef.current === typeId) setContentsFailed(true);
-      return;
-    }
-    if (requestedTypeRef.current !== typeId) return;
-    if (!res.ok) { setContents(null); setDraft([]); setDraftRoute(""); setContentsFailed(true); return; }
-    const c: Contents = await res.json();
-    if (requestedTypeRef.current !== typeId) return;
-    setContents(c);
-    setDraft(c.lines.map(toDraft));
-    setDraftRoute(c.default_route_number == null ? "" : String(c.default_route_number));
+    return readContents(typeId).then((read) => {
+      if (requestedTypeRef.current !== typeId) return;
+      if (read === "unreachable") { setContentsFailed(true); return; }
+      if (read === "failed") { setContents(null); setDraft([]); setDraftRoute(""); setContentsFailed(true); return; }
+      setContents(read);
+      setDraft(read.lines.map(toDraft));
+      setDraftRoute(read.default_route_number == null ? "" : String(read.default_route_number));
+    });
   }, []);
 
-  const loadAll = React.useCallback(async () => {
-    try {
-      const [list, typesRes] = await Promise.all([loadTypes(), apiFetch("/api/settings/item-types")]);
-      const all = typesRes.ok ? await typesRes.json() : [];
-      if (!typesRes.ok) setTypesFailed(true);
-      setItemTypes(Array.isArray(all) ? all : []);
-      // ?type={id} (the testing-routes screen's "פתח במסך המארזים") opens that package type.
-      const wanted = Number(new URLSearchParams(window.location.search).get("type"));
-      const first = list.find((t) => t.item_type_id === wanted) ?? list[0];
-      if (first) setSelectedId((cur) => cur ?? first.item_type_id);
-    } catch {
-      setTypesFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [loadTypes]);
+  const loadAll = React.useCallback(
+    () =>
+      Promise.all([loadTypes(), readList<ItemTypeOption>("/api/settings/item-types")])
+        .then(([list, all]) => {
+          if (!all.ok) setTypesFailed(true);
+          setItemTypes(all.list);
+          // ?type={id} (the testing-routes screen's "פתח במסך המארזים") opens that package type.
+          const wanted = Number(new URLSearchParams(window.location.search).get("type"));
+          const first = list.find((t) => t.item_type_id === wanted) ?? list[0];
+          if (first) setSelectedId((cur) => cur ?? first.item_type_id);
+        })
+        .catch(() => setTypesFailed(true))
+        .finally(() => setLoading(false)),
+    [loadTypes],
+  );
 
   React.useEffect(() => { void loadAll(); }, [loadAll]);
   const retryAll = () => { setLoading(true); setTypesFailed(false); void loadAll(); };
 
-  React.useEffect(() => {
-    // Drop the previous type's contents straight away: the editor (and its
-    // Save) only renders with `contents`, so nothing of the old type can be
-    // edited or PUT to the newly selected one while its own contents load.
+  // Drop the previous type's contents straight away (during render): the
+  // editor (and its Save) only renders with `contents`, so nothing of the old
+  // type can be edited or PUT to the newly selected one while its own
+  // contents load.
+  const [contentsFor, setContentsFor] = React.useState<number | null>(null);
+  if (contentsFor !== selectedId) {
+    setContentsFor(selectedId);
     setContents(null);
     setDraft([]);
     setContentsFailed(false);
     setRowErrors({});
+  }
+  React.useEffect(() => {
     if (selectedId == null) { requestedTypeRef.current = null; return; }
-    loadContents(selectedId);
+    void loadContents(selectedId);
   }, [selectedId, loadContents]);
   const retryContents = () => { if (selectedId == null) return; setContentsFailed(false); void loadContents(selectedId); };
 

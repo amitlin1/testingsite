@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, SearchInput, Snackbar, Alert, Switch, FormControlLabel,
@@ -16,6 +16,19 @@ interface StationsTableProps {
   typeName: string;
   /** Station deep-linked from the command palette (?station=) — highlighted once loaded. */
   highlightStationId?: number | null;
+}
+
+/** The type's stations, or null when they could not be read. */
+async function readStations(typeId: number): Promise<TestStation[] | null> {
+  try {
+    const res = await apiFetch(`/api/settings/test-stations?typeId=${typeId}`);
+    if (!res.ok) throw new Error("Failed to fetch");
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
 }
 
 export default function StationsTable({ typeId, typeName, highlightStationId }: StationsTableProps) {
@@ -49,37 +62,43 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
       .catch((err) => console.error("Failed to load statuses", err));
   }, []);
 
+  const applyRows = useCallback((list: TestStation[] | null) => {
+    if (list) setRows(list);
+    else setLoadError(true);
+    setLoading(false);
+  }, []);
+
   const fetchData = useCallback(async () => {
     if (!typeId) return;
     setLoading(true);
     setLoadError(false);
-    try {
-      const res = await apiFetch(`${apiUrl}?typeId=${typeId}`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
-      setRows(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error(err);
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [typeId]);
+    applyRows(await readStations(typeId));
+  }, [typeId, applyRows]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // Another type starts its load during render; the effect only reads, and
+  // applies the reply. (`loading` starts true for the first one.)
+  const [loadingTypeId, setLoadingTypeId] = useState(typeId);
+  if (loadingTypeId !== typeId) {
+    setLoadingTypeId(typeId);
+    if (typeId) { setLoading(true); setLoadError(false); }
+  }
+  useEffect(() => {
+    if (typeId) readStations(typeId).then(applyRows);
+  }, [typeId, applyRows]);
 
   // Arriving from the command palette's ?station=<id> deep link: once the rows
   // are in, pre-fill the search box with that station's description so the user
   // lands on exactly the row they picked. It's a seed, not a lock — clearing
-  // the box restores the full list, and the ref stops us re-seeding after that.
-  const seededRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (!highlightStationId || seededRef.current === highlightStationId) return;
+  // the box restores the full list, and `seededFor` stops us re-seeding after
+  // that. Seeded during render, so the unfiltered table is never painted.
+  const [seededFor, setSeededFor] = useState<number | null>(null);
+  if (highlightStationId && seededFor !== highlightStationId) {
     const match = rows.find((r) => r.test_station_id === highlightStationId);
-    if (!match) return;
-    seededRef.current = highlightStationId;
-    setSearchTerm(match.test_station_desc.trim());
-  }, [rows, highlightStationId]);
+    if (match) {
+      setSeededFor(highlightStationId);
+      setSearchTerm(match.test_station_desc.trim());
+    }
+  }
 
   const handleAdd = () => {
     setEditingRow(null);

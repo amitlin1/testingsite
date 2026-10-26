@@ -12,15 +12,16 @@ import CommandPalette from "./CommandPalette";
  * palette. A focusable text field in the bar that does nothing until you type
  * is the pattern this replaces.
  */
+const noSubscribe = () => () => {};
+const readIsMac = () => /mac/i.test(navigator.platform);
+const notMac = () => false;
+
 export default function CommandPaletteTrigger() {
   const [open, setOpen] = React.useState(false);
-  const [isMac, setIsMac] = React.useState(false);
-
-  // navigator is client-only; read it after mount so SSR and the first client
-  // render agree (otherwise the "Ctrl K" label hydration-mismatches on macOS).
-  React.useEffect(() => {
-    setIsMac(/mac/i.test(navigator.platform));
-  }, []);
+  // navigator is client-only; the server snapshot (false) is what SSR and
+  // hydration use, so they agree (otherwise the "Ctrl K" label
+  // hydration-mismatches on macOS), and the real platform follows after.
+  const isMac = React.useSyncExternalStore(noSubscribe, readIsMac, notMac);
 
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {

@@ -210,11 +210,15 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
   const captured = photos.length;
   const hasSlots = total > 0;
 
+  // A new shot (or another slot count) moves to the next slot to fill; picking
+  // a frame by hand moves it too. Adjusted during render.
   const [activeIdx, setActiveIdx] = React.useState(0);
-  React.useEffect(() => {
+  const [activeFor, setActiveFor] = React.useState<{ captured: number; total: number } | null>(null);
+  if (!activeFor || activeFor.captured !== captured || activeFor.total !== total) {
+    setActiveFor({ captured, total });
     const target = hasSlots ? Math.min(captured, total - 1) : Math.max(0, captured - 1);
     setActiveIdx(target < 0 ? 0 : target);
-  }, [captured, total, hasSlots]);
+  }
 
   const openCamera = () => cameraRef.current?.click();
   const openGallery = () => galleryRef.current?.click();

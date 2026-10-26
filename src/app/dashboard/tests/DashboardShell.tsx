@@ -77,12 +77,13 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
   // behaviour, not layout, and everything layout-shaped is a CSS media query so
   // the first paint is already correct (§15).
   const isDrawerWidth = useMediaQuery(DRAWER_QUERY);
-  React.useEffect(() => {
-    if (!isDrawerWidth) setDrawerOpen(false);
-  }, [isDrawerWidth]);
-  React.useEffect(() => {
-    setDrawerOpen(false);
-  }, [api.state.tab]);
+  // A wide window or another tab closes the drawer; adjusted during render.
+  const tab = api.state.tab;
+  const [drawerSeen, setDrawerSeen] = React.useState({ isDrawerWidth, tab });
+  if (drawerSeen.isDrawerWidth !== isDrawerWidth || drawerSeen.tab !== tab) {
+    setDrawerSeen({ isDrawerWidth, tab });
+    if (drawerSeen.tab !== tab || !isDrawerWidth) setDrawerOpen(false);
+  }
   const drawerRef = React.useRef<HTMLDivElement>(null);
   useDrawerFocus(drawerOpen, drawerRef, () => setDrawerOpen(false));
 
