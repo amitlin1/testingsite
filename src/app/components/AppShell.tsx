@@ -24,7 +24,7 @@ const COLLAPSED_STORAGE_KEY = "sidebarCollapsed";
 /** Page title + icon resolved from the current route, shown in the top bar. */
 function usePageMeta(pathname: string | null) {
   if (pathname?.startsWith("/testing")) return { title: "מסך בדיקה", icon: <ScienceIcon fontSize={20} /> };
-  if (pathname?.startsWith("/packages")) return { title: "מארזים", icon: <InventoryIcon fontSize={20} /> };
+  if (pathname?.startsWith("/packages")) return { title: "מארזים ופריטים", icon: <InventoryIcon fontSize={20} /> };
   if (pathname?.startsWith("/dashboard")) return { title: "לוח ניהול", icon: <AnalyticsIcon fontSize={20} /> };
   if (pathname?.startsWith("/shipments")) return { title: "משלוחים נכנסים", icon: <LocalShippingIcon fontSize={20} /> };
   if (pathname?.startsWith("/files")) return { title: "ניהול קבצים", icon: <FolderCopyIcon fontSize={20} /> };

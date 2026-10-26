@@ -9,10 +9,11 @@ export async function GET() {
       orderBy: { test_station_desc: "asc" },
     });
 
-    // Format name to include ID as requested: "Name (ID)"
+    // The station's name only — the internal id meant nothing to the workers
+    // (the pickers show the station type under the name).
     const stations = rows.map((row) => ({
       id: row.test_station_id,
-      name: `${(row.test_station_desc ?? "").trim()} (${row.test_station_id})`,
+      name: (row.test_station_desc ?? "").trim(),
       typeId: row.test_station_type_id,
     }));
 

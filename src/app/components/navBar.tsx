@@ -124,8 +124,8 @@ export default function NavBar({
   const avatarChar = displayName.trim().charAt(0) || "מ";
 
   const mainLinks = [
+    { href: "/packages", label: "מארזים ופריטים", icon: <InventoryIcon fontSize={20} /> },
     { href: "/", label: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> },
-    { href: "/packages", label: "מארזים", icon: <InventoryIcon fontSize={20} /> },
     { href: "/testing", label: "מסך בדיקה", icon: <ScienceIcon fontSize={20} /> },
     { href: "/dashboard/tests", label: "לוח ניהול", icon: <AnalyticsIcon fontSize={20} /> },
     { href: "/shipments", label: "משלוחים נכנסים", icon: <LocalShippingIcon fontSize={20} /> },

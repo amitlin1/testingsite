@@ -49,6 +49,8 @@ export type PackageItemView = {
   current_status: number | null;
   current_route_step: number | null;
   route_length: number;
+  /** Station type of the item's current route step ("כיול RF"), raw. */
+  step_desc: string | null;
   is_finished: boolean;
   state: PackageItemState;
   state_label: string;
@@ -79,8 +81,15 @@ export type PackageView = {
   current_route_step: number | null;
   /** Station type of the box's current step (the queue it belongs to). */
   current_step_type_id: number | null;
+  /** Station type of the box's current step, in words. */
+  current_step_desc: string | null;
+  /** The station the box is being worked at right now, when in test. */
+  station_name: string | null;
   route_length: number;
   is_finished: boolean;
+  /** The box left with its shipment (shipments.is_sent): history only. */
+  shipment_is_sent: boolean;
+  shipment_sent_at: string | null;
   created_at: string | null;
   opened_at: string | null;
   closed_at: string | null;
@@ -110,6 +119,8 @@ export type PackageListFilters = {
   q?: string | null;
   /** Restrict to these package ids (the queue / item dialog reuse the view). */
   ids?: bigint[] | null;
+  /** Leave out boxes whose shipment already went out (shipments.is_sent). */
+  excludeSent?: boolean;
 };
 
 type PkgRow = {
@@ -129,8 +140,12 @@ type PkgRow = {
   current_status: number | null;
   current_route_step: number | null;
   current_step_type_id: number | null;
+  current_step_desc: string | null;
+  station_name: string | null;
   route_length: number | null;
   is_finished: boolean | null;
+  shipment_is_sent: boolean | null;
+  shipment_sent_date: Date | null;
   created_at: Date | null;
   finished_at: Date | null;
   opened_at: Date | null;
@@ -216,7 +231,10 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
            i.makat, TRIM(i.model) AS model, TRIM(i.manufacturer_name) AS manufacturer_name, i.manufacturer_no,
            ir.route_number, ir.current_status, ir.current_route_step,
            tr.route_steps[ir.current_route_step] AS current_step_type_id,
+           TRIM(pstt.test_type_desc) AS current_step_desc,
+           TRIM(pts.test_station_desc) AS station_name,
            COALESCE(array_length(tr.route_steps, 1), 0) AS route_length,
+           sh.is_sent AS shipment_is_sent, sh.shipment_sent_date,
            ir.is_finished, ir.created_at, ir.finished_at,
            (SELECT max(h.processing_end_time) FROM item_route_history h
              WHERE h.item_id = i.item_id AND h.current_route_step = 1) AS opened_at,
@@ -237,7 +255,10 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
     LEFT JOIN shipment_items si ON si.id = i.shipment_item_id
     LEFT JOIN item_routes ir ON ir.item_id = i.item_id
     LEFT JOIN testing_routes tr ON tr.item_type_id = i.item_type_id AND tr.route_number = ir.route_number
+    LEFT JOIN test_stations_type pstt ON pstt.test_station_type_id = tr.route_steps[ir.current_route_step]
+    LEFT JOIN test_stations pts ON pts.test_station_id = ir.test_station_id
     WHERE i.package_id IS NULL AND it.is_package = true
+      AND (${filters.excludeSent === true}::boolean = false OR COALESCE(sh.is_sent, false) = false)
       AND (${filters.shipmentId ?? null}::int IS NULL OR i.shipment_id = ${filters.shipmentId ?? null}::int)
       AND (${filters.customerId ?? null}::int IS NULL OR i.customer_id = ${filters.customerId ?? null}::int)
       AND (${filters.packageTypeId ?? null}::int IS NULL OR i.item_type_id = ${filters.packageTypeId ?? null}::int)
@@ -300,6 +321,7 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
         current_status: m.current_status,
         current_route_step: m.current_route_step,
         route_length: Number(m.route_length ?? 0),
+        step_desc: m.step_type_desc?.trim() || null,
         is_finished: m.is_finished === true,
         state,
         state_label: ITEM_STATE_LABEL[state],
@@ -340,8 +362,12 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       current_status: p.current_status,
       current_route_step: p.current_route_step,
       current_step_type_id: p.current_step_type_id,
+      current_step_desc: p.current_step_desc || null,
+      station_name: p.station_name || null,
       route_length: Number(p.route_length ?? 0),
       is_finished: p.is_finished === true,
+      shipment_is_sent: p.shipment_is_sent === true,
+      shipment_sent_at: iso(p.shipment_sent_date),
       created_at: iso(p.created_at),
       opened_at: iso(p.opened_at),
       closed_at: iso(p.finished_at),

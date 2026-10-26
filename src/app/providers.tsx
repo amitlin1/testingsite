@@ -20,6 +20,7 @@
 
 import * as React from "react";
 import { SessionProvider } from "next-auth/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BASE_PATH } from "@/lib/base-path";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 
@@ -36,6 +37,17 @@ export function useIsDev(): boolean {
   return React.useContext(DevModeContext);
 }
 
+// React Query: the list screens (packages, testing) read through it so a filter
+// change, a refocus or a mutation refreshes the data without a full reload.
+// One client per browser tab, created lazily so SSR never shares it.
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { staleTime: 15_000, refetchOnWindowFocus: true, retry: 1 },
+    },
+  });
+}
+
 export function Providers({
   children,
   isDev = false,
@@ -43,11 +55,14 @@ export function Providers({
   children: React.ReactNode;
   isDev?: boolean;
 }) {
+  const [queryClient] = React.useState(makeQueryClient);
   return (
     <SessionProvider basePath={AUTH_BASE} refetchInterval={SESSION_REFETCH_SECONDS}>
-      <DevModeContext.Provider value={isDev}>
-        <TooltipProvider>{children}</TooltipProvider>
-      </DevModeContext.Provider>
+      <QueryClientProvider client={queryClient}>
+        <DevModeContext.Provider value={isDev}>
+          <TooltipProvider>{children}</TooltipProvider>
+        </DevModeContext.Provider>
+      </QueryClientProvider>
     </SessionProvider>
   );
 }
