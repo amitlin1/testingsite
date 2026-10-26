@@ -96,7 +96,7 @@ type TemplateStep = {
 
 ### 3.4 צילומים: רכיב הצילום במקום קבוצת צילום
 
-- **לטבלה `photo_types` מתווספות שתי עמודות:** `test_station_type_id` ו-`component_id`, ייחודיות יחד. רכיב צילום שנוסף לתבנית יוצר שורה עם `code` אוטומטי (`c_xxxxxxxx`, בלי שם), ועם תיאור = כותרת הרכיב. התיאור מתעדכן כשהכותרת משתנה.
+- **לטבלה `photo_types` מתווספות שתי עמודות:** `test_station_type_id` ו-`component_id`, ייחודיות יחד. רכיב צילום שנוסף לתבנית יוצר שורה שה-`code` שלה הוא המזהה של הרכיב (`k_xxxxxxxx`, בלי שם), ושהתיאור שלה הוא `{שם סוג העמדה} · {כותרת הרכיב}`. התיאור מתעדכן בכל שמירה.
 - **התמונות הקיימות לא זזות:** בזריעה, הקבוצה של סוג 2 (שורה 3) מקושרת לרכיב הצילום בתבנית של סוג 2. שורות 1–2 (מארז / פריט) נשארות עד שלב 2, ואז מתקשרות לרכיבי הצילום של בסיס המארז.
 - **רכיב צילום שנמחק:** השורה שלו נהיית לא פעילה ולא נמחקת. כך תמונות ייחוס ותמונות עובדים ממשיכות להופיע עם כותרת. לפני המחיקה מוצגת אזהרה עם מספר תמונות הייחוס.
 - **בעמוד פריטי הייחוס** (`ReferenceImagesField.tsx`), "העלאה אל:" מציג את רכיבי הצילום מקובצים לפי סוג עמדה: `{עמדה} · {כותרת הרכיב}`. קודם מופיעים הרכיבים של סוגי העמדה שבמסלולים של סוג הפריט. ה-API לא משתנה, כי הוא כבר עובד לפי `code`.
@@ -109,8 +109,7 @@ details: {
   station: "type-N",
   template: { v: 3 },                      // הגרסה שהעובד מילא
   sku, hasRU,                              // כמו היום
-  weight: { reference, measured, diffPct, pass },   // כשיש רכיב שקילה
-  components: { [componentId]: FieldValue },       // צילום / סריקה / שקילה, כותרת בזמן השמירה
+  components: { [componentId]: FieldValue },       // סריקה / צילום / שקילה, כותרת בזמן השמירה; ריקים לא נשמרים
   schema, fields,                          // שדות המסלול, כמו היום
   verdict: { ok, note, suggested, ... },   // כמו היום
 }
@@ -120,13 +119,15 @@ details: {
 
 ### 3.6 איך נבחר החלון בעמדה
 
-- `GET /api/settings/test-stations-type` מחזיר גם `popup_template: { base, version } | null`.
+- `GET /api/testing/stations` (סוגי העמדה של מסך הבדיקות) מחזיר גם `popupTemplate: { base, version } | null`.
 - `hasStartTestDialog(typeId)` מחזיר `true` כשיש תבנית.
 - `getStartTestDialog` מחזיר `TemplateStation` כשיש תבנית, ואחרת את `REGISTRY` של היום.
-- `TemplateStation` מביא את התבנית כשהוא נפתח (`GET /api/testing/popup-template?stationTypeId=`).
+- `TemplateStation` מביא את התבנית כשהוא נפתח (`GET /api/settings/popup-templates/[typeId]`). אם התבנית נמחקה בינתיים (404), נפתח החלון של היום.
 - פריט במחקר (סטטוס 5) ממשיך לפתוח את החלון של היום בשלב 1.
 
 ## 4. שלב 1 — בסיס לפריט, תכנית מפורטת
+
+**מצב (26.10.2026):** צעדים 1.1, 1.2, 1.3 ו-1.5 בוצעו בענף `feat/popup-templates` ונבדקו בדפדפן על עותק של pkgtest (`testingsite_pt_dev`, המיגרציה והזריעה הורצו עליו). בדיקות האינטגרציה רצות על `testingsite_pt_test`. נשארו 1.4, 1.6, 1.7, 1.8 ו-1.9. המסד `testingsite_pkgtest` לא נגעו בו.
 
 כל צעד הוא commit משלו על ענף `feat/popup-templates`. הצעדים מסודרים כך שעד צעד 1.5 העובד לא רואה שום שינוי.
 
@@ -144,7 +145,6 @@ details: {
 - **סקריפט SQL לייצור** בתיקייה `scripts/prod-popup-templates/`, באותה תבנית כמו `scripts/prod-route-fields`: בדיקות מקדימות, המיגרציה, שורת `_prisma_migrations`, בדיקות אחרי.
 - **ה-API:**
   - `GET/PUT/DELETE /api/settings/popup-templates/[typeId]`. השמירה מעלה גרסה, שומרת היסטוריה, ויוצרת או מעדכנת את שורות `photo_types` של רכיבי הצילום. הכתיבה מוגבלת לתפקידים manager ו-tester, כמו עמוד המסלולים.
-  - `GET /api/testing/popup-template?stationTypeId=`.
 - **בדיקות אינטגרציה** על מסד זמני (`createdb -T testingsite_metrics_test`).
 - **גמור כש:** שמירה, קריאה, גרסאות וקבוצות הצילום עובדות, והמסדים `testingsite` ו-`testingsite_pkgtest` לא נגעו.
 
