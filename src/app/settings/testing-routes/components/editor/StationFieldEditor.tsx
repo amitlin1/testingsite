@@ -28,6 +28,7 @@ import { insertTsvRows, parseTsvRows } from "../../lib/pasteTsv";
 import { alongsideFields, stepFieldIds } from "../../lib/bulkModel";
 import { StationTimeline } from "./StationTimeline";
 import { SharedRouteNotice } from "./SharedRouteNotice";
+import { usePopupTemplateTypes } from "../../lib/usePopupTemplateTypes";
 import { FieldRowsTable } from "./FieldRowsTable";
 import type { FocusPart } from "./FieldRowsTable";
 import { rowIds } from "./FieldRowEditor";
@@ -92,11 +93,15 @@ export type StationFieldEditorProps = {
   reloadContext?: () => void;
 };
 
-/** Which popup a station type opens on the worker screen (mainPopUp.ts — the one source). */
-const POPUP_LOOKUP: PopupLookup = {
-  hasWizard: hasStartTestDialog,
-  isVerdict: (typeId) => getStartTestDialog(typeId) === VerdictStation,
-};
+/** Which popup a station type opens on the worker screen (mainPopUp.ts — the one source), and
+ *  whether its station type has a popup template (it wins; usePopupTemplateTypes). */
+function popupLookup(templateTypes: ReadonlySet<number> | null): PopupLookup {
+  return {
+    hasWizard: hasStartTestDialog,
+    isVerdict: (typeId) => getStartTestDialog(typeId) === VerdictStation,
+    hasTemplate: (typeId) => templateTypes?.has(typeId) ?? false,
+  };
+}
 
 /** Where focus goes after the editor moved to another cell from its own controls. */
 type NavFocus = "target" | "stop" | null;
@@ -124,6 +129,7 @@ function CellEditor({
 }: CellEditorProps) {
   const store = useDraftStore();
   const { model: drafts, summary } = useDraftSnapshot();
+  const templateTypes = usePopupTemplateTypes();
   const { binding, stepMeta } = cell;
   const entry = drafts.routes[binding.route_id];
   const column = getColumn(model, cell.columnKey);
@@ -247,7 +253,7 @@ function CellEditor({
 
   // ---- derived ---------------------------------------------------------------------------------
   const stationTypeName = context.stations[cell.stepMeta.station_type_id]?.label?.trim() || cell.stationLabel;
-  const popupKind = popupKindOf(stepMeta.station_type_id, cell.packageLevel, POPUP_LOOKUP);
+  const popupKind = popupKindOf(stepMeta.station_type_id, cell.packageLevel, popupLookup(templateTypes));
   let wizard: PackageWizard | null = null;
   if (popupKind === "package" && context.kit) {
     const r = context.kit.route;
@@ -433,6 +439,7 @@ function CellEditor({
             popupKind={popupKind}
             stationTypeName={stationTypeName}
             packageWizard={wizard ?? undefined}
+            stationTypeId={stepMeta.station_type_id}
           />
           {popover?.kind === "picker" && <div className="sfe-preview-col__veil" aria-hidden="true" />}
         </div>
