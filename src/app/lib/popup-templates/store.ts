@@ -1,8 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 import type { TransactionClient } from "@/app/lib/prisma";
-import { allComponentsOf, fillVariables } from "./schema";
-import type { PhotoComponent, PopupTemplateConfig, PopupTemplateJson, TemplateBase } from "./schema";
+import { PACKAGE_ROLES, allComponentsOf, fillVariables } from "./schema";
+import type { PackageRole, PhotoComponent, PopupTemplateConfig, PopupTemplateJson, TemplateBase } from "./schema";
 import { TemplateShapeError, lintPopupTemplate, parsePopupTemplateConfig, parseTemplateBase } from "./validate";
 import type { TemplateIssue } from "./validate";
 
@@ -67,18 +67,25 @@ export async function getTemplate(typeId: number, db: Db = prisma): Promise<Popu
 
 /** Which station types have a template, and its base and version — the testing page and the
  *  settings list read this, never the configs. */
-export async function listTemplateSummaries(db: Db = prisma): Promise<{ station_type_id: number; base: TemplateBase; version: number; updated_at: string; updated_by: string | null }[]> {
+export async function listTemplateSummaries(db: Db = prisma): Promise<{
+  station_type_id: number; base: TemplateBase; version: number; role: PackageRole | null; updated_at: string; updated_by: string | null;
+}[]> {
   const rows = await db.station_popup_templates.findMany({
-    select: { test_station_type_id: true, base: true, version: true, updated_at: true, updated_by: true },
+    select: { test_station_type_id: true, base: true, version: true, config: true, updated_at: true, updated_by: true },
     orderBy: { test_station_type_id: "asc" },
   });
-  return rows.map((r) => ({
-    station_type_id: r.test_station_type_id,
-    base: parseTemplateBase(r.base),
-    version: r.version,
-    updated_at: r.updated_at.toISOString(),
-    updated_by: r.updated_by,
-  }));
+  return rows.map((r) => {
+    // A package template's role (PLAN.md §5): the editor's list and the routes page's warning read it.
+    const role = (r.config as { role?: unknown } | null)?.role;
+    return {
+      station_type_id: r.test_station_type_id,
+      base: parseTemplateBase(r.base),
+      version: r.version,
+      role: (PACKAGE_ROLES as readonly unknown[]).includes(role) ? (role as PackageRole) : null,
+      updated_at: r.updated_at.toISOString(),
+      updated_by: r.updated_by,
+    };
+  });
 }
 
 export type SaveTemplateInput = {

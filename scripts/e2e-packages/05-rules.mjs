@@ -160,7 +160,7 @@ try {
   await sleep(300);
   await clickEnabled(page, "המשך");
   await sleep(600);
-  await page.evaluate(() => { [...document.querySelectorAll("span")].filter((s) => ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת הקופסה קריאה"].includes((s.innerText || "").trim())).forEach((s) => s.click()); });
+  await page.evaluate(() => { [...document.querySelectorAll("span")].filter((s) => ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת המארז קריאה"].includes((s.innerText || "").trim())).forEach((s) => s.click()); });
   await sleep(300);
   await clickEnabled(page, "סגור מארז");
   let closed = false; for (let i = 0; i < 60 && !closed; i++) { await sleep(500); closed = await bodyHas(page, "המארז נסגר"); }

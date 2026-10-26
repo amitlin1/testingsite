@@ -6,6 +6,9 @@ import { LayoutTemplate } from "lucide-react";
 import { Alert, Button, ConfirmDialog, Skeleton, Tag } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import { CODE_POPUPS } from "@/app/lib/popup-templates/codePopups";
+import { packageRolesByType } from "@/app/lib/popup-templates/placement";
+import type { RouteSteps } from "@/app/lib/popup-templates/placement";
+import type { PackageRole } from "@/app/lib/popup-templates/schema";
 import SettingsToolbar from "../components/SettingsToolbar";
 import TemplateEditor from "./components/TemplateEditor";
 import type { EditorType } from "./components/TemplateEditor";
@@ -18,24 +21,29 @@ import "./popup-templates.css";
  * (the stations screen's "תבנית חלון") opens it. Leaving a draft with unsaved changes asks first.
  */
 
-type Summary = { station_type_id: number; base: string; version: number };
+type Summary = { station_type_id: number; base: string; version: number; role: PackageRole | null };
 type PhotoType = { photo_type_id: number; code: string };
 
-type Lists = { types: EditorType[]; photoTypes: PhotoType[]; summaries: Map<number, Summary> };
+type Lists = { types: EditorType[]; photoTypes: PhotoType[]; summaries: Map<number, Summary>; packageRoles: Map<number, Set<PackageRole>> };
 
-/** The station types, the photo groups and the template summaries; null when any failed. */
+/** The station types, the photo groups, the template summaries and the package-level types' places
+ *  on the package routes; null when any failed. */
 async function readLists(): Promise<Lists | null> {
   try {
-    const [typesRes, photosRes, sumRes] = await Promise.all([
+    const [typesRes, photosRes, sumRes, routesRes, itemTypesRes] = await Promise.all([
       apiFetch("/api/settings/test-stations-type"), apiFetch("/api/settings/photo-types?all=1"), apiFetch("/api/settings/popup-templates"),
+      apiFetch("/api/settings/testing-routes"), apiFetch("/api/itemTypes"),
     ]);
-    if (!typesRes.ok || !photosRes.ok || !sumRes.ok) return null;
+    if (!typesRes.ok || !photosRes.ok || !sumRes.ok || !routesRes.ok || !itemTypesRes.ok) return null;
     const rows = (await typesRes.json()) as { test_station_type_id: number; test_type_desc: string; package_level: boolean }[];
     const summaries = (await sumRes.json()) as Summary[];
+    const routes = (await routesRes.json()) as RouteSteps[];
+    const packageItemTypes = new Set(((await itemTypesRes.json()) as { item_type_id: number; is_package: boolean }[]).filter((t) => t.is_package).map((t) => t.item_type_id));
     return {
       types: rows.map((r) => ({ id: r.test_station_type_id, name: r.test_type_desc.trim(), packageLevel: r.package_level })),
       photoTypes: (await photosRes.json()) as PhotoType[],
       summaries: new Map(summaries.map((r) => [r.station_type_id, r])),
+      packageRoles: packageRolesByType(routes, (id) => packageItemTypes.has(id)),
     };
   } catch {
     return null;
@@ -59,6 +67,7 @@ function PopupTemplatesView() {
   const [types, setTypes] = React.useState<EditorType[] | null>(null);
   const [summaries, setSummaries] = React.useState<Map<number, Summary>>(new Map());
   const [photoTypes, setPhotoTypes] = React.useState<PhotoType[]>([]);
+  const [packageRoles, setPackageRoles] = React.useState<Map<number, Set<PackageRole>>>(new Map());
   const [failed, setFailed] = React.useState(false);
 
   const loadSummaries = React.useCallback(async () => {
@@ -75,6 +84,7 @@ function PopupTemplatesView() {
     setTypes(lists.types);
     setPhotoTypes(lists.photoTypes);
     setSummaries(lists.summaries);
+    setPackageRoles(lists.packageRoles);
   }, []);
   const load = React.useCallback(() => readLists().then(applyLists), [applyLists]);
   React.useEffect(() => {
@@ -123,12 +133,10 @@ function PopupTemplatesView() {
                   <li key={t.id}>
                     <button type="button" className="pt-type" aria-current={t.id === selectedId ? "true" : undefined} onClick={() => pick(t.id)}>
                       <span className="pt-type__name">{t.name}</span>
-                      {t.packageLevel ? (
-                        <span className="pt-type__sub">{EDITOR_TEXT.rowPackage}</span>
-                      ) : s ? (
-                        <Tag tone="primary">{EDITOR_TEXT.rowTemplate(s.version)}</Tag>
+                      {s ? (
+                        <Tag tone="primary">{t.packageLevel ? EDITOR_TEXT.rowPackageTemplate(s.role, s.version) : EDITOR_TEXT.rowTemplate(s.version)}</Tag>
                       ) : (
-                        <span className="pt-type__sub">{EDITOR_TEXT.rowCode}</span>
+                        <span className="pt-type__sub">{t.packageLevel ? EDITOR_TEXT.rowPackageCode : EDITOR_TEXT.rowCode}</span>
                       )}
                     </button>
                   </li>
@@ -144,6 +152,7 @@ function PopupTemplatesView() {
             type={selected}
             codePopup={CODE_POPUPS[selected.id]}
             photoCodeOf={photoCodeOf}
+            placeRoles={packageRoles.get(selected.id)}
             onSaved={reloadSummaries}
             onDirty={onDirty}
           />

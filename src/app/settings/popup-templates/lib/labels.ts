@@ -1,8 +1,9 @@
-import type { TemplateComponent } from "@/app/lib/popup-templates/schema";
+import type { PackageRole, TemplateComponent } from "@/app/lib/popup-templates/schema";
 import { COMPONENT_NAME } from "@/app/lib/popup-templates/labels";
 
 /**
- * Strings of the template editor (/settings/popup-templates, docs/popup-templates/PLAN.md step 1.6).
+ * Strings of the template editor (/settings/popup-templates, docs/popup-templates/PLAN.md steps 1.6
+ * and 2.5).
  * No artboard draws this screen: every word is our own and awaits approval.
  */
 export const EDITOR_TEXT = {
@@ -13,11 +14,28 @@ export const EDITOR_TEXT = {
   pickTypeSub: "התבנית שלו תוצג כאן לעריכה.",
   rowTemplate: (v: number) => `תבנית · גרסה ${v}`,
   rowCode: "החלון של היום",
-  rowPackage: "ברמת מארז · בשלב הבא",
+  rowPackageCode: "אשף המארז של היום",
+  rowPackageTemplate: (role: PackageRole | null, v: number) => `${role === "closing" ? "סגירה" : "פתיחה"} · גרסה ${v}`,
   noTemplate: "לסוג העמדה הזה אין תבנית, ולכן הוא פותח את החלון של היום.",
+  noPackageTemplate: "לסוג העמדה הזה אין תבנית, ולכן הוא פותח את אשף המארז של היום.",
   createFromCode: "צור מהחלון של היום",
   createBlank: "צור תבנית ריקה",
-  packageLater: "תבניות לעמדות ברמת מארז (פתיחה וסגירה של מארז) יגיעו בשלב הבא. עד אז הן פותחות את אשפי המארז של היום.",
+  createOpening: "צור מאשף הפתיחה של היום",
+  createClosing: "צור מאשף הסגירה של היום",
+  role: { opening: "פתיחת מארז", closing: "סגירת מארז" } satisfies Record<PackageRole, string>,
+  place: {
+    opening: "במסלולי המארזים העמדה הזו פותחת את המארז.",
+    closing: "במסלולי המארזים העמדה הזו סוגרת את המארז.",
+    both: "במסלולי המארזים העמדה הזו גם פותחת מארזים וגם סוגרת אותם. תבנית רצה רק במקום שמתאים לתפקיד שלה, ובשאר המקומות נפתח האשף של היום.",
+    none: "העמדה הזו לא מופיעה באף מסלול של מארז.",
+  },
+  roleMismatch: (role: PackageRole) => (role === "opening"
+    ? "זו תבנית פתיחה, אבל במסלולי המארזים העמדה הזו סוגרת את המארז. שם היא תפתח את אשף הסגירה של היום."
+    : "זו תבנית סגירה, אבל במסלולי המארזים העמדה הזו פותחת את המארז. שם היא תפתח את אשף הפתיחה של היום."),
+  itemFlowTitle: "תהליך לכל פריט",
+  itemFlowSub: "כל פריט במארז עובר את השלבים האלה, בשלב \"פריטים במארז\".",
+  itemPhase: (n: number) => `שלב פריט ${n}`,
+  systemPart: "חלק קבוע של אשף המארז",
   version: (v: number) => `גרסה ${v}`,
   newTemplate: "תבנית חדשה, עוד לא נשמרה",
   dirty: "לא נשמר",
@@ -72,6 +90,11 @@ export const COMPONENT_SETTINGS_TEXT = {
   routeFields: "כאן יופיעו שדות הבדיקה שמוגדרים לעמדה בעמוד מסלולי בדיקה.",
   question: "השאלה",
   noteMax: "אורך מרבי להערה (כשיש שדות)",
+  checklistTitle: "כותרת",
+  checklistRow: (n: number) => `שורה ${n}`,
+  addRow: "הוסף שורה",
+  removeRow: (n: number) => `הסר שורה ${n}`,
+  notesLabel: "כותרת השדה",
 } as const;
 
 /** A component's one-line summary in its row. */
@@ -94,10 +117,13 @@ export function componentSummary(c: TemplateComponent): string {
     case "notes":
       return c.label || "(ללא כותרת)";
     case "contents":
+      return "מה בקופסה וסריאלי לכל פריט · חלק קבוע";
     case "items":
+      return "כל פריט עובר את \"תהליך לכל פריט\" · חלק קבוע";
     case "labels":
+      return "מדבקה לכל פריט · אפשר להסיר";
     case "arrival":
-      return "חלק קבוע של אשף המארז";
+      return "הגעה, נארז, והחלטה לפריט שלא הגיע · חלק קבוע";
   }
 }
 

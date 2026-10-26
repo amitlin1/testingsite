@@ -167,3 +167,16 @@
   border-radius: var(--r-xs);
   padding: 1px 6px;
 }
+
+/* A package wizard's own part (PLAN.md §5, step 2.5): shown, never opened. */
+.pt-comp__open--static { cursor: default; }
+/* The opening's item flow: its phases under their own heading. */
+.pt-flow { display: flex; flex-direction: column; gap: var(--space-sm); }
+.pt-flow__head { display: flex; flex-direction: column; gap: 2px; padding-top: var(--space-xs); }
+.pt-flow__title { font-size: var(--text-body); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.pt-flow__sub { font-size: var(--text-small); color: var(--color-ink-muted-48); }
+/* A checklist's rows, each with its remove button. */
+.pt-rows { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pt-row { display: flex; align-items: center; gap: 6px; }
+.pt-row > :first-child { flex: 1; }
+.pt-rows__add { align-self: flex-start; }

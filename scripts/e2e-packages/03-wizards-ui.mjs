@@ -229,7 +229,7 @@ try {
   await sleep(300);
   await clickExact(page, "המשך");
   check("packing checks step", await waitText(page, "האריזה סגורה ותקינה", 8000));
-  const checks = await page.evaluate(() => { const spans = [...document.querySelectorAll("span")].filter((s) => ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת הקופסה קריאה"].includes((s.innerText || "").trim())); spans.forEach((s) => s.click()); return spans.length; });
+  const checks = await page.evaluate(() => { const spans = [...document.querySelectorAll("span")].filter((s) => ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת המארז קריאה"].includes((s.innerText || "").trim())); spans.forEach((s) => s.click()); return spans.length; });
   check("ticked the 3 packing checks", checks === 3, `${checks}`);
   await shot(page, "52-close-checks");
   await clickExact(page, "סגור מארז");

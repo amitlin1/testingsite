@@ -29,6 +29,7 @@ import { BLOCK_TITLE, VARIANT_SPEC, draftsFieldsState, kitItemFieldGroups, type 
 import { WORKER_UNDRAWN_TEXT } from "@/app/testing/fields/labels";
 import { buildFieldsBlock, inputFieldCount, useFieldsState, type Drafts } from "@/app/testing/fields/useFieldsState";
 import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
+import { OPENING_PHOTO_CODES } from "@/app/lib/popup-templates/codePopups";
 import "@/app/packages/packages.css";
 
 /**
@@ -57,8 +58,8 @@ import "@/app/packages/packages.css";
  * wizard is exactly as before.
  */
 
-const PT_PACKAGE = "package";
-const PT_PRODUCT = "product";
+const PT_PACKAGE = OPENING_PHOTO_CODES.box;
+const PT_PRODUCT = OPENING_PHOTO_CODES.item;
 const TOLERANCE_PCT = 5;
 
 const STEPS: WizardStep[] = [

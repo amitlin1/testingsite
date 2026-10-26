@@ -3,13 +3,14 @@ import * as React from "react";
 import { Eye, LayoutTemplate, PackageOpen, Save, Undo2 } from "lucide-react";
 import { Alert, Button, ConfirmDialog, Skeleton, Snackbar, Tag, TextField } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
-import type { PopupTemplateConfig, PopupTemplateJson } from "@/app/lib/popup-templates/schema";
+import type { PackageRole, PopupTemplateConfig, PopupTemplateJson, TemplateBase } from "@/app/lib/popup-templates/schema";
+import { soleRole } from "@/app/lib/popup-templates/placement";
 import { lintPopupTemplate, TEMPLATE_LIMITS } from "@/app/lib/popup-templates/validate";
 import type { TemplateIssue } from "@/app/lib/popup-templates/validate";
 import type { CodePopup } from "@/app/lib/popup-templates/codePopups";
 import { TemplatePopup } from "@/app/testing/tests-popups/TemplateStation";
 import type { ItemRow, TestStation } from "@/types";
-import { blankTemplate, codeTemplateFor, sameConfig, setFinishLabel, templateIssues } from "../lib/editorModel";
+import { blankTemplate, catalogFor, codeTemplateFor, packageCodeTemplate, sameConfig, setFinishLabel, templateIssues } from "../lib/editorModel";
 import { EDITOR_TEXT } from "../lib/labels";
 import { StepsEditor, VariablesHint } from "./StepsEditor";
 
@@ -18,6 +19,12 @@ import { StepsEditor, VariablesHint } from "./StepsEditor";
  * template / a new one not saved yet), the draft under edit, save (a new version; 409 when someone
  * saved meanwhile, 422 with the server's issues), "חזור לחלון של היום" (delete), and the preview —
  * the worker's popup itself (TemplatePopup in preview mode) over a sample item.
+ *
+ * A package-level type gets a package template (PLAN.md §5, step 2.5): made from today's opening or
+ * closing wizard — the one its place on the package routes calls for comes first — with the box's
+ * steps and, at the opening, the item flow. The role is the template's for good; a template whose
+ * role its place does not call for is flagged. No preview for it yet: the package popups run against
+ * a real box.
  *
  * The draft's dirtiness is reported up (onDirty), so the page can ask before leaving it.
  */
@@ -33,6 +40,8 @@ export type TemplateEditorProps = {
   type: EditorType;
   codePopup: CodePopup | undefined;
   photoCodeOf: (photoTypeId: number) => string | null;
+  /** A package-level type's roles on the package routes (placement.ts); undefined when it is on none. */
+  placeRoles?: ReadonlySet<PackageRole>;
   /** A save or a delete changed the list's summary. */
   onSaved: () => void;
   onDirty: (dirty: boolean) => void;
@@ -50,7 +59,8 @@ async function readTemplate(typeId: number): Promise<PopupTemplateJson | null | 
   }
 }
 
-export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, onDirty }: TemplateEditorProps) {
+export default function TemplateEditor({ type, codePopup, photoCodeOf, placeRoles, onSaved, onDirty }: TemplateEditorProps) {
+  const base: TemplateBase = type.packageLevel ? "package" : "item";
   const [load, setLoad] = React.useState<Load>({ status: "loading" });
   const [draft, setDraft] = React.useState<PopupTemplateConfig | null>(null);
   const [serverIssues, setServerIssues] = React.useState<TemplateIssue[] | null>(null);
@@ -85,7 +95,7 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
   const dirty = draft != null && !sameConfig(draft, saved?.config ?? null);
   React.useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
 
-  const issues = React.useMemo(() => (draft ? lintPopupTemplate(draft) : []), [draft]);
+  const issues = React.useMemo(() => (draft ? lintPopupTemplate(draft, base) : []), [draft, base]);
   const shownIssues = serverIssues ?? issues;
 
   const save = async () => {
@@ -96,7 +106,7 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
       const res = await apiFetch(`/api/settings/popup-templates/${type.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base: "item", config: draft, expected_version: saved?.version ?? null }),
+        body: JSON.stringify({ base, config: draft, expected_version: saved?.version ?? null }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 409 && body.code === "TEMPLATE_CONFLICT") { setConflict(true); return; }
@@ -133,23 +143,37 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
 
   const edit = (next: PopupTemplateConfig) => { setServerIssues(null); setDraft(next); };
   const fromCode = codeTemplateFor(codePopup, photoCodeOf);
+  // A package-level type: the role its place on the package routes calls for, and what that place is.
+  const placeRole = soleRole(placeRoles);
+  const placeText = !placeRoles || placeRoles.size === 0 ? EDITOR_TEXT.place.none : placeRole ? EDITOR_TEXT.place[placeRole] : EDITOR_TEXT.place.both;
+  const role = draft?.role ?? null;
 
   // ---- states before a draft ----
   let body: React.ReactNode;
-  if (type.packageLevel) {
-    body = (
-      <div className="settings-empty" style={{ padding: "48px var(--space-lg)" }}>
-        <PackageOpen size={34} strokeWidth={1.5} color="var(--color-ink-muted-48)" aria-hidden />
-        <div style={{ maxWidth: 440 }}>{EDITOR_TEXT.packageLater}</div>
-      </div>
-    );
-  } else if (load.status === "loading") {
+  if (load.status === "loading") {
     body = <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }} aria-busy="true"><Skeleton variant="rounded" height={44} /><Skeleton variant="rounded" height={160} /><Skeleton variant="rounded" height={160} /></div>;
   } else if (load.status === "error") {
     body = (
       <div className="settings-error">
         <Alert severity="error">{EDITOR_TEXT.loadFailed}</Alert>
         <Button variant="outlined" color="inherit" size="small" onClick={reload}>{EDITOR_TEXT.retry}</Button>
+      </div>
+    );
+  } else if (!draft && type.packageLevel) {
+    // Today's opening first, unless the type's place closes the box.
+    const order: PackageRole[] = placeRole === "closing" ? ["closing", "opening"] : ["opening", "closing"];
+    body = (
+      <div className="settings-empty" style={{ padding: "48px var(--space-lg)" }}>
+        <PackageOpen size={34} strokeWidth={1.5} color="var(--color-ink-muted-48)" aria-hidden />
+        <div className="settings-empty__title">{EDITOR_TEXT.noPackageTemplate}</div>
+        <div style={{ maxWidth: 460 }}>{placeText}</div>
+        <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap", justifyContent: "center", marginTop: "var(--space-xs)" }}>
+          {order.map((r, i) => (
+            <Button key={r} variant={i === 0 ? "contained" : "outlined"} color={i === 0 ? "primary" : "inherit"} onClick={() => edit(packageCodeTemplate(r))}>
+              {r === "opening" ? EDITOR_TEXT.createOpening : EDITOR_TEXT.createClosing}
+            </Button>
+          ))}
+        </div>
       </div>
     );
   } else if (!draft) {
@@ -177,7 +201,17 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
             {EDITOR_TEXT.issuesTitle} {templateIssues(shownIssues).map((i) => i.message).join(" · ")}
           </Alert>
         )}
-        <StepsEditor cfg={draft} issues={shownIssues} onChange={edit} />
+        {role && placeRole && placeRole !== role && <Alert severity="warning">{EDITOR_TEXT.roleMismatch(role)}</Alert>}
+        <StepsEditor cfg={draft} issues={shownIssues} onChange={edit} catalog={catalogFor(role, "steps")} />
+        {role === "opening" && (
+          <section className="pt-flow" aria-label={EDITOR_TEXT.itemFlowTitle}>
+            <div className="pt-flow__head">
+              <span className="pt-flow__title">{EDITOR_TEXT.itemFlowTitle}</span>
+              <span className="pt-flow__sub">{EDITOR_TEXT.itemFlowSub}</span>
+            </div>
+            <StepsEditor cfg={draft} issues={shownIssues} onChange={edit} where="item_flow" catalog={catalogFor(role, "item_flow")} />
+          </section>
+        )}
         <div className="settings-card pt-finish">
           <TextField label={EDITOR_TEXT.finishLabel} value={draft.finish_label} size="small" sx={{ maxWidth: 320 }}
             onChange={(e) => edit(setFinishLabel(draft, e.target.value))} inputProps={{ maxLength: TEMPLATE_LIMITS.finishLabel }} />
@@ -195,12 +229,13 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
           <span className="settings-card__title">{type.name}</span>
           {saved && <span className="settings-count">{EDITOR_TEXT.version(saved.version)}</span>}
+          {role && <Tag tone="primary" size="md">{EDITOR_TEXT.role[role]}</Tag>}
           {!saved && draft && <Tag tone="neutral" size="md">{EDITOR_TEXT.newTemplate}</Tag>}
           {dirty && saved && <Tag tone="warning" size="md">{EDITOR_TEXT.dirty}</Tag>}
         </div>
-        {draft && !type.packageLevel && (
+        {draft && (
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", flexWrap: "wrap" }}>
-            <Button variant="text" startIcon={<Eye size={16} strokeWidth={1.75} aria-hidden />} onClick={() => setPreviewOpen(true)}>{EDITOR_TEXT.preview}</Button>
+            {!type.packageLevel && <Button variant="text" startIcon={<Eye size={16} strokeWidth={1.75} aria-hidden />} onClick={() => setPreviewOpen(true)}>{EDITOR_TEXT.preview}</Button>}
             {saved && <Button variant="text" color="error" onClick={() => setConfirmDelete(true)}>{EDITOR_TEXT.deleteTemplate}</Button>}
             {dirty && (
               <Button variant="outlined" color="inherit" startIcon={<Undo2 size={16} strokeWidth={1.75} aria-hidden />}
@@ -210,7 +245,7 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
           </div>
         )}
       </div>
-      <div style={{ padding: draft && !type.packageLevel && load.status === "ready" ? 18 : 0 }}>{body}</div>
+      <div style={{ padding: draft && load.status === "ready" ? 18 : 0 }}>{body}</div>
 
       <ConfirmDialog
         open={confirmDelete}
@@ -224,7 +259,7 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
         onConfirm={() => void remove()}
       />
 
-      {previewOpen && draft && (
+      {previewOpen && draft && !type.packageLevel && (
         <PreviewPopup type={type} config={draft} version={saved?.version ?? 0} onClose={() => setPreviewOpen(false)} />
       )}
 
