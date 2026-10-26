@@ -1,0 +1,169 @@
+/* =========================================================================
+   /settings/popup-templates — "תבניות חלון" (docs/popup-templates/PLAN.md
+   step 1.6). pt-* classes only, tokens only (src/styles/tokens.css). The
+   page sits in the settings frame (settings.css): .stations-grid is the
+   master–detail, .route-step__btn / .route-add the shared step controls.
+   ========================================================================= */
+
+/* ---------------------------------------------------- station types --- */
+.pt-types { list-style: none; margin: 0; padding: 0; }
+.pt-types > li + li { border-top: 1px solid var(--color-divider-soft); }
+.pt-type {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 48px;
+  padding: 8px var(--space-md);
+  font: inherit;
+  text-align: start;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .pt-type:hover { background: var(--color-canvas-parchment); }
+}
+.pt-type[aria-current] { background: var(--color-primary-tint); }
+.pt-type:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+.pt-type__name {
+  min-width: 0;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pt-type[aria-current] .pt-type__name { font-weight: var(--fw-semibold); }
+.pt-type__sub { flex: none; font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+
+/* ----------------------------------------------------------- editor --- */
+.pt-editor { display: flex; flex-direction: column; gap: var(--space-md); }
+.pt-steps { display: flex; flex-direction: column; gap: var(--space-sm); }
+.pt-step { overflow: visible; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.pt-step__head { display: flex; align-items: flex-start; gap: var(--space-sm); }
+.pt-step__num {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-top: 6px;
+  border-radius: var(--r-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-small);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+.pt-step__fields { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: var(--space-xs); }
+.pt-step__actions { flex: none; display: flex; gap: 4px; margin-top: 4px; }
+@media (max-width: 720px) {
+  .pt-step__fields { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Components: one framed row each, settings opening under it. */
+.pt-comps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pt-comps__empty { font-size: var(--text-small); color: var(--color-ink-muted-48); padding: 4px 2px; }
+.pt-comp {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+  background: var(--color-surface-pearl);
+}
+.pt-comp[data-invalid] { border-color: var(--color-warning-border); }
+.pt-comp__row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
+.pt-comp__icon { flex: none; display: flex; color: var(--color-ink-muted-48); padding-inline: 4px; }
+.pt-comp__open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  padding: 6px 4px;
+  font: inherit;
+  text-align: start;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+.pt-comp__open:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.pt-comp__name { flex: none; font-size: var(--text-body-sm); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.pt-comp__sub {
+  min-width: 0;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-48);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pt-comp__chev { flex: none; margin-inline-start: auto; color: var(--color-ink-muted-48); transition: transform var(--dur-fast) var(--ease-out); }
+.pt-comp__open[aria-expanded="true"] .pt-comp__chev { transform: rotate(180deg); }
+.pt-comp__settings {
+  border-top: 1px solid var(--color-divider-soft);
+  padding: 12px 14px 14px;
+  background: var(--color-canvas);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+.pt-set { display: flex; flex-direction: column; gap: 10px; }
+.pt-set__row { display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: flex-start; }
+.pt-set__row > * { flex: 1; min-width: 180px; }
+.pt-set__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-48);
+  line-height: 1.5;
+}
+.pt-set__note > svg { flex: none; margin-top: 3px; }
+
+/* The catalog under each step: quiet chips that add a component. */
+.pt-add { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pt-add__label { font-size: var(--text-fine); color: var(--color-ink-muted-48); margin-inline-end: 2px; }
+.pt-add__btn {
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  background: var(--color-canvas);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--r-pill);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .pt-add__btn:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
+}
+.pt-add__btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.pt-add-step { align-self: flex-start; }
+
+/* Issues where they are: warning ink, the triangle at the reading edge. */
+.pt-issues { list-style: none; margin: 0; padding: 0 8px 6px; display: flex; flex-direction: column; gap: 2px; }
+.pt-issues > li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+  color: var(--color-warning-ink);
+}
+
+.pt-finish { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.pt-vars { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+.pt-vars code {
+  font-family: inherit;
+  font-size: var(--text-fine);
+  color: var(--color-ink);
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+  padding: 1px 6px;
+}

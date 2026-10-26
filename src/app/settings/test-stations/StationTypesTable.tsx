@@ -5,7 +5,8 @@ import {
   TextField, SearchInput, Snackbar, Alert, Checkbox, FormControlLabel,
   ConfirmDialog, Skeleton, Tag,
 } from "@/components/ui";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Plus, Pencil, Trash2, LayoutTemplate } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 
 interface StationType {
@@ -250,6 +251,17 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                   )}
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                  {/* The type's popup template (docs/popup-templates/PLAN.md step 1.6). */}
+                  <IconButton
+                    size="small"
+                    className="set-act"
+                    component={Link}
+                    href={`/settings/popup-templates?type=${r.test_station_type_id}`}
+                    title={`תבנית החלון של ${r.test_type_desc}`}
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  >
+                    <LayoutTemplate size={15} strokeWidth={1.75} aria-hidden />
+                  </IconButton>
                   <IconButton
                     size="small"
                     className="set-act"

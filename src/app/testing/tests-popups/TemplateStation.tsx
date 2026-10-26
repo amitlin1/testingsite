@@ -82,10 +82,12 @@ export default function TemplateStation(props: StationTestDialogProps & { fallba
   );
 }
 
-/** The popup itself, once the template is in. Exported for the settings screen's preview. */
+/** The popup itself, once the template is in. Exported for the settings screen's preview:
+ *  `preview` loads no route fields (a placeholder stands where they go) and keeps shots on screen
+ *  without storing them; finishing calls onSubmit, which the preview makes a no-op. */
 export function TemplatePopup({
-  open, onClose, item, station, stationTypeName, workerId, workerName, onSubmit, template,
-}: StationTestDialogProps & { template: PopupTemplateJson }) {
+  open, onClose, item, station, stationTypeName, workerId, workerName, onSubmit, template, preview = false,
+}: StationTestDialogProps & { template: PopupTemplateJson; preview?: boolean }) {
   const cfg = template.config;
   const kind = stationTypeName?.trim() || "";
   const sku = skuScanOf(cfg);
@@ -98,11 +100,11 @@ export function TemplatePopup({
   const [submitting, setSubmitting] = React.useState(false);
 
   // ---- the route's station fields of this step (route-fields spec §4.2–§4.3) ----
-  const sf = useStationFields(item.item_id, open, station.test_station_id);
+  const sf = useStationFields(item.item_id, open && !preview, station.test_station_id);
   const ready = sf.status === "ready" && sf.mode === "item" ? sf : null;
   const fx = useFieldsState(ready ? ready.fields : []);
   const hasFields = ready != null && fx.defsCount > 0;
-  const fieldsBlocking = sf.status === "loading" || sf.status === "error" || (hasFields && fx.blocking(ready.gate));
+  const fieldsBlocking = !preview && (sf.status === "loading" || sf.status === "error" || (hasFields && fx.blocking(ready.gate)));
   const { reset: resetFields } = fx;
   const slot = routeFieldsSlot(cfg);
 
@@ -141,6 +143,7 @@ export function TemplatePopup({
     const previewUrl = URL.createObjectURL(file);
     const patch = (fn: (shots: TemplateRunState["photos"][string]) => TemplateRunState["photos"][string]) =>
       setState((s) => ({ ...s, photos: { ...s.photos, [c.id]: fn(s.photos[c.id] ?? []) } }));
+    if (preview) { patch((shots) => [...shots, { previewUrl, objectKey: "preview" }]); return; }
     patch((shots) => [...shots, { previewUrl, uploading: true }]);
     uploadItemFiles(item.item_id, [file], { workerId, stationTypeId: station.test_station_type_id, photoType: c.photo_code })
       .then(([result]) => result?.objectKey ?? null, () => null)
@@ -150,7 +153,7 @@ export function TemplatePopup({
       });
   };
   const removePhoto = (c: PhotoComponent, idx: number) => {
-    discard(item.item_id, (state.photos[c.id] ?? [])[idx]);
+    if (!preview) discard(item.item_id, (state.photos[c.id] ?? [])[idx]);
     setState((s) => ({ ...s, photos: { ...s.photos, [c.id]: (s.photos[c.id] ?? []).filter((_, i) => i !== idx) } }));
   };
   const uploadFieldPhoto = React.useCallback<UploadFieldPhoto>(
@@ -204,7 +207,11 @@ export function TemplatePopup({
   // ---- the body of the current step ----
   const step = cfg.steps[phaseIdx];
   const fieldsHere = slot?.stepIndex === phaseIdx;
-  const fieldsBlock = hasFields ? (
+  const fieldsBlock = preview ? (
+    <Box key="route-fields" sx={{ border: `1.5px dashed ${HAIR}`, borderRadius: "var(--r-card)", p: "18px 20px", color: MUTED, fontSize: "var(--text-body-sm)" }}>
+      כאן יופיעו שדות הבדיקה של העמדה. הם מוגדרים בעמוד מסלולי בדיקה, לכל מסלול בנפרד.
+    </Box>
+  ) : hasFields ? (
     <FieldsBlock key="route-fields" variant="station" title={stationBlockTitle(kind)} groups={[{ fields: ready.fields }]} fx={fx} uploadPhoto={uploadFieldPhoto} />
   ) : (
     <FieldsBlockFallback key="route-fields" sf={sf} />

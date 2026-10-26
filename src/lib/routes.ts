@@ -76,6 +76,7 @@ export const ROLE_PROTECTED: ReadonlyArray<{
   // the generic /settings rule. Pages only: the intake and the queues still
   // read routes / stations through /api/settings/* (see the role plan).
   { prefix: "/settings/testing-routes", any: ["manager", "tester"] },
+  { prefix: "/settings/popup-templates", any: ["manager", "tester"] },
   { prefix: "/settings/test-stations", any: ["manager", "tester"] },
   { prefix: "/settings/test-station-status", any: ["manager", "tester"] },
   { prefix: "/settings", any: ["manager", "tester", "storekeeper"] }, // other settings — all roles

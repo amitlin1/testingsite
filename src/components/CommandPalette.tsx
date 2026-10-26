@@ -164,6 +164,7 @@ const NAV_DEFS: { id: string; label: string; sub: string; icon: LucideIcon; href
   { id: "files", label: "ניהול קבצים", sub: "קבצים מצורפים", icon: Folder, href: "/files" },
   { id: "stations", label: "עמדות בדיקה", sub: "הגדרות · סוגי עמדות ועמדות", icon: Monitor, href: "/settings/test-stations" },
   { id: "routes", label: "מסלולי בדיקה", sub: "הגדרות", icon: Settings, href: "/settings/testing-routes" },
+  { id: "popup-templates", label: "תבניות חלון", sub: "הגדרות", icon: Settings, href: "/settings/popup-templates" },
   { id: "itemtypes", label: "סוגי פריטים", sub: "הגדרות", icon: Tag, href: "/settings/item-types" },
   { id: "pkgtypes", label: "סוגי מארזים", sub: "הגדרות · תכולת מארז ומסלול", icon: Package, href: "/settings/packages" },
   { id: "reference", label: "פריטי ייחוס", sub: "הגדרות", icon: Package, href: "/settings/reference-items" },
