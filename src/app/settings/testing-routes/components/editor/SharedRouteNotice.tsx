@@ -53,14 +53,17 @@ export type SharedRouteNoticeProps = {
   kits: readonly string[];
   /** "צור מסלול נפרד למארז הזה" — kit context only; without it the notice has no link. */
   fork?: SharedRouteFork;
+  /** The sentence before the link; default the fields' (sharedNoticeText). "שלבי המסלול" says it
+   *  about steps. */
+  text?: string;
 };
 
-export function SharedRouteNotice({ routeNumber, item, kits, fork }: SharedRouteNoticeProps) {
+export function SharedRouteNotice({ routeNumber, item, kits, fork, text }: SharedRouteNoticeProps) {
   return (
     <div role="note" className="sfe-notice">
       <Info size={18} strokeWidth={1.75} className="sfe-notice__icon" aria-hidden />
       <span className="sfe-notice__text">
-        {sharedNoticeText(routeNumber, item, kits)}
+        {text ?? sharedNoticeText(routeNumber, item, kits)}
         {fork && (
           <>
             {" "}

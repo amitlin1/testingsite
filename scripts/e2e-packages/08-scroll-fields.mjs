@@ -298,11 +298,11 @@ try {
   await page.keyboard.press("Escape");
 
   // ---- other screens keep their metrics, gain the keyboard ------------------
-  // The steps tab's item-type field: a default (not dense) combobox. The route
-  // picker above the tabs is dense on purpose (route-fields §5.2).
-  await goto(page, "/settings/testing-routes?view=steps");
-  await sleep(1500);
-  const other = await (await page.$('input[placeholder="בחר סוג פריט…"]'))?.evaluateHandle((el) => el.closest(".sh-input-wrap"));
+  // The steps tab's "הוסף שלב (סוג עמדה)" field: a default (not dense) combobox.
+  // The two pickers above the tabs are dense on purpose (route-fields §5.2).
+  await goto(page, `/settings/testing-routes?type=${PKG_TYPE_AMP}&route=1&view=steps`);
+  await sleep(2500);
+  const other = await (await page.$('input[placeholder="בחר סוג עמדה…"]'))?.evaluateHandle((el) => el.closest(".sh-input-wrap"));
   const og = await geo(other);
   await (await other.$("input")).click();
   await sleep(300);

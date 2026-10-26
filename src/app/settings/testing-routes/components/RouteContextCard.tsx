@@ -4,73 +4,81 @@ import Link from "next/link";
 import { ExternalLink, Package } from "lucide-react";
 import { Button, Tag } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
-import { CONTEXT_CARD_TEXT, UNDRAWN_TEXT, coverageText, kitSummaryText, routeOptionText } from "../lib/labels";
+import {
+  CONTEXT_CARD_TEXT, ROUTE_PICK_TEXT, coverageText, kitRoutesText, kitSummaryText, routeNumberSubText, routeNumberText,
+} from "../lib/labels";
+import type { KitTypeOption, RouteNumberOption } from "../lib/routePickModel";
 import type { RouteRef } from "../lib/routeQuery";
 import KeyboardHelp from "./KeyboardHelp";
 
 /**
  * The context card (route-fields spec §5.2; artboards 1, 2, 11): <section aria-label="מסלול נבחר">,
  * one row that wraps —
- *   "מסלול"  every route (GET /api/settings/testing-routes) joined with its item type
- *            (GET /api/settings/item-types: name, is_package), kits first, then items. The
- *            primitive has no groupBy: the list is sorted and each option's subtitle names its
- *            group (spec §5.2). Value "{type} · מסלול {n}", Package at the start for a kit.
- *   tags     primary "מארז · {k} סוגי פריטים · {u} יחידות" (a kit, from the context's lines) and
- *            the count "כיסוי {defined}/{relevant}" (mapModel coverage) — each only once known.
- *   actions  ghost "פתח במסך המארזים" (a kit) → /settings/packages?type={id}; the "?" of the
- *            keyboard shortcuts.
+ *   "סוג מארז"     every package type (never an item type: an item's route is reached from its kit,
+ *                  in "שלבי המסלול"), by name; the subtitle counts its routes. Picking one opens
+ *                  the route the page chooses for it (routeForKitType).
+ *   "מספר מסלול"   the routes of that package type, then one number without a route ("חדש —
+ *                  ייווצר בשמירה"); the subtitle counts the steps and marks the default.
+ *   tags           primary "מארז · {k} סוגי פריטים · {u} יחידות" (from the context's lines) and the
+ *                  count "כיסוי {defined}/{relevant}" (mapModel coverage) — each only once known.
+ *   actions        ghost "פתח במסך המארזים" → /settings/packages?type={id}; the "?" of the
+ *                  keyboard shortcuts.
  * Hidden on the library view (artboard 8) — the page decides.
  */
 
-/** One route of the "מסלול" list. */
-export type RouteOption = {
-  /** "{type}:{route}" — unique (a route is the pair). */
-  key: string;
-  type: number;
-  route: number;
-  /** item_types.item_type_desc (trimmed). */
-  desc: string;
-  isPackage: boolean;
-};
-
-/** Kits first, then items; by name, then by route number. */
-export function sortRouteOptions(options: readonly RouteOption[]): RouteOption[] {
-  return [...options].sort(
-    (a, b) =>
-      Number(b.isPackage) - Number(a.isPackage) ||
-      a.desc.localeCompare(b.desc, "he") ||
-      a.route - b.route,
-  );
-}
-
 export type RouteContextCardProps = {
-  /** Every route, sorted (sortRouteOptions); null while the list loads. */
-  options: RouteOption[] | null;
-  /** The open route; a pair with no route yet (a new one in "שלבי המסלול") still shows. */
-  value: RouteOption | null;
-  onChange: (ref: RouteRef) => void;
-  /** A kit's template, from the context's lines; null when not a kit or not loaded. */
+  /** Every package type (kitTypeOptions); null while the lists load. */
+  kitTypes: KitTypeOption[] | null;
+  /** The route numbers of the chosen package type (routeNumberOptions); [] when none is chosen. */
+  routeNumbers: RouteNumberOption[];
+  /** The open kit route; null = none. */
+  value: RouteRef | null;
+  /** A package type was picked. */
+  onTypeChange: (typeId: number) => void;
+  /** A route number of the chosen package type was picked. */
+  onRouteChange: (ref: RouteRef) => void;
+  /** The kit's template, from the context's lines; null when not loaded. */
   kit: { kinds: number; units: number } | null;
   /** The map's coverage; null while unknown. */
   coverage: { defined: number; relevant: number } | null;
 };
 
-export default function RouteContextCard({ options, value, onChange, kit, coverage }: RouteContextCardProps) {
+export default function RouteContextCard({
+  kitTypes, routeNumbers, value, onTypeChange, onRouteChange, kit, coverage,
+}: RouteContextCardProps) {
+  const type = value ? kitTypes?.find((t) => t.id === value.type) ?? null : null;
+  const route = value ? routeNumbers.find((o) => o.route === value.route) ?? null : null;
   return (
     <section aria-label={CONTEXT_CARD_TEXT.sectionLabel} className="settings-card rf-context-card">
       <div className="rf-context-card__pick">
-        <SearchableCombobox<RouteOption>
-          options={options ?? []}
-          loading={options == null}
-          value={value}
-          onChange={(o) => { if (o) onChange({ type: o.type, route: o.route }); }}
-          getOptionLabel={(o) => routeOptionText(o.desc, o.route)}
-          getOptionSubtitle={(o) => (o.isPackage ? UNDRAWN_TEXT.routeGroupKit : UNDRAWN_TEXT.routeGroupItem)}
-          isOptionEqualToValue={(a, b) => a.key === b.key}
-          label={CONTEXT_CARD_TEXT.routeLabel}
+        <SearchableCombobox<KitTypeOption>
+          options={kitTypes ?? []}
+          loading={kitTypes == null}
+          value={type}
+          onChange={(o) => { if (o) onTypeChange(o.id); }}
+          getOptionLabel={(o) => o.label}
+          getOptionSubtitle={(o) => kitRoutesText(o.routeCount)}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          label={ROUTE_PICK_TEXT.typeLabel}
+          placeholder={ROUTE_PICK_TEXT.typePlaceholder}
           dense
           disableClearable
-          startIcon={value?.isPackage ? <Package size={18} strokeWidth={1.75} aria-hidden /> : undefined}
+          startIcon={<Package size={18} strokeWidth={1.75} aria-hidden />}
+        />
+      </div>
+      <div className="rf-context-card__pick rf-context-card__pick--route">
+        <SearchableCombobox<RouteNumberOption>
+          options={routeNumbers}
+          value={route}
+          onChange={(o) => { if (o && value) onRouteChange({ type: value.type, route: o.route }); }}
+          getOptionLabel={(o) => routeNumberText(o.route)}
+          getOptionSubtitle={(o) => (o.isNew ? ROUTE_PICK_TEXT.newRoute : routeNumberSubText(o.stations, o.isDefault))}
+          isOptionEqualToValue={(a, b) => a.route === b.route}
+          label={ROUTE_PICK_TEXT.routeLabel}
+          placeholder={ROUTE_PICK_TEXT.routePlaceholder}
+          dense
+          disableClearable
+          disabled={type == null}
         />
       </div>
 
@@ -82,11 +90,11 @@ export default function RouteContextCard({ options, value, onChange, kit, covera
       )}
 
       <div className="rf-context-card__actions">
-        {value?.isPackage && (
+        {type && (
           <Button
             variant="text"
             component={Link}
-            href={`/settings/packages?type=${value.type}`}
+            href={`/settings/packages?type=${type.id}`}
             startIcon={<ExternalLink size={16} strokeWidth={1.75} aria-hidden />}
           >
             {CONTEXT_CARD_TEXT.openPackages}

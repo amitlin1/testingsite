@@ -15,7 +15,7 @@ import type {
  *
  * | status  | when                                    | the screen shows                             |
  * |---------|-----------------------------------------|----------------------------------------------|
- * | idle    | no route chosen                         | "בחר סוג פריט ומספר מסלול"                   |
+ * | idle    | no route chosen                         | "בחר סוג מארז ומספר מסלול"                   |
  * | loading | the first answer for this route pending | the map's skeleton — never "ללא שדות"        |
  * | error   | non-200, network, or a body that is not | "טעינת הגדרות השדות נכשלה" + "נסה שוב"       |
  * |         | a context (`retrying` while retry runs) | ("טוען…", disabled) — never an empty route   |

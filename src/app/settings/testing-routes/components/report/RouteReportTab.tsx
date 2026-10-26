@@ -56,7 +56,7 @@ export default function RouteReportTab({ context, loading }: { context: FieldsCo
   if (!context) {
     return (
       <div className="settings-card">
-        <Alert severity="info">בחר סוג פריט ומספר מסלול כדי לערוך את תבנית הדוח.</Alert>
+        <Alert severity="info">בחר סוג מארז ומספר מסלול כדי לערוך את תבנית הדוח.</Alert>
       </div>
     );
   }

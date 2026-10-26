@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import type { RouteQuery, StorageLike } from "../routeQuery";
 import {
   DEFAULT_ROUTE_QUERY, LAST_ROUTE_STORAGE_KEY, backToMap, encodeTarget, isEditorOpen, normalizeRouteQuery, parseRouteQuery,
-  parseTargetParam, readLastRoute, routeQueryHref, routeRefFrom, routeRefOf, sameRouteQuery, sameTarget, serializeRouteQuery, withEditor,
-  withField, withLastRoute, withLibrary, withRoute, withView, writeLastRoute,
+  parseTargetParam, readLastRoute, routeQueryHref, routeRefOf, sameRouteQuery, sameTarget, serializeRouteQuery, withEditor,
+  withField, withItem, withLastRoute, withLibrary, withRoute, withView, writeLastRoute,
 } from "../routeQuery";
 
 const editor = "type=50&route=1&view=map&step=s_moelec00&target=item%3A4&field=f_abcd1234";
@@ -12,7 +12,7 @@ const editor = "type=50&route=1&view=map&step=s_moelec00&target=item%3A4&field=f
 test("the editor URL of spec §5.2 round-trips", () => {
   const q = parseRouteQuery(editor);
   assert.deepEqual(q, {
-    type: 50, route: 1, view: "map", step: "s_moelec00", target: { item_type_id: 4 }, field: "f_abcd1234", lib: null, id: null,
+    type: 50, route: 1, view: "map", step: "s_moelec00", target: { item_type_id: 4 }, field: "f_abcd1234", item: null, lib: null, id: null,
   });
   assert.equal(serializeRouteQuery(q), editor);
   assert.equal(isEditorOpen(q), true);
@@ -51,6 +51,11 @@ test("anything invalid falls back to its default", () => {
   assert.equal(parseRouteQuery("type=5&route=1&field=f_abcd1234").field, null);
   assert.equal(parseRouteQuery("type=5&route=1&step=s_moelec00&target=box&field=f_bad").field, null);
   assert.equal(parseRouteQuery("type=5&route=1&view=steps&step=s_moelec00&target=box").step, null);
+  // item only in the steps view, and only with a route.
+  assert.equal(parseRouteQuery("type=5&route=1&view=steps&item=7").item, 7);
+  assert.equal(parseRouteQuery("type=5&route=1&item=7").item, null, "not in the map");
+  assert.equal(parseRouteQuery("view=steps&item=7").item, null, "not without a route");
+  assert.equal(parseRouteQuery("type=5&route=1&view=steps&item=0").item, null);
   // lib / id only in the library.
   assert.deepEqual(parseRouteQuery("type=5&route=1&lib=lists&id=3"), { ...DEFAULT_ROUTE_QUERY, type: 5, route: 1 });
   assert.equal(parseRouteQuery("view=library&lib=other&id=x").lib, "sets");
@@ -59,7 +64,7 @@ test("anything invalid falls back to its default", () => {
 
 test("serialising is canonical: always the view, never a member the state cannot hold", () => {
   assert.equal(serializeRouteQuery(DEFAULT_ROUTE_QUERY), "view=map");
-  const odd: RouteQuery = { ...DEFAULT_ROUTE_QUERY, type: 5, view: "steps", step: "s_moelec00", target: "box", lib: "lists", id: 3 };
+  const odd: RouteQuery = { ...DEFAULT_ROUTE_QUERY, type: 5, view: "steps", step: "s_moelec00", target: "box", item: 4, lib: "lists", id: 3 };
   assert.equal(serializeRouteQuery(odd), "view=steps");
   assert.equal(routeQueryHref("/settings/testing-routes", parseRouteQuery("route=1&type=5")), "/settings/testing-routes?type=5&route=1&view=map");
   assert.equal(sameRouteQuery(parseRouteQuery("route=1&type=5"), parseRouteQuery("type=5&route=1&view=map")), true);
@@ -83,6 +88,16 @@ test("transitions: back to the map, another route, another view, the editor, a f
   assert.equal(serializeRouteQuery(withField(kit, "f_00000001")), "type=50&route=1&view=map&step=s_kitopen1&target=box&field=f_00000001");
   assert.equal(withField(backToMap(q), "f_00000001").field, null, "no field without the editor");
   assert.equal(serializeRouteQuery(withEditor(lib, "s_kitopen1", "each_item")), "type=50&route=1&view=map&step=s_kitopen1&target=each_item");
+});
+
+test("the steps view: a template line's route, kept on the same kit, dropped on another", () => {
+  const steps = withItem(parseRouteQuery(editor), 7);
+  assert.equal(serializeRouteQuery(steps), "type=50&route=1&view=steps&item=7", "withItem opens the steps view");
+  assert.equal(serializeRouteQuery(withItem(steps, null)), "type=50&route=1&view=steps", "null = the box");
+  assert.equal(serializeRouteQuery(withRoute(steps, { type: 50, route: 1 })), "type=50&route=1&view=steps&item=7");
+  assert.equal(serializeRouteQuery(withRoute(steps, { type: 50, route: 2 })), "type=50&route=2&view=steps", "another route starts on the box");
+  assert.equal(serializeRouteQuery(withRoute(steps, { type: 60, route: 1 })), "type=60&route=1&view=steps", "another kit has other lines");
+  assert.equal(serializeRouteQuery(withView(steps, "map")), "type=50&route=1&view=map");
 });
 
 // ---- the last route ---------------------------------------------------------------------------------
@@ -115,17 +130,6 @@ test("a storage that throws (private mode, blocked site data) is ignored", () =>
   assert.doesNotThrow(() => writeLastRoute({ type: 5, route: 1 }, throwing));
   assert.equal(readLastRoute(null), null);
   assert.doesNotThrow(() => writeLastRoute({ type: 5, route: 1 }, null));
-});
-
-test("routeRefFrom: only a pair the URL can hold is a route", () => {
-  assert.deepEqual(routeRefFrom(3, 1), { type: 3, route: 1 });
-  assert.equal(routeRefFrom(null, 1), null);
-  assert.equal(routeRefFrom(3, null), null);
-  assert.equal(routeRefFrom(3, 0), null, "route 0 stays in the picker");
-  assert.equal(routeRefFrom(3, -2), null);
-  assert.equal(routeRefFrom(3, 2147483648), null, "not an int4");
-  assert.equal(routeRefFrom(3, 1.5), null);
-  assert.equal(routeRefFrom(3, Number.NaN), null);
 });
 
 test("withLastRoute fills a URL without a route, and never overrides one", () => {

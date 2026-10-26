@@ -1,4 +1,4 @@
-import { TransactionClient } from "@/app/lib/prisma";
+import type { TransactionClient } from "@/app/lib/prisma";
 
 /**
  * Route-shape rules of the package model — docs/packages/PLAN.md §4.

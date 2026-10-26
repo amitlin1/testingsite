@@ -5,9 +5,10 @@ import type { FieldId, GroupTarget, StepUid } from "@/app/lib/station-fields/sch
  * The view state of /settings/testing-routes, kept in the query string so a link opens exactly
  * what the admin saw (route-fields spec §5.2, D6):
  *
- *   ?type={item_type_id}&route={route_number}&view=map|steps|library
+ *   ?type={package_type_id}&route={route_number}&view=map|steps|library|report
  *    [&step={step_uid}&target={box|each_item|item|item:{item_type_id}}]   ← the cell editor (view=map)
  *    [&field={field_id}]                                                    ← "עבור לשדה"
+ *    [&item={item_type_id}]                                                 ← view=steps: a line's route
  *    [&lib=sets|lists&id={id}]                                              ← inside view=library
  *
  * Pure: parse and serialise, plus the transitions the page makes. Anything invalid falls back to
@@ -15,6 +16,7 @@ import type { FieldId, GroupTarget, StepUid } from "@/app/lib/station-fields/sch
  * two states by their serialised form:
  *   - type and route come together, or neither (a route is the pair);
  *   - step and target come together, and only in view=map; field only with them;
+ *   - item only in view=steps, and only with a route;
  *   - lib only in view=library (default "sets"); id only with lib.
  * Which step uids and targets the route really has is the map's business: a link to a cell that
  * is gone is the page's to send back to the map (backToMap).
@@ -35,6 +37,8 @@ export interface RouteQuery {
   step: StepUid | null;
   target: GroupTarget | null;
   field: FieldId | null;
+  /** view=steps: the kit's template line (its item_type_id) whose route is shown; null = the box. */
+  item: number | null;
   lib: LibraryTab | null;
   /** The field set / option list open in the library. */
   id: number | null;
@@ -44,7 +48,7 @@ export interface RouteQuery {
 export type RouteRef = { type: number; route: number };
 
 export const DEFAULT_ROUTE_QUERY: RouteQuery = Object.freeze({
-  type: null, route: null, view: "map", step: null, target: null, field: null, lib: null, id: null,
+  type: null, route: null, view: "map", step: null, target: null, field: null, item: null, lib: null, id: null,
 });
 
 /** What parseRouteQuery reads: URLSearchParams, Next's ReadonlyURLSearchParams, or a query string. */
@@ -100,6 +104,7 @@ export function normalizeRouteQuery(q: RouteQuery): RouteQuery {
   const editor = step != null && target != null;
   const field = editor && q.field != null && ID_PATTERNS.field.test(q.field) ? q.field : null;
   const inLibrary = q.view === "library";
+  const inSteps = q.view === "steps";
   return {
     type: hasRoute ? q.type : null,
     route: hasRoute ? q.route : null,
@@ -107,6 +112,7 @@ export function normalizeRouteQuery(q: RouteQuery): RouteQuery {
     step: editor ? step : null,
     target: editor ? target : null,
     field,
+    item: hasRoute && inSteps && isId(q.item) ? q.item : null,
     lib: inLibrary ? readLib(q.lib) : null,
     id: inLibrary && isId(q.id) ? q.id : null,
   };
@@ -123,13 +129,14 @@ export function parseRouteQuery(source: ParamSource): RouteQuery {
     step: get("step"),
     target: parseTargetParam(get("target")),
     field: get("field"),
+    item: readId(get("item")),
     lib: get("lib") as LibraryTab | null,
     id: readId(get("id")),
   });
 }
 
 /** The canonical query string, without "?": type, route, view (always written), step, target,
- *  field, lib, id — only the members the state holds. */
+ *  field, item, lib, id — only the members the state holds. */
 export function serializeRouteQuery(q: RouteQuery): string {
   const n = normalizeRouteQuery(q);
   const out = new URLSearchParams();
@@ -143,6 +150,7 @@ export function serializeRouteQuery(q: RouteQuery): string {
     out.set("target", encodeTarget(n.target));
     if (n.field != null) out.set("field", n.field);
   }
+  if (n.item != null) out.set("item", String(n.item));
   if (n.lib != null) {
     out.set("lib", n.lib);
     if (n.id != null) out.set("id", String(n.id));
@@ -166,13 +174,6 @@ export function routeRefOf(q: RouteQuery): RouteRef | null {
   return q.type != null && q.route != null ? { type: q.type, route: q.route } : null;
 }
 
-/** An item type + route number pair as a route the URL can hold, or null — a pair the URL cannot
- *  name (half-filled, a route number below 1) stays in the "שלבי המסלול" picker, as the old page
- *  let it. */
-export function routeRefFrom(type: number | null, route: number | null): RouteRef | null {
-  return isId(type) && isId(route) ? { type, route } : null;
-}
-
 /** The cell editor is open (view=map with step and target). */
 export function isEditorOpen(q: RouteQuery): boolean {
   return q.view === "map" && q.step != null && q.target != null;
@@ -183,17 +184,26 @@ export function backToMap(q: RouteQuery): RouteQuery {
   return normalizeRouteQuery({ ...q, view: "map", step: null, target: null, field: null });
 }
 
-/** Another route in the "מסלול" combobox. Step uids belong to a route, so the editor closes; the
- *  view stays (the library is the same for every route). null clears the route. */
+/** Another route in the context card's pickers. Step uids belong to a route, so the editor closes,
+ *  and another kit has other lines, so "שלבי המסלול" goes back to the box; the view stays (the
+ *  library is the same for every route). null clears the route. */
 export function withRoute(q: RouteQuery, ref: RouteRef | null): RouteQuery {
-  return normalizeRouteQuery({ ...q, type: ref?.type ?? null, route: ref?.route ?? null, step: null, target: null, field: null });
+  const same = ref != null && ref.type === q.type && ref.route === q.route;
+  return normalizeRouteQuery({
+    ...q, type: ref?.type ?? null, route: ref?.route ?? null, step: null, target: null, field: null, item: same ? q.item : null,
+  });
 }
 
 /** Another tab. The map tab opens on the map (not on a cell editor left behind); the library opens
  *  on "sets" unless it is already open. */
 export function withView(q: RouteQuery, view: RouteView): RouteQuery {
   if (view === q.view && view !== "map") return normalizeRouteQuery(q);
-  return normalizeRouteQuery({ ...q, view, step: null, target: null, field: null, lib: view === "library" ? q.lib : null, id: view === "library" ? q.id : null });
+  return normalizeRouteQuery({ ...q, view, step: null, target: null, field: null, item: null, lib: view === "library" ? q.lib : null, id: view === "library" ? q.id : null });
+}
+
+/** "שלבי המסלול" on a template line's route (its item_type_id), or on the box (null). */
+export function withItem(q: RouteQuery, item: number | null): RouteQuery {
+  return normalizeRouteQuery({ ...q, view: "steps", step: null, target: null, field: null, item, lib: null, id: null });
 }
 
 /** The cell editor on (step, target), optionally focused on a field ("עבור לשדה"). */

@@ -8,8 +8,7 @@ import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import type { FieldId } from "@/app/lib/station-fields/schema";
 import SettingsToolbar from "../components/SettingsToolbar";
 import RouteFieldsHeader from "./components/RouteFieldsHeader";
-import RouteContextCard, { sortRouteOptions } from "./components/RouteContextCard";
-import type { RouteOption } from "./components/RouteContextCard";
+import RouteContextCard from "./components/RouteContextCard";
 import RouteViewTabs from "./components/RouteViewTabs";
 import RouteStepsTab from "./components/steps/RouteStepsTab";
 import RouteReportTab from "./components/report/RouteReportTab";
@@ -35,21 +34,24 @@ import { useFieldsContext } from "./lib/useFieldsContext";
 import type { FieldsContextState, FieldsContextSubject } from "./lib/useFieldsContext";
 import {
   backToMap, isEditorOpen, parseRouteQuery, readLastRoute, routeQueryHref, routeRefOf, sameRouteQuery,
-  withEditor, withLastRoute, withLibrary, withRoute, withView, writeLastRoute,
+  withEditor, withItem, withLastRoute, withLibrary, withRoute, withView, writeLastRoute,
 } from "./lib/routeQuery";
 import type { RouteQuery, RouteRef, RouteView } from "./lib/routeQuery";
+import { kitTypeOptions, routeForKitType, routeNumberOptions } from "./lib/routePickModel";
+import type { ItemTypeRow, RouteRow } from "./lib/routePickModel";
 import { HEADER_TEXT, NO_ROUTE_TEXT } from "./lib/labels";
 import "./route-fields.css";
 
 /**
  * /settings/testing-routes — "מסלולי בדיקה" (route-fields spec §5.1, §5.2; D6): the shell of the
  * route-fields screen. Header (RouteFieldsHeader) → context card "מסלול נבחר" (hidden on the
- * library) → the view tabs → the view:
+ * library): a package type, then its route number — never an item type (2026-10-26) → the view
+ * tabs → the view:
  *   map      the fields map (FieldsMap, artboard 1) — under the onboarding card while the route holds
  *            no fields of its own (FieldsOnboarding, artboard 11) — and, with ?step=&target=, its cell
  *            editor (StationFieldEditor, artboard 2 — its breadcrumb in the tabs' row); this shell
  *            draws the map's other states (artboard 11)
- *   steps    "שלבי המסלול" (RouteStepsTab)
+ *   steps    "שלבי המסלול" (RouteStepsTab) — the box or one of its items (?item=), and its steps
  *   library  "ערכות ורשימות" (FieldLibrary, artboard 8)
  *   report   "דוח PDF" (RouteReportTab) — the report template of each item route on screen
  *
@@ -62,10 +64,12 @@ import "./route-fields.css";
  *
  * ALL view state is in the URL (lib/routeQuery.ts), changed with router.replace. Without a route
  * in the URL the page opens the route last opened in this browser (localStorage), else the empty
- * state "בחר סוג פריט ומספר מסלול". The map and its editor take the whole frame (`settings-wide`).
+ * state "בחר סוג מארז ומספר מסלול". A route of an item type (an old link, an old remembered route)
+ * is no route here: the screen opens kit routes only. The map and its editor take the whole frame
+ * (`settings-wide`).
  *
- * Data: the item types and station types (the old page's options), the route list (the "מסלול"
- * combobox and the header count), and GET …/fields-context for the route on screen
+ * Data: the item types and station types (the old page's options), the route list (the two
+ * pickers and the header count), and GET …/fields-context for the kit route on screen
  * (useFieldsContext), whose answer feeds the page's one DraftStoreProvider. The context is asked
  * for again whenever a route's steps change: after a steps save, and when the draft store read a
  * route back with other steps (409 STEP_UNKNOWN) — the map's columns are the context's.
@@ -78,16 +82,6 @@ interface Option {
   packageLevel?: boolean;
 }
 
-interface ItemTypeOption extends Option {
-  isPackage: boolean;
-}
-
-/** A row of GET /api/settings/testing-routes (the members this page reads). */
-interface RouteRow {
-  item_type_id: number;
-  route_number: number;
-  route_steps: number[];
-}
 
 // ---- the route last opened (localStorage) ----------------------------------------------------------
 // Read through useSyncExternalStore: the server snapshot is "unknown" (null), so the first client
@@ -141,10 +135,8 @@ function TestingRoutesShell() {
     if (!sameRouteQuery(next, query)) router.replace(routeQueryHref(pathname, next), { scroll: false });
   }, [query, router, pathname]);
 
-  const ref = useMemo(() => routeRefOf(query), [query]);
-
   // ---- options: item types, station types, routes ----------------------------------------------
-  const [itemTypes, setItemTypes] = useState<ItemTypeOption[]>([]);
+  const [itemTypes, setItemTypes] = useState<ItemTypeRow[]>([]);
   const [stationTypes, setStationTypes] = useState<Option[]>([]);
   const [routes, setRoutes] = useState<RouteRow[] | null>(null);
   const [optionsLoaded, setOptionsLoaded] = useState(false);
@@ -180,7 +172,12 @@ function TestingRoutesShell() {
       }),
       loadRoutes(),
     ]).then(([items, stations, routesOk]) => {
-      setItemTypes(Array.isArray(items) ? (items as any[]).map((i) => ({ id: i.item_type_id, label: i.item_type_desc, isPackage: i.is_package === true })) : []);
+      setItemTypes(Array.isArray(items) ? (items as any[]).map((i) => ({
+        id: i.item_type_id,
+        label: i.item_type_desc,
+        isPackage: i.is_package === true,
+        defaultRoute: typeof i.default_route_number === "number" ? i.default_route_number : null,
+      })) : []);
       setStationTypes(Array.isArray(stations) ? (stations as any[]).map((s) => ({ id: s.test_station_type_id, label: s.test_type_desc, packageLevel: s.package_level === true })) : []);
       setOptionsLoaded(true);
       // Without the route list the "מסלול" combobox cannot offer a route: the same band.
@@ -199,6 +196,14 @@ function TestingRoutesShell() {
   }, [loadRoutes]);
 
   useEffect(() => { loadOptions(); }, [loadOptions]);
+
+  // The route on screen: a kit route only. Until the item types are in, the URL's pair waits (the
+  // views show their loading states); then a pair of an item type is no route.
+  const ref = useMemo((): RouteRef | null => {
+    const r = routeRefOf(query);
+    if (!r || !optionsLoaded) return r;
+    return itemTypes.find((t) => t.id === r.type)?.isPackage ? r : null;
+  }, [query, optionsLoaded, itemTypes]);
 
   // ---- the fields context of the route on screen --------------------------------------------------
   // Kit or item decides the request; it is known once the item types are in.
@@ -222,6 +227,7 @@ function TestingRoutesShell() {
     <DraftStoreProvider context={context}>
       <RouteFieldsScreen
         query={query}
+        routeRef={ref}
         routeUnknown={routeUnknown}
         navigate={navigate}
         pathname={pathname}
@@ -242,11 +248,13 @@ function TestingRoutesShell() {
 
 type ScreenProps = {
   query: RouteQuery;
+  /** The kit route on screen (null = none, or the URL names an item type's route). */
+  routeRef: RouteRef | null;
   /** No route in the URL and storage not read yet (server render). */
   routeUnknown: boolean;
   navigate: (next: RouteQuery) => void;
   pathname: string;
-  itemTypes: ItemTypeOption[];
+  itemTypes: ItemTypeRow[];
   stationTypes: Option[];
   routes: RouteRow[] | null;
   optionsError: boolean;
@@ -260,10 +268,9 @@ type ScreenProps = {
 
 /** Everything under the page's DraftStoreProvider. */
 function RouteFieldsScreen({
-  query, routeUnknown, navigate, pathname, itemTypes, stationTypes, routes, optionsError, optionsLoading,
+  query, routeRef: ref, routeUnknown, navigate, pathname, itemTypes, stationTypes, routes, optionsError, optionsLoading,
   optionsLoaded, onRetryOptions, ctx, context, onStepsSaved,
 }: ScreenProps) {
-  const ref = useMemo(() => routeRefOf(query), [query]);
   // Field sets (session 2d): their versions mark "הערכה עודכנה" cells, their names the "ערכה: …" tags.
   const setVersions = useFieldSetVersions();
   const setNames = useFieldSetNames();
@@ -286,31 +293,21 @@ function RouteFieldsScreen({
     reloadContext();
   }, [stepsKey, reloadContext]);
 
-  // ---- the "מסלול" options and value -------------------------------------------------------------
+  // ---- the two pickers: "סוג מארז", then "מספר מסלול" ---------------------------------------------
   const typeById = useMemo(() => new Map(itemTypes.map((t) => [t.id, t])), [itemTypes]);
-  const routeOptions = useMemo((): RouteOption[] | null => {
-    if (!routes || !optionsLoaded) return null;
-    return sortRouteOptions(routes.map((r) => {
-      const type = typeById.get(r.item_type_id);
-      return {
-        key: `${r.item_type_id}:${r.route_number}`,
-        type: r.item_type_id,
-        route: r.route_number,
-        // An item type the list does not know is named like an unknown station type ("ID {n}").
-        desc: type?.label.trim() || `ID ${r.item_type_id}`,
-        isPackage: type?.isPackage === true,
-      };
-    }));
-  }, [routes, optionsLoaded, typeById]);
-  const routeValue = useMemo((): RouteOption | null => {
-    if (!ref) return null;
-    const listed = routeOptions?.find((o) => o.type === ref.type && o.route === ref.route);
-    if (listed) return listed;
-    // A pair with no route yet ("מסלול חדש — ייווצר בשמירה") still shows what is open.
-    const type = typeById.get(ref.type);
-    if (!type) return null;
-    return { key: `${ref.type}:${ref.route}`, type: ref.type, route: ref.route, desc: type.label.trim(), isPackage: type.isPackage };
-  }, [ref, routeOptions, typeById]);
+  const kitTypes = useMemo(
+    () => (routes && optionsLoaded ? kitTypeOptions(itemTypes, routes) : null),
+    [routes, optionsLoaded, itemTypes],
+  );
+  const routeNumbers = useMemo(
+    () => (ref && routes ? routeNumberOptions(ref.type, routes, typeById.get(ref.type)?.defaultRoute ?? null, ref.route) : []),
+    [ref, routes, typeById],
+  );
+  // The header counts the routes the pickers offer: the kits'.
+  const kitRouteCount = useMemo(
+    () => (routes && optionsLoaded ? routes.filter((r) => typeById.get(r.item_type_id)?.isPackage).length : null),
+    [routes, optionsLoaded, typeById],
+  );
   const stepsCount = useMemo(() => {
     if (!ref || !routes) return null;
     const row = routes.find((r) => r.item_type_id === ref.type && r.route_number === ref.route);
@@ -357,6 +354,12 @@ function RouteFieldsScreen({
 
   const hrefOf = useCallback((v: RouteView) => routeQueryHref(pathname, withView(query, v)), [pathname, query]);
   const onRouteChange = useCallback((next: RouteRef) => navigate(withRoute(query, next)), [navigate, query]);
+  const onTypeChange = useCallback((typeId: number) => {
+    if (ref?.type === typeId) return;
+    const route = routeForKitType(typeId, routes ?? [], typeById.get(typeId)?.defaultRoute ?? null);
+    navigate(withRoute(query, { type: typeId, route }));
+  }, [ref, routes, typeById, navigate, query]);
+  const hrefOfItem = useCallback((item: number | null) => routeQueryHref(pathname, withItem(query, item)), [pathname, query]);
   const packagesHref = ref ? `/settings/packages?type=${ref.type}` : "/settings/packages";
 
   // ---- the map and its cell editor ----------------------------------------------------------------
@@ -495,7 +498,7 @@ function RouteFieldsScreen({
   return (
     <div dir="rtl" className={cn("rf-page", view === "map" && "settings-wide")}>
       <RouteFieldsHeader
-        routeCount={routes ? routes.length : null}
+        routeCount={kitRouteCount}
         routeChosen={ref != null}
         context={context}
         map={map}
@@ -533,9 +536,11 @@ function RouteFieldsScreen({
 
       {view !== "library" && (
         <RouteContextCard
-          options={routeOptions}
-          value={routeValue}
-          onChange={onRouteChange}
+          kitTypes={kitTypes}
+          routeNumbers={routeNumbers}
+          value={ref}
+          onTypeChange={onTypeChange}
+          onRouteChange={onRouteChange}
           kit={kit}
           coverage={coverage}
         />
@@ -558,9 +563,11 @@ function RouteFieldsScreen({
       {view === "steps" && (
         <RouteStepsTab
           route={ref}
-          itemTypes={itemTypes}
+          item={query.item}
+          ctx={ctx}
           stationTypes={stationTypes}
-          onRouteChange={onRouteChange}
+          hrefOfItem={hrefOfItem}
+          packagesHref={packagesHref}
           onSaved={onStepsSaved}
         />
       )}
