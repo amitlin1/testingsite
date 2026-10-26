@@ -259,18 +259,21 @@ export function popoverFieldId(p: EditorPopover | null): FieldId | null {
 }
 
 // ---- the popup the station opens (spec §10.3 last row) -------------------------------------------
-/** What the worker's popup is: VerdictStation, PhotoStation, PopUpTestDialog, or a package wizard. */
-export type PopupKind = "verdict" | "photo" | "dialog" | "package";
+/** What the worker's popup is: VerdictStation, PhotoStation, PopUpTestDialog, a package wizard, or
+ *  the station type's popup template (docs/popup-templates/PLAN.md). */
+export type PopupKind = "verdict" | "photo" | "dialog" | "package" | "template";
 
 /** The worker screen's choice (src/app/testing/page.tsx `packageKindOf`): a kit at its route's last
  *  step (of more than one) is closing, else opening. */
 export type PackageWizard = "open" | "close";
 
-/** How the station's popup is looked up — mainPopUp.ts, passed in so this module stays pure. */
-export type PopupLookup = { hasWizard(typeId: number): boolean; isVerdict(typeId: number): boolean };
+/** How the station's popup is looked up — mainPopUp.ts, passed in so this module stays pure.
+ *  hasTemplate: the station type has a popup template (it wins over the code's wizard). */
+export type PopupLookup = { hasWizard(typeId: number): boolean; isVerdict(typeId: number): boolean; hasTemplate?(typeId: number): boolean };
 
 export function popupKindOf(stationTypeId: number, packageLevel: boolean, lookup: PopupLookup): PopupKind {
   if (packageLevel) return "package";
+  if (lookup.hasTemplate?.(stationTypeId)) return "template";
   if (!lookup.hasWizard(stationTypeId)) return "dialog";
   return lookup.isVerdict(stationTypeId) ? "verdict" : "photo";
 }
@@ -290,6 +293,8 @@ export function lockedRowTexts(kind: PopupKind, wizard: PackageWizard | null, ta
       return { top: EDITOR_TEXT.lockedTopStation, bottom: EDITOR_TEXT.lockedBottomStation };
     case "dialog":
       return { top: c.lockedTopDialog, bottom: c.lockedBottomDialog };
+    case "template":
+      return { top: c.lockedTopTemplate, bottom: c.lockedBottomTemplate };
     case "package": {
       const box = target === "box";
       if (wizard === "close") return { top: box ? c.lockedTopCloseBox : c.lockedTopCloseItem, bottom: c.lockedBottomClose };

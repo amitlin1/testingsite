@@ -10,6 +10,7 @@ export async function GET() {
         test_station_type_id: true,
         test_type_desc: true,
         package_level: true,
+        popup_template: { select: { base: true, version: true } },
       },
       orderBy: { test_type_desc: "asc" },
     });
@@ -21,6 +22,8 @@ export async function GET() {
         // Package-level station types (opening / closing) queue PACKAGES, not
         // items (docs/packages/PLAN.md §4).
         packageLevel: r.package_level,
+        // Its popup template, if any: the popup is built from it (docs/popup-templates/PLAN.md §3.6).
+        popupTemplate: r.popup_template ? { base: r.popup_template.base, version: r.popup_template.version } : null,
       }))
     );
   } catch (error) {

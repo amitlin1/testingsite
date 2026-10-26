@@ -202,7 +202,14 @@ model photo_types {
   sort_order      Int                     @default(0)
   is_active       Boolean                 @default(true)
   created_at      DateTime                @default(now()) @db.Timestamptz(6)
+  /// The popup template's photo component that owns this group (docs/popup-templates/PLAN.md §3.4):
+  /// the photo IS the group. Both NULL = a group no template owns.
+  test_station_type_id Int?
+  component_id    String?                 @db.VarChar(16)
   images          reference_item_images[]
+  test_stations_type test_stations_type?  @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: SetNull, onUpdate: NoAction, map: "fk_photo_types_station_type")
+
+  @@unique([test_station_type_id, component_id], map: "photo_types_component_uq")
 }
 
 /// A physical thing with a barcode: either a PACKAGE (the box; item type has
@@ -398,6 +405,9 @@ model test_stations_type {
   stale_after_minutes  Int              @default(30)
   test_stations        test_stations[]
   testing_routes       testing_routes[]
+  popup_template       station_popup_templates?
+  popup_template_versions station_popup_template_versions[]
+  photo_types          photo_types[]
 }
 
 model testing_routes {
@@ -768,3 +778,29 @@ model metrics_schema_version {
   applied_at DateTime @default(now()) @db.Timestamptz(6)
 }
 
+/// The envelope of a station type's test popup (docs/popup-templates/PLAN.md §3): base 'item' /
+/// 'package' and the config (steps of components; src/app/lib/popup-templates). No row = the
+/// type opens the popup the code gives it.
+model station_popup_templates {
+  test_station_type_id Int                @id
+  base                 String             @db.VarChar(16)
+  config               Json
+  version              Int
+  updated_at           DateTime           @default(now()) @db.Timestamptz(6)
+  updated_by           String?            @db.VarChar(255)
+  test_stations_type   test_stations_type @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_station_popup_templates_type")
+}
+
+/// Every saved popup template, by (type, version) — kept when the template is deleted, so the
+/// numbering carries on.
+model station_popup_template_versions {
+  test_station_type_id Int
+  version              Int
+  base                 String             @db.VarChar(16)
+  config               Json
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  created_by           String?            @db.VarChar(255)
+  test_stations_type   test_stations_type @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_station_popup_template_versions_type")
+
+  @@id([test_station_type_id, version])
+}

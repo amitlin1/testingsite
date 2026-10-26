@@ -249,17 +249,33 @@ const REF_SOURCE_LABEL: Record<string, string> = {
   none: "ללא ייחוס",
 };
 
-/** The fields of a row: the station-fields block when present, else what the
- *  legacy popups saved (weight / photos / the documented `fields` array). */
+/** One saved FieldValue as a report row. */
+function fieldValueRow(id: string, raw: unknown): ReportFieldResult | null {
+  if (!isObj(raw) || typeof raw.t !== "string") return null;
+  const v = raw as unknown as FieldValue;
+  const f = formatFieldValue(v);
+  return { id, label: v.label || "שדה", value: f.value, tone: f.tone, ...(v.note ? { note: v.note } : {}), ...(f.photos ? { photos: f.photos } : {}) };
+}
+
+/** The fields of a row: a popup template's components (docs/popup-templates/PLAN.md §3.5) and the
+ *  station-fields block when present, else what the legacy popups saved (weight / photos / the
+ *  documented `fields` array). */
 function rowFields(d: Obj | null): ReportFieldResult[] {
   if (!d) return [];
   const out: ReportFieldResult[] = [];
+  // [{ id, ...FieldValue }] in popup order (tests-popups/templateModel.ts SavedComponent).
+  if (Array.isArray(d.components)) {
+    for (const raw of d.components) {
+      if (isObj(raw) && typeof raw.id === "string") {
+        const row = fieldValueRow(raw.id, raw);
+        if (row) out.push(row);
+      }
+    }
+  }
   if (isObj(d.fields)) {
     for (const [id, raw] of Object.entries(d.fields)) {
-      if (!isObj(raw) || typeof raw.t !== "string") continue;
-      const v = raw as unknown as FieldValue;
-      const f = formatFieldValue(v);
-      out.push({ id, label: v.label || "שדה", value: f.value, tone: f.tone, ...(v.note ? { note: v.note } : {}), ...(f.photos ? { photos: f.photos } : {}) });
+      const row = fieldValueRow(id, raw);
+      if (row) out.push(row);
     }
   } else if (Array.isArray(d.fields)) {
     // docs/REPORT_TEMPLATE.md: [{ label, type, value, unit?, min?, max?, expected?, passed? }]
@@ -299,7 +315,9 @@ function rowFields(d: Obj | null): ReportFieldResult[] {
 function orderFields(fields: ReportFieldResult[], order: readonly string[] | undefined): ReportFieldResult[] {
   if (!order) return fields;
   const pos = new Map(order.map((id, i) => [id, i]));
-  const at = (f: ReportFieldResult) => pos.get(f.id) ?? Number.MAX_SAFE_INTEGER;
+  // A template's components ("k_…") lead, in the popup's order (the sort is stable); the route's
+  // fields follow in their config's order; anything else trails.
+  const at = (f: ReportFieldResult) => pos.get(f.id) ?? (f.id.startsWith("k_") ? -1 : Number.MAX_SAFE_INTEGER);
   return [...fields].sort((a, b) => at(a) - at(b));
 }
 

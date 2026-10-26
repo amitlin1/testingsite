@@ -47,6 +47,8 @@ export function newStepUid(taken: ReadonlySet<string>, random: RandomSource = cr
 export const newFieldId = (random: RandomSource = cryptoRandom): FieldId => "f_" + randomSuffix(random);
 export const newOptionId = (random: RandomSource = cryptoRandom): OptionId => "o_" + randomSuffix(random);
 export const newChecklistItemId = (random: RandomSource = cryptoRandom): ChecklistItemId => "c_" + randomSuffix(random);
+/** The same id for another module's prefix (popup templates: "p_" steps, "k_" components). */
+export const newPrefixedId = (prefix: string, random: RandomSource = cryptoRandom): string => prefix + randomSuffix(random);
 
 export type StepUidErrorCode = "STEP_UID_UNKNOWN" | "STEP_UID_DUPLICATE";
 

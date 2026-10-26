@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
-import { CircleCheck, ClipboardCheck, Info } from "lucide-react";
+import Link from "next/link";
+import { CircleCheck, ClipboardCheck, Info, LayoutTemplate } from "lucide-react";
 import { Button, Tag } from "@/components/ui";
 import { GATE_FINISH_ON_REQUIRED } from "@/app/lib/station-fields/evaluate";
 import { SUGGEST_PREFIX_DIALOG, statusA } from "@/app/lib/station-fields/labels";
@@ -13,7 +14,7 @@ import {
 } from "@/app/testing/fields/fieldsBlockModel";
 import { inputFieldCount, type Drafts, type FieldDraft } from "@/app/testing/fields/useFieldsState";
 import {
-  PREVIEW_UNDRAWN_TEXT, PREVIEW_SAMPLE, PREVIEW_TEXT, previewStepText, previewSubText, stationFinishText,
+  EDITOR_UNDRAWN_TEXT, PREVIEW_UNDRAWN_TEXT, PREVIEW_SAMPLE, PREVIEW_TEXT, previewStepText, previewSubText, stationFinishText,
 } from "../../lib/labels";
 import type { PackageWizard } from "../../lib/editorModel";
 // PassFail's looks live in the testing page's stylesheet (stationKit: "Stateful styling … lives in
@@ -58,7 +59,7 @@ import "./preview.css";
  */
 
 /** The popup the station opens (the editor's popupKindOf). */
-export type PreviewPopupKind = "verdict" | "photo" | "dialog" | "package";
+export type PreviewPopupKind = "verdict" | "photo" | "dialog" | "package" | "template";
 
 export type WorkerPreviewCardProps = {
   /** The station's name ({station} of "{station} · {item} · {N} שדות"). */
@@ -76,6 +77,8 @@ export type WorkerPreviewCardProps = {
   /** popupKind "package": which wizard the step opens (the editor's packageWizardAt — the kit
    *  route's last step closes the kit). Without it, the opening wizard's rows. */
   packageWizard?: PackageWizard;
+  /** popupKind "template": the station type, for the link to its template. */
+  stationTypeId?: number;
 };
 
 /** The variant whose behaviour the rows take (fieldsBlockModel VARIANT_SPEC): artboard 12, 13, 14,
@@ -85,6 +88,8 @@ const ROW_VARIANT: Record<PreviewPopupKind, FieldRowVariant> = {
   photo: "photo",
   dialog: "dialog",
   package: "wizard",
+  // A template popup draws its route fields as the station popups do (TemplateStation: variant "station").
+  template: "station",
 };
 
 /** The closing wizard's rows (artboards 17/18): pick-only lists, the 38px note. "pack" and
@@ -146,7 +151,7 @@ function focusRowAfter(rows: HTMLElement | null, id: FieldId) {
 }
 
 export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
-  const { stationLabel, rowLabel, stepIndex, stepCount, fields, popupKind, stationTypeName, packageWizard } = p;
+  const { stationLabel, rowLabel, stepIndex, stepCount, fields, popupKind, stationTypeName, packageWizard, stationTypeId } = p;
   const variant = rowVariantOf(popupKind, packageWizard);
   const prefix = React.useId();
   const frameTitleId = `${prefix}-pv-frame`;
@@ -219,6 +224,15 @@ export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
           </div>
           {scanStep && <span className="rf-pv-step">{previewStepText(stepIndex, stepCount)}</span>}
         </div>
+        {popupKind === "template" && (
+          <div className="rf-pv-plan">
+            <LayoutTemplate size={15} strokeWidth={1.75} aria-hidden />
+            <span>
+              {EDITOR_UNDRAWN_TEXT.templateNote}{" "}
+              {stationTypeId != null && <Link href={`/settings/popup-templates?type=${stationTypeId}`} className="sh-link">{EDITOR_UNDRAWN_TEXT.templateLink}</Link>}
+            </span>
+          </div>
+        )}
         {scanStep && (
           <div className="rf-pv-plan">
             <Info size={15} strokeWidth={1.75} aria-hidden />

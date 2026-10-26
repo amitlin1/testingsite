@@ -11,6 +11,7 @@ import {
   Lock as LockIcon,
   AccessTime as AccessTimeIcon,
   Inventory as InventoryIcon,
+  Dashboard as LayoutIcon,
 } from "@/components/ui/icons";
 
 /**
@@ -37,6 +38,7 @@ export const settingsLinks: SettingsLink[] = [
   { path: "/settings/test-station-status", label: "סטטוסי עמדת בדיקה", icon: EventNoteIcon },
   { path: "/settings/test-stations", label: "עמדות בדיקה", icon: PrecisionManufacturingIcon },
   { path: "/settings/testing-routes", label: "מסלולי בדיקה", icon: AltRouteIcon },
+  { path: "/settings/popup-templates", label: "תבניות חלון", icon: LayoutIcon },
   { path: "/settings/reference-items", label: "פריטי ייחוס", icon: PhotoLibraryIcon },
   { path: "/settings/work-hours", label: "שעות עבודה וחופשות", icon: AccessTimeIcon },
 ];

@@ -12,8 +12,10 @@ import { withFiles, withoutImage, type FieldErrors, type FieldKey, type ItemDraf
  * same form. `typeField` is the type slot: a combobox in the regular dialog,
  * a locked field in the package one.
  */
-export default function ReferenceItemFields({ idPrefix, draft, onDraft, errors, onClearError, photoTypes, typeField, skuHelp, nameLabel = "שם הפריט", namePlaceholder = "תיאור קצר", weightLabel = "משקל (גר׳)" }: {
+export default function ReferenceItemFields({ idPrefix, draft, onDraft, errors, onClearError, photoTypes, typeField, skuHelp, nameLabel = "שם הפריט", namePlaceholder = "תיאור קצר", weightLabel = "משקל (גר׳)", relevantStationTypes }: {
   idPrefix: string;
+  /** The station types on the item type's routes — their photo components lead (ReferenceImagesField). */
+  relevantStationTypes?: ReadonlySet<number> | null;
   draft: ItemDraft;
   onDraft: (next: ItemDraft) => void;
   errors: FieldErrors;
@@ -90,6 +92,7 @@ export default function ReferenceItemFields({ idPrefix, draft, onDraft, errors, 
       <ReferenceImagesField
         idPrefix={idPrefix}
         photoTypes={photoTypes}
+        relevantStationTypes={relevantStationTypes}
         images={draft.images}
         primaryKey={draft.primaryKey}
         uploadType={draft.uploadType}

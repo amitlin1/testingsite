@@ -83,9 +83,12 @@ export async function lookupRU(sku: string, itemTypeId: number | null) {
   if (itemTypeId != null) qs.set("itemTypeId", String(itemTypeId));
   const res = await apiFetch(`/api/testing/reference-lookup?${qs.toString()}`);
   const d = await res.json();
+  const weight = d.referenceWeight == null ? NaN : Number(String(d.referenceWeight).trim());
   return {
     hasRU: !!d.hasRU,
     imagesByType: (d.imagesByType ?? {}) as Record<string, RefImg[]>,
+    /** The reference item's weight in grams; null when it has none. */
+    refWeight: Number.isFinite(weight) && weight > 0 ? weight : null,
   };
 }
 
@@ -122,12 +125,13 @@ export function PassFail({ value, onChange, labelledBy, size = "lg", invalid = f
   return <div role="group" aria-labelledby={labelledBy} aria-describedby={describedBy} style={{ display: "flex", gap: row ? 6 : 12 }}>{opt("pass")}{opt("fail")}</div>;
 }
 
-/** Section header for the photos block: "תיעוד בתמונות" + soft divider line. */
-export function PhotoSection({ children }: { children: React.ReactNode }) {
+/** Section header for the photos block: "תיעוד בתמונות" (or a template photo component's title)
+ *  + soft divider line. */
+export function PhotoSection({ children, title = "תיעוד בתמונות" }: { children: React.ReactNode; title?: string }) {
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, pb: "12px", borderBottom: `1px solid ${HAIR}`, mb: 2 }}>
-        <Typography component="h3" sx={{ m: 0, fontSize: "var(--text-lead)", fontWeight: 700, color: INK, whiteSpace: "nowrap" }}>תיעוד בתמונות</Typography>
+        <Typography component="h3" sx={{ m: 0, fontSize: "var(--text-lead)", fontWeight: 700, color: INK, whiteSpace: "nowrap" }}>{title}</Typography>
       </Box>
       {children}
     </Box>
@@ -140,16 +144,18 @@ export function PhotoSection({ children }: { children: React.ReactNode }) {
  *  takes no room while it says nothing; `noteMax` turns the notes into a
  *  NotesField of that length, drawn as the popup's other notes (`noteLook`).
  *  Without them the card is exactly today's. */
-export function VerdictCard({ ok, note, onOk, onNote, rows = 3, suggestion, noteMax, notePlaceholder = "הוסף הערה…", noteEditorTitle = "הערה · הערות", noteLook }: {
+export function VerdictCard({ ok, note, onOk, onNote, rows = 3, suggestion, noteMax, notePlaceholder = "הוסף הערה…", noteEditorTitle = "הערה · הערות", noteLook, question = "בדיקה תקינה?" }: {
   ok: Photos["ok"]; note: string; onOk: (v: "pass" | "fail") => void; onNote: (v: string) => void; rows?: number;
   suggestion?: React.ReactNode; noteMax?: number; notePlaceholder?: string; noteEditorTitle?: string; noteLook?: NoteLook;
+  /** The question over the pair — a template's verdict component may word it. */
+  question?: string;
 }) {
   const questionId = React.useId();
   const noteId = React.useId();
   return (
     <Box sx={{ border: `1px solid ${HAIR}`, borderRadius: "var(--r-card)", p: "20px 24px", display: "flex", flexDirection: "column", gap: "18px" }}>
       <Box>
-        <Typography id={questionId} sx={{ fontSize: "var(--text-body)", fontWeight: 600, color: INK, mb: 1.5 }}>בדיקה תקינה?</Typography>
+        <Typography id={questionId} sx={{ fontSize: "var(--text-body)", fontWeight: 600, color: INK, mb: 1.5 }}>{question}</Typography>
         <PassFail value={ok} onChange={onOk} labelledBy={questionId} />
         {suggestion != null && suggestion !== false && <div className="tst-verdict-suggest">{suggestion}</div>}
       </Box>

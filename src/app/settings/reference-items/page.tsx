@@ -56,6 +56,12 @@ export default function ReferenceItemsPage() {
   const [itemTypes, setItemTypes] = React.useState<ItemType[]>([]);
   const [selectedType, setSelectedType] = React.useState<ItemType | null>(null);
   const [photoTypes, setPhotoTypes] = React.useState<PhotoType[]>([]);
+  // item_type_id → the station types on its routes; null when the routes did not load (every station shows).
+  const [stationsByType, setStationsByType] = React.useState<Map<number, Set<number>> | null>(null);
+  const stationTypesOf = React.useCallback(
+    (itemTypeId: number | null | undefined) => (stationsByType && itemTypeId != null ? stationsByType.get(itemTypeId) ?? new Set<number>() : null),
+    [stationsByType],
+  );
 
   const [items, setItems] = React.useState<ReferenceItem[]>([]);
   const [loadingItems, setLoadingItems] = React.useState(false);
@@ -92,6 +98,19 @@ export default function ReferenceItemsPage() {
       .then(okJson)
       .then((data: PhotoType[]) => setPhotoTypes(Array.isArray(data) ? data : []))
       .catch(() => { setPhotoTypes([]); setOptionsError(true); });
+    // Best effort: without the routes every station's photo components show.
+    apiFetch("/api/settings/testing-routes")
+      .then(okJson)
+      .then((rows: { item_type_id: number; route_steps: number[] | null }[]) => {
+        const map = new Map<number, Set<number>>();
+        for (const r of Array.isArray(rows) ? rows : []) {
+          const set = map.get(r.item_type_id) ?? new Set<number>();
+          for (const st of r.route_steps ?? []) set.add(st);
+          map.set(r.item_type_id, set);
+        }
+        setStationsByType(map);
+      })
+      .catch(() => setStationsByType(null));
   }, []);
 
   React.useEffect(() => { loadOptions(); }, [loadOptions]);
@@ -442,6 +461,7 @@ export default function ReferenceItemsPage() {
                 errors={fieldErrors}
                 onClearError={clearFieldError}
                 photoTypes={photoTypes}
+                relevantStationTypes={stationTypesOf(formType?.item_type_id)}
                 typeField={
                   // Package types have their own dialog (a package reference).
                   <SearchableCombobox<ItemType>
@@ -503,6 +523,7 @@ export default function ReferenceItemsPage() {
           editing={pkgDialog.editing}
           lines={templateLines}
           photoTypes={photoTypes}
+          stationTypesOf={stationTypesOf}
           onClose={() => setPkgDialog(null)}
           onSaved={() => { setPkgDialog(null); loadItems(selectedType.item_type_id); }}
         />

@@ -258,6 +258,12 @@ test("locked rows follow the popup the station really opens", () => {
   assert.equal(popupKindOf(2, false, lookup), "photo");
   assert.equal(popupKindOf(12, false, lookup), "dialog");
   assert.equal(popupKindOf(3, true, lookup), "package");
+  // A station type with a popup template opens it — never at a package-level step.
+  const withTemplate = { ...lookup, hasTemplate: (id: number) => id === 3 || id === 12 };
+  assert.equal(popupKindOf(3, false, withTemplate), "template");
+  assert.equal(popupKindOf(12, false, withTemplate), "template");
+  assert.equal(popupKindOf(3, true, withTemplate), "package");
+  assert.equal(lockedRowTexts("template", null, "item").bottom, EDITOR_UNDRAWN_TEXT.lockedBottomTemplate);
 
   // Artboard 2's wording belongs to VerdictStation / PhotoStation only.
   const station = { top: "סריקת מק״ט יצרן · חלק קבוע · שלב 1 בחלון", bottom: "פסק דין · 'בדיקה תקינה?' · תמיד אחרון" };
