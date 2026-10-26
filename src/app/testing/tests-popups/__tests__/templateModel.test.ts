@@ -38,7 +38,7 @@ test("the route's fields: at their component, else before the verdict", () => {
   assert.deepEqual(routeFieldsSlot(cfg), { stepIndex: 1, componentId: cfg.steps[1].components[1].id, atComponent: true });
   cfg.steps[1].components.splice(1, 1);
   assert.deepEqual(routeFieldsSlot(cfg), { stepIndex: 1, componentId: cfg.steps[1].components[1].id, atComponent: false });
-  assert.equal(routeFieldsSlot({ steps: [], finish_label: "x" }), null);
+  assert.equal(routeFieldsSlot({ steps: [] }), null);
 });
 
 test("the weight against the reference", () => {

@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api/client";
 import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { SUGGEST_PREFIX } from "@/app/lib/station-fields/labels";
 import { fillVariables, skuScanOf } from "@/app/lib/popup-templates/schema";
-import type { PhotoComponent, PopupTemplateJson, TemplateComponent, WeightComponent } from "@/app/lib/popup-templates/schema";
+import type { PackageRole, PhotoComponent, PopupTemplateJson, TemplateComponent, WeightComponent } from "@/app/lib/popup-templates/schema";
 import { COMPONENT_NAME, TEMPLATE_DEFAULTS } from "@/app/lib/popup-templates/labels";
 import {
   BAD, HAIR, INK, MUTED, OK, type RefImg, type ShellPhase,
@@ -19,6 +19,7 @@ import { fieldsErrorText, shouldReloadFields } from "../fields/errors";
 import { VARIANT_SPEC, stationBlockTitle } from "../fields/fieldsBlockModel";
 import { useFieldsState } from "../fields/useFieldsState";
 import { useStationFields } from "../fields/useStationFields";
+import TemplatePackageOpening from "./TemplatePackageOpening";
 import {
   type TemplateRunState, buildTemplateDetails, emptyRunState, finishBlocker, routeFieldsSlot, stepBlocker, weightOutcome,
 } from "./templateModel";
@@ -32,9 +33,16 @@ import {
  *
  * TemplateStation fetches the template when it opens. A type whose template is gone meanwhile (404)
  * opens `fallback` — the popup the code gives the type — so the worker is never stuck.
+ *
+ * A box at a package-level station comes with `packageRole`, its place on the route (PLAN.md §5.1,
+ * decision 1): a package template of that role runs it (the opening: TemplatePackageOpening);
+ * anything else — another role, a role not built yet — opens the wizard, its `fallback`.
  */
-export default function TemplateStation(props: StationTestDialogProps & { fallback: React.ComponentType<StationTestDialogProps> }) {
-  const { open, onClose, station, fallback: Fallback, ...rest } = props;
+export default function TemplateStation(props: StationTestDialogProps & {
+  fallback: React.ComponentType<StationTestDialogProps>;
+  packageRole?: PackageRole;
+}) {
+  const { open, onClose, station, fallback: Fallback, packageRole, ...rest } = props;
   const typeId = station.test_station_type_id;
   const [attempt, setAttempt] = React.useState(0);
   // The answer is kept with the request it answers: a new request (another type, a retry) reads as
@@ -57,8 +65,16 @@ export default function TemplateStation(props: StationTestDialogProps & { fallba
     return () => { cancelled = true; };
   }, [key, typeId]);
 
-  if (load.status === "none") return <Fallback open={open} onClose={onClose} station={station} {...rest} />;
-  if (load.status === "ready") return <TemplatePopup key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={load.tpl} />;
+  const fallback = <Fallback open={open} onClose={onClose} station={station} {...rest} />;
+  if (load.status === "none") return fallback;
+  if (load.status === "ready") {
+    const tpl = load.tpl;
+    if (packageRole == null) return tpl.base === "item" ? <TemplatePopup key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={tpl} /> : fallback;
+    if (tpl.base === "package" && tpl.config.role === packageRole && packageRole === "opening") {
+      return <TemplatePackageOpening key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={tpl} />;
+    }
+    return fallback;
+  }
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle onClose={onClose}>{station.test_station_desc}</DialogTitle>

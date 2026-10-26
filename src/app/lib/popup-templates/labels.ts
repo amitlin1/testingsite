@@ -39,6 +39,9 @@ export const TEMPLATE_DEFAULTS = {
   closeFinish: "סגור מארז",
   packNote: "הערות אריזה",
   packChecks: ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת המארז קריאה"],
+  boxPhotoMessage: "נא לצלם את הקופסה בדיוק לפי תמונות הייחוס.",
+  itemPhotoMessage: "נא לצלם את הפריט בדיוק לפי תמונות הייחוס.",
+  weighMessage: "נא לשקול את הפריט ולהזין את המשקל שנמדד.",
 } as const;
 
 /** Content rules (lintPopupTemplate). Every one blocks a save. */

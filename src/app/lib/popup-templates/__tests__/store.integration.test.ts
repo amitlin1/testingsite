@@ -11,7 +11,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 import type { PopupTemplateConfig } from "../schema";
-import { photoStationTemplate, verdictStationTemplate } from "../templates";
+import { closingTemplate, openingTemplate, photoStationTemplate, verdictStationTemplate } from "../templates";
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const LEDGER_TRUNCATE_LOCK = 526050825;
@@ -100,9 +100,23 @@ describe("popup-template store", { skip: TEST_DATABASE_URL ? false : "TEST_DATAB
     await rejects(save(ITEM_TYPE, bad, null), 422, "TEMPLATE_INVALID");
     await rejects(save(PACKAGE_TYPE, verdictStationTemplate(), null), 409, "BASE_MISMATCH");
     await rejects(save(ITEM_TYPE, verdictStationTemplate(), null, "package"), 409, "BASE_MISMATCH");
-    await rejects(save(PACKAGE_TYPE, verdictStationTemplate(), null, "package"), 409, "PACKAGE_BASE_NOT_YET");
+    await rejects(save(PACKAGE_TYPE, verdictStationTemplate(), null, "package"), 422, "TEMPLATE_INVALID");
+    await rejects(save(PACKAGE_TYPE, closingTemplate(), null, "package"), 409, "PACKAGE_BASE_NOT_YET");
     await rejects(save(9999, verdictStationTemplate(), null), 404, "STATION_TYPE_NOT_FOUND");
     assert.equal(await store.getTemplate(ITEM_TYPE), null, "nothing was written");
+  });
+
+  it("saves an opening template; its box and item photo components own their groups", async () => {
+    const cfg = openingTemplate(LEGACY_CODE, "k_itemgrp01");
+    const saved = await save(PACKAGE_TYPE, cfg, null, "package");
+    assert.deepEqual([saved.base, saved.version, saved.config.role], ["package", 1, "opening"]);
+    assert.deepEqual(saved.config.item_flow, cfg.item_flow, "the item flow is kept as sent");
+    const boxPhoto = cfg.steps[1].components.find((c) => c.kind === "photo")!;
+    const itemPhoto = cfg.item_flow![1].components.find((c) => c.kind === "photo")!;
+    const box = await group(LEGACY_CODE);
+    const items = await group("k_itemgrp01");
+    assert.deepEqual([box.test_station_type_id, box.component_id, box.is_active], [PACKAGE_TYPE, boxPhoto.id, true]);
+    assert.deepEqual([items.test_station_type_id, items.component_id, items.is_active], [PACKAGE_TYPE, itemPhoto.id, true]);
   });
 
   it("a photo component owns its group: links an existing one, creates a new one, keeps both named", async () => {

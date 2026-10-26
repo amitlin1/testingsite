@@ -16,8 +16,8 @@ test("today's two package wizards are valid package templates, unchanged by the 
     assert.deepEqual(lintPopupTemplate(cfg, "package"), []);
     assert.deepEqual(parsePopupTemplateConfig(clone(cfg)), cfg);
   }
-  assert.deepEqual(kinds(open), [["sku_scan"], ["photo", "route_fields", "verdict"], ["contents"], ["items"], ["labels"]]);
-  assert.deepEqual(open.item_flow!.map((s) => s.components.map((c) => c.kind)), [["sku_scan"], ["photo", "route_fields", "verdict"], ["weight"]]);
+  assert.deepEqual(kinds(open), [["sku_scan"], ["message", "photo", "route_fields", "verdict"], ["contents"], ["items"], ["labels"]]);
+  assert.deepEqual(open.item_flow!.map((s) => s.components.map((c) => c.kind)), [["sku_scan"], ["message", "photo", "route_fields", "verdict"], ["message", "weight"]]);
   assert.deepEqual(photoCodesOf(open), ["pkg", "prod"], "the box's group and the items' — the item flow counts");
   assert.deepEqual(kinds(close), [["sku_scan"], ["arrival"], ["route_fields", "checklist", "notes"]]);
   const checks = allComponentsOf(close).find((c) => c.kind === "checklist") as Extract<TemplateComponent, { kind: "checklist" }>;
@@ -74,7 +74,7 @@ test("the item flow: an opening needs one, a closing has none; its own SKU and v
 
   const verdictEarly = clone(openingTemplate("pkg", "prod"));
   const photoPhase = verdictEarly.item_flow![1].components;
-  [photoPhase[1], photoPhase[2]] = [photoPhase[2], photoPhase[1]];
+  [photoPhase[2], photoPhase[3]] = [photoPhase[3], photoPhase[2]];
   assert.deepEqual(codes(verdictEarly), ["VERDICT_NOT_LAST_IN_STEP"]);
 
   const noLookup = clone(openingTemplate("pkg", "prod"));

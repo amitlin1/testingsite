@@ -47,14 +47,12 @@ import { Star as StarIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
 import { Queue as QueueIcon } from "@/components/ui/icons";
 // MoreVertIcon removed
-import { getStartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
+import { getPackageDialog, getStartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
 import StationHistoryDialog from "../components/StationHistoryDialog";
 import TestingDock from "../components/testing/TestingDock";
 import type { PackageView } from "@/app/lib/packages/read";
 import PackageIdText from "../components/packages/PackageIdText";
 import PackageQueueCard from "../components/testing/PackageQueueCard";
-import PackageOpenWizard from "./tests-popups/PackageOpenWizard";
-import PackageCloseWizard from "./tests-popups/PackageCloseWizard";
 import { ITEM_STATES, seq2 } from "../components/packages/packageUi";
 
 /**
@@ -1385,9 +1383,10 @@ function TestingPageView() {
         {(() => {
   if (!dialogOpen || !selectedItem || !selectedStation || !selectedStationType) return null;
   // A box at a package-level station gets the opening / closing wizard by the
-  // station type's flag (PLAN §4); everything else resolves from the registry.
+  // station type's flag (PLAN §4) — from the type's package template when it has
+  // one (docs/popup-templates/PLAN.md §5); everything else resolves from the registry.
   const StartDialog = packageLevel && selectedItem.is_package && selectedItem.package
-    ? (packageKindOf(selectedItem) === "open" ? PackageOpenWizard : PackageCloseWizard)
+    ? getPackageDialog(selectedStationType.id, packageKindOf(selectedItem), selectedStationType.popupTemplate?.base === "package")
     // A type with a popup template opens it — except for an item in research, which keeps the
     // code's popup (docs/popup-templates/PLAN.md §7, decision 3).
     : getStartTestDialog(selectedStationType.id, selectedStationType.popupTemplate != null && selectedItem.current_status !== 5);

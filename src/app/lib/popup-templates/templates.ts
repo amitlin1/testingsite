@@ -50,6 +50,7 @@ export function photoStationTemplate(photoCode: string, random?: RandomSource): 
  * the box's label → the box's photos, its fields and "האריזה תקינה?" → contents and serials → every
  * item (scan → photo, its fields and "הפריט תקין?" → weigh, ±5%) → labels. `boxCode` / `itemCode`:
  * the photo groups the wizard captures into today, so the reference images stay where they are.
+ * The messages are the wizard's instruction lines (the band under the step's title).
  */
 export function openingTemplate(boxCode: string, itemCode: string, random?: RandomSource): PopupTemplateConfig {
   const c = (kind: "contents" | "items" | "labels") => ({ id: newComponentId(random), kind });
@@ -60,6 +61,7 @@ export function openingTemplate(boxCode: string, itemCode: string, random?: Rand
         { id: newComponentId(random), kind: "sku_scan", required: true, carry_last: false, lookup_reference: true },
       ] },
       { id: newTemplateStepId(random), title: "צילום הקופסה", desc: "3 זוויות + תקינות", components: [
+        { id: newComponentId(random), kind: "message", text: TEMPLATE_DEFAULTS.boxPhotoMessage },
         { id: newComponentId(random), kind: "photo", title: "צילום הקופסה", photo_code: boxCode, min: 0, show_reference: true },
         { id: newComponentId(random), kind: "route_fields" },
         { id: newComponentId(random), kind: "verdict", question: TEMPLATE_DEFAULTS.boxQuestion, note_max: NOTE_MAX_DEFAULT },
@@ -73,11 +75,13 @@ export function openingTemplate(boxCode: string, itemCode: string, random?: Rand
         { id: newComponentId(random), kind: "sku_scan", required: true, carry_last: false, lookup_reference: true },
       ] },
       { id: newTemplateStepId(random), title: "צילום", desc: "", components: [
+        { id: newComponentId(random), kind: "message", text: TEMPLATE_DEFAULTS.itemPhotoMessage },
         { id: newComponentId(random), kind: "photo", title: "צילום הפריט", photo_code: itemCode, min: 0, show_reference: true },
         { id: newComponentId(random), kind: "route_fields" },
         { id: newComponentId(random), kind: "verdict", question: TEMPLATE_DEFAULTS.itemQuestion, note_max: NOTE_MAX_DEFAULT },
       ] },
       { id: newTemplateStepId(random), title: "שקילה", desc: "", components: [
+        { id: newComponentId(random), kind: "message", text: TEMPLATE_DEFAULTS.weighMessage },
         { id: newComponentId(random), kind: "weight", required: true, tolerance_pct: 5 },
       ] },
     ],

@@ -105,7 +105,7 @@ export function parseSaveInput(body: unknown): { base: TemplateBase; config: Pop
 /**
  * Saves a station type's template as a new version.
  *   404 STATION_TYPE_NOT_FOUND
- *   409 PACKAGE_BASE_NOT_YET   the package base is phase 2
+ *   409 PACKAGE_BASE_NOT_YET   a closing template: phase 2, step 2.3
  *   409 BASE_MISMATCH          the item base on a package-level type (or the reverse)
  *   409 BASE_CHANGED           a template's base never changes; delete it and start again
  *   409 TEMPLATE_CONFLICT      someone saved since the editor loaded { current }
@@ -127,7 +127,7 @@ export async function saveTemplate(
     if (type.package_level !== wantsPackage) {
       throw new TemplateStoreError(409, "BASE_MISMATCH", type.package_level ? "לעמדה ברמת מארז מתאים רק בסיס למארז" : "לעמדה של פריט מתאים רק בסיס לפריט");
     }
-    if (wantsPackage) throw new TemplateStoreError(409, "PACKAGE_BASE_NOT_YET", "תבנית למארז תגיע בשלב הבא");
+    if (wantsPackage && input.config.role === "closing") throw new TemplateStoreError(409, "PACKAGE_BASE_NOT_YET", "תבנית לסגירת מארז תגיע בשלב הבא");
     // The content, by the rules of its base — once the base itself fits the station type.
     const issues: TemplateIssue[] = lintPopupTemplate(input.config, input.base);
     if (issues.length > 0) throw new TemplateStoreError(422, "TEMPLATE_INVALID", "בתבנית יש בעיות לתיקון", { issues });
