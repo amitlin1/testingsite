@@ -172,22 +172,29 @@ export interface DashboardStateApi {
   activeFilterCount: number;
 }
 
-// The rail preference is read through useSyncExternalStore. The in-memory copy
-// stands in when storage is unavailable (private mode), so the toggle still
-// works for the rest of the visit.
-let railFallback = true;
-const railListeners = new Set<() => void>();
+// The rail preference is read through useSyncExternalStore, once per visit to
+// the dashboard (forgotten when it unmounts), so a toggle in another tab never
+// flips this one. The in-memory copy is also what keeps the toggle working when
+// storage is unavailable (private mode).
+let railOpenRead: boolean | null = null;
 function readRailOpen(): boolean {
-  try {
-    const stored = localStorage.getItem(RAIL_STORAGE_KEY);
-    if (stored !== null) return stored === "true";
-  } catch {
-    /* private mode — keep the default */
+  if (railOpenRead === null) {
+    railOpenRead = true;
+    try {
+      const stored = localStorage.getItem(RAIL_STORAGE_KEY);
+      if (stored !== null) railOpenRead = stored === "true";
+    } catch {
+      /* private mode — keep the default */
+    }
   }
-  return railFallback;
+  return railOpenRead;
 }
+function forgetRailOpen() {
+  railOpenRead = null;
+}
+const railListeners = new Set<() => void>();
 function writeRailOpen(open: boolean) {
-  railFallback = open;
+  railOpenRead = open;
   try {
     localStorage.setItem(RAIL_STORAGE_KEY, String(open));
   } catch {
@@ -209,6 +216,7 @@ export function useDashboardState(initial?: Partial<DashboardState>): DashboardS
   // first client paint agree; the rail's own CSS width transition covers the
   // correction.
   const railOpen = React.useSyncExternalStore(subscribeRail, readRailOpen, () => true);
+  React.useEffect(() => forgetRailOpen, []);
   const [baseState, setState] = React.useState<DashboardState>(() => {
     const sp = new URLSearchParams(searchParams?.toString() ?? "");
     return { ...stateFromParams(sp, true), ...initial };

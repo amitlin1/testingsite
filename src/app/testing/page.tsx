@@ -69,43 +69,49 @@ const packageKindOf = (it: ItemRow): "open" | "close" => {
 
 // Item / station types now live in src/types (ItemRow, TestStation, TestStationType, StationLite).
 
-// A one-second clock, read through useSyncExternalStore so render stays pure.
+// A one-second tick, read through useSyncExternalStore so render stays pure.
 // The server render has no clock (null), so it draws no time.
 const subscribeSecond = (onTick: () => void) => {
   const interval = setInterval(onTick, 1000);
   return () => clearInterval(interval);
 };
-const secondSnapshot = () => Math.floor(Date.now() / 1000) * 1000;
 const noClock = () => null;
 const noSubscribe = () => () => {};
 
 // Custom hook for live elapsed time display. The clock ticks only while there
-// is a valid start time.
+// is a valid start time; each tick reads the whole seconds since it.
 function useElapsedTime(createdAt: string | null | undefined): string {
   const startTime = createdAt ? new Date(createdAt).getTime() : NaN;
   const ticking = !isNaN(startTime);
-  const now = React.useSyncExternalStore(ticking ? subscribeSecond : noSubscribe, ticking ? secondSnapshot : noClock, noClock);
-  if (!ticking || now === null) return "";
-  const diff = Math.floor((now - startTime) / 1000);
-  if (diff < 0) return "";
+  const secondsSinceStart = React.useCallback(() => Math.floor((Date.now() - startTime) / 1000), [startTime]);
+  const diff = React.useSyncExternalStore(ticking ? subscribeSecond : noSubscribe, ticking ? secondsSinceStart : noClock, noClock);
+  if (diff === null || diff < 0) return "";
   const hours = Math.floor(diff / 3600);
   const minutes = Math.floor((diff % 3600) / 60);
   const seconds = diff % 60;
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-// Page-level "who's working" choice, persisted to localStorage.
+// Page-level "who's working" choice, persisted to localStorage. Read once per
+// visit to the page (forgotten when it unmounts), so a choice made in another
+// tab never changes this one's worker until it is opened again.
 const WORKER_STORAGE_KEY = "testing-page:active-worker-id";
+let storedWorkerIdRead: { id: number | null } | null = null;
 const readStoredWorkerId = (): number | null => {
-  try {
-    const raw = window.localStorage.getItem(WORKER_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = parseInt(raw, 10);
-    return Number.isNaN(parsed) ? null : parsed;
-  } catch {
-    return null;
+  if (!storedWorkerIdRead) {
+    let id: number | null = null;
+    try {
+      const raw = window.localStorage.getItem(WORKER_STORAGE_KEY);
+      const parsed = raw ? parseInt(raw, 10) : NaN;
+      if (!Number.isNaN(parsed)) id = parsed;
+    } catch {
+      /* ignore */
+    }
+    storedWorkerIdRead = { id };
   }
+  return storedWorkerIdRead.id;
 };
+const forgetStoredWorkerId = () => { storedWorkerIdRead = null; };
 const noStoredWorkerId = (): number | null => null;
 
 /** Start-test failed (someone else took the item, or the server refused). */
@@ -711,6 +717,7 @@ function TestingPageView() {
   // Until the token or the picker sets one, the active worker is the stored
   // choice (read after hydration, so the server render never guesses it).
   const storedWorkerId = React.useSyncExternalStore(noSubscribe, readStoredWorkerId, noStoredWorkerId);
+  React.useEffect(() => forgetStoredWorkerId, []);
   const [pickedWorker, setPickedWorker] = React.useState<{ id: number | null } | null>(null);
   const activeWorkerId = pickedWorker ? pickedWorker.id : storedWorkerId;
   // Auth: the logged-in user's worker id, from their Keycloak employeeNumber.
