@@ -435,7 +435,8 @@
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  height: 32px;
+  /* The rail's pickers are SearchableCombobox at its dense 34px. */
+  height: 34px;
   padding: 0 9px;
   border: 1px solid var(--color-field-border);
   border-radius: var(--r-sm);
@@ -446,11 +447,6 @@
   font-weight: var(--fw-regular);
   outline: none;
   transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, background-color var(--dur-fast) ease;
-}
-select.dash-field {
-  appearance: none;
-  padding-inline-end: 28px;
-  cursor: pointer;
 }
 .dash-field::placeholder { color: var(--color-ink-muted-48); }
 .dash-field--set {
