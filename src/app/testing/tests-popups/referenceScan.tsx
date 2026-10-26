@@ -129,14 +129,16 @@ export function ScanField({ label, placeholder, value, onChange, lookup, found, 
   onSubmit: () => void;
   prev?: string | null; serial?: string | null; filledNote?: string; flagChange?: boolean;
 }) {
-  const [pending, setPending] = React.useState(false);
+  // An Enter that came while the lookup was still checking; it draws nothing,
+  // so a ref: the answer's arrival submits it.
+  const pendingRef = React.useRef(false);
   const submitRef = React.useRef(onSubmit);
   React.useEffect(() => { submitRef.current = onSubmit; }, [onSubmit]);
   React.useEffect(() => {
-    if (!pending || lookup.checking) return;
-    setPending(false);
+    if (!pendingRef.current || lookup.checking) return;
+    pendingRef.current = false;
     submitRef.current();
-  }, [pending, lookup.checking]);
+  }, [lookup.checking]);
 
   const ref = lookup.ref;
   const said = ref == null ? null : verdict ? verdict(ref) : { tone: ref.hasRU ? "ok" as const : "warn" as const, text: ref.hasRU ? found(ref) : missing };
@@ -147,8 +149,8 @@ export function ScanField({ label, placeholder, value, onChange, lookup, found, 
       <label htmlFor={fieldId} style={{ display: "block", fontSize: "var(--text-small)", color: MUTED, marginBottom: 7 }}>{label}</label>
       {/* A code: LTR, kept at the reading edge (testing.css .tst-ref-scan). The
           edge follows focus (.sh-input ring), not whether the field has text. */}
-      <input id={fieldId} className="sh-input tst-ref-scan" dir="ltr" value={value} onChange={(e) => { setPending(false); onChange(e.target.value); }} autoFocus placeholder={placeholder}
-        onKeyDown={(e) => { if (e.key === "Enter") { if (lookup.checking) setPending(true); else onSubmit(); } }} />
+      <input id={fieldId} className="sh-input tst-ref-scan" dir="ltr" value={value} onChange={(e) => { pendingRef.current = false; onChange(e.target.value); }} autoFocus placeholder={placeholder}
+        onKeyDown={(e) => { if (e.key === "Enter") { if (lookup.checking) pendingRef.current = true; else onSubmit(); } }} />
       {/* The lookup's answer for exactly this text, announced as it arrives. */}
       <div role="status" aria-live="polite">
         {value.trim() !== "" && (

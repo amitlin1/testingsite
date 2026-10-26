@@ -155,22 +155,31 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const reloadFields = sf.reload;
 
   // ---- open: reset ----------------------------------------------------------
+  // Items an earlier opening already submitted — it broke off before the
+  // box's own result — have left the opening step: they count as done and are
+  // not sent again, or each would move one more step and skip a station.
+  // The state resets during render, when the dialog opens or the box changes;
+  // the refs and the item types follow in the effect below.
+  const [openedFor, setOpenedFor] = React.useState<{ open: boolean; pkg: PackageView | null } | null>(null);
+  if (!openedFor || openedFor.open !== open || openedFor.pkg !== pkg) {
+    setOpenedFor({ open, pkg });
+    if (open && pkg) {
+      setStep(0); setScan(""); setBoxPhotos(emptyPhotos());
+      setItems(pkg.items); setItemIdx(null); setItemPhase("scan");
+      setContentRowsRaw(rowsFromItems(pkg.items, boxDetailsOf(pkg))); setContentsSaved(false); setContentsError(null);
+      setLabelsOpen(false); setLabelsPrinted(false); setSubmitting(false); setError(null);
+      const sent = pkg.items.filter(leftOpening).map((it) => it.item_id);
+      setWork(Object.fromEntries(sent.map((id) => [id, { ...freshWork(), done: true }])));
+      setDoneRows([]);
+      resetBoxFields();
+    }
+  }
   React.useEffect(() => {
     if (!open || !pkg) return;
-    setStep(0); setScan(""); setBoxPhotos(emptyPhotos());
-    setItems(pkg.items); setItemIdx(null); setItemPhase("scan");
-    setContentRowsRaw(rowsFromItems(pkg.items, boxDetailsOf(pkg))); setContentsSaved(false); setContentsError(null);
-    setLabelsOpen(false); setLabelsPrinted(false); setSubmitting(false); setError(null);
-    // Items an earlier opening already submitted — it broke off before the
-    // box's own result — have left the opening step: they count as done and are
-    // not sent again, or each would move one more step and skip a station.
-    const sent = pkg.items.filter(leftOpening).map((it) => it.item_id);
-    setWork(Object.fromEntries(sent.map((id) => [id, { ...freshWork(), done: true }])));
-    submitIdRef.current = null; committedRef.current = new Set(sent);
-    nextStopsRef.current = new Map(); setDoneRows([]);
-    resetBoxFields();
+    submitIdRef.current = null; committedRef.current = new Set(pkg.items.filter(leftOpening).map((it) => it.item_id));
+    nextStopsRef.current = new Map();
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
-  }, [open, pkg, resetBoxFields]);
+  }, [open, pkg]);
 
   // ---- reference lookups, driven by what is scanned -------------------------
   // The box: its label among the package type's reference items. The answer

@@ -13,7 +13,7 @@ import {
 import { Add as AddIcon, Delete as DeleteIcon, QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
 import { Shipment, NewShipment, Customers } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
@@ -67,7 +67,6 @@ export default function ShipmentUpdatePopup({
         control,
         handleSubmit,
         reset,
-        watch,
         setValue,
         getValues,
         trigger,
@@ -91,12 +90,19 @@ export default function ShipmentUpdatePopup({
     };
 
     // The declared total = Σ quantities of the started lines.
-    const shipmentItems = watch("shipment_items");
+    const shipmentItems = useWatch({ control, name: "shipment_items" });
+    const shipmentCode = useWatch({ control, name: "shipment_code" });
+    const customerId = useWatch({ control, name: "customer_id" });
     const total = declaredBoxes(shipmentItems);
     useEffect(() => {
         setValue("amount", total);
-        setConfirmBig(false);
     }, [total, setValue]);
+    // A changed count asks again: cleared during render.
+    const [confirmedFor, setConfirmedFor] = useState(total);
+    if (confirmedFor !== total) {
+        setConfirmedFor(total);
+        setConfirmBig(false);
+    }
 
     useEffect(() => {
         let cancelled = false;
@@ -154,14 +160,22 @@ export default function ShipmentUpdatePopup({
                 recieving_worker_id: shipment.recieving_worker_id,
                 recieving_worker_name: shipment.recieving_worker_name,
             });
+            allowDuplicateRef.current = false;
+        }
+    }, [open, shipment, reset]);
+    // The screen state of an opening starts clean during render; the form and
+    // the ref follow in the effect above.
+    const [openedFor, setOpenedFor] = useState<{ open: boolean; shipment: typeof shipment } | null>(null);
+    if (!openedFor || openedFor.open !== open || openedFor.shipment !== shipment) {
+        setOpenedFor({ open, shipment });
+        if (open && shipment) {
             setSubmitError(null);
             setLineScanOpen(false);
             setPending(null);
             setDuplicate(null);
-            allowDuplicateRef.current = false;
             setConfirmBig(false);
         }
-    }, [open, shipment, reset]);
+    }
 
     // Editing keeps whoever already received the shipment (fixing the customer
     // code must not reassign it to the editor); only a shipment nobody is
@@ -178,7 +192,7 @@ export default function ShipmentUpdatePopup({
     // shipment's customer (the server refuses the change too); before that a
     // change re-mints the boxes, so their labels are printed again.
     const customerLocked = (shipment?.sampled_amount ?? 0) > 0;
-    const customerChanged = shipment != null && watch("customer_id") !== shipment.customer_id;
+    const customerChanged = shipment != null && customerId !== shipment.customer_id;
 
     // Could this save take boxes away or re-mint them? Then the server is asked
     // first (dry_run) and the worker sees which labels stop being valid.
@@ -294,7 +308,7 @@ export default function ShipmentUpdatePopup({
                 onClose={() => setLineScanOpen(false)}
                 itemTypes={itemTypes}
                 takenRows={scannedRows(shipmentItems)}
-                shipmentCode={watch("shipment_code")}
+                shipmentCode={shipmentCode}
                 onConfirm={addScannedLines}
             />
             <ShipmentDuplicateDialog
@@ -306,7 +320,7 @@ export default function ShipmentUpdatePopup({
                     void handleSubmit((data) => onSubmit(data))();
                 }}
             />
-            <form onSubmit={handleSubmit((data) => onSubmit(data))} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+            <form onSubmit={(e) => handleSubmit((data) => onSubmit(data))(e)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
                     {receiverBlocked && (
                         <Alert severity="error" sx={{ mb: 2 }}>

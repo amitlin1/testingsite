@@ -29,6 +29,18 @@ type FormErrors = Partial<Record<"id" | "desc" | "stale", string>>;
 const STALE_HELP =
   "כמה דקות פריט יכול לשבת בבדיקה או במחקר בעמדה מסוג זה ללא תוצאה, לפני שהמערכת מחזירה אותו לתור ומשחררת את העמדה. יש להתאים את הערך לזמן שבדיקה מסוג זה באמת אורכת. 0 = הסוג הזה לא משוחרר אוטומטית לעולם.";
 
+/** The station types, or null when they could not be read. */
+async function readStationTypes(): Promise<StationType[] | null> {
+  try {
+    const res = await apiFetch("/api/settings/test-stations-type");
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return null;
+  }
+}
+
 export default function StationTypesTable({ selectedId, onSelect }: StationTypesTableProps) {
   const [rows, setRows] = useState<StationType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,22 +67,20 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   /** The column's own DEFAULT — a new type is fail-safe unless it says otherwise. */
   const DEFAULT_STALE_AFTER_MINUTES = 30;
 
+  const applyRows = useCallback((list: StationType[] | null) => {
+    if (list) setRows(list);
+    else setLoadError(true);
+    setLoading(false);
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
-    try {
-      const res = await apiFetch(apiUrl);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
-      setRows(Array.isArray(data) ? data : []);
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    applyRows(await readStationTypes());
+  }, [applyRows]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // The first load: `loading` starts true, so only the reply sets state.
+  useEffect(() => { readStationTypes().then(applyRows); }, [applyRows]);
 
   // A selection can arrive from outside the table — the command palette
   // deep-links ?type=<id>, which the page turns into `selectedId` before the

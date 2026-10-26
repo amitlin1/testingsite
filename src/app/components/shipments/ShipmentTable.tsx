@@ -60,6 +60,23 @@ const KPI_ORDER: KpiKey[] = ["total", "pending", "waitingStart", "inProcess", "r
    date on the screen. */
 const chipDate = (value: string) => formatDate(value);
 
+/* `rows` null = keep what is on screen; `failed` = say so instead of drawing
+   "no shipments". */
+type ShipmentsRead = { rows: Shipment[] | null; failed: boolean };
+
+async function readShipments(): Promise<ShipmentsRead> {
+    try {
+        const res = await apiFetch("/api/shipments");
+        const data = await res.json();
+        // A 4xx/5xx answers with an error object, not a list.
+        const list = Array.isArray(data);
+        return { rows: list ? data : [], failed: !res.ok || !list };
+    } catch (error) {
+        console.error("Failed to load shipments", error);
+        return { rows: null, failed: true };
+    }
+}
+
 export default function ShipmentTable() {
     const router = useRouter();
     const [rows, setRows] = useState<Shipment[]>([]);
@@ -103,26 +120,21 @@ export default function ShipmentTable() {
     const [snackbarMessage, setSnackbarMessage] = useState("");
     const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">("success");
 
+    const applyShipments = (read: ShipmentsRead) => {
+        if (read.failed) setLoadError(true);
+        if (read.rows) setRows(read.rows);
+        setLoading(false);
+    };
+
     const loadShipments = async () => {
-        try {
-            setLoading(true);
-            setLoadError(false);
-            const res = await apiFetch("/api/shipments");
-            const data = await res.json();
-            // A 4xx/5xx answers with an error object, not a list — say so
-            // instead of drawing "no shipments".
-            if (!res.ok || !Array.isArray(data)) setLoadError(true);
-            setRows(Array.isArray(data) ? data : []);
-        } catch (error) {
-            console.error("Failed to load shipments", error);
-            setLoadError(true);
-        } finally {
-            setLoading(false);
-        }
+        setLoading(true);
+        setLoadError(false);
+        applyShipments(await readShipments());
     };
 
     useEffect(() => {
-        loadShipments();
+        // The first load: `loading` starts true, so only the reply sets state.
+        readShipments().then(applyShipments);
         // Load customers for filter
         (async () => {
             try {

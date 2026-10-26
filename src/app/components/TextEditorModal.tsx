@@ -60,11 +60,21 @@ export default function TextEditorModal({
     [itemId, objectKey],
   );
 
+  // Opening (or another file) starts the load during render; the effect only
+  // sets state from the reply.
+  const loadKey = open ? contentUrl : null;
+  const [seenLoadKey, setSeenLoadKey] = React.useState<string | null>(null);
+  if (seenLoadKey !== loadKey) {
+    setSeenLoadKey(loadKey);
+    if (loadKey) {
+      setError(null);
+      setLoading(true);
+    }
+  }
+
   React.useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setError(null);
-    setLoading(true);
     fetch(contentUrl)
       .then(async (r) => {
         if (!r.ok) {

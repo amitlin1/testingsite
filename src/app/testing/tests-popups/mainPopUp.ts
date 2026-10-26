@@ -23,7 +23,7 @@ import { CODE_POPUPS } from "@/app/lib/popup-templates/codePopups";
  * Package-level station types (test_stations_type.package_level — opening /
  * closing) are NOT registered here: the testing page opens the package
  * wizards for them by the flag, not by id (docs/packages/PLAN.md §4) —
- * getPackageDialog, through the type's package template when it has one.
+ * PackageTestDialog, through the type's package template when it has one.
  */
 
 /** A photo wizard that captures the photo_types group `photoTypeId`. */
@@ -43,42 +43,31 @@ const REGISTRY: Record<number, React.ComponentType<StationTestDialogProps>> = Ob
 /** The popup the code gives a station type (no template). */
 const codeDialog = (typeId: number) => REGISTRY[typeId] ?? PopUpTestDialog;
 
-/** One template dialog per station type, made once: a new component type per render would
- *  remount the popup and lose what the worker filled. */
-const templateDialogs = new Map<number, React.ComponentType<StationTestDialogProps>>();
-function templateDialog(typeId: number): React.ComponentType<StationTestDialogProps> {
-  const made = templateDialogs.get(typeId);
-  if (made) return made;
-  const fallback = codeDialog(typeId);
-  const TemplateDialog = (props: StationTestDialogProps) => React.createElement(TemplateStation, { ...props, fallback });
-  TemplateDialog.displayName = `TemplateDialog(${typeId})`;
-  templateDialogs.set(typeId, TemplateDialog);
-  return TemplateDialog;
-}
-
 /** True if a station type has a dedicated wizard (so "התחל בדיקה" opens it instead of starting a plain test). */
 export const hasStartTestDialog = (typeId: number, hasTemplate = false) => hasTemplate || typeId in REGISTRY;
 
-export const getStartTestDialog = (typeId: number, hasTemplate = false) =>
-  hasTemplate ? templateDialog(typeId) : codeDialog(typeId);
+/** The popup the code gives a station type; with a template, StartTestDialog opens TemplateStation instead. */
+export const getStartTestDialog = (typeId: number) => codeDialog(typeId);
 
-/** One package template dialog per station type and role, made once (as templateDialog). */
-const packageDialogs = new Map<string, React.ComponentType<StationTestDialogProps>>();
+/** The dialog a station type opens: its template (TemplateStation, with the code's popup as the
+ *  fallback) when it has one, else the code's popup. Every one of them is a module-level component,
+ *  so nothing remounts the popup and loses what the worker filled. */
+export function StartTestDialog({ typeId, hasTemplate = false, ...props }: StationTestDialogProps & { typeId: number; hasTemplate?: boolean }) {
+  const fallback = codeDialog(typeId);
+  return hasTemplate
+    ? React.createElement(TemplateStation, { ...props, fallback })
+    : React.createElement(fallback, props);
+}
 
 /**
  * The dialog of a box at a package-level station: the opening or closing wizard by its place on the
- * route (`kind`), or — when the type has a template — TemplateStation with that role, the wizard
- * as its fallback (docs/popup-templates/PLAN.md §5).
+ * route (`kind`), or — when the type has a package template — TemplateStation with that role, the
+ * wizard as its fallback (docs/popup-templates/PLAN.md §5). A module-level component, like
+ * StartTestDialog.
  */
-export function getPackageDialog(typeId: number, kind: "open" | "close", hasTemplate = false): React.ComponentType<StationTestDialogProps> {
+export function PackageTestDialog({ kind, hasTemplate = false, ...props }: StationTestDialogProps & { kind: "open" | "close"; hasTemplate?: boolean }) {
   const wizard = kind === "open" ? PackageOpenWizard : PackageCloseWizard;
-  if (!hasTemplate) return wizard;
-  const key = `${typeId}:${kind}`;
-  const made = packageDialogs.get(key);
-  if (made) return made;
-  const packageRole = kind === "open" ? "opening" as const : "closing" as const;
-  const PackageTemplateDialog = (props: StationTestDialogProps) => React.createElement(TemplateStation, { ...props, fallback: wizard, packageRole });
-  PackageTemplateDialog.displayName = `PackageTemplateDialog(${key})`;
-  packageDialogs.set(key, PackageTemplateDialog);
-  return PackageTemplateDialog;
+  return hasTemplate
+    ? React.createElement(TemplateStation, { ...props, fallback: wizard, packageRole: kind === "open" ? "opening" : "closing" })
+    : React.createElement(wizard, props);
 }

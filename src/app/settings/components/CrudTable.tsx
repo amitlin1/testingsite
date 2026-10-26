@@ -35,6 +35,18 @@ interface CrudTableProps {
   countLabel?: string;
 }
 
+/** The table's rows, or null when they could not be read. */
+async function readRows(apiUrl: string): Promise<any[] | null> {
+  try {
+    const res = await apiFetch(apiUrl);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return null;
+  }
+}
+
 export default function CrudTable({ apiUrl, columns, idField, nameField, entityName, title, subtitle, countLabel }: CrudTableProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,22 +69,27 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
   });
   const showSnackbar = (message: string, severity: "success" | "error") => setSnackbar({ open: true, message, severity });
 
+  const applyRows = useCallback((list: any[] | null) => {
+    if (list) setRows(list);
+    else setLoadError(true);
+    setLoading(false);
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
-    try {
-      const res = await apiFetch(apiUrl);
-      if (!res.ok) throw new Error("Failed to fetch data");
-      const data = await res.json();
-      setRows(Array.isArray(data) ? data : []);
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiUrl]);
+    applyRows(await readRows(apiUrl));
+  }, [apiUrl, applyRows]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // Another table starts its load during render; the effect only reads, and
+  // applies the reply. (`loading` starts true for the first one.)
+  const [loadingUrl, setLoadingUrl] = useState(apiUrl);
+  if (loadingUrl !== apiUrl) {
+    setLoadingUrl(apiUrl);
+    setLoading(true);
+    setLoadError(false);
+  }
+  useEffect(() => { readRows(apiUrl).then(applyRows); }, [apiUrl, applyRows]);
 
   const handleAdd = () => { setEditingRow(null); setFormData({}); setFormErrors({}); setOpenDialog(true); };
   const handleEdit = (row: any) => { setEditingRow(row); setFormData({ ...row }); setFormErrors({}); setOpenDialog(true); };

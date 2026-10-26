@@ -96,6 +96,15 @@ type Load =
   | { kind: "previewFailed" }
   | { kind: "ready"; impact: PublishImpactJson; routeIds: number[] };
 
+/** What one run of prepare() came to: a Load to show, or the dialog closes (or nothing, when stale). */
+type Prepared =
+  | Exclude<Load, { kind: "loading" }>
+  | { kind: "stale" }
+  /** Nothing left to publish. */
+  | { kind: "close" }
+  /** A refusal for lint errors (422). */
+  | { kind: "issues" };
+
 type SessionProps = Omit<PublishDialogProps, "context"> & {
   context: FieldsContextJson;
   onPublished: (version: number) => void;
@@ -156,23 +165,14 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
     onClose();
   };
 
-  /** Save, then ask for the impact. The state is "loading" when it starts (the first render, or the
-   *  action that called it). */
-  const prepare = async () => {
-    const run = ++runRef.current;
-    const live = () => run === runRef.current;
+  /** Save, then ask for the impact; what came of it, without touching state. */
+  const readPrepared = async (live: () => boolean): Promise<Prepared> => {
     const flushed = await store.flushAll();
-    if (!live()) return;
-    if (!flushed.ok) {
-      setLoad({ kind: flushed.conflicts.length > 0 ? "saveConflict" : "saveFailed" });
-      return;
-    }
+    if (!live()) return { kind: "stale" };
+    if (!flushed.ok) return { kind: flushed.conflicts.length > 0 ? "saveConflict" : "saveFailed" };
     const routeIds = store.getSnapshot().summary.draftRouteIds;
-    if (routeIds.length === 0) {
-      // Nothing left to publish (the drafts went meanwhile).
-      onClose();
-      return;
-    }
+    // Nothing left to publish (the drafts went meanwhile).
+    if (routeIds.length === 0) return { kind: "close" };
     let status = 0;
     let body: unknown = null;
     try {
@@ -187,25 +187,40 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
     } catch {
       status = 0;
     }
-    if (!live()) return;
-    if (status === 422 && errorCode(body) === "LINT_ERRORS") {
-      closeForIssues();
-      return;
-    }
+    if (!live()) return { kind: "stale" };
+    if (status === 422 && errorCode(body) === "LINT_ERRORS") return { kind: "issues" };
     const impact = status === 200 ? parsePublishImpact(body) : null;
-    if (!impact) {
-      setLoad({ kind: "previewFailed" });
-      return;
-    }
-    if (impact.routes.length === 0) {
-      onClose();
-      return;
-    }
-    setLoad({ kind: "ready", impact, routeIds });
-    if (fromSetIds(impact).length > 0) {
-      const names = await loadSetNames();
-      if (live()) setSetNames(names);
-    }
+    if (!impact) return { kind: "previewFailed" };
+    if (impact.routes.length === 0) return { kind: "close" };
+    return { kind: "ready", impact, routeIds };
+  };
+
+  /** Save, then ask for the impact. The state is "loading" when it starts (the first render, or the
+   *  action that called it); it is set only once the answers are in. */
+  const prepare = () => {
+    const run = ++runRef.current;
+    const live = () => run === runRef.current;
+    return readPrepared(live).then((prepared) => {
+      if (!live()) return;
+      switch (prepared.kind) {
+        case "stale":
+          return;
+        case "close":
+          onClose();
+          return;
+        case "issues":
+          closeForIssues();
+          return;
+        case "ready":
+          setLoad(prepared);
+          if (fromSetIds(prepared.impact).length > 0) {
+            void loadSetNames().then((names) => { if (live()) setSetNames(names); });
+          }
+          return;
+        default:
+          setLoad(prepared);
+      }
+    });
   };
 
   // The first run, once per session (StrictMode's second mount drops the first run's answers).

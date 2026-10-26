@@ -88,8 +88,9 @@ export default function ReferenceItemsPage() {
   const pkgOpenings = React.useRef(0);
 
   // ---- data loading --------------------------------------------------------
-  const loadOptions = React.useCallback(() => {
-    setOptionsError(false);
+  // The fetches set state only from their callbacks, so the effects below can
+  // run them; the retries clear the error first.
+  const fetchOptions = React.useCallback(() => {
     apiFetch("/api/settings/item-types")
       .then(okJson)
       .then((data: ItemType[]) => setItemTypes(Array.isArray(data) ? data : []))
@@ -112,37 +113,57 @@ export default function ReferenceItemsPage() {
       })
       .catch(() => setStationsByType(null));
   }, []);
+  const loadOptions = React.useCallback(() => {
+    setOptionsError(false);
+    fetchOptions();
+  }, [fetchOptions]);
 
-  React.useEffect(() => { loadOptions(); }, [loadOptions]);
+  React.useEffect(() => { fetchOptions(); }, [fetchOptions]);
 
-  const loadItems = React.useCallback((typeId: number) => {
-    setLoadingItems(true);
-    setItemsError(false);
+  const fetchItems = React.useCallback((typeId: number) => {
     apiFetch(`/api/settings/reference-items?itemTypeId=${typeId}`)
       .then(okJson)
       .then((data: ReferenceItem[]) => setItems(Array.isArray(data) ? data : []))
       .catch(() => { setItems([]); setItemsError(true); })
       .finally(() => setLoadingItems(false));
   }, []);
+  const loadItems = React.useCallback((typeId: number) => {
+    setLoadingItems(true);
+    setItemsError(false);
+    fetchItems(typeId);
+  }, [fetchItems]);
 
-  const loadLines = React.useCallback((typeId: number) => {
-    setLines({ status: "loading" });
+  const fetchLines = React.useCallback((typeId: number) => {
     apiFetch(`/api/settings/item-types/${typeId}/contents`)
       .then(okJson)
       .then((data: { lines?: TemplateLine[] }) => setLines({ status: "ready", lines: Array.isArray(data.lines) ? data.lines : [] }))
       .catch(() => setLines({ status: "error" }));
   }, []);
+  const loadLines = React.useCallback((typeId: number) => {
+    setLines({ status: "loading" });
+    fetchLines(typeId);
+  }, [fetchLines]);
 
-  React.useEffect(() => {
+  // A newly selected type starts its loads (and drops the old filters) during
+  // render; the effect below only fetches.
+  const [loadedType, setLoadedType] = React.useState<ItemType | null>(null);
+  if (loadedType !== selectedType) {
+    setLoadedType(selectedType);
     if (selectedType) {
-      loadItems(selectedType.item_type_id);
-      if (selectedType.is_package) loadLines(selectedType.item_type_id);
+      setLoadingItems(true);
+      setItemsError(false);
+      if (selectedType.is_package) setLines({ status: "loading" });
       setSkuFilter(null);
       setManuFilter(null);
     } else {
       setItems([]);
     }
-  }, [selectedType, loadItems, loadLines]);
+  }
+  React.useEffect(() => {
+    if (!selectedType) return;
+    fetchItems(selectedType.item_type_id);
+    if (selectedType.is_package) fetchLines(selectedType.item_type_id);
+  }, [selectedType, fetchItems, fetchLines]);
 
   const isPackage = !!selectedType?.is_package;
   const regularTypes = React.useMemo(() => itemTypes.filter((t) => !t.is_package), [itemTypes]);

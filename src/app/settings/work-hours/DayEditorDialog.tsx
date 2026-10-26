@@ -68,14 +68,20 @@ export default function DayEditorDialog({
   const [bEnd, setBEnd] = React.useState("13:00");
   const [saving, setSaving] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!open) return;
-    setSel(override?.kind ?? "default");
-    setStart(override?.start ?? "07:00");
-    setEnd(override?.end ?? (underlyingEve || underlyingFriday ? "12:00" : "13:00"));
-    setBStart(override?.breakStart ?? "12:00");
-    setBEnd(override?.breakEnd ?? "13:00");
-  }, [open, override, underlyingEve, underlyingFriday]);
+  // Seeded from the override whenever the dialog opens or what it edits
+  // changes; done during render, so the old values are never painted.
+  const seedInputs = [open, override, underlyingEve, underlyingFriday] as const;
+  const [seededFor, setSeededFor] = React.useState<typeof seedInputs | null>(null);
+  if (!seededFor || seedInputs.some((v, i) => v !== seededFor[i])) {
+    setSeededFor(seedInputs);
+    if (open) {
+      setSel(override?.kind ?? "default");
+      setStart(override?.start ?? "07:00");
+      setEnd(override?.end ?? (underlyingEve || underlyingFriday ? "12:00" : "13:00"));
+      setBStart(override?.breakStart ?? "12:00");
+      setBEnd(override?.breakEnd ?? "13:00");
+    }
+  }
 
   const needsHours = sel === "short_hours" || sel === "short_day" || sel === "friday_work" || sel === "eve_work";
   const halfKind = sel === "friday_work" || sel === "eve_work";

@@ -110,13 +110,22 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   const { reset: resetBoxFields } = boxFx;
   const [itemDrafts, setItemDrafts] = React.useState<Record<string, Drafts>>({});
 
+  // The state resets during render, when the dialog opens or the box changes;
+  // the refs follow in the effect below.
+  const [openedFor, setOpenedFor] = React.useState<{ open: boolean; pkg: PackageView | null } | null>(null);
+  if (!openedFor || openedFor.open !== open || openedFor.pkg !== pkg) {
+    setOpenedFor({ open, pkg });
+    if (open) {
+      setStep(0); setScan(pkg?.opening_sku ?? ""); setPacked({}); setDecisions({}); setDecideFor(null); setChecks(CHECKS.map(() => false)); setNote("");
+      setSubmitting(false); setError(null); setDoneRows([]);
+      setItemDrafts({}); resetBoxFields();
+    }
+  }
   React.useEffect(() => {
     if (!open) return;
-    setStep(0); setScan(pkg?.opening_sku ?? ""); setPacked({}); setDecisions({}); setDecideFor(null); setChecks(CHECKS.map(() => false)); setNote("");
-    setSubmitting(false); setError(null); submitIdRef.current = null; committedRef.current = new Set();
-    nextStopsRef.current = new Map(); setDoneRows([]);
-    setItemDrafts({}); resetBoxFields();
-  }, [open, pkg, resetBoxFields]);
+    submitIdRef.current = null; committedRef.current = new Set();
+    nextStopsRef.current = new Map();
+  }, [open, pkg]);
 
   const boxLookup = useReferenceLookup(scan, item.item_type_id, open);
 

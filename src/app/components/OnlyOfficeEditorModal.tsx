@@ -158,13 +158,24 @@ export default function OnlyOfficeEditorModal({
   // moment, with no timing assumptions.
   const [container, setContainer] = React.useState<HTMLDivElement | null>(null);
 
+  // Every (re)init of the editor below starts from a clean spinner. The reset
+  // happens during render, when the inputs the effect depends on change, so
+  // the effect itself only sets state from its async callbacks.
+  const initInputs = [open, container, objectKey, workerId, workerName, viewOnly] as const;
+  const [seenInputs, setSeenInputs] = React.useState(initInputs);
+  if (initInputs.some((v, i) => v !== seenInputs[i])) {
+    setSeenInputs(initInputs);
+    if (open && container) {
+      setError(null);
+      setLoading(true);
+    }
+  }
+
   React.useEffect(() => {
     console.log(`[${BUILD_TAG}] effect fired`, { open, hasContainer: !!container });
     if (!open || !container) return;
 
     let cancelled = false;
-    setError(null);
-    setLoading(true);
     sawSaveRef.current = false;
 
     // Mint a fresh placeholder OUTSIDE React's tree so OnlyOffice has its own

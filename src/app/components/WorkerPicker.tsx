@@ -63,25 +63,31 @@ export default function WorkerPicker({
   onOpen,
   onClose,
 }: WorkerPickerProps) {
-  const [workers, setWorkers] = React.useState<Worker[]>(workersProp ?? []);
-  const [loading, setLoading] = React.useState(false);
+  // The directory, fetched only when no list was passed in.
+  const [fetchedWorkers, setFetchedWorkers] = React.useState<Worker[]>([]);
+  const workers = workersProp ?? fetchedWorkers;
+  const [loading, setLoading] = React.useState(!workersProp);
   // The header (or, when hidden, a visually-hidden label) names the input.
   const inputId = React.useId();
 
+  // Losing the passed-in list starts a fetch: raise the spinner during render.
+  const fetching = !workersProp;
+  const [seenFetching, setSeenFetching] = React.useState(fetching);
+  if (seenFetching !== fetching) {
+    setSeenFetching(fetching);
+    if (fetching) setLoading(true);
+  }
+
   React.useEffect(() => {
-    if (workersProp) {
-      setWorkers(workersProp);
-      return;
-    }
+    if (workersProp) return;
     let cancelled = false;
-    setLoading(true);
     apiFetch("/api/workers-directory")
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
-        if (!cancelled) setWorkers(Array.isArray(data) ? data : []);
+        if (!cancelled) setFetchedWorkers(Array.isArray(data) ? data : []);
       })
       .catch(() => {
-        if (!cancelled) setWorkers([]);
+        if (!cancelled) setFetchedWorkers([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

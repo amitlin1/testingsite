@@ -102,6 +102,20 @@ function parseRefKey(key: string | null): RouteRef | null {
 // ---- the map's id: the header's "בעיה אחת לתיקון" brings it into view ------------------------------
 const MAP_REGION_ID = "rf-map-region";
 
+/** The testing routes, or null when they could not be read. */
+async function readRoutes(): Promise<RouteRow[] | null> {
+  try {
+    const res = await apiFetch("/api/settings/testing-routes");
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error("not a list");
+    return data as RouteRow[];
+  } catch (err) {
+    console.error("Failed to load testing routes", err);
+    return null;
+  }
+}
+
 export default function TestingRoutesPage() {
   // useSearchParams needs a Suspense boundary.
   return (
@@ -144,23 +158,16 @@ function TestingRoutesShell() {
   // A failed options load is not "no item types": it gets a band and a retry.
   const [optionsError, setOptionsError] = useState(false);
 
-  const loadRoutes = useCallback(async (): Promise<boolean> => {
-    try {
-      const res = await apiFetch("/api/settings/testing-routes");
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const data = await res.json();
-      if (!Array.isArray(data)) throw new Error("not a list");
-      setRoutes(data as RouteRow[]);
-      return true;
-    } catch (err) {
-      console.error("Failed to load testing routes", err);
-      return false;
-    }
-  }, []);
+  // Read, then applied in the promise's callback, so the effects below can run these.
+  const loadRoutes = useCallback(
+    (): Promise<boolean> => readRoutes().then((rows) => {
+      if (rows) setRoutes(rows);
+      return rows !== null;
+    }),
+    [],
+  );
 
-  const loadOptions = useCallback(() => {
-    setOptionsError(false);
-    setOptionsLoading(true);
+  const fetchOptions = useCallback(() => {
     Promise.all([
       apiFetch("/api/settings/item-types").then(async res => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -194,8 +201,14 @@ function TestingRoutesShell() {
       setOptionsLoading(false);
     });
   }, [loadRoutes]);
+  // The retry clears the band and shows the spinner first (the first load starts that way).
+  const loadOptions = useCallback(() => {
+    setOptionsError(false);
+    setOptionsLoading(true);
+    fetchOptions();
+  }, [fetchOptions]);
 
-  useEffect(() => { loadOptions(); }, [loadOptions]);
+  useEffect(() => { fetchOptions(); }, [fetchOptions]);
 
   // The route on screen: a kit route only. Until the item types are in, the URL's pair waits (the
   // views show their loading states); then a pair of an item type is no route.

@@ -92,6 +92,18 @@ const COLUMNS: Column<StationHistoryEntry>[] = [
   { key: "worker", header: "עובד", nowrap: true, cell: (e) => (e.workerId ? `עובד #${e.workerId}` : "—") },
 ];
 
+/** The station's history, or null when it could not be read. */
+async function readStationHistory(stationId: number): Promise<StationHistoryEntry[] | null> {
+  try {
+    const res = await apiFetch(`/api/testing/station-history?stationId=${stationId}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return null;
+  }
+}
+
 export default function StationHistoryDialog({
   open,
   onClose,
@@ -104,37 +116,31 @@ export default function StationHistoryDialog({
   // Bumped by "נסה שוב" to run the same load again.
   const [attempt, setAttempt] = React.useState(0);
 
+  // Each load (dialog opens, another station, "נסה שוב") starts during render:
+  // a closed dialog drops what it showed, an open one raises the spinner. The
+  // effect below only reads, and sets state once the reply is in.
+  const loadKey = open && stationId ? `${stationId}:${attempt}` : null;
+  const [seenLoadKey, setSeenLoadKey] = React.useState<string | null>(null);
+  if (seenLoadKey !== loadKey) {
+    setSeenLoadKey(loadKey);
+    setError(null);
+    if (loadKey) setLoading(true);
+    else setHistory([]);
+  }
+
   // Fetch history when dialog opens and stationId is available
   React.useEffect(() => {
-    if (!open || !stationId) {
-      setHistory([]);
-      setError(null);
-      return;
-    }
+    if (!open || !stationId) return;
 
     let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await apiFetch(`/api/testing/station-history?stationId=${stationId}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!cancelled) {
-          setHistory(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        // Whatever failed (server, network, a non-JSON reply), the worker
-        // gets one Hebrew line that says what happened and what to do.
-        if (!cancelled) {
-          setError("לא ניתן לטעון את היסטוריית העמדה. בדוק את החיבור ונסה שוב.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
+    readStationHistory(stationId).then((rows) => {
+      if (cancelled) return;
+      // Whatever failed (server, network, a non-JSON reply), the worker
+      // gets one Hebrew line that says what happened and what to do.
+      if (rows) setHistory(rows);
+      else setError("לא ניתן לטעון את היסטוריית העמדה. בדוק את החיבור ונסה שוב.");
+      setLoading(false);
+    });
 
     return () => {
       cancelled = true;

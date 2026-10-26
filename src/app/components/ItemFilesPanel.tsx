@@ -110,6 +110,23 @@ function downloadUrl(objectKey: string): string {
   );
 }
 
+type FilesRead = { files: ItemFile[]; error: null } | { files: null; error: string };
+
+/** The item's files at `url`, or the error to show instead. */
+async function readFiles(url: string): Promise<FilesRead> {
+  try {
+    const r = await apiFetch(url);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      return { files: null, error: j.error || "שגיאה בטעינת קבצים" };
+    }
+    const j = (await r.json()) as { files: ItemFile[] };
+    return { files: j.files ?? [], error: null };
+  } catch (e) {
+    return { files: null, error: (e as Error).message };
+  }
+}
+
 export default function ItemFilesPanel({
   itemId,
   workerId: workerIdProp,
@@ -118,7 +135,7 @@ export default function ItemFilesPanel({
   stationTypeId = null,
 }: ItemFilesPanelProps) {
   const [files, setFiles] = React.useState<ItemFile[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
   const [uploading, setUploading] = React.useState(false);
   // 0–100 across the whole batch while files stream to MinIO; null = no byte count yet.
   const [uploadProgress, setUploadProgress] = React.useState<number | null>(null);
@@ -151,29 +168,31 @@ export default function ItemFilesPanel({
   const [pendingDelete, setPendingDelete] = React.useState<ItemFile | null>(null);
 
   const listUrl = `/api/items/${encodeURIComponent(String(itemId))}/files`;
+  const filesUrl = stationTypeId != null ? `${listUrl}?stationTypeId=${stationTypeId}` : listUrl;
+
+  const applyFiles = React.useCallback((read: FilesRead) => {
+    if (read.files) setFiles(read.files);
+    else setError(read.error);
+    setLoading(false);
+  }, []);
 
   const refresh = React.useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const url = stationTypeId != null ? `${listUrl}?stationTypeId=${stationTypeId}` : listUrl;
-      const r = await apiFetch(url);
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || "שגיאה בטעינת קבצים");
-      }
-      const j = (await r.json()) as { files: ItemFile[] };
-      setFiles(j.files ?? []);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [listUrl, stationTypeId]);
+    applyFiles(await readFiles(filesUrl));
+  }, [filesUrl, applyFiles]);
 
+  // A new list (on mount, or another item / station) starts loading during
+  // render; the effect only reads, and applies the result in its callback.
+  const [loadingUrl, setLoadingUrl] = React.useState(filesUrl);
+  if (loadingUrl !== filesUrl) {
+    setLoadingUrl(filesUrl);
+    setLoading(true);
+    setError(null);
+  }
   React.useEffect(() => {
-    refresh();
-  }, [refresh]);
+    readFiles(filesUrl).then(applyFiles);
+  }, [filesUrl, applyFiles]);
 
   const ensureWorker = (): boolean => {
     if (effectiveWorkerId == null) {

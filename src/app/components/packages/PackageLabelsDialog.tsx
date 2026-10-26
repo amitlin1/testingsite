@@ -154,11 +154,12 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
 
   // Reset when the dialog opens or the item set changes — keyed on the count,
   // not the array identity, because callers build `items` inline each render.
-  React.useEffect(() => {
-    if (!open) return;
-    setBoxOn(boxFirst); setItemsOn(items.map(() => true)); setCopies(1); setPreview(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, items.length]);
+  // Done during render, so the stale selection is never painted.
+  const [resetFor, setResetFor] = React.useState({ open, count: items.length });
+  if (resetFor.open !== open || resetFor.count !== items.length) {
+    setResetFor({ open, count: items.length });
+    if (open) { setBoxOn(boxFirst); setItemsOn(items.map(() => true)); setCopies(1); setPreview(false); }
+  }
 
   const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: `Package-${packageId}-labels`, onAfterPrint: onPrinted });
 

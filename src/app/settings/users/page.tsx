@@ -136,6 +136,18 @@ const emptyForm: FormState = {
   mustChange: true,
 };
 
+/** The users, or null when they could not be read. */
+async function readUsers(): Promise<AdminUser[] | null> {
+  try {
+    const res = await apiFetch("/api/users");
+    if (!res.ok) throw new Error();
+    const data = (await res.json()) as { users: AdminUser[] };
+    return data.users ?? [];
+  } catch {
+    return null;
+  }
+}
+
 export default function UsersPage() {
   // Your own account: the API blocks self-demote/disable/delete (lockout guard);
   // reflect that in the UI so the action is disabled rather than failing.
@@ -172,22 +184,24 @@ export default function UsersPage() {
   // double-click firing duplicate requests).
   const [busy, setBusy] = React.useState(false);
 
-  const load = React.useCallback(async () => {
-    setPhase("loading");
-    try {
-      const res = await apiFetch("/api/users");
-      if (!res.ok) throw new Error();
-      const data = (await res.json()) as { users: AdminUser[] };
-      setUsers(data.users ?? []);
+  const applyUsers = React.useCallback((list: AdminUser[] | null) => {
+    if (list) {
+      setUsers(list);
       setPhase("ready");
-    } catch {
+    } else {
       setPhase("error");
     }
   }, []);
 
+  const load = React.useCallback(async () => {
+    setPhase("loading");
+    applyUsers(await readUsers());
+  }, [applyUsers]);
+
+  // The first load: `phase` starts as "loading", so only the reply sets state.
   React.useEffect(() => {
-    load();
-  }, [load]);
+    readUsers().then(applyUsers);
+  }, [applyUsers]);
 
   // ---- filtering ----
   const filtered = users.filter((u) => {

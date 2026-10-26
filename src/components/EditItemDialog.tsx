@@ -72,14 +72,18 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
   const [connectedItems, setConnectedItems] = React.useState<ConnectedItem[] | null>(null);
   const [discardOpen, setDiscardOpen] = React.useState(false);
 
-  React.useEffect(() => {
+  // Seeded from the item during render, when the dialog opens or the item
+  // changes, so the previous item's form is never painted.
+  const [seededFor, setSeededFor] = React.useState<{ open: boolean; item: ItemRow | null } | null>(null);
+  if (!seededFor || seededFor.open !== open || seededFor.item !== item) {
+    setSeededFor({ open, item });
     if (open && item) {
       setForm(formOf(item));
       setConfirmOpen(false);
       setConnectedItems(null);
       setDiscardOpen(false);
     }
-  }, [open, item]);
+  }
 
   if (!open || !item) return null;
 
