@@ -4,9 +4,10 @@ import { saveSignature } from "../../../lib/file-utils";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { withAuth } from "@/lib/auth/withAuth";
 import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
-import { lineDetails, nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
+import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 import { syncShipmentBoxes } from "@/app/lib/packages/boxes";
 import { PackageError, packageErrorResponse } from "@/app/lib/packages/errors";
+import { SHIPMENT_TX, duplicateShipmentError, findDuplicateShipment, readShipmentLines, saveShipmentLines } from "@/app/lib/shipments/lines";
 
 // GET: Fetch all shipments
 export async function GET() {
@@ -55,6 +56,7 @@ export async function GET() {
         s.amount,
         s.makat,
         s.signature_path,
+        s.received_at,
         s.recieving_worker_id,
         s.recieving_worker_name,
         (SELECT si.item_type_id FROM shipment_items si WHERE si.shipment_id = s.id LIMIT 1) as item_type_id,
@@ -91,7 +93,7 @@ export async function GET() {
                 'purchase_order', si.purchase_order,
                 'cert_row_raw', si.cert_row_raw,
                 'item_type_desc', sit.item_type_desc
-            ))
+            ) ORDER BY si.id) -- the order the lines were entered: a line edited in place moves on disk, not here
             FROM shipment_items si
             JOIN item_types sit ON si.item_type_id = sit.item_type_id
             WHERE si.shipment_id = s.id
@@ -109,6 +111,8 @@ export async function GET() {
     const normalizedRows = rows.map((row: any) => ({
       ...row,
       shipment_date: normalizeToUtcIso(row.shipment_date),
+      // timestamptz: already an instant, no zone guessing.
+      received_at: row.received_at ? new Date(row.received_at).toISOString() : null,
       shipment_sent_date: normalizeToUtcIso(row.shipment_sent_date),
       finished_at: normalizeToUtcIso(row.finished_at),
       signature_path: row.signature_path
@@ -127,15 +131,19 @@ export async function GET() {
 }
 
 // POST: Create a new shipment
+//
+// Only the roles that receive shipments (the /shipments page's). The lines are
+// checked before anything is written (lib/shipments/lines.ts); the same
+// certificate — number + customer — entered twice is refused with the
+// existing shipment unless the form says the worker chose to enter it again
+// (allow_duplicate).
 export const POST = withAuth(async (request, { session }) => {
   try {
     const body = await request.json();
     const {
-      shipment_code,
       customer_id,
       shipment_date,
       makat,
-      amount,
       recieving_worker_id,
       recieving_worker_name,
       shipment_items,
@@ -145,13 +153,13 @@ export const POST = withAuth(async (request, { session }) => {
       source_id,
       poc_details,
     } = body;
+    const shipment_code = typeof body.shipment_code === "string" ? body.shipment_code.trim() : "";
 
-    // Basic validation
-    if (!shipment_code || !customer_id || !shipment_date || !amount) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 },
-      );
+    if (!shipment_code) return NextResponse.json({ error: "חסר מספר משלוח" }, { status: 400 });
+    if (shipment_code.length > 20) return NextResponse.json({ error: "מספר משלוח ארוך מ-20 תווים" }, { status: 400 });
+    if (!customer_id) return NextResponse.json({ error: "חסר לקוח" }, { status: 400 });
+    if (!shipment_date || Number.isNaN(new Date(shipment_date).getTime())) {
+      return NextResponse.json({ error: "חסר תאריך משלוח" }, { status: 400 });
     }
 
     // POC details are English-only. This check MUST stay out here, with the
@@ -164,7 +172,7 @@ export const POST = withAuth(async (request, { session }) => {
     // the correct answer and the only one that cannot half-happen.
     if (/[֐-׿]/.test(poc_details || "")) {
       return NextResponse.json(
-        { error: "POC details must be in English only" },
+        { error: "פרטי איש הקשר באנגלית בלבד" },
         { status: 400 },
       );
     }
@@ -178,6 +186,10 @@ export const POST = withAuth(async (request, { session }) => {
         { status: 400 },
       );
     }
+    const lines = readShipmentLines(shipment_items, shipment_code);
+    // The declared count is the lines' — never a number the client sent beside them.
+    const amount = lines.length > 0 ? lines.reduce((sum, l) => sum + l.quantity, 0) : Number(body.amount);
+    if (!(amount > 0)) return NextResponse.json({ error: "יש להצהיר על לפחות מארז אחד" }, { status: 400 });
 
     // "עובד מקבל": the logged-in worker, unless a manager picked someone else
     // (resolveShipmentWorker — never trust a non-manager's submitted id/name).
@@ -187,7 +199,9 @@ export const POST = withAuth(async (request, { session }) => {
     const finalRecievingWorkerName = receiver.worker.name;
 
     const newShipment = await prisma.$transaction(async (tx) => {
-      // First create the shipment without signature
+      const duplicate = await findDuplicateShipment(tx, shipment_code, Number(customer_id));
+      if (duplicate && body.allow_duplicate !== true) throw duplicateShipmentError(duplicate);
+
       const created = await tx.shipments.create({
         data: {
           shipment_code,
@@ -202,52 +216,39 @@ export const POST = withAuth(async (request, { session }) => {
           sending_worker_name: sending_worker_name || null,
           source_id: source_id || null,
           poc_details: poc_details || null,
+          // The moment it entered the system; shipment_date is the certificate's.
+          received_at: new Date(),
         },
       });
-      // Now save signature with shipment ID for folder organization
-      let signaturePath = null;
-      if (signature_base64) {
-        signaturePath = await saveSignature(
-          signature_base64,
-          "recv",
-          created.id,
-        );
-        if (signaturePath) {
-          await tx.shipments.update({
-            where: { id: created.id },
-            data: { signature_path: signaturePath },
-          });
-          created.signature_path = signaturePath;
-        }
-      }
-
-      if (shipment_items && Array.isArray(shipment_items)) {
-        for (const item of shipment_items) {
-          await tx.shipment_items.create({
-            data: {
-              shipment_id: created.id,
-              item_type_id: item.item_type_id,
-              quantity: item.quantity,
-              ...lineDetails(item),
-            },
-          });
-        }
-      }
+      await saveShipmentLines(tx, created.id, lines);
 
       // A box per declared unit, its id minted now: the labels print from
       // the shipment and the intake scans them (lib/packages/boxes.ts).
       await syncShipmentBoxes(tx, created.id);
 
       return created;
-    });
+    }, SHIPMENT_TX);
 
-    return NextResponse.json(newShipment, { status: 201 });
+    // The signature goes to storage after the commit: inside the transaction
+    // its upload held the day's id counter for the network's time, and a save
+    // that rolled back left the file behind.
+    let signature_saved: boolean | null = null;
+    if (signature_base64) {
+      const signaturePath = await saveSignature(signature_base64, "recv", newShipment.id);
+      signature_saved = !!signaturePath;
+      if (signaturePath) {
+        await prisma.shipments.update({ where: { id: newShipment.id }, data: { signature_path: signaturePath } });
+        newShipment.signature_path = signaturePath;
+      }
+    }
+
+    return NextResponse.json({ ...newShipment, signature_saved }, { status: 201 });
   } catch (error) {
     if (error instanceof PackageError) return packageErrorResponse(error, "");
     console.error("Error creating shipment:", error);
     return NextResponse.json(
-      { error: "Failed to create shipment" },
+      { error: "המשלוח לא נשמר — שגיאה בשרת" },
       { status: 500 },
     );
   }
-});
+}, { role: ["manager", "storekeeper"] });

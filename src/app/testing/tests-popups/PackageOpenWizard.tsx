@@ -609,6 +609,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           <OpeningContents
             rows={contentRows} onRows={setContentRows} memberTypes={memberTypes} templateCount={templateCount}
             shipmentId={pkg.shipment_id} packageId={String(item.item_id)} box={boxDetailsOf(pkg)} error={contentsError}
+            cert={{ rowNo: pkg.cert_row_no ?? null, serial: pkg.cert_serial_no ?? null }}
             expectedOf={kitMembers ? (id) => expectedOf({ item_type_id: id }) : undefined}
             onDone={() => { if (contentsGap == null) onNext(); }}
           />

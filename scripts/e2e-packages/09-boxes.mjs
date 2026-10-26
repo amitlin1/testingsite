@@ -101,8 +101,13 @@ try {
     inQueue.includes(ids[0]) && !inQueue.includes(ids[1]), `${inQueue.length} in queue`);
   await page.keyboard.press("Escape");
   await sleep(400);
+  // Both boxes taken in, then one declared. (A line of 0 is no line: the API
+  // refuses it as such, 400, before it gets to the boxes.)
+  await post(page, "/api/packages/intake", { barcode: ids[1] });
+  r = await put(1);
+  check("declaring fewer boxes than were taken in is refused", r.status === 409 && r.json?.code === "SHIPMENT_BOXES_TAKEN_IN", `${r.status} ${r.json?.error}`);
   r = await put(0);
-  check("declaring fewer boxes than were taken in is refused", r.status === 409, `${r.status} ${r.json?.error}`);
+  check("a line of 0 boxes is refused", r.status === 400, `${r.status} ${r.json?.error}`);
   r = await api(page, `/api/shipments/${sid}`, { method: "DELETE" });
   check("a shipment with a box taken in is not deleted", r.status === 400, `${r.status}`);
   // A line with nothing from the certificate: still saved, its boxes still minted.
@@ -130,7 +135,7 @@ try {
   const waitText = async (t, ms = 20000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await bodyHas(page, t)) return true; await sleep(300); } return false; };
   const click = (label) => page.evaluate((t) => { const els = [...document.querySelectorAll("button")].filter((e) => (e.innerText || "").trim() === t && !e.disabled); els.at(-1)?.click(); return els.length > 0; }, label);
   await waitText("סריקת מק״ט המארז");
-  await page.type('input[placeholder="סרוק את מדבקת הקופסה"]', `KIT-${tag}`);
+  await page.type('input[placeholder="סרוק את מק״ט היצרן"]', `KIT-${tag}`);
   await sleep(1500);
   await click("המשך"); await sleep(500);
   await click("תקין"); await sleep(300);
@@ -140,7 +145,8 @@ try {
   check("rows from the template, no serials, no going on", (await page.$$(serialSel)).length === units &&
     !(await page.evaluate(() => [...document.querySelectorAll("button")].some((b) => b.innerText.trim() === "שמור והמשך" && !b.disabled))));
   check("details closed: nothing to type but serials", (await page.$$('table input[id$="-makat"]')).length === 0);
-  // Row 1: a unit's certificate row — serial and details. Row 2: a batch row, then its serial.
+  // Row 1: a unit's certificate row the shipment never scanned — its serial only, the details
+  // stay the box's. Row 2: a batch row, then its serial.
   await (await page.$$(serialSel))[0].focus();
   await page.keyboard.type(`2^1|M-1|SONY|145DL|111|${tag}-A|1|1|PO-1`); await page.keyboard.press("Enter"); await sleep(500);
   await (await page.$$(serialSel))[1].focus();
@@ -161,8 +167,11 @@ try {
   check("saved → items step", await waitText("כל פריט עובר סריקה, צילום ושקילה", 15000));
   const view = (await api(page, `/api/packages/${ids[0]}`)).json?.package;
   const got = (view?.items ?? []).map((it) => `${it.serial_no}|${(it.makat ?? "").trim()}|${(it.model ?? "").trim()}`);
-  check("the box as saved: kept items with serials, the missing one gone, the new one added with the box's details",
-    got.length === units && got.includes(`${tag}-A|111|145DL`) && got.includes(`${tag}-C|MK-${tag}|MD-${tag}`) && got.some((g) => g.startsWith(`${tag}-B|222|X2`)), JSON.stringify(got));
+  check("the box as saved: kept items with serials, the missing one gone, the new one added — all with the box's details",
+    got.length === units && [`${tag}-A`, `${tag}-B`, `${tag}-C`].every((sn) => got.includes(`${sn}|MK-${tag}|MD-${tag}`)), JSON.stringify(got));
+  // The shipment's own row scanned at its own box: matched, nothing moves.
+  const bound = await post(page, `/api/packages/${ids[0]}/cert-row`, { barcode: `2^${ROW.cert_row_raw}` });
+  check("the box's own certificate row: matched, the box stays on its row", bound.ok && bound.json?.binding?.matched === true && bound.json?.binding?.moved === false, JSON.stringify(bound.json?.binding ?? bound.json));
   // An item may lose every detail: editing it still saves (only its serial is required).
   const kept = (view?.items ?? []).find((it) => it.serial_no === `${tag}-A`);
   r = await post(page, `/api/items/${kept?.item_id}`, {

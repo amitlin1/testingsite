@@ -103,7 +103,9 @@ export type Shipment = {
   item_type_id: number | null; // Legacy
   item_type_desc: string | null; // Legacy
   signature_path?: string | null;
-  shipment_items?: ({ item_type_id: number; quantity: number; item_type_desc?: string } & ShipmentLineDetails)[];
+  /** `id` is the line's shipment_items row: an edit sends it back as `line_id`
+   *  so the line keeps its boxes (lib/packages/boxes.ts). */
+  shipment_items?: ({ id?: number; item_type_id: number; quantity: number; item_type_desc?: string } & ShipmentLineDetails)[];
   source_id: number | null;
   source_desc: string | null;
   sending_worker_id: number | null;
@@ -120,6 +122,10 @@ export type Shipment = {
   started_sampled_amount?: number;
   sent_amount?: number;
   poc_details?: string | null;
+  /** When the shipment was entered into the system (shipments.received_at);
+   *  null on shipments saved before it was recorded. shipment_date is the
+   *  certificate's date. */
+  received_at?: string | null;
 };
 
 export type NewShipment = {
@@ -131,7 +137,8 @@ export type NewShipment = {
   recieving_worker_id?: number | null;
   recieving_worker_name?: string | null;
   item_type_id?: number | null;
-  shipment_items?: ({ item_type_id: number; quantity: number } & ShipmentLineDetails)[];
+  /** `line_id`: the saved line this one edits (none on a new line). */
+  shipment_items?: ({ line_id?: number | null; item_type_id: number; quantity: number } & ShipmentLineDetails)[];
   source_id?: number | null;
   sending_worker_id: number | null;
   sending_worker_name?: string | null;

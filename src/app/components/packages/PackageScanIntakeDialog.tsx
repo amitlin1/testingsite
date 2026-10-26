@@ -35,23 +35,17 @@ export default function PackageScanIntakeDialog({
   const [taken, setTaken] = React.useState<PackageView[]>([]);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const sound = React.useSyncExternalStore(subscribeSound, soundOn, () => true);
+  // Labels scanned while an earlier one is still being taken in wait here, in
+  // order: a fast run of scans is never dropped or run together in the field.
+  const queue = React.useRef<string[]>([]);
+  const draining = React.useRef(false);
+  const [queued, setQueued] = React.useState(0);
 
   if (!open) return null;
 
   const fail = (text: string) => { setOutcome({ tone: "error", text }); playCue("error"); };
 
-  const submit = async () => {
-    const value = scan.trim();
-    if (!value || busy) return;
-    setScan("");
-    if (!BOX_ID.test(value)) {
-      fail(/^\d+(-\d+)?$/.test(value)
-        ? `${value} אינו מזהה של מארז (16 ספרות). אם זו מדבקת משלוח — הדפס את מדבקות המארזים מעמוד המשלוחים.`
-        : `"${value}" אינו ברקוד של מדבקת מארז.`);
-      return;
-    }
-    if (!value.split("-")[0].endsWith("00")) { fail("זו מדבקה של פריט בתוך מארז — סרוק את מדבקת המארז (המזהה מסתיים ב-00)."); return; }
-    setBusy(true);
+  const takeIn = async (value: string) => {
     try {
       const res = await apiFetch("/api/packages/intake", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ barcode: value }),
@@ -65,10 +59,38 @@ export default function PackageScanIntakeDialog({
       onChanged?.();
     } catch {
       fail("שגיאה בתקשורת");
-    } finally {
-      setBusy(false);
-      inputRef.current?.focus();
     }
+  };
+
+  const drain = async () => {
+    if (draining.current) return;
+    draining.current = true;
+    setBusy(true);
+    while (queue.current.length > 0) {
+      const next = queue.current.shift()!;
+      setQueued(queue.current.length);
+      await takeIn(next);
+    }
+    draining.current = false;
+    setBusy(false);
+    inputRef.current?.focus();
+  };
+
+  const submit = () => {
+    const value = scan.trim();
+    if (!value) return;
+    setScan("");
+    if (!BOX_ID.test(value)) {
+      fail(/^\d+(-\d+)?$/.test(value)
+        ? `${value} אינו מזהה של מארז (16 ספרות). אם זו מדבקת משלוח — הדפס את מדבקות המארזים מעמוד המשלוחים.`
+        : `"${value}" אינו ברקוד של מדבקת מארז.`);
+      return;
+    }
+    if (!value.split("-")[0].endsWith("00")) { fail("זו מדבקה של פריט בתוך מארז — סרוק את מדבקת המארז (המזהה מסתיים ב-00)."); return; }
+    if (queue.current.includes(value)) return;
+    queue.current.push(value);
+    setQueued(queue.current.length);
+    void drain();
   };
 
   const undo = async (pkg: PackageView) => {
@@ -108,7 +130,7 @@ export default function PackageScanIntakeDialog({
             value={scan}
             onChange={(e) => setScan(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); void submit(); return; }
+              if (e.key === "Enter") { e.preventDefault(); submit(); return; }
               typeAsUsKeyboard(e);
             }}
             placeholder="סרוק מדבקת מארז"
@@ -117,6 +139,11 @@ export default function PackageScanIntakeDialog({
             className="pkg-field pkg-field--lg pkg-field--code"
             style={{ paddingRight: 44 }}
           />
+          {queued > 0 && (
+            <div role="status" style={{ marginTop: 6, fontSize: 12.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
+              {queued === 1 ? "מדבקה אחת ממתינה בתור" : `${queued} מדבקות ממתינות בתור`}
+            </div>
+          )}
         </div>
 
         {outcome && (

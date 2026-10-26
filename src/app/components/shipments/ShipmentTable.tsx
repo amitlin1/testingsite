@@ -26,6 +26,10 @@ const EM_DASH = "—";
  */
 type KpiKey = "total" | "pending" | "sent" | "inProcess" | "waitingStart" | "readyToSend";
 
+/** When the shipment entered the system; shipments saved before that was
+ *  recorded show the certificate's date. */
+const receivedOf = (s: Shipment) => s.received_at ?? s.shipment_date;
+
 const startedTesting = (s: Shipment) => (s.started_sampled_amount || 0) > 0;
 const isSampleDone = (s: Shipment) =>
     !s.is_sent && (s.sampled_amount || 0) > 0 && (s.finished_sampled_amount || 0) >= (s.sampled_amount || 0);
@@ -161,12 +165,12 @@ export default function ShipmentTable() {
             if (makatFilter.trim()) {
                 if (!row.makat?.toString().includes(makatFilter)) return false;
             }
-            // Date Range filter
+            // Date Range filter — on the receipt date the table shows.
             if (startDate) {
-                if (new Date(row.shipment_date) < new Date(startDate)) return false;
+                if (new Date(receivedOf(row)) < new Date(startDate)) return false;
             }
             if (endDate) {
-                if (new Date(row.shipment_date) > new Date(endDate)) return false;
+                if (new Date(receivedOf(row)) > new Date(endDate)) return false;
             }
             return true;
         });
@@ -298,7 +302,7 @@ export default function ShipmentTable() {
                 </span>
             ),
         },
-        { key: "date", header: "תאריך קבלה", nums: true, nowrap: true, cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{formatDate(r.shipment_date)}</span> },
+        { key: "date", header: "תאריך קבלה", nums: true, nowrap: true, cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{formatDate(receivedOf(r))}</span> },
         { key: "worker", header: "עובד מקבל", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.recieving_worker_name || EM_DASH}</span> },
         // Package model (docs/packages/PLAN.md §9.10): every count is boxes.
         { key: "amount", header: "מארזים שהוצהרו", align: "center", nums: true, cell: (r) => <span style={{ fontWeight: 700 }}>{r.amount}</span> },

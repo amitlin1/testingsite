@@ -143,7 +143,7 @@ try {
   const startedClose = await page.evaluate((head) => { const b = [...document.querySelectorAll("button")].filter((x) => (x.innerText || "").includes("התחל סגירת מארז")).find((x) => (x.parentElement?.innerText || "").replace(/\s/g, "").includes(head)); b?.click(); return !!b; }, E.slice(0, 14));
   check("E: closing wizard started from the card", startedClose);
   await sleep(1500);
-  await page.type('input[placeholder="סרוק את מדבקת הקופסה"]', "RULES-E-" + tag);
+  await page.type('input[placeholder="סרוק את מק״ט היצרן"]', "RULES-E-" + tag);
   await clickEnabled(page, "המשך");
   check("E: arrival step shows the stray item as לא הגיע with a decision button", await waitText(page, "לא הגיע") && await bodyHas(page, "נדרשת החלטה"));
   await shot(page, "61-close-arrival-missing");

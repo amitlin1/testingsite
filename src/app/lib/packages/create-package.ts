@@ -80,21 +80,36 @@ export type TemplateLine = {
 export const CHAR50 = (s: string | null | undefined) => (s ?? "").trim().slice(0, 50);
 
 export async function nextDailyPackageCounter(tx: TransactionClient, dateKey: string): Promise<number> {
-  // The row lock this upsert takes is held to commit, so two intakes running
-  // at once queue behind each other and can never mint the same prefix.
+  return reserveDailyPackageCounters(tx, dateKey, 1);
+}
+
+/**
+ * Reserves `count` consecutive values of the day's package counter in one
+ * statement and answers the first; the values are first .. first+count-1.
+ * The row lock this upsert takes is held to commit, so two savers running at
+ * once queue behind each other and can never mint the same prefix.
+ */
+export async function reserveDailyPackageCounters(tx: TransactionClient, dateKey: string, count: number): Promise<number> {
   const rows = await tx.$queryRaw<{ counter: number }[]>`
     INSERT INTO daily_counters (date_key, counter)
-    VALUES (${dateKey}::date, 1)
+    VALUES (${dateKey}::date, ${count})
     ON CONFLICT (date_key)
-    DO UPDATE SET counter = daily_counters.counter + 1
+    DO UPDATE SET counter = daily_counters.counter + ${count}
     RETURNING counter
   `;
-  const counter = Number(rows[0]?.counter);
-  if (!Number.isFinite(counter)) throw new Error("daily_counters returned no counter");
-  if (counter > MAX_DAILY_PACKAGES) {
-    throw new PackageError("DAILY_LIMIT", `נקלטו כבר ${MAX_DAILY_PACKAGES} מארזים היום — המונה היומי במזהה מלא`, 409);
+  const last = Number(rows[0]?.counter);
+  if (!Number.isFinite(last)) throw new Error("daily_counters returned no counter");
+  if (last > MAX_DAILY_PACKAGES) {
+    const left = Math.max(0, MAX_DAILY_PACKAGES - (last - count));
+    throw new PackageError(
+      "DAILY_LIMIT",
+      count === 1
+        ? `נקלטו כבר ${MAX_DAILY_PACKAGES} מארזים היום — המונה היומי במזהה מלא`
+        : `המונה היומי במזהה מאפשר עוד ${left} מארזים היום, והמשלוח צריך ${count}`,
+      409,
+    );
   }
-  return counter;
+  return last - count + 1;
 }
 
 export async function loadTemplate(tx: TransactionClient, packageTypeId: number): Promise<TemplateLine[]> {

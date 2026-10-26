@@ -1,8 +1,8 @@
 import { prisma, TransactionClient } from "@/app/lib/prisma";
 import { PackageError } from "./errors";
-import { serialKey, type SerialMatch } from "./serial-key";
+import { serialKey, serialProblem, type SerialMatch } from "./serial-key";
 
-export { serialKey, type SerialMatch };
+export { serialKey, serialProblem, type SerialMatch };
 
 /**
  * Serial numbers at intake. Two serials are the same label when they match
@@ -48,6 +48,8 @@ export async function assertSerialFreeForItem(
   const row = await tx.items.findUnique({ where: { item_id: itemId }, select: { shipment_id: true, item_type_id: true, serial_no: true } });
   const key = serialKey(serialNumber);
   if (!row || !key || (key === serialKey(row.serial_no) && itemType === row.item_type_id)) return;
+  const notSerial = serialProblem(serialNumber);
+  if (notSerial) throw new PackageError("ITEM_SERIAL_INVALID", notSerial, 400);
   const clash = (await findSerials(tx, [serialNumber])).find(
     (m) => m.shipment_id === row.shipment_id && m.item_type_id === itemType && m.item_id !== Number(itemId),
   );
@@ -70,6 +72,8 @@ export async function assertSerialsFree(
 
   const seen = new Map<string, number>();
   for (let i = 0; i < items.length; i++) {
+    const notSerial = serialProblem(items[i].serialNumber);
+    if (notSerial) throw new PackageError("ITEM_SERIAL_INVALID", `${desc(items[i].itemType)}: ${notSerial}`, 400, i);
     const key = serialKey(items[i].serialNumber);
     const first = seen.get(key);
     if (first != null) {

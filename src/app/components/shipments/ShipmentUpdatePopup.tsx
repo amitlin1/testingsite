@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
     Dialog,
     DialogTitle,
@@ -18,7 +18,9 @@ import { Shipment, NewShipment, Customers } from "@/types";
 import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
 import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
-import ShipmentLineScanDialog, { LineCertNote, placeScannedLines, scannedRows, type ShipmentLine } from "./ShipmentLineScanDialog";
+import { fmtId } from "@/app/components/packages/packageUi";
+import ShipmentLineScanDialog, { BIG_SHIPMENT, LineCertNote, declaredBoxes, lineIsEmpty, lineProblem, placeScannedLines, scannedRows, type ShipmentLine } from "./ShipmentLineScanDialog";
+import ShipmentDuplicateDialog, { duplicateOf, type DuplicateShipment } from "./ShipmentDuplicateDialog";
 import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
 
 type ShipmentUpdatePopupProps = {
@@ -27,6 +29,10 @@ type ShipmentUpdatePopupProps = {
     onUpdate: (success: boolean) => void;
     shipment: Shipment | null;
 };
+
+/** What a save would do to the boxes (PUT dry_run): pending boxes that go —
+ *  their labels stop being valid — and boxes re-minted for a new customer. */
+type BoxChanges = { removed: string[]; reminted: number };
 
 export default function ShipmentUpdatePopup({
     open,
@@ -45,6 +51,14 @@ export default function ShipmentUpdatePopup({
     // with the reason above the buttons; nothing typed is lost.
     const [submitError, setSubmitError] = useState<string | null>(null);
 
+    // The save would remove boxes or re-mint them: shown, and saved only on "אשר ושמור".
+    const [pending, setPending] = useState<BoxChanges | null>(null);
+    // The same certificate (number + customer) is already another shipment's.
+    const [duplicate, setDuplicate] = useState<DuplicateShipment | null>(null);
+    const allowDuplicateRef = useRef(false);
+    // A save that grows the shipment past BIG_SHIPMENT boxes asks once more.
+    const [confirmBig, setConfirmBig] = useState(false);
+
     // "עובד מקבל" — same rule as ShipmentInsertPopup (useShipmentWorker): only
     // a manager may change it; the server applies the same rule.
     const receiver = useShipmentWorker(workers);
@@ -56,6 +70,7 @@ export default function ShipmentUpdatePopup({
         watch,
         setValue,
         getValues,
+        trigger,
         formState: { errors, isValid, isSubmitting },
     } = useForm<NewShipment>({
         mode: "onChange",
@@ -70,15 +85,18 @@ export default function ShipmentUpdatePopup({
     // ShipmentInsertPopup. A row already on the shipment (saved with its
     // cert_row_raw) is not added twice.
     const [lineScanOpen, setLineScanOpen] = useState(false);
-    const addScannedLines = (lines: ShipmentLine[]) =>
+    const addScannedLines = (lines: ShipmentLine[]) => {
         placeScannedLines(getValues('shipment_items'), lines, { update, append });
+        void trigger('shipment_items');
+    };
 
-    // Auto-calculate total amount
+    // The declared total = Σ quantities of the started lines.
     const shipmentItems = watch("shipment_items");
+    const total = declaredBoxes(shipmentItems);
     useEffect(() => {
-        const total = shipmentItems?.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0) || 0;
         setValue("amount", total);
-    }, [shipmentItems, setValue]);
+        setConfirmBig(false);
+    }, [total, setValue]);
 
     useEffect(() => {
         let cancelled = false;
@@ -112,8 +130,10 @@ export default function ShipmentUpdatePopup({
 
     useEffect(() => {
         if (open && shipment) {
-            // Prepare initial shipment items. If new array exists use it, otherwise fallback to legacy single item type
-            let initialItems = shipment.shipment_items || [];
+            // Each saved line goes back with its id (line_id), so the server
+            // keeps that line's boxes. A legacy shipment without lines starts
+            // from its single item type.
+            let initialItems: ShipmentLine[] = (shipment.shipment_items || []).map(({ id, item_type_desc: _desc, ...line }) => ({ ...line, line_id: id ?? null }));
             if (initialItems.length === 0 && shipment.item_type_id) {
                 initialItems = [{
                     item_type_id: shipment.item_type_id,
@@ -136,6 +156,10 @@ export default function ShipmentUpdatePopup({
             });
             setSubmitError(null);
             setLineScanOpen(false);
+            setPending(null);
+            setDuplicate(null);
+            allowDuplicateRef.current = false;
+            setConfirmBig(false);
         }
     }, [open, shipment, reset]);
 
@@ -150,53 +174,109 @@ export default function ShipmentUpdatePopup({
     }, [open, receiverAlreadySet, receiver.selfId, receiver.selfName, setValue]);
     const receiverBlocked = receiver.blocked && !receiverAlreadySet;
 
-    const onSubmit = async (data: NewShipment) => {
+    // The customer is in every box id. Once a box was taken in it stays the
+    // shipment's customer (the server refuses the change too); before that a
+    // change re-mints the boxes, so their labels are printed again.
+    const customerLocked = (shipment?.sampled_amount ?? 0) > 0;
+    const customerChanged = shipment != null && watch("customer_id") !== shipment.customer_id;
+
+    // Could this save take boxes away or re-mint them? Then the server is asked
+    // first (dry_run) and the worker sees which labels stop being valid.
+    const mayDropBoxes = (lines: ShipmentLine[]): boolean => {
+        if (!shipment) return false;
+        if (customerChanged) return true;
+        const byId = new Map(lines.filter((l) => l.line_id != null).map((l) => [l.line_id, l]));
+        return (shipment.shipment_items ?? []).some((old) => {
+            const now = old.id != null ? byId.get(old.id) : undefined;
+            return !now || now.item_type_id !== old.item_type_id || Number(now.quantity) < old.quantity;
+        });
+    };
+
+    const put = (payload: object) => apiFetch(`/api/shipments/${shipment!.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+
+    const buildPayload = (data: NewShipment, validItems: ShipmentLine[]) => ({
+        ...data,
+        amount: declaredBoxes(validItems),
+        shipment_date: data.shipment_date ? new Date(data.shipment_date).toISOString() : null,
+        shipment_items: validItems,
+        // Legacy support
+        item_type_id: validItems[0]?.item_type_id || null,
+        allow_duplicate: allowDuplicateRef.current,
+        // Every saved line goes back with its line_id: a line without one is new.
+        line_ids: true,
+    });
+
+    /** Sends the edit; `confirmed` = the worker already saw what it does to the boxes. */
+    const onSubmit = async (data: NewShipment, confirmed = false) => {
         if (!shipment) return;
         setSubmitError(null);
+        // A started line that is not whole stops the save — it is never
+        // dropped quietly; only an untouched blank row is left out.
+        const lines = data.shipment_items ?? [];
+        const bad = lines.findIndex((l) => lineProblem(l) != null);
+        if (bad >= 0) {
+            setSubmitError(`שורה ${bad + 1}: ${lineProblem(lines[bad])}`);
+            void trigger('shipment_items');
+            return;
+        }
+        const validItems = lines.filter((l) => !lineIsEmpty(l));
+        if (validItems.length === 0) {
+            setSubmitError("יש להוסיף לפחות סוג מארז אחד עם כמות.");
+            return;
+        }
+        const totalAmount = declaredBoxes(validItems);
+        if (totalAmount > BIG_SHIPMENT && totalAmount > (shipment.amount ?? 0) && !confirmBig) {
+            setConfirmBig(true);
+            return;
+        }
+
         // The dialog closes only once the server has accepted the change; a
-        // refusal (or a form with no package line) keeps everything typed.
+        // refusal keeps everything typed.
         let saved = false;
         try {
-            // Filter out empty rows
-            const validItems = data.shipment_items?.filter(i => i.item_type_id && i.quantity > 0) || [];
-
-            if (validItems.length === 0) {
-                setSubmitError("יש להוסיף לפחות סוג מארז אחד עם כמות.");
-                return;
+            const payload = buildPayload(data, validItems);
+            if (!confirmed && mayDropBoxes(validItems)) {
+                const dry = await put({ ...payload, dry_run: true });
+                if (!dry.ok) {
+                    const existing = await duplicateOf(dry);
+                    if (existing) setDuplicate(existing);
+                    else setSubmitError(await serverErrorMessage(dry, "השינויים לא נשמרו. בדוק את הפרטים ונסה שוב."));
+                    return;
+                }
+                const plan = (await dry.json().catch(() => null))?.boxes as BoxChanges | undefined;
+                if (plan && (plan.removed.length > 0 || plan.reminted > 0)) {
+                    setPending(plan);
+                    return;
+                }
             }
 
-            // Recalculate total amount to ensure it is up to date with any immediate changes
-            const totalAmount = validItems.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0);
-
-            const payload = {
-                ...data,
-                amount: totalAmount, // Use the calculated total
-                shipment_date: data.shipment_date ? new Date(data.shipment_date).toISOString() : null,
-                shipment_items: validItems,
-                // Legacy support
-                item_type_id: validItems[0]?.item_type_id || null
-            };
-
-            const res = await apiFetch(`/api/shipments/${shipment.id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-
+            const res = await put(payload);
             if (res.ok) {
                 saved = true;
             } else {
-                setSubmitError(await serverErrorMessage(res, "השינויים לא נשמרו. בדוק את הפרטים ונסה שוב."));
+                const existing = await duplicateOf(res);
+                if (existing) setDuplicate(existing);
+                else setSubmitError(await serverErrorMessage(res, "השינויים לא נשמרו. בדוק את הפרטים ונסה שוב."));
             }
         } catch (error) {
             console.error(error);
             setSubmitError(NETWORK_ERROR);
         } finally {
             if (saved) {
+                setPending(null);
                 onUpdate(true);
                 onClose();
             }
         }
+    };
+
+    const confirmPending = () => {
+        setPending(null);
+        void handleSubmit((data) => onSubmit(data, true))();
     };
 
     return (
@@ -214,9 +294,19 @@ export default function ShipmentUpdatePopup({
                 onClose={() => setLineScanOpen(false)}
                 itemTypes={itemTypes}
                 takenRows={scannedRows(shipmentItems)}
+                shipmentCode={watch("shipment_code")}
                 onConfirm={addScannedLines}
             />
-            <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+            <ShipmentDuplicateDialog
+                duplicate={duplicate}
+                onCancel={() => setDuplicate(null)}
+                onConfirm={() => {
+                    setDuplicate(null);
+                    allowDuplicateRef.current = true;
+                    void handleSubmit((data) => onSubmit(data))();
+                }}
+            />
+            <form onSubmit={handleSubmit((data) => onSubmit(data))} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
                     {receiverBlocked && (
                         <Alert severity="error" sx={{ mb: 2 }}>
@@ -258,6 +348,7 @@ export default function ShipmentUpdatePopup({
                                         label="קוד לקוח"
                                         required
                                         options={customers}
+                                        disabled={customerLocked}
                                         getOptionLabel={(option) => option.customer_code}
                                         isOptionEqualToValue={(o, v) => o.id === v.id}
                                         value={customers.find((c) => c.id === value) || null}
@@ -268,6 +359,11 @@ export default function ShipmentUpdatePopup({
                                     />
                                 )}
                             />
+                            {customerLocked ? (
+                                <div className="sh-field-helper">מארזים מהמשלוח כבר נקלטו — אי אפשר לשנות את הלקוח</div>
+                            ) : customerChanged && (shipment?.total_items ?? 0) > 0 && (
+                                <div className="sh-field-helper" style={{ color: "var(--color-warning-ink)" }}>שינוי הלקוח מחליף את מזהי המארזים — יש להדפיס את המדבקות מחדש</div>
+                            )}
                         </div>
                         <div>
                             <Controller
@@ -361,16 +457,24 @@ export default function ShipmentUpdatePopup({
                                     <Controller
                                         name={`shipment_items.${index}.item_type_id` as const}
                                         control={control}
-                                        rules={{ required: true }}
+                                        rules={{
+                                            // A started line needs its type; 0 is "none", not a type.
+                                            validate: (_v, values) => {
+                                                const line = values.shipment_items?.[index];
+                                                return lineIsEmpty(line) || line?.item_type_id ? true : "יש לבחור סוג מארז";
+                                            },
+                                            deps: [`shipment_items.${index}.quantity`],
+                                        }}
                                         render={({ field: { onChange, value } }) => (
                                             <SearchableCombobox<{ id: number; name: string }>
                                                 options={itemTypes}
                                                 getOptionLabel={(option) => option.name}
                                                 isOptionEqualToValue={(o, v) => o.id === v.id}
                                                 value={itemTypes.find((t) => t.id === value) || null}
-                                                onChange={(newValue) => onChange(newValue?.id ?? null)}
+                                                onChange={(newValue) => onChange(newValue?.id ?? 0)}
                                                 placeholder="סוג מארז"
                                                 error={!!errors.shipment_items?.[index]?.item_type_id}
+                                                helperText={errors.shipment_items?.[index]?.item_type_id?.message}
                                             />
                                         )}
                                     />
@@ -380,7 +484,15 @@ export default function ShipmentUpdatePopup({
                                 <Controller
                                     name={`shipment_items.${index}.quantity` as const}
                                     control={control}
-                                    rules={{ required: true, min: 1 }}
+                                    rules={{
+                                        validate: (_v, values) => {
+                                            const line = values.shipment_items?.[index];
+                                            if (lineIsEmpty(line)) return true;
+                                            const qty = Number(line?.quantity);
+                                            return Number.isInteger(qty) && qty >= 1 ? true : "מינימום 1";
+                                        },
+                                        deps: [`shipment_items.${index}.item_type_id`],
+                                    }}
                                     render={({ field }) => (
                                         <TextField
                                             {...field}
@@ -390,8 +502,10 @@ export default function ShipmentUpdatePopup({
                                             size="small"
                                             fullWidth
                                             inputProps={{ "aria-label": `כמות, שורה ${index + 1}`, style: { fontVariantNumeric: "tabular-nums" } }}
-                                            onChange={(e) => field.onChange(Number(e.target.value))}
+                                            value={field.value === 0 ? '' : field.value ?? ''}
+                                            onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
                                             error={!!errors.shipment_items?.[index]?.quantity}
+                                            helperText={errors.shipment_items?.[index]?.quantity?.message}
                                         />
                                     )}
                                 />
@@ -407,27 +521,55 @@ export default function ShipmentUpdatePopup({
                     {/* Auto-calculated total = Σ quantities */}
                     <div style={{ marginTop: "var(--space-md)", display: 'flex', justifyContent: 'flex-end', fontSize: "var(--text-body-sm)", fontWeight: 600 }}>
                         <span>
-                            סה״כ מארזים (מחושב): <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{watch("amount") || 0}</span>
+                            סה״כ מארזים (מחושב): <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{total}</span>
                         </span>
                     </div>
                 </DialogContent>
-                {submitError && (
+                {(submitError || pending || confirmBig) && (
                     <div style={{ padding: "0 var(--space-lg) var(--space-sm)" }}>
-                        <Alert severity="error">{submitError}</Alert>
+                        {submitError ? (
+                            <Alert severity="error">{submitError}</Alert>
+                        ) : pending ? (
+                            <Alert severity="warning">
+                                {pending.removed.length > 0 && (
+                                    <div>
+                                        השמירה תמחק {pending.removed.length === 1 ? "מארז אחד שממתין" : `${pending.removed.length} מארזים שממתינים`} לקליטה. אם המדבקה כבר הודבקה — יש להסיר אותה מהקופסה:
+                                        <div dir="ltr" style={{ marginTop: 4, fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
+                                            {pending.removed.map((id) => { const { head, suffix } = fmtId(id); return `${head} ${suffix}`; }).join(" · ")}
+                                        </div>
+                                    </div>
+                                )}
+                                {pending.reminted > 0 && (
+                                    <div style={{ marginTop: pending.removed.length > 0 ? 6 : 0 }}>
+                                        {pending.reminted === 1 ? "מזהה של מארז אחד יוחלף" : `המזהים של ${pending.reminted} מארזים יוחלפו`} בגלל שינוי הלקוח — יש להדפיס את המדבקות מחדש.
+                                    </div>
+                                )}
+                            </Alert>
+                        ) : (
+                            <Alert severity="warning">
+                                המשלוח יכלול {total} מארזים. אם הכמות נכונה, לחץ שוב על &quot;עדכן&quot;.
+                            </Alert>
+                        )}
                     </div>
                 )}
                 <DialogActions>
-                    <Button onClick={onClose} variant="outlined" color="inherit">
+                    <Button onClick={pending ? () => setPending(null) : onClose} variant="outlined" color="inherit">
                         ביטול
                     </Button>
-                    <Button
-                        type="submit"
-                        disabled={!isValid || receiverBlocked}
-                        loading={isSubmitting}
-                        variant="contained"
-                    >
-                        עדכן
-                    </Button>
+                    {pending ? (
+                        <Button onClick={confirmPending} loading={isSubmitting} variant="contained">
+                            אשר ושמור
+                        </Button>
+                    ) : (
+                        <Button
+                            type="submit"
+                            disabled={!isValid || receiverBlocked}
+                            loading={isSubmitting}
+                            variant="contained"
+                        >
+                            עדכן
+                        </Button>
+                    )}
                 </DialogActions>
             </form>
         </Dialog>

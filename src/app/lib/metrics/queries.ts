@@ -1457,17 +1457,21 @@ SELECT s.id AS entity_id, TRIM(s.shipment_code) AS entity_code,
        round(100.0 * count(DISTINCT rr.unit_id) / NULLIF(s.amount, 0), 1)      AS coverage_pct,
        -- receipt-to-shipment: the shipping moment lives on shipments
        -- (written in shipment-history/route.ts:81), not on route_run — a
-       -- shipment leaves long after its last run closes. shipment_date is
-       -- Timestamp(6) without a zone (§7.1), hence the explicit conversion.
+       -- shipment leaves long after its last run closes. Receipt is
+       -- received_at, the moment the shipment entered the system (timestamptz);
+       -- shipment_date is the certificate's own date, midnight of a day that
+       -- can be days earlier, so it stands in only for shipments saved before
+       -- received_at was recorded. It is Timestamp(6) without a zone (§7.1),
+       -- hence the explicit conversion.
        -- Same NULL trap as the route turnaround above: a shipment that has not
        -- left yet has finished_at IS NULL, and work_seconds_between would answer
        -- 0 while the wall column correctly answers NULL. Guarded so an unshipped
        -- shipment reads "not shipped yet" on BOTH clocks.
-       CASE WHEN s.finished_at IS NULL OR s.shipment_date IS NULL THEN NULL
-            ELSE EXTRACT(EPOCH FROM (s.finished_at - (s.shipment_date AT TIME ZONE 'UTC')))/60
+       CASE WHEN s.finished_at IS NULL OR COALESCE(s.received_at, s.shipment_date AT TIME ZONE 'UTC') IS NULL THEN NULL
+            ELSE EXTRACT(EPOCH FROM (s.finished_at - COALESCE(s.received_at, s.shipment_date AT TIME ZONE 'UTC')))/60
        END                                                                           AS ship_turnaround_wall_min,
-       CASE WHEN s.finished_at IS NULL OR s.shipment_date IS NULL THEN NULL
-            ELSE work_seconds_between((s.shipment_date AT TIME ZONE 'UTC'), s.finished_at)/60
+       CASE WHEN s.finished_at IS NULL OR COALESCE(s.received_at, s.shipment_date AT TIME ZONE 'UTC') IS NULL THEN NULL
+            ELSE work_seconds_between(COALESCE(s.received_at, s.shipment_date AT TIME ZONE 'UTC'), s.finished_at)/60
        END                                                                           AS ship_turnaround_work_min
 FROM shipments s
 JOIN customers c ON c.id = s.customer_id
