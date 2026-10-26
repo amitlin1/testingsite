@@ -26,6 +26,7 @@ import "./testing.css";
 import { toneOfStatus, TONE_DOT } from "@/app/lib/status-tones";
 import { useGlobalScanner } from "./useGlobalScanner";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
+import type { NextStationResult } from "../../types";
 import { apiFetch } from "@/lib/api/client";
 import { newActionId } from "@/app/lib/metrics/action-id";
 import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
@@ -1021,7 +1022,7 @@ function TestingPageView() {
     }
   };
 
-  const handleSubmitTestResult = async (testData: Record<string, any>) => {
+  const handleSubmitTestResult = async (testData: Record<string, any>): Promise<NextStationResult | void> => {
     if (!selectedItem || !selectedStation) return;
     const routeStepsLength = selectedItem.route_steps?.length || 0;
     if (routeStepsLength === 0) throw new Error("Route steps information is missing.");
@@ -1072,10 +1073,10 @@ function TestingPageView() {
     // Refresh items list
     handleRefreshItems();
 
-    // A package wizard has its own "done" step (opened → items continue on
-    // their routes / closed → package done), so the next-station dialog would
-    // only say something misleading about the box.
-    if (selectedItem.is_package) return;
+    // A package wizard has its own "done" step, which names where the box and
+    // each of its items go next (from this answer and the items' own); the
+    // next-station dialog would only say something misleading about the box.
+    if (selectedItem.is_package) return result;
 
     // Handle research response
     if (testData.sendToResearch && result.recommendedResearchStation) {
@@ -1094,6 +1095,7 @@ function TestingPageView() {
       });
       setNextStationDialogOpen(true);
     }
+    return result;
   };
 
   // Dock all-stations pick: the station goes into the URL.

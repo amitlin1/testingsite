@@ -71,12 +71,6 @@ export const UNDRAWN_TEXT = {
   // a single-item route's map (kind "item", spec §5.4.1 "לא אומת"): a package-level
   // step's fields live on the kit's route, so its cell is "—" with this tooltip.
   packageLevelOnItemRoute: "השדות של עמדה ברמת מארז מוגדרים במפת המארז",
-  // the group line under each option of the "מסלול" combobox. The spec groups the
-  // list "מארזים" / "פריטים" (§5.2, not drawn — the artboards draw the closed field only); a
-  // subtitle per option carries it, in the words the app already uses for a kit and an item ("מארז"
-  // — the kit Tag of the item-types and packages screens; "פריט").
-  routeGroupKit: "מארז",
-  routeGroupItem: "פריט",
   // a number setting (מינימום / מקסימום / ערך ייחוס / סטייה מותרת ±%) holding text that
   // is not a number (spec §5.15 "ערך לא מספרי", not drawn) — the worker's own words for the same
   // case under a number field (artboards 14 and 6, RANGE_WORD.nan in src/app/testing/fields/labels.ts).
@@ -145,7 +139,7 @@ export function publishedPillText(version: number): string {
 /** The page header (spec §5.1, §5.2; artboards 1, 11). */
 export const HEADER_TEXT = {
   title: "מסלולי בדיקה",
-  subtitle: "הגדרת סדר העמדות והשדות שהעובד ממלא בכל עמדה, לפי סוג פריט או מארז.",
+  subtitle: "הגדרת סדר העמדות והשדות שהעובד ממלא בכל עמדה, לכל סוג מארז ולפריטים שבו.",
   /** Artboard 11: the pill when no route of the map holds a field. */
   noFields: "ללא שדות",
   /** Artboard 11: beside the disabled publish button (its aria-describedby). */
@@ -187,18 +181,82 @@ export const VIEW_TAB_TEXT = {
 /** Spec §5.2: the context card (artboards 1, 11). */
 export const CONTEXT_CARD_TEXT = {
   sectionLabel: "מסלול נבחר",
-  routeLabel: "מסלול",
   openPackages: "פתח במסך המארזים",
   shortcuts: "קיצורי מקלדת",
 } as const;
+
+/**
+ * Choosing a route (2026-10-26, Amit): the context card picks a package type, then one of its route
+ * numbers — an item type is never picked there; "שלבי המסלול" then picks the box itself or one of
+ * the items of its template. No artboard draws any of this: worded here, not yet approved.
+ */
+export const ROUTE_PICK_TEXT = {
+  typeLabel: "סוג מארז",
+  typePlaceholder: "בחר סוג מארז…",
+  routeLabel: "מספר מסלול",
+  routePlaceholder: "בחר מסלול…",
+  /** A package type's subtitle in the list while it has no route. */
+  noRoutes: "אין מסלול עדיין",
+  /** A route number's subtitle: the package type's default_route_number. */
+  defaultRoute: "ברירת מחדל",
+  /** The subtitle of the number without a route, offered at the end of the list. */
+  newRoute: "חדש — ייווצר בשמירה",
+} as const;
+
+/** A route number in the "מספר מסלול" list and value: "מסלול {r}". */
+export function routeNumberText(routeNumber: number): string {
+  return "מסלול " + routeNumber;
+}
+
+/** A package type's subtitle in the "סוג מארז" list: how many routes it has. */
+export function kitRoutesText(n: number): string {
+  if (n === 0) return ROUTE_PICK_TEXT.noRoutes;
+  return n === 1 ? UNDRAWN_TEXT.routesOne : n + " מסלולים";
+}
+
+/** A route number's subtitle: its steps ("4 עמדות"), and whether it is the kit's default. */
+export function routeNumberSubText(stations: number, isDefault: boolean): string {
+  const count = stations === 0 ? STEPS_PARTS_TEXT.noSteps : stations === 1 ? UNDRAWN_TEXT.stationsOne : stations + " עמדות";
+  return isDefault ? count + " · " + ROUTE_PICK_TEXT.defaultRoute : count;
+}
+
+/** "שלבי המסלול": the parts of the kit (the box and its template lines) beside the steps editor. */
+export const STEPS_PARTS_TEXT = {
+  navLabel: "חלקי המארז",
+  box: "המארז עצמו",
+  items: "פריטים במארז",
+  noLines: "לסוג המארז אין תכולה עדיין.",
+  editContents: "עריכת התכולה",
+  noSteps: "ללא עמדות",
+  /** A part's sub-line while its route does not exist: "מסלול {r} · טרם נוצר". */
+  notCreated: "טרם נוצר",
+  newRoute: "מסלול חדש — ייווצר בשמירה",
+  dirty: "לא נשמר",
+  /** The editor's note under an item's title: where its route number comes from. */
+  itemRouteFrom: "מספר המסלול של הפריט נקבע בתכולת המארז.",
+  /** Under the rule a step list breaks (route-rules.ts' reason before it). */
+  ruleTail: "אפשר לשמור, אבל קליטת מארז מהסוג הזה תיחסם עד שהמסלול יתוקן.",
+  loadFailed: "טעינת תכולת המארז נכשלה. בדוק את החיבור לשרת ונסה שוב.",
+} as const;
+
+/** The steps editor's title: "שלבי המארז" / "שלבי {item}". */
+export function stepsTitleText(item: string | null): string {
+  return item == null ? "שלבי המארז" : "שלבי " + item;
+}
+
+/** A shared item route in the steps editor (the map's "משותף" notice, about steps): "מסלול {r} של
+ *  {item} משמש גם ב: {kits}. שינוי בשלבים יחול גם שם." */
+export function sharedStepsNoticeText(routeNumber: number, item: string, kits: readonly string[]): string {
+  return "מסלול " + routeNumber + " של " + item + " משמש גם ב: " + kits.join(", ") + ". שינוי בשלבים יחול גם שם.";
+}
 
 /** The route combobox value, artboards 1, 11: "{type} · מסלול {r}" ("מארז עמדת עבודה · מסלול 1"). */
 export function routeOptionText(typeDesc: string, routeNumber: number): string {
   return typeDesc + " · מסלול " + routeNumber;
 }
 
-/** No route chosen and none remembered (spec §5.2) — the existing text of page.tsx. */
-export const NO_ROUTE_TEXT = "בחר סוג פריט ומספר מסלול";
+/** No route chosen and none remembered (spec §5.2). */
+export const NO_ROUTE_TEXT = "בחר סוג מארז ומספר מסלול";
 
 // ---- the map: rows, columns, cells (artboards 1, 11) ---------------------------------------------
 /** The two fixed rows of a kit's map (spec §5.4.1). */

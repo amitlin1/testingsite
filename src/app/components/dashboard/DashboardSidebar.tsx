@@ -12,16 +12,18 @@
 // the fields are hidden — and one press on it opens the rail again. The state
 // is one localStorage key and survives a reload (§12.6).
 //
-// Every field has a real <label>; a field that carries a value is told apart
-// from a focused one (dashboard.css `.dash-field--set` vs `:focus`); the
-// current tab is `aria-current="page"`; the switch is the app's ui Switch.
+// Every field has a real <label>; a text field that carries a value is told
+// apart from a focused one (dashboard.css `.dash-field--set` vs `:focus`); the
+// pickers are the app's SearchableCombobox (dense, 34px — one combobox across
+// the app), whose value and × say a filter is on; the current tab is
+// `aria-current="page"`; the switch is the app's ui Switch.
 
 import * as React from "react";
 
 import { Switch } from "@/components/ui";
+import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import {
   AccessTime,
-  ArrowDropDown,
   BarChart,
   Business,
   Category,
@@ -309,7 +311,7 @@ export default function DashboardSidebar({
           </div>
         )}
 
-        <SelectField
+        <ComboField
           id={id("customer")}
           label="לקוח"
           value={state.filters.customerId}
@@ -318,7 +320,7 @@ export default function DashboardSidebar({
           options={options.customers.map((c: CustomerOption) => ({ id: c.id, name: c.name }))}
         />
 
-        <SelectField
+        <ComboField
           id={id("shipment")}
           label="משלוח"
           value={state.filters.shipmentId}
@@ -327,7 +329,7 @@ export default function DashboardSidebar({
           options={shipmentOptions(options.shipments, state.filters.showAllHistory === true)}
         />
 
-        <SelectField
+        <ComboField
           id={id("type")}
           label="סוג פריט"
           value={state.filters.itemTypeId}
@@ -337,7 +339,7 @@ export default function DashboardSidebar({
         />
 
         {EXTRAS[state.tab].includes("stationType") && (
-          <SelectField
+          <ComboField
             id={id("stationType")}
             label="סוג עמדה"
             value={state.filters.testStationTypeId}
@@ -348,7 +350,7 @@ export default function DashboardSidebar({
         )}
 
         {EXTRAS[state.tab].includes("station") && (
-          <SelectField
+          <ComboField
             id={id("station")}
             label="עמדה"
             value={state.filters.testStationId}
@@ -380,30 +382,30 @@ export default function DashboardSidebar({
         )}
 
         {EXTRAS[state.tab].includes("status") && (
-          <Field id={id("status")} label="סטטוס">
-            <NativeSelect
-              id={id("status")}
-              value={state.filters.status}
-              set={state.filters.status !== "all"}
-              onChange={(v) => setFilter("status", v as StatusFilter)}
-              items={STATUS_OPTIONS.map((s) => ({ value: s.value, label: s.label }))}
-            />
-          </Field>
+          // "all" is no filter: the empty field (its placeholder), cleared by ×.
+          <ComboField
+            id={id("status")}
+            label="סטטוס"
+            value={state.filters.status === "all" ? null : state.filters.status}
+            onChange={(v) => setFilter("status", (v ?? "all") as StatusFilter)}
+            placeholder="הכל"
+            options={STATUS_OPTIONS.filter((s) => s.value !== "all").map((s) => ({ id: s.value, name: s.label }))}
+          />
         )}
 
         {EXTRAS[state.tab].includes("shipmentScope") && (
-          <Field id={id("scope")} label="סטטוס משלוח">
-            <NativeSelect
-              id={id("scope")}
-              value={state.filters.showAllHistory ? "all" : "open"}
-              set={state.filters.showAllHistory === true}
-              onChange={(v) => setFilter("showAllHistory", v === "all")}
-              items={[
-                { value: "open", label: "פתוחים בלבד" },
-                { value: "all", label: "הכל" },
-              ]}
-            />
-          </Field>
+          <ComboField
+            id={id("scope")}
+            label="סטטוס משלוח"
+            value={state.filters.showAllHistory ? "all" : "open"}
+            onChange={(v) => setFilter("showAllHistory", v === "all")}
+            placeholder="פתוחים בלבד"
+            options={[
+              { id: "open", name: "פתוחים בלבד" },
+              { id: "all", name: "הכל" },
+            ]}
+            required
+          />
         )}
 
         {/* The app's Switch (focus ring, 3:1 off track, the RTL thumb travel
@@ -479,79 +481,42 @@ function Field({ id, label, children }: { id: string; label: string; children: R
   );
 }
 
-function NativeSelect({
-  id,
-  value,
-  set,
-  onChange,
-  items,
-}: {
-  id: string;
-  value: string;
-  set: boolean;
-  onChange: (value: string) => void;
-  items: Array<{ value: string; label: string }>;
-}) {
-  return (
-    <div style={{ position: "relative" }}>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={fieldClass(set)}
-        style={{ color: set ? "var(--color-ink)" : "var(--color-ink-muted-48)" }}
-      >
-        {items.map((item) => (
-          <option key={item.value} value={item.value}>
-            {item.label}
-          </option>
-        ))}
-      </select>
-      <span
-        className="dash-icon"
-        aria-hidden
-        style={{
-          position: "absolute",
-          // The select reserves its 28px at the inline END for this caret; at
-          // the start it sat on the first letters of the selected value.
-          insetInlineEnd: 9,
-          top: 9,
-          color: "var(--color-ink-muted-48)",
-          pointerEvents: "none",
-        }}
-      >
-        <ArrowDropDown fontSize={14} />
-      </span>
-    </div>
-  );
-}
-
-function SelectField({
+/**
+ * A picker of the rail: the app's SearchableCombobox (type to filter, the
+ * shared list and check), dense at 34px to sit in the 248px rail. Empty =
+ * no filter, its placeholder says what that means ("כל הלקוחות"); × clears it.
+ * `required` pickers always hold a value and have no ×.
+ */
+function ComboField<K extends string | number>({
   id,
   label,
   value,
   onChange,
   placeholder,
   options,
+  required = false,
 }: {
   id: string;
   label: string;
-  value: number | null;
-  onChange: (value: number | null) => void;
+  value: K | null;
+  onChange: (value: K | null) => void;
   placeholder: string;
-  options: Array<{ id: number; name: string }>;
+  options: Array<{ id: K; name: string }>;
+  required?: boolean;
 }) {
   return (
     <Field id={id} label={label}>
-      <NativeSelect
+      <SearchableCombobox<{ id: K; name: string }>
         id={id}
-        value={value === null ? "" : String(value)}
-        set={value !== null}
-        onChange={(v) => onChange(v === "" ? null : Number(v))}
-        items={[
-          { value: "", label: placeholder },
-          ...options.map((o) => ({ value: String(o.id), label: o.name })),
-        ]}
+        options={options}
+        value={options.find((o) => o.id === value) ?? null}
+        onChange={(o) => onChange(o ? o.id : null)}
+        getOptionLabel={(o) => o.name}
+        isOptionEqualToValue={(a, b) => a.id === b.id}
+        placeholder={placeholder}
+        dense
+        denseHeight={34}
+        disableClearable={required}
       />
     </Field>
   );

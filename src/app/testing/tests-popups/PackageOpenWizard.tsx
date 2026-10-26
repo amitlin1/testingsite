@@ -14,6 +14,7 @@ import { ExpectedContents, ExpectedReference } from "./PackageReferenceViews";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import { OpeningContents, boxDetailsOf, contentsProblem, rowsFromItems, saveContents, type ContentRow } from "./OpeningContents";
 import { playCue } from "@/app/components/packages/scanSound";
+import { NextStationList, nextStopOf, type NextStop, type NextStopRow } from "./nextStation";
 import {
   AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, RED, RED_BG, seq2,
 } from "@/app/components/packages/packageUi";
@@ -133,6 +134,10 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
   const submitIdRef = React.useRef<string | null>(null);
   const committedRef = React.useRef<Set<string>>(new Set());
+  // Each item's next station, from its own result's answer (kept across a retry
+  // of "הדפס וסיים"), and the done step's rows once the box's answer is in.
+  const nextStopsRef = React.useRef<Map<string, NextStop>>(new Map());
+  const [doneRows, setDoneRows] = React.useState<NextStopRow[]>([]);
   const uid = React.useId();
 
   // ---- station fields (route-fields spec §4.11.3) ---------------------------
@@ -162,6 +167,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
     const sent = pkg.items.filter(leftOpening).map((it) => it.item_id);
     setWork(Object.fromEntries(sent.map((id) => [id, { ...freshWork(), done: true }])));
     submitIdRef.current = null; committedRef.current = new Set(sent);
+    nextStopsRef.current = new Map(); setDoneRows([]);
     resetBoxFields();
     apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
   }, [open, pkg, resetBoxFields]);
@@ -395,9 +401,10 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           if (shouldReloadFields(d)) reloadFields();
           throw new Error(`שמירת הפריט ${it.serial_no ?? seq2(it.package_seq)} נכשלה${d?.error ? ` — ${d.error}` : ` (${res.status})`}`);
         }
+        nextStopsRef.current.set(it.item_id, nextStopOf(await res.json().catch(() => null)));
         committedRef.current.add(it.item_id);
       }
-      await onSubmit({
+      const boxResult = await onSubmit({
         Result: boxPass ? 1 : 0, Passed: boxPass, Comments: boxPhotos.note || undefined, WorkerID: workerId ?? undefined, SubmitID: submitId,
         Details: {
           sku: scan.trim(), hasRU: boxHasRU,
@@ -408,6 +415,19 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
           ...(fieldsCfg ? boxFx.toBlock({ ...fieldsCfg.schema, target: "box" }, { ok: boxPhotos.ok }) : {}),
         },
       });
+      // The box waits at its next (closing) station until its items come back; each item goes
+      // on to its own. An item an earlier opening sent on has no answer here: where it is now.
+      const boxStop = nextStopOf(boxResult);
+      setDoneRows([
+        { key: "box", badge: "00", label: pkg.item_type_desc, stop: boxStop, note: boxStop.kind === "station" ? "ממתין לפריטי המארז" : undefined },
+        ...items.map((it) => ({
+          key: it.item_id,
+          badge: seq2(it.package_seq),
+          label: it.item_type_desc,
+          stop: nextStopsRef.current.get(it.item_id)
+            ?? (it.station_name && it.station_name !== "—" ? { kind: "station" as const, name: it.station_name } : { kind: "unknown" as const }),
+        })),
+      ]);
       setStep(STEPS.length - 1);
     } catch (e) {
       // The box's 409 arrives as the Error page.tsx throws, carrying the body's code.
@@ -640,6 +660,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               {items.map((it) => <span key={it.item_id} title={`${seq2(it.package_seq)} · ${it.item_type_desc}`} style={{ width: 30, height: 10, borderRadius: 3, background: itemPass(it) ? BLUE : GREY }} />)}
             </div>
             <div style={{ fontSize: 12.5, color: MUTED, marginTop: 9, fontVariantNumeric: "tabular-nums" }}>{items.length} פריטים נפתחו · {pkg.item_type_desc}</div>
+            <NextStationList rows={doneRows} />
           </div>
         )}
       </PackageWizardShell>

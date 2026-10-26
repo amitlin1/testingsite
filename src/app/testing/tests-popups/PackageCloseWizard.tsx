@@ -19,6 +19,7 @@ import { buildFieldsBlock, inputFieldCount, useFieldsState, type Drafts } from "
 import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
 import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
 import PackageDecisionDialog, { type PackDecision } from "./PackageDecisionDialog";
+import { NextStationList, nextStopOf, type NextStop, type NextStopRow } from "./nextStation";
 import { ScanField, useReferenceLookup } from "./referenceScan";
 import {
   AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, HAIR, HAIR_2, INK, INK_2, MUTED, RED, RED_BG, seq2,
@@ -95,6 +96,10 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   const [error, setError] = React.useState<string | null>(null);
   const submitIdRef = React.useRef<string | null>(null);
   const committedRef = React.useRef<Set<string>>(new Set());
+  // Each packed item's next station, from its own result's answer (kept across a retry of "סגור
+  // מארז"), and the done step's rows once the box's answer is in.
+  const nextStopsRef = React.useRef<Map<string, NextStop>>(new Map());
+  const [doneRows, setDoneRows] = React.useState<NextStopRow[]>([]);
   const noteId = React.useId();
 
   // Station fields: the kit's answer (the popup opens on the box row → mode "package"), the box's
@@ -109,6 +114,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
     if (!open) return;
     setStep(0); setScan(pkg?.opening_sku ?? ""); setPacked({}); setDecisions({}); setDecideFor(null); setChecks(CHECKS.map(() => false)); setNote("");
     setSubmitting(false); setError(null); submitIdRef.current = null; committedRef.current = new Set();
+    nextStopsRef.current = new Map(); setDoneRows([]);
     setItemDrafts({}); resetBoxFields();
   }, [open, pkg, resetBoxFields]);
 
@@ -221,9 +227,10 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
           if (shouldReloadFields(d)) sf.reload();
           throw new Error(`שמירת הפריט ${it.serial_no ?? seq2(it.package_seq)} נכשלה${d?.error ? ` — ${d.error}` : ` (${res.status})`}`);
         }
+        nextStopsRef.current.set(it.item_id, nextStopOf(await res.json().catch(() => null)));
         committedRef.current.add(it.item_id);
       }
-      await onSubmit({
+      const boxResult = await onSubmit({
         Result: anyMissing ? 0 : 1, Passed: !anyMissing, Comments: note || undefined, WorkerID: workerId ?? undefined, SubmitID: submitId,
         Details: {
           sku: scan.trim(), hasRU: boxLookup.ref?.hasRU ?? null, closing: true, checks: CHECKS.map((label, i) => ({ label, ok: checks[i] })), note,
@@ -237,6 +244,14 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
           ...(kitFields ? boxFx.toBlock({ ...kitFields.schema, target: "box" }, {}) : {}),
         },
       });
+      // The closing is the last step of the box's route and of its items' (PLAN §4), so this
+      // is normally one "no next station" line; a route drawn otherwise names its station.
+      setDoneRows([
+        { key: "box", badge: "00", label: pkg.item_type_desc, stop: nextStopOf(boxResult) },
+        ...items.filter((it) => nextStopsRef.current.has(it.item_id)).map((it) => ({
+          key: it.item_id, badge: seq2(it.package_seq), label: it.item_type_desc, stop: nextStopsRef.current.get(it.item_id)!,
+        })),
+      ]);
       setStep(STEPS.length - 1);
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : "שגיאה בשמירת סגירת המארז");
@@ -380,6 +395,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
               {items.map((it) => <span key={it.item_id} title={`${seq2(it.package_seq)} · ${it.item_type_desc}`} style={{ width: 30, height: 10, borderRadius: 3, background: decisions[it.item_id]?.decision === "missing" ? RED : GREEN }} />)}
             </div>
             <div style={{ fontSize: 12.5, color: MUTED, marginTop: 9, fontVariantNumeric: "tabular-nums" }}>{items.filter((it) => decisions[it.item_id]?.decision !== "missing").length} פריטים נארזו · {pkg.item_type_desc}</div>
+            <NextStationList rows={doneRows} />
           </div>
         )}
       </PackageWizardShell>

@@ -46,6 +46,45 @@ type TestResultRequest = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** A replay's next station: where the item is assigned now, in the shape of the
+ *  original answer (isLastStation / nextStation). Best effort — a failed read
+ *  answers nothing, and the client then says it does not know. */
+async function whereItemIsNow(itemId: bigint): Promise<Record<string, unknown>> {
+  try {
+    const rows = await prisma.$queryRaw<{
+      is_finished: boolean;
+      current_status: number;
+      current_route_step: number;
+      test_station_id: number | null;
+      test_station_desc: string | null;
+      test_station_type_id: number | null;
+    }[]>`
+      SELECT ir.is_finished, ir.current_status, ir.current_route_step, ir.test_station_id,
+             ts.test_station_desc, ts.test_station_type_id
+      FROM item_routes ir
+      LEFT JOIN test_stations ts ON ts.test_station_id = ir.test_station_id
+      WHERE ir.item_id = ${itemId}
+      LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) return {};
+    if (row.is_finished || row.current_status === 3) return { isLastStation: true };
+    if (row.test_station_id == null || row.test_station_type_id == null) return {};
+    return {
+      isLastStation: false,
+      nextStation: {
+        testStationId: row.test_station_id,
+        testStationDesc: (row.test_station_desc ?? "").trim(),
+        stationTypeId: row.test_station_type_id,
+        routeStep: row.current_route_step,
+      },
+    };
+  } catch (error) {
+    console.error("Error reading where a replayed item is now:", error);
+    return {};
+  }
+}
+
 export async function POST(req: Request) {
   // Write-path schema gate (§8 stage 3): refuse loudly when the DB is behind
   // this image, instead of failing mid-transaction with an opaque 500.
@@ -935,8 +974,10 @@ export async function POST(req: Request) {
     // A recognised replay: the original submit already committed, nothing was
     // written this time. Answer 200 so a retrying client stops retrying — the
     // work it asked for IS done — and mark it so a caller that cares can tell.
+    // The original answer's next station is gone with its response, so this one
+    // says where the item is now: the worker still sees where it goes next.
     if ("replay" in txResult) {
-      return NextResponse.json({ ok: true, success: true, replay: true });
+      return NextResponse.json({ ok: true, success: true, replay: true, ...(await whereItemIsNow(itemIdBig)) });
     }
 
     const responseData: any = {
