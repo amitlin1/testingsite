@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { CircleCheck, ClipboardCheck, Info, LayoutTemplate } from "lucide-react";
+import { AlertTriangle, CircleCheck, ClipboardCheck, Info, LayoutTemplate } from "lucide-react";
 import { Button, Tag } from "@/components/ui";
 import { GATE_FINISH_ON_REQUIRED } from "@/app/lib/station-fields/evaluate";
 import { SUGGEST_PREFIX_DIALOG, statusA } from "@/app/lib/station-fields/labels";
@@ -79,6 +79,10 @@ export type WorkerPreviewCardProps = {
   packageWizard?: PackageWizard;
   /** popupKind "template": the station type, for the link to its template. */
   stationTypeId?: number;
+  /** popupKind "package": the role of the station type's package template, if it has one — the
+   *  note says the popup is the template's, or, when the step's wizard is the other role, that the
+   *  wizard opens here (popup-templates PLAN.md §5, step 2.6). */
+  packageTemplateRole?: "opening" | "closing" | null;
 };
 
 /** The variant whose behaviour the rows take (fieldsBlockModel VARIANT_SPEC): artboard 12, 13, 14,
@@ -151,7 +155,8 @@ function focusRowAfter(rows: HTMLElement | null, id: FieldId) {
 }
 
 export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
-  const { stationLabel, rowLabel, stepIndex, stepCount, fields, popupKind, stationTypeName, packageWizard, stationTypeId } = p;
+  const { stationLabel, rowLabel, stepIndex, stepCount, fields, popupKind, stationTypeName, packageWizard, stationTypeId, packageTemplateRole } = p;
+  const packageTemplateFits = packageTemplateRole != null && (packageTemplateRole === "closing") === (packageWizard === "close");
   const variant = rowVariantOf(popupKind, packageWizard);
   const prefix = React.useId();
   const frameTitleId = `${prefix}-pv-frame`;
@@ -224,11 +229,14 @@ export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
           </div>
           {scanStep && <span className="rf-pv-step">{previewStepText(stepIndex, stepCount)}</span>}
         </div>
-        {popupKind === "template" && (
+        {(popupKind === "template" || (popupKind === "package" && packageTemplateRole != null)) && (
           <div className="rf-pv-plan">
-            <LayoutTemplate size={15} strokeWidth={1.75} aria-hidden />
+            {popupKind === "package" && !packageTemplateFits
+              ? <AlertTriangle size={15} strokeWidth={1.75} aria-hidden />
+              : <LayoutTemplate size={15} strokeWidth={1.75} aria-hidden />}
             <span>
-              {EDITOR_UNDRAWN_TEXT.templateNote}{" "}
+              {popupKind === "template" ? EDITOR_UNDRAWN_TEXT.templateNote
+                : packageTemplateFits ? EDITOR_UNDRAWN_TEXT.packageTemplateNote : EDITOR_UNDRAWN_TEXT.packageTemplateMismatch}{" "}
               {stationTypeId != null && <Link href={`/settings/popup-templates?type=${stationTypeId}`} className="sh-link">{EDITOR_UNDRAWN_TEXT.templateLink}</Link>}
             </span>
           </div>

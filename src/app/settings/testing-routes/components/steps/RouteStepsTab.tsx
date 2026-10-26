@@ -8,6 +8,8 @@ import { apiFetch } from "@/lib/api/client";
 import { checkItemRouteAgainstPackage, checkPackageRoute } from "@/app/lib/packages/route-rules";
 import type { RouteShape } from "@/app/lib/packages/route-rules";
 import type { ContextLineJson, FieldsContextJson } from "@/app/lib/station-fields/admin-types";
+import { roleAtStep } from "@/app/lib/popup-templates/placement";
+import { usePopupTemplateTypes } from "../../lib/usePopupTemplateTypes";
 import { SharedRouteNotice } from "../editor/SharedRouteNotice";
 import { useDraftStore } from "../../lib/draftStore";
 import type { FieldsContextState } from "../../lib/useFieldsContext";
@@ -317,6 +319,13 @@ async function fetchRoute(typeId: number, routeNumber: number): Promise<RouteDat
 function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps) {
   const store = useDraftStore();
   const { typeId, routeNumber } = target;
+  // The box's own route: a package-level step's template plays the role of its place (placement.ts).
+  const templates = usePopupTemplateTypes();
+  const templateRoleAt = (stepTypeId: number, index: number, count: number) => {
+    if (target.name != null) return null;
+    const role = templates?.get(stepTypeId)?.role ?? null;
+    return role ? { role, fits: role === roleAtStep(index, count) } : null;
+  };
 
   // Route Data
   const [loadingRoute, setLoadingRoute] = useState(true);
@@ -501,17 +510,21 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
                 <>
                   {steps.map((step, index) => {
                     const name = getStationName(step.typeId);
+                    const packageLevel = stationTypes.find((t) => t.id === step.typeId)?.packageLevel ?? false;
+                    const tpl = packageLevel ? templateRoleAt(step.typeId, index, steps.length) : null;
                     return (
                       // The uid is the step's identity; a step added here (no uid yet) is keyed
                       // by its place until the save gives it one. Never an index-derived uid.
-                      <div key={step.uid ?? `new-${index}`} className="route-step">
+                      <React.Fragment key={step.uid ?? `new-${index}`}>
+                      <div className="route-step">
                         <span className="route-step__num">{index + 1}</span>
                         <span style={{ flex: 1, fontSize: "var(--text-body-sm)", fontWeight: 600, color: "var(--color-ink)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
                           {name}
-                          {stationTypes.find((t) => t.id === step.typeId)?.packageLevel && (
+                          {packageLevel && (
                             // design/Settings.dc.html — a package-level step (opening / closing) is marked on the route.
                             <Tag tone="primary">עמדה ברמת מארז</Tag>
                           )}
+                          {tpl && <Tag tone={tpl.fits ? "neutral" : "warning"}>{STEPS_PARTS_TEXT.templateRole(tpl.role)}</Tag>}
                         </span>
                         <IconButton size="small" className="route-step__btn" title={`הקדם את ${name}`} disabled={index === 0} onClick={() => handleMoveStep(index, "up")}>
                           <ArrowUp size={15} strokeWidth={1.9} aria-hidden />
@@ -523,6 +536,16 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
                           <X size={15} strokeWidth={1.9} aria-hidden />
                         </IconButton>
                       </div>
+                      {tpl && !tpl.fits && (
+                        <div role="note" className="rf-steps__tpl-warn">
+                          <AlertTriangle size={15} strokeWidth={1.9} aria-hidden />
+                          <span>
+                            {STEPS_PARTS_TEXT.templateRoleMismatch(tpl.role)}{" "}
+                            <Link href={`/settings/popup-templates?type=${step.typeId}`} className="sh-link">{STEPS_PARTS_TEXT.templateLink}</Link>
+                          </span>
+                        </div>
+                      )}
+                      </React.Fragment>
                     );
                   })}
                   {steps.length === 0 && (

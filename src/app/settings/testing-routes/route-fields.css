@@ -138,6 +138,19 @@
 }
 .rf-steps__from { font-size: var(--text-small); color: var(--color-ink-muted-48); }
 .rf-steps__from-link { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+/* A package-level step whose template plays the other role (popup-templates PLAN.md §5, step 2.6). */
+.rf-steps__tpl-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: -2px 0 2px;
+  padding: 8px 12px;
+  font-size: var(--text-small);
+  color: var(--color-warning-ink);
+  background: var(--color-warning-bg);
+  border-radius: var(--r-md);
+}
+.rf-steps__tpl-warn svg { flex: none; margin-top: 2px; }
 .rf-context-card__tags {
   display: flex;
   align-items: center;

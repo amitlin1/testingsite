@@ -95,7 +95,7 @@ export type StationFieldEditorProps = {
 
 /** Which popup a station type opens on the worker screen (mainPopUp.ts — the one source), and
  *  whether its station type has a popup template (it wins; usePopupTemplateTypes). */
-function popupLookup(templateTypes: ReadonlySet<number> | null): PopupLookup {
+function popupLookup(templateTypes: ReadonlyMap<number, unknown> | null): PopupLookup {
   return {
     hasWizard: hasStartTestDialog,
     isVerdict: (typeId) => getStartTestDialog(typeId) === VerdictStation,
@@ -440,6 +440,7 @@ function CellEditor({
             stationTypeName={stationTypeName}
             packageWizard={wizard ?? undefined}
             stationTypeId={stepMeta.station_type_id}
+            packageTemplateRole={popupKind === "package" ? templateTypes?.get(stepMeta.station_type_id)?.role ?? null : null}
           />
           {popover?.kind === "picker" && <div className="sfe-preview-col__veil" aria-hidden="true" />}
         </div>

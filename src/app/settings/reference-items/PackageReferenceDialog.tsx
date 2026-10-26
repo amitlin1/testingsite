@@ -7,6 +7,7 @@ import {
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import ReferenceItemFields from "./ReferenceItemFields";
+import { OPENING_PHOTO_CODES } from "@/app/lib/popup-templates/codePopups";
 import {
   checkDraft, draftOf, draftPayload, isComplete, revokeDraftUrls, startUploadType,
   type FieldErrors, type FieldKey, type ItemDraft, type ItemType, type PhotoType, type ReferenceItem, type TemplateLine,
@@ -51,9 +52,18 @@ export default function PackageReferenceDialog({ packageType, editing, lines, ph
   onSaved: () => void;
 }) {
   const fallbackPhoto = photoTypes[0]?.code ?? "";
-  const [box, setBox] = React.useState<ItemDraft>(() => draftOf(editing, startUploadType(photoTypes, "package"), fallbackPhoto));
+  // The station types whose photo components the form lists first. A member is photographed at the
+  // box's own stations too — the opening template's item flow (docs/popup-templates/PLAN.md §5) — so
+  // they count for it beside its own route's; null (the routes did not load) shows every station.
+  const relevantStationTypesOf = (memberTypeId: number | null): ReadonlySet<number> | null => {
+    const boxTypes = stationTypesOf?.(packageType.item_type_id) ?? null;
+    if (memberTypeId == null) return boxTypes;
+    const own = stationTypesOf?.(memberTypeId) ?? null;
+    return own && boxTypes ? new Set([...own, ...boxTypes]) : null;
+  };
+  const [box, setBox] = React.useState<ItemDraft>(() => draftOf(editing, startUploadType(photoTypes, OPENING_PHOTO_CODES.box), fallbackPhoto));
   const [members, setMembers] = React.useState<Record<number, ItemDraft | null>>(() =>
-    Object.fromEntries((editing?.members ?? []).map((m) => [m.item_type_id, draftOf(m, startUploadType(photoTypes, "product"), fallbackPhoto)])));
+    Object.fromEntries((editing?.members ?? []).map((m) => [m.item_type_id, draftOf(m, startUploadType(photoTypes, OPENING_PHOTO_CODES.item), fallbackPhoto)])));
   const [sel, setSel] = React.useState<Sel>("box");
   const [errors, setErrors] = React.useState<Record<string, FieldErrors>>({});
   const [formError, setFormError] = React.useState("");
@@ -95,7 +105,7 @@ export default function PackageReferenceDialog({ packageType, editing, lines, ph
   };
 
   const addMember = (typeId: number) =>
-    setMembers((all) => ({ ...all, [typeId]: draftOf(null, startUploadType(photoTypes, "product"), fallbackPhoto) }));
+    setMembers((all) => ({ ...all, [typeId]: draftOf(null, startUploadType(photoTypes, OPENING_PHOTO_CODES.item), fallbackPhoto) }));
   const removeMember = (typeId: number) => {
     revokeDraftUrls(members[typeId] ?? null);
     setMembers((all) => ({ ...all, [typeId]: null }));
@@ -274,7 +284,7 @@ export default function PackageReferenceDialog({ packageType, editing, lines, ph
                     errors={errors[keyOf(sel)] ?? {}}
                     onClearError={clearError(sel)}
                     photoTypes={photoTypes}
-                    relevantStationTypes={stationTypesOf?.(sel === "box" ? packageType.item_type_id : selRow?.typeId ?? packageType.item_type_id) ?? null}
+                    relevantStationTypes={relevantStationTypesOf(sel === "box" ? null : selRow?.typeId ?? null)}
                     typeField={
                       <TextField
                         id={`pkg-${keyOf(sel)}-type`}

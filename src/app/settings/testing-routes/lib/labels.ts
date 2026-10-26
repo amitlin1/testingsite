@@ -237,6 +237,13 @@ export const STEPS_PARTS_TEXT = {
   /** Under the rule a step list breaks (route-rules.ts' reason before it). */
   ruleTail: "אפשר לשמור, אבל קליטת מארז מהסוג הזה תיחסם עד שהמסלול יתוקן.",
   loadFailed: "טעינת תכולת המארז נכשלה. בדוק את החיבור לשרת ונסה שוב.",
+  /** A package-level step whose station type has a package template (popup-templates PLAN.md §5,
+   *  step 2.6): the role it plays, and when its place calls for the other one. Not approved yet. */
+  templateRole: (role: "opening" | "closing") => (role === "opening" ? "תבנית פתיחה" : "תבנית סגירה"),
+  templateRoleMismatch: (role: "opening" | "closing") => (role === "opening"
+    ? "לעמדה יש תבנית פתיחה, אבל כאן היא סוגרת את המארז. כאן ייפתח אשף הסגירה של היום."
+    : "לעמדה יש תבנית סגירה, אבל כאן היא פותחת את המארז. כאן ייפתח אשף הפתיחה של היום."),
+  templateLink: "פתח את תבנית החלון",
 } as const;
 
 /** The steps editor's title: "שלבי המארז" / "שלבי {item}". */
@@ -654,6 +661,9 @@ export const EDITOR_UNDRAWN_TEXT = {
   lockedTopTemplate: "רכיבי תבנית החלון שלפני השדות · נקבעים בתבניות חלון",
   lockedBottomTemplate: "פסק דין · תמיד אחרון",
   templateNote: "החלון בעמדה הזו נבנה מתבנית החלון של סוג העמדה. השדות מופיעים במקום שהתבנית קובעת.",
+  // a package-level step whose station type has a package template (PLAN.md §5, step 2.6).
+  packageTemplateNote: "החלון בעמדה הזו נבנה מתבנית החלון של סוג העמדה, על בסיס האשף של המארז.",
+  packageTemplateMismatch: "לעמדה יש תבנית בתפקיד אחר מזה של הצעד הזה במסלול, ולכן כאן ייפתח האשף של היום.",
   templateLink: "פתח את תבנית החלון",
   lockedBottomDialog: "הערות נוספות · 'שמור וסיים' · תמיד אחרון",
   // the locked rows of a package-level step (spec §5.5.2 ב/ה "לא אומת לעורך"), in the
