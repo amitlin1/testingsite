@@ -10,6 +10,10 @@ export const runtime = "nodejs";
  * photos; code addresses a group by the stable `code`, never by the numeric id.
  * Active types only, unless `?all=1` — a test station keeps tagging its captures
  * with its group even after the type is hidden from the pickers.
+ *
+ * A group a popup template's photo component owns (docs/popup-templates/PLAN.md
+ * §3.4) carries its station type: station_type_id / station_type_desc, so the
+ * reference-items page can list it under its station. Both null = no owner.
  */
 export async function GET(request: Request) {
   try {
@@ -17,9 +21,16 @@ export async function GET(request: Request) {
     const rows = await prisma.photo_types.findMany({
       where: all ? {} : { is_active: true },
       orderBy: { sort_order: "asc" },
-      select: { photo_type_id: true, code: true, photo_type_desc: true, sort_order: true },
+      select: {
+        photo_type_id: true, code: true, photo_type_desc: true, sort_order: true,
+        test_station_type_id: true, test_stations_type: { select: { test_type_desc: true } },
+      },
     });
-    return NextResponse.json(rows);
+    return NextResponse.json(rows.map(({ test_station_type_id, test_stations_type, ...r }) => ({
+      ...r,
+      station_type_id: test_station_type_id,
+      station_type_desc: test_stations_type?.test_type_desc.trim() ?? null,
+    })));
   } catch (error) {
     console.error("Error fetching photo types:", error);
     // A real error, never an empty list (route-fields spec §11-12): every caller

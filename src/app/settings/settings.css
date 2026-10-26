@@ -344,6 +344,28 @@
   .ri-chip:hover { border-color: var(--color-primary); }
 }
 .ri-chip[aria-pressed="true"] { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+/* "העלאה אל:" — the unowned groups, then one row per station type with its photo
+   components (docs/popup-templates/PLAN.md §3.4); other stations fold away. */
+.ri-upload { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.ri-upload-row { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; }
+.ri-upload-row__station {
+  min-width: 96px;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink);
+}
+.ri-upload-more {
+  align-self: flex-start;
+  font: inherit;
+  font-size: var(--text-small);
+  color: var(--color-primary);
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.ri-upload-more:disabled { color: var(--color-ink-muted-48); cursor: default; }
+.ri-upload-more:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; border-radius: var(--r-xs); }
 /* The drop zone opens the file picker by click or keyboard. */
 .ri-drop {
   display: flex;

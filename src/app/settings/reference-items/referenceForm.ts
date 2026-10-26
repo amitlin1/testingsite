@@ -16,6 +16,9 @@ export interface PhotoType {
   code: string;
   photo_type_desc: string;
   sort_order: number;
+  /** The station type whose popup template owns the group (its photo component); null = none. */
+  station_type_id?: number | null;
+  station_type_desc?: string | null;
 }
 
 export interface RefImage {

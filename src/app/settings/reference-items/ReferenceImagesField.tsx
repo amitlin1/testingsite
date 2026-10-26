@@ -12,10 +12,25 @@ import type { FormImage, PhotoType } from "./referenceForm";
  * ("צילום אריזה" / "צילום פריט" / ...), the drop zone, and the thumbnails
  * grouped by photo type, with the cover star. States (hover / focus / drag)
  * live in settings.css (.ri-*).
+ *
+ * "העלאה אל:" lists the groups no template owns first, then each station type's
+ * photo components (docs/popup-templates/PLAN.md §3.4) under the station's name.
+ * With `relevantStationTypes` (the station types on the item type's routes), the
+ * other stations' components fold behind "עמדות נוספות" — open while the chosen
+ * group is one of them.
  */
-export default function ReferenceImagesField({ idPrefix, photoTypes, images, primaryKey, uploadType, onUploadType, onAddFiles, onRemove, onPrimary }: {
+
+/** A component's own title: its group's description without the "{station} · " the server adds. */
+function componentTitle(pt: PhotoType): string {
+  const prefix = pt.station_type_desc ? `${pt.station_type_desc} · ` : "";
+  return prefix && pt.photo_type_desc.startsWith(prefix) ? pt.photo_type_desc.slice(prefix.length) : pt.photo_type_desc;
+}
+
+export default function ReferenceImagesField({ idPrefix, photoTypes, images, primaryKey, uploadType, onUploadType, onAddFiles, onRemove, onPrimary, relevantStationTypes }: {
   idPrefix: string;
   photoTypes: PhotoType[];
+  /** The station types on the item type's routes; null / absent = every station shows. */
+  relevantStationTypes?: ReadonlySet<number> | null;
   images: FormImage[];
   primaryKey: string | null;
   uploadType: string;
@@ -25,8 +40,30 @@ export default function ReferenceImagesField({ idPrefix, photoTypes, images, pri
   onPrimary: (key: string) => void;
 }) {
   const [dragOver, setDragOver] = React.useState(false);
+  const [showOthers, setShowOthers] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
   const labelId = `${idPrefix}-images-label`;
+
+  // "העלאה אל:" — the unowned groups, then one row per station type with its photo components.
+  const general = photoTypes.filter((pt) => pt.station_type_id == null);
+  const stations = [...new Map(photoTypes.filter((pt) => pt.station_type_id != null)
+    .map((pt) => [pt.station_type_id as number, pt.station_type_desc ?? ""])).entries()]
+    .map(([id, name]) => ({ id, name, groups: photoTypes.filter((pt) => pt.station_type_id === id) }));
+  const isRelevant = (id: number) => !relevantStationTypes || relevantStationTypes.has(id);
+  const relevant = stations.filter((s) => isRelevant(s.id));
+  const others = stations.filter((s) => !isRelevant(s.id));
+  const chosenAmongOthers = others.some((s) => s.groups.some((pt) => pt.code === uploadType));
+  const chip = (pt: PhotoType, label: string) => (
+    <button key={pt.code} type="button" className="ri-chip" aria-pressed={pt.code === uploadType} onClick={() => onUploadType(pt.code)}>
+      {label}
+    </button>
+  );
+  const stationRow = (s: { id: number; name: string; groups: PhotoType[] }) => (
+    <div key={s.id} className="ri-upload-row">
+      <span className="ri-upload-row__station">{s.name}</span>
+      {s.groups.map((pt) => chip(pt, componentTitle(pt)))}
+    </div>
+  );
 
   // Thumbnails grouped by photo type — one section per group so it's obvious
   // which reference set each image belongs to.
@@ -45,13 +82,21 @@ export default function ReferenceImagesField({ idPrefix, photoTypes, images, pri
 
       {/* Photo-group selector: newly-added files are tagged with the active group. */}
       {photoTypes.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", marginBottom: 10, flexWrap: "wrap" }}>
-          <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>העלאה אל:</span>
-          {photoTypes.map((pt) => (
-            <button key={pt.code} type="button" className="ri-chip" aria-pressed={pt.code === uploadType} onClick={() => onUploadType(pt.code)}>
-              {pt.photo_type_desc}
-            </button>
-          ))}
+        <div className="ri-upload">
+          <div className="ri-upload-row">
+            <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>העלאה אל:</span>
+            {general.map((pt) => chip(pt, pt.photo_type_desc))}
+          </div>
+          {relevant.map(stationRow)}
+          {others.length > 0 && (
+            <>
+              <button type="button" className="ri-upload-more" aria-expanded={showOthers || chosenAmongOthers}
+                onClick={() => setShowOthers((v) => !v)} disabled={chosenAmongOthers}>
+                עמדות נוספות ({others.length})
+              </button>
+              {(showOthers || chosenAmongOthers) && others.map(stationRow)}
+            </>
+          )}
         </div>
       )}
 

@@ -38,8 +38,10 @@ const STATUS: Record<Status, { label: string; tone: TagTone }> = {
 
 const MUTED = "var(--color-ink-muted-48)";
 
-export default function PackageReferenceDialog({ packageType, editing, lines, photoTypes, onClose, onSaved }: {
+export default function PackageReferenceDialog({ packageType, editing, lines, photoTypes, stationTypesOf, onClose, onSaved }: {
   packageType: ItemType;
+  /** The station types on an item type's routes (null = unknown): their photo components lead. */
+  stationTypesOf?: (itemTypeId: number) => ReadonlySet<number> | null;
   /** The package reference being edited; null for a new one. */
   editing: ReferenceItem | null;
   /** The package type's contents. */
@@ -272,6 +274,7 @@ export default function PackageReferenceDialog({ packageType, editing, lines, ph
                     errors={errors[keyOf(sel)] ?? {}}
                     onClearError={clearError(sel)}
                     photoTypes={photoTypes}
+                    relevantStationTypes={stationTypesOf?.(sel === "box" ? packageType.item_type_id : selRow?.typeId ?? packageType.item_type_id) ?? null}
                     typeField={
                       <TextField
                         id={`pkg-${keyOf(sel)}-type`}
