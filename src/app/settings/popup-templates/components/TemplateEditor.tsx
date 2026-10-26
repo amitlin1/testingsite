@@ -38,6 +38,18 @@ export type TemplateEditorProps = {
   onDirty: (dirty: boolean) => void;
 };
 
+/** A station type's template: null when it has none, "error" when it could not be read. */
+async function readTemplate(typeId: number): Promise<PopupTemplateJson | null | "error"> {
+  try {
+    const res = await apiFetch(`/api/settings/popup-templates/${typeId}`);
+    if (res.status === 404) return null;
+    if (!res.ok) return "error";
+    return (await res.json()) as PopupTemplateJson;
+  } catch {
+    return "error";
+  }
+}
+
 export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, onDirty }: TemplateEditorProps) {
   const [load, setLoad] = React.useState<Load>({ status: "loading" });
   const [draft, setDraft] = React.useState<PopupTemplateConfig | null>(null);
@@ -50,23 +62,24 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
   const [notice, setNotice] = React.useState<{ text: string; severity: "success" | "error"; seq: number } | null>(null);
   const say = (text: string, severity: "success" | "error" = "success") => setNotice((n) => ({ text, severity, seq: (n?.seq ?? 0) + 1 }));
 
-  const fetchTemplate = React.useCallback(async () => {
+  // Read (readTemplate), then applied in the promise's callback, so nothing is set in an effect's
+  // own body; a reload ("נסה שוב", "טען מחדש") first shows loading.
+  const applyRead = React.useCallback((read: PopupTemplateJson | null | "error") => {
+    if (read === "error") { setLoad({ status: "error" }); return; }
+    setLoad({ status: "ready", saved: read });
+    setDraft(read?.config ?? null);
+  }, []);
+  React.useEffect(() => {
+    let alive = true;
+    readTemplate(type.id).then((read) => { if (alive) applyRead(read); });
+    return () => { alive = false; };
+  }, [type.id, applyRead]);
+  const reload = () => {
     setLoad({ status: "loading" });
     setConflict(false);
     setServerIssues(null);
-    try {
-      const res = await apiFetch(`/api/settings/popup-templates/${type.id}`);
-      if (res.status === 404) { setLoad({ status: "ready", saved: null }); setDraft(null); return; }
-      if (!res.ok) throw new Error(String(res.status));
-      const saved = (await res.json()) as PopupTemplateJson;
-      setLoad({ status: "ready", saved });
-      setDraft(saved.config);
-    } catch {
-      setLoad({ status: "error" });
-    }
-  }, [type.id]);
-
-  React.useEffect(() => { void fetchTemplate(); }, [fetchTemplate]);
+    readTemplate(type.id).then(applyRead);
+  };
 
   const saved = load.status === "ready" ? load.saved : null;
   const dirty = draft != null && !sameConfig(draft, saved?.config ?? null);
@@ -136,7 +149,7 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
     body = (
       <div className="settings-error">
         <Alert severity="error">{EDITOR_TEXT.loadFailed}</Alert>
-        <Button variant="outlined" color="inherit" size="small" onClick={() => void fetchTemplate()}>{EDITOR_TEXT.retry}</Button>
+        <Button variant="outlined" color="inherit" size="small" onClick={reload}>{EDITOR_TEXT.retry}</Button>
       </div>
     );
   } else if (!draft) {
@@ -156,7 +169,7 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, onSaved, 
         {conflict && (
           <div className="settings-error" style={{ padding: 0 }}>
             <Alert severity="warning">{EDITOR_TEXT.conflict}</Alert>
-            <Button variant="outlined" color="inherit" size="small" onClick={() => void fetchTemplate()}>{EDITOR_TEXT.reload}</Button>
+            <Button variant="outlined" color="inherit" size="small" onClick={reload}>{EDITOR_TEXT.reload}</Button>
           </div>
         )}
         {templateIssues(shownIssues).length > 0 && (

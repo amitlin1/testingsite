@@ -301,6 +301,19 @@ type StepsEditorProps = {
   notice: React.ReactNode;
 };
 
+/** A route's row (GET /api/settings/testing-routes?itemTypeId=&routeNumber=): the route, null when
+ *  it does not exist yet, "error" when it could not be read. */
+async function fetchRoute(typeId: number, routeNumber: number): Promise<RouteData | null | "error"> {
+  try {
+    const res = await apiFetch(`/api/settings/testing-routes?itemTypeId=${typeId}&routeNumber=${routeNumber}`);
+    if (!res.ok) return "error";
+    const data = await res.json();
+    return Array.isArray(data) && data.length > 0 ? (data[0] as RouteData) : null;
+  } catch {
+    return "error";
+  }
+}
+
 function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps) {
   const store = useDraftStore();
   const { typeId, routeNumber } = target;
@@ -329,40 +342,30 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
     return () => { alive.current = false; };
   }, []);
 
-  // Load Route
-  const loadRoute = useCallback(async () => {
-    setLoadingRoute(true);
-    setRouteError(false);
-    try {
-      const res = await apiFetch(`/api/settings/testing-routes?itemTypeId=${typeId}&routeNumber=${routeNumber}`);
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      const data = await res.json();
-      if (!alive.current) return;
-
-      if (Array.isArray(data) && data.length > 0) {
-        const found = data[0] as RouteData;
-        setCurrentRoute(found);
-        setLoadedSteps(stepsOf(found));
-        setSteps(stepsOf(found));
-        setIsNew(false);
-      } else {
-        setCurrentRoute(null);
-        setLoadedSteps([]);
-        setSteps([]);
-        setIsNew(true);
-      }
-    } catch {
-      if (alive.current) setRouteError(true);
-    } finally {
-      if (alive.current) setLoadingRoute(false);
+  // Load Route — read (fetchRoute), then applied in the promise's callback: the editor is keyed by
+  // its route and starts loading, so nothing is set in an effect's own body. "נסה שוב" shows
+  // loading first (retryRoute).
+  const applyRoute = useCallback((found: RouteData | null | "error") => {
+    if (!alive.current) return;
+    if (found === "error") {
+      setRouteError(true);
+    } else {
+      setCurrentRoute(found);
+      setLoadedSteps(found ? stepsOf(found) : []);
+      setSteps(found ? stepsOf(found) : []);
+      setIsNew(found == null);
     }
-  }, [typeId, routeNumber]);
+    setLoadingRoute(false);
+  }, []);
 
   useEffect(() => {
-    void loadRoute();
-  }, [loadRoute]);
+    fetchRoute(typeId, routeNumber).then(applyRoute);
+  }, [typeId, routeNumber, applyRoute]);
+  const retryRoute = () => {
+    setLoadingRoute(true);
+    setRouteError(false);
+    fetchRoute(typeId, routeNumber).then(applyRoute);
+  };
 
   // Editor Actions — on { uid, typeId } steps: the uid moves with its step.
   const handleAddStep = () => {
@@ -475,7 +478,7 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
         {routeError ? (
           <div className="settings-error" style={{ padding: 0 }}>
             <Alert severity="error">טעינת המסלול נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
-            <Button variant="outlined" color="inherit" size="small" onClick={loadRoute}>נסה שוב</Button>
+            <Button variant="outlined" color="inherit" size="small" onClick={retryRoute}>נסה שוב</Button>
           </div>
         ) : (
           <>

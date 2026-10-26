@@ -36,29 +36,29 @@ import {
 export default function TemplateStation(props: StationTestDialogProps & { fallback: React.ComponentType<StationTestDialogProps> }) {
   const { open, onClose, station, fallback: Fallback, ...rest } = props;
   const typeId = station.test_station_type_id;
-  const [load, setLoad] = React.useState<
-    { status: "loading" } | { status: "ready"; tpl: PopupTemplateJson } | { status: "none" } | { status: "error" }
-  >({ status: "loading" });
   const [attempt, setAttempt] = React.useState(0);
+  // The answer is kept with the request it answers: a new request (another type, a retry) reads as
+  // loading until its own answer lands — no state reset inside the effect.
+  const key = open ? `${typeId}:${attempt}` : "";
+  const [answer, setAnswer] = React.useState<{ key: string; load: TemplateLoad } | null>(null);
+  const load: TemplateLoad = answer?.key === key ? answer.load : { status: "loading" };
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!key) return;
     let cancelled = false;
-    setLoad({ status: "loading" });
+    const settle = (l: TemplateLoad) => { if (!cancelled) setAnswer({ key, load: l }); };
     apiFetch(`/api/settings/popup-templates/${typeId}`)
       .then(async (res) => {
-        if (cancelled) return;
-        if (res.status === 404) { setLoad({ status: "none" }); return; }
+        if (res.status === 404) { settle({ status: "none" }); return; }
         if (!res.ok) throw new Error(String(res.status));
-        const tpl = (await res.json()) as PopupTemplateJson;
-        if (!cancelled) setLoad({ status: "ready", tpl });
+        settle({ status: "ready", tpl: (await res.json()) as PopupTemplateJson });
       })
-      .catch(() => { if (!cancelled) setLoad({ status: "error" }); });
+      .catch(() => settle({ status: "error" }));
     return () => { cancelled = true; };
-  }, [open, typeId, attempt]);
+  }, [key, typeId]);
 
   if (load.status === "none") return <Fallback open={open} onClose={onClose} station={station} {...rest} />;
-  if (load.status === "ready") return <TemplatePopup open={open} onClose={onClose} station={station} {...rest} template={load.tpl} />;
+  if (load.status === "ready") return <TemplatePopup key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={load.tpl} />;
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle onClose={onClose}>{station.test_station_desc}</DialogTitle>
@@ -82,6 +82,8 @@ export default function TemplateStation(props: StationTestDialogProps & { fallba
   );
 }
 
+type TemplateLoad = { status: "loading" } | { status: "ready"; tpl: PopupTemplateJson } | { status: "none" } | { status: "error" };
+
 /** The popup itself, once the template is in. Exported for the settings screen's preview:
  *  `preview` loads no route fields (a placeholder stands where they go) and keeps shots on screen
  *  without storing them; finishing calls onSubmit, which the preview makes a no-op. */
@@ -91,8 +93,11 @@ export function TemplatePopup({
   const cfg = template.config;
   const kind = stationTypeName?.trim() || "";
   const sku = skuScanOf(cfg);
+  // Mounted per opening (the page renders a popup only while it is open, keyed by the item), so
+  // the first state IS the fresh one: the SKU carries on from the station before
+  // (ItemRow.last_sku) when the template says so.
   const [phaseIdx, setPhaseIdx] = React.useState(0);
-  const [state, setState] = React.useState<TemplateRunState>(() => emptyRunState());
+  const [state, setState] = React.useState<TemplateRunState>(() => emptyRunState(sku?.carry_last ? item.last_sku ?? "" : ""));
   const [refImages, setRefImages] = React.useState<Record<string, RefImg[]>>({});
   const [lookedUpFor, setLookedUpFor] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -105,16 +110,7 @@ export function TemplatePopup({
   const fx = useFieldsState(ready ? ready.fields : []);
   const hasFields = ready != null && fx.defsCount > 0;
   const fieldsBlocking = !preview && (sf.status === "loading" || sf.status === "error" || (hasFields && fx.blocking(ready.gate)));
-  const { reset: resetFields } = fx;
   const slot = routeFieldsSlot(cfg);
-
-  React.useEffect(() => {
-    if (!open) return;
-    // The SKU carries on from the station before (ItemRow.last_sku) when the template says so.
-    setPhaseIdx(0); setError(null); setRefImages({}); setLookedUpFor(null);
-    setState(emptyRunState(sku?.carry_last ? item.last_sku ?? "" : ""));
-    resetFields();
-  }, [open, item, sku, resetFields]);
 
   const vars = { station: kind, sku: state.sku, model: item.model, serial: item.serial_no };
   const fill = (text: string) => fillVariables(text, vars);

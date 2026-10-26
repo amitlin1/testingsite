@@ -21,6 +21,27 @@ import "./popup-templates.css";
 type Summary = { station_type_id: number; base: string; version: number };
 type PhotoType = { photo_type_id: number; code: string };
 
+type Lists = { types: EditorType[]; photoTypes: PhotoType[]; summaries: Map<number, Summary> };
+
+/** The station types, the photo groups and the template summaries; null when any failed. */
+async function readLists(): Promise<Lists | null> {
+  try {
+    const [typesRes, photosRes, sumRes] = await Promise.all([
+      apiFetch("/api/settings/test-stations-type"), apiFetch("/api/settings/photo-types?all=1"), apiFetch("/api/settings/popup-templates"),
+    ]);
+    if (!typesRes.ok || !photosRes.ok || !sumRes.ok) return null;
+    const rows = (await typesRes.json()) as { test_station_type_id: number; test_type_desc: string; package_level: boolean }[];
+    const summaries = (await sumRes.json()) as Summary[];
+    return {
+      types: rows.map((r) => ({ id: r.test_station_type_id, name: r.test_type_desc.trim(), packageLevel: r.package_level })),
+      photoTypes: (await photosRes.json()) as PhotoType[],
+      summaries: new Map(summaries.map((r) => [r.station_type_id, r])),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function PopupTemplatesPage() {
   return (
     <Suspense fallback={<div dir="rtl"><SettingsToolbar title={EDITOR_TEXT.title} subtitle={EDITOR_TEXT.subtitle} /></div>}>
@@ -47,20 +68,20 @@ function PopupTemplatesView() {
     setSummaries(new Map(rows.map((r) => [r.station_type_id, r])));
   }, []);
 
-  const load = React.useCallback(async () => {
-    setFailed(false);
-    try {
-      const [typesRes, photosRes] = await Promise.all([apiFetch("/api/settings/test-stations-type"), apiFetch("/api/settings/photo-types?all=1"), loadSummaries()]);
-      if (!typesRes.ok || !photosRes.ok) throw new Error("load");
-      const rows = (await typesRes.json()) as { test_station_type_id: number; test_type_desc: string; package_level: boolean }[];
-      setTypes(rows.map((r) => ({ id: r.test_station_type_id, name: r.test_type_desc.trim(), packageLevel: r.package_level })));
-      setPhotoTypes((await photosRes.json()) as PhotoType[]);
-    } catch {
-      setFailed(true);
-    }
-  }, [loadSummaries]);
-
-  React.useEffect(() => { void load(); }, [load]);
+  // Read (readLists), then applied in the promise's callback, so nothing is set in an effect's own
+  // body; "נסה שוב" clears the failure first.
+  const applyLists = React.useCallback((lists: Lists | null) => {
+    if (!lists) { setFailed(true); return; }
+    setTypes(lists.types);
+    setPhotoTypes(lists.photoTypes);
+    setSummaries(lists.summaries);
+  }, []);
+  const load = React.useCallback(() => readLists().then(applyLists), [applyLists]);
+  React.useEffect(() => {
+    let alive = true;
+    readLists().then((lists) => { if (alive) applyLists(lists); });
+    return () => { alive = false; };
+  }, [applyLists]);
 
   // ---- selection, with a guard for unsaved changes ----
   const [dirty, setDirty] = React.useState(false);
@@ -83,7 +104,7 @@ function PopupTemplatesView() {
       {failed && (
         <div className="settings-card settings-error" style={{ marginTop: "var(--space-lg)" }}>
           <Alert severity="error">{EDITOR_TEXT.listFailed}</Alert>
-          <Button variant="outlined" color="inherit" size="small" onClick={() => void load()}>{EDITOR_TEXT.retry}</Button>
+          <Button variant="outlined" color="inherit" size="small" onClick={() => { setFailed(false); void load(); }}>{EDITOR_TEXT.retry}</Button>
         </div>
       )}
 
