@@ -101,7 +101,6 @@ describe("popup-template store", { skip: TEST_DATABASE_URL ? false : "TEST_DATAB
     await rejects(save(PACKAGE_TYPE, verdictStationTemplate(), null), 409, "BASE_MISMATCH");
     await rejects(save(ITEM_TYPE, verdictStationTemplate(), null, "package"), 409, "BASE_MISMATCH");
     await rejects(save(PACKAGE_TYPE, verdictStationTemplate(), null, "package"), 422, "TEMPLATE_INVALID");
-    await rejects(save(PACKAGE_TYPE, closingTemplate(), null, "package"), 409, "PACKAGE_BASE_NOT_YET");
     await rejects(save(9999, verdictStationTemplate(), null), 404, "STATION_TYPE_NOT_FOUND");
     assert.equal(await store.getTemplate(ITEM_TYPE), null, "nothing was written");
   });
@@ -117,6 +116,12 @@ describe("popup-template store", { skip: TEST_DATABASE_URL ? false : "TEST_DATAB
     const items = await group("k_itemgrp01");
     assert.deepEqual([box.test_station_type_id, box.component_id, box.is_active], [PACKAGE_TYPE, boxPhoto.id, true]);
     assert.deepEqual([items.test_station_type_id, items.component_id, items.is_active], [PACKAGE_TYPE, itemPhoto.id, true]);
+
+    // The same type closes boxes too in a test DB: a closing template replaces it as a new version,
+    // and the opening's photo groups go inactive with their components.
+    const closing = await save(PACKAGE_TYPE, closingTemplate(), 1, "package");
+    assert.deepEqual([closing.version, closing.config.role], [2, "closing"]);
+    assert.equal((await group(LEGACY_CODE)).is_active, false);
   });
 
   it("a photo component owns its group: links an existing one, creates a new one, keeps both named", async () => {

@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openingTemplate } from "@/app/lib/popup-templates/templates";
+import { closingTemplate, openingTemplate } from "@/app/lib/popup-templates/templates";
 import type { ChecklistComponent, PopupTemplateConfig, TemplateStep } from "@/app/lib/popup-templates/schema";
 import { TEMPLATE_RUN_TEXT, emptyRunState, stepBlocker } from "../templateModel";
 import {
-  bandOf, boxPasses, buildOpeningBoxDetails, buildOpeningItemDetails, freshItemWork, hebrewList, itemOutcome, itemsLine, openingStepKind,
+  bandOf, boxPasses, buildClosingBoxDetails, buildOpeningBoxDetails, buildOpeningItemDetails, closingChecks, closingNote, closingPasses,
+  closingStepKind, freshItemWork, hebrewList, itemOutcome, itemsLine, openingStepKind,
 } from "../packageTemplateModel";
 
 const same = (t: string) => t;
@@ -87,4 +88,26 @@ test("a checklist holds its step until every row is ticked, and saves every row"
   assert.deepEqual(details.components, [
     { id: list.id, t: "checklist", label: "בדיקות", items: [{ id: "i_aaaaaaaa", label: "א", ok: true }, { id: "i_bbbbbbbb", label: "ב", ok: false }] },
   ], "a blank note is left out");
+});
+
+test("today's closing: its checks and note keep the wizard's keys; a missing item fails the box", () => {
+  const cfg = closingTemplate();
+  assert.deepEqual(cfg.steps.map(closingStepKind), ["components", "arrival", "components"]);
+  const list = cfg.steps[2].components.find((c) => c.kind === "checklist") as ChecklistComponent;
+  const notes = cfg.steps[2].components.find((c) => c.kind === "notes")!;
+  const box = { ...emptyRunState(" BOX-9 "), hasRU: true, checks: { [list.id]: [list.items[0].id, list.items[2].id] }, notes: { [notes.id]: "סגור" } };
+  assert.deepEqual(closingChecks(cfg, box), [
+    { label: "כל הפריטים שסומנו נמצאים בקופסה", ok: true }, { label: "האריזה סגורה ותקינה", ok: false }, { label: "מדבקת המארז קריאה", ok: true },
+  ]);
+  assert.equal(closingNote(cfg, box), "סגור");
+  const details = buildClosingBoxDetails(cfg, { version: 2, station: "סגירה" }, box, { packed: ["11"], decisions: [{ item_id: "12", decision: "missing", note: "x" }] });
+  assert.deepEqual(Object.keys(details), ["sku", "hasRU", "closing", "checks", "note", "packed", "decisions", "template", "components"], "no verdict key: the template asks none");
+  assert.deepEqual([details.sku, details.closing, details.packed, details.template], ["BOX-9", true, ["11"], { v: 2 }]);
+  assert.equal(closingPasses(cfg, box, false), true);
+  assert.equal(closingPasses(cfg, box, true), false);
+
+  const withVerdict: PopupTemplateConfig = { ...cfg, steps: [...cfg.steps.slice(0, 2), { ...cfg.steps[2], components: [...cfg.steps[2].components, { id: "k_verdict9", kind: "verdict", question: "האריזה תקינה?", note_max: 1000 }] }] };
+  const failed = { ...box, verdict: { ok: "fail" as const, note: "קרוע" } };
+  assert.equal(closingPasses(withVerdict, failed, false), false, "a verdict the template asks can fail the box");
+  assert.deepEqual(buildClosingBoxDetails(withVerdict, { version: 1, station: "" }, failed, { packed: [], decisions: [] }).verdict, { ok: "fail", note: "קרוע" });
 });

@@ -121,3 +121,50 @@ export function buildOpeningBoxDetails(
     components: savedComponents(comps, box, ctx.station),
   };
 }
+
+// ---- the closing (step 2.3) ---------------------------------------------------------
+
+/** A closing step: the arrival and packing (its system part, alone in its step), or the admin's
+ *  components. */
+export function closingStepKind(step: TemplateStep): "arrival" | "components" {
+  return step.components.length === 1 && step.components[0].kind === "arrival" ? "arrival" : "components";
+}
+
+/** Today's `checks`: every checklist row over the template's steps, ticked or not. */
+export function closingChecks(cfg: PopupTemplateConfig, box: TemplateRunState): { label: string; ok: boolean }[] {
+  return componentsOf(cfg).flatMap((c) => (c.kind === "checklist"
+    ? c.items.map((row) => ({ label: row.label, ok: (box.checks[c.id] ?? []).includes(row.id) }))
+    : []));
+}
+
+/** Today's `note` (and the result's comment): the first notes component's text. */
+export function closingNote(cfg: PopupTemplateConfig, box: TemplateRunState): string {
+  const notes = componentsOf(cfg).find((c) => c.kind === "notes");
+  return notes ? box.notes[notes.id] ?? "" : "";
+}
+
+/** The box passes when no item is "חסר במארז" — as today — and its verdict, when the template asks
+ *  one, is not a fail. */
+export function closingPasses(cfg: PopupTemplateConfig, box: TemplateRunState, anyMissing: boolean): boolean {
+  const asks = componentsOf(cfg).some((c) => c.kind === "verdict");
+  return !anyMissing && !(asks && box.verdict.ok === "fail");
+}
+
+/** The box's result details at the closing (today's keys, PackageCloseWizard). `box.hasRU` is the
+ *  box label's lookup; `verdict` only when the template asks one. */
+export function buildClosingBoxDetails(
+  cfg: PopupTemplateConfig,
+  ctx: { version: number; station: string },
+  box: TemplateRunState,
+  facts: { packed: string[]; decisions: unknown[] },
+): Record<string, unknown> {
+  const comps = componentsOf(cfg);
+  return {
+    sku: box.sku.trim(), hasRU: box.hasRU, closing: true,
+    checks: closingChecks(cfg, box), note: closingNote(cfg, box),
+    packed: facts.packed, decisions: facts.decisions,
+    ...(comps.some((c) => c.kind === "verdict") ? { verdict: { ok: box.verdict.ok, note: box.verdict.note } } : {}),
+    template: { v: ctx.version },
+    components: savedComponents(comps, box, ctx.station),
+  };
+}

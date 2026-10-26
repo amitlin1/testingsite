@@ -20,6 +20,7 @@ import { VARIANT_SPEC, stationBlockTitle } from "../fields/fieldsBlockModel";
 import { useFieldsState } from "../fields/useFieldsState";
 import { useStationFields } from "../fields/useStationFields";
 import TemplatePackageOpening from "./TemplatePackageOpening";
+import TemplatePackageClosing from "./TemplatePackageClosing";
 import {
   type TemplateRunState, buildTemplateDetails, emptyRunState, finishBlocker, routeFieldsSlot, stepBlocker, weightOutcome,
 } from "./templateModel";
@@ -35,8 +36,8 @@ import {
  * opens `fallback` — the popup the code gives the type — so the worker is never stuck.
  *
  * A box at a package-level station comes with `packageRole`, its place on the route (PLAN.md §5.1,
- * decision 1): a package template of that role runs it (the opening: TemplatePackageOpening);
- * anything else — another role, a role not built yet — opens the wizard, its `fallback`.
+ * decision 1): a package template of that role runs it (TemplatePackageOpening /
+ * TemplatePackageClosing); a template of the other role opens the wizard, its `fallback`.
  */
 export default function TemplateStation(props: StationTestDialogProps & {
   fallback: React.ComponentType<StationTestDialogProps>;
@@ -70,10 +71,9 @@ export default function TemplateStation(props: StationTestDialogProps & {
   if (load.status === "ready") {
     const tpl = load.tpl;
     if (packageRole == null) return tpl.base === "item" ? <TemplatePopup key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={tpl} /> : fallback;
-    if (tpl.base === "package" && tpl.config.role === packageRole && packageRole === "opening") {
-      return <TemplatePackageOpening key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={tpl} />;
-    }
-    return fallback;
+    if (tpl.base !== "package" || tpl.config.role !== packageRole) return fallback;
+    const PackagePopup = packageRole === "opening" ? TemplatePackageOpening : TemplatePackageClosing;
+    return <PackagePopup key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={tpl} />;
   }
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>

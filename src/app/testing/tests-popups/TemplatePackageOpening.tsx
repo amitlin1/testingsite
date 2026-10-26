@@ -1,17 +1,14 @@
 "use client";
 import React from "react";
-import { Check, CircleAlert } from "lucide-react";
+import { Check } from "lucide-react";
 import type { StationTestDialogProps } from "@/types";
 import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
-import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { newActionId } from "@/app/lib/metrics/action-id";
 import { fillVariables, skuScanOf } from "@/app/lib/popup-templates/schema";
-import type {
-  ChecklistComponent, PhotoComponent, PopupTemplateJson, SkuScanComponent, TemplateStep, WeightComponent,
-} from "@/app/lib/popup-templates/schema";
+import type { PopupTemplateJson, SkuScanComponent, TemplateStep } from "@/app/lib/popup-templates/schema";
 import PackageWizardShell, { type ItemStepperRow, type WizardStep } from "./PackageWizardShell";
-import { PhotoUploader, PassFail, useShotDiscard, type RefImg, type Shot } from "./stationKit";
+import type { RefImg } from "./stationKit";
 import { NO_REF, ScanField, useReferenceLookup } from "./referenceScan";
 import { resolveItemReference, type RefMember } from "./packageReference";
 import { ExpectedContents, ExpectedReference } from "./PackageReferenceViews";
@@ -19,25 +16,24 @@ import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import { OpeningContents, boxDetailsOf, contentsProblem, rowsFromItems, saveContents, type ContentRow } from "./OpeningContents";
 import { playCue } from "@/app/components/packages/scanSound";
 import { NextStationList, nextStopOf, type NextStop, type NextStopRow } from "./nextStation";
-import {
-  AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, GREY, HAIR, INK, INK_2, MUTED, RED, RED_BG, seq2,
-} from "@/app/components/packages/packageUi";
-import { UNDRAWN_TEXT, SUGGEST_PREFIX, fieldsGateText } from "@/app/lib/station-fields/labels";
-import type { DraftShot, Drafts } from "@/app/lib/station-fields/evaluate";
+import { BLUE, GREEN, GREY, HAIR, INK, INK_2, MUTED, seq2 } from "@/app/components/packages/packageUi";
+import { UNDRAWN_TEXT, fieldsGateText } from "@/app/lib/station-fields/labels";
 import type { Field } from "@/app/lib/station-fields/schema";
 import { FieldsBlock, FieldsBlockFallback } from "@/app/testing/fields/FieldsBlock";
-import { NotesField } from "@/app/testing/fields/NotesField";
-import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
 import { shouldReloadFields } from "@/app/testing/fields/errors";
-import { BLOCK_TITLE, VARIANT_SPEC, draftsFieldsState, kitItemFieldGroups, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
+import { BLOCK_TITLE, draftsFieldsState, kitItemFieldGroups, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
 import { WORKER_UNDRAWN_TEXT } from "@/app/testing/fields/labels";
 import { buildFieldsBlock, inputFieldCount, useFieldsState } from "@/app/testing/fields/useFieldsState";
 import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
-import { emptyRunState, routeFieldsSlot, stepBlocker, weightOutcome, type TemplateRunState } from "./templateModel";
+import { emptyRunState, routeFieldsSlot, stepBlocker, type TemplateRunState } from "./templateModel";
 import {
   bandOf, boxPasses, buildOpeningBoxDetails, buildOpeningItemDetails, freshItemWork, itemOutcome, itemsLine, openingStepKind,
   type OpeningItemWork,
 } from "./packageTemplateModel";
+import {
+  CHECKING, PACKAGE_POPUP_TEXT, PlainScan, StepComponents, WizardError, fieldShots, stepShots, useTemplatePhotos,
+  type RunPatch, type Target,
+} from "./packageTemplateParts";
 import "@/app/packages/packages.css";
 
 /**
@@ -57,11 +53,6 @@ import "@/app/packages/packages.css";
 /** The wizard's own words for the parts the template does not word. */
 const OPEN_TEXT = {
   title: "פתיחת מארז",
-  boxScanLabel: "מק״ט המארז",
-  boxScanPlaceholder: "סרוק את מק״ט היצרן",
-  boxScanSubtitle: "סרוק את מדבקת המארז כדי לפתוח את המארז בעמדה.",
-  boxScanBand: "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה.",
-  boxNoReference: "לא נמצא פריט ייחוס למק״ט המארז שנסרק — צלם לפי שיקול דעת והמשך.",
   itemScanLabel: "מק״ט יצרן של הפריט",
   itemScanPlaceholder: "סרוק את מק״ט היצרן של הפריט",
   itemScanBand: "סרוק את מק״ט היצרן של הפריט — לפיו נטענים תמונות ומשקל הייחוס.",
@@ -69,9 +60,6 @@ const OPEN_TEXT = {
   itemNoReference: (sku: string) => `לא נמצא פריט ייחוס למק״ט שנסרק (${sku}) — צלם לפי שיקול דעת והמשך.`,
   contentsSubtitle: "פתח את הקופסה: סמן מה לא הגיע, הוסף מה שלא היה בתבנית, והזן סריאלי לכל פריט.",
   labelsSubtitle: "מדבקה לכל פריט — הדבק כל אחת על הפריט שלה. מדבקת המארז כבר עליו מהמשלוח (אפשר להדפיס שוב).",
-  doneStep: "סיום",
-  notes: "הערות",
-  optional: "אופציונלי",
 } as const;
 
 type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
@@ -80,41 +68,7 @@ type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package
  *  routeRow): an item past it already has its result here. */
 const leftOpening = (it: PackageItemView) => it.is_finished || (it.current_route_step ?? 1) > 1;
 
-/** The shots taken in the photo fields among `defs` (station fields). */
-const fieldShots = (defs: readonly Field[], drafts: Readonly<Drafts>): DraftShot[] =>
-  defs.flatMap((d) => (d.type === "photo" ? drafts[d.id]?.photos ?? [] : []));
-
-/** The step's own shots (its photo components). */
-const stepShots = (st: TemplateStep, run: TemplateRunState): Shot[] =>
-  st.components.flatMap((c) => (c.kind === "photo" ? run.photos[c.id] ?? [] : []));
-
-/** A step blocked only while a lookup answers: the next button waits, and no error is shown. */
-const CHECKING = "checking";
-
 const NO_FLOW: TemplateStep[] = [];
-
-type RunPatch = (fn: (s: TemplateRunState) => TemplateRunState) => void;
-
-/** The verdict's suggestion from the route's fields, while there are fields. */
-type Suggest = { fails: DraftsFieldsState["ev"]["fails"]; defs: Field[] };
-
-/** Who an admin's step works on: the box, or the item on screen in its flow. */
-type Target = {
-  /** Where its shots are stored: the box's id or the item's. */
-  targetId: string | number;
-  run: TemplateRunState;
-  patch: RunPatch;
-  fill: (text: string) => string;
-  refImages: (code: string) => RefImg[];
-  /** Heads a step that leans on the reference when the lookup found none; null = it found one. */
-  noReference: string | null;
-  /** The route's fields block, drawn where the slot puts it in this step (null = not here). */
-  fieldsHere: { block: React.ReactNode; atComponent: boolean; componentId: string } | null;
-  /** With fields, the verdict shows their suggestion and its note is a NotesField. */
-  suggest: Suggest | null;
-  look: "wizard" | "kit-item";
-  notesTitle: string;
-};
 
 export default function TemplatePackageOpening(props: StationTestDialogProps & { template: PopupTemplateJson }) {
   const pkg = props.item.package as PackageView | null;
@@ -201,28 +155,7 @@ function OpeningPopup({
   const patchItemRun = (id: string): RunPatch => (fn) => patchWork(id, (w) => ({ ...w, run: fn(w.run) }));
 
   // ---- uploads (browser → MinIO, tagged by the photo component's group) --------
-  const uploadTo = React.useCallback(async (targetId: string | number, file: File, photoType: string): Promise<string | null> => {
-    try {
-      const [result] = await uploadItemFiles(targetId, [file], { workerId, stationTypeId: station.test_station_type_id, photoType });
-      return result?.objectKey ?? null;
-    } catch { return null; }
-  }, [workerId, station.test_station_type_id]);
-
-  // A shot removed on screen is taken back from storage too (useShotDiscard).
-  const { discard, landed } = useShotDiscard(workerId);
-  const pickPhoto = (targetId: string | number, patch: RunPatch, c: PhotoComponent, file: File) => {
-    const previewUrl = URL.createObjectURL(file);
-    const setShots = (fn: (shots: Shot[]) => Shot[]) => patch((s) => ({ ...s, photos: { ...s.photos, [c.id]: fn(s.photos[c.id] ?? []) } }));
-    setShots((shots) => [...shots, { previewUrl, uploading: true }]);
-    uploadTo(targetId, file, c.photo_code).then((key) => {
-      if (landed(targetId, previewUrl, key)) return;
-      setShots((shots) => shots.map((x) => (x.previewUrl === previewUrl ? { ...x, objectKey: key ?? undefined, uploading: false, failed: key == null } : x)));
-    });
-  };
-  const removePhoto = (targetId: string | number, run: TemplateRunState, patch: RunPatch, c: PhotoComponent, idx: number) => {
-    discard(targetId, (run.photos[c.id] ?? [])[idx]);
-    patch((s) => ({ ...s, photos: { ...s.photos, [c.id]: (s.photos[c.id] ?? []).filter((_, j) => j !== idx) } }));
-  };
+  const { uploadTo, photosFor } = useTemplatePhotos(workerId, station.test_station_type_id);
 
   // ---- the package reference ------------------------------------------------
   // Found by the box label: its members are what each item is expected to be. null = no package
@@ -338,7 +271,7 @@ function OpeningPopup({
 
   // ---- the shell's texts and its next button -----------------------------------
   const finishLabel = fillBox(cfg.finish_label);
-  let stepTitle = stepDef ? fillBox(stepDef.title) : OPEN_TEXT.doneStep;
+  let stepTitle = stepDef ? fillBox(stepDef.title) : PACKAGE_POPUP_TEXT.doneStep;
   let stepSubtitle = "";
   let systemMsg: string | null = null;
   let nextLabel = "המשך";
@@ -353,7 +286,7 @@ function OpeningPopup({
     // A shot still uploading, or one whose upload failed, blocks the step: a failed upload leaves
     // nothing in storage, so continuing would silently lose the photo. The worker removes the red
     // shot and takes it again.
-    if (stepShots(ph, curWork.run).some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
+    if (stepShots(ph, curWork.run).some((s) => s.failed)) nextLabel = PACKAGE_POPUP_TEXT.removeFailedShot;
   } else if (stepDef && stepKind) {
     const isLast = step === lastBoxStep;
     const nextKind = isLast ? null : openingStepKind(cfg.steps[step + 1]);
@@ -374,11 +307,11 @@ function OpeningPopup({
       nextEnabled = sf.status !== "loading";
     } else {
       const isScan = boxSkuC != null && stepDef.components.length === 1 && stepDef.components[0] === boxSkuC;
-      if (isScan) { stepSubtitle = OPEN_TEXT.boxScanSubtitle; systemMsg = OPEN_TEXT.boxScanBand; }
+      if (isScan) { stepSubtitle = PACKAGE_POPUP_TEXT.boxScanSubtitle; systemMsg = PACKAGE_POPUP_TEXT.boxScanBand; }
       else systemMsg = bandOf(stepDef, fillBox);
       nextEnabled = boxStepBlocker(step) == null;
       nextLabel = isLast ? finishLabel : "המשך";
-      if (stepShots(stepDef, box).some((s) => s.failed)) nextLabel = "הסר את הצילום שנכשל";
+      if (stepShots(stepDef, box).some((s) => s.failed)) nextLabel = PACKAGE_POPUP_TEXT.removeFailedShot;
     }
   } else nextLabel = "חזרה לתור";
 
@@ -401,7 +334,7 @@ function OpeningPopup({
     const shots = [box, ...items.map((it) => workOf(it.item_id).run)].flatMap((run) => Object.values(run.photos).flat())
       .concat(fieldsToSend.flatMap((f) => fieldShots(f.defs, f.fx.drafts)));
     if (shots.some((sh) => sh.uploading || sh.failed)) {
-      setError(shots.some((sh) => sh.failed) ? "יש צילום שההעלאה שלו נכשלה — הסר אותו וצלם שוב לפני הסיום." : "יש צילום שעדיין עולה — המתן לסיום ההעלאה.");
+      setError(shots.some((sh) => sh.failed) ? PACKAGE_POPUP_TEXT.photoFailed : PACKAGE_POPUP_TEXT.photoUploading);
       return;
     }
     // Nor before the station fields have answered, nor with their gate shut (spec §4.11.3) —
@@ -524,7 +457,7 @@ function OpeningPopup({
 
   const steps: WizardStep[] = [
     ...cfg.steps.map((st) => ({ key: st.id, label: fillBox(st.title), note: fillBox(st.desc) })),
-    { key: "done", label: OPEN_TEXT.doneStep, note: "" },
+    { key: "done", label: PACKAGE_POPUP_TEXT.doneStep, note: "" },
   ];
   const onItemsStep = stepKind === "items" || inItemFlow;
   const itemStepper: ItemStepperRow[] | null = onItemsStep
@@ -537,58 +470,9 @@ function OpeningPopup({
     : null;
 
   // ---- the components of an admin's step (the box's, or an item's phase) -------
-  const renderComponents = (st: TemplateStep, t: Target) => {
-    const photoCount = st.components.filter((c) => c.kind === "photo").length;
-    // Photos over reference images lean on the lookup; the weighing says its own "no reference".
-    const leans = st.components.some((c) => c.kind === "photo" && c.show_reference);
-    return (
-      <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
-        {leans && t.noReference && <div style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px" }}>{t.noReference}</div>}
-        {st.components.map((c) => {
-          switch (c.kind) {
-            case "photo":
-              return (
-                <div key={c.id}>
-                  {/* A lone photo component is the step's own subject; several are told apart by their titles. */}
-                  {photoCount > 1 && <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>{t.fill(c.title)}</div>}
-                  <PhotoUploader photos={t.run.photos[c.id] ?? []} refImages={c.show_reference ? t.refImages(c.photo_code) : []}
-                    onPick={(f) => pickPhoto(t.targetId, t.patch, c, f)} onRemove={(i) => removePhoto(t.targetId, t.run, t.patch, c, i)} />
-                </div>
-              );
-            case "route_fields":
-              return t.fieldsHere?.atComponent ? <React.Fragment key={c.id}>{t.fieldsHere.block}</React.Fragment> : null;
-            case "verdict":
-              return (
-                <React.Fragment key={c.id}>
-                  {t.fieldsHere && !t.fieldsHere.atComponent && t.fieldsHere.componentId === c.id && t.fieldsHere.block}
-                  <VerdictBlock question={t.fill(c.question)} verdict={t.run.verdict} suggest={t.suggest} look={t.look} notesTitle={t.notesTitle}
-                    id={`${uid}-${c.id}-note`} onVerdict={(patch) => t.patch((s) => ({ ...s, verdict: { ...s.verdict, ...patch } }))} />
-                </React.Fragment>
-              );
-            case "weight":
-              return <WeighBlock key={c.id} c={c} refWeight={t.run.refWeight} value={t.run.weights[c.id] ?? ""} id={`${uid}-${c.id}`}
-                onChange={(v) => t.patch((s) => ({ ...s, weights: { ...s.weights, [c.id]: v } }))} />;
-            case "checklist":
-              return <ChecklistBlock key={c.id} c={c} title={t.fill(c.title)} ticked={t.run.checks[c.id] ?? []}
-                onToggle={(rowId) => t.patch((s) => {
-                  const cur = s.checks[c.id] ?? [];
-                  return { ...s, checks: { ...s.checks, [c.id]: cur.includes(rowId) ? cur.filter((x) => x !== rowId) : [...cur, rowId] } };
-                })} />;
-            case "notes":
-              return <NotesBlock key={c.id} label={t.fill(c.label)} id={`${uid}-${c.id}`} value={t.run.notes[c.id] ?? ""}
-                onChange={(v) => t.patch((s) => ({ ...s, notes: { ...s.notes, [c.id]: v } }))} />;
-            default:
-              // sku_scan is a step of its own; message is the band; the system parts are steps of their own.
-              return null;
-          }
-        })}
-      </div>
-    );
-  };
-
   const boxTarget = (i: number): Target => ({
-    targetId: item.item_id, run: box, patch: patchBox, fill: fillBox, refImages: boxRefImages,
-    noReference: boxHasRU === false ? OPEN_TEXT.boxNoReference : null,
+    run: box, patch: patchBox, photos: photosFor(item.item_id, box, patchBox), fill: fillBox, refImages: boxRefImages,
+    noReference: boxHasRU === false ? PACKAGE_POPUP_TEXT.boxNoReference : null,
     fieldsHere: boxSlot?.stepIndex === i
       ? {
         atComponent: boxSlot.atComponent, componentId: boxSlot.componentId,
@@ -602,7 +486,7 @@ function OpeningPopup({
     look: "wizard", notesTitle: "הערות · הקופסה",
   });
   const itemTarget = (it: PackageItemView, w: OpeningItemWork): Target => ({
-    targetId: it.item_id, run: w.run, patch: patchItemRun(it.item_id), fill: fillItem(it, w),
+    run: w.run, patch: patchItemRun(it.item_id), photos: photosFor(it.item_id, w.run, patchItemRun(it.item_id)), fill: fillItem(it, w),
     refImages: (code) => w.refImages[code] ?? [],
     noReference: w.run.hasRU === false ? OPEN_TEXT.itemNoReference(w.sku ?? "") : null,
     fieldsHere: flowSlot?.stepIndex === phase
@@ -641,20 +525,20 @@ function OpeningPopup({
             value={curWork.run.sku} onChange={(v) => patchItemRun(curItem.item_id)((s) => ({ ...s, sku: v }))} onSubmit={onNext} />
         )}
       </>
-    ) : renderComponents(ph, itemTarget(curItem, curWork));
+    ) : <StepComponents step={ph} t={itemTarget(curItem, curWork)} />;
   } else if (stepDef && stepKind === "components") {
     const isScan = boxSkuC != null && stepDef.components.length === 1 && stepDef.components[0] === boxSkuC;
     body = isScan ? (
       <>
         {boxSkuC.lookup_reference ? (
           <ScanField
-            label={OPEN_TEXT.boxScanLabel} placeholder={OPEN_TEXT.boxScanPlaceholder}
+            label={PACKAGE_POPUP_TEXT.boxScanLabel} placeholder={PACKAGE_POPUP_TEXT.boxScanPlaceholder}
             value={box.sku} onChange={(v) => setBox((s) => ({ ...s, sku: v }))} lookup={boxLookup} onSubmit={onNext}
             found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
             missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה. אפשר להמשיך, צילום הקופסה יהיה ללא ייחוס`}
             prev={boxSkuC.carry_last ? item.last_sku : undefined} />
         ) : (
-          <PlainScan label={OPEN_TEXT.boxScanLabel} placeholder={OPEN_TEXT.boxScanPlaceholder}
+          <PlainScan label={PACKAGE_POPUP_TEXT.boxScanLabel} placeholder={PACKAGE_POPUP_TEXT.boxScanPlaceholder}
             value={box.sku} onChange={(v) => setBox((s) => ({ ...s, sku: v }))} onSubmit={onNext} />
         )}
         {/* The package reference the label found: what should be in the box. */}
@@ -663,7 +547,7 @@ function OpeningPopup({
             boxPhotos={cfg.steps.flatMap((s) => s.components).reduce((n, c) => n + (c.kind === "photo" && c.show_reference ? boxRefImages(c.photo_code).length : 0), 0)} />
         )}
       </>
-    ) : renderComponents(stepDef, boxTarget(step));
+    ) : <StepComponents step={stepDef} t={boxTarget(step)} />;
   } else if (stepKind === "contents") {
     body = (
       <OpeningContents
@@ -747,12 +631,7 @@ function OpeningPopup({
         backDisabled={(step === 0 && !inItemFlow) || doneStep}
         onBack={onBack} nextLabel={nextLabel} nextEnabled={nextEnabled && !busy} onNext={onNext} busy={submitting}
       >
-        {error && (
-          <div role="alert" style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "flex-start", background: RED_BG, border: "1px solid color-mix(in srgb, var(--color-destructive) 25%, transparent)", borderRadius: 10, padding: "11px 14px" }}>
-            <span style={{ color: RED, marginTop: 1, display: "inline-flex" }}><CircleAlert size={16} strokeWidth={2} aria-hidden /></span>
-            <div style={{ fontSize: 13, fontWeight: 600, color: RED }}>{error}</div>
-          </div>
-        )}
+        <WizardError error={error} />
         {body}
       </PackageWizardShell>
 
@@ -773,110 +652,5 @@ function OpeningPopup({
         />
       )}
     </>
-  );
-}
-
-/** "האריזה תקינה?" / "הפריט תקין?": the verdict, its suggestion, its note — the wizard's markup. */
-function VerdictBlock({ question, verdict, onVerdict, suggest, look, notesTitle, id }: {
-  question: string; verdict: TemplateRunState["verdict"]; onVerdict: (patch: Partial<TemplateRunState["verdict"]>) => void;
-  suggest: Suggest | null; look: Target["look"]; notesTitle: string; id: string;
-}) {
-  return (
-    <div>
-      <div style={{ fontSize: 14.5, fontWeight: 600 }}>{question}</div>
-      <div style={{ marginTop: 10 }}><PassFail value={verdict.ok} onChange={(v) => onVerdict({ ok: v })} /></div>
-      {suggest && <SuggestionLine fails={suggest.fails} defs={suggest.defs} prefix={SUGGEST_PREFIX} decided={verdict.ok} style={{ marginTop: 10 }} />}
-      <label htmlFor={id} style={{ display: "block", fontSize: 12.5, color: MUTED, margin: "16px 0 7px" }}>{OPEN_TEXT.notes}</label>
-      {suggest ? (
-        <NotesField size="area" id={id} value={verdict.note} onChange={(note) => onVerdict({ note })}
-          placeholder={OPEN_TEXT.optional} editorTitle={notesTitle} look={VARIANT_SPEC[look].noteLook} />
-      ) : (
-        <textarea id={id} value={verdict.note} onChange={(e) => onVerdict({ note: e.target.value })} placeholder={OPEN_TEXT.optional} className="pkg-field pkg-field--area" style={{ maxWidth: 560 }} />
-      )}
-    </div>
-  );
-}
-
-/** A scan with no reference lookup: the field alone. */
-function PlainScan({ label, placeholder, value, onChange, onSubmit }: {
-  label: string; placeholder: string; value: string; onChange: (v: string) => void; onSubmit: () => void;
-}) {
-  const id = React.useId();
-  return (
-    <div style={{ maxWidth: 420, marginTop: 20 }}>
-      <label htmlFor={id} style={{ display: "block", fontSize: "var(--text-small)", color: MUTED, marginBottom: 7 }}>{label}</label>
-      <input id={id} className="sh-input tst-ref-scan" dir="ltr" value={value} onChange={(e) => onChange(e.target.value)} autoFocus placeholder={placeholder}
-        onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }} />
-    </div>
-  );
-}
-
-/** "שקילה מול ייחוס" in the wizard's markup: the reference weight, the measured one, the deviation. */
-function WeighBlock({ c, refWeight, value, id, onChange }: {
-  c: WeightComponent; refWeight: number | null; value: string; id: string; onChange: (v: string) => void;
-}) {
-  const w = weightOutcome(c, refWeight, value);
-  const diff = w.measured != null && refWeight != null ? w.measured - refWeight : null;
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", maxWidth: 620 }}>
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>משקל פריט ייחוס</div>
-          <div className="pkg-field pkg-field--lg pkg-field--static" style={{ fontVariantNumeric: "tabular-nums" }}>{refWeight != null ? `${refWeight} גר׳` : "לא מוגדר"}</div>
-        </div>
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <label htmlFor={id} style={{ display: "block", fontSize: 12.5, color: MUTED, marginBottom: 7 }}>משקל פריט נבדק</label>
-          {/* The focus ring, not the value, marks the field (A11-2); a weight reads left-to-right. */}
-          <input id={id} dir="ltr" value={value} onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="גר׳" inputMode="decimal"
-            className="pkg-field pkg-field--lg pkg-field--code" />
-        </div>
-      </div>
-      {w.diffPct != null && w.pass != null && diff != null && (
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 11, background: w.pass ? GREEN_BG : RED_BG, border: `1px solid ${w.pass ? "color-mix(in srgb, var(--color-status-approved) 22%, transparent)" : "color-mix(in srgb, var(--color-destructive) 25%, transparent)"}`, borderRadius: 11, padding: "13px 15px", marginTop: 16, maxWidth: 620 }}>
-          {/* ✓ only when it passes; out of tolerance gets the alert mark. */}
-          <span style={{ color: w.pass ? GREEN : RED, marginTop: 1, display: "inline-flex" }}>{w.pass ? <Check size={18} strokeWidth={2} aria-hidden /> : <CircleAlert size={18} strokeWidth={2} aria-hidden />}</span>
-          <div>
-            <div style={{ fontSize: 14.5, fontWeight: 600, color: w.pass ? GREEN : RED }}>{w.pass ? "משקל תקין" : "משקל לא תקין"}</div>
-            <div style={{ fontSize: 13, color: INK_2, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>סטייה {diff >= 0 ? "+" : "−"}{Math.abs(diff).toFixed(0)} גר׳ ({w.diffPct.toFixed(1)}% · סטייה תקנית ±{c.tolerance_pct}%)</div>
-          </div>
-        </div>
-      )}
-      {refWeight == null && value !== "" && <div style={{ marginTop: 16, fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 10, padding: "9px 13px", maxWidth: 620 }}>אין משקל ייחוס לסוג פריט זה — המשקל נרשם ללא השוואה.</div>}
-    </div>
-  );
-}
-
-/** "רשימת סימון" in the closing wizard's markup: every row a tick. */
-function ChecklistBlock({ c, title, ticked, onToggle }: {
-  c: ChecklistComponent; title: string; ticked: string[]; onToggle: (rowId: string) => void;
-}) {
-  return (
-    <div style={{ maxWidth: 620 }}>
-      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>{title}</div>
-      <div role="group" aria-label={title} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-        {c.items.map((row) => {
-          const on = ticked.includes(row.id);
-          return (
-            <button key={row.id} type="button" role="checkbox" aria-checked={on} onClick={() => onToggle(row.id)}
-              className="pkg-choice pkg-press" style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52, borderRadius: 12, padding: "13px 15px" }}>
-              <span aria-hidden className={on ? "pkg-tick pkg-tick--on" : "pkg-tick"} style={{ width: 22, height: 22, borderRadius: 7, borderColor: on ? undefined : "var(--color-field-border)" }}>{on && <Check size={13} strokeWidth={2.5} />}</span>
-              <span style={{ fontSize: 14.5, fontWeight: 600, color: on ? BLUE : INK }}>{row.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/** "הערות": a free-text note under its label. */
-function NotesBlock({ label, id, value, onChange }: {
-  label: string; id: string; value: string; onChange: (v: string) => void;
-}) {
-  return (
-    <div style={{ maxWidth: 620 }}>
-      <label htmlFor={id} style={{ display: "block", fontSize: 12.5, color: MUTED, marginBottom: 7 }}>{label}</label>
-      <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={OPEN_TEXT.optional} className="pkg-field pkg-field--area" />
-    </div>
   );
 }
