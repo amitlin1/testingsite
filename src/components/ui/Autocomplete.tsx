@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useState, useMemo, useEffect, useLayoutEffect, useCallback, useId } from "react";
+import React, { useRef, useState, useMemo, useEffect, useLayoutEffect, useCallback, useId, useEffectEvent } from "react";
 import { createPortal } from "react-dom";
 import { DismissableLayerBranch } from "@radix-ui/react-dismissable-layer";
 import { X, ChevronDown } from "lucide-react";
@@ -145,7 +145,8 @@ export function Autocomplete<
   const inputValue = inputValueProp !== undefined ? inputValueProp : inputText;
   // Index into `filtered` of the row the keyboard / pointer is on; -1 = none.
   const [highlight, setHighlight] = useState(-1);
-  const scrollToHighlight = useRef(false);
+  // Highlight moves made by the keyboard, counted: only those scroll the row into view.
+  const [keyMoves, setKeyMoves] = useState(0);
   // The side chosen once the list has been measured for real stays for the
   // rest of that open (typing must not bounce the list between above/below).
   const lockedPlacement = useRef<"top" | "bottom" | null>(null);
@@ -164,23 +165,43 @@ export function Autocomplete<
     onInputChange?.(e, v, reason);
   };
 
-  // onOpen / onClose callbacks, and the highlight reset when the list closes.
+  // The list opening and closing, followed during render: opened, the first row is highlighted with
+  // autoHighlight; closed, nothing is, and the popup has no place until it opens again.
+  const [openSeen, setOpenSeen] = useState(open);
+  if (openSeen !== open) {
+    setOpenSeen(open);
+    if (open) { if (autoHighlight) setHighlight(0); }
+    else { setHighlight(-1); setPos(null); }
+  }
+  // onOpen / onClose for the parent; the side locked for one open is free again once it closes.
   const prevOpen = useRef(open);
   useEffect(() => {
-    if (open && !prevOpen.current) { onOpen?.(); if (autoHighlight) setHighlight(0); }
-    else if (!open && prevOpen.current) { onClose?.(); setHighlight(-1); lockedPlacement.current = null; }
+    if (open && !prevOpen.current) onOpen?.();
+    else if (!open && prevOpen.current) { onClose?.(); lockedPlacement.current = null; }
     prevOpen.current = open;
-  }, [open, onOpen, onClose, autoHighlight]);
+  }, [open, onOpen, onClose]);
 
   // Closed ⇒ the text is the selected option's label (or empty). This is what
   // discards a partial search on Esc / Tab / outside click, and follows a
   // value changed from outside while the list is closed. freeSolo owns its
-  // text, so it is left alone.
+  // text, so it is left alone. Checked at mount and whenever the list opens or
+  // closes or the label changes, during render: an uncontrolled field's own
+  // text is put right at once, and the parent hears of it ("reset") once it is
+  // committed — a controlled field's text is the parent's to change.
+  const resetKey = `${open}|${selectedLabel}`;
+  const [resetSeen, setResetSeen] = useState<string | null>(null);
+  const [resetNotice, setResetNotice] = useState<{ text: string } | null>(null);
+  if (resetSeen !== resetKey) {
+    setResetSeen(resetKey);
+    if (!open && !multiple && !freeSolo && inputValue !== selectedLabel) {
+      if (inputValueProp === undefined) setInputText(selectedLabel);
+      setResetNotice({ text: selectedLabel });
+    }
+  }
+  const notifyReset = useEffectEvent((text: string) => onInputChange?.(null, text, "reset"));
   useLayoutEffect(() => {
-    if (open || multiple || freeSolo) return;
-    if (inputValue !== selectedLabel) setInput(null, selectedLabel, "reset");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, selectedLabel]);
+    if (resetNotice) notifyReset(resetNotice.text);
+  }, [resetNotice]);
 
   const filtered = useMemo(() => {
     if (filterOptions) return filterOptions(options, { inputValue });
@@ -189,9 +210,9 @@ export function Autocomplete<
     return options.filter((o) => getOptionLabel(o).toLowerCase().includes(q));
   }, [options, inputValue, filterOptions, selectedSingle, selectedLabel, getOptionLabel]);
   const hl = highlight < filtered.length ? highlight : -1;
-  useEffect(() => {
-    if (highlight >= filtered.length && highlight !== -1) setHighlight(-1);
-  }, [highlight, filtered.length]);
+  // A highlight past the end of a list that shrank is dropped for good, so the list growing back
+  // does not bring it back.
+  if (highlight >= filtered.length && highlight !== -1) setHighlight(-1);
 
   // Measure the field and place the popup. Raw viewport coordinates from
   // getBoundingClientRect() + position:fixed — no scroll math — so it's immune
@@ -233,7 +254,7 @@ export function Autocomplete<
   }, []);
 
   useLayoutEffect(() => {
-    if (!open) { setPos(null); return; }
+    if (!open) return;
     measure();
     window.addEventListener("scroll", measure, true); // capture: catch inner scrollers too
     window.addEventListener("resize", measure);
@@ -251,10 +272,9 @@ export function Autocomplete<
 
   // Keep the highlighted row in view when it moved by keyboard.
   useLayoutEffect(() => {
-    if (!open || !scrollToHighlight.current) return;
-    scrollToHighlight.current = false;
+    if (!open || keyMoves === 0) return;
     listRef.current?.querySelector<HTMLElement>("[data-highlighted]")?.scrollIntoView({ block: "nearest" });
-  }, [open, hl]);
+  }, [open, keyMoves]);
 
   const isSelected = (o: T) => {
     if (multiple) return (val as T[]).some((v) => isOptionEqualToValue(o, v));
@@ -290,7 +310,7 @@ export function Autocomplete<
         ? filtered.findIndex((o) => isOptionEqualToValue(o, selectedSingle))
         : -1;
     const next = dir === 1 ? Math.min(filtered.length - 1, from + 1) : Math.max(0, from < 0 ? 0 : from - 1);
-    scrollToHighlight.current = true;
+    setKeyMoves((n) => n + 1);
     setHighlight(next);
   };
 
@@ -324,7 +344,7 @@ export function Autocomplete<
           setOpen(true);
           // Focus goes with the list: otherwise a list opened from the arrow
           // could never be closed by a click elsewhere (there is nothing to blur).
-          anchorRef.current?.querySelector("input")?.focus();
+          e.currentTarget.closest("[data-sh-ac]")?.querySelector("input")?.focus();
         }} />
     </span>
   );
@@ -380,7 +400,7 @@ export function Autocomplete<
   };
 
   return (
-    <div ref={anchorRef} style={{ position: "relative", width: fullWidth ? "100%" : undefined, ...sxToStyle(sx) }}>
+    <div ref={anchorRef} data-sh-ac="" style={{ position: "relative", width: fullWidth ? "100%" : undefined, ...sxToStyle(sx) }}>
       {renderInput(params)}
       {open && pos && typeof document !== "undefined" && createPortal(
         // This popup is portaled to <body> as a sibling of any Radix Dialog that
