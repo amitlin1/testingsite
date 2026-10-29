@@ -156,7 +156,8 @@ model reference_items {
   /// A package reference's member: the package reference (an item of a
   /// package type) it belongs to, one per content line. NULL on regular
   /// reference items and on package references. Members are edited only inside
-  /// their package reference and never listed or looked up on their own.
+  /// their package reference and never listed on their own; an item's SKU with
+  /// no regular reference item is looked up among them.
   parent_reference_id Int?
   created_at        DateTime                @default(now()) @db.Timestamptz(6)
   updated_at        DateTime                @default(now()) @updatedAt @db.Timestamptz(6)

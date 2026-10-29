@@ -7,10 +7,9 @@ import { withFiles, withStation, withoutImage, type FieldErrors, type FieldKey, 
 
 /**
  * A reference item's fields — the type slot, manufacturer SKU, weight,
- * manufacturer, name, images and notes. The regular dialog, the package
- * reference's box and each of its content lines all use it, so they are the
- * same form. `typeField` is the type slot: a combobox in the regular dialog,
- * a locked field in the package one.
+ * manufacturer, name, images and notes. The package reference's box and each
+ * of its content lines use it, so they are the same form. `typeField` is the
+ * type slot (a locked field there).
  */
 export default function ReferenceItemFields({ idPrefix, draft, onDraft, errors, onClearError, stations, typeField, skuHelp, nameLabel = "שם הפריט", namePlaceholder = "תיאור קצר", weightLabel = "משקל (גר׳)" }: {
   idPrefix: string;

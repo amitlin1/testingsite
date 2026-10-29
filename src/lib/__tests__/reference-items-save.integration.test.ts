@@ -1,7 +1,7 @@
 // Package references (spec: ייחוס מארז) through the real save / delete code and the real
 // GET + reference-lookup handlers: a package reference holds one member per content line,
-// members are edited only through it, never listed or looked up on their own, and leave
-// with it. No images here (an empty upload list never reaches the object store).
+// members are edited only through it, never listed on their own (an item's SKU with no
+// regular reference item is looked up among them), and leave with it. No images here (an empty upload list never reaches the object store).
 //
 // Runs ONLY when TEST_DATABASE_URL points at a throwaway, fully migrated database:
 //   TEST_DATABASE_URL=postgresql://…/scratch node --import tsx --test src/lib/__tests__/reference-items-save.integration.test.ts
@@ -73,13 +73,28 @@ describe("package references", { skip: SKIP }, () => {
     assert.deepEqual(pcs, [], "a member is not a regular reference item of its type");
   });
 
-  it("the box label's lookup brings the members; a member's SKU alone finds nothing", async () => {
-    const found = await (await lookup.GET(new Request(`http://t/api/testing/reference-lookup?sku=BOX-${tag}&itemTypeId=${types.box}`))).json();
+  it("the box label's lookup brings the members; a member's SKU finds the member, a regular item first", async () => {
+    const look = async (sku: string, typeId: number) =>
+      (await (await lookup.GET(new Request(`http://t/api/testing/reference-lookup?sku=${sku}&itemTypeId=${typeId}`))).json());
+    const found = await look(`BOX-${tag}`, types.box);
     assert.equal(found.hasRU, true);
     assert.deepEqual(found.packageMembers.map((m: { item_type_id: number; referenceItem: { manufacturer_sku: string } }) => [m.item_type_id, m.referenceItem.manufacturer_sku]),
       [[types.pc, `PC-${tag}`], [types.mouse, `MS-${tag}`]]);
-    const member = await (await lookup.GET(new Request(`http://t/api/testing/reference-lookup?sku=PC-${tag}&itemTypeId=${types.pc}`))).json();
-    assert.equal(member.hasRU, false);
+
+    // At a regular station the item's SKU finds the box's member, as a plain reference item.
+    const member = await look(`PC-${tag}`, types.pc);
+    assert.equal(member.hasRU, true);
+    assert.equal(member.referenceItem.parent_reference_id, boxId);
+    assert.equal(member.referenceWeight, "500");
+    assert.deepEqual(member.packageMembers, []);
+    assert.equal((await look(`PC-${tag}`, types.mouse)).hasRU, false, "only among members of that type");
+
+    // An older regular reference item of the same SKU is answered instead.
+    const regId = await save.saveReferenceItem(null, { item_type_id: types.pc, ...fields(`PC-${tag}`, { reference_weight: "700" }) });
+    const regular = await look(`PC-${tag}`, types.pc);
+    assert.equal(regular.referenceItem.reference_item_id, regId);
+    assert.equal(regular.referenceWeight, "700");
+    await save.deleteReferenceItem(regId);
   });
 
   it("an edit updates a kept member, drops the one left out, adds a new one — in one save", async () => {

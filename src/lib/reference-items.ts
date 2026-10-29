@@ -45,7 +45,8 @@ import { issueTicket, newUploadId, verifyUploaded } from '@/lib/directUpload/ser
  * A reference item of a package type is a PACKAGE REFERENCE: besides the box
  * it holds one member reference item per content line (parent_reference_id),
  * made and edited only inside it (lib/reference-items-save.ts). Members are
- * never listed or looked up on their own.
+ * never listed on their own; an item's SKU with no regular reference item is
+ * looked up among them (api/testing/reference-lookup).
  */
 
 export { REFERENCE_PREFIX };

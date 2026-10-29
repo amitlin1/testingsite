@@ -4,8 +4,8 @@ import type { ReferenceStation, ReferenceStations } from "@/lib/reference-statio
 export type { ReferenceStation, ReferenceStations };
 
 /**
- * The reference-item form, shared by the regular dialog and the package
- * reference dialog (the box and each content line fill the same form).
+ * The reference-item form of the package reference dialog (the box and each
+ * content line fill the same form).
  */
 
 export interface ItemType {

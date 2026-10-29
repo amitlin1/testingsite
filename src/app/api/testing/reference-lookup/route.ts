@@ -12,10 +12,15 @@ export const runtime = "nodejs";
  * `reference_items` / `reference_item_images` tables (the /settings/reference-items
  * infrastructure). Used by the RU-check, photo-by-reference, and weighing steps.
  *
- * A package reference's members are never found on their own. When the item
- * found IS a package reference (the box label at the opening station),
- * `packageMembers` carries its members — one per content line — so the
- * wizard knows what should be in the box and what each item compares against.
+ * When the item found IS a package reference (the box label at the opening
+ * station), `packageMembers` carries its members — one per content line — so
+ * the wizard knows what should be in the box and what each item compares against.
+ *
+ * Reference items are defined inside the package references (the settings page
+ * offers package types only), so an item's SKU with no regular reference item
+ * of its own is found among the members: the latest member of that type with
+ * that SKU, with its images by station and weight, and no members of its own.
+ * A regular reference item, where an older one still exists, comes first.
  */
 export async function GET(req: Request) {
   try {
@@ -31,15 +36,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "itemTypeId must be a number" }, { status: 400 });
     }
 
-    const row = await prisma.reference_items.findFirst({
-      where: {
-        manufacturer_sku: sku,
-        parent_reference_id: null,
-        ...(itemTypeId != null ? { item_type_id: itemTypeId } : {}),
-      },
-      include: referenceItemWithMembersInclude,
-      orderBy: { updated_at: "desc" },
-    });
+    const byType = itemTypeId != null ? { item_type_id: itemTypeId } : {};
+    const row =
+      (await prisma.reference_items.findFirst({
+        where: { manufacturer_sku: sku, parent_reference_id: null, ...byType },
+        include: referenceItemWithMembersInclude,
+        orderBy: { updated_at: "desc" },
+      })) ??
+      (await prisma.reference_items.findFirst({
+        where: { manufacturer_sku: sku, parent_reference_id: { not: null }, ...byType },
+        include: referenceItemWithMembersInclude,
+        orderBy: { updated_at: "desc" },
+      }));
 
     if (!row) {
       return NextResponse.json({ hasRU: false, referenceItem: null });
