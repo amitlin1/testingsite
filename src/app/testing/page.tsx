@@ -784,6 +784,10 @@ function TestingPageView() {
   const filteredItems = React.useMemo(() => {
     const ql = filterText.trim().toLowerCase();
     const has = (v: unknown) => v != null && String(v).toLowerCase().includes(ql);
+    // A label reads "itemId-sourceId": the id part names the item, the
+    // suffix is in no field, so the whole code alone would match nothing.
+    const labelId = /^\d+-\d+$/.test(ql) ? ql.split("-")[0] : null;
+    const isId = (v: unknown) => labelId != null && v != null && String(v) === labelId;
     const base = items.filter((item) =>
       (url.customer === "" || String(item.customer_id) === url.customer) &&
       (url.shipment === "" || String(item.shipment_id) === url.shipment) &&
@@ -791,9 +795,10 @@ function TestingPageView() {
       (ql === "" ||
         has(item.makat) || has(item.serial_no) || has(item.item_id) || has(item.customer_name) ||
         has(item.shipment_code) || has(item.item_type_desc) || has(item.package_id) ||
+        isId(item.item_id) || isId(item.package_id) ||
         // A box row is found by any of its items too (an item row's
         // `package` is its parent box — siblings must not match).
-        (!!item.is_package && (item.package?.items ?? []).some((it) => has(it.item_id) || has(it.serial_no)))),
+        (!!item.is_package && (item.package?.items ?? []).some((it) => has(it.item_id) || has(it.serial_no) || isId(it.item_id)))),
     );
 
     // Hoist the scanned item to the front of the list (if present).
@@ -955,7 +960,10 @@ function TestingPageView() {
     const id = code.split("-")[0];
     const local = items.find((it) => String(it.item_id) === id || (it.serial_no ?? "") === code);
     if (local) {
+      // Like a scan located elsewhere: the field empties, so the code left in
+      // it can't hide the item and the next scan starts clean.
       setHighlightedItemId(Number(local.item_id));
+      setFilterText("");
       return;
     }
     handleBarcodeScan(code);
