@@ -23,9 +23,9 @@ import { useStationFields } from "../fields/useStationFields";
  * Which photo group this station captures. Only the numeric photo_types id is
  * kept in code, so no group name lives here (the ids are pinned by the
  * settings seed); the group's `code` is resolved at runtime from
- * /api/settings/photo-types, inactive types included. Reference images are
- * pulled from imagesByType[code] and every capture is tagged with that code,
- * so each station lists only its own group.
+ * /api/settings/photo-types, inactive types included. Every capture is tagged
+ * with that code. The reference images are the station type's own
+ * (imagesByStation — the station type is the reference set).
  */
 export type PhotoStationConfig = {
   /** photo_types.photo_type_id of the group this station captures. */
@@ -146,9 +146,9 @@ export default function PhotoStation({
 
   // ---- navigation ----
   const runLookup = React.useCallback(async () => {
-    try { const ru = await lookupRU(skuScan.trim(), item.item_type_id); setHasRU(ru.hasRU); setRefImages(photoCode ? ru.imagesByType[photoCode] ?? [] : []); }
+    try { const ru = await lookupRU(skuScan.trim(), item.item_type_id, station.test_station_type_id); setHasRU(ru.hasRU); setRefImages(ru.images); }
     catch { setHasRU(false); }
-  }, [skuScan, item.item_type_id, photoCode]);
+  }, [skuScan, item.item_type_id, station.test_station_type_id]);
 
   const onNext = async () => {
     setError(null);

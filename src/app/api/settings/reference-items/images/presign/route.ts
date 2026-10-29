@@ -6,7 +6,7 @@ import {
   MAX_IMAGE_SIZE,
   parseReferenceImageDescriptors,
   presignReferenceImages,
-  resolvePhotoTypeIds,
+  checkStationTypeIds,
 } from '@/lib/reference-items';
 
 export const runtime = 'nodejs';
@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
  * image upload.
  *
  * Body (JSON):
- *   files            [{ name, type, size, photoType }]
+ *   files            [{ name, type, size, stationTypeId }] — the station type each image is for
  *   referenceItemId  the item being edited, or null/absent for a new item
  *
  * Answer: one ticket per file, same order, into the RU bucket. The browser
@@ -54,12 +54,12 @@ export async function POST(request: Request) {
       referenceItemId = n;
     }
 
-    // Unknown photo-type codes are refused here, before any ticket or row exists.
+    // Unknown station types are refused here, before any ticket or row exists.
     try {
-      await resolvePhotoTypeIds(parsed.files.map((f) => f.photoType));
+      await checkStationTypeIds(parsed.files.map((f) => f.stationTypeId));
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : 'סוג תמונה לא תקין' },
+        { error: e instanceof Error ? e.message : 'עמדה לא תקינה' },
         { status: 400 },
       );
     }

@@ -9,8 +9,7 @@ import { AMBER_INK, BLUE, HAIR, MUTED } from "@/app/components/packages/packageU
  * above an item's scan the member expected for it.
  */
 
-const PT_PRODUCT = "product";
-const photosOf = (m: RefMember) => (m.imagesByType[PT_PRODUCT] ?? []).length;
+const photosOf = (m: RefMember) => m.images.length;
 
 /** Under the box scan: what should be in the box, by the package reference. */
 export function ExpectedContents({ types, expectedOf, boxPhotos }: {

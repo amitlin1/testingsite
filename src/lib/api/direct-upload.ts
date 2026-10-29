@@ -295,14 +295,14 @@ export async function uploadFileManagerFile(
 export interface ReferenceImageInput {
   file: File;
   fileName: string;
-  /** photo_types.code the image belongs to. */
-  photoType: string;
+  /** The station type the image is for. */
+  stationTypeId: number;
 }
 
 export interface UploadedReferenceImage {
   objectKey: string;
   fileName: string;
-  photoType: string;
+  stationTypeId: number;
 }
 
 /**
@@ -326,7 +326,7 @@ export async function uploadReferenceImages(
         name: img.fileName,
         type: img.file.type || null,
         size: img.file.size,
-        photoType: img.photoType,
+        stationTypeId: img.stationTypeId,
       })),
     },
     "presign",
@@ -350,6 +350,6 @@ export async function uploadReferenceImages(
   return images.map((img, i) => ({
     objectKey: presign.uploads[i].objectKey,
     fileName: img.fileName,
-    photoType: img.photoType,
+    stationTypeId: img.stationTypeId,
   }));
 }

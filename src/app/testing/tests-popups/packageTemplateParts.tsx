@@ -92,7 +92,9 @@ export type Target = {
   patch: RunPatch;
   photos: PhotoHandlers;
   fill: (text: string) => string;
-  refImages: (code: string) => RefImg[];
+  /** The reference images at this station (the box's, or the item's) — every photo component that
+   *  shows reference images shows these. */
+  refImages: RefImg[];
   /** Heads a step whose photos lean on the reference when the lookup found none; null = it found one. */
   noReference: string | null;
   /** The route's fields block, drawn where the slot puts it in this step (null = not here), and the
@@ -129,7 +131,7 @@ export function StepComponents({ step, t }: { step: TemplateStep; t: Target }) {
               <div key={c.id}>
                 {/* A lone photo component is the step's own subject; several are told apart by their titles. */}
                 {photoCount > 1 && <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>{t.fill(c.title)}</div>}
-                <PhotoUploader photos={t.run.photos[c.id] ?? []} refImages={c.show_reference ? t.refImages(c.photo_code) : []}
+                <PhotoUploader photos={t.run.photos[c.id] ?? []} refImages={c.show_reference ? t.refImages : []}
                   onPick={(f) => t.photos.pick(c, f)} onRemove={(i) => t.photos.remove(c, i)} />
               </div>
             );

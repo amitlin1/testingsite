@@ -114,7 +114,7 @@ export function TemplatePopup({
   // (ItemRow.last_sku) when the template says so.
   const [phaseIdx, setPhaseIdx] = React.useState(0);
   const [state, setState] = React.useState<TemplateRunState>(() => emptyRunState(sku?.carry_last ? item.last_sku ?? "" : ""));
-  const [refImages, setRefImages] = React.useState<Record<string, RefImg[]>>({});
+  const [refImages, setRefImages] = React.useState<RefImg[]>([]);
   const [lookedUpFor, setLookedUpFor] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -137,17 +137,17 @@ export function TemplatePopup({
     if (!sku?.lookup_reference || !scanned || lookedUpFor === scanned) return;
     setBusy(true);
     try {
-      const ru = await lookupRU(scanned, item.item_type_id);
+      const ru = await lookupRU(scanned, item.item_type_id, station.test_station_type_id);
       setState((s) => ({ ...s, hasRU: ru.hasRU, refWeight: ru.refWeight }));
-      setRefImages(ru.imagesByType);
+      setRefImages(ru.images);
     } catch {
       setState((s) => ({ ...s, hasRU: false, refWeight: null }));
-      setRefImages({});
+      setRefImages([]);
     } finally {
       setLookedUpFor(scanned);
       setBusy(false);
     }
-  }, [sku, state.sku, lookedUpFor, item.item_type_id]);
+  }, [sku, state.sku, lookedUpFor, item.item_type_id, station.test_station_type_id]);
 
   // ---- photos: each component's shots go to storage tagged with its own group ----
   const { discard, landed } = useShotDiscard(workerId);
@@ -238,7 +238,7 @@ export function TemplatePopup({
       case "photo":
         return (
           <PhotoSection key={c.id} title={fill(c.title)}>
-            <PhotoUploader photos={state.photos[c.id] ?? []} refImages={c.show_reference ? refImages[c.photo_code] ?? [] : []}
+            <PhotoUploader photos={state.photos[c.id] ?? []} refImages={c.show_reference ? refImages : []}
               onPick={(f) => pickPhoto(c, f)} onRemove={(i) => removePhoto(c, i)} />
           </PhotoSection>
         );

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
  * Reference ("RU") lookup for the intake wizard.
  *
  * Given an item type + manufacturer SKU, returns whether a reference item exists
- * (`hasRU`), its reference weight, and its reference images — sourced from the
+ * (`hasRU`), its reference weight, and its reference images by station type — sourced from the
  * `reference_items` / `reference_item_images` tables (the /settings/reference-items
  * infrastructure). Used by the RU-check, photo-by-reference, and weighing steps.
  *
@@ -51,16 +51,15 @@ export async function GET(req: Request) {
       referenceItem: ref,
       referenceWeight: ref.reference_weight,
       images: ref.images,
-      // Grouped by photo-type code ("package" | "product" | ...): each wizard
-      // screen pulls only its own reference set.
-      imagesByType: ref.images_by_type,
+      // By station type ("<test_station_type_id>"): each station shows only its own images.
+      imagesByStation: ref.images_by_station,
       coverUrl: ref.cover_url,
       packageMembers: members.map((m) => ({
         item_type_id: m.item_type_id,
         item_type_desc: m.item_type_desc,
         referenceItem: { ...m, members: undefined },
         referenceWeight: m.reference_weight,
-        imagesByType: m.images_by_type,
+        imagesByStation: m.images_by_station,
         coverUrl: m.cover_url,
       })),
     });

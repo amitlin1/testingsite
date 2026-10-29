@@ -77,8 +77,16 @@ const MAX_PHOTO_BYTES = MAX_PHOTO_MB * 1024 * 1024;
 export const SKU_TITLE = "סריקת מק״ט יצרן";
 export const SKU_DESC = "סרוק את מק״ט היצרן של המוצר לזיהוי פריט הייחוס.";
 
-/** Reference ("RU") lookup — reference weight + images grouped by photo-type code. */
-export async function lookupRU(sku: string, itemTypeId: number | null) {
+/** The reference images a lookup answered for one station type (imagesByStation): the station
+ *  type is the reference set (docs/popup-templates/PLAN.md §5ג). */
+export function stationImagesOf(imagesByStation: unknown, stationTypeId: number): RefImg[] {
+  if (imagesByStation == null || typeof imagesByStation !== "object") return [];
+  const list = (imagesByStation as Record<string, unknown>)[String(stationTypeId)];
+  return Array.isArray(list) ? (list as RefImg[]) : [];
+}
+
+/** Reference ("RU") lookup — reference weight + the reference images of the station it is asked at. */
+export async function lookupRU(sku: string, itemTypeId: number | null, stationTypeId: number) {
   const qs = new URLSearchParams({ sku });
   if (itemTypeId != null) qs.set("itemTypeId", String(itemTypeId));
   const res = await apiFetch(`/api/testing/reference-lookup?${qs.toString()}`);
@@ -86,7 +94,7 @@ export async function lookupRU(sku: string, itemTypeId: number | null) {
   const weight = d.referenceWeight == null ? NaN : Number(String(d.referenceWeight).trim());
   return {
     hasRU: !!d.hasRU,
-    imagesByType: (d.imagesByType ?? {}) as Record<string, RefImg[]>,
+    images: stationImagesOf(d.imagesByStation, stationTypeId),
     /** The reference item's weight in grams; null when it has none. */
     refWeight: Number.isFinite(weight) && weight > 0 ? weight : null,
   };

@@ -141,13 +141,13 @@ function OpeningPopup({
   // ---- reference lookups, driven by what is scanned -------------------------
   // The box: its label among the package type's reference items. The answer also supplies the
   // box photos' reference sets, so it stays live past the scan.
-  const boxLookup = useReferenceLookup(box.sku, item.item_type_id, open && (boxSkuC?.lookup_reference ?? false));
+  const boxLookup = useReferenceLookup(box.sku, item.item_type_id, open && (boxSkuC?.lookup_reference ?? false), station.test_station_type_id);
   const boxHasRU = boxLookup.ref ? boxLookup.ref.hasRU : null;
   // The item being worked on: its label among its own type's reference items, only while its scan
   // is up. Moving on copies the answer into its work.
   const curItem = itemIdx != null ? items[itemIdx] ?? null : null;
   const onItemScan = curItem != null && phase === 0 && itemSkuC != null;
-  const itemLookup = useReferenceLookup(curItem && onItemScan ? (work[curItem.item_id]?.run.sku ?? "") : "", curItem?.item_type_id, onItemScan && itemSkuC.lookup_reference);
+  const itemLookup = useReferenceLookup(curItem && onItemScan ? (work[curItem.item_id]?.run.sku ?? "") : "", curItem?.item_type_id, onItemScan && itemSkuC.lookup_reference, station.test_station_type_id);
 
   const workOf = (id: string): OpeningItemWork => work[id] ?? freshItemWork();
   const patchWork = (id: string, fn: (w: OpeningItemWork) => OpeningItemWork) => setWork((all) => ({ ...all, [id]: fn(all[id] ?? freshItemWork()) }));
@@ -170,7 +170,7 @@ function OpeningPopup({
     else acc.push({ id: it.item_type_id, desc: it.item_type_desc, count: 1 });
     return acc;
   }, []);
-  const boxRefImages = (code: string): RefImg[] => boxLookup.ref?.imagesByType[code] ?? [];
+  const boxRefImages: RefImg[] = boxLookup.ref?.images ?? [];
 
   // Every item starts at its flow's first phase. With a scan there, its reference item's SKU —
   // the member the package reference expects for its type — is already in it, as its serial is;
@@ -186,7 +186,7 @@ function OpeningPopup({
       } else {
         const ref = resolveItemReference(expected?.sku ?? "", expected, NO_REF, it.item_type_desc);
         patchWork(it.item_id, () => ({
-          ...freshItemWork(), sku: expected?.sku ?? null, refImages: ref.imagesByType, refSource: ref.source, expectedSku: ref.expectedSku,
+          ...freshItemWork(), sku: expected?.sku ?? null, refImages: ref.images, refSource: ref.source, expectedSku: ref.expectedSku,
           run: { ...emptyRunState(), hasRU: ref.hasRU, refWeight: ref.refWeight },
         }));
       }
@@ -427,7 +427,7 @@ function OpeningPopup({
         if (sku !== curWork.sku) {
           const ref = resolveItemReference(sku, expectedOf(curItem), (itemSkuC.lookup_reference ? itemLookup.ref : null) ?? NO_REF, curItem.item_type_desc);
           patchWork(curItem.item_id, (w) => ({
-            ...w, sku, refImages: ref.imagesByType, refSource: ref.source, expectedSku: ref.expectedSku,
+            ...w, sku, refImages: ref.images, refSource: ref.source, expectedSku: ref.expectedSku,
             run: { ...w.run, hasRU: ref.hasRU, refWeight: ref.refWeight },
           }));
         }
@@ -487,7 +487,7 @@ function OpeningPopup({
   });
   const itemTarget = (it: PackageItemView, w: OpeningItemWork): Target => ({
     run: w.run, patch: patchItemRun(it.item_id), photos: photosFor(it.item_id, w.run, patchItemRun(it.item_id)), fill: fillItem(it, w),
-    refImages: (code) => w.refImages[code] ?? [],
+    refImages: w.refImages,
     noReference: w.run.hasRU === false ? OPEN_TEXT.itemNoReference(w.sku ?? "") : null,
     fieldsHere: flowSlot?.stepIndex === phase
       ? {
@@ -544,7 +544,7 @@ function OpeningPopup({
         {/* The package reference the label found: what should be in the box. */}
         {kitMembers && !boxLookup.checking && box.sku.trim() !== "" && (
           <ExpectedContents types={boxTypes} expectedOf={(id) => expectedOf({ item_type_id: id })}
-            boxPhotos={cfg.steps.flatMap((s) => s.components).reduce((n, c) => n + (c.kind === "photo" && c.show_reference ? boxRefImages(c.photo_code).length : 0), 0)} />
+            boxPhotos={cfg.steps.some((s) => s.components.some((c) => c.kind === "photo" && c.show_reference)) ? boxRefImages.length : 0} />
         )}
       </>
     ) : <StepComponents step={stepDef} t={boxTarget(step)} />;

@@ -1,11 +1,13 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/app/lib/prisma';
 import {
+  checkStationTypeIds,
   createReferenceImageRows,
   parseReferenceImageUploads,
   parseReferenceWeight,
   registerReferenceImages,
   removeReferenceImageObjects,
+  stationTypeIdOf,
   verifyReferenceImageUploads,
   type ReferenceImageUpload,
   type VerifiedReferenceImage,
@@ -18,9 +20,11 @@ import {
  * Body (JSON):
  *   item_type_id, manufacturer_sku, manufacturer, name?, reference_weight?
  *   (grams), notes?, images (NEW uploads, already in MinIO through
- *   images/presign), keepImageIds? (edit: existing image ids to keep; absent =
- *   keep all), primaryKey? ("<existingImageId>" | "new:<index>") or
- *   primaryIndex? (index into images)
+ *   images/presign, each with its stationTypeId), keepImageIds? (edit: existing
+ *   image ids to keep; absent = keep all), imageStations? (edit: { "<existing
+ *   image id>": stationTypeId } — an image moved to another station, or an
+ *   unassigned one given its station), primaryKey? ("<existingImageId>" |
+ *   "new:<index>") or primaryIndex? (index into images)
  *   members?  package types only: the package reference's members, one per
  *             content line — [{ item_type_id, reference_item_id? (an existing
  *             member), ...the same fields as above }]. A member left out is
@@ -50,6 +54,8 @@ type ItemForm = {
   uploads: ReferenceImageUpload[];
   /** null = keep every existing image. */
   keepImageIds: number[] | null;
+  /** Existing image id → the station type it moves to. */
+  imageStations: Map<number, number>;
   /** "<existingImageId>" | "new:<index>" | "" */
   primaryKey: string;
 };
@@ -74,6 +80,15 @@ function parseItemForm(raw: Raw, who: string): ItemForm {
   } catch (e) {
     throw fail(e instanceof Error ? e.message : 'רשימת התמונות אינה תקינה');
   }
+  const imageStations = new Map<number, number>();
+  if (raw.imageStations != null) {
+    if (!isObj(raw.imageStations)) throw fail('שיוך התמונות לעמדות אינו תקין');
+    for (const [imageId, station] of Object.entries(raw.imageStations)) {
+      const stationTypeId = stationTypeIdOf(station);
+      if (!/^\d+$/.test(imageId) || stationTypeId == null) throw fail('שיוך התמונות לעמדות אינו תקין');
+      imageStations.set(Number(imageId), stationTypeId);
+    }
+  }
   const primaryIndex = raw.primaryIndex;
   return {
     manufacturerSku,
@@ -83,6 +98,7 @@ function parseItemForm(raw: Raw, who: string): ItemForm {
     notes: str(raw.notes) || null,
     uploads,
     keepImageIds: Array.isArray(raw.keepImageIds) ? raw.keepImageIds.map(Number).filter(Number.isFinite) : null,
+    imageStations,
     primaryKey: str(raw.primaryKey) || (primaryIndex != null && primaryIndex !== '' ? `new:${Number(primaryIndex)}` : ''),
   };
 }
@@ -116,6 +132,14 @@ function resolvePrimary(existing: Existing | null, plan: ImagePlan, newRows: { r
   }
   const surviving = existing?.primary_image_id != null && plan.keep.includes(existing.primary_image_id) ? existing.primary_image_id : null;
   return surviving ?? plan.keep[0] ?? newRows[0]?.reference_item_image_id ?? null;
+}
+
+/** The kept images the form moved to another station (an image of another item is never touched). */
+async function moveImages(tx: Prisma.TransactionClient, plan: ImagePlan, form: ItemForm): Promise<void> {
+  for (const [imageId, stationTypeId] of form.imageStations) {
+    if (!plan.keep.includes(imageId)) continue;
+    await tx.reference_item_images.update({ where: { reference_item_image_id: imageId }, data: { test_station_type_id: stationTypeId } });
+  }
 }
 
 const fieldsOf = (f: ItemForm) => ({
@@ -172,6 +196,7 @@ export async function saveReferenceItem(id: number | null, body: Raw): Promise<n
   // ---- uploads: verified before anything is written ----------------------------
   const verify = async (f: ItemForm, who: string): Promise<VerifiedReferenceImage[]> => {
     try {
+      await checkStationTypeIds([...f.imageStations.values()]);
       return await verifyReferenceImageUploads(f.uploads);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'תמונה לא תקינה';
@@ -210,6 +235,7 @@ export async function saveReferenceItem(id: number | null, body: Raw): Promise<n
         await tx.reference_items.deleteMany({ where: { reference_item_id: { in: removedMembers.map((m) => m.reference_item_id) } } });
       }
 
+      await moveImages(tx, plan, form);
       const newRows = await createReferenceImageRows(tx, ownId, verified, plan.startSort);
       await tx.reference_items.update({
         where: { reference_item_id: ownId },
@@ -224,6 +250,7 @@ export async function saveReferenceItem(id: number | null, body: Raw): Promise<n
           data: { item_type_id: m.itemTypeId, parent_reference_id: ownId, ...fieldsOf(m) },
           select: { reference_item_id: true },
         })).reference_item_id;
+        await moveImages(tx, mPlan, m);
         const rows = await createReferenceImageRows(tx, memberId, memberVerified[i], mPlan.startSort);
         await tx.reference_items.update({
           where: { reference_item_id: memberId },

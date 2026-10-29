@@ -47,7 +47,7 @@ export type OpeningItemWork = {
   /** The SKU the reference below was resolved for; null until then. */
   sku: string | null;
   /** The reference's images, by photo group (photo_types.code). */
-  refImages: Record<string, RefImg[]>;
+  refImages: RefImg[];
   refSource: RefSource | null;
   expectedSku: string | null;
   done: boolean;
@@ -56,7 +56,7 @@ export type OpeningItemWork = {
 };
 
 export const freshItemWork = (scan = ""): OpeningItemWork => ({
-  run: emptyRunState(scan), sku: null, refImages: {}, refSource: null, expectedSku: null, done: false, fields: {},
+  run: emptyRunState(scan), sku: null, refImages: [], refSource: null, expectedSku: null, done: false, fields: {},
 });
 
 /** Today's `weight` key: the flow's first weight component against the item's reference, or null

@@ -22,8 +22,8 @@ import { apiFetch } from "@/lib/api/client";
 import ReferenceItemFields from "./ReferenceItemFields";
 import PackageReferenceDialog from "./PackageReferenceDialog";
 import {
-  checkDraft, draftOf, draftPayload, revokeDraftUrls, startUploadType,
-  type FieldErrors, type FieldKey, type ItemDraft, type ItemType, type PhotoType, type ReferenceItem, type TemplateLine,
+  checkDraft, draftOf, draftPayload, revokeDraftUrls, stationsFor,
+  type FieldErrors, type FieldKey, type ItemDraft, type ItemType, type ReferenceItem, type ReferenceStations, type TemplateLine,
 } from "./referenceForm";
 
 // ---- Design tokens (Shifthouse) --------------------------------------------
@@ -55,13 +55,8 @@ type LinesState = { status: "loading" } | { status: "error" } | { status: "ready
 export default function ReferenceItemsPage() {
   const [itemTypes, setItemTypes] = React.useState<ItemType[]>([]);
   const [selectedType, setSelectedType] = React.useState<ItemType | null>(null);
-  const [photoTypes, setPhotoTypes] = React.useState<PhotoType[]>([]);
-  // item_type_id → the station types on its routes; null when the routes did not load (every station shows).
-  const [stationsByType, setStationsByType] = React.useState<Map<number, Set<number>> | null>(null);
-  const stationTypesOf = React.useCallback(
-    (itemTypeId: number | null | undefined) => (stationsByType && itemTypeId != null ? stationsByType.get(itemTypeId) ?? new Set<number>() : null),
-    [stationsByType],
-  );
+  // The stations that take reference images, per item type in route order; null until loaded.
+  const [stations, setStations] = React.useState<ReferenceStations | null>(null);
 
   const [items, setItems] = React.useState<ReferenceItem[]>([]);
   const [loadingItems, setLoadingItems] = React.useState(false);
@@ -95,23 +90,10 @@ export default function ReferenceItemsPage() {
       .then(okJson)
       .then((data: ItemType[]) => setItemTypes(Array.isArray(data) ? data : []))
       .catch(() => { setItemTypes([]); setOptionsError(true); });
-    apiFetch("/api/settings/photo-types")
+    apiFetch("/api/settings/reference-items/stations")
       .then(okJson)
-      .then((data: PhotoType[]) => setPhotoTypes(Array.isArray(data) ? data : []))
-      .catch(() => { setPhotoTypes([]); setOptionsError(true); });
-    // Best effort: without the routes every station's photo components show.
-    apiFetch("/api/settings/testing-routes")
-      .then(okJson)
-      .then((rows: { item_type_id: number; route_steps: number[] | null }[]) => {
-        const map = new Map<number, Set<number>>();
-        for (const r of Array.isArray(rows) ? rows : []) {
-          const set = map.get(r.item_type_id) ?? new Set<number>();
-          for (const st of r.route_steps ?? []) set.add(st);
-          map.set(r.item_type_id, set);
-        }
-        setStationsByType(map);
-      })
-      .catch(() => setStationsByType(null));
+      .then((data: ReferenceStations) => setStations(data && Array.isArray(data.stations) && data.byItemType ? data : null))
+      .catch(() => { setStations(null); setOptionsError(true); });
   }, []);
   const loadOptions = React.useCallback(() => {
     setOptionsError(false);
@@ -204,14 +186,12 @@ export default function ReferenceItemsPage() {
     : `${items.length} ${noun}`;
 
   // ---- dialogs -------------------------------------------------------------
-  const fallbackPhoto = photoTypes[0]?.code ?? "";
-
   const openPackage = (editing: ReferenceItem | null) => setPkgDialog({ key: ++pkgOpenings.current, editing });
 
   const openNew = () => {
     if (isPackage) { openPackage(null); return; }
     setFormType(selectedType);
-    setDraft(draftOf(null, startUploadType(photoTypes, ""), fallbackPhoto));
+    setDraft(draftOf(null));
     setFormError("");
     setFieldErrors({});
     setFormOpen(true);
@@ -220,7 +200,7 @@ export default function ReferenceItemsPage() {
   const openEdit = (it: ReferenceItem) => {
     if (itemTypes.find((t) => t.item_type_id === it.item_type_id)?.is_package) { openPackage(it); return; }
     setFormType(itemTypes.find((t) => t.item_type_id === it.item_type_id) ?? selectedType);
-    setDraft(draftOf(it, startUploadType(photoTypes, ""), fallbackPhoto));
+    setDraft(draftOf(it));
     setFormError("");
     setFieldErrors({});
     setFormOpen(true);
@@ -481,8 +461,7 @@ export default function ReferenceItemsPage() {
                 onDraft={setDraft}
                 errors={fieldErrors}
                 onClearError={clearFieldError}
-                photoTypes={photoTypes}
-                relevantStationTypes={stationTypesOf(formType?.item_type_id)}
+                stations={stationsFor(stations, formType?.item_type_id)}
                 typeField={
                   // Package types have their own dialog (a package reference).
                   <SearchableCombobox<ItemType>
@@ -543,8 +522,7 @@ export default function ReferenceItemsPage() {
           packageType={selectedType}
           editing={pkgDialog.editing}
           lines={templateLines}
-          photoTypes={photoTypes}
-          stationTypesOf={stationTypesOf}
+          stations={stations}
           onClose={() => setPkgDialog(null)}
           onSaved={() => { setPkgDialog(null); loadItems(selectedType.item_type_id); }}
         />

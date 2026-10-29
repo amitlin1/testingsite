@@ -326,65 +326,98 @@
 @media (max-width: 600px) {
   .ri-form-grid { grid-template-columns: minmax(0, 1fr); }
 }
-/* Photo-group choice ("העלאה אל"). */
-.ri-chip {
-  min-height: 32px;
-  padding: 0 14px;
-  font: inherit;
+/* Reference images by station (docs/popup-templates/PLAN.md §5ג): one section per station of the
+   item's route, in route order, each with its images and its own drop target. */
+.ri-stations-hint { margin: 2px 0 10px; font-size: var(--text-small); color: var(--color-ink-muted-48); }
+.ri-stations-empty {
+  margin: 0 0 10px;
+  padding: 12px 14px;
   font-size: var(--text-small);
-  font-weight: var(--fw-semibold);
   color: var(--color-ink);
-  background: var(--color-canvas);
-  border: 1.5px solid var(--color-hairline);
-  border-radius: var(--r-pill);
-  cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .ri-chip:hover { border-color: var(--color-primary); }
-}
-.ri-chip[aria-pressed="true"] { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
-/* "העלאה אל:" — the unowned groups, then one row per station type with its photo
-   components (docs/popup-templates/PLAN.md §3.4); other stations fold away. */
-.ri-upload { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.ri-upload-row { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; }
-.ri-upload-row__station {
-  min-width: 96px;
-  font-size: var(--text-small);
-  font-weight: var(--fw-semibold);
-  color: var(--color-ink);
-}
-.ri-upload-more {
-  align-self: flex-start;
-  font: inherit;
-  font-size: var(--text-small);
-  color: var(--color-primary);
-  background: none;
-  border: 0;
-  padding: 2px 0;
-  cursor: pointer;
-}
-.ri-upload-more:disabled { color: var(--color-ink-muted-48); cursor: default; }
-.ri-upload-more:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; border-radius: var(--r-xs); }
-/* The drop zone opens the file picker by click or keyboard. */
-.ri-drop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 22px;
-  text-align: center;
-  cursor: pointer;
   background: var(--color-surface-pearl);
-  border: 1.5px dashed var(--color-border-strong);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+}
+.ri-stations { display: flex; flex-direction: column; gap: 10px; }
+.ri-station {
+  padding: 12px 14px 14px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: var(--r-md);
   transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
-.ri-drop--over { border-color: var(--color-primary); background: var(--color-primary-tint); }
-@media (hover: hover) and (pointer: fine) {
-  .ri-drop:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
+.ri-station--over { border-color: var(--color-primary); background: var(--color-primary-tint); }
+.ri-station--unassigned { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
+.ri-station__head { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; min-height: 32px; }
+.ri-station__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-radius: var(--r-pill);
 }
-.ri-drop:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.ri-station__name { font-size: var(--text-body-sm); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.ri-station__count { flex: 1; font-size: var(--text-fine); color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; }
+.ri-station__note { margin: 6px 0 0; font-size: var(--text-small); color: var(--color-ink-muted-70); }
+.ri-station__drop {
+  margin-top: 10px;
+  padding: 14px;
+  text-align: center;
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-70);
+  cursor: pointer;
+  background: var(--color-surface-pearl);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ri-station__drop:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
+}
+.ri-station__drop:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.ri-station__drop-link { color: var(--color-primary); font-weight: var(--fw-semibold); }
+.ri-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--space-sm); margin-top: 10px; }
+.ri-thumb { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ri-thumb__frame {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+}
+.ri-thumb__frame[data-primary] { border: 2px solid var(--color-primary); }
+.ri-thumb__frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.ri-thumb__actions { position: absolute; top: 4px; inset-inline-start: 4px; display: flex; gap: 4px; }
+.ri-thumb__cover {
+  position: absolute;
+  bottom: 0;
+  inset-inline: 0;
+  padding: 2px 0;
+  text-align: center;
+  font-size: var(--text-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+}
+.ri-assign {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: var(--text-fine);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--r-xs);
+}
+.ri-assign:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
 /* The package reference dialog: the box and its content lines in a rail
    beside the form. The rail stacks above the form on narrow screens. */
 .ri-pkg { display: flex; flex-wrap: wrap; min-height: 560px; }

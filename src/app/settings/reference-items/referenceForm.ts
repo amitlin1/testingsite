@@ -1,4 +1,7 @@
 import { uploadReferenceImages } from "@/lib/api/direct-upload";
+import type { ReferenceStation, ReferenceStations } from "@/lib/reference-stations";
+
+export type { ReferenceStation, ReferenceStations };
 
 /**
  * The reference-item form, shared by the regular dialog and the package
@@ -11,22 +14,34 @@ export interface ItemType {
   is_package: boolean;
 }
 
-export interface PhotoType {
-  photo_type_id: number;
-  code: string;
-  photo_type_desc: string;
-  sort_order: number;
-  /** The station type whose popup template owns the group (its photo component); null = none. */
-  station_type_id?: number | null;
-  station_type_desc?: string | null;
+/** The stations one item type's images go to (GET /api/settings/reference-items/stations): those of
+ *  its routes that show reference images, in route order, and every station's name. */
+export type StationsFor = { route: ReferenceStation[]; nameOf: (stationTypeId: number) => string };
+
+/** The stations of an item type, from the stations answer (null while it loads or after it failed). */
+export function stationsFor(all: ReferenceStations | null, itemTypeId: number | null | undefined): StationsFor {
+  const names = new Map((all?.stations ?? []).map((s) => [s.id, s.name]));
+  const ids = all && itemTypeId != null ? all.byItemType[String(itemTypeId)] ?? [] : [];
+  return {
+    route: ids.map((id) => ({ id, name: names.get(id) ?? `עמדה ${id}` })),
+    nameOf: (id) => names.get(id) ?? `עמדה ${id}`,
+  };
+}
+
+/** A package reference's member: the box's stations first (its items are photographed there too —
+ *  the opening's item flow), then its own route's. */
+export function memberStations(all: ReferenceStations | null, packageTypeId: number, memberTypeId: number): StationsFor {
+  const box = stationsFor(all, packageTypeId);
+  const own = stationsFor(all, memberTypeId);
+  return { route: [...box.route, ...own.route.filter((s) => !box.route.some((b) => b.id === s.id))], nameOf: own.nameOf };
 }
 
 export interface RefImage {
   id: number;
   file_name: string;
   sort_order: number;
-  /** photo_types.code — which group this image belongs to ("package" | "product" | ...). */
-  photo_type: string | null;
+  /** The station type the image is for; null = not assigned to a station (an older upload). */
+  station_type_id: number | null;
   url: string;
   is_primary: boolean;
 }
@@ -57,10 +72,12 @@ export interface TemplateLine {
 
 // A form image is either one already stored on the server, or a freshly
 // selected File that hasn't been uploaded yet. `key` is stable within the form.
-// `photoType` is the photo_types.code of the group the image belongs to.
+// `stationTypeId` is the station type the image is for (null: an existing image
+// not assigned yet); `savedStationTypeId` is where the server has it, so a save
+// sends only the images that moved.
 export type FormImage =
-  | { key: string; kind: "existing"; id: number; url: string; fileName: string; photoType: string }
-  | { key: string; kind: "new"; url: string; file: File; fileName: string; photoType: string };
+  | { key: string; kind: "existing"; id: number; url: string; fileName: string; stationTypeId: number | null; savedStationTypeId: number | null }
+  | { key: string; kind: "new"; url: string; file: File; fileName: string; stationTypeId: number };
 
 /** The form fields a save checks; each error is shown on its field. */
 export type FieldKey = "type" | "sku" | "manu" | "weight" | "name";
@@ -77,21 +94,20 @@ export type ItemDraft = {
   images: FormImage[];
   /** The cover: a FormImage key. */
   primaryKey: string | null;
-  /** Which photo group newly-added files go to (photo_types.code). */
-  uploadType: string;
 };
 
 let keySeq = 0;
 const nextKey = () => `img_${Date.now()}_${keySeq++}`;
 
-export function draftOf(item: ReferenceItem | null, uploadType: string, fallbackPhotoType: string): ItemDraft {
+export function draftOf(item: ReferenceItem | null): ItemDraft {
   const images: FormImage[] = (item?.images ?? []).map((img) => ({
     key: `e_${img.id}`,
     kind: "existing",
     id: img.id,
     url: img.url,
     fileName: img.file_name,
-    photoType: img.photo_type ?? fallbackPhotoType,
+    stationTypeId: img.station_type_id,
+    savedStationTypeId: img.station_type_id,
   }));
   const primary = item?.images.find((i) => i.is_primary) ?? item?.images[0];
   return {
@@ -103,13 +119,7 @@ export function draftOf(item: ReferenceItem | null, uploadType: string, fallback
     notes: item?.notes ?? "",
     images,
     primaryKey: primary ? `e_${primary.id}` : null,
-    uploadType,
   };
-}
-
-/** The upload group a new form starts on: `preferred` when it is offered, else the first. */
-export function startUploadType(photoTypes: PhotoType[], preferred: string): string {
-  return photoTypes.some((pt) => pt.code === preferred) ? preferred : photoTypes[0]?.code ?? "";
 }
 
 /** Grams: a plain positive number — the stations compare it with Number(). */
@@ -128,14 +138,19 @@ export function checkDraft(d: ItemDraft): FieldErrors {
 
 export const isComplete = (d: ItemDraft) => Object.keys(checkDraft(d)).length === 0;
 
-/** Add picked files to the draft, tagged with its current photo group. */
-export function withFiles(d: ItemDraft, files: File[]): ItemDraft {
+/** Add picked files to the draft, for one station. */
+export function withFiles(d: ItemDraft, files: File[], stationTypeId: number): ItemDraft {
   const added: FormImage[] = files
     .filter((f) => f.type.startsWith("image/"))
-    .map((f) => ({ key: nextKey(), kind: "new", url: URL.createObjectURL(f), file: f, fileName: f.name, photoType: d.uploadType }));
+    .map((f) => ({ key: nextKey(), kind: "new", url: URL.createObjectURL(f), file: f, fileName: f.name, stationTypeId }));
   if (added.length === 0) return d;
   const images = [...d.images, ...added];
   return { ...d, images, primaryKey: d.primaryKey ?? images[0]?.key ?? null };
+}
+
+/** An image moved to a station — or an unassigned one given its station. */
+export function withStation(d: ItemDraft, key: string, stationTypeId: number): ItemDraft {
+  return { ...d, images: d.images.map((i) => (i.key === key ? { ...i, stationTypeId } : i)) };
 }
 
 export function withoutImage(d: ItemDraft, key: string): ItemDraft {
@@ -157,10 +172,12 @@ export function revokeDraftUrls(d: ItemDraft | null) {
 export async function draftPayload(d: ItemDraft): Promise<Record<string, unknown>> {
   const fresh = d.images.filter((i): i is Extract<FormImage, { kind: "new" }> => i.kind === "new");
   const images = await uploadReferenceImages(
-    fresh.map((img) => ({ file: img.file, fileName: img.fileName, photoType: img.photoType })),
+    fresh.map((img) => ({ file: img.file, fileName: img.fileName, stationTypeId: img.stationTypeId })),
     d.id,
   );
   const primary = d.images.find((i) => i.key === d.primaryKey);
+  const moved = d.images.filter((i): i is Extract<FormImage, { kind: "existing" }> =>
+    i.kind === "existing" && i.stationTypeId != null && i.stationTypeId !== i.savedStationTypeId);
   return {
     manufacturer_sku: d.sku.trim(),
     manufacturer: d.manu.trim(),
@@ -169,6 +186,7 @@ export async function draftPayload(d: ItemDraft): Promise<Record<string, unknown
     notes: d.notes.trim(),
     images,
     keepImageIds: d.images.filter((i) => i.kind === "existing").map((i) => (i as Extract<FormImage, { kind: "existing" }>).id),
+    imageStations: Object.fromEntries(moved.map((i) => [String(i.id), i.stationTypeId])),
     primaryKey: primary?.kind === "existing" ? String(primary.id) : primary ? `new:${fresh.indexOf(primary)}` : "",
   };
 }

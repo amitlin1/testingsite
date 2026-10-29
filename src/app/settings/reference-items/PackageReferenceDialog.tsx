@@ -7,10 +7,9 @@ import {
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import ReferenceItemFields from "./ReferenceItemFields";
-import { OPENING_PHOTO_CODES } from "@/app/lib/popup-templates/codePopups";
 import {
-  checkDraft, draftOf, draftPayload, isComplete, revokeDraftUrls, startUploadType,
-  type FieldErrors, type FieldKey, type ItemDraft, type ItemType, type PhotoType, type ReferenceItem, type TemplateLine,
+  checkDraft, draftOf, draftPayload, isComplete, memberStations, revokeDraftUrls, stationsFor,
+  type FieldErrors, type FieldKey, type ItemDraft, type ItemType, type ReferenceItem, type ReferenceStations, type TemplateLine,
 } from "./referenceForm";
 
 /**
@@ -39,31 +38,23 @@ const STATUS: Record<Status, { label: string; tone: TagTone }> = {
 
 const MUTED = "var(--color-ink-muted-48)";
 
-export default function PackageReferenceDialog({ packageType, editing, lines, photoTypes, stationTypesOf, onClose, onSaved }: {
+export default function PackageReferenceDialog({ packageType, editing, lines, stations, onClose, onSaved }: {
   packageType: ItemType;
-  /** The station types on an item type's routes (null = unknown): their photo components lead. */
-  stationTypesOf?: (itemTypeId: number) => ReadonlySet<number> | null;
+  /** The stations that take reference images (GET /api/settings/reference-items/stations). */
+  stations: ReferenceStations | null;
   /** The package reference being edited; null for a new one. */
   editing: ReferenceItem | null;
   /** The package type's contents. */
   lines: TemplateLine[];
-  photoTypes: PhotoType[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const fallbackPhoto = photoTypes[0]?.code ?? "";
-  // The station types whose photo components the form lists first. A member is photographed at the
-  // box's own stations too — the opening template's item flow (docs/popup-templates/PLAN.md §5) — so
-  // they count for it beside its own route's; null (the routes did not load) shows every station.
-  const relevantStationTypesOf = (memberTypeId: number | null): ReadonlySet<number> | null => {
-    const boxTypes = stationTypesOf?.(packageType.item_type_id) ?? null;
-    if (memberTypeId == null) return boxTypes;
-    const own = stationTypesOf?.(memberTypeId) ?? null;
-    return own && boxTypes ? new Set([...own, ...boxTypes]) : null;
-  };
-  const [box, setBox] = React.useState<ItemDraft>(() => draftOf(editing, startUploadType(photoTypes, OPENING_PHOTO_CODES.box), fallbackPhoto));
+  // The box: the package route's stations. A member: the box's, then its own route's.
+  const stationsOfSel = (memberTypeId: number | null) =>
+    memberTypeId == null ? stationsFor(stations, packageType.item_type_id) : memberStations(stations, packageType.item_type_id, memberTypeId);
+  const [box, setBox] = React.useState<ItemDraft>(() => draftOf(editing));
   const [members, setMembers] = React.useState<Record<number, ItemDraft | null>>(() =>
-    Object.fromEntries((editing?.members ?? []).map((m) => [m.item_type_id, draftOf(m, startUploadType(photoTypes, OPENING_PHOTO_CODES.item), fallbackPhoto)])));
+    Object.fromEntries((editing?.members ?? []).map((m) => [m.item_type_id, draftOf(m)])));
   const [sel, setSel] = React.useState<Sel>("box");
   const [errors, setErrors] = React.useState<Record<string, FieldErrors>>({});
   const [formError, setFormError] = React.useState("");
@@ -105,7 +96,7 @@ export default function PackageReferenceDialog({ packageType, editing, lines, ph
   };
 
   const addMember = (typeId: number) =>
-    setMembers((all) => ({ ...all, [typeId]: draftOf(null, startUploadType(photoTypes, OPENING_PHOTO_CODES.item), fallbackPhoto) }));
+    setMembers((all) => ({ ...all, [typeId]: draftOf(null) }));
   const removeMember = (typeId: number) => {
     revokeDraftUrls(members[typeId] ?? null);
     setMembers((all) => ({ ...all, [typeId]: null }));
@@ -283,8 +274,7 @@ export default function PackageReferenceDialog({ packageType, editing, lines, ph
                     onDraft={setSelDraft}
                     errors={errors[keyOf(sel)] ?? {}}
                     onClearError={clearError(sel)}
-                    photoTypes={photoTypes}
-                    relevantStationTypes={relevantStationTypesOf(sel === "box" ? null : selRow?.typeId ?? null)}
+                    stations={stationsOfSel(sel === "box" ? null : selRow?.typeId ?? null)}
                     typeField={
                       <TextField
                         id={`pkg-${keyOf(sel)}-type`}

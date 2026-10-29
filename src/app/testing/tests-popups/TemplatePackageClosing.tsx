@@ -115,7 +115,7 @@ function ClosingPopup({
   const [itemDrafts, setItemDrafts] = React.useState<Record<string, Drafts>>({});
   const boxSlot = routeFieldsSlot(cfg);
 
-  const boxLookup = useReferenceLookup(box.sku, item.item_type_id, open && (boxSkuC?.lookup_reference ?? false));
+  const boxLookup = useReferenceLookup(box.sku, item.item_type_id, open && (boxSkuC?.lookup_reference ?? false), station.test_station_type_id);
   const boxHasRU = boxLookup.ref ? boxLookup.ref.hasRU : null;
   const { uploadTo, photosFor } = useTemplatePhotos(workerId, station.test_station_type_id);
   const patchBox: RunPatch = (fn) => setBox(fn);
@@ -297,7 +297,7 @@ function ClosingPopup({
 
   const boxTarget = (i: number): Target => ({
     run: box, patch: patchBox, photos: photosFor(item.item_id, box, patchBox), fill,
-    refImages: (code) => boxLookup.ref?.imagesByType[code] ?? [],
+    refImages: boxLookup.ref?.images ?? [],
     noReference: boxHasRU === false ? PACKAGE_POPUP_TEXT.boxNoReference : null,
     fieldsHere: boxSlot?.stepIndex === i
       ? {

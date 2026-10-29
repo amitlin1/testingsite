@@ -127,7 +127,7 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
     nextStopsRef.current = new Map();
   }, [open, pkg]);
 
-  const boxLookup = useReferenceLookup(scan, item.item_type_id, open);
+  const boxLookup = useReferenceLookup(scan, item.item_type_id, open, station.test_station_type_id);
 
   if (!open || !pkg) return null;
 

@@ -182,13 +182,21 @@ model reference_item_images {
   content_type            String?         @db.VarChar(255)
   size_bytes              BigInt          @default(0)
   sort_order              Int             @default(0)
-  photo_type_id           Int
+  /// The photo group the image was uploaded to before reference images went by station
+  /// (docs/popup-templates/PLAN.md §5ג). Kept as it was; a new image has none.
+  photo_type_id           Int?
+  /// The station type whose popup shows this image — the station type is the reference set. NULL =
+  /// not assigned to a station: listed on the reference page under "לא משויכות לעמדה", shown at no
+  /// station.
+  test_station_type_id    Int?
   created_at              DateTime        @default(now()) @db.Timestamptz(6)
   reference_items         reference_items @relation(fields: [reference_item_id], references: [reference_item_id], onDelete: Cascade)
-  photo_types             photo_types     @relation(fields: [photo_type_id], references: [photo_type_id], onDelete: Restrict, onUpdate: Cascade)
+  photo_types             photo_types?    @relation(fields: [photo_type_id], references: [photo_type_id], onDelete: Restrict, onUpdate: Cascade)
+  test_stations_type      test_stations_type? @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: SetNull, onUpdate: NoAction, map: "fk_reference_item_images_station_type")
 
   @@index([reference_item_id], map: "idx_reference_item_images_item")
   @@index([photo_type_id], map: "idx_reference_item_images_type")
+  @@index([test_station_type_id], map: "idx_reference_item_images_station")
 }
 
 /// Global photo classifications ("package", "product", ...). Screens address a
@@ -415,6 +423,7 @@ model test_stations_type {
   popup_template       station_popup_templates?
   popup_template_versions station_popup_template_versions[]
   photo_types          photo_types[]
+  reference_item_images reference_item_images[]
 }
 
 model testing_routes {

@@ -22,7 +22,8 @@ export type RefMember = {
   sku: string;
   name: string | null;
   refWeight: number | null;
-  imagesByType: Record<string, RefImg[]>;
+  /** Its reference images at the station the lookup was made at. */
+  images: RefImg[];
 };
 
 /** What the lookup of one scanned SKU answered (referenceScan.tsx RefLookup). */
@@ -30,7 +31,7 @@ export type FoundReference = {
   hasRU: boolean;
   name: string | null;
   refWeight: number | null;
-  imagesByType: Record<string, RefImg[]>;
+  images: RefImg[];
 };
 
 /** Where an item's reference came from — saved on its result. */
@@ -43,11 +44,9 @@ export type ItemReference = {
   hasRU: boolean;
   name: string | null;
   refWeight: number | null;
-  imagesByType: Record<string, RefImg[]>;
+  images: RefImg[];
   expectedSku: string | null;
 };
-
-const PT_PRODUCT = "product";
 
 /** A stored reference weight as grams; anything that is not a number is no weight. */
 export function gramsOf(v: unknown): number | null {
@@ -56,8 +55,8 @@ export function gramsOf(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-const describe = (name: string | null, imagesByType: Record<string, RefImg[]>, refWeight: number | null) =>
-  `${name ? ` · ${name}` : ""} · ${(imagesByType[PT_PRODUCT] ?? []).length} תמונות ייחוס${refWeight != null ? ` · ${refWeight} גר׳` : ""}`;
+const describe = (name: string | null, images: RefImg[], refWeight: number | null) =>
+  `${name ? ` · ${name}` : ""} · ${images.length} תמונות ייחוס${refWeight != null ? ` · ${refWeight} גר׳` : ""}`;
 
 /**
  * Which reference an item is compared against, given what was scanned on it,
@@ -66,12 +65,12 @@ const describe = (name: string | null, imagesByType: Record<string, RefImg[]>, r
  */
 export function resolveItemReference(scanned: string, expected: RefMember | null, found: FoundReference, typeDesc: string): ItemReference {
   const sku = scanned.trim();
-  const fromMember = (m: RefMember) => ({ hasRU: true, name: m.name, refWeight: m.refWeight, imagesByType: m.imagesByType });
-  const fromFound = { hasRU: found.hasRU, name: found.name, refWeight: found.refWeight, imagesByType: found.imagesByType };
+  const fromMember = (m: RefMember) => ({ hasRU: true, name: m.name, refWeight: m.refWeight, images: m.images });
+  const fromFound = { hasRU: found.hasRU, name: found.name, refWeight: found.refWeight, images: found.images };
 
   if (expected && sku === expected.sku.trim()) {
     return { source: "package", tone: "ok", expectedSku: expected.sku, ...fromMember(expected),
-      text: `תואם לייחוס המארז${describe(expected.name, expected.imagesByType, expected.refWeight)}` };
+      text: `תואם לייחוס המארז${describe(expected.name, expected.images, expected.refWeight)}` };
   }
   if (expected && found.hasRU) {
     return { source: "scan", tone: "warn", expectedSku: expected.sku, ...fromFound,
@@ -83,7 +82,7 @@ export function resolveItemReference(scanned: string, expected: RefMember | null
   }
   if (found.hasRU) {
     return { source: "scan", tone: "ok", expectedSku: null, ...fromFound,
-      text: `נמצא פריט ייחוס${describe(found.name, found.imagesByType, found.refWeight)}` };
+      text: `נמצא פריט ייחוס${describe(found.name, found.images, found.refWeight)}` };
   }
   return { source: "none", tone: "warn", expectedSku: null, ...fromFound,
     text: `לא נמצא פריט ייחוס של ${typeDesc} עם המק״ט הזה — אפשר להמשיך, הצילום והשקילה יהיו ללא ייחוס` };

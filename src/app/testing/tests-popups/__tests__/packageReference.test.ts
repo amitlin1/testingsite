@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { gramsOf, resolveItemReference, type FoundReference, type RefMember } from "../packageReference";
 
 const img = (id: number) => ({ id, url: `/r/${id}.jpg` });
-const EXPECTED: RefMember = { itemTypeId: 5, sku: "HP-PC-800", name: "HP EliteDesk 800", refWeight: 5400, imagesByType: { product: [img(1), img(2)] } };
-const FOUND: FoundReference = { hasRU: true, name: "HP EliteDesk 600", refWeight: 5000, imagesByType: { product: [img(3)] } };
-const NOTHING: FoundReference = { hasRU: false, name: null, refWeight: null, imagesByType: {} };
+const EXPECTED: RefMember = { itemTypeId: 5, sku: "HP-PC-800", name: "HP EliteDesk 800", refWeight: 5400, images: [img(1), img(2)] };
+const FOUND: FoundReference = { hasRU: true, name: "HP EliteDesk 600", refWeight: 5000, images: [img(3)] };
+const NOTHING: FoundReference = { hasRU: false, name: null, refWeight: null, images: [] };
 
 test("resolveItemReference: the expected SKU → the package reference's member", () => {
   const r = resolveItemReference(" HP-PC-800 ", EXPECTED, FOUND, "מחשב");
@@ -33,7 +33,7 @@ test("resolveItemReference: another SKU that nothing has → the expected member
   assert.equal(r.tone, "warn");
   assert.equal(r.hasRU, true);
   assert.equal(r.refWeight, 5400);
-  assert.deepEqual(r.imagesByType, EXPECTED.imagesByType);
+  assert.deepEqual(r.images, EXPECTED.images);
 });
 
 test("resolveItemReference: no member for the type → as before the package reference", () => {

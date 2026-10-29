@@ -185,13 +185,13 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   // ---- reference lookups, driven by what is scanned -------------------------
   // The box: its label among the package type's reference items. The answer
   // also supplies the box-photo reference set, so it stays live past step 1.
-  const boxLookup = useReferenceLookup(scan, item.item_type_id, open);
+  const boxLookup = useReferenceLookup(scan, item.item_type_id, open, station.test_station_type_id);
   const boxHasRU = boxLookup.ref ? boxLookup.ref.hasRU : null;
-  const boxRef = boxLookup.ref?.imagesByType[PT_PACKAGE] ?? [];
+  const boxRef = boxLookup.ref?.images ?? [];
   // The item being worked on: its label among its own type's reference items,
   // only while its scan screen is up. Moving on copies the answer into its work.
   const scanItem = itemIdx != null ? items[itemIdx] : null;
-  const itemLookup = useReferenceLookup(scanItem ? (work[scanItem.item_id]?.scan ?? "") : "", scanItem?.item_type_id, itemPhase === "scan");
+  const itemLookup = useReferenceLookup(scanItem ? (work[scanItem.item_id]?.scan ?? "") : "", scanItem?.item_type_id, itemPhase === "scan", station.test_station_type_id);
 
   const workOf = (id: string): ItemWork => work[id] ?? freshWork();
   const patchWork = (id: string, patch: Partial<ItemWork>) => setWork((w) => ({ ...w, [id]: { ...(w[id] ?? freshWork()), ...patch } }));
@@ -458,7 +458,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
         if (sku !== curWork.sku) {
           const ref = resolveItemReference(sku, expectedOf(cur), itemLookup.ref ?? NO_REF, cur.item_type_desc);
           patchWork(cur.item_id, {
-            sku, hasRU: ref.hasRU, refWeight: ref.refWeight, refImages: ref.imagesByType[PT_PRODUCT] ?? [],
+            sku, hasRU: ref.hasRU, refWeight: ref.refWeight, refImages: ref.images,
             refSource: ref.source, expectedSku: ref.expectedSku,
           });
         }
@@ -523,7 +523,7 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               <ScanField key={cur.item_id}
                 label="מק״ט יצרן של הפריט" placeholder="סרוק את מק״ט היצרן של הפריט"
                 value={curWork.scan} onChange={(v) => patchWork(cur.item_id, { scan: v })} lookup={itemLookup} onSubmit={onNext}
-                found={(ref) => `נמצא פריט ייחוס${ref.name ? ` · ${ref.name}` : ""} · ${(ref.imagesByType[PT_PRODUCT] ?? []).length} תמונות ייחוס${ref.refWeight != null ? ` · ${ref.refWeight} גר׳` : ""}`}
+                found={(ref) => `נמצא פריט ייחוס${ref.name ? ` · ${ref.name}` : ""} · ${ref.images.length} תמונות ייחוס${ref.refWeight != null ? ` · ${ref.refWeight} גר׳` : ""}`}
                 missing={`לא נמצא פריט ייחוס של ${cur.item_type_desc} עם המק״ט הזה — אפשר להמשיך, הצילום והשקילה יהיו ללא ייחוס`}
                 verdict={(ref) => resolveItemReference(curWork.scan, expectedOf(cur), ref, cur.item_type_desc)}
                 // A changed SKU is already said by the verdict (resolveItemReference).

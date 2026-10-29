@@ -120,6 +120,29 @@ describe("package references", { skip: SKIP }, () => {
     assert.deepEqual(r, { reference_weight: "90", parent_reference_id: null });
   });
 
+  it("reference images go by station: an unassigned image given its station is shown there, at that station only", async () => {
+    const { rows: st } = await pool.query(`SELECT test_station_type_id AS id FROM test_stations_type ORDER BY 1 LIMIT 2`);
+    const [a, b] = st.map((r) => r.id as number);
+    const id = await save.saveReferenceItem(null, { item_type_id: types.mouse, ...fields(`IMG-${tag}`) });
+    // As an older upload left it: a photo group, no station.
+    const { rows: [img] } = await pool.query(
+      `INSERT INTO reference_item_images (reference_item_id, bucket, object_key, file_name, photo_type_id)
+       VALUES ($1, 'ru', $2, 'a.png', (SELECT MIN(photo_type_id) FROM photo_types)) RETURNING reference_item_image_id AS id`,
+      [id, `reference-items/${tag}/a.png`]);
+    const look = async () => (await (await lookup.GET(new Request(`http://t/api/testing/reference-lookup?sku=IMG-${tag}&itemTypeId=${types.mouse}`))).json());
+    assert.deepEqual((await look()).imagesByStation, {}, "unassigned: shown at no station");
+
+    await rejects(save.saveReferenceItem(id, { item_type_id: types.mouse, ...fields(`IMG-${tag}`), imageStations: { [img.id]: 2_000_000_000 } }), /סוג עמדה לא מוכר/);
+    await save.saveReferenceItem(id, { item_type_id: types.mouse, ...fields(`IMG-${tag}`), imageStations: { [img.id]: a } });
+    const at = (await look()).imagesByStation;
+    assert.deepEqual(Object.keys(at), [String(a)]);
+    assert.equal(at[String(a)][0].id, img.id);
+    assert.equal(at[String(b)], undefined);
+    const { rows: [row] } = await pool.query(`SELECT test_station_type_id, photo_type_id IS NOT NULL AS kept_group FROM reference_item_images WHERE reference_item_image_id = $1`, [img.id]);
+    assert.deepEqual(row, { test_station_type_id: a, kept_group: true }, "the group it was uploaded to stays as it was");
+    await pool.query(`DELETE FROM reference_items WHERE reference_item_id = $1`, [id]);
+  });
+
   it("deleting the package reference takes its members", async () => {
     const memberIds = (await rows("parent_reference_id = $1", [boxId])).map((m) => m.reference_item_id);
     await save.deleteReferenceItem(boxId);

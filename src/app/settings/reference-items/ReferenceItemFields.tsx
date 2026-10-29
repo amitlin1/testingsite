@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Alert, TextField } from "@/components/ui";
+import { TextField } from "@/components/ui";
 import ReferenceImagesField from "./ReferenceImagesField";
-import { withFiles, withoutImage, type FieldErrors, type FieldKey, type ItemDraft, type PhotoType } from "./referenceForm";
+import { withFiles, withStation, withoutImage, type FieldErrors, type FieldKey, type ItemDraft, type StationsFor } from "./referenceForm";
 
 /**
  * A reference item's fields — the type slot, manufacturer SKU, weight,
@@ -12,22 +12,20 @@ import { withFiles, withoutImage, type FieldErrors, type FieldKey, type ItemDraf
  * same form. `typeField` is the type slot: a combobox in the regular dialog,
  * a locked field in the package one.
  */
-export default function ReferenceItemFields({ idPrefix, draft, onDraft, errors, onClearError, photoTypes, typeField, skuHelp, nameLabel = "שם הפריט", namePlaceholder = "תיאור קצר", weightLabel = "משקל (גר׳)", relevantStationTypes }: {
+export default function ReferenceItemFields({ idPrefix, draft, onDraft, errors, onClearError, stations, typeField, skuHelp, nameLabel = "שם הפריט", namePlaceholder = "תיאור קצר", weightLabel = "משקל (גר׳)" }: {
   idPrefix: string;
-  /** The station types on the item type's routes — their photo components lead (ReferenceImagesField). */
-  relevantStationTypes?: ReadonlySet<number> | null;
+  /** The stations of the item type's routes that show reference images, in route order. */
+  stations: StationsFor;
   draft: ItemDraft;
   onDraft: (next: ItemDraft) => void;
   errors: FieldErrors;
   onClearError: (key: FieldKey) => void;
-  photoTypes: PhotoType[];
   typeField: React.ReactNode;
   skuHelp?: string;
   nameLabel?: string;
   namePlaceholder?: string;
   weightLabel?: string;
 }) {
-  const [imgError, setImgError] = React.useState("");
   const set = (key: FieldKey | "notes", patch: Partial<ItemDraft>) => {
     onDraft({ ...draft, ...patch });
     if (key !== "notes") onClearError(key);
@@ -91,21 +89,14 @@ export default function ReferenceItemFields({ idPrefix, draft, onDraft, errors, 
 
       <ReferenceImagesField
         idPrefix={idPrefix}
-        photoTypes={photoTypes}
-        relevantStationTypes={relevantStationTypes}
+        stations={stations}
         images={draft.images}
         primaryKey={draft.primaryKey}
-        uploadType={draft.uploadType}
-        onUploadType={(uploadType) => onDraft({ ...draft, uploadType })}
-        onAddFiles={(files) => {
-          if (!draft.uploadType) { setImgError("יש לבחור סוג תמונה לפני העלאה."); return; }
-          setImgError("");
-          onDraft(withFiles(draft, files));
-        }}
+        onAddFiles={(stationTypeId, files) => onDraft(withFiles(draft, files, stationTypeId))}
+        onStation={(key, stationTypeId) => onDraft(withStation(draft, key, stationTypeId))}
         onRemove={(key) => onDraft(withoutImage(draft, key))}
         onPrimary={(key) => onDraft({ ...draft, primaryKey: key })}
       />
-      {imgError && <Alert severity="error">{imgError}</Alert>}
 
       <TextField
         id={`${idPrefix}-notes`}
