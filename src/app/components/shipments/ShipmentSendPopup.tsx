@@ -86,6 +86,8 @@ export default function ShipmentSendPopup({
     });
 
     const items = useWatch({ control, name: "items" });
+    const sentCode = useWatch({ control, name: "sent_shipment_code" });
+    const sentDate = useWatch({ control, name: "sent_date" });
 
     const sigCanvas = React.useRef<SignatureCanvas>(null);
 
@@ -217,6 +219,19 @@ export default function ShipmentSendPopup({
     // done before the shipment is closed by it.
     const notTakenIn = Math.max(0, (shipment.total_items ?? 0) - (shipment.sampled_amount ?? 0));
     const unfinished = Math.max(0, (shipment.sampled_amount ?? 0) - (shipment.finished_sampled_amount ?? 0));
+
+    // What still keeps "שלח" disabled, said next to it — a field turns red only
+    // once touched, so an untouched empty one left the button dead with no reason.
+    const lines = items ?? [];
+    const hasSendableLine = lines.some((i) => i.item_type_id && Number(i.amount) > 0);
+    const missing = [
+        !sentCode?.trim() && "קוד משלוח יוצא",
+        !sentDate && "תאריך שליחה",
+        lines.some((i) => !i.item_type_id) && "סוג מארז",
+        !hasSendableLine && "כמות מארזים",
+        errors.items?.some?.((e) => e?.amount) && "כמות תקינה (עד המקסימום)",
+        !isSigned && "חתימה",
+    ].filter(Boolean) as string[];
 
     return (
         <Dialog
@@ -399,8 +414,9 @@ export default function ShipmentSendPopup({
                                         }
                                     }}
                                     render={({ field }) => {
-                                        // Calculate max allowed
-                                        const currentItem = items[index];
+                                        // Calculate max allowed. Right after "הוסף" the watched
+                                        // list is a render behind the rows: the new row starts blank.
+                                        const currentItem = items?.[index] ?? item;
                                         const originalItem = availableItems.find(opt =>
                                             opt.item_type_id === currentItem.item_type_id && opt.makat == currentItem.makat
                                         );
@@ -453,12 +469,17 @@ export default function ShipmentSendPopup({
                     </div>
                 )}
                 <DialogActions>
+                    {missing.length > 0 && !sender.blocked && (
+                        <span className="sh-field-helper" role="status" style={{ marginInlineEnd: "auto", marginTop: 0 }}>
+                            חסר לשליחה: {missing.join(" · ")}
+                        </span>
+                    )}
                     <Button onClick={onClose} variant="outlined" color="inherit">
                         ביטול
                     </Button>
                     <Button
                         type="submit"
-                        disabled={!isValid || !isSigned || sender.blocked}
+                        disabled={!isValid || !isSigned || !hasSendableLine || sender.blocked}
                         loading={isSubmitting}
                         variant="contained"
                     >
