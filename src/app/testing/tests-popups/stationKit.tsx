@@ -199,9 +199,32 @@ export function SkuScreen({ value, onChange, prev, serial }: {
   );
 }
 
+/** One filmstrip tile: a reference image or a photo, picking the frame shown large. */
+function FilmTile({ src, label, active, shot, badge, onClick }: {
+  src?: string; label: string; active: boolean; shot?: Shot; badge?: string; onClick: () => void;
+}) {
+  return (
+    <button type="button" className="tst-film" onClick={onClick}
+      aria-label={label} aria-current={active ? "true" : undefined}
+      style={{ border: shot?.failed ? `2.5px solid ${BAD}` : active ? `2.5px solid ${BLUE}` : shot ? `1.5px solid ${OK}` : `1.5px solid ${HAIR}` }}>
+      {src && <Box component="img" src={src} alt="" sx={{ display: "block", width: "100%", height: "100%", objectFit: "cover", opacity: shot?.uploading ? 0.5 : 1 }} />}
+      {badge && <Box component="span" sx={{ position: "absolute", bottom: 5, insetInlineStart: 5, fontSize: "var(--text-micro)", fontWeight: 600, color: "var(--color-on-primary)", bgcolor: "color-mix(in srgb, var(--color-ink) 55%, transparent)", borderRadius: "6px", px: 0.75, py: "1px", fontVariantNumeric: "tabular-nums" }}>{badge}</Box>}
+      {shot && !shot.uploading && (
+        <Box component="span" sx={{ position: "absolute", top: 4, insetInlineStart: 4, width: 20, height: 20, borderRadius: "var(--r-pill)", bgcolor: shot.failed ? BAD : OK, color: "var(--color-on-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {shot.failed ? <WarningIcon sx={{ fontSize: 12 }} aria-hidden /> : <CheckIcon sx={{ fontSize: 13 }} aria-hidden />}
+        </Box>
+      )}
+      {/* Centred by inset + auto margins (a physical left:50% with a logical margin drifted in RTL). */}
+      {shot?.uploading && <CircularProgress size={18} aria-hidden sx={{ position: "absolute", inset: 0, margin: "auto" }} />}
+    </button>
+  );
+}
+
 /**
- * PhotoUploader — slots model: each reference image is a slot to fill; photos[i]
- * fills slot i. Large focused frame + big capture button + filmstrip + counter.
+ * PhotoUploader — the reference images and the worker's photos are two rows,
+ * both always on screen: a photo never covers the reference it is compared
+ * with, however many are taken. The counter still reads photos against the
+ * reference count. Large focused frame + big capture button + the two rows.
  */
 export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
   photos: Shot[]; refImages: RefImg[]; onPick: (file: File) => void; onRemove: (idx: number) => void;
@@ -218,14 +241,15 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
   const captured = photos.length;
   const hasSlots = total > 0;
 
-  // A new shot (or another slot count) moves to the next slot to fill; picking
-  // a frame by hand moves it too. Adjusted during render.
-  const [activeIdx, setActiveIdx] = React.useState(0);
+  // The frame shown large: a new or removed shot shows the last photo (the
+  // first reference while there is none); a tile picks it by hand. Adjusted
+  // during render.
+  type Active = { kind: "ref" | "shot"; idx: number };
+  const [active, setActive] = React.useState<Active>({ kind: "ref", idx: 0 });
   const [activeFor, setActiveFor] = React.useState<{ captured: number; total: number } | null>(null);
   if (!activeFor || activeFor.captured !== captured || activeFor.total !== total) {
     setActiveFor({ captured, total });
-    const target = hasSlots ? Math.min(captured, total - 1) : Math.max(0, captured - 1);
-    setActiveIdx(target < 0 ? 0 : target);
+    setActive(captured > 0 ? { kind: "shot", idx: captured - 1 } : { kind: "ref", idx: 0 });
   }
 
   const openCamera = () => cameraRef.current?.click();
@@ -242,13 +266,14 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
     picked.filter((f) => !bad.includes(f)).forEach(onPick);
   };
 
-  const activeShot: Shot | undefined = photos[activeIdx];
-  const activeRef: RefImg | undefined = refImages[activeIdx];
+  const activeShot: Shot | undefined = active.kind === "shot" ? photos[active.idx] : undefined;
+  const activeRef: RefImg | undefined = active.kind === "ref" ? refImages[active.idx] : undefined;
   const activeIsCaptured = !!activeShot;
   const bigSrc = activeShot?.previewUrl ?? activeRef?.url;
 
   const failedCount = photos.filter((s) => s.failed).length;
-  const pillText = activeShot?.failed ? "ההעלאה נכשלה" : activeIsCaptured ? "צולם" : "תמונת ייחוס";
+  const pillText = activeShot?.failed ? "ההעלאה נכשלה" : activeIsCaptured ? `התמונה שלי ${active.idx + 1}` : `תמונת ייחוס ${active.idx + 1}`;
+  const groupTitle = { fontSize: "var(--text-small)", fontWeight: 600, color: "var(--color-ink-muted-80)" } as const;
   // One line covering both ways a photo can fail to reach storage: refused here
   // before upload, or refused by the server mid-upload.
   const rejectedMsg = rejected.length === 1
@@ -277,7 +302,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         {hasSlots && (
           <Box aria-hidden sx={{ flex: 1, display: "flex", gap: "6px" }}>
             {refImages.map((_, i) => (
-              <Box key={i} sx={{ flex: 1, height: 4, borderRadius: "var(--r-pill)", bgcolor: photos[i]?.failed ? BAD : i < captured ? OK : i === activeIdx ? BLUE : HAIR }} />
+              <Box key={i} sx={{ flex: 1, height: 4, borderRadius: "var(--r-pill)", bgcolor: photos[i]?.failed ? BAD : i < captured ? OK : i === captured ? BLUE : HAIR }} />
             ))}
           </Box>
         )}
@@ -294,7 +319,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         onDrop={(e) => { e.preventDefault(); setDragging(false); takeFiles(e.dataTransfer.files); }}
         sx={{ position: "relative", height: 420, borderRadius: "var(--r-lg)", overflow: "hidden", border: dragging ? `2px dashed ${BLUE}` : `1px solid ${HAIR}`, bgcolor: dragging ? "var(--color-primary-tint)" : PARCHMENT, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {bigSrc ? (
-          <Box component="img" src={bigSrc} alt={activeIsCaptured ? `צילום ${activeIdx + 1}` : `תמונת ייחוס ${activeIdx + 1}`} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <Box component="img" src={bigSrc} alt={pillText} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5, color: MUTED_LT }}>
             <AddAPhotoIcon sx={{ fontSize: 52 }} aria-hidden />
@@ -308,7 +333,7 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
           </Box>
         )}
         {activeIsCaptured && (
-          <IconButton size="small" round title="הסר תמונה" onClick={() => onRemove(activeIdx)}
+          <IconButton size="small" round title="הסר תמונה" onClick={() => onRemove(active.idx)}
             sx={{ position: "absolute", top: 8, insetInlineStart: 8 }}>
             <CloseIcon sx={{ fontSize: 16 }} aria-hidden />
           </IconButton>
@@ -328,32 +353,38 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
 
       {alertMsg && <Alert severity="error">{alertMsg}</Alert>}
 
-      {/* Filmstrip — flex-wrap row with even gaps; each tile picks the frame shown large */}
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: "14px", pb: 0.5 }}>
-        {Array.from({ length: Math.max(total, captured) }).map((_, i) => {
-          const shot = photos[i];
-          const ref = refImages[i];
-          const isCap = !!shot;
-          const isActive = i === activeIdx;
-          const src = shot?.previewUrl ?? ref?.url;
-          const label = `${isCap ? "צילום" : "תמונת ייחוס"} ${i + 1}${shot?.failed ? " — ההעלאה נכשלה" : shot?.uploading ? " — מעלה" : ""}`;
-          return (
-            <button key={i} type="button" className="tst-film" onClick={() => setActiveIdx(i)}
-              aria-label={label} aria-current={isActive ? "true" : undefined}
-              style={{ border: shot?.failed ? `2.5px solid ${BAD}` : isActive ? `2.5px solid ${BLUE}` : isCap ? `1.5px solid ${OK}` : `1.5px solid ${HAIR}` }}>
-              {src && <Box component="img" src={src} alt="" sx={{ display: "block", width: "100%", height: "100%", objectFit: "cover", opacity: shot?.uploading ? 0.5 : 1 }} />}
-              {!isCap && <Box component="span" sx={{ position: "absolute", bottom: 5, insetInlineStart: 5, fontSize: "var(--text-micro)", fontWeight: 600, color: "var(--color-on-primary)", bgcolor: "color-mix(in srgb, var(--color-ink) 55%, transparent)", borderRadius: "6px", px: 0.75, py: "1px" }}>ייחוס</Box>}
-              {isCap && !shot?.uploading && (
-                <Box component="span" sx={{ position: "absolute", top: 4, insetInlineStart: 4, width: 20, height: 20, borderRadius: "var(--r-pill)", bgcolor: shot?.failed ? BAD : OK, color: "var(--color-on-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {shot?.failed ? <WarningIcon sx={{ fontSize: 12 }} aria-hidden /> : <CheckIcon sx={{ fontSize: 13 }} aria-hidden />}
-                </Box>
-              )}
-              {/* Centred by inset + auto margins (a physical left:50% with a logical margin drifted in RTL). */}
-              {shot?.uploading && <CircularProgress size={18} aria-hidden sx={{ position: "absolute", inset: 0, margin: "auto" }} />}
-            </button>
-          );
-        })}
-      </Box>
+      {/* Reference images — their own row, never covered by a photo */}
+      {hasSlots && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography sx={groupTitle}>תמונות ייחוס ({total})</Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: "14px" }}>
+            {refImages.map((ref, i) => (
+              <FilmTile key={ref.id} src={ref.url} label={`תמונת ייחוס ${i + 1}`} badge={total > 1 ? `ייחוס ${i + 1}` : "ייחוס"}
+                active={active.kind === "ref" && active.idx === i} onClick={() => setActive({ kind: "ref", idx: i })} />
+            ))}
+          </Box>
+        </Box>
+      )}
+
+      {/* The worker's photos — every one, however many */}
+      {(hasSlots || captured > 0) && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, pb: 0.5 }}>
+          {hasSlots && <Typography sx={groupTitle}>התמונות שלי ({captured})</Typography>}
+          {captured > 0 ? (
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: "14px" }}>
+              {photos.map((shot, i) => (
+                <FilmTile key={i} src={shot.previewUrl} shot={shot} badge={String(i + 1)}
+                  label={`התמונה שלי ${i + 1}${shot.failed ? " — ההעלאה נכשלה" : shot.uploading ? " — מעלה" : ""}`}
+                  active={active.kind === "shot" && active.idx === i} onClick={() => setActive({ kind: "shot", idx: i })} />
+              ))}
+            </Box>
+          ) : (
+            <Box sx={{ border: `1.5px dashed ${HAIR}`, borderRadius: "13px", p: 2, textAlign: "center", color: MUTED, fontSize: "var(--text-body-sm)" }}>
+              עוד לא צילמת. לחץ &quot;צלם&quot; או &quot;העלה תמונות&quot;.
+            </Box>
+          )}
+        </Box>
+      )}
 
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden
         onChange={(e) => { takeFiles(e.target.files); e.target.value = ""; }} />
