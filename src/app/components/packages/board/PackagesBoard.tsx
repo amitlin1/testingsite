@@ -226,18 +226,24 @@ export default function PackagesBoard() {
           <FilterSelect value={url.shipment} onChange={(v) => setUrl({ shipment: v })} options={shipmentOptions} allLabel="כל המשלוחים" width={210} />
           <FilterSelect value={url.type} onChange={(v) => setUrl({ type: v })} options={packageTypes.data ?? []} allLabel="כל סוגי המארז" />
           <FilterSelect value={url.step} onChange={(v) => setUrl({ step: v })} options={stepOptions} allLabel="כל העמדות" />
-          {anyFilter && <button type="button" className="pkg-link" onClick={clearFilters}>ניקוי הסינון</button>}
         </div>
-        <div className="pb-tabs" role="tablist" aria-label="סינון לפי שלב">
-          {TABS.map((t) => (
-            <button key={t.key} type="button" role="tab" className="pb-tab"
-              aria-selected={!searching && !sentView && url.tab === t.key}
-              onClick={() => { setQInput(""); setUrl({ tab: t.key, q: "" }); }}>
-              {t.label}<span className="pb-tab-count">{firstLoad ? "—" : counts[t.key]}</span>
-            </button>
-          ))}
+        {/* The tabs, then the notes and "ניקוי הסינון" at the row's far end (outside the
+            tablist: only tabs belong in it). */}
+        <div className="pb-tabs">
+          <div role="tablist" aria-label="סינון לפי שלב" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {TABS.map((t) => (
+              <button key={t.key} type="button" role="tab" className="pb-tab"
+                aria-selected={!searching && !sentView && url.tab === t.key}
+                onClick={() => { setQInput(""); setUrl({ tab: t.key, q: "" }); }}>
+                {t.label}<span className="pb-tab-count">{firstLoad ? "—" : counts[t.key]}</span>
+              </button>
+            ))}
+          </div>
           {searching && <span className="pb-note" style={{ marginInlineStart: 8 }}>החיפוש רץ על כל השלבים</span>}
-          {packages.isFetching && !firstLoad && <span className="pb-note" role="status" style={{ marginInlineStart: "auto" }}>מתעדכן…</span>}
+          <span style={{ marginInlineStart: "auto", display: "inline-flex", alignItems: "center", gap: 16 }}>
+            {packages.isFetching && !firstLoad && <span className="pb-note" role="status">מתעדכן…</span>}
+            {anyFilter && <button type="button" className="pkg-link" onClick={clearFilters}>ניקוי הסינון</button>}
+          </span>
         </div>
       </div>
 

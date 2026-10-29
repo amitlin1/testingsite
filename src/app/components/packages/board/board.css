@@ -15,7 +15,9 @@
 .pb-scan input { box-sizing: border-box; width: 100%; height: 44px; border: 1px solid var(--color-field-border); border-radius: 9999px; padding-inline: 44px 44px; font: inherit; font-size: var(--text-body); color: var(--color-ink); background: var(--color-canvas); }
 .pb-scan input:focus { outline: none; border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
 .pb-scan-icon { position: absolute; inset-inline-start: 16px; top: 12px; pointer-events: none; color: var(--color-ink-muted-48); }
-.pb-scan-clear { position: absolute; inset-inline-end: 4px; top: 4px; }
+/* Scoped under .pb-scan: .pkg-iconbtn (packages.css, loaded later) sets position: relative,
+   which would drop the button out of the field onto a line of its own. */
+.pb-scan .pb-scan-clear { position: absolute; inset-inline-end: 6px; top: 6px; }
 .pb-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .pb-tab { height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 9999px; font: inherit; font-size: var(--text-body-sm); font-weight: 600; cursor: pointer; background: var(--color-canvas); color: var(--color-ink-muted-70); border: 1px solid var(--color-hairline); }
 .pb-tab[aria-selected="true"] { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary-border); }
