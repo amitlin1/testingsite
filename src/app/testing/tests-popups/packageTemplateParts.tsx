@@ -11,6 +11,7 @@ import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
 import { VARIANT_SPEC, noteEditorTitle, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
 import { PhotoUploader, PassFail, useShotDiscard, type RefImg, type Shot } from "./stationKit";
 import { weightOutcome, type TemplateRunState } from "./templateModel";
+import { SkuSuggestions, type RefSku } from "./referenceScan";
 import {
   AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, INK, INK_2, MUTED, RED, RED_BG,
 } from "@/app/components/packages/packageUi";
@@ -212,15 +213,20 @@ export function VerdictBlock({ question, verdict, onVerdict, suggest, look, note
 }
 
 /** A scan with no reference lookup: the field alone. */
-export function PlainScan({ label, placeholder, value, onChange, onSubmit }: {
+export function PlainScan({ label, placeholder, value, onChange, onSubmit, suggestions = [], suggestionsLabel = "מק״טים מיוחסים" }: {
   label: string; placeholder: string; value: string; onChange: (v: string) => void; onSubmit: () => void;
+  /** Reference SKUs to tap instead of scanning (as ScanField's). */
+  suggestions?: RefSku[]; suggestionsLabel?: string;
 }) {
   const id = React.useId();
+  const inputRef = React.useRef<HTMLInputElement>(null);
   return (
     <div style={{ maxWidth: 420, marginTop: 20 }}>
       <label htmlFor={id} style={{ display: "block", fontSize: "var(--text-small)", color: MUTED, marginBottom: 7 }}>{label}</label>
-      <input id={id} className="sh-input tst-ref-scan" dir="ltr" value={value} onChange={(e) => onChange(e.target.value)} autoFocus placeholder={placeholder}
+      <input ref={inputRef} id={id} className="sh-input tst-ref-scan" dir="ltr" value={value} onChange={(e) => onChange(e.target.value)} autoFocus placeholder={placeholder}
         onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }} />
+      <SkuSuggestions value={value} suggestions={suggestions} label={suggestionsLabel}
+        onPick={(sku) => { onChange(sku); inputRef.current?.focus(); }} />
     </div>
   );
 }

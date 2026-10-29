@@ -18,7 +18,7 @@ import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields
 import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
 import PackageDecisionDialog, { type PackDecision } from "./PackageDecisionDialog";
 import { NextStationList, nextStopOf, type NextStop, type NextStopRow } from "./nextStation";
-import { ScanField, useReferenceLookup } from "./referenceScan";
+import { ScanField, closingSkuSuggestions, useReferenceLookup, useReferenceSkus } from "./referenceScan";
 import { emptyRunState, routeFieldsSlot, stepBlocker, type TemplateRunState } from "./templateModel";
 import { bandOf, buildClosingBoxDetails, closingNote, closingPasses, closingStepKind } from "./packageTemplateModel";
 import {
@@ -117,6 +117,10 @@ function ClosingPopup({
 
   const boxLookup = useReferenceLookup(box.sku, item.item_type_id, open && (boxSkuC?.lookup_reference ?? false), station.test_station_type_id);
   const boxHasRU = boxLookup.ref ? boxLookup.ref.hasRU : null;
+  // Offered under the box scan: the SKU it was opened with (closingSkuSuggestions).
+  const typeSkus = useReferenceSkus(item.item_type_id, open && boxSkuC != null);
+  const boxSkus = closingSkuSuggestions(pkg.opening_sku, typeSkus);
+  const boxSkusLabel = boxSkus.fromOpening ? "מק״ט הפתיחה" : `מק״טים מיוחסים ל־${pkg.item_type_desc}`;
   const { uploadTo, photosFor } = useTemplatePhotos(workerId, station.test_station_type_id);
   const patchBox: RunPatch = (fn) => setBox(fn);
 
@@ -325,10 +329,12 @@ function ClosingPopup({
         value={box.sku} onChange={(v) => setBox((s) => ({ ...s, sku: v }))} lookup={boxLookup} onSubmit={onNext}
         found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
         missing={CLOSE_TEXT.boxScanMissing(pkg.item_type_desc)}
-        prev={boxSkuC.carry_last ? pkg.opening_sku : undefined} filledNote={CLOSE_TEXT.boxScanFilled} />
+        prev={boxSkuC.carry_last ? pkg.opening_sku : undefined} filledNote={CLOSE_TEXT.boxScanFilled}
+        suggestions={boxSkus.skus} suggestionsLabel={boxSkusLabel} />
     ) : (
       <PlainScan label={PACKAGE_POPUP_TEXT.boxScanLabel} placeholder={PACKAGE_POPUP_TEXT.boxScanPlaceholder}
-        value={box.sku} onChange={(v) => setBox((s) => ({ ...s, sku: v }))} onSubmit={onNext} />
+        value={box.sku} onChange={(v) => setBox((s) => ({ ...s, sku: v }))} onSubmit={onNext}
+        suggestions={boxSkus.skus} suggestionsLabel={boxSkusLabel} />
     );
   } else if (stepDef && closingStepKind(stepDef) === "arrival") {
     body = (

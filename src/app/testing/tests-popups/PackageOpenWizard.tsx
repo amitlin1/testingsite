@@ -8,7 +8,7 @@ import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { newActionId } from "@/app/lib/metrics/action-id";
 import PackageWizardShell, { type ItemStepperRow, type WizardStep } from "./PackageWizardShell";
 import { PhotoUploader, PassFail, emptyPhotos, useShotDiscard, type Photos, type RefImg } from "./stationKit";
-import { NO_REF, ScanField, useReferenceLookup } from "./referenceScan";
+import { NO_REF, ScanField, useReferenceLookup, useReferenceSkus } from "./referenceScan";
 import { resolveItemReference, type RefMember, type RefSource } from "./packageReference";
 import { ExpectedContents, ExpectedReference } from "./PackageReferenceViews";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
@@ -188,6 +188,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
   const boxLookup = useReferenceLookup(scan, item.item_type_id, open, station.test_station_type_id);
   const boxHasRU = boxLookup.ref ? boxLookup.ref.hasRU : null;
   const boxRef = boxLookup.ref?.images ?? [];
+  // The package type's reference SKUs, offered under the box scan to tap instead of scanning.
+  const boxSkus = useReferenceSkus(item.item_type_id, open && pkg != null);
   // The item being worked on: its label among its own type's reference items,
   // only while its scan screen is up. Moving on copies the answer into its work.
   const scanItem = itemIdx != null ? items[itemIdx] : null;
@@ -586,7 +588,8 @@ export default function PackageOpenWizard({ open, onClose, item, station, worker
               label="מק״ט המארז" placeholder="סרוק את מק״ט היצרן"
               value={scan} onChange={setScan} lookup={boxLookup} onSubmit={onNext}
               found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
-              missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה. אפשר להמשיך, צילום הקופסה יהיה ללא ייחוס`} />
+              missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה. אפשר להמשיך, צילום הקופסה יהיה ללא ייחוס`}
+              suggestions={boxSkus} suggestionsLabel={`מק״טים מיוחסים ל־${pkg.item_type_desc}`} />
             {/* The package reference the label found: what should be in the box. */}
             {kitMembers && !boxLookup.checking && scan.trim() !== "" && (
               <ExpectedContents types={boxTypes} expectedOf={(id) => expectedOf({ item_type_id: id })} boxPhotos={boxRef.length} />

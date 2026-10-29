@@ -20,7 +20,7 @@ import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields
 import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
 import PackageDecisionDialog, { type PackDecision } from "./PackageDecisionDialog";
 import { NextStationList, nextStopOf, type NextStop, type NextStopRow } from "./nextStation";
-import { ScanField, useReferenceLookup } from "./referenceScan";
+import { ScanField, closingSkuSuggestions, useReferenceLookup, useReferenceSkus } from "./referenceScan";
 import {
   AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, HAIR, HAIR_2, INK, INK_2, MUTED, RED, RED_BG, seq2,
 } from "@/app/components/packages/packageUi";
@@ -128,8 +128,12 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
   }, [open, pkg]);
 
   const boxLookup = useReferenceLookup(scan, item.item_type_id, open, station.test_station_type_id);
+  const typeSkus = useReferenceSkus(item.item_type_id, open && pkg != null);
 
   if (!open || !pkg) return null;
+
+  // Offered under the box scan: the SKU it was opened with (closingSkuSuggestions).
+  const scanSuggestions = closingSkuSuggestions(pkg.opening_sku, typeSkus);
 
   const items = pkg.items;
   const arrived = (it: PackageItemView) => it.arrived_at_closing;
@@ -304,7 +308,8 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
             value={scan} onChange={setScan} lookup={boxLookup} onSubmit={onNext}
             found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
             missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה`}
-            prev={pkg.opening_sku} filledNote="הושלם מסריקת הפתיחה" />
+            prev={pkg.opening_sku} filledNote="הושלם מסריקת הפתיחה"
+            suggestions={scanSuggestions.skus} suggestionsLabel={scanSuggestions.fromOpening ? "מק״ט הפתיחה" : `מק״טים מיוחסים ל־${pkg.item_type_desc}`} />
         )}
 
         {stepKey === "arrival" && (

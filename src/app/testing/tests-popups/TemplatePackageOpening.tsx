@@ -9,7 +9,7 @@ import { fillVariables, skuScanOf } from "@/app/lib/popup-templates/schema";
 import type { PopupTemplateJson, SkuScanComponent, TemplateStep } from "@/app/lib/popup-templates/schema";
 import PackageWizardShell, { type ItemStepperRow, type WizardStep } from "./PackageWizardShell";
 import type { RefImg } from "./stationKit";
-import { NO_REF, ScanField, useReferenceLookup } from "./referenceScan";
+import { NO_REF, ScanField, useReferenceLookup, useReferenceSkus } from "./referenceScan";
 import { resolveItemReference, type RefMember } from "./packageReference";
 import { ExpectedContents, ExpectedReference } from "./PackageReferenceViews";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
@@ -143,6 +143,8 @@ function OpeningPopup({
   // box photos' reference sets, so it stays live past the scan.
   const boxLookup = useReferenceLookup(box.sku, item.item_type_id, open && (boxSkuC?.lookup_reference ?? false), station.test_station_type_id);
   const boxHasRU = boxLookup.ref ? boxLookup.ref.hasRU : null;
+  // The package type's reference SKUs, offered under the box scan to tap instead of scanning.
+  const boxSkus = useReferenceSkus(item.item_type_id, open && boxSkuC != null);
   // The item being worked on: its label among its own type's reference items, only while its scan
   // is up. Moving on copies the answer into its work.
   const curItem = itemIdx != null ? items[itemIdx] ?? null : null;
@@ -536,10 +538,12 @@ function OpeningPopup({
             value={box.sku} onChange={(v) => setBox((s) => ({ ...s, sku: v }))} lookup={boxLookup} onSubmit={onNext}
             found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
             missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה. אפשר להמשיך, צילום הקופסה יהיה ללא ייחוס`}
-            prev={boxSkuC.carry_last ? item.last_sku : undefined} />
+            prev={boxSkuC.carry_last ? item.last_sku : undefined}
+            suggestions={boxSkus} suggestionsLabel={`מק״טים מיוחסים ל־${pkg.item_type_desc}`} />
         ) : (
           <PlainScan label={PACKAGE_POPUP_TEXT.boxScanLabel} placeholder={PACKAGE_POPUP_TEXT.boxScanPlaceholder}
-            value={box.sku} onChange={(v) => setBox((s) => ({ ...s, sku: v }))} onSubmit={onNext} />
+            value={box.sku} onChange={(v) => setBox((s) => ({ ...s, sku: v }))} onSubmit={onNext}
+            suggestions={boxSkus} suggestionsLabel={`מק״טים מיוחסים ל־${pkg.item_type_desc}`} />
         )}
         {/* The package reference the label found: what should be in the box. */}
         {kitMembers && !boxLookup.checking && box.sku.trim() !== "" && (
