@@ -140,11 +140,6 @@ export function removeChecklistItem(f: ChecklistField, itemId: ChecklistItemId):
   return { ...f, items: f.items.filter((it) => it.id !== itemId) };
 }
 
-/** The photo type (photo_types.code); "" while none is chosen — the lint's PHOTO_TYPE_EMPTY. */
-export function withPhotoType(f: PhotoField, code: string): PhotoField {
-  return { ...f, photo_type: code.slice(0, LIMITS.photoType) };
-}
-
 /** "מינ׳" as typed: a whole number clamped to 0..LIMITS.photoMin, or null while the text holds none
  *  (empty) — the field then keeps its minimum. Anything but digits is dropped. */
 export function parsePhotoMin(text: string): number | null {

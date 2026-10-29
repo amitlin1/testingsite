@@ -14,12 +14,16 @@ export const runtime = "nodejs";
  * A group a popup template's photo component owns (docs/popup-templates/PLAN.md
  * §3.4) carries its station type: station_type_id / station_type_desc, so the
  * reference-items page can list it under its station. Both null = no owner.
+ *
+ * A group a route photo field owns (station-fields/photo-groups.ts) comes only
+ * with `?all=1`, where screens name photos by their group: a photo field shows
+ * no reference images, so the pickers never offer it.
  */
 export async function GET(request: Request) {
   try {
     const all = new URL(request.url).searchParams.get("all") === "1";
     const rows = await prisma.photo_types.findMany({
-      where: all ? {} : { is_active: true },
+      where: all ? {} : { is_active: true, test_route_id: null },
       orderBy: { sort_order: "asc" },
       select: {
         photo_type_id: true, code: true, photo_type_desc: true, sort_order: true,

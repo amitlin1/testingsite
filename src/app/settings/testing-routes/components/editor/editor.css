@@ -680,7 +680,7 @@
 }
 .sfe-check-add:disabled { background: var(--color-canvas-parchment); cursor: not-allowed; }
 
-/* Photo row (no artboard; spec §5.5.2): the photo type (a dense 38px combobox) and "מינ׳" (38px). */
+/* Photo row (no artboard; spec §5.5.2): "מינ׳" (38px). The field owns its photo group — nothing to pick. */
 .sfe-photo {
   min-height: 38px;
   display: flex;
@@ -690,7 +690,6 @@
   font-size: var(--text-small);
   color: var(--color-ink-muted-70);
 }
-.sfe-photo__type { flex: 1 1 160px; min-width: 0; }
 .stp-input.sfe-photo__min { width: 56px; flex: none; direction: ltr; unicode-bidi: isolate; }
 
 /* ---------------------------------------------------- notes column --- */

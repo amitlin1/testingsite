@@ -208,3 +208,34 @@ test("kitItemGroups: each_item first, then the item's own type; empty groups lef
   assert.deepEqual(kitItemGroups(KIT_CONFIG.steps.s_kclose01, 14), []);
   assert.deepEqual(kitItemGroups(KIT_CONFIG.steps.s_kclose01, 99), [{ target: { item_type_id: 99 }, fields: KIT_CONFIG.steps.s_kclose01.groups[1].fields }]);
 });
+
+// ---- photo fields own their photo group ------------------------------------------------------
+test("photo fields: tagged with the field's own group in every version, whatever the config stored", () => {
+  const shot = (id: string, photo_type: string): Field =>
+    ({ id, type: "photo", label: "צילום", required: false, notes: "off", photo_type, min: 1 }) as Field;
+  const itemCfg: RouteFieldsConfig = {
+    schema: 1,
+    steps: { s_elec0001: { ...ITEM_CONFIG.steps.s_elec0001, groups: [{ target: "item", fields: [led, shot("f_pho00001", "product"), shot("f_pho00002", "")] }] } },
+  };
+  const item = resolveStationFields(itemInput({ config: itemCfg }));
+  assert.equal(item.mode, "item");
+  assert.deepEqual(item.mode === "item" ? item.fields.map((f) => (f.type === "photo" ? f.photo_type : f.type)) : null,
+    ["choice_row", "r77.s_elec0001.f_pho00001", "r77.s_elec0001.f_pho00002"]);
+  // The stored config is not changed.
+  assert.equal((itemCfg.steps.s_elec0001.groups[0].fields[1] as { photo_type: string }).photo_type, "product");
+
+  const kitCfg: RouteFieldsConfig = {
+    schema: 1,
+    steps: { s_kopen001: { ...KIT_CONFIG.steps.s_kopen001, groups: [
+      { target: "box", fields: [shot("f_bxp00001", "package")] },
+      { target: "each_item", fields: [shot("f_eap00001", "product")] },
+    ] } },
+  };
+  const kit = resolveStationFields(kitInput({ config: kitCfg }));
+  assert.equal(kit.mode, "package");
+  if (kit.mode !== "package") return;
+  assert.deepEqual(kit.box.map((f) => f.type === "photo" && f.photo_type), ["r91.s_kopen001.f_bxp00001"]);
+  // A kit item's field is the KIT route's: one group for the field, whichever item it photographs.
+  assert.deepEqual(kit.items.map((it) => it.groups[0].fields.map((f) => f.type === "photo" && f.photo_type)),
+    KIT_ITEMS.map(() => ["r91.s_kopen001.f_eap00001"]));
+});

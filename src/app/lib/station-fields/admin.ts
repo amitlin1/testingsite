@@ -9,6 +9,7 @@ import { STATUS_QUEUED, STATUS_WAITING_FOR_PACKAGE_ITEMS } from "@/app/lib/packa
 import { diffConfigs } from "./diff";
 import type { Change } from "./diff";
 import { KIT_ROUTE_LABEL, routeOfTypeLabel } from "./labels";
+import { syncFieldPhotoGroups } from "./photo-groups";
 import { stepConfigOf } from "./schema";
 import type { RouteFieldsConfig, StepUid } from "./schema";
 import { ShapeError, checkConfigAgainstRoute, lintRouteFieldsConfig, parseRouteFieldsConfig, unknownStepIssues } from "./validate";
@@ -671,6 +672,8 @@ export async function previewPublish(db: PrismaClient, input: PublishPreviewInpu
  * with a draft becomes version fields_version + 1, all under one publish_batch, and its draft is
  * cleared. Every mode but "new_only" also moves the rows of movableRows to the new version.
  *
+ * Each route's photo fields get their photo groups (photo-groups.ts) with its version.
+ *
  * Every read comes first — the "מולא ב-N בדיקות" counts scan test_results — and the item_routes
  * rows are moved last: a worker's start-test or results submit on such a row waits for its lock,
  * so the lock is taken only once nothing slow is left before the commit.
@@ -722,6 +725,8 @@ export async function publishFields(db: PrismaClient, input: PublishInput, actor
         UPDATE testing_routes
            SET fields_version = ${v}, fields_draft = NULL, draft_rev = draft_rev + 1
          WHERE test_route_id = ${id}`;
+      // The photo fields' own groups, named after the field as published.
+      await syncFieldPhotoGroups(tx, id, p.draft);
       versions[id] = v;
     }
 

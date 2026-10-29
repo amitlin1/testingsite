@@ -19,7 +19,6 @@ import {
   issuesOfGroup, lockedRowTexts, moveField, moveFieldBy, namedFieldCount, neighbourStop, newField, opensExpanded,
   packageWizardAt, parsePhotoMin, popoverFieldId, popupKindOf, removeChecklistItem, removeField, removeOption,
   renameChecklistItem, renameOption, replaceField, setOptionTone, stopTargetCell, targetChips, timelineStops, withFieldHelp,
-  withPhotoType,
 } from "../editorModel";
 import type { IdSource } from "../editorModel";
 import { PC, artboard1, choice } from "./fixtures";
@@ -159,14 +158,10 @@ test("checklist boxes: add on Enter (trimmed, own id), rename in place, remove; 
   assert.deepEqual(parseFieldList([full]), [full]);
 });
 
-test("photo settings: the type by code, the minimum a whole number 0..20", () => {
+test("photo settings: no type to pick (the field owns its group), the minimum a whole number 0..20", () => {
   const f = newField("photo", ids()) as PhotoField;
-  const lint = (field: Field) => lintRouteFieldsConfig(configWith(field)).map((i) => i.code);
-  assert.deepEqual(lint(f).filter((c) => c === "PHOTO_TYPE_EMPTY"), ["PHOTO_TYPE_EMPTY"]);
-  const typed = withPhotoType(f, "package");
-  assert.equal(typed.photo_type, "package");
-  assert.equal(f.photo_type, "", "the original is untouched");
-  assert.deepEqual(lint(typed).filter((c) => c === "PHOTO_TYPE_EMPTY"), []);
+  assert.equal(f.photo_type, "");
+  assert.deepEqual(lintRouteFieldsConfig(configWith(f)).filter((i) => i.level === "error"), [], "a new photo field publishes as it is");
 
   assert.equal(parsePhotoMin(""), null);
   assert.equal(parsePhotoMin("x"), null);
@@ -175,7 +170,7 @@ test("photo settings: the type by code, the minimum a whole number 0..20", () =>
   assert.equal(parsePhotoMin("2a"), 2);
   assert.equal(parsePhotoMin("25"), 20);
   assert.equal(parsePhotoMin("-4"), 4);
-  assert.deepEqual(parseFieldList([{ ...typed, min: parsePhotoMin("99")! }]), [{ ...typed, min: 20 }]);
+  assert.deepEqual(parseFieldList([{ ...f, min: parsePhotoMin("99")! }]), [{ ...f, min: 20 }]);
 });
 
 // ---- the field list --------------------------------------------------------------------------------

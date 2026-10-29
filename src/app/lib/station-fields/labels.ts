@@ -119,8 +119,6 @@ export const UNDRAWN_TEXT = {
   checklistEmpty: "אין תיבות סימון — הוסיפו תיבת סימון",
   // CHECKLIST_ITEM_LABEL_EMPTY — a checklist item without a name (worded like LINT_TEXT.optionLabelEmpty).
   checklistItemLabelEmpty: "תיבת סימון ריקה — מלאו או הסירו",
-  // PHOTO_TYPE_EMPTY — a photo field without a photo type (the photo settings are not drawn, spec §5.5.2).
-  photoTypeEmpty: "יש לבחור סוג צילום",
   // STEP_SCOPE_MISMATCH — the step's station type changed level (package / item) under its fields (spec §3.5).
   stepScopeMismatch: "השדות לא תואמים לרמת העמדה",
   // STEP_UNKNOWN — the config names a step the route does not have (or the route's

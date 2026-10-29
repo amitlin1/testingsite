@@ -481,7 +481,8 @@ export const FIELD_TYPE_TEXT: Record<FieldType, { name: string; desc: string }> 
   textarea: { name: "טקסט ארוך", desc: "פסקה, עד 3 שורות" },
   checklist: { name: "רשימת סימון", desc: "כמה תיבות סימון, כמו בבדיקת הסגירה" },
   multi_choice: { name: "בחירה מרובה", desc: "אפשר לבחור יותר מאפשרות אחת" },
-  photo: { name: "צילום", desc: "סוג צילום ומינימום תמונות" },
+  // Artboard 3 says "סוג צילום ומינימום תמונות"; the field owns its photo group, so only the minimum is left (not approved).
+  photo: { name: "צילום", desc: "מינימום תמונות" },
   scan: { name: "סריקה", desc: "שדה לקורא ברקוד" },
   section: { name: "כותרת מקטע", desc: "מחלקת את השדות לקבוצות בחלון" },
 };
@@ -835,12 +836,8 @@ export const FIELD_SETTINGS_UNDRAWN_TEXT = {
   checklistGroupPrefix: "תיבות סימון לשדה ",
   checklistItemEditPrefix: "עריכת תיבת הסימון ",
   checklistItemRemovePrefix: "הסרת תיבת הסימון ",
-  // the photo row — artboard 3's description of the type, "סוג צילום ומינימום תמונות":
-  // the photo type combobox (its name and placeholder, worded like the packages screen's "בחר סוג
-  // פריט…") and the minimum ("מינ׳", the short form artboard 3 uses for a minimum; the input's title
-  // spells it out).
-  photoTypeLabel: "סוג צילום",
-  photoTypePlaceholder: "בחר סוג צילום…",
+  // the photo row — the minimum ("מינ׳", the short form artboard 3 uses for a minimum; the input's
+  // title spells it out). There is no photo type to pick: the field owns its photo group.
   photoMinLabel: "מינ׳",
   photoMinTitle: "מינימום תמונות",
 } as const;

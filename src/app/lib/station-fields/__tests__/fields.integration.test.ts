@@ -1447,6 +1447,43 @@ describe(
       }]);
     });
 
+    it("photo fields: publishing gives the field its own group, named '{station type} · {field}' and renamed with it; the worker and the submit use it in every version; the reference pickers never list it", async () => {
+      const SHOT: Field = { id: "f_pho00001", type: "photo", label: "צילום הלוח", required: false, notes: "off", photo_type: "product", min: 1 };
+      const code = `r${R.fields}.${UID.f1}.${SHOT.id}`;
+      await H.q("DELETE FROM photo_types WHERE test_route_id IS NOT NULL");
+      const [{ name }] = await H.q<{ name: string }>("SELECT TRIM(test_type_desc) AS name FROM test_stations_type WHERE test_station_type_id = $1", [H.TYPE_FUNC]);
+      const groupOf = () => H.q("SELECT photo_type_desc, test_route_id, step_uid, field_id, is_active FROM photo_types WHERE code = $1", [code]);
+
+      // v1 stores the group an older routes editor picked: it is not used.
+      await publish(R.fields, config(itemStep(UID.f1, [LED, GND, SHOT])));
+      assert.deepEqual(await groupOf(), [{ photo_type_desc: `${name} · צילום הלוח`, test_route_id: R.fields, step_uid: UID.f1, field_id: SHOT.id, is_active: true }]);
+
+      await seedFrozenItem(6421, 1);
+      await seedFrozenItem(6422, 1);
+      const read = await stationFields(6421, H.STATION_FUNC_A);
+      assert.equal(read.status, 200);
+      assert.equal(read.body.fields.find((f: Field) => f.id === SHOT.id).photo_type, code);
+
+      const shot = (photo_type: string) => ({ ...validFields(), [SHOT.id]: { t: "photo", photo_type, photos: ["items/6421/a.png"] } });
+      const stale = await submitAt(6422, H.STATION_FUNC_A, { Details: { schema: itemSchema(), fields: shot("product") } });
+      assert.equal(stale.status, 400, "the group the config stored is not the field's");
+      assert.equal(stale.body.code, "FIELDS_INVALID");
+      const saved = await submitAt(6421, H.STATION_FUNC_A, { Details: { schema: itemSchema(), fields: shot(code) } });
+      assert.equal(saved.status, 200, JSON.stringify(saved.body));
+      assert.deepEqual((await storedResults(6421))[0].details.fields[SHOT.id], { t: "photo", label: "צילום הלוח", photo_type: code, photos: ["items/6421/a.png"] });
+
+      // A rename follows on the next publish; a field that leaves the route keeps its group.
+      await publish(R.fields, config(itemStep(UID.f1, [LED, GND, { ...SHOT, label: "צילום הלוח מלפנים" }])));
+      assert.equal(((await groupOf())[0] as { photo_type_desc: string }).photo_type_desc, `${name} · צילום הלוח מלפנים`);
+      await publish(R.fields, config(itemStep(UID.f1, [LED, GND])));
+      assert.equal((await groupOf()).length, 1);
+
+      const { GET } = await import("../../../api/settings/photo-types/route");
+      const codes = async (url: string) => ((await (await GET(new Request(url))).json()) as { code: string }[]).map((p) => p.code);
+      assert.ok(!(await codes("http://localhost/api/settings/photo-types")).includes(code), "not offered for reference images");
+      assert.ok((await codes("http://localhost/api/settings/photo-types?all=1")).includes(code), "named in the item's history");
+    });
+
     it("results: a note over its maximum is a 400 NOTE_TOO_LONG even when 'send to research' turns the gate off, and nothing is written", async () => {
       await publish(R.fields, ITEM_CONFIG);
       await seedFrozenItem(6501, 1);

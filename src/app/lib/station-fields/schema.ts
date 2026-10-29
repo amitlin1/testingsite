@@ -88,8 +88,18 @@ export interface MultiChoiceField extends FieldBase {
 }
 export interface PhotoField extends FieldBase {
   type: "photo";                 // "צילום"
-  photo_type: string;            // photo_types.code
+  /** photo_types.code the shots are tagged with. A photo field owns its group: at run time this is
+   *  always fieldPhotoCode(route, step, field) (resolve.ts); what a config stores here is not used
+   *  — "" in new fields, the group the admin picked in older ones. */
+  photo_type: string;
   min: number;                   // "מינ׳" — 0..20
+}
+
+/** The photo group a photo field owns (photo_types.code, ≤ 50): one per route, step and field, so
+ *  a forked route's copy of a field gets a group of its own. Never shown — the group's name is
+ *  "{station type} · {field label}" (admin.ts syncFieldPhotoGroups). */
+export function fieldPhotoCode(routeId: number, stepUid: StepUid, fieldId: FieldId): string {
+  return `r${routeId}.${stepUid}.${fieldId}`;
 }
 export interface ScanField extends FieldBase { type: "scan" }         // "סריקה"
 export interface SectionField {                                       // "כותרת מקטע"

@@ -382,7 +382,6 @@ function OptionsCell(props: FieldRowEditorProps & { field: InputField }) {
           <PhotoFieldSettings
             field={field}
             minId={rowIds(field.id).photoMin}
-            typeMissing={props.issues.some((i) => i.code === "PHOTO_TYPE_EMPTY")}
             onChange={props.onChange}
           />
           <HelpInput {...props} field={field} />

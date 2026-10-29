@@ -15,7 +15,7 @@ import {
 } from "../validate";
 import type { Issue } from "../validate";
 import { FIELD_TYPES, NOTES_MODE_LABEL, TONE_WORD, targetKey } from "../schema";
-import type { ChoiceOption, Field, RouteFieldsConfig, Tone } from "../schema";
+import type { ChoiceOption, Field, PhotoField, RouteFieldsConfig, Tone } from "../schema";
 import { UNDRAWN_TEXT, LINT_TEXT, duplicateSkipText, optionEmptyMapText, optionsOkText } from "../labels";
 
 // ---- fixtures -----------------------------------------------------------------------
@@ -382,7 +382,7 @@ test("lint: an item-type group repeating an each_item name is a duplicate — th
   );
 });
 
-test("lint: a checklist with no items or an unnamed item, and a photo field without a photo type, block publish", () => {
+test("lint: a checklist with no items or an unnamed item blocks publish; a photo field needs no photo type", () => {
   const checklist = (id: string, items: { id: string; label: string }[]): Field =>
     ({ id, type: "checklist", label: `רשימה ${id}`, required: true, notes: "off", items }) as Field;
   const photo = (id: string, photo_type: string): Field =>
@@ -399,12 +399,21 @@ test("lint: a checklist with no items or an unnamed item, and a photo field with
     ["error", "CHECKLIST_EMPTY", "f_chk00001", undefined, UNDRAWN_TEXT.checklistEmpty],
     ["error", "CHECKLIST_ITEM_LABEL_EMPTY", "f_chk00002", "c_blank001", UNDRAWN_TEXT.checklistItemLabelEmpty],
     ["error", "CHECKLIST_ITEM_LABEL_EMPTY", "f_chk00002", "c_blank002", UNDRAWN_TEXT.checklistItemLabelEmpty],
-    ["error", "PHOTO_TYPE_EMPTY", "f_pho00001", undefined, UNDRAWN_TEXT.photoTypeEmpty],
-    ["error", "PHOTO_TYPE_EMPTY", "f_pho00002", undefined, UNDRAWN_TEXT.photoTypeEmpty],
   ]);
   // The shape check still takes them, as draft states.
   const draft = parseRouteFieldsConfig({ schema: 1, steps: { s_elec0001: { ...config([]).steps.s_elec0001, groups: [{ target: "item", fields: [checklist("f_chk00001", []), photo("f_pho00001", "")] }] } } });
   assert.equal(draft.steps.s_elec0001.groups[0].fields.length, 2);
+});
+
+test("shape: a photo field's stored photo_type is kept as it is, and reads \"\" when absent", () => {
+  const photo = (extra: Record<string, unknown>) =>
+    ({ id: "f_pho00001", type: "photo", label: "צילום", required: false, notes: "off", min: 1, ...extra });
+  const parse = (f: Record<string, unknown>) =>
+    parseRouteFieldsConfig({ schema: 1, steps: { s_elec0001: { ...config([]).steps.s_elec0001, groups: [{ target: "item", fields: [f] }] } } })
+      .steps.s_elec0001.groups[0].fields[0] as PhotoField;
+  assert.equal(parse(photo({ photo_type: "product" })).photo_type, "product");
+  assert.equal(parse(photo({})).photo_type, "");
+  assert.throws(() => parse(photo({ photo_type: 3 })), ShapeError);
 });
 
 test("lint: NUMBER_RANGE — minimum above maximum, or a negative tolerance", () => {
@@ -465,7 +474,7 @@ test("artboard strings are exact", () => {
   // The undrawn text exists and is non-empty (UNDRAWN_TEXT in labels.ts).
   assert.deepEqual(Object.keys(UNDRAWN_TEXT).sort(), [
     "checklistEmpty", "checklistItemLabelEmpty", "duplicateLabel", "noteTooLong", "numberRange", "optionsEmpty",
-    "photoTypeEmpty", "schemaMismatch", "stepScopeMismatch", "stepUnknown",
+    "schemaMismatch", "stepScopeMismatch", "stepUnknown",
   ]);
   for (const text of Object.values(UNDRAWN_TEXT)) assert.ok(text.trim().length > 0);
 });

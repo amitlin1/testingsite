@@ -29,7 +29,7 @@ export type ChangeDetail = {
   note_max?: NoteMax;        // the new effective maximum
   from_set?: string;         // "<set id>:<ver>" of the new field-set link, "" when unlinked
   moved?: boolean;           // the field's place in the cell changed
-  /** Any other property: help, unit, min/max, ref/tol_pct, out_of_range_fail, photo type/min,
+  /** Any other property: help, unit, min/max, ref/tol_pct, out_of_range_fail, photo min,
    *  checklist items, the wording or order of options both versions share. */
   other?: boolean;
 };
@@ -183,7 +183,8 @@ function otherChanged(prev: Field, next: Field): boolean {
     return prev.items.length !== next.items.length
       || prev.items.some((it, i) => it.id !== next.items[i].id || it.label !== next.items[i].label);
   }
-  if (prev.type === "photo" && next.type === "photo") return prev.photo_type !== next.photo_type || prev.min !== next.min;
+  // photo_type is not compared: the field owns its photo group, whatever a config stores (schema.ts).
+  if (prev.type === "photo" && next.type === "photo") return prev.min !== next.min;
   return false;
 }
 

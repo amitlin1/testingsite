@@ -1,4 +1,4 @@
-import { stepConfigOf, targetKey } from "./schema";
+import { fieldPhotoCode, stepConfigOf, targetKey } from "./schema";
 import type { Field, KitItemFields, KitItemGroup, RouteFieldsConfig, StationFieldsResponse, StepConfig, StepUid } from "./schema";
 import { ShapeError, parseRouteFieldsConfig } from "./validate";
 
@@ -69,6 +69,19 @@ export function kitItemGroups(step: StepConfig, itemTypeId: number): KitItemGrou
   return out;
 }
 
+/** The step with every photo field tagging its shots with its own group (fieldPhotoCode) — in
+ *  every frozen version alike, whatever group an older config stored. The popup uploads with it,
+ *  and the submit check compares against it. */
+export function withFieldPhotoGroups(step: StepConfig, routeId: number): StepConfig {
+  return {
+    ...step,
+    groups: step.groups.map((g) => ({
+      ...g,
+      fields: g.fields.map((f) => (f.type === "photo" ? { ...f, photo_type: fieldPhotoCode(routeId, step.uid, f.id) } : f)),
+    })),
+  };
+}
+
 function parseConfig(raw: unknown): RouteFieldsConfig | null {
   if (raw == null) return null;
   try {
@@ -92,10 +105,11 @@ export function resolveStationFields(input: ResolveInput): StationFieldsResponse
   // a kit at a package-level step is shown on the kit's card — the popup opens on the box).
   if (input.rowIsPackage !== input.stepIsPackageLevel) return legacy;
   const config = parseConfig(input.config);
-  const step = config ? stepConfigOf(config, uid) : undefined;
-  if (!step) return legacy;
+  const stored = config ? stepConfigOf(config, uid) : undefined;
+  if (!stored) return legacy;
 
   const route_id = input.route.test_route_id;
+  const step = withFieldPhotoGroups(stored, route_id);
   if (!input.rowIsPackage) {
     const fields = groupFields(step, targetKey("item"));
     if (!hasInput(fields)) return legacy;

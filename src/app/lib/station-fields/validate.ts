@@ -28,7 +28,6 @@ export type IssueCode =
   | "NUMBER_RANGE"
   | "CHECKLIST_EMPTY"
   | "CHECKLIST_ITEM_LABEL_EMPTY"
-  | "PHOTO_TYPE_EMPTY"
   | "STEP_SCOPE_MISMATCH"
   | "STEP_UNKNOWN";
 
@@ -335,7 +334,9 @@ function parseField(f: unknown, p: string, seen: Set<string>): Field {
     case "checklist":
       return { ...head(type), items: parseChecklistItems(own(f, "items"), `${p}.items`) };
     case "photo": {
-      const photoType = own(f, "photo_type");
+      // photo_type is not used (the field owns its group, schema.ts fieldPhotoCode): read as stored
+      // so older versions keep their exact config, and "" when absent.
+      const photoType = own(f, "photo_type") ?? "";
       const min = own(f, "min");
       if (!isStr(photoType, LIMITS.photoType) || !isInt(min) || min < 0 || min > LIMITS.photoMin) throw new ShapeError(p, "photo");
       return { ...head(type), photo_type: photoType, min };
@@ -413,8 +414,8 @@ export function lintFields(
       else if (n < 2) out.push({ level: "warning", code: "OPTIONS_TOO_FEW", ...loc, message: LINT_TEXT.optionsTooFew });
       else if (fails === 0) out.push({ level: "warning", code: "OPTIONS_NO_FAIL", ...loc, message: LINT_TEXT.optionsNoFail });
     }
-    // A checklist with nothing to tick, or with an unnamed box, and a photo field without a photo
-    // type cannot be filled in as meant; the shape check lets them through as draft states.
+    // A checklist with nothing to tick, or with an unnamed box, cannot be filled in as meant; the
+    // shape check lets it through as a draft state.
     if (f.type === "checklist") {
       for (const it of f.items) {
         if (!it.label.trim()) {
@@ -422,9 +423,6 @@ export function lintFields(
         }
       }
       if (f.items.length === 0) out.push({ level: "error", code: "CHECKLIST_EMPTY", ...loc, message: UNDRAWN_TEXT.checklistEmpty });
-    }
-    if (f.type === "photo" && !f.photo_type.trim()) {
-      out.push({ level: "error", code: "PHOTO_TYPE_EMPTY", ...loc, message: UNDRAWN_TEXT.photoTypeEmpty });
     }
     if (f.type === "number") {
       const inverted = f.min != null && f.max != null && f.min > f.max;

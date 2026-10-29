@@ -206,10 +206,17 @@ model photo_types {
   /// the photo IS the group. Both NULL = a group no template owns.
   test_station_type_id Int?
   component_id    String?                 @db.VarChar(16)
+  /// The route photo field that owns this group (src/app/lib/station-fields/schema.ts
+  /// fieldPhotoCode — the code is "r{route}.{step}.{field}"). All NULL = no field owns it. Plain
+  /// values with no FK, so a route can go away and its photos keep their group's name.
+  test_route_id   Int?
+  step_uid        String?                 @db.VarChar(16)
+  field_id        String?                 @db.VarChar(16)
   images          reference_item_images[]
   test_stations_type test_stations_type?  @relation(fields: [test_station_type_id], references: [test_station_type_id], onDelete: SetNull, onUpdate: NoAction, map: "fk_photo_types_station_type")
 
   @@unique([test_station_type_id, component_id], map: "photo_types_component_uq")
+  @@unique([test_route_id, step_uid, field_id], map: "photo_types_field_uq")
 }
 
 /// A physical thing with a barcode: either a PACKAGE (the box; item type has
