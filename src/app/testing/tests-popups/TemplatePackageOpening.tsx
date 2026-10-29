@@ -475,7 +475,7 @@ function OpeningPopup({
     noReference: boxHasRU === false ? PACKAGE_POPUP_TEXT.boxNoReference : null,
     fieldsHere: boxSlot?.stepIndex === i
       ? {
-        atComponent: boxSlot.atComponent, componentId: boxSlot.componentId,
+        atComponent: boxSlot.atComponent, componentId: boxSlot.componentId, title: fieldsCfg && boxHasFields ? BLOCK_TITLE.box : null,
         block: fieldsCfg
           ? boxHasFields && <FieldsBlock key="route-fields" variant="wizard" title={BLOCK_TITLE.box} groups={[{ fields: fieldsCfg.box }]} fx={boxFx} idPrefix={`${uid}-fxbox`}
             uploadPhoto={(file, photoType) => uploadTo(item.item_id, file, photoType)} />
@@ -491,7 +491,7 @@ function OpeningPopup({
     noReference: w.run.hasRU === false ? OPEN_TEXT.itemNoReference(w.sku ?? "") : null,
     fieldsHere: flowSlot?.stepIndex === phase
       ? {
-        atComponent: flowSlot.atComponent, componentId: flowSlot.componentId,
+        atComponent: flowSlot.atComponent, componentId: flowSlot.componentId, title: fieldsCfg && curFx ? BLOCK_TITLE.kitItem : null,
         // Artboard 16: the item's fields — a group label even for a lone group.
         block: fieldsCfg
           ? curFx && <FieldsBlock key={`route-fields-${it.item_id}`} variant="kit-item" title={BLOCK_TITLE.kitItem}

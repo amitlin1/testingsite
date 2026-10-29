@@ -95,8 +95,9 @@ export type Target = {
   refImages: (code: string) => RefImg[];
   /** Heads a step whose photos lean on the reference when the lookup found none; null = it found one. */
   noReference: string | null;
-  /** The route's fields block, drawn where the slot puts it in this step (null = not here). */
-  fieldsHere: { block: React.ReactNode; atComponent: boolean; componentId: string } | null;
+  /** The route's fields block, drawn where the slot puts it in this step (null = not here), and the
+   *  heading it shows (null while it draws none). */
+  fieldsHere: { block: React.ReactNode; atComponent: boolean; componentId: string; title: string | null } | null;
   /** With fields: their suggestion under the verdict (or, without one, under the checklist that
    *  shares their step), and the notes as NotesFields. */
   suggest: Suggest | null;
@@ -115,6 +116,9 @@ export function StepComponents({ step, t }: { step: TemplateStep; t: Target }) {
   const leans = step.components.some((c) => c.kind === "photo" && c.show_reference);
   const hasVerdict = step.components.some((c) => c.kind === "verdict");
   const lastChecklist = step.components.filter((c) => c.kind === "checklist").pop();
+  // A checklist titled as the fields block in its step goes without a heading of its own: today's
+  // closing draws its checks under the packing block's "בדיקות האריזה" alone (artboard 18).
+  const repeatsFieldsTitle = (title: string) => t.fieldsHere?.title != null && t.fieldsHere.title.trim() === title.trim();
   return (
     <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 18 }}>
       {leans && t.noReference && <AmberNote>{t.noReference}</AmberNote>}
@@ -145,7 +149,7 @@ export function StepComponents({ step, t }: { step: TemplateStep; t: Target }) {
           case "checklist":
             return (
               <div key={c.id}>
-                <ChecklistBlock c={c} title={t.fill(c.title)} ticked={t.run.checks[c.id] ?? []}
+                <ChecklistBlock c={c} title={t.fill(c.title)} showTitle={!repeatsFieldsTitle(t.fill(c.title))} ticked={t.run.checks[c.id] ?? []}
                   onToggle={(rowId) => t.patch((s) => {
                     const cur = s.checks[c.id] ?? [];
                     return { ...s, checks: { ...s.checks, [c.id]: cur.includes(rowId) ? cur.filter((x) => x !== rowId) : [...cur, rowId] } };
@@ -254,13 +258,14 @@ export function WeighBlock({ c, refWeight, value, id, onChange }: {
   );
 }
 
-/** "רשימת סימון" in the closing wizard's markup: every row a tick. */
-export function ChecklistBlock({ c, title, ticked, onToggle }: {
-  c: ChecklistComponent; title: string; ticked: string[]; onToggle: (rowId: string) => void;
+/** "רשימת סימון" in the closing wizard's markup: every row a tick. `showTitle` false: the title
+ *  names the group for screen readers only. */
+export function ChecklistBlock({ c, title, showTitle = true, ticked, onToggle }: {
+  c: ChecklistComponent; title: string; showTitle?: boolean; ticked: string[]; onToggle: (rowId: string) => void;
 }) {
   return (
     <div style={{ maxWidth: 620 }}>
-      <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>{title}</div>
+      {showTitle && <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>{title}</div>}
       <div role="group" aria-label={title} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
         {c.items.map((row) => {
           const on = ticked.includes(row.id);

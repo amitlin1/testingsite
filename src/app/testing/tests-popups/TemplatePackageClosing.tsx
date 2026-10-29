@@ -301,7 +301,7 @@ function ClosingPopup({
     noReference: boxHasRU === false ? PACKAGE_POPUP_TEXT.boxNoReference : null,
     fieldsHere: boxSlot?.stepIndex === i
       ? {
-        atComponent: boxSlot.atComponent, componentId: boxSlot.componentId,
+        atComponent: boxSlot.atComponent, componentId: boxSlot.componentId, title: boxFields ? BLOCK_TITLE.packing : null,
         // Artboard 18: the box's fields, before the packing checks in today's closing.
         block: (
           <React.Fragment key="route-fields">
