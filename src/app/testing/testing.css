@@ -118,6 +118,31 @@
   .sh-iconbtn.tst-pkg-btn:hover:not(:disabled) { background: var(--color-primary-soft); }
 }
 
+/* "חזרה לבדיקה הקודמת" — a pill on the card's top edge, beside the priority
+   ribbon's place: quiet (hairline on canvas) until hovered or focused. The
+   ::before widens its hit area to 32px without growing the pill. */
+.tst-step-back {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-70);
+  font: inherit;
+  font-size: var(--text-micro);
+  font-weight: 600;
+  border-radius: var(--r-pill);
+  padding: 2px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tst-step-back::before { content: ""; position: absolute; inset: -7px -2px; }
+.tst-step-back:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .tst-step-back:hover { border-color: var(--color-primary-border); color: var(--color-primary); background: var(--color-primary-tint); }
+}
+
 /* "מתעדכן…" beside the queue title while a refresh runs over a list that is
    already on screen (the list itself stays, so the scroll position does too). */
 .tst-refreshing { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-fine); color: var(--color-ink-muted-48); }

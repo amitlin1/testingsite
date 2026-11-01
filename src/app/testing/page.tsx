@@ -15,12 +15,14 @@ import {
   InputAdornment,
   IconButton,
   Dialog,
+  DialogParked,
   DialogTitle,
   DialogContent,
   DialogActions,
   Alert,
   Snackbar,
   CircularProgress,
+  ConfirmDialog,
 } from "@/components/ui";
 import "./testing.css";
 import { toneOfStatus, TONE_DOT } from "@/app/lib/status-tones";
@@ -46,6 +48,7 @@ import { TrendingUp as TrendingUpIcon } from "@/components/ui/icons";
 import { Star as StarIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
 import { Queue as QueueIcon } from "@/components/ui/icons";
+import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";
 // MoreVertIcon removed
 import { PackageTestDialog, StartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
 import StationHistoryDialog from "../components/StationHistoryDialog";
@@ -147,6 +150,7 @@ function ItemCard({
   highlighted = false,
   priority = false,
   hasWizard = false,
+  onStepBack,
 }: {
   item: ItemRow;
   rank: number;
@@ -158,6 +162,8 @@ function ItemCard({
   highlighted?: boolean;
   priority?: boolean;
   hasWizard?: boolean;
+  /** "חזרה לבדיקה הקודמת": given only when the item can go back a step (page.tsx stepBackTarget). */
+  onStepBack?: () => void;
 }) {
   const baseTimeString =
     item.current_status === 1 || item.current_status === 5
@@ -231,28 +237,35 @@ function ItemCard({
           transition: "border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease",
         }}
       >
-        {/* Priority ribbon — the longest-waiting item */}
-        {priority && (
-            <Box
-                sx={{
-                    position: "absolute",
-                    top: -10,
-                    insetInlineStart: 58,
-                    zIndex: 3,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    bgcolor: "var(--color-warning-ink)",
-                    color: "var(--color-on-primary)",
-                    fontSize: "var(--text-micro)",
-                    fontWeight: 700,
-                    borderRadius: "var(--r-pill)",
-                    padding: "3px 10px",
-                    whiteSpace: "nowrap",
-                }}
-            >
-                <StarIcon sx={{ fontSize: 12 }} aria-hidden />
-                ממתין הכי הרבה
+        {/* On the card's top edge, at its start: the priority ribbon (the
+            longest-waiting item) and "חזרה לבדיקה הקודמת", side by side. */}
+        {(priority || onStepBack) && (
+            <Box sx={{ position: "absolute", top: -10, insetInlineStart: 58, zIndex: 3, display: "flex", alignItems: "center", gap: "6px" }}>
+                {priority && (
+                    <Box
+                        sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            bgcolor: "var(--color-warning-ink)",
+                            color: "var(--color-on-primary)",
+                            fontSize: "var(--text-micro)",
+                            fontWeight: 700,
+                            borderRadius: "var(--r-pill)",
+                            padding: "3px 10px",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        <StarIcon sx={{ fontSize: 12 }} aria-hidden />
+                        ממתין הכי הרבה
+                    </Box>
+                )}
+                {onStepBack && (
+                    <button type="button" className="tst-step-back" onClick={onStepBack}>
+                        <ArrowBackIcon sx={{ fontSize: 12 }} aria-hidden />
+                        חזרה לבדיקה הקודמת
+                    </button>
+                )}
             </Box>
         )}
 
@@ -686,6 +699,12 @@ function TestingPageView() {
   // opens; if it's closed any other way (X button, backdrop, Escape) the item
   // must be released back to waiting instead of staying locked forever.
   const dialogSubmittedRef = React.useRef(false);
+  // A test window closed without a result is parked, not dropped: hidden, with everything
+  // filled in it, until the same worker opens the same item at the same station again — it
+  // comes back where it was. A result, another station or another worker drops it; so does
+  // leaving the page. `session` remounts the window for every fresh start.
+  const [parked, setParked] = React.useState<{ stationId: number; workerId: number | null } | null>(null);
+  const [dialogSession, setDialogSession] = React.useState(0);
   const [historyDialogOpen, setHistoryDialogOpen] = React.useState(false);
   const [nextStationDialogOpen, setNextStationDialogOpen] = React.useState(false);
   const [nextStationInfo, setNextStationInfo] = React.useState<{
@@ -857,9 +876,22 @@ function TestingPageView() {
 
   const handleAddTestResult = (item: ItemRow) => {
     dialogSubmittedRef.current = false;
-    setSelectedItem(item);
+    // The parked window of this very item, still at the same step: back where it was (with the
+    // item it was opened with, so it does not start over). Anything else starts fresh.
+    const resume = parked != null && selectedItem != null
+      && Number(selectedItem.item_id) === Number(item.item_id)
+      && selectedItem.current_route_step === item.current_route_step;
+    if (!resume) {
+      setSelectedItem(item);
+      setDialogSession((n) => n + 1);
+    }
+    setParked(null);
     setDialogOpen(true);
   };
+  // Another station or another worker drops the parked window (adjusted during render).
+  if (parked && (parked.stationId !== selectedStation?.test_station_id || parked.workerId !== activeWorkerId)) {
+    setParked(null);
+  }
 
   // Resolve a scanned barcode to a station and hoist the matching item.
   // filterTo: also narrow the queue to that one item (the ?item= deep link
@@ -1122,6 +1154,51 @@ function TestingPageView() {
     [stationTypes]
   );
 
+  // "חזרה לבדיקה הקודמת" (api/testing/step-back): the card offers it, a
+  // dialog confirms, and the answer says where the item went back to — like
+  // the next-station dialog after a result. The server checks everything again.
+  const [stepBackItem, setStepBackItem] = React.useState<ItemRow | null>(null);
+  const [stepBackBusy, setStepBackBusy] = React.useState(false);
+  const [steppedBack, setSteppedBack] = React.useState<{ stationName: string; routeStep: number } | null>(null);
+  /** The station type a waiting item goes back to; null where it can't go back
+   *  (first step, a box, or the step before is the whole box's — its opening). */
+  const stepBackTarget = (item: ItemRow): TestStationType | null => {
+    const step = item.current_route_step ?? 1;
+    if (item.current_status !== 2 || item.is_package || step <= 1) return null;
+    const prevTypeId = item.route_steps?.[step - 2];
+    const prev = prevTypeId != null ? stationTypes.find((t) => t.id === Number(prevTypeId)) : undefined;
+    return prev && !prev.packageLevel ? prev : null;
+  };
+  const confirmStepBack = async () => {
+    const it = stepBackItem;
+    if (!it || stepBackBusy) return;
+    setStepBackBusy(true);
+    try {
+      const res = await apiFetch("/api/testing/step-back", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId: String(it.item_id), currentRouteStep: it.current_route_step,
+          workerId: activeWorkerId ?? undefined, workerName: activeWorkerName || undefined, actionId: newActionId(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setStepBackItem(null);
+      if (!res.ok) {
+        setStartError(data?.error || "שגיאה בהחזרת הפריט לעמדה הקודמת");
+      } else {
+        setSteppedBack({ stationName: data.stationDesc || data.stationTypeDesc || "", routeStep: Number(data.routeStep) });
+      }
+      handleRefreshItems();
+    } catch {
+      setStepBackItem(null);
+      setStartError("שגיאה בתקשורת עם השרת");
+    } finally {
+      setStepBackBusy(false);
+    }
+  };
+  const stepBackTo = stepBackItem ? stepBackTarget(stepBackItem) : null;
+
   // The queue on screen belongs to another (or no) station yet: skeletons and
   // "—" until the selected station's queue answers. A station id the station
   // list does not know (yet) counts as loading, too.
@@ -1130,7 +1207,8 @@ function TestingPageView() {
 
   // Keep the search field ready for the next scan: focus it whenever no
   // dialog is open and nothing else holds the focus.
-  const anyDialogOpen = dialogOpen || scannerOpen || finishedDialogOpen || nextStationDialogOpen || researchDialogOpen || historyDialogOpen;
+  const anyDialogOpen = dialogOpen || scannerOpen || finishedDialogOpen || nextStationDialogOpen || researchDialogOpen || historyDialogOpen
+    || stepBackItem != null || steppedBack != null;
   React.useEffect(() => {
     if (anyDialogOpen) return;
     const t = setTimeout(() => {
@@ -1341,6 +1419,7 @@ function TestingPageView() {
                                             onRefresh={handleRefreshItems}
                                             onStartError={setStartError}
                                             highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
+                                            onStepBack={stepBackTarget(item) ? () => setStepBackItem(item) : undefined}
                                         />
                                     ))}
                                 </Box>
@@ -1370,6 +1449,7 @@ function TestingPageView() {
                                         highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
                                         priority={priorityItemId != null && Number(item.item_id) === Number(priorityItemId)}
                                         hasWizard={hasWizard}
+                                        onStepBack={stepBackTarget(item) ? () => setStepBackItem(item) : undefined}
                                     />
                                 ))}
                             </Box>
@@ -1395,12 +1475,15 @@ function TestingPageView() {
 
         {/* Dialogs — the per-type finish/report dialog, resolved from the registry. */}
         {(() => {
-  if (!dialogOpen || !selectedItem || !selectedStation || !selectedStationType) return null;
+  if (!(dialogOpen || parked) || !selectedItem || !selectedStation || !selectedStationType) return null;
   const dialogProps = {
-    open: dialogOpen,
+    // Parked, the window still thinks it is open (so it neither resets nor reloads);
+    // DialogParked is what hides it.
+    open: true,
     onClose: () => {
       setDialogOpen(false);
       if (!dialogSubmittedRef.current) {
+        setParked({ stationId: selectedStation.test_station_id, workerId: activeWorkerId });
         releaseTest(selectedItem.item_id, selectedStation.test_station_id);
       }
     },
@@ -1416,21 +1499,27 @@ function TestingPageView() {
   // one (docs/popup-templates/PLAN.md §5); everything else resolves from the registry.
   if (packageLevel && selectedItem.is_package && selectedItem.package) {
     return (
-      <PackageTestDialog
-        {...dialogProps}
-        kind={packageKindOf(selectedItem)}
-        hasTemplate={selectedStationType.popupTemplate?.base === "package"}
-      />
+      <DialogParked.Provider value={!dialogOpen}>
+        <PackageTestDialog
+          key={dialogSession}
+          {...dialogProps}
+          kind={packageKindOf(selectedItem)}
+          hasTemplate={selectedStationType.popupTemplate?.base === "package"}
+        />
+      </DialogParked.Provider>
     );
   }
   // A type with a popup template opens it — except for an item in research, which keeps the
   // code's popup (docs/popup-templates/PLAN.md §7, decision 3).
   return (
-    <StartTestDialog
-      {...dialogProps}
-      typeId={selectedStationType.id}
-      hasTemplate={selectedStationType.popupTemplate != null && selectedItem.current_status !== 5}
-    />
+    <DialogParked.Provider value={!dialogOpen}>
+      <StartTestDialog
+        key={dialogSession}
+        {...dialogProps}
+        typeId={selectedStationType.id}
+        hasTemplate={selectedStationType.popupTemplate != null && selectedItem.current_status !== 5}
+      />
+    </DialogParked.Provider>
   );
 })()}
 
@@ -1487,6 +1576,44 @@ function TestingPageView() {
                 <Button onClick={() => setNextStationDialogOpen(false)}>
                     אישור
                 </Button>
+            </DialogActions>
+        </Dialog>
+
+        {/* "חזרה לבדיקה הקודמת": the question, then where the item went back to. */}
+        <ConfirmDialog
+            open={stepBackItem != null}
+            title={`להחזיר את הפריט ל${stepBackTo?.name ?? "עמדה הקודמת"}?`}
+            message={stepBackItem
+              ? `הפריט יחזור לשלב ${(stepBackItem.current_route_step ?? 2) - 1} וימתין שם לבדיקה חוזרת. התוצאה הקודמת נשמרת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.`
+              : undefined}
+            confirmText="החזר"
+            busy={stepBackBusy}
+            onConfirm={confirmStepBack}
+            onCancel={() => setStepBackItem(null)}
+        />
+        <Dialog open={steppedBack != null} onClose={() => setSteppedBack(null)} maxWidth="xs" fullWidth>
+            <DialogTitle onClose={() => setSteppedBack(null)}>
+                <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                    <CheckCircleOutlineIcon fontSize={24} color="success" aria-hidden />
+                    הפריט הוחזר לבדיקה הקודמת
+                </Box>
+            </DialogTitle>
+            <DialogContent>
+                <Typography sx={{ fontSize: "var(--text-body)", color: "var(--color-ink-muted-48)" }}>העמדה שהפריט חזר אליה:</Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: "12px", mt: "10px" }}>
+                    <ArrowBackIcon fontSize={22} htmlColor="var(--color-ink-muted-48)" aria-hidden />
+                    <Box>
+                        <Typography sx={{ fontSize: "var(--text-lead)", fontWeight: 600 }}>
+                            {steppedBack?.stationName || "לא ידוע"}
+                        </Typography>
+                        <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
+                            שלב {steppedBack?.routeStep}
+                        </Typography>
+                    </Box>
+                </Box>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setSteppedBack(null)}>אישור</Button>
             </DialogActions>
         </Dialog>
 
