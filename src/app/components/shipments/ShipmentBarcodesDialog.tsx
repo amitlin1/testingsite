@@ -24,8 +24,8 @@ type ShipmentBarcodesDialogProps = {
 };
 
 /**
- * One label per BOX of the shipment, each with the box's own id (16 digits
- * ending in 00) as its barcode — the label the intake scans. A label carries
+ * One label per BOX of the shipment, each with the box's own id (ending in
+ * 00, lib/packages/ids.ts) as its barcode — the label the intake scans. A label carries
  * the code only: the barcode and its digits, no text. The boxes are
  * minted when the shipment is saved (lib/packages/boxes.ts); opening this
  * asks the server for them, which also mints the missing ones of a shipment

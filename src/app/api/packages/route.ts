@@ -64,7 +64,7 @@ const str = (v: unknown): string => (v == null ? "" : String(v));
  *   makat, model, manufacturer, manufacturerNo   package fields, optional
  *   items: [{ itemType, serialNumber, makat, model, manufacturer, manufacturerNo?, routeNumber? }]
  *
- * Answers 201 { ok, packageId, itemIds } — ids as numbers (16 digits, exact).
+ * Answers 201 { ok, packageId, itemIds } — ids as numbers (15 digits, exact).
  * A serial twice in the box, or already on an item of the same type in this
  * shipment, answers 409 with `itemIndex` (lib/packages/serials.ts).
  *

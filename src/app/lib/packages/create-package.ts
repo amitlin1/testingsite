@@ -4,9 +4,11 @@ import { recordTransition } from "@/app/lib/metrics/record";
 import { TransactionClient } from "@/app/lib/prisma";
 import { PackageError } from "./errors";
 import {
+  CUSTOMER_CODE_RULE,
   MAX_DAILY_PACKAGES,
   MAX_PACKAGE_SEQ,
   baseOfId,
+  idCustomerCode,
   isNewFormatId,
   itemIdFromBase,
   localDateParts,
@@ -78,6 +80,21 @@ export type TemplateLine = {
 };
 
 export const CHAR50 = (s: string | null | undefined) => (s ?? "").trim().slice(0, 50);
+
+/** The customer's code as a new id carries it, or the refusal that says to fix
+ *  it in the customers' settings. Checked before a counter value is reserved. */
+export function idCodeOrRefuse(customerCode: string | null | undefined): string {
+  const code = idCustomerCode(customerCode);
+  if (code == null) {
+    const shown = (customerCode ?? "").trim();
+    throw new PackageError(
+      "CUSTOMER_CODE_FORMAT",
+      `${shown ? `קוד הלקוח "${shown}" לא מתאים למזהה המארז` : "ללקוח אין קוד"} — ${CUSTOMER_CODE_RULE}. יש לתקן אותו בהגדרות ← לקוחות.`,
+      409,
+    );
+  }
+  return code;
+}
 
 export async function nextDailyPackageCounter(tx: TransactionClient, dateKey: string): Promise<number> {
   return reserveDailyPackageCounters(tx, dateKey, 1);
@@ -227,8 +244,9 @@ export async function createPackage(tx: TransactionClient, input: PackageInput):
     throw new PackageError("TOO_MANY_ITEMS", `מארז יכול להכיל עד ${MAX_PACKAGE_SEQ} פריטים`);
   }
 
-  const customerRow = await tx.customers.findUnique({ where: { id: customer }, select: { id: true } });
+  const customerRow = await tx.customers.findUnique({ where: { id: customer }, select: { customer_code: true } });
   if (!customerRow) throw new PackageError("CUSTOMER_NOT_FOUND", "הלקוח לא נמצא", 404);
+  const customerCode = idCodeOrRefuse(customerRow.customer_code);
 
   const shipmentRow = await tx.shipments.findUnique({
     where: { id: shipment },
@@ -282,7 +300,7 @@ export async function createPackage(tx: TransactionClient, input: PackageInput):
 
   const { datePart, dateKey } = localDateParts();
   const counter = await nextDailyPackageCounter(tx, dateKey);
-  const base = packageIdBase(customer, datePart, counter);
+  const base = packageIdBase(customerCode, datePart, counter);
   const packageId = packageIdFromBase(base);
 
   await insertRoutedRow(tx, {

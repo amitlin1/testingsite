@@ -140,7 +140,7 @@ interface PaletteItem {
   icon: LucideIcon;
   /** Trailing pill (e.g. "4 עמדות", "הושלם"). */
   tag?: string;
-  /** A 16-digit package / item id shown before the label with its bold
+  /** A package / item id (15 digits, 16 before 2026-11-01) shown before the label with its bold
    *  position suffix (design/TopNav.dc.html) — boxes and items differ by the
    *  "מארז" tag and that suffix. */
   labelId?: string;
@@ -347,7 +347,7 @@ function buildGroups(
     const rows: PaletteItem[] = [];
     for (const it of items.slice(0, ITEM_ROWS_MAX)) {
       // Package model (docs/packages/PLAN.md): a box and an item inside one
-      // carry a 16-digit id whose two-digit suffix is the position — shown as
+      // carry a 15- (or older 16-) digit id whose two-digit suffix is the position — shown as
       // labelId with the suffix in bold; the box additionally gets the "מארז"
       // tag. A legacy loose item keeps the plain "#id" identity.
       const inPackageModel = it.isPackage || it.packageId != null;

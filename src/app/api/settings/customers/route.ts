@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
 import { Prisma } from "@prisma/client";
+import { CUSTOMER_CODE_RULE, idCustomerCode } from "@/app/lib/packages/ids";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,10 @@ export async function POST(req: Request) {
 
   const trimmedName = name.trim();
   const trimmedCode = customer_code.trim();
+  // The code goes into every box id minted for the customer (lib/packages/ids.ts).
+  if (idCustomerCode(trimmedCode) == null) {
+    return NextResponse.json({ error: CUSTOMER_CODE_RULE }, { status: 400 });
+  }
 
   // Fix sequence before insert
   await fixSequence(prisma, "customers", "id", "customers_id_seq");

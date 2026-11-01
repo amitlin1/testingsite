@@ -8,6 +8,7 @@ import {
   CreatedPackage,
   PackageItemInput,
   addPackageItem,
+  idCodeOrRefuse,
   insertItemRow,
   loadTemplate,
   reserveDailyPackageCounters,
@@ -97,12 +98,13 @@ async function lockBox(tx: TransactionClient, packageId: bigint): Promise<BoxRow
  *  reserved run of the day's counter, all written in one statement. */
 async function mintPendingBoxes(
   tx: TransactionClient,
-  args: { customer: number; shipment: number; packageType: number; lineId: number; details: BoxDetails; count: number },
+  args: { customer: number; customerCode: string | null; shipment: number; packageType: number; lineId: number; details: BoxDetails; count: number },
 ): Promise<bigint[]> {
   if (args.count < 1) return [];
+  const code = idCodeOrRefuse(args.customerCode);
   const { datePart, dateKey } = localDateParts();
   const first = await reserveDailyPackageCounters(tx, dateKey, args.count);
-  const ids = Array.from({ length: args.count }, (_, k) => packageIdFromBase(packageIdBase(args.customer, datePart, first + k)));
+  const ids = Array.from({ length: args.count }, (_, k) => packageIdFromBase(packageIdBase(code, datePart, first + k)));
   const { makat, model, manufacturer, manufacturerNo } = args.details;
   await tx.$executeRaw`
     INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model, manufacturer_name,
@@ -147,8 +149,12 @@ type SyncBox = DetailCols & {
  */
 export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: number): Promise<BoxSync> {
   // The shipment row lock serializes two saves of one shipment.
-  const ship = (await tx.$queryRaw<{ customer_id: number; makat: string | null; is_sent: boolean | null }[]>`
-    SELECT customer_id, makat, is_sent FROM shipments WHERE id = ${shipmentId} FOR UPDATE
+  const ship = (await tx.$queryRaw<{ customer_id: number; customer_code: string | null; makat: string | null; is_sent: boolean | null }[]>`
+    SELECT s.customer_id, c.customer_code, s.makat, s.is_sent
+    FROM shipments s
+    LEFT JOIN customers c ON c.id = s.customer_id
+    WHERE s.id = ${shipmentId}
+    FOR UPDATE OF s
   `)[0];
   if (!ship || ship.is_sent) return { created: 0, removed: [], reminted: 0 };
 
@@ -254,7 +260,7 @@ export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: numbe
     const details = boxDetails({ ...line, makat: line.makat?.trim() || ship.makat });
     if (mine.length < line.quantity && line.item_type_id != null) {
       const minted = await mintPendingBoxes(tx, {
-        customer: ship.customer_id, shipment: shipmentId, packageType: line.item_type_id, lineId: line.id, details,
+        customer: ship.customer_id, customerCode: ship.customer_code, shipment: shipmentId, packageType: line.item_type_id, lineId: line.id, details,
         count: line.quantity - mine.length,
       });
       created += minted.length;

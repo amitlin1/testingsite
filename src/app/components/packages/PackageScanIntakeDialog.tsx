@@ -18,7 +18,9 @@ import { GREEN, GREEN_BG, HAIR, HAIR_2, INK_2, MUTED, RED, RED_BG, fmtId } from 
 
 type Outcome = { tone: "ok" | "error"; text: string };
 
-const BOX_ID = /^\d{16}(-\d+)?$/;
+// A box id: 15 digits, or the 16 minted before the customer code; an older
+// label may still carry "-sourceId".
+const BOX_ID = /^\d{15,16}(-\d+)?$/;
 
 export default function PackageScanIntakeDialog({
   open, onClose, onChanged,

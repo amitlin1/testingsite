@@ -287,7 +287,7 @@ export async function resetDb(): Promise<void> {
     await q("ALTER TABLE item_state_event ENABLE TRIGGER trg_ise_immutable");
   }
 
-  await q("INSERT INTO customers (id, name, customer_code) VALUES ($1, 'INTEGRATION', 'CUST-TEST')", [
+  await q("INSERT INTO customers (id, name, customer_code) VALUES ($1, 'INTEGRATION', '901')", [
     CUSTOMER_ID,
   ]);
   await q(

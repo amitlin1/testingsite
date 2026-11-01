@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { CUSTOMER_CODE_RULE, idCustomerCode } from "@/app/lib/packages/ids";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         { error: "קוד לקוח הוא שדה חובה" },
         { status: 400 }
       );
+    }
+
+    // The code goes into every box id minted for the customer (lib/packages/ids.ts).
+    if (idCustomerCode(customer_code) == null) {
+      return NextResponse.json({ error: CUSTOMER_CODE_RULE }, { status: 400 });
     }
 
     const updated = await prisma.customers.update({

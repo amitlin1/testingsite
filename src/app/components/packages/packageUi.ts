@@ -67,19 +67,26 @@ export const LEGEND: { label: string; color: string }[] = [
   { label: "חסר במארז", color: RED },
 ];
 
-/** 16-digit id → { head: "1005 1509 2600 03", suffix: "00" }. A legacy id
- *  (shorter) has no suffix convention: head = the whole id, suffix = "". */
+/** 15-digit id → its parts { head: "323 011126 0001", suffix: "00" } (customer
+ *  code, date, the day's counter; lib/packages/ids.ts). The previous 16-digit
+ *  id → { head: "1005 1509 2600 03", suffix: "00" }. A legacy id (shorter) has
+ *  no suffix convention: head = the whole id, suffix = "". */
 export function fmtId(id: string | number | bigint): { head: string; suffix: string } {
   const s = String(id);
+  if (s.length === 15) {
+    return { head: `${s.slice(0, 3)} ${s.slice(3, 9)} ${s.slice(9, 13)}`, suffix: s.slice(13) };
+  }
   if (s.length === 16) {
     return { head: s.slice(0, 14).replace(/(\d{4})(?=\d)/g, "$1 "), suffix: s.slice(14) };
   }
   return { head: s.replace(/(\d{4})(?=\d)/g, "$1 "), suffix: "" };
 }
 
-/** Compact form for chips and dense tables: "…2600 03". */
+/** Compact form for chips and dense tables: the day's counter and the
+ *  position, "…0001 00" (the previous 16-digit id: "…2600 03"). */
 export function shortId(id: string | number | bigint): string {
   const s = String(id);
+  if (s.length === 15) return `…${s.slice(9, 13)} ${s.slice(13)}`;
   if (s.length === 16) return `…${s.slice(10, 14)} ${s.slice(14)}`;
   return s.length > 8 ? `…${s.slice(-8)}` : s;
 }

@@ -58,7 +58,7 @@ describe("shipment boxes follow their lines", { skip: H.skipReason() }, () => {
 
   beforeEach(async () => {
     await H.resetDb();
-    await H.q("INSERT INTO customers (id, name, customer_code) VALUES ($1, 'OTHER', 'CUST-2')", [OTHER_CUSTOMER]);
+    await H.q("INSERT INTO customers (id, name, customer_code) VALUES ($1, 'OTHER', '902')", [OTHER_CUSTOMER]);
     await H.q(
       `INSERT INTO package_contents (package_type_id, item_type_id, quantity, route_number, sort_order) VALUES ($1, $2, 1, 1, 0)`,
       [BOX_TYPE, H.ITEM_TYPE_IN_BOX],
@@ -99,7 +99,7 @@ describe("shipment boxes follow their lines", { skip: H.skipReason() }, () => {
     assert.equal(r.created, 300);
     const bs = await boxRows();
     assert.equal(bs.length, 300);
-    const counters = bs.map((b) => Number(b.item_id.slice(10, 14))).sort((a, b) => a - b);
+    const counters = bs.map((b) => Number(b.item_id.slice(-6, -2))).sort((a, b) => a - b);
     assert.deepEqual(counters, Array.from({ length: 300 }, (_, k) => counters[0] + k));
     const [day] = await H.q<{ counter: number }>("SELECT counter FROM daily_counters ORDER BY date_key DESC LIMIT 1");
     assert.equal(day.counter, counters[299]);
@@ -130,7 +130,7 @@ describe("shipment boxes follow their lines", { skip: H.skipReason() }, () => {
     assert.deepEqual(r.removed, []);
     const bs = await boxRows();
     assert.equal(bs.length, 2);
-    assert.ok(bs.every((b) => b.customer_id === OTHER_CUSTOMER && b.item_id.slice(1, 4) === "008" && !old.includes(b.item_id)));
+    assert.ok(bs.every((b) => b.customer_id === OTHER_CUSTOMER && b.item_id.slice(0, 3) === "902" && !old.includes(b.item_id)));
   });
 
   it("6. a box no line claims (minted before boxes were linked) is adopted, or removed when nothing has room", async () => {

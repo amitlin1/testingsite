@@ -1,28 +1,36 @@
 /**
  * Item / package identifiers — docs/packages/PLAN.md §2.
  *
- * A new-format id is a fixed 16-digit number:
+ * A new-format id is a fixed 15-digit number:
  *
- *   1 CCC ddMMyy NNNN SS
- *   │ │   │      │    └─ position inside the package: 00 = the package itself,
- *   │ │   │      │       01..99 = items in the order they were added
- *   │ │   │      └────── daily package counter (0001..9999)
- *   │ │   └───────────── date the box was minted — its shipment's save
- *   │ │                  (boxes.ts) — server clock (TZ=Asia/Jerusalem)
- *   │ └───────────────── customer id, zero-padded to 3 digits
- *   └─────────────────── constant leading digit, so the customer's leading
- *                        zeros survive numeric storage and the width is fixed
+ *   CCC ddMMyy NNNN SS
+ *   │   │      │    └─ position inside the package: 00 = the package itself,
+ *   │   │      │       01..99 = items in the order they were added
+ *   │   │      └────── daily package counter (0001..9999), shared by every
+ *   │   │              customer — so the id is unique whatever the code
+ *   │   └───────────── date the box was minted — its shipment's save
+ *   │                  (boxes.ts) — server clock (TZ=Asia/Jerusalem)
+ *   └───────────────── the customer's code (customers.customer_code): 3 digits,
+ *                      never a leading 0 (numeric storage would drop it), so
+ *                      the width is fixed. A code that does not fit refuses
+ *                      the mint (idCustomerCode).
  *
- * Max value 1,999,999,999,999,999 < 2^53, so the id stays exact as a JS
- * Number everywhere the app converts BigInt → Number. Ids created before this
- * format ("legacy") are shorter and follow no suffix rule: only
- * items.package_id is the truth about membership — the suffix is a
- * human-readable convention for labels and screens.
+ * Max value 999,311,299,999,999 < 2^53, so the id stays exact as a JS Number
+ * everywhere the app converts BigInt → Number.
+ *
+ * Ids minted before 2026-11-01 are 16 digits — "1", the customer's internal id
+ * zero-padded to 3, then the same tail. They are never minted again but read
+ * everywhere as new-format (prefix, position, order). Ids older than both
+ * ("legacy") are shorter and follow no suffix rule: only items.package_id is
+ * the truth about membership — the suffix is a human-readable convention for
+ * labels and screens.
  */
 
-export const ID_LEADING_DIGIT = "1";
-export const ID_TOTAL_DIGITS = 16;
-export const MAX_CUSTOMER_ID = 999;
+export const CUSTOMER_CODE_DIGITS = 3;
+export const ID_TOTAL_DIGITS = CUSTOMER_CODE_DIGITS + 12;
+/** The 16-digit ids minted before the customer code: read, never minted. */
+const PREV_ID_TOTAL_DIGITS = 16;
+const PREV_ID_LEADING_DIGIT = "1";
 export const MAX_DAILY_PACKAGES = 9999;
 export const MAX_PACKAGE_SEQ = 99;
 export const PACKAGE_SEQ = 0;
@@ -46,10 +54,23 @@ export function localDateParts(now: Date = new Date()): IdDateParts {
   };
 }
 
-/** The 14-digit prefix shared by a package and every item inside it. */
-export function packageIdBase(customerId: number, datePart: string, counter: number): string {
-  if (!Number.isInteger(customerId) || customerId < 1 || customerId > MAX_CUSTOMER_ID) {
-    throw new RangeError(`customer id ${customerId} does not fit the 3-digit id field`);
+const CUSTOMER_CODE_RE = new RegExp(`^[1-9]\\d{${CUSTOMER_CODE_DIGITS - 1}}$`);
+
+/** The customer's code as it goes into an id, or null when it cannot:
+ *  exactly CUSTOMER_CODE_DIGITS digits, the first not 0. */
+export function idCustomerCode(code: string | null | undefined): string | null {
+  const s = (code ?? "").trim();
+  return CUSTOMER_CODE_RE.test(s) ? s : null;
+}
+
+/** Why a customer code cannot go into an id — the words every refusal uses. */
+export const CUSTOMER_CODE_RULE = `קוד לקוח חייב להיות מספר בן ${CUSTOMER_CODE_DIGITS} ספרות שלא מתחיל ב-0`;
+
+/** The prefix (all but the position) shared by a package and every item inside it. */
+export function packageIdBase(customerCode: string, datePart: string, counter: number): string {
+  const code = idCustomerCode(customerCode);
+  if (code == null) {
+    throw new RangeError(`customer code "${customerCode}" does not fit the ${CUSTOMER_CODE_DIGITS}-digit id field`);
   }
   if (!Number.isInteger(counter) || counter < 1 || counter > MAX_DAILY_PACKAGES) {
     throw new RangeError(`daily package counter ${counter} does not fit the 4-digit id field`);
@@ -57,7 +78,7 @@ export function packageIdBase(customerId: number, datePart: string, counter: num
   if (!/^\d{6}$/.test(datePart)) {
     throw new RangeError(`date part "${datePart}" must be ddMMyy`);
   }
-  return `${ID_LEADING_DIGIT}${String(customerId).padStart(3, "0")}${datePart}${String(counter).padStart(4, "0")}`;
+  return `${code}${datePart}${String(counter).padStart(4, "0")}`;
 }
 
 export function packageIdFromBase(base: string): bigint {
@@ -71,17 +92,20 @@ export function itemIdFromBase(base: string, seq: number): bigint {
   return BigInt(`${base}${String(seq).padStart(2, "0")}`);
 }
 
-/** True for ids minted by this module. Legacy ids are shorter. */
+/** True for ids minted by this module — today's 15 digits or the previous 16.
+ *  Legacy ids are shorter. */
 export function isNewFormatId(id: bigint | number | string): boolean {
   const s = String(id);
-  return s.length === ID_TOTAL_DIGITS && s.startsWith(ID_LEADING_DIGIT) && /^\d+$/.test(s);
+  if (!/^\d+$/.test(s)) return false;
+  return (s.length === ID_TOTAL_DIGITS && s[0] !== "0")
+    || (s.length === PREV_ID_TOTAL_DIGITS && s.startsWith(PREV_ID_LEADING_DIGIT));
 }
 
 /** The shared prefix of a new-format id (everything but the position). */
 export function baseOfId(id: bigint | number | string): string {
   const s = String(id);
   if (!isNewFormatId(s)) throw new RangeError(`${s} is not a new-format id`);
-  return s.slice(0, ID_TOTAL_DIGITS - 2);
+  return s.slice(0, -2);
 }
 
 /** Display helper ONLY — the truth is items.package_id. */
@@ -97,11 +121,13 @@ export function displaySeqOf(id: bigint | number | string): number | null {
 /**
  * Sorts ids in the order they were minted: yyMMdd + the day's counter. The id
  * itself does not sort that way — its date is ddMMyy and it starts with the
- * customer — so "the newest box" is never the largest id. Legacy ids sort
- * before every new-format one, by their own value.
+ * customer — so "the newest box" is never the largest id. Both widths end in
+ * the same ddMMyy NNNN SS tail, so they sort together. Legacy ids sort before
+ * every new-format one, by their own value.
  */
 export function mintOrderKey(id: bigint | number | string): string {
   const s = String(id);
-  if (!isNewFormatId(s)) return `0${s.padStart(ID_TOTAL_DIGITS, "0")}`;
-  return `1${s.slice(8, 10)}${s.slice(6, 8)}${s.slice(4, 6)}${s.slice(10, 14)}`;
+  if (!isNewFormatId(s)) return `0${s.padStart(PREV_ID_TOTAL_DIGITS, "0")}`;
+  const tail = s.slice(-12);
+  return `1${tail.slice(4, 6)}${tail.slice(2, 4)}${tail.slice(0, 2)}${tail.slice(6, 10)}`;
 }

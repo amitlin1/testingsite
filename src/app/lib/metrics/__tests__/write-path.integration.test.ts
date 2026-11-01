@@ -72,11 +72,11 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
       }),
     );
 
-    // Id shape (§2): 16 digits, leading 1, package ends in 00, items in 01/02
-    // and share the package's prefix.
+    // Id shape (§2): 15 digits, the customer's code first, package ends in 00,
+    // items in 01/02 and share the package's prefix.
     const packageId = created.packageId;
-    assert.equal(String(packageId).length, 16);
-    assert.ok(String(packageId).startsWith("1"));
+    assert.equal(String(packageId).length, 15);
+    assert.ok(String(packageId).startsWith("901"));
     assert.ok(String(packageId).endsWith("00"));
     assert.deepEqual(created.itemIds, [packageId + 1, packageId + 2]);
 
