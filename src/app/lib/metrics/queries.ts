@@ -27,6 +27,39 @@
 function pkgDupActive(alias: string): string {
   return `(${alias}.is_package_item AND ${alias}.station_type_id IN (SELECT test_station_type_id FROM test_stations_type WHERE package_level))`;
 }
+
+// A `queued` interval that ONE submission both opened and closed is
+// bookkeeping, not a wait. The event contract produces one per occurrence, on
+// purpose (write-path tests pin the event sequences):
+//   - the last step of a route: #9 records `queued` for step N+1 and #10 (or
+//     #11, no_station_for_type) records `done` microseconds later in the same
+//     transaction — once for EVERY finished run;
+//   - a box advancing onto its closing step before its items: #9 records
+//     `queued`, and the readiness recheck of the same submit flips it to
+//     waiting_for_package_items — once for every opened box.
+// No real wait leaves its queue on result_submitted / no_station_for_type
+// (a queued row leaves by test_started — #15 synthesises one for a submit in
+// status 2 — or by a release, reset or override), so for those the exit reason
+// alone is exact and needs no join. package_items_pending can also close a
+// REAL wait at the closing queue (a step-back or an edit that sends an item
+// back makes a ready box wait again), so there the two events must share the
+// submit. Left in, every such row was a ~5 ms "wait" in every wait average and
+// count: on the stepwise dashboard check the KPI's average queue time read
+// 3.47 min against a true 4.30 (-19%), and the bias grows with the number of
+// finished runs per day.
+//
+// COALESCE(..., false) is load-bearing: an OPEN row has exit_reason NULL, the
+// bare predicate is then NULL, and `NOT NULL` drops the row — Q5 lost every
+// wait still in progress until the integration test caught it.
+function passThroughWait(alias: string): string {
+  return `COALESCE(${alias}.state_key = 'queued' AND (
+         ${alias}.exit_reason IN ('result_submitted', 'no_station_for_type')
+         OR (${alias}.exit_reason = 'package_items_pending' AND EXISTS (
+               SELECT 1 FROM item_state_event pt_in, item_state_event pt_out
+                WHERE pt_in.event_id = ${alias}.entry_event_id
+                  AND pt_out.event_id = ${alias}.exit_event_id
+                  AND pt_in.submit_id = pt_out.submit_id))), false)`;
+}
 //           request that happens to hit it.
 //  §5.0(10) two clocks, always as a pair. Every duration column exists as
 //           `_wall_` AND `_work_`. A response that exposes only one is a defect.
@@ -645,6 +678,11 @@ WITH type_queue AS (
            ORDER BY work_seconds_between(lower(q.valid_range), now()))/60    AS p95_work_min
   FROM item_state_interval q
   WHERE q.valid_range @> now() AND NOT q.is_terminal AND q.state_key = 'queued'
+    -- At a package-level step the queue is BOXES: the items inside a box that
+    -- waits for opening are hidden from that station (api/testing/items lists
+    -- the box alone), so counting them reported 12 waiting at an opening
+    -- bench whose own screen showed 3 boxes (PLAN.md §9, decision 13).
+    AND NOT COALESCE(${pkgDupActive("q")}, false)
   GROUP BY q.station_type_id
 ), research_pool AS (
   -- Uncorrelated, so it is one row for the whole board (§5.4: one count, no
@@ -657,7 +695,9 @@ SELECT st.test_station_id,
        TRIM(st.test_station_desc) AS station_name,
        st.test_station_type_id    AS station_type_id,
        TRIM(sty.test_type_desc)   AS station_type_name,
-       count(*) FILTER (WHERE i.state_key = 'testing')     AS in_test,
+       -- One box on the opening / closing bench is ONE thing in test there,
+       -- not 1 + its items (they ride the box's group start, §9 decision 13).
+       count(*) FILTER (WHERE i.state_key = 'testing' AND NOT COALESCE(${pkgDupActive("i")}, false)) AS in_test,
        count(*) FILTER (WHERE i.state_key = 'in_research') AS in_research,
        -- COALESCE keeps the LEFT JOIN's NULL identical to the old subquery's
        -- count(*) = 0; the two ages stay NULL, because avg() over no rows is
@@ -670,10 +710,13 @@ SELECT st.test_station_id,
        tq.p95_wall_min                                              AS p95_queue_age_wall_min,
        tq.p95_work_min                                              AS p95_queue_age_work_min,
        rp.n                                                         AS research_pool_queue,
+       -- interval_id IS NOT NULL: an idle station joins one all-NULL row, and
+       -- work_seconds_between(NULL, now()) is 0, not NULL (LEAST/GREATEST skip
+       -- NULLs), so without it the work clock read 0 next to a NULL wall clock.
        avg(EXTRACT(EPOCH FROM (now() - lower(i.valid_range))))
-         FILTER (WHERE NOT ${pkgDupActive("i")})/60                     AS active_test_age_wall_min,
+         FILTER (WHERE i.interval_id IS NOT NULL AND NOT ${pkgDupActive("i")})/60 AS active_test_age_wall_min,
        avg(work_seconds_between(lower(i.valid_range), now()))
-         FILTER (WHERE NOT ${pkgDupActive("i")})/60                     AS active_test_age_work_min
+         FILTER (WHERE i.interval_id IS NOT NULL AND NOT ${pkgDupActive("i")})/60 AS active_test_age_work_min
 FROM test_stations st
 JOIN test_stations_type sty ON sty.test_station_type_id = st.test_station_type_id
 LEFT JOIN type_queue tq ON tq.station_type_id = st.test_station_type_id
@@ -917,7 +960,8 @@ JOIN   metric_state ms ON ms.state_key = i.state_key AND ${flag}
 ${dim.join}
 LEFT   JOIN item_state_event ev ON ev.event_id = i.exit_event_id
 WHERE  i.close_business_date BETWEEN $1::date AND $2::date
-  AND  i.closed_at IS NOT NULL AND i.is_trusted AND NOT i.is_terminal${intervalFilterSql("i", 3)}
+  AND  i.closed_at IS NOT NULL AND i.is_trusted AND NOT i.is_terminal
+  AND  NOT ${passThroughWait("i")}${intervalFilterSql("i", 3)}
 ${groups.length ? `GROUP BY ${groups.join(", ")}\nORDER BY ${groups.join(", ")}` : ""}`;
 
   return { sql, params: [from, to, ...intervalFilterParams(filters)] };
@@ -1029,7 +1073,8 @@ clipped AS (
   FROM item_state_interval i
   CROSS JOIN win w
   JOIN metric_state ms ON ms.state_key = i.state_key
-  WHERE i.valid_range && w.w AND i.is_trusted AND NOT i.is_terminal${intervalFilterSql("i", 3)}
+  WHERE i.valid_range && w.w AND i.is_trusted AND NOT i.is_terminal
+    AND NOT ${passThroughWait("i")}${intervalFilterSql("i", 3)}
 ),
 -- The two clocks are materialised ONCE per clipped row. Written inline, as the
 -- spec has it, work_seconds_between(lo,hi) appears in six aggregate expressions

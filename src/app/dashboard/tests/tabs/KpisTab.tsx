@@ -226,7 +226,7 @@ export default function KpisTab({ data }: TabProps) {
       <DataCard
         chart
         title="תפוקה יומית · 20 ימים"
-        subtitle="התחילו = הפעם הראשונה שנגעו בפריט · סיימו = סגירת המסלול · ללא אביזרים"
+        subtitle="התחילו = הפעם הראשונה שנגעו בפריט · סיימו = סגירת המסלול · מארז נספר פעם אחת, בלי הפריטים שבתוכו"
         right={<Legend items={THROUGHPUT_LEGEND} />}
         error={kpis.error ?? times.error ?? history.error}
         onRetry={data.refresh}

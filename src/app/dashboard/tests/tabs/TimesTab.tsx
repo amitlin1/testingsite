@@ -181,7 +181,7 @@ export default function TimesTab({ api, data }: TabProps) {
             {CLOCK_NOTE} · דלי נוצר רק אם נסגר בו משהו
           </span>
         }
-        note="עמודות ההמתנה שייכות לסוג העמדה — הן חוזרות בכל שורות אותו סוג ואין לסכם אותן. ״רשומות · ביצוע״ אינו כולל אביזרים, ״רשומות · המתנה״ כן."
+        note="עמודות ההמתנה שייכות לסוג העמדה — הן חוזרות בכל שורות אותו סוג ואין לסכם אותן. ״רשומות · ביצוע״ אינו כולל את הפריטים שבתוך מארז בעמדות פתיחה וסגירה (המשך נספר פעם אחת, על המארז), ״רשומות · המתנה״ כן."
         error={stations.error}
         onRetry={data.refresh}
         // A share of the column rather than a fixed 190px (about two rows on a
