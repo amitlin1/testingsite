@@ -10,7 +10,8 @@ import {
     IconButton,
     Alert,
 } from "@/components/ui";
-import { Add as AddIcon, Delete as DeleteIcon } from "@/components/ui/icons";
+import { Add as AddIcon, Delete as DeleteIcon, Print as PrintIcon } from "@/components/ui/icons";
+import { useReactToPrint } from "react-to-print";
 import SearchableCombobox from "../common/SearchableCombobox";
 import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
@@ -21,6 +22,7 @@ import { apiFetch } from "@/lib/api/client";
 import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
 import ShipmentSignatureField from "./ShipmentSignatureField";
 import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
+import { ShipmentDeliveryForm } from "./ShipmentDeliveryForm";
 
 type ShipmentSendPopupProps = {
     open: boolean;
@@ -91,6 +93,15 @@ export default function ShipmentSendPopup({
 
     const sigCanvas = React.useRef<SignatureCanvas>(null);
 
+    // טופס מסירה (ShipmentDeliveryForm): printed from the form as it stands, or
+    // after the send from what was sent. It counts items, so each box type's
+    // contents (its template: items per box) load as the type is picked.
+    // null = the type has no contents (or they failed to load).
+    const [perBox, setPerBox] = useState<Record<number, number | null>>({});
+    const [sent, setSent] = useState<{ code: string; date: string; itemsTotal: number | null } | null>(null);
+    const printRef = React.useRef<HTMLDivElement>(null);
+    const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: "טופס מסירת משלוח" });
+
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -134,6 +145,7 @@ export default function ShipmentSendPopup({
         setOpenedFor({ open, shipment });
         if (open && shipment) {
             setSubmitError(null);
+            setSent(null);
             // The pad mounts empty with the dialog, so the form starts unsigned
             // (as the receiving form does) — never "signed" from the last return.
             setIsSigned(false);
@@ -150,6 +162,27 @@ export default function ShipmentSendPopup({
             });
         }
     }, [open, shipment, reset]);
+
+    // Each picked box type's items per box, loaded once per type.
+    const missingTypes = (items ?? [])
+        .map((i) => i.item_type_id)
+        .filter((id): id is number => id != null && !(id in perBox))
+        .join(",");
+    useEffect(() => {
+        if (!missingTypes) return;
+        let cancelled = false;
+        for (const id of missingTypes.split(",").map(Number)) {
+            apiFetch(`/api/settings/item-types/${id}/contents`)
+                .then((res) => (res.ok ? res.json() : null))
+                .catch(() => null)
+                .then((data: { lines?: { quantity?: number }[] } | null) => {
+                    if (cancelled) return;
+                    const n = Array.isArray(data?.lines) ? data.lines.reduce((sum, l) => sum + Math.max(0, Number(l.quantity) || 0), 0) : 0;
+                    setPerBox((m) => ({ ...m, [id]: n > 0 ? n : null }));
+                });
+        }
+        return () => { cancelled = true; };
+    }, [missingTypes]);
 
     // Declared after the reset above so it lands on the fresh form.
     useEffect(() => {
@@ -195,6 +228,7 @@ export default function ShipmentSendPopup({
 
             if (res.ok) {
                 saved = true;
+                setSent({ code: data.sent_shipment_code, date: data.sent_date, itemsTotal });
             } else {
                 console.error("Failed to send shipment items");
                 setSubmitError(await serverErrorMessage(res, "המשלוח לא נשלח. בדוק את הכמויות ונסה שוב."));
@@ -203,10 +237,8 @@ export default function ShipmentSendPopup({
             console.error(error);
             setSubmitError(NETWORK_ERROR);
         } finally {
-            if (saved) {
-                onSend(true);
-                onClose();
-            }
+            // The dialog stays open, to offer the delivery form for what was sent.
+            if (saved) onSend(true);
         }
     };
 
@@ -224,6 +256,23 @@ export default function ShipmentSendPopup({
     // once touched, so an untouched empty one left the button dead with no reason.
     const lines = items ?? [];
     const hasSendableLine = lines.some((i) => i.item_type_id && Number(i.amount) > 0);
+    // The items in the boxes on the form: each sendable line's boxes × its type's
+    // items per box. null while a type's contents load, or when one has none.
+    const sendable = lines.filter((i) => i.item_type_id && Number(i.amount) > 0);
+    const itemsTotal = sendable.every((i) => perBox[i.item_type_id!] != null)
+        ? sendable.reduce((n, i) => n + Number(i.amount) * (perBox[i.item_type_id!] ?? 0), 0)
+        : null;
+    const noContents = sendable
+        .filter((i) => i.item_type_id! in perBox && perBox[i.item_type_id!] == null)
+        .map((i) => availableItems.find((o) => o.item_type_id === i.item_type_id)?.item_type_desc || "סוג מארז");
+    const printBlocked = !sentCode?.trim() ? "יש למלא קוד משלוח יוצא"
+        : !sentDate ? "יש למלא תאריך שליחה"
+        : !hasSendableLine || errors.items?.some?.((e) => e?.amount) ? "יש למלא כמות מארזים תקינה"
+        : noContents.length > 0 ? `אין תבנית תכולה ל${noContents.join(", ")}, ולכן אי אפשר לספור פריטים`
+        : itemsTotal == null ? "טוען את תכולת המארזים…"
+        : null;
+    const printForm = sent ?? { code: sentCode ?? "", date: sentDate ?? "", itemsTotal };
+
     const missing = [
         !sentCode?.trim() && "קוד משלוח יוצא",
         !sentDate && "תאריך שליחה",
@@ -243,6 +292,42 @@ export default function ShipmentSendPopup({
             <DialogTitle onClose={onClose}>
                 החזרת משלוח
             </DialogTitle>
+            {/* What the printer gets; on screen it stays hidden. */}
+            <div style={{ display: "none" }}>
+                {printForm.itemsTotal != null && (
+                    <ShipmentDeliveryForm
+                        ref={printRef}
+                        sentCode={printForm.code}
+                        sentDate={printForm.date}
+                        sourceShipmentCode={shipment.shipment_code}
+                        customerCode={shipment.customer_code}
+                        itemsTotal={printForm.itemsTotal}
+                    />
+                )}
+            </div>
+            {sent ? (
+                <>
+                    <DialogContent>
+                        <Alert severity="success">
+                            המשלוח {sent.code} נשלח. אפשר להדפיס עכשיו את טופס המסירה, עם מקום לחתימת המקבל.
+                        </Alert>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={onClose} variant="outlined" color="inherit">
+                            סגירה
+                        </Button>
+                        <Button
+                            variant="contained"
+                            startIcon={<PrintIcon fontSize={16} aria-hidden />}
+                            disabled={sent.itemsTotal == null}
+                            title={sent.itemsTotal == null ? "אי אפשר לספור את הפריטים במארזים שנשלחו" : undefined}
+                            onClick={() => handlePrint()}
+                        >
+                            הדפס טופס מסירה
+                        </Button>
+                    </DialogActions>
+                </>
+            ) : (
             <form onSubmit={(e) => handleSubmit(onSubmit)(e)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
                     {sender.blocked && (
@@ -478,6 +563,15 @@ export default function ShipmentSendPopup({
                         ביטול
                     </Button>
                     <Button
+                        variant="outlined"
+                        startIcon={<PrintIcon fontSize={16} aria-hidden />}
+                        disabled={printBlocked != null}
+                        title={printBlocked ?? undefined}
+                        onClick={() => handlePrint()}
+                    >
+                        הדפס טופס מסירה
+                    </Button>
+                    <Button
                         type="submit"
                         disabled={!isValid || !isSigned || !hasSendableLine || sender.blocked}
                         loading={isSubmitting}
@@ -487,6 +581,7 @@ export default function ShipmentSendPopup({
                     </Button>
                 </DialogActions>
             </form>
+            )}
         </Dialog>
     );
 }
