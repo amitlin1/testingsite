@@ -8,7 +8,7 @@
 -- against the application database. It is NOT idempotent — run it once, on an
 -- empty database.
 --
--- Migrations included (33):
+-- Migrations included (36):
 --   0_init
 --   20260217140614_add_poc_and_stokekeeper
 --   20260218000000_dashboard_optimization
@@ -41,7 +41,10 @@
 --   20261020140000_photo_type_xray
 --   20261020150000_package_items_box_details
 --   20261021120000_reference_items_parent
+--   20261026120000_popup_templates
 --   20261027100000_shipment_box_lines
+--   20261029120000_field_photo_groups
+--   20261029130000_reference_images_by_station
 -- ===========================================================================
 
 
@@ -3307,6 +3310,85 @@ CREATE UNIQUE INDEX IF NOT EXISTS "reference_items_parent_type_uq" ON "reference
 
 
 -- ---------------------------------------------------------------------------
+-- migration: 20261026120000_popup_templates
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- Popup templates: the envelope of a station's test popup, one per station
+-- type (docs/popup-templates/PLAN.md §3).
+--
+-- station_popup_templates: the current template of a station type — its base
+-- ('item' / 'package'), the config (steps of components, validated by
+-- src/app/lib/popup-templates/validate.ts) and its version. No row = the type
+-- opens the popup the code gives it today, so this table can start empty.
+--
+-- station_popup_template_versions: every saved config, kept by (type, version).
+-- It hangs off the station type, not off the template: deleting a template
+-- and making a new one carries on the numbering, so a result's
+-- details.template.v never points at two different configs.
+--
+-- photo_types.test_station_type_id / component_id: a template's photo
+-- component owns one photo group (the photo is the group — PLAN §3.4). The
+-- reference images and the worker photos keep pointing at the same row, so
+-- nothing moves when an existing group is linked to a component. Both NULL =
+-- a group no template owns (every row until a template is saved). Unique per
+-- (type, component); NULLs are distinct, so unowned groups are not constrained.
+--
+-- Additive only: two new tables, two nullable columns. The previous image
+-- keeps working after it (it never reads them), so this runs any time before
+-- the new image. No metrics_schema_version bump: the ledger reads none of it.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS "station_popup_templates" (
+    "test_station_type_id" INTEGER NOT NULL,
+    "base" VARCHAR(16) NOT NULL,
+    "config" JSONB NOT NULL,
+    "version" INTEGER NOT NULL,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+    "updated_by" VARCHAR(255),
+    CONSTRAINT "station_popup_templates_pkey" PRIMARY KEY ("test_station_type_id"),
+    CONSTRAINT "station_popup_templates_base_check" CHECK ("base" IN ('item', 'package')),
+    CONSTRAINT "station_popup_templates_version_check" CHECK ("version" >= 1)
+);
+
+CREATE TABLE IF NOT EXISTS "station_popup_template_versions" (
+    "test_station_type_id" INTEGER NOT NULL,
+    "version" INTEGER NOT NULL,
+    "base" VARCHAR(16) NOT NULL,
+    "config" JSONB NOT NULL,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+    "created_by" VARCHAR(255),
+    CONSTRAINT "station_popup_template_versions_pkey" PRIMARY KEY ("test_station_type_id", "version")
+);
+
+ALTER TABLE "photo_types" ADD COLUMN IF NOT EXISTS "test_station_type_id" INTEGER;
+ALTER TABLE "photo_types" ADD COLUMN IF NOT EXISTS "component_id" VARCHAR(16);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_station_popup_templates_type') THEN
+        ALTER TABLE "station_popup_templates"
+            ADD CONSTRAINT "fk_station_popup_templates_type"
+            FOREIGN KEY ("test_station_type_id") REFERENCES "test_stations_type"("test_station_type_id") ON DELETE CASCADE ON UPDATE NO ACTION;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_station_popup_template_versions_type') THEN
+        ALTER TABLE "station_popup_template_versions"
+            ADD CONSTRAINT "fk_station_popup_template_versions_type"
+            FOREIGN KEY ("test_station_type_id") REFERENCES "test_stations_type"("test_station_type_id") ON DELETE CASCADE ON UPDATE NO ACTION;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_photo_types_station_type') THEN
+        ALTER TABLE "photo_types"
+            ADD CONSTRAINT "fk_photo_types_station_type"
+            FOREIGN KEY ("test_station_type_id") REFERENCES "test_stations_type"("test_station_type_id") ON DELETE SET NULL ON UPDATE NO ACTION;
+    END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS "photo_types_component_uq" ON "photo_types"("test_station_type_id", "component_id");
+
+
+-- ---------------------------------------------------------------------------
 -- migration: 20261027100000_shipment_box_lines
 -- ---------------------------------------------------------------------------
 -- ============================================================================
@@ -3396,6 +3478,182 @@ $mig$;
 CREATE INDEX IF NOT EXISTS "idx_items_shipment_item_id" ON "items"("shipment_item_id");
 CREATE INDEX IF NOT EXISTS "idx_items_shipment_id" ON "items"("shipment_id");
 CREATE INDEX IF NOT EXISTS "idx_items_serial_key" ON "items" (UPPER(TRIM("serial_no"))) WHERE "serial_no" IS NOT NULL;
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261029120000_field_photo_groups
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- Route photo fields own their photo groups (docs/popup-templates/PLAN.md §5א).
+--
+-- WHY: a photo field on the testing-routes page used to name a photo group
+-- the admin picked (PhotoField.photo_type), shared with whatever else used
+-- that group. Now each field has a group of its own — one photo_types row
+-- per route, step and field, code "r{route}.{step}.{field}"
+-- (src/app/lib/station-fields/schema.ts fieldPhotoCode), named
+-- "{station type} · {field label}" (photo-groups.ts fieldPhotoGroupDesc).
+-- The worker's shots are tagged with it in every frozen version alike
+-- (resolve.ts withFieldPhotoGroups); publishing creates and renames the rows.
+--
+-- photo_types.test_route_id / step_uid / field_id: the owning field. All
+-- NULL = no field owns the group. Plain values with no FK: a route can go
+-- away and its photos keep their group's name. Unique together; NULLs are
+-- distinct, so groups no field owns are not constrained.
+--
+-- The backfill creates the group of every photo field in a published version
+-- (route_field_versions), named after the newest version that has it, so the
+-- photos the new image tags are named in the item's history from the first
+-- shot. Nothing existing changes: no photo is re-tagged here. Moving the
+-- photos already taken through a field into its group is a separate, optional
+-- step (scripts/prod-field-photo-groups/2-*.sql).
+--
+-- Additive only: three nullable columns, one unique index, new rows. The
+-- previous image keeps working after it (it lists the new rows among the
+-- photo types, unused). No metrics_schema_version bump: the ledger reads
+-- no photo group.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database; a group that exists is left as it is.
+-- ============================================================================
+
+ALTER TABLE "photo_types" ADD COLUMN IF NOT EXISTS "test_route_id" INTEGER;
+ALTER TABLE "photo_types" ADD COLUMN IF NOT EXISTS "step_uid" VARCHAR(16);
+ALTER TABLE "photo_types" ADD COLUMN IF NOT EXISTS "field_id" VARCHAR(16);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "photo_types_field_uq" ON "photo_types"("test_route_id", "step_uid", "field_id");
+
+WITH photo_fields AS (
+    SELECT DISTINCT ON (v.test_route_id, s.key, f->>'id')
+           v.test_route_id,
+           s.key            AS step_uid,
+           f->>'id'         AS field_id,
+           COALESCE(f->>'label', '')                    AS label,
+           (s.value->>'station_type_id')::int           AS station_type_id,
+           COALESCE(s.value->>'station_label', '')      AS station_label
+    FROM route_field_versions v
+    CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(v.config->'steps') = 'object' THEN v.config->'steps' ELSE '{}'::jsonb END) AS s
+    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(s.value->'groups') = 'array' THEN s.value->'groups' ELSE '[]'::jsonb END) AS g
+    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(g->'fields') = 'array' THEN g->'fields' ELSE '[]'::jsonb END) AS f
+    WHERE f->>'type' = 'photo' AND f->>'id' IS NOT NULL
+    ORDER BY v.test_route_id, s.key, f->>'id', v.version DESC
+), named AS (
+    SELECT pf.*,
+           'r' || pf.test_route_id || '.' || pf.step_uid || '.' || pf.field_id AS code,
+           LEFT(
+             COALESCE(NULLIF(TRIM(t.test_type_desc), ''), TRIM(pf.station_label))
+             || ' · ' || COALESCE(NULLIF(TRIM(pf.label), ''), 'צילום'),
+             255) AS photo_type_desc
+    FROM photo_fields pf
+    LEFT JOIN test_stations_type t ON t.test_station_type_id = pf.station_type_id
+), base AS (
+    SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM photo_types
+)
+INSERT INTO photo_types (code, photo_type_desc, sort_order, is_active, test_route_id, step_uid, field_id)
+SELECT n.code, n.photo_type_desc,
+       base.max_sort + ROW_NUMBER() OVER (ORDER BY n.test_route_id, n.step_uid, n.field_id),
+       true, n.test_route_id, n.step_uid, n.field_id
+FROM named n CROSS JOIN base
+WHERE NOT EXISTS (SELECT 1 FROM photo_types p WHERE p.code = n.code)
+ON CONFLICT DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261029130000_reference_images_by_station
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- Reference images go by station type, not by photo group
+-- (docs/popup-templates/PLAN.md §5ג).
+--
+-- WHY: the reference-items page asked which photo group an image goes to
+-- ("צילום אריזה", "פירוק · תיעוד בתמונות", ...), and a station showed the
+-- images of the group its popup named. A group the station did not name —
+-- an image uploaded to "צילום שיקוף" while the X-ray station's template
+-- photo has a group of its own — was shown nowhere. Now the station type is
+-- the reference set: the page lists the stations of the item's route and an
+-- image is uploaded to a station; every station shows the images of its own
+-- type (src/lib/reference-items.ts images_by_station).
+--
+-- reference_item_images.test_station_type_id: the station type. NULL = not
+-- assigned: the page lists it under "לא משויכות לעמדה" with a station to
+-- pick, and no station shows it. ON DELETE SET NULL: a station type that goes
+-- away leaves its images unassigned, not deleted.
+-- reference_item_images.photo_type_id: NOT NULL dropped. The group an image
+-- was uploaded to stays as it was; a new image has none.
+--
+-- The backfill gives every existing image the station of its group, when
+-- exactly one station type shows that group today:
+--   * a popup template's photo component owns the group (photo_types.
+--     test_station_type_id with component_id) — that station;
+--   * a per-item station's code popup captures it (CODE_POPUPS in
+--     src/app/lib/popup-templates/codePopups.ts: type 2 → group 3,
+--     type 5 → group 4; a unit test keeps this list equal to it);
+--   * the opening wizard's groups 'package' / 'product' — the package-level
+--     station types that open a package route (any step but the last,
+--     src/app/lib/popup-templates/placement.ts).
+-- A group no station shows, or more than one shows, leaves its images
+-- unassigned: the page offers the station to pick, so nothing has to be
+-- uploaded again. scripts/prod-reference-images-by-station/1-dry-run.sql
+-- reports, before this runs, which images go where and which stay
+-- unassigned.
+--
+-- Additive: one nullable column, one dropped NOT NULL, one index. The
+-- previous image keeps working after it (it never reads the column and
+-- always writes photo_type_id). No metrics_schema_version bump.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database; the backfill runs only when the column is new.
+-- ============================================================================
+
+DO $mig$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema() AND table_name = 'reference_item_images' AND column_name = 'test_station_type_id'
+  ) THEN
+    ALTER TABLE "reference_item_images" ADD COLUMN "test_station_type_id" INTEGER;
+
+    UPDATE reference_item_images i
+       SET test_station_type_id = m.station
+      FROM (
+        -- station-of-group:begin
+        WITH opening_types AS (
+          SELECT DISTINCT t.test_station_type_id
+            FROM testing_routes tr
+            JOIN item_types it ON it.item_type_id = tr.item_type_id AND it.is_package
+           CROSS JOIN LATERAL unnest(tr.route_steps[1:GREATEST(COALESCE(array_length(tr.route_steps, 1), 0) - 1, 0)]) AS s(st)
+            JOIN test_stations_type t ON t.test_station_type_id = s.st AND t.package_level
+        ), candidates AS (
+          SELECT p.photo_type_id, p.test_station_type_id AS station
+            FROM photo_types p
+           WHERE p.test_station_type_id IS NOT NULL AND p.component_id IS NOT NULL
+          UNION
+          SELECT c.photo_type_id, c.station
+            FROM (VALUES (2, 3), (5, 4)) AS c(station, photo_type_id)
+            JOIN test_stations_type t ON t.test_station_type_id = c.station AND NOT t.package_level
+            JOIN photo_types p ON p.photo_type_id = c.photo_type_id
+          UNION
+          SELECT p.photo_type_id, o.test_station_type_id
+            FROM photo_types p CROSS JOIN opening_types o
+           WHERE p.code IN ('package', 'product')
+        )
+        SELECT photo_type_id, MIN(station) AS station, COUNT(DISTINCT station) AS stations
+          FROM candidates
+         GROUP BY photo_type_id
+        -- station-of-group:end
+      ) m
+     WHERE m.stations = 1 AND i.photo_type_id = m.photo_type_id AND i.test_station_type_id IS NULL;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_reference_item_images_station_type') THEN
+    ALTER TABLE "reference_item_images" ADD CONSTRAINT "fk_reference_item_images_station_type"
+      FOREIGN KEY ("test_station_type_id") REFERENCES "test_stations_type"("test_station_type_id") ON DELETE SET NULL ON UPDATE NO ACTION;
+  END IF;
+END
+$mig$;
+
+ALTER TABLE "reference_item_images" ALTER COLUMN "photo_type_id" DROP NOT NULL;
+
+CREATE INDEX IF NOT EXISTS "idx_reference_item_images_station" ON "reference_item_images"("test_station_type_id");
 
 
 -- ===========================================================================
@@ -3547,5 +3805,17 @@ SELECT gen_random_uuid()::text, 'e32c207ab4fb9a751227e79f7e88bf63c778d343416a408
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261021120000_reference_items_parent');
 INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '16c220814f3d19b866ef2a45d7bdcb4ec97185e4baa6ca07c816aa8352fc9cc2', now(), '20261026120000_popup_templates', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261026120000_popup_templates');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
 SELECT gen_random_uuid()::text, 'ccabb00faf40d9fadbfec37af252ac323409d14b05bff23402100a861dccb829', now(), '20261027100000_shipment_box_lines', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261027100000_shipment_box_lines');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '5c77854126b2b840231f1fac118dfae022103e7aa252ced410fec4cdebcac65c', now(), '20261029120000_field_photo_groups', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261029120000_field_photo_groups');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, 'ab03daa722dfbf7a0890feb896ac37b2bc521944a479e7fd1a037262e39db6c0', now(), '20261029130000_reference_images_by_station', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261029130000_reference_images_by_station');
