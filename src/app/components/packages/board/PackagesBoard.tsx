@@ -352,7 +352,7 @@ export default function PackagesBoard() {
         />
       )}
       {barcodeFor && (
-        <BarcodeDialog open onClose={() => setBarcodeFor(null)} itemId={barcodeFor.id} sourceId={barcodeFor.sourceId} itemSerial={barcodeFor.serial} />
+        <BarcodeDialog open onClose={() => setBarcodeFor(null)} itemId={barcodeFor.id} sourceId={barcodeFor.sourceId} />
       )}
 
       <Snackbar open={!!toast} autoHideDuration={toast?.undoId ? 10000 : 6000} onClose={() => setToast(null)} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>

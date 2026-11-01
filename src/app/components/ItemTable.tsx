@@ -404,7 +404,6 @@ export default function ItemTable() {
           onClose={() => setBarcodeOpen(false)}
           itemId={barcodeItem.id}
           sourceId={barcodeItem.sourceId}
-          itemSerial={barcodeItem.serial}
         />
       )}
 

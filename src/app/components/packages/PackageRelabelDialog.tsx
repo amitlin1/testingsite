@@ -4,7 +4,7 @@ import { useReactToPrint } from "react-to-print";
 import type { PackageView } from "@/app/lib/packages/read";
 import { BLUE, INK, INK_2, MUTED, AMBER_INK, AMBER_BG, AMBER_BORDER, fmtId, pressKeys } from "./packageUi";
 import { PackageDialog, PackageDialogHeader } from "./PackageDialog";
-import { CopiesStepper, LabelSheet, Tick, customerLineOf, packageLabels, type LabelSpec } from "./PackageLabelsDialog";
+import { CopiesStepper, LabelSheet, Tick, packageLabels, type LabelSpec } from "./PackageLabelsDialog";
 
 /**
  * New labels for the boxes the production upgrade converted from legacy
@@ -65,8 +65,6 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
   const labels: LabelSpec[] = chosen.flatMap(({ pkg, sourceId }) =>
     packageLabels({
       packageId: pkg.item_id,
-      packageType: pkg.item_type_desc,
-      customerLine: customerLineOf(pkg),
       sourceId,
       items: pkg.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no })),
     }),

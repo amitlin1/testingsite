@@ -13,7 +13,6 @@ import Barcode from "react-barcode";
 import { useReactToPrint } from "react-to-print";
 import { Print as PrintIcon } from "@/components/ui/icons";
 import { Shipment } from "@/types";
-import { formatDate } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
 import type { PackageView } from "@/app/lib/packages/read";
 import { barcodeOf, fmtId } from "@/app/components/packages/packageUi";
@@ -26,7 +25,8 @@ type ShipmentBarcodesDialogProps = {
 
 /**
  * One label per BOX of the shipment, each with the box's own id (16 digits
- * ending in 00) as its barcode — the label the intake scans. The boxes are
+ * ending in 00) as its barcode — the label the intake scans. A label carries
+ * the code only: the barcode and its digits, no text. The boxes are
  * minted when the shipment is saved (lib/packages/boxes.ts); opening this
  * asks the server for them, which also mints the missing ones of a shipment
  * saved before that. Item labels print later, at the opening station.
@@ -54,7 +54,6 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
 
     const total = boxes?.length ?? 0;
     const takenIn = boxes?.filter((b) => b.status !== "pending").length ?? 0;
-    const shipmentDate = shipment ? formatDate(shipment.shipment_date) : "";
 
     const handlePrint = useReactToPrint({
         contentRef: printRef,
@@ -91,7 +90,7 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                             }}
                         >
                             <div ref={printRef}>
-                                {boxes.map((b, i) => {
+                                {boxes.map((b) => {
                                     const { head, suffix } = fmtId(b.item_id);
                                     return (
                                         <div
@@ -111,22 +110,6 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                                                 {/* The id reads left to right; the box's 00 stands out. */}
                                                 <div dir="ltr" style={{ fontSize: 15, letterSpacing: 1.5, fontVariantNumeric: "tabular-nums" }}>
                                                     {head} <b>{suffix}</b>
-                                                </div>
-                                                <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{b.item_type_desc}</div>
-                                                {/* The certificate row the box was minted for: the label goes on the box
-                                                    that row describes (its serial, else its makat). */}
-                                                {(b.cert_row_no || b.cert_serial_no) && (
-                                                    <div style={{ fontSize: 13, fontWeight: 600 }}>
-                                                        {b.cert_row_no ? `שורה ${b.cert_row_no} בתעודה` : ""}
-                                                        {b.cert_row_no && (b.cert_serial_no || b.makat) ? " · " : ""}
-                                                        {b.cert_serial_no ? <>S/N <bdi dir="ltr">{b.cert_serial_no}</bdi></> : b.makat ? <>מק״ט <bdi dir="ltr">{b.makat}</bdi></> : null}
-                                                    </div>
-                                                )}
-                                                <div style={{ fontSize: 13 }}>משלוח: {shipment?.shipment_code} · לקוח: {shipment?.customer_code}</div>
-                                                <div style={{ fontSize: 13 }}>תאריך: {shipmentDate}</div>
-                                                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
-                                                    {/* <bdi>: RTL would print label 3 of 12 as "12 / 3" */}
-                                                    <bdi dir="ltr">{i + 1} / {total}</bdi>
                                                 </div>
                                             </div>
                                         </div>

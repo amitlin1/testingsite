@@ -28,13 +28,10 @@ export type LabelItem = {
   serial_no?: string | null;
 };
 
-export type LabelSpec = { key: string; value: string; title: string; sub: string; foot: string };
+export type LabelSpec = { key: string; value: string };
 
 export type LabelSource = {
   packageId: string | number;
-  packageType: string;
-  /** "רפאל · משלוח SH-2041" */
-  customerLine: string;
   sourceId?: number | null;
   items: LabelItem[];
 };
@@ -43,22 +40,18 @@ export type LabelSource = {
  *  a subset (the dialog's checkboxes); omitted, everything prints. */
 export function packageLabels(src: LabelSource, pick?: { box: boolean; items: boolean[] }): LabelSpec[] {
   const out: LabelSpec[] = [];
-  const totalSeq = seq2(src.items.length);
   if (pick?.box ?? true) {
-    out.push({ key: `box-${src.packageId}`, value: barcodeOf(src.packageId, src.sourceId), title: src.packageType, sub: src.customerLine, foot: `${src.items.length} פריטים` });
+    out.push({ key: `box-${src.packageId}`, value: barcodeOf(src.packageId, src.sourceId) });
   }
   src.items.forEach((it, i) => {
     if (!(pick?.items[i] ?? true)) return;
-    out.push({ key: String(it.item_id), value: barcodeOf(it.item_id, src.sourceId), title: it.item_type_desc, sub: it.serial_no ? `S/N ${it.serial_no}` : "ללא סריאלי", foot: `פריט ${seq2(it.package_seq)} מתוך ${totalSeq}` });
+    out.push({ key: String(it.item_id), value: barcodeOf(it.item_id, src.sourceId) });
   });
   return out;
 }
 
-export function customerLineOf(p: { customer_name: string | null; customer_code: string | null; shipment_code: string | null }): string {
-  return `${p.customer_name ?? p.customer_code ?? ""} · משלוח ${p.shipment_code ?? ""}`;
-}
-
-/** The labels themselves — what the printer gets. Shown on screen only as the preview. */
+/** The labels themselves — what the printer gets. Shown on screen only as the
+ *  preview. A label carries the code only: the barcode and its digits, no text. */
 export const LabelSheet = React.forwardRef<HTMLDivElement, { labels: LabelSpec[]; copies: number; preview: boolean }>(
   function LabelSheet({ labels, copies, preview }, ref) {
     return (
@@ -69,21 +62,16 @@ export const LabelSheet = React.forwardRef<HTMLDivElement, { labels: LabelSpec[]
             .package-labels-print { display: block !important; }
             .package-label { page-break-after: always; break-after: page; }
           }
-          .package-label { width: 57mm; height: 32mm; box-sizing: border-box; padding: 2mm 3mm; border: 1px dashed var(--color-border-strong); border-radius: 4px; display: flex; flex-direction: column; justify-content: space-between; direction: rtl; background: var(--color-canvas); }
+          .package-label { width: 57mm; height: 32mm; box-sizing: border-box; padding: 2mm 3mm; border: 1px dashed var(--color-border-strong); border-radius: 4px; display: flex; align-items: center; justify-content: center; direction: ltr; background: var(--color-canvas); }
         `}</style>
         <div className="no-print" style={{ fontSize: 11, fontWeight: 600, color: MUTED, marginBottom: 10 }}>תצוגה מקדימה</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {Array.from({ length: copies }, (_, c) =>
             labels.map((l) => (
               <div key={`${l.key}-${c}`} className="package-label">
-                <div style={{ fontSize: 11, fontWeight: 700, color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.title}</div>
-                <div style={{ direction: "ltr", display: "flex", justifyContent: "center" }}>
-                  <Barcode value={l.value} width={1.2} height={34} fontSize={10} margin={0} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: INK_2 }}>
-                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{l.sub}</span>
-                  <span style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{l.foot}</span>
-                </div>
+                {/* Alone on the label, the barcode takes its height (the width is
+                    the code's own, and already spans the label). */}
+                <Barcode value={l.value} width={1.2} height={70} fontSize={12} margin={0} />
               </div>
             )),
           )}
@@ -181,7 +169,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
   const totalSeq = seq2(items.length);
   const toggleItem = (i: number) => setItemsOn((v) => v.map((x, j) => (j === i ? !x : x)));
 
-  const selectedLabels = packageLabels({ packageId, packageType, customerLine, sourceId, items }, { box: boxOn, items: itemsOn });
+  const selectedLabels = packageLabels({ packageId, sourceId, items }, { box: boxOn, items: itemsOn });
 
   return (
     <PackageDialog open onClose={onClose} width="min(880px, 96vw)">
