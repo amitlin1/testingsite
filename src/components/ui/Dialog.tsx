@@ -11,6 +11,11 @@ import { X } from "lucide-react";
  *  (a fixed delete confirmation shows no move cursor). */
 const DraggableDialog = React.createContext(false);
 
+/** True around a dialog kept alive but put away (the testing page parks a test window
+ *  closed without a result): every Dialog inside shows nothing, while the components
+ *  that render them stay mounted and keep what they hold. */
+export const DialogParked = React.createContext(false);
+
 const MAXW: Record<string, number> = { xs: 444, sm: 600, md: 900, lg: 1200, xl: 1536 };
 
 export interface DialogProps {
@@ -47,7 +52,9 @@ export function Dialog({
   draggable = true,
 }: DialogProps) {
   const paper = { ...slotProps?.paper, ...PaperProps };
-  const { ref: dragRef, onPointerDown: onDragStart, offset: dragOffset, moved: dragMoved } = useDraggable(open, draggable && !fullScreen);
+  const parked = React.useContext(DialogParked);
+  const shown = open && !parked;
+  const { ref: dragRef, onPointerDown: onDragStart, offset: dragOffset, moved: dragMoved } = useDraggable(shown, draggable && !fullScreen);
   // Radix reports WHAT closed the dialog (Escape / a press outside) before it
   // asks to close; remember it so onClose runs exactly once, with the reason.
   // (It used to run twice on a backdrop press — once as "backdropClick", then
@@ -62,7 +69,7 @@ export function Dialog({
       };
   return (
     <RDialog.Root
-      open={open}
+      open={shown}
       onOpenChange={(o) => {
         if (o) return;
         const reason = reasonRef.current;
