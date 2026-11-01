@@ -803,8 +803,9 @@ function TestingPageView() {
   const filteredItems = React.useMemo(() => {
     const ql = filterText.trim().toLowerCase();
     const has = (v: unknown) => v != null && String(v).toLowerCase().includes(ql);
-    // A label reads "itemId-sourceId": the id part names the item, the
-    // suffix is in no field, so the whole code alone would match nothing.
+    // A label printed before the source left the barcode reads "itemId-sourceId":
+    // the id part names the item, the suffix is in no field, so the whole code
+    // alone would match nothing.
     const labelId = /^\d+-\d+$/.test(ql) ? ql.split("-")[0] : null;
     const isId = (v: unknown) => labelId != null && v != null && String(v) === labelId;
     const base = items.filter((item) =>

@@ -32,7 +32,6 @@ export type LabelSpec = { key: string; value: string };
 
 export type LabelSource = {
   packageId: string | number;
-  sourceId?: number | null;
   items: LabelItem[];
 };
 
@@ -41,11 +40,11 @@ export type LabelSource = {
 export function packageLabels(src: LabelSource, pick?: { box: boolean; items: boolean[] }): LabelSpec[] {
   const out: LabelSpec[] = [];
   if (pick?.box ?? true) {
-    out.push({ key: `box-${src.packageId}`, value: barcodeOf(src.packageId, src.sourceId) });
+    out.push({ key: `box-${src.packageId}`, value: barcodeOf(src.packageId) });
   }
   src.items.forEach((it, i) => {
     if (!(pick?.items[i] ?? true)) return;
-    out.push({ key: String(it.item_id), value: barcodeOf(it.item_id, src.sourceId) });
+    out.push({ key: String(it.item_id), value: barcodeOf(it.item_id) });
   });
   return out;
 }
@@ -111,7 +110,6 @@ export type PackageLabelsDialogProps = {
   packageType: string;
   /** "רפאל · משלוח SH-2041" */
   customerLine: string;
-  sourceId?: number | null;
   items: LabelItem[];
   onPrinted?: () => void;
   /** Whether the box label starts ticked. The opening station starts with it
@@ -130,7 +128,7 @@ function Bars({ n, seed, height }: { n: number; seed: number; height: number }) 
   );
 }
 
-export default function PackageLabelsDialog({ open, onClose, packageId, packageType, customerLine, sourceId, items, onPrinted, boxFirst = true }: PackageLabelsDialogProps) {
+export default function PackageLabelsDialog({ open, onClose, packageId, packageType, customerLine, items, onPrinted, boxFirst = true }: PackageLabelsDialogProps) {
   const [boxOn, setBoxOn] = React.useState(boxFirst);
   const [itemsOn, setItemsOn] = React.useState<boolean[]>(() => items.map(() => true));
   const [copies, setCopies] = React.useState(1);
@@ -169,7 +167,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
   const totalSeq = seq2(items.length);
   const toggleItem = (i: number) => setItemsOn((v) => v.map((x, j) => (j === i ? !x : x)));
 
-  const selectedLabels = packageLabels({ packageId, sourceId, items }, { box: boxOn, items: itemsOn });
+  const selectedLabels = packageLabels({ packageId, items },{ box: boxOn, items: itemsOn });
 
   return (
     <PackageDialog open onClose={onClose} width="min(880px, 96vw)">

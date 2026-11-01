@@ -51,7 +51,6 @@ export default function PackagePage() {
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [labelsOpen, setLabelsOpen] = React.useState(false);
-  const [sourceId, setSourceId] = React.useState<number | null>(null);
 
   const id = params?.id;
 
@@ -61,13 +60,6 @@ export default function PackagePage() {
     else {
       setPkg(read.pkg);
       setTimeline(read.timeline);
-      const shipmentId = read.pkg?.shipment_id;
-      if (shipmentId) {
-        apiFetch("/api/shipments").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => {
-          const s = (Array.isArray(d) ? d : []).find((x) => x.id === shipmentId);
-          setSourceId(s?.source_id ?? null);
-        }).catch(() => {});
-      }
     }
     setLoading(false);
   }, []);
@@ -293,7 +285,6 @@ export default function PackagePage() {
           packageId={pkg.item_id}
           packageType={pkg.item_type_desc}
           customerLine={`${pkg.customer_name ?? pkg.customer_code ?? ""} · משלוח ${pkg.shipment_code ?? ""}`}
-          sourceId={sourceId}
           items={pkg.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
         />
       )}

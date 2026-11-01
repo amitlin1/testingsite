@@ -18,8 +18,6 @@ import { Print as PrintIcon } from "@/components/ui/icons";
  *  code only (barcode + digits); serialNo / title / role are not printed. */
 export type ItemLabel = {
     itemId: number;
-    /** Same source as the parent package; encoded as "itemId-sourceId" like the rest of the app. */
-    sourceId?: number | null;
     serialNo?: string | null;
     /** Item type / model text. */
     title?: string | null;
@@ -50,7 +48,7 @@ export default function ItemLabelsDialog({ open, onClose, labels, heading, onPri
         onAfterPrint: onPrinted,
     });
 
-    const barcodeOf = (l: ItemLabel) => (l.sourceId ? `${l.itemId}-${l.sourceId}` : String(l.itemId));
+    const barcodeOf = (l: ItemLabel) => String(l.itemId);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>

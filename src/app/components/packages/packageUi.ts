@@ -107,9 +107,10 @@ export function fmtDateTime(iso: string | null | undefined): string {
   return `${fmtDate(iso)} ${hh}:${mi}`;
 }
 
-/** Barcode payload — the app-wide "id-sourceId" shape. */
-export function barcodeOf(id: string | number | bigint, sourceId?: number | null): string {
-  return sourceId ? `${id}-${sourceId}` : String(id);
+/** Barcode payload — the id alone. Labels printed before also carried "-sourceId";
+ *  parseBarcode still reads those by their id part. */
+export function barcodeOf(id: string | number | bigint): string {
+  return String(id);
 }
 
 /*

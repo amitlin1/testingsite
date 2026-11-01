@@ -160,9 +160,8 @@ export default function PackagesBoard() {
   const [intakeOpen, setIntakeOpen] = React.useState(sp.get("new") === "1");
   const [labelsFor, setLabelsFor] = React.useState<PackageView | null>(null);
   const [deleteFor, setDeleteFor] = React.useState<PackageView | null>(null);
-  const [barcodeFor, setBarcodeFor] = React.useState<{ id: number; sourceId: number | null; serial?: string } | null>(null);
+  const [barcodeFor, setBarcodeFor] = React.useState<{ id: number; serial?: string } | null>(null);
   const [toast, setToast] = React.useState<{ text: string; error?: boolean; undoId?: string } | null>(null);
-  const sourceOf = (p: PackageView) => shipmentList.find((s) => s.id === p.shipment_id)?.source_id ?? null;
 
   const intake = useMutation({
     mutationFn: (id: string) => sendJson<{ package?: PackageView }>("/api/packages/intake", "POST", { barcode: id }),
@@ -306,7 +305,7 @@ export default function PackagesBoard() {
               intakeBusy={intake.isPending && intake.variables === p.item_id}
               onLabels={() => setLabelsFor(p)}
               onDelete={() => setDeleteFor(p)}
-              onBarcode={(it) => setBarcodeFor({ id: Number(it.item_id), sourceId: sourceOf(p), serial: it.serial_no ?? undefined })}
+              onBarcode={(it) => setBarcodeFor({ id: Number(it.item_id), serial:it.serial_no ?? undefined })}
             />
           ))}
 
@@ -347,12 +346,11 @@ export default function PackagesBoard() {
           packageId={labelsFor.item_id}
           packageType={labelsFor.item_type_desc}
           customerLine={`${labelsFor.customer_name ?? labelsFor.customer_code ?? ""} · משלוח ${labelsFor.shipment_code ?? ""}`}
-          sourceId={sourceOf(labelsFor)}
           items={labelsFor.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
         />
       )}
       {barcodeFor && (
-        <BarcodeDialog open onClose={() => setBarcodeFor(null)} itemId={barcodeFor.id} sourceId={barcodeFor.sourceId} />
+        <BarcodeDialog open onClose={() => setBarcodeFor(null)} itemId={barcodeFor.id} />
       )}
 
       <Snackbar open={!!toast} autoHideDuration={toast?.undoId ? 10000 : 6000} onClose={() => setToast(null)} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>

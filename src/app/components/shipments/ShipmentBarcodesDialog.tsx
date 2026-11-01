@@ -105,7 +105,7 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                                                 breakAfter: "page",
                                             }}
                                         >
-                                            <Barcode value={barcodeOf(b.item_id, shipment?.source_id)} width={1.6} height={70} displayValue={false} margin={0} />
+                                            <Barcode value={barcodeOf(b.item_id)} width={1.6} height={70} displayValue={false} margin={0} />
                                             <div style={{ marginTop: 8, textAlign: "center", direction: "rtl" }}>
                                                 {/* The id reads left to right; the box's 00 stands out. */}
                                                 <div dir="ltr" style={{ fontSize: 15, letterSpacing: 1.5, fontVariantNumeric: "tabular-nums" }}>

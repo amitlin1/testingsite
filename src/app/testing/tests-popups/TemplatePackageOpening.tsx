@@ -650,7 +650,6 @@ function OpeningPopup({
           packageId={item.item_id}
           packageType={pkg.item_type_desc}
           customerLine={`${pkg.customer_name ?? pkg.customer_code ?? ""} · משלוח ${pkg.shipment_code ?? ""}`}
-          sourceId={item.source_id ?? null}
           items={items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
           boxFirst={false}
         />

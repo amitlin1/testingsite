@@ -15,14 +15,12 @@ type BarcodeDialogProps = {
     open: boolean;
     onClose: () => void;
     itemId: number;
-    sourceId?: number | null;
 };
 
-export default function BarcodeDialog({ open, onClose, itemId, sourceId }: BarcodeDialogProps) {
+export default function BarcodeDialog({ open, onClose, itemId }: BarcodeDialogProps) {
     const componentRef = useRef<HTMLDivElement>(null);
 
-    // פורמט ברקוד: itemId-sourceId (אם sourceId קיים)
-    const barcodeValue = sourceId ? `${itemId}-${sourceId}` : itemId.toString();
+    const barcodeValue = itemId.toString();
 
     const handlePrint = useReactToPrint({
         contentRef: componentRef,

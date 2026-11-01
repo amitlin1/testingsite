@@ -98,7 +98,7 @@ function PackagesPageInner() {
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [labelsOpen, setLabelsOpen] = React.useState(false);
   const [customers, setCustomers] = React.useState<Option[]>([]);
-  const [shipments, setShipments] = React.useState<(Option & { source_id?: number | null })[]>([]);
+  const [shipments, setShipments] = React.useState<Option[]>([]);
   // Boxes the production upgrade converted from legacy items and that still
   // wear their old label (legacy_id_map.relabeled_at IS NULL). Empty where
   // the upgrade never ran, so the button below simply never shows.
@@ -115,10 +115,7 @@ function PackagesPageInner() {
     }).catch(() => {});
   }, []);
   React.useEffect(() => { loadConverted(); }, [loadConverted]);
-  const relabelPackages = React.useMemo<RelabelPackage[]>(
-    () => converted.map((c) => ({ ...c, sourceId: shipments.find((s) => s.value === String(c.pkg.shipment_id))?.source_id ?? null })),
-    [converted, shipments],
-  );
+  const relabelPackages: RelabelPackage[] = converted;
   const markRelabeled = (packageIds: string[]) => {
     if (packageIds.length === 0) return;
     apiFetch("/api/packages/converted", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ packageIds }) }).catch(() => {}).finally(loadConverted);
@@ -141,7 +138,7 @@ function PackagesPageInner() {
   React.useEffect(() => { readPackages().then(applyPackages); }, [applyPackages]);
   React.useEffect(() => {
     apiFetch("/api/customers").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setCustomers((Array.isArray(d) ? d : []).map((c) => ({ value: String(c.id), label: c.customer_code ? `${c.name} (${c.customer_code})` : c.name })))).catch(() => {});
-    apiFetch("/api/shipments").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setShipments((Array.isArray(d) ? d : []).map((s) => ({ value: String(s.id), label: s.shipment_code, source_id: s.source_id ?? null })))).catch(() => {});
+    apiFetch("/api/shipments").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setShipments((Array.isArray(d) ? d : []).map((s) => ({ value: String(s.id), label: s.shipment_code })))).catch(() => {});
     apiFetch("/api/settings/package-types").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setTypes((Array.isArray(d) ? d : []).map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })))).catch(() => {});
   }, []);
 
@@ -168,7 +165,6 @@ function PackagesPageInner() {
       p.items.some((it) => it.item_id.includes(ql) || (it.serial_no ?? "").toLowerCase().includes(ql) || (it.makat ?? "").toLowerCase().includes(ql))),
   );
   const sel = list.find((p) => p.item_id === selectedId) ?? null;
-  const selSource = sel ? shipments.find((s) => s.value === String(sel.shipment_id))?.source_id ?? null : null;
 
   return (
     <div dir="rtl" className="pkg-page" style={{ color: INK }}>
@@ -378,7 +374,6 @@ function PackagesPageInner() {
           packageId={sel.item_id}
           packageType={sel.item_type_desc}
           customerLine={`${sel.customer_name ?? sel.customer_code ?? ""} · משלוח ${sel.shipment_code ?? ""}`}
-          sourceId={selSource}
           items={sel.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
         />
       )}

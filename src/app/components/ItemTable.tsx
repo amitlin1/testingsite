@@ -59,11 +59,11 @@ export default function ItemTable() {
 
   // barcode dialog
   const [barcodeOpen, setBarcodeOpen] = React.useState(false);
-  const [barcodeItem, setBarcodeItem] = React.useState<{ id: number; sourceId?: number | null; serial?: string } | null>(null);
+  const [barcodeItem, setBarcodeItem] = React.useState<{ id: number; serial?: string } | null>(null);
 
   const openBarcode = (e: React.MouseEvent, row: ItemRow) => {
     e.stopPropagation();
-    setBarcodeItem({ id: row.item_id, sourceId: row.source_id || null, serial: row.serial_no || undefined });
+    setBarcodeItem({ id: row.item_id, serial:row.serial_no || undefined });
     setBarcodeOpen(true);
   };
 
@@ -403,7 +403,6 @@ export default function ItemTable() {
           open={barcodeOpen}
           onClose={() => setBarcodeOpen(false)}
           itemId={barcodeItem.id}
-          sourceId={barcodeItem.sourceId}
         />
       )}
 

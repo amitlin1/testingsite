@@ -17,7 +17,6 @@ import { CopiesStepper, LabelSheet, Tick, packageLabels, type LabelSpec } from "
  */
 export type RelabelPackage = {
   pkg: PackageView;
-  sourceId: number | null;
   /** The old ids this box's contents were known by. */
   legacyIds: string[];
 };
@@ -62,10 +61,9 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
   if (!open) return null;
 
   const chosen = packages.filter((_, i) => on[i]);
-  const labels: LabelSpec[] = chosen.flatMap(({ pkg, sourceId }) =>
+  const labels: LabelSpec[] = chosen.flatMap(({ pkg }) =>
     packageLabels({
       packageId: pkg.item_id,
-      sourceId,
       items: pkg.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no })),
     }),
   );
