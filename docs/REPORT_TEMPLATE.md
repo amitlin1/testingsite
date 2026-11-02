@@ -34,6 +34,11 @@ A4 portrait, 10–12 mm margins. Table headers repeat on every page; field
 cells, per-test blocks and signatures never split across pages. Fonts are the
 bundled Rubik (air-gapped — no web fonts).
 
+A one-page document (e.g. `ShipmentDeliveryForm`) can pass `fillPage` to
+`ReportPage`: the page stretches to the full A4 height, and a child with
+`marginTop: "auto"` — the signature — drops to the bottom together with the
+footer. `FieldGrid large` gives bigger cells for a document with few fields.
+
 ## A new document
 
 ```tsx

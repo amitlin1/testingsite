@@ -56,12 +56,15 @@ type ReportPageProps = {
     /** Extra meta cells after מס׳ מסמך / תאריך הפקה / הופק ע״י. */
     meta?: ReportMetaItem[];
     landscape?: boolean;
+    /** Single-page document: stretch to the full page height, so a child with
+     *  marginTop "auto" (and the footer after it) sits at the bottom. */
+    fillPage?: boolean;
     children: React.ReactNode;
 };
 
 /** The page frame: classification, emblem header, meta row, body, footer. */
 export const ReportPage = React.forwardRef<HTMLDivElement, ReportPageProps>(
-    ({ titleHe, titleEn, operational, documentNumber, generatedBy, generatedAt, meta = [], landscape, children }, ref) => {
+    ({ titleHe, titleEn, operational, documentNumber, generatedBy, generatedAt, meta = [], landscape, fillPage, children }, ref) => {
         const generated = generatedAt ?? new Date();
         const metaItems: ReportMetaItem[] = [
             ...(documentNumber ? [{ label: "מס׳ מסמך", value: documentNumber, mono: true }] : []),
@@ -87,6 +90,8 @@ export const ReportPage = React.forwardRef<HTMLDivElement, ReportPageProps>(
                     display: "flex",
                     flexDirection: "column",
                     gap: 16,
+                    // The @page box less its margins (10 + 14 mm), a little short so it never spills onto a second page.
+                    minHeight: fillPage ? (landscape ? "184mm" : "271mm") : undefined,
                 } as React.CSSProperties}
             >
                 <style>{PAGE_CSS}</style>
@@ -200,20 +205,21 @@ export function ReportSection({ title, children }: { title: string; children: Re
 
 export type ReportField = { label: string; value: React.ReactNode; mono?: boolean; strong?: boolean };
 
-/** Label / value cells in a grid (2 columns by default). */
-export function FieldGrid({ fields, columns = 2 }: { fields: ReportField[]; columns?: number }) {
+/** Label / value cells in a grid (2 columns by default). `large` for a short document with few fields. */
+export function FieldGrid({ fields, columns = 2, large }: { fields: ReportField[]; columns?: number; large?: boolean }) {
+    const pad = large ? "12px 14px" : "7px 10px";
     return (
-        <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 8 }}>
+        <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: large ? 12 : 8 }}>
             {fields.map((f, i) => (
-                <div key={i} className="ts-keep" style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 5, overflow: "hidden" }}>
+                <div key={i} className="ts-keep" style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: large ? 6 : 5, overflow: "hidden" }}>
                     <span style={{
-                        flex: "0 0 96px", padding: "7px 10px", background: C.labelBg, borderLeft: `1px solid ${C.border}`,
-                        fontWeight: 600, fontSize: 11, color: C.label, ...printExact,
+                        flex: `0 0 ${large ? 132 : 96}px`, padding: pad, background: C.labelBg, borderLeft: `1px solid ${C.border}`,
+                        fontWeight: 600, fontSize: large ? 13.5 : 11, color: C.label, ...printExact,
                     }}>
                         {f.label}
                     </span>
                     <span style={{
-                        flex: 1, padding: "7px 10px", minWidth: 0, overflowWrap: "anywhere",
+                        flex: 1, padding: pad, minWidth: 0, overflowWrap: "anywhere", fontSize: large ? 16 : undefined,
                         fontFamily: f.mono ? REPORT_MONO : undefined,
                         fontWeight: f.strong ? 700 : f.mono ? 600 : 500,
                         color: f.strong ? C.navy : undefined,

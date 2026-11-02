@@ -1,6 +1,5 @@
 "use client";
 import React from "react";
-import Barcode from "react-barcode";
 import { FieldGrid, ReportPage, ReportSection, REPORT_COLORS } from "@/app/components/reports/ReportKit";
 import { formatReportDate } from "@/app/components/reports/reportTheme";
 
@@ -17,37 +16,34 @@ type ShipmentDeliveryFormProps = {
 
 /**
  * טופס מסירת משלוח — printed from the return dialog (ShipmentSendPopup), to go
- * with the boxes. On the unified report template: the shipment's details, the
- * number of items alone (no names, no lines), and one empty box for the
- * receiver to sign by hand.
+ * with the boxes. On the unified report template, one full page: the shipment's
+ * details, the number of items alone (no names, no lines), and at the bottom of
+ * the page one empty box for the receiver to sign by hand.
  */
 export const ShipmentDeliveryForm = React.forwardRef<HTMLDivElement, ShipmentDeliveryFormProps>(
     ({ sentCode, sentDate, sourceShipmentCode, customerCode, itemsTotal }, ref) => (
-        <ReportPage ref={ref} titleHe="טופס מסירת משלוח" titleEn="SHIPMENT DELIVERY FORM" documentNumber={sentCode}>
+        <ReportPage ref={ref} titleHe="טופס מסירת משלוח" titleEn="SHIPMENT DELIVERY FORM" documentNumber={sentCode} fillPage>
             <ReportSection title="פרטי משלוח">
-                <div style={{ display: "flex", gap: 14, alignItems: "stretch" }}>
-                    <FieldGrid fields={[
-                        { label: "מס׳ משלוח יוצא", value: sentCode || "—", mono: true },
-                        { label: "תאריך שליחה", value: formatReportDate(sentDate) },
-                        { label: "משלוח מקור", value: sourceShipmentCode || "—", mono: true },
-                        { label: "קוד לקוח", value: customerCode || "—", mono: true },
-                        { label: "סה״כ פריטים", value: itemsTotal, strong: true },
-                    ]} />
-                    {sentCode && (
-                        <div style={{
-                            flex: "0 0 180px", border: `1px solid ${REPORT_COLORS.border}`, borderRadius: 5,
-                            display: "flex", alignItems: "center", justifyContent: "center", padding: 6, overflow: "hidden",
-                        }}>
-                            <Barcode value={sentCode} width={1.4} height={56} fontSize={11} margin={0} />
-                        </div>
-                    )}
+                <FieldGrid large fields={[
+                    { label: "משלוח יוצא", value: sentCode || "—", mono: true },
+                    { label: "תאריך שליחה", value: formatReportDate(sentDate) },
+                    { label: "משלוח מקור", value: sourceShipmentCode || "—", mono: true },
+                    { label: "קוד לקוח", value: customerCode || "—", mono: true },
+                ]} />
+                <div className="ts-keep" style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
+                    border: `1.5px solid ${REPORT_COLORS.navy}`, borderRadius: 6, background: REPORT_COLORS.labelBg,
+                    padding: "14px 20px", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact",
+                }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: REPORT_COLORS.label }}>סה״כ פריטים</span>
+                    <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: REPORT_COLORS.navy }}>{itemsTotal}</span>
                 </div>
             </ReportSection>
 
-            {/* One box, left empty for the receiver's hand. */}
-            <div className="ts-keep" style={{ marginTop: 8, border: `1px solid ${REPORT_COLORS.border}`, borderRadius: 6, padding: "12px 14px", maxWidth: 340 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: REPORT_COLORS.navy }}>חתימת המקבל</span>
-                <div style={{ height: 70, borderBottom: `1px solid ${REPORT_COLORS.ink}` }} />
+            {/* One box, left empty for the receiver's hand; marginTop auto drops it (and the footer) to the page bottom. */}
+            <div className="ts-keep" style={{ marginTop: "auto", border: `1px solid ${REPORT_COLORS.border}`, borderRadius: 6, padding: "14px 18px", maxWidth: 380 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: REPORT_COLORS.navy }}>חתימת המקבל</span>
+                <div style={{ height: 80, borderBottom: `1px solid ${REPORT_COLORS.ink}` }} />
             </div>
         </ReportPage>
     ),
