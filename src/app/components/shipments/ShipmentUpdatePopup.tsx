@@ -453,7 +453,7 @@ export default function ShipmentUpdatePopup({
                             <div style={{ fontSize: "var(--text-body)", fontWeight: 600 }}>מארזים במשלוח</div>
                             <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap" }}>
                                 <Button variant="outlined" size="small" startIcon={<QrCodeScannerIcon fontSize={16} aria-hidden />} onClick={() => setLineScanOpen(true)}>
-                                    סרוק שורה מהתעודה
+                                    סרוק או הזן שורה מהתעודה
                                 </Button>
                                 <Button variant="outlined" size="small" startIcon={<AddIcon fontSize={16} aria-hidden />} onClick={() => append({ item_type_id: 0, quantity: 0 })}>
                                     הוסף סוג מארז
