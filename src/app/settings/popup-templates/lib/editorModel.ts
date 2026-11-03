@@ -5,7 +5,7 @@ import { allComponentsOf } from "@/app/lib/popup-templates/schema";
 import type {
   ComponentKind, PackageRole, PopupTemplateConfig, TemplateComponent, TemplateStep,
 } from "@/app/lib/popup-templates/schema";
-import { TEMPLATE_DEFAULTS } from "@/app/lib/popup-templates/labels";
+import { COMPONENT_NAME, TEMPLATE_DEFAULTS } from "@/app/lib/popup-templates/labels";
 import { TEMPLATE_LIMITS } from "@/app/lib/popup-templates/validate";
 import type { TemplateIssue } from "@/app/lib/popup-templates/validate";
 import {
@@ -40,11 +40,18 @@ export function catalogFor(role: PackageRole | null, where: StepList): readonly 
 }
 
 /** The package wizards' own parts: they keep their step, and their settings are the wizards'. */
-export const SYSTEM_PART_KINDS: readonly ComponentKind[] = ["contents", "items", "labels", "arrival"];
+export const SYSTEM_PART_KINDS: readonly ComponentKind[] = ["contents", "items", "labels", "arrival", "report_sign"];
 /** Of those, the ones a template must have: neither they nor their step can be removed. */
 const MANDATORY_PART_KINDS: readonly ComponentKind[] = ["contents", "items", "arrival"];
 
 export const isSystemPart = (c: TemplateComponent) => SYSTEM_PART_KINDS.includes(c.kind);
+/** A system part the admin may remove (and add back): the labels, the report signing. */
+export const isOptionalPart = (c: TemplateComponent) => isSystemPart(c) && !MANDATORY_PART_KINDS.includes(c.kind);
+/** The closing's report-signing step: added and removed whole (addReportSignStep), and always last. */
+export const holdsReportSign = (step: TemplateStep) => step.components.some((c) => c.kind === "report_sign");
+/** Whether the closing can take the report signing (it has none yet). */
+export const canAddReportSign = (cfg: PopupTemplateConfig) =>
+  cfg.role === "closing" && !cfg.steps.some(holdsReportSign) && cfg.steps.length < TEMPLATE_LIMITS.maxSteps;
 /** A step holding a mandatory system part stays (it can still move). */
 export const isLockedStep = (step: TemplateStep) => step.components.some((c) => MANDATORY_PART_KINDS.includes(c.kind));
 
@@ -76,6 +83,7 @@ export function newComponent(kind: ComponentKind, random?: RandomSource): Templa
     case "items":
     case "labels":
     case "arrival":
+    case "report_sign":
       return { id, kind };
   }
 }
@@ -107,12 +115,14 @@ export const packageCodeTemplate = (role: PackageRole, random?: RandomSource): P
 
 // ---- steps ----------------------------------------------------------------------
 /** A new, empty step at the end of a list — in the item base, before the step that holds the
- *  verdict, which stays last. */
+ *  verdict, which stays last; in a closing, before the report signing, which stays last too. */
 export function addStep(cfg: PopupTemplateConfig, random?: RandomSource, where: StepList = "steps"): PopupTemplateConfig {
   const step: TemplateStep = { id: newTemplateStepId(random), title: "שלב חדש", desc: "", components: [] };
   const list = listOf(cfg, where);
-  const verdictAt = cfg.role == null ? list.findIndex((s) => s.components.some((c) => c.kind === "verdict")) : -1;
-  const at = verdictAt === -1 ? list.length : verdictAt;
+  const lastAt = cfg.role == null
+    ? list.findIndex((s) => s.components.some((c) => c.kind === "verdict"))
+    : list.findIndex(holdsReportSign);
+  const at = lastAt === -1 ? list.length : lastAt;
   return withList(cfg, where, [...list.slice(0, at), step, ...list.slice(at)]);
 }
 
@@ -124,12 +134,20 @@ export function removeStep(cfg: PopupTemplateConfig, stepId: string): PopupTempl
   return mapLists(cfg, (steps) => steps.filter((s) => s.id !== stepId));
 }
 
+/** Whether a step may move one place: never the report signing, nor anything past it. */
+export function canMoveStep(cfg: PopupTemplateConfig, stepId: string, by: -1 | 1): boolean {
+  const list = listOf(cfg, whereIs(cfg, (s) => s.id === stepId));
+  const i = list.findIndex((s) => s.id === stepId);
+  const j = i + by;
+  return i !== -1 && j >= 0 && j < list.length && !holdsReportSign(list[i]) && !holdsReportSign(list[j]);
+}
+
 export function moveStep(cfg: PopupTemplateConfig, stepId: string, by: -1 | 1): PopupTemplateConfig {
   const where = whereIs(cfg, (s) => s.id === stepId);
   const list = listOf(cfg, where);
   const i = list.findIndex((s) => s.id === stepId);
   const j = i + by;
-  if (i === -1 || j < 0 || j >= list.length) return cfg;
+  if (!canMoveStep(cfg, stepId, by)) return cfg;
   const steps = [...list];
   [steps[i], steps[j]] = [steps[j], steps[i]];
   return withList(cfg, where, steps);
@@ -146,6 +164,16 @@ export function canAddKind(cfg: PopupTemplateConfig, kind: ComponentKind, where:
   if (kind === "photo") return allComponentsOf(cfg).filter((c) => c.kind === "photo").length < TEMPLATE_LIMITS.maxPhotos;
   if (SYSTEM_PART_KINDS.includes(kind)) return !allComponentsOf(cfg).some((c) => c.kind === kind) && step != null && step.components.length === 0;
   return true;
+}
+
+/** Adds the report signing to a closing: a step of its own at the end, named after it. */
+export function addReportSignStep(cfg: PopupTemplateConfig, random?: RandomSource): PopupTemplateConfig {
+  if (!canAddReportSign(cfg)) return cfg;
+  const step: TemplateStep = {
+    id: newTemplateStepId(random), title: COMPONENT_NAME.report_sign, desc: "הדוחות של הפריטים + חתימה",
+    components: [newComponent("report_sign", random)],
+  };
+  return { ...cfg, steps: [...cfg.steps, step] };
 }
 
 /** Adds a component to a step: before the verdict when the step ends with it, else at the end. */
@@ -167,7 +195,10 @@ export function updateComponent<C extends TemplateComponent>(cfg: PopupTemplateC
   })));
 }
 
+/** Removes a component; the report signing goes with its step, which holds nothing else. */
 export function removeComponent(cfg: PopupTemplateConfig, componentId: string): PopupTemplateConfig {
+  const sign = cfg.steps.find((s) => holdsReportSign(s) && s.components.some((c) => c.id === componentId));
+  if (sign) return removeStep(cfg, sign.id);
   return mapLists(cfg, (steps) => steps.map((s) => ({ ...s, components: s.components.filter((c) => c.id !== componentId) })));
 }
 

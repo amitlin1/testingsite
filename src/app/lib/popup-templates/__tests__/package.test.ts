@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { allComponentsOf, photoCodesOf } from "../schema";
+import { allComponentsOf, photoCodesOf, reportSignStepOf } from "../schema";
 import type { PopupTemplateConfig, TemplateComponent } from "../schema";
 import { TemplateShapeError, lintPopupTemplate, parsePopupTemplateConfig } from "../validate";
 import { closingTemplate, openingTemplate, verdictStationTemplate } from "../templates";
@@ -109,4 +109,30 @@ test("the shape parse: role, item flow, checklist rows, unique ids across all of
     mutate(c);
     assert.throws(() => parsePopupTemplateConfig(c), TemplateShapeError, what);
   }
+});
+
+test("the report signing: a closing's last step, alone; never an opening's or an item station's", () => {
+  const sign = (): TemplateComponent => ({ id: "k_sign0001", kind: "report_sign" });
+  const close = clone(closingTemplate());
+  close.steps.push({ id: "p_sign0001", title: "חתימה על הדוחות", desc: "", components: [sign()] });
+  assert.deepEqual(lintPopupTemplate(close, "package"), []);
+  assert.deepEqual(parsePopupTemplateConfig(clone(close)), close);
+  assert.equal(reportSignStepOf(close)?.id, "p_sign0001");
+  assert.equal(reportSignStepOf(closingTemplate()), null, "today's closing has none");
+
+  const notLast = clone(close);
+  notLast.steps = [notLast.steps[0], notLast.steps[3], notLast.steps[1], notLast.steps[2]];
+  assert.ok(codes(notLast).includes("REPORT_SIGN_NOT_LAST"));
+  assert.equal(reportSignStepOf(notLast), null);
+
+  const notAlone = clone(close);
+  notAlone.steps[3].components.push({ id: "k_note0001", kind: "notes", label: "הערות" });
+  assert.ok(codes(notAlone).includes("SYSTEM_NOT_ALONE"));
+
+  const open = clone(openingTemplate("pkg", "prod"));
+  open.steps.push({ id: "p_sign0001", title: "חתימה", desc: "", components: [sign()] });
+  assert.ok(codes(open).includes("KIND_NOT_ALLOWED"));
+  const item = clone(verdictStationTemplate());
+  item.steps.push({ id: "p_sign0001", title: "חתימה", desc: "", components: [sign()] });
+  assert.ok(codes(item, "item").includes("KIND_NOT_ALLOWED"));
 });

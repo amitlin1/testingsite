@@ -58,6 +58,7 @@ export const EDITOR_TEXT = {
   stepDesc: "תיאור (אופציונלי)",
   stepEmpty: "אין רכיבים בשלב הזה.",
   addStep: "הוסף שלב",
+  addReportSign: "הוסף חתימה על הדוחות",
   addComponent: "הוסף:",
   moveUp: (what: string) => `הזז למעלה: ${what}`,
   moveDown: (what: string) => `הזז למטה: ${what}`,
@@ -124,6 +125,8 @@ export function componentSummary(c: TemplateComponent): string {
       return "מדבקה לכל פריט · אפשר להסיר";
     case "arrival":
       return "הגעה, נארז, והחלטה לפריט שלא הגיע · חלק קבוע";
+    case "report_sign":
+      return "הדוחות של הפריטים וחתימה אחת לכולם, לפני כפתור הסיום · חובה · אפשר להסיר";
   }
 }
 

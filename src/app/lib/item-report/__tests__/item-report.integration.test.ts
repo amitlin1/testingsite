@@ -331,6 +331,46 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.equal((await H.q("SELECT 1 FROM report_templates")).length, 0);
   });
 
+  it("a signature sent with the finishing result signs it in the same request; refused before saving without the role", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    await saveTemplate(R.report, template({ signature: true }));
+    await seedReportItem(8101, v);
+    const results = async () => (await H.q("SELECT 1 FROM test_results WHERE item_id = $1", [8101])).length;
+    const start = async () => {
+      const started = await H.startTest({ itemId: 8101, stationId: H.STATION_FUNC_A, actionUuid: randomUUID() });
+      assert.equal(started.status, 200, JSON.stringify(started.body));
+    };
+    const send = (uid: string, fields: Record<string, unknown>, signature: unknown) =>
+      H.submitResult({ ItemID: 8101, StationID: H.STATION_FUNC_A, SubmitID: randomUUID(), Passed: true, Details: { schema: schemaOf(uid, v), fields }, ReportSignature: signature });
+    const step1 = { [VOLT.id]: { t: "number", value: 27.9 }, [LED.id]: { t: "choice_row", opt: "o_led00001" } };
+
+    // No right to sign, or no usable signature: nothing is saved (the item stays in its test).
+    await start();
+    session = signedIn("storekeeper");
+    let r = await send(UID.a, step1, PNG);
+    assert.equal(r.status, 403);
+    session = signedIn("tester");
+    r = await send(UID.a, step1, "data:text/plain;base64,eA==");
+    assert.equal(r.status, 400);
+    assert.equal(await results(), 0);
+
+    // A step that does not finish the route: saved, nothing to sign yet.
+    r = await send(UID.a, step1, PNG);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.reportSign, "nothing_to_sign");
+    assert.equal(await reportRow(8101), null);
+
+    // The finishing step: saved, signed and frozen before the answer.
+    await start();
+    r = await send(UID.b, { [CASE.id]: { t: "pass_fail", ok: "pass" } }, PNG);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.reportSign, "signed");
+    const row = await reportRow(8101);
+    assert.ok(row?.signature_key && row.storage_key, "signed and frozen");
+    assert.equal(row.signed_by_name, "רונית כהן");
+    assert.equal((await status(8101)).state, "final");
+  });
+
   it("no template → 204 and state no_template; unknown item → 404; malformed id → 400", async () => {
     const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
     await seedReportItem(8001, v);

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { lintPopupTemplate } from "@/app/lib/popup-templates/validate";
 import type { PhotoComponent } from "@/app/lib/popup-templates/schema";
 import {
-  addChecklistRow, addComponent, addStep, blankTemplate, canAddKind, catalogFor, codeTemplateFor, isLockedStep, isSystemPart, issuesAt,
+  addChecklistRow, addComponent, addReportSignStep, addStep, blankTemplate, canAddKind, canAddReportSign, canMoveStep, catalogFor, codeTemplateFor,
+  isLockedStep, isOptionalPart, isSystemPart, issuesAt,
   moveComponent, moveStep, newComponent, packageCodeTemplate, removeChecklistRow, removeComponent, removeStep, sameConfig,
   setChecklistRow, setFinishLabel, templateIssues, updateComponent, updateStep,
 } from "../editorModel";
@@ -128,4 +129,32 @@ test("a checklist's rows", () => {
   assert.deepEqual(rows.map((r) => r.label), ["האריזה סגורה", ""]);
   assert.match(rows[1].id, /^i_[a-z0-9]{8}$/);
   assert.deepEqual(removeChecklistRow(rows, rows[1].id).map((r) => r.label), ["האריזה סגורה"]);
+});
+
+test("the report signing: added as its own last step, kept last, removed with its step", () => {
+  let cfg = packageCodeTemplate("closing");
+  assert.ok(canAddReportSign(cfg));
+  cfg = addReportSignStep(cfg);
+  const sign = cfg.steps[cfg.steps.length - 1];
+  assert.deepEqual(sign.components.map((c) => c.kind), ["report_sign"]);
+  assert.ok(isOptionalPart(sign.components[0]));
+  assert.deepEqual(lintPopupTemplate(cfg, "package"), []);
+  assert.equal(canAddReportSign(cfg), false, "once");
+  assert.equal(addReportSignStep(cfg), cfg);
+  assert.equal(canAddReportSign(packageCodeTemplate("opening")), false, "a closing's only");
+
+  // A new step goes before it; nothing moves past it.
+  cfg = addStep(cfg);
+  assert.equal(cfg.steps[cfg.steps.length - 1].id, sign.id);
+  const before = cfg.steps[cfg.steps.length - 2];
+  assert.equal(canMoveStep(cfg, sign.id, -1), false);
+  assert.equal(canMoveStep(cfg, before.id, 1), false);
+  assert.equal(moveStep(cfg, before.id, 1), cfg);
+  assert.ok(canMoveStep(cfg, before.id, -1));
+
+  // Removing the part removes its step.
+  const n = cfg.steps.length;
+  cfg = removeComponent(cfg, sign.components[0].id);
+  assert.equal(cfg.steps.length, n - 1);
+  assert.ok(!cfg.steps.some((s) => s.id === sign.id));
 });

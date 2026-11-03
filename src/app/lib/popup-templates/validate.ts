@@ -23,7 +23,7 @@ export type TemplateIssueCode =
   | "PHOTO_TITLE_EMPTY" | "PHOTO_TOO_MANY" | "PHOTO_CODE_DUPLICATE" | "TOLERANCE"
   // the package base (PLAN.md §5.2)
   | "ROLE_MISSING" | "ROLE_ON_ITEM" | "KIND_NOT_ALLOWED" | "SYSTEM_MISSING" | "SYSTEM_NOT_ALONE" | "SYSTEM_DUPLICATE"
-  | "SYSTEM_ORDER" | "ITEM_FLOW_EMPTY" | "ITEM_FLOW_NOT_HERE" | "VERDICT_NOT_LAST_IN_STEP"
+  | "SYSTEM_ORDER" | "REPORT_SIGN_NOT_LAST" | "ITEM_FLOW_EMPTY" | "ITEM_FLOW_NOT_HERE" | "VERDICT_NOT_LAST_IN_STEP"
   | "CHECKLIST_TITLE_EMPTY" | "CHECKLIST_EMPTY" | "CHECKLIST_ITEM_EMPTY" | "NOTES_LABEL_EMPTY";
 
 /** One content issue; step_id / component_id say where. */
@@ -152,6 +152,7 @@ function parseComponent(raw: unknown, p: string): TemplateComponent {
     case "items":
     case "labels":
     case "arrival":
+    case "report_sign":
       return { id, kind };
   }
 }
@@ -261,7 +262,8 @@ function lintComponent(c: TemplateComponent, at: { stepId?: string; allowed: rea
  * of the last step; no role, no item flow, none of the package base's parts.
  * base "package" (PLAN.md §5.2): a role; its system parts each alone in a step and in order
  * (contents → items → labels; arrival); a verdict is optional and closes its own step; an opening's
- * item flow has at least one component, its SKU scan first and its verdict last; a closing has none.
+ * item flow has at least one component, its SKU scan first and its verdict last; a closing has none,
+ * and its report signing, when it has one, is its last step (it runs after the finish saved).
  */
 export function lintPopupTemplate(cfg: PopupTemplateConfig, base: TemplateBase = "item"): TemplateIssue[] {
   const out: TemplateIssue[] = [];
@@ -347,6 +349,8 @@ export function lintPopupTemplate(cfg: PopupTemplateConfig, base: TemplateBase =
   } else if (role === "closing") {
     if (!systemAt.arrival) add("SYSTEM_MISSING", T.systemMissing(COMPONENT_NAME.arrival));
     if ((cfg.item_flow?.length ?? 0) > 0) add("ITEM_FLOW_NOT_HERE", T.roleOnItem);
+    const sign = systemAt.report_sign;
+    if (sign && sign.si !== cfg.steps.length - 1) add("REPORT_SIGN_NOT_LAST", T.reportSignNotLast, sign.stepId, sign.id);
   }
 
   // ---- photos, over the whole template ----

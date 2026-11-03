@@ -2,7 +2,7 @@
 import * as React from "react";
 import {
   AlertTriangle, ArrowDown, ArrowUp, Boxes, CheckSquare, ChevronDown, Image as ImageIcon, Info, ListChecks, ListTodo, MessageSquare,
-  PackageCheck, PackageOpen, Plus, ScanBarcode, Scale, StickyNote, Tag as TagIcon, Trash2,
+  PackageCheck, PackageOpen, PenLine, Plus, ScanBarcode, Scale, StickyNote, Tag as TagIcon, Trash2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Checkbox, FormControlLabel, IconButton, MenuItem, Select, TextField } from "@/components/ui";
@@ -17,8 +17,8 @@ import { COMPONENT_NAME } from "@/app/lib/popup-templates/labels";
 import { TEMPLATE_LIMITS } from "@/app/lib/popup-templates/validate";
 import type { TemplateIssue } from "@/app/lib/popup-templates/validate";
 import {
-  addChecklistRow, addComponent, addStep, canAddKind, isLockedStep, isSystemPart, issuesAt, moveComponent, moveStep, removeChecklistRow,
-  removeComponent, removeStep, setChecklistRow, updateComponent, updateStep,
+  addChecklistRow, addComponent, addReportSignStep, addStep, canAddKind, canAddReportSign, canMoveStep, holdsReportSign, isLockedStep, isOptionalPart,
+  isSystemPart, issuesAt, moveComponent, moveStep, removeChecklistRow, removeComponent, removeStep, setChecklistRow, updateComponent, updateStep,
 } from "../lib/editorModel";
 import type { StepList } from "../lib/editorModel";
 import { COMPONENT_SETTINGS_TEXT, EDITOR_TEXT, addKindText, componentSummary } from "../lib/labels";
@@ -30,8 +30,9 @@ import { COMPONENT_SETTINGS_TEXT, EDITOR_TEXT, addKindText, componentSummary } f
  * shows where it is. Pure view over the draft: every edit goes through onChange with a new config.
  *
  * A package template draws it twice: for its steps, and for the opening's item flow (`where`). The
- * package wizards' own parts (contents, items, labels, arrival) show their name and what they do,
- * and stay in their step; the steps of the mandatory ones cannot be removed (PLAN.md §5, step 2.5).
+ * package wizards' own parts (contents, items, labels, arrival, report_sign) show their name and what
+ * they do, and stay in their step; the steps of the mandatory ones cannot be removed (PLAN.md §5,
+ * step 2.5). A closing's report signing is added and removed as a whole step, and stays last.
  */
 
 const KIND_ICON: Record<ComponentKind, LucideIcon> = {
@@ -47,6 +48,7 @@ const KIND_ICON: Record<ComponentKind, LucideIcon> = {
   items: Boxes,
   labels: TagIcon,
   arrival: PackageCheck,
+  report_sign: PenLine,
 };
 
 export function VariablesHint() {
@@ -98,9 +100,9 @@ export function StepsEditor({ cfg, issues, onChange, where = "steps", catalog }:
                 inputProps={{ maxLength: TEMPLATE_LIMITS.stepDesc }} />
             </div>
             <div className="pt-step__actions">
-              <IconButton size="small" className="route-step__btn" title={EDITOR_TEXT.moveUp(stepName(si + 1))} disabled={si === 0}
+              <IconButton size="small" className="route-step__btn" title={EDITOR_TEXT.moveUp(stepName(si + 1))} disabled={!canMoveStep(cfg, step.id, -1)}
                 onClick={() => onChange(moveStep(cfg, step.id, -1))}><ArrowUp size={15} strokeWidth={1.9} aria-hidden /></IconButton>
-              <IconButton size="small" className="route-step__btn" title={EDITOR_TEXT.moveDown(stepName(si + 1))} disabled={si === steps.length - 1}
+              <IconButton size="small" className="route-step__btn" title={EDITOR_TEXT.moveDown(stepName(si + 1))} disabled={!canMoveStep(cfg, step.id, 1)}
                 onClick={() => onChange(moveStep(cfg, step.id, 1))}><ArrowDown size={15} strokeWidth={1.9} aria-hidden /></IconButton>
               <IconButton size="small" className="route-step__btn route-step__btn--danger"
                 title={isLockedStep(step) ? EDITOR_TEXT.systemPart : EDITOR_TEXT.remove(stepName(si + 1))} disabled={isLockedStep(step)}
@@ -115,9 +117,10 @@ export function StepsEditor({ cfg, issues, onChange, where = "steps", catalog }:
               const name = COMPONENT_NAME[c.kind];
               const open = openId === c.id;
               const first = si === 0 && ci === 0;
-              const last = si === steps.length - 1 && ci === step.components.length - 1;
+              // Nothing moves into the report signing's step.
+              const last = ci === step.components.length - 1 && (si === steps.length - 1 || holdsReportSign(steps[si + 1]));
               const compIssues = issuesAt(issues, { stepId: step.id, componentId: c.id });
-              // A wizard's own part: shown, never opened or moved; only the labels may be removed.
+              // A wizard's own part: shown, never opened or moved; only the optional ones (labels, report signing) may be removed.
               const system = isSystemPart(c);
               return (
                 <li key={c.id} className="pt-comp" data-invalid={compIssues.length > 0 || undefined}>
@@ -144,7 +147,7 @@ export function StepsEditor({ cfg, issues, onChange, where = "steps", catalog }:
                           onClick={() => onChange(moveComponent(cfg, c.id, 1))}><ArrowDown size={15} strokeWidth={1.9} aria-hidden /></IconButton>
                       </>
                     )}
-                    {(!system || c.kind === "labels") && (
+                    {(!system || isOptionalPart(c)) && (
                       <IconButton size="small" className="route-step__btn route-step__btn--danger" title={EDITOR_TEXT.remove(name)}
                         onClick={() => onChange(removeComponent(cfg, c.id))}><Trash2 size={15} strokeWidth={1.9} aria-hidden /></IconButton>
                     )}
@@ -177,6 +180,11 @@ export function StepsEditor({ cfg, issues, onChange, where = "steps", catalog }:
       <button type="button" className="route-add pt-add-step" onClick={() => onChange(addStep(cfg, undefined, where))} disabled={steps.length >= TEMPLATE_LIMITS.maxSteps}>
         <Plus size={16} strokeWidth={2} aria-hidden />{EDITOR_TEXT.addStep}
       </button>
+      {where === "steps" && canAddReportSign(cfg) && (
+        <button type="button" className="route-add pt-add-step" onClick={() => onChange(addReportSignStep(cfg))}>
+          <PenLine size={16} strokeWidth={2} aria-hidden />{EDITOR_TEXT.addReportSign}
+        </button>
+      )}
     </div>
   );
 }

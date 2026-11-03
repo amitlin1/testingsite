@@ -12,6 +12,7 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 |---|---|
 | Edit a route's template | הגדרות מערכת → מסלולי בדיקה → לשונית **דוח PDF** |
 | Download / sign an item's report | היסטוריית פריט (`/items/<id>/history`) — the buttons under the status |
+| Sign a kit's reports at its closing | the closing template's "חתימה על הדוחות" step (`report_sign`) — see below |
 | Template components (shared by editor + server) | `src/app/lib/item-report/puck-config.tsx` |
 | Variables: catalog + values | `src/app/lib/item-report/variables.ts` (pure, unit-tested) |
 | Route catalog (server) | `src/app/lib/item-report/catalog.ts` |
@@ -99,6 +100,29 @@ finished (+ signed) ────► FINAL: rendered once, stored in MinIO, serve
   reopened item is a draft again; when it finishes again a new final copy is
   frozen — and a new signature is needed. No reopen path has to clean anything.
 - A lost blob is rebuilt once from current data on download (as in ticketflow).
+
+## Signing at the kit's closing
+
+A closing popup template (תבניות חלון, role `closing`) may end with the system part
+**חתימה על הדוחות** (`report_sign`, "הוסף חתימה על הדוחות" in the editor). It is a step of its own
+and always the last one (lint `REPORT_SIGN_NOT_LAST`), so the finish button ("סגור מארז") is on it:
+the signature comes **before** anything is saved (`TemplatePackageClosing.tsx`, `ReportSignStep.tsx`).
+
+- It lists the arrived items whose report will need the approver's signature (`needsSignature`,
+  not final) and that the signed-in user may sign (`canSign`), shows each report as it is now
+  (`?html=1`; the closing's own row is added on save), and takes **one signature for all of them**.
+- "סגור מארז" waits for it. Each of those items' closing result carries it (`POST
+  /api/testing/results` `ReportSignature`, a PNG data URL); the server checks it — shape, and
+  `REPORT_SIGN_ROLES` of the signed-in user — before saving anything (400 / 403), and once the
+  result has finished the route signs and freezes the report in the same request
+  (`signReportWithResult`; the answer's `reportSign`: `signed` / `nothing_to_sign` / `failed`). A
+  refresh before "סגור מארז" saves nothing; after it, the box is closed with its reports signed.
+- The signer is the signed-in user. A signing that fails after the save (`failed`) leaves the report
+  awaiting its signature: the done step names it, and the item page signs it.
+- Nothing to sign (no report template with the approver's signature, or a user who may not sign)
+  → the step says so and the box closes as before; reports waiting for someone else are counted on
+  the done step.
+- Today's closing wizard (no template) and a template without the part are unchanged.
 
 ## Storage
 

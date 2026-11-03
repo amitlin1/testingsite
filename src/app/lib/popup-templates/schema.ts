@@ -39,21 +39,22 @@ export const TEMPLATE_ID_PATTERNS = {
 // ---- components ---------------------------------------------------------------
 export const COMPONENT_KINDS = [
   "sku_scan", "message", "photo", "weight", "route_fields", "verdict",
-  "checklist", "notes", "contents", "items", "labels", "arrival",
+  "checklist", "notes", "contents", "items", "labels", "arrival", "report_sign",
 ] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
 
 /** What each place of a template may hold (PLAN.md §3.2, §5.2). The package base's system parts
- *  (contents / items / labels in an opening, arrival in a closing) are the wizards' own steps. */
+ *  (contents / items / labels in an opening, arrival / report_sign in a closing) are the wizards'
+ *  own steps. */
 export const KINDS_ALLOWED = {
   item: ["sku_scan", "message", "photo", "weight", "route_fields", "verdict"],
   opening: ["sku_scan", "message", "photo", "route_fields", "verdict", "checklist", "notes", "contents", "items", "labels"],
-  closing: ["sku_scan", "message", "photo", "route_fields", "verdict", "checklist", "notes", "arrival"],
+  closing: ["sku_scan", "message", "photo", "route_fields", "verdict", "checklist", "notes", "arrival", "report_sign"],
   item_flow: ["sku_scan", "message", "photo", "weight", "route_fields", "verdict"],
 } as const satisfies Record<string, readonly ComponentKind[]>;
 
 /** The package base's system parts: each alone in its step, in this order. */
-export const SYSTEM_KINDS = ["contents", "items", "labels", "arrival"] as const satisfies readonly ComponentKind[];
+export const SYSTEM_KINDS = ["contents", "items", "labels", "arrival", "report_sign"] as const satisfies readonly ComponentKind[];
 
 interface ComponentBase { id: ComponentId }
 
@@ -122,8 +123,11 @@ export interface NotesComponent extends ComponentBase {
  *  contents  "תכולה וסריאליים" (opening): what is in the box, a serial for every item
  *  items     "פריטים במארז" (opening): every item through the template's item_flow
  *  labels    "מדבקות" (opening): a label for every item
- *  arrival   "פריטים ואריזה" (closing): arrived → packed, not arrived → a decision with a note */
-export interface SystemComponent extends ComponentBase { kind: "contents" | "items" | "labels" | "arrival" }
+ *  arrival   "פריטים ואריזה" (closing): arrived → packed, not arrived → a decision with a note
+ *  report_sign "חתימה על הדוחות" (closing, optional): the last step, the one the finish button is
+ *            on — the items' PDF reports and one signature for all of them, sent with the
+ *            closing's results (docs/ITEM_REPORTS.md). Required: the finish waits for it. */
+export interface SystemComponent extends ComponentBase { kind: "contents" | "items" | "labels" | "arrival" | "report_sign" }
 
 export type TemplateComponent =
   | SkuScanComponent | MessageComponent | PhotoComponent | WeightComponent | RouteFieldsComponent | VerdictComponent
@@ -202,6 +206,13 @@ export function allComponentsOf(cfg: PopupTemplateConfig): TemplateComponent[] {
 /** The template's SKU scan, if it has one. */
 export function skuScanOf(cfg: PopupTemplateConfig): SkuScanComponent | null {
   return (componentsOf(cfg).find((c) => c.kind === "sku_scan") as SkuScanComponent | undefined) ?? null;
+}
+
+/** A closing's report-signing step: its last step, holding only "report_sign" — or null. The finish
+ *  button is on it, so the signature is in hand before anything is saved. */
+export function reportSignStepOf(cfg: PopupTemplateConfig): TemplateStep | null {
+  const last = cfg.steps[cfg.steps.length - 1];
+  return cfg.role === "closing" && last?.components.length === 1 && last.components[0].kind === "report_sign" ? last : null;
 }
 
 /** The photo codes the template's photo components write — one photo_types row each. */

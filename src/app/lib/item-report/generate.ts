@@ -556,6 +556,29 @@ export async function signItemReport(
   return { version };
 }
 
+/**
+ * Sign the report with a result that has just been saved (the closing's report signing,
+ * popup-templates `report_sign`): "signed" when the report is signed now or already was,
+ * "nothing_to_sign" when it does not wait for a signature (the result did not finish the route,
+ * no template, no signature block). Anything else throws — the result itself stays saved.
+ */
+export async function signReportWithResult(
+  itemId: bigint,
+  png: Buffer,
+  signer: { username: string; name: string; number: string },
+): Promise<"signed" | "nothing_to_sign"> {
+  try {
+    await signItemReport(itemId, png, signer);
+    return "signed";
+  } catch (e) {
+    if (e instanceof ReportSignError) {
+      if (e.code === "ALREADY_SIGNED" || e.code === "ALREADY_FINAL") return "signed";
+      if (e.code === "NOT_FINISHED" || e.code === "NO_TEMPLATE" || e.code === "NO_SIGNATURE_BLOCK") return "nothing_to_sign";
+    }
+    throw e;
+  }
+}
+
 // ---------------------------------------------------------------- editor preview
 
 /**

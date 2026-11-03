@@ -9,7 +9,11 @@ import { loadPackageContext } from "@/app/lib/packages/context";
 import { recheckPackageReadiness } from "@/app/lib/packages/readiness";
 import { GATE_FINISH_ON_REQUIRED } from "@/app/lib/station-fields/evaluate";
 import { FieldsSubmissionError, checkFieldsSubmission, resolveForSubmission } from "@/app/lib/station-fields/submit";
-import { freezeReportIfFinal } from "@/app/lib/item-report/generate";
+import { freezeReportIfFinal, signReportWithResult } from "@/app/lib/item-report/generate";
+import { actorOf, decodeImageDataUrl } from "@/app/lib/item-report/http";
+import { REPORT_SIGN_ROLES } from "@/app/lib/item-report/roles";
+import { hasAnyRole } from "@/lib/auth/roles";
+import { auth } from "@/../auth";
 
 
 export const runtime = "nodejs";
@@ -42,6 +46,11 @@ type TestResultRequest = {
   // Optional so the plain report dialog (which sends only Result) keeps working.
   Passed?: boolean;
   Details?: unknown;
+  // The closing's report signing (popup-templates report_sign, docs/ITEM_REPORTS.md): the
+  // approver's signature, a PNG data URL. When this result finishes the item's route, its report
+  // is signed in this same request — so a refresh can never leave the box closed and the report
+  // unsigned. Checked (shape + REPORT_SIGN_ROLES) before anything is saved.
+  ReportSignature?: string;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -108,6 +117,7 @@ export async function POST(req: Request) {
       ReturnAt,
       Passed,
       Details,
+      ReportSignature,
     } = body;
     // Route/timing fields may be omitted (e.g. the intake wizard submitting one
     // result per accessory, where the client doesn't hold each child's route data).
@@ -181,6 +191,31 @@ export async function POST(req: Request) {
     const currentUtcIso = getCurrentUtcIso();
     const currentUtcDate = new Date(currentUtcIso);
     const itemIdBig = BigInt(ItemID);
+
+    // A signature that cannot be used refuses the submit before it saves: the closing is either
+    // saved and signed, or not saved.
+    let reportSigning: { png: Buffer; signer: ReturnType<typeof actorOf> } | null = null;
+    if (ReportSignature !== undefined) {
+      const img = decodeImageDataUrl(ReportSignature, 2 * 1024 * 1024);
+      if (!img || img.type !== "image/png") {
+        return NextResponse.json({ error: "ReportSignature must be a PNG data URL" }, { status: 400 });
+      }
+      const session = await auth();
+      if (!session?.user || !hasAnyRole(session.roles ?? [], REPORT_SIGN_ROLES)) {
+        return NextResponse.json({ error: "אין לך הרשאה לחתום על דוחות", code: "REPORT_SIGN_FORBIDDEN" }, { status: 403 });
+      }
+      reportSigning = { png: img.bytes, signer: actorOf(session) };
+    }
+    /** The report signed with this result (after it committed); never fails the submit. */
+    const signReport = async (): Promise<Record<string, unknown>> => {
+      if (!reportSigning) return {};
+      try {
+        return { reportSign: await signReportWithResult(itemIdBig, reportSigning.png, reportSigning.signer) };
+      } catch (e) {
+        console.error(`[item-report] signing the report of item ${itemIdBig} with its result failed`, e);
+        return { reportSign: "failed" };
+      }
+    };
 
     // Main transaction: insert history, update item_routes, insert research_history,
     // update station, emit the ledger events, and (per §4.8) the next-station
@@ -977,7 +1012,8 @@ export async function POST(req: Request) {
     // The original answer's next station is gone with its response, so this one
     // says where the item is now: the worker still sees where it goes next.
     if ("replay" in txResult) {
-      return NextResponse.json({ ok: true, success: true, replay: true, ...(await whereItemIsNow(itemIdBig)) });
+      // A retry after a lost answer still signs, when the first attempt did not get to it.
+      return NextResponse.json({ ok: true, success: true, replay: true, ...(await whereItemIsNow(itemIdBig)), ...(await signReport()) });
     }
 
     const responseData: any = {
@@ -995,6 +1031,8 @@ export async function POST(req: Request) {
     if (txResult.packageGate) {
       responseData.packageGate = txResult.packageGate;
     }
+    // Before the freeze below: a report that waits for this signature is frozen by the signing.
+    Object.assign(responseData, await signReport());
 
     // The item may have just finished its route: freeze its PDF report now,
     // while the data is exactly what it finished with (docs/ITEM_REPORTS.md).

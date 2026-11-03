@@ -21,6 +21,7 @@ export const COMPONENT_NAME: Record<ComponentKind, string> = {
   items: "פריטים במארז",
   labels: "מדבקות",
   arrival: "פריטים ואריזה",
+  report_sign: "חתימה על הדוחות",
 };
 
 /** Worker-facing defaults — today's popups' own words. */
@@ -71,6 +72,7 @@ export const TEMPLATE_LINT_TEXT = {
   systemMissing: (name: string) => `בתבנית הזו חייב להיות "${name}"`,
   systemNotAlone: (name: string) => `"${name}" חייב להיות לבד בשלב שלו`,
   systemOrder: "הסדר במארז: תכולה וסריאליים, אחריה הפריטים, ואחריהם המדבקות",
+  reportSignNotLast: "\"חתימה על הדוחות\" חייבת להיות השלב האחרון: כפתור הסיום נמצא עליה, והחתימה נשמרת יחד עם התוצאות",
   itemFlowEmpty: "בתהליך לכל פריט חייב להיות לפחות רכיב אחד",
   skuNotFirstInFlow: "בתהליך לכל פריט, סריקת המק״ט חייבת להיות ראשונה",
   verdictNotLastInStep: "פסק הדין חייב להיות הרכיב האחרון בשלב שלו",

@@ -1,11 +1,12 @@
 "use client";
 import React from "react";
 import { Check } from "lucide-react";
+import type SignatureCanvas from "react-signature-canvas";
 import type { StationTestDialogProps } from "@/types";
 import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 import { apiFetch } from "@/lib/api/client";
 import { newActionId } from "@/app/lib/metrics/action-id";
-import { fillVariables, skuScanOf } from "@/app/lib/popup-templates/schema";
+import { fillVariables, reportSignStepOf, skuScanOf } from "@/app/lib/popup-templates/schema";
 import type { PopupTemplateJson } from "@/app/lib/popup-templates/schema";
 import type { FieldsEvaluation } from "@/app/lib/station-fields/evaluate";
 import { fieldsGateText, missLabel } from "@/app/lib/station-fields/labels";
@@ -19,6 +20,7 @@ import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
 import PackageDecisionDialog, { type PackDecision } from "./PackageDecisionDialog";
 import { NextStationList, nextStopOf, type NextStop, type NextStopRow } from "./nextStation";
 import { ScanField, closingSkuSuggestions, useReferenceLookup, useReferenceSkus } from "./referenceScan";
+import { REPORT_SIGN_TEXT, ReportSignStep, reportsToSign, type SignItem } from "./ReportSignStep";
 import { emptyRunState, routeFieldsSlot, stepBlocker, type TemplateRunState } from "./templateModel";
 import { bandOf, buildClosingBoxDetails, closingNote, closingPasses, closingStepKind } from "./packageTemplateModel";
 import {
@@ -40,6 +42,12 @@ import "@/app/packages/packages.css";
  * The box's fields appear where the template places them (artboard 18), and the step that holds
  * them waits for them. "סגור מארז" records one result per arrived item, then the box's, whose
  * details keep the wizard's keys (packageTemplateModel.ts) — all under one submit id.
+ *
+ * A template that ends with "חתימה על הדוחות" (report_sign) has its finish button on that step: it
+ * shows the reports of the items finishing here that wait for the approver's signature, and the
+ * finish waits for one signature, which every such item's result carries (ReportSignature) — the
+ * server signs it in the same request. Nothing is saved before the signature; a refresh before
+ * "סגור מארז" only starts the closing over.
  */
 
 const CLOSE_TEXT = {
@@ -105,6 +113,18 @@ function ClosingPopup({
   // finish), and the done step's rows once the box's answer is in.
   const nextStopsRef = React.useRef<Map<string, NextStop>>(new Map());
   const [doneRows, setDoneRows] = React.useState<NextStopRow[]>([]);
+  // The report signing (report_sign): the reports this user signs with the closing (null while
+  // they load), how many wait for someone else who may sign, the pad, and — kept across a retry of
+  // the finish — what each signed item's result answered.
+  const signStepDef = reportSignStepOf(cfg);
+  const signIdx = signStepDef ? cfg.steps.length - 1 : -1;
+  const [toSign, setToSign] = React.useState<SignItem[] | null>(null);
+  const [othersSign, setOthersSign] = React.useState(0);
+  const [signLoadError, setSignLoadError] = React.useState(false);
+  const [padSigned, setPadSigned] = React.useState(false);
+  const padRef = React.useRef<SignatureCanvas | null>(null);
+  const signOutcomeRef = React.useRef<Map<string, boolean>>(new Map());
+  const [signDone, setSignDone] = React.useState<{ signed: number; failed: string[] }>({ signed: 0, failed: [] });
   const uid = React.useId();
 
   // Station fields: the kit's answer (the popup opens on the box row → mode "package"), the box's
@@ -161,6 +181,11 @@ function ClosingPopup({
    *  count names the button); CHECKING while something answers. */
   const stepHold = (i: number): string | null => {
     const st = cfg.steps[i];
+    if (i === signIdx) {
+      if (signLoadError) return REPORT_SIGN_TEXT.loadFailed;
+      if (toSign == null) return CHECKING;
+      return toSign.length > 0 && !padSigned ? REPORT_SIGN_TEXT.needsSignature : null;
+    }
     if (closingStepKind(st) === "arrival") {
       if (!allResolved) return CLOSE_TEXT.needsDecision;
       return itemsHold ? itemsMissText ?? CHECKING : null;
@@ -178,6 +203,7 @@ function ClosingPopup({
   const fill = (text: string) => fillVariables(text, { station: kind, sku: box.sku, model: item.model, serial: item.serial_no });
   const finishLabel = fill(cfg.finish_label);
   const isScan = stepDef != null && boxSkuC != null && stepDef.components.length === 1 && stepDef.components[0] === boxSkuC;
+  const isSign = stepDef != null && step === signIdx;
   let stepSubtitle = "";
   let systemMsg: string | null = null;
   let nextLabel = CLOSE_TEXT.doneNext as string;
@@ -188,6 +214,9 @@ function ClosingPopup({
     nextLabel = step === lastStep ? finishLabel : "המשך";
     if (closingStepKind(stepDef) === "arrival") {
       stepSubtitle = CLOSE_TEXT.arrivalSubtitle;
+      if (hold && hold !== CHECKING) nextLabel = hold;
+    } else if (isSign) {
+      stepSubtitle = REPORT_SIGN_TEXT.subtitle;
       if (hold && hold !== CHECKING) nextLabel = hold;
     } else {
       if (isScan) { stepSubtitle = PACKAGE_POPUP_TEXT.boxScanSubtitle; systemMsg = PACKAGE_POPUP_TEXT.boxScanBand; }
@@ -214,6 +243,12 @@ function ClosingPopup({
     const held = (gate ? fieldsGateText(missing.required, missing.notes) : null)
       ?? (shots.length === 0 ? null : shots.some((s) => s.failed) ? PACKAGE_POPUP_TEXT.photoFailed : PACKAGE_POPUP_TEXT.photoUploading);
     if (held) { setError(held); return; }
+    // One signature for every report that waits for it: it travels with each of those items'
+    // results, and the server signs in the same request.
+    const signIds = new Set(signStepDef ? (toSign ?? []).map((x) => x.item_id) : []);
+    const pad = padRef.current;
+    const signature = signIds.size > 0 && pad && !pad.isEmpty() ? pad.getCanvas().toDataURL("image/png") : null;
+    if (signIds.size > 0 && !signature) { setError(REPORT_SIGN_TEXT.needsSignature); setStep(signIdx); return; }
     setSubmitting(true); setError(null);
     const submitId = (submitIdRef.current ??= newActionId());
     // With a config every row answers it (D5): each arrived item as "kit_item" and the box as "box",
@@ -235,6 +270,7 @@ function ClosingPopup({
             ItemID: Number(it.item_id), StationID: station.test_station_id, WorkerID: workerId ?? undefined, WorkerName: workerName || undefined, SubmitID: submitId,
             Result: 1, Passed: true,
             Details: { closing: true, packed: true, package_id: String(item.item_id), template: { v: template.version }, ...(kitItemRef ? itemBlock(it, kitItemRef) : {}) },
+            ...(signature && signIds.has(it.item_id) ? { ReportSignature: signature } : {}),
           }),
         });
         if (!res.ok) {
@@ -244,7 +280,9 @@ function ClosingPopup({
           if (shouldReloadFields(d)) sf.reload();
           throw new Error(`שמירת הפריט ${it.serial_no ?? seq2(it.package_seq)} נכשלה${d?.error ? ` — ${d.error}` : ` (${res.status})`}`);
         }
-        nextStopsRef.current.set(it.item_id, nextStopOf(await res.json().catch(() => null)));
+        const answer = await res.json().catch(() => null);
+        nextStopsRef.current.set(it.item_id, nextStopOf(answer));
+        if (signIds.has(it.item_id)) signOutcomeRef.current.set(it.item_id, (answer as { reportSign?: string } | null)?.reportSign === "signed");
         committedRef.current.add(it.item_id);
       }
       const passed = closingPasses(cfg, box, anyMissing);
@@ -272,6 +310,11 @@ function ClosingPopup({
           key: it.item_id, badge: seq2(it.package_seq), label: it.item_type_desc, stop: nextStopsRef.current.get(it.item_id)!,
         })),
       ]);
+      const outcome = [...signOutcomeRef.current.entries()];
+      setSignDone({
+        signed: outcome.filter(([, ok]) => ok).length,
+        failed: outcome.filter(([, ok]) => !ok).map(([id]) => { const it = items.find((x) => x.item_id === id); return it ? `${seq2(it.package_seq)} · ${it.item_type_desc}` : id; }),
+      });
       setStep(lastStep + 1);
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : "שגיאה בשמירת סגירת המארז");
@@ -281,17 +324,37 @@ function ClosingPopup({
     }
   };
 
+  /** The reports of the items that finish at this closing and wait for a signature. Loaded on
+   *  every entry to the signing step: the packing may have changed since. */
+  const loadToSign = async () => {
+    setSignLoadError(false); setToSign(null);
+    const finishing = items.filter((it) => arrived(it));
+    try {
+      const { mine, othersOnly } = await reportsToSign(finishing.map((it) => it.item_id));
+      setOthersSign(othersOnly);
+      setToSign(finishing.filter((it) => mine.includes(it.item_id)).map((it) => ({
+        item_id: it.item_id, badge: seq2(it.package_seq), label: it.item_type_desc, serial: it.serial_no,
+      })));
+    } catch {
+      setSignLoadError(true);
+    }
+  };
+  const goTo = (i: number) => {
+    setStep(i);
+    if (i === signIdx && i !== step) void loadToSign();
+  };
+
   const onNext = () => {
     if (!nextEnabled || submitting) return;
     setError(null);
     if (doneStep) { onClose(); return; }
     if (step >= lastStep) { void finish(); return; }
-    setStep(step + 1);
+    goTo(step + 1);
   };
   // The rail: back always; forward only over steps that are done.
   const onStep = (i: number) => {
     if (doneStep || submitting || i > lastStep) return;
-    if (i <= step || Array.from({ length: i }, (_, k) => stepHold(k)).every((b) => b == null)) setStep(i);
+    if (i <= step || Array.from({ length: i }, (_, k) => stepHold(k)).every((b) => b == null)) goTo(i);
   };
 
   const steps: WizardStep[] = [
@@ -393,6 +456,11 @@ function ClosingPopup({
         )}
       </div>
     );
+  } else if (stepDef && isSign) {
+    body = (
+      <ReportSignStep items={toSign} loadError={signLoadError} onRetry={() => void loadToSign()}
+        canvasRef={padRef} signed={padSigned} onSignedChange={setPadSigned} />
+    );
   } else if (stepDef) {
     body = <StepComponents step={stepDef} t={boxTarget(step)} />;
   } else {
@@ -405,6 +473,16 @@ function ClosingPopup({
           {items.map((it) => <span key={it.item_id} title={`${seq2(it.package_seq)} · ${it.item_type_desc}`} style={{ width: 30, height: 10, borderRadius: 3, background: decisions[it.item_id]?.decision === "missing" ? RED : GREEN }} />)}
         </div>
         <div style={{ fontSize: 12.5, color: MUTED, marginTop: 9, fontVariantNumeric: "tabular-nums" }}>{items.filter((it) => decisions[it.item_id]?.decision !== "missing").length} פריטים נארזו · {pkg.item_type_desc}</div>
+        {(signDone.signed > 0 || othersSign > 0) && (
+          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
+            {[signDone.signed > 0 ? REPORT_SIGN_TEXT.doneSigned(signDone.signed) : null, othersSign > 0 ? REPORT_SIGN_TEXT.doneWaiting(othersSign) : null].filter(Boolean).join(" · ")}
+          </div>
+        )}
+        {signDone.failed.length > 0 && (
+          <div role="status" style={{ fontSize: 13, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 11, padding: "9px 12px", marginTop: 10, maxWidth: 460 }}>
+            {REPORT_SIGN_TEXT.doneFailed(signDone.failed.join(", "))}
+          </div>
+        )}
         <NextStationList rows={doneRows} />
       </div>
     );
