@@ -23,7 +23,9 @@ export const REPORT_SIGN_TEXT = {
   loadFailed: "טעינת הדוחות נכשלה. בלי הדוחות אי אפשר לסגור את המארז — נסה שוב.",
   retry: "נסה שוב",
   needsSignature: "יש לחתום לפני סגירת המארז",
-  nothingToSign: "לאף פריט במארז אין דוח שממתין לחתימה שלך. אפשר לסגור את המארז.",
+  nothingToSign: "לאף פריט במארז אין דוח שממתין לחתימה. אפשר לסגור את המארז.",
+  cannotSign: "רק בודק או מנהל יכולים לחתום על הדוחות ולסגור את המארז",
+  cannotSignBody: "הדוחות של הפריטים במארז ממתינים לחתימה של בודק או מנהל, ובלי החתימה המארז לא נסגר. בקש מבודק או ממנהל לסגור את המארז.",
   preview: "תצוגת הדוח",
   previewNote: "הדוח מוצג כמו שהוא עכשיו. שורת סגירת המארז תתווסף אליו בשמירה.",
   previewLoading: "טוען את הדוח…",
@@ -64,12 +66,14 @@ function useReportHtml(id: string | null): string | null | "failed" {
 }
 
 export function ReportSignStep({
-  items, loadError, onRetry, canvasRef, signed, onSignedChange,
+  items, loadError, onRetry, cannotSign, canvasRef, signed, onSignedChange,
 }: {
   /** null while the reports to sign load. */
   items: SignItem[] | null;
   loadError: boolean;
   onRetry: () => void;
+  /** Reports wait for a signature this user may not give (not REPORT_SIGN_ROLES): the box stays open. */
+  cannotSign: boolean;
   canvasRef: React.RefObject<SignatureCanvas | null>;
   signed: boolean;
   onSignedChange: (signed: boolean) => void;
@@ -88,6 +92,13 @@ export function ReportSignStep({
     );
   }
   if (!items) return <div role="status" style={{ marginTop: 20, fontSize: 14, color: MUTED }}>{T.loading}</div>;
+  if (cannotSign) {
+    return (
+      <div role="alert" style={{ marginTop: 20, fontSize: 14, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 11, padding: "12px 14px" }}>
+        {T.cannotSignBody}
+      </div>
+    );
+  }
   if (!shown) return <div role="status" style={{ marginTop: 20, fontSize: 14, color: MUTED }}>{T.nothingToSign}</div>;
 
   return (

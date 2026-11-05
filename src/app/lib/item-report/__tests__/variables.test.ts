@@ -181,3 +181,22 @@ test("officialStarterTemplate: known blocks only, every variable in the catalog,
   assert.equal(requiresFinalSignature(t), true);
   assert.notStrictEqual(officialStarterTemplate().root, t.root, "a fresh copy every time");
 });
+
+test("generalStarterTemplate: binds only what every route has, prints each station with its photos, wants the final signature", async () => {
+  const { generalStarterTemplate } = await import("../starter");
+  const { puckConfig } = await import("../puck-config");
+  const { templateUsesPhotos } = await import("../template-utils");
+  const { readFileSync } = await import("node:fs");
+  const t = generalStarterTemplate();
+  const known = new Set(Object.keys(puckConfig.components));
+  for (const n of t.content) assert.ok(known.has(n.type), `unknown block ${n.type}`);
+  assert.ok(t.content.some((n) => n.type === "StepDetails"), "every station's detail");
+  const used = JSON.stringify(t).match(/"v":"([^"]+)"/g)!.map((m) => m.slice(5, -1));
+  for (const v of used) assert.match(v, /^(item|report)\./, `a variable every route has: ${v}`);
+  assert.equal(requiresFinalSignature(t), true);
+  assert.equal(templateUsesPhotos(t), true);
+  // The migration seeds exactly this document.
+  const sql = readFileSync("prisma/migrations/20261104120000_report_general_template/migration.sql", "utf8");
+  const seeded = /VALUES \(1, '([\s\S]*?)'::jsonb/.exec(sql)![1];
+  assert.deepEqual(JSON.parse(seeded), JSON.parse(JSON.stringify(t)));
+});

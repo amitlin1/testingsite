@@ -187,6 +187,8 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     session = null;
     await H.resetDb();
     await H.q("TRUNCATE item_reports");
+    // The migration seeds the general template; a test that wants it puts it back.
+    await H.q("DELETE FROM report_general_template");
     await H.q("DELETE FROM file_objects WHERE entity_type LIKE 'item_report%' OR entity_type = 'report_logo'");
     await H.q(`INSERT INTO item_types (item_type_id, item_type_desc, is_package) VALUES ($1, 'REPORT', false)`, [ITEM_TYPE_REPORT]);
     R.report = (await H.one<{ id: number }>(
@@ -329,6 +331,80 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     r = await call(api.template.DELETE, `/api/item-reports/templates/${R.report}`, { method: "DELETE" }, { routeId: String(R.report) });
     assert.equal(r.status, 204);
     assert.equal((await H.q("SELECT 1 FROM report_templates")).length, 0);
+  });
+
+  it("the general template: a route without its own gets it, its own wins, a kit's box gets none; its handlers", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    await seedReportItem(8201, v);
+    assert.equal((await status(8201)).state, "no_template", "no general template yet");
+
+    // Writes: the template roles, never empty.
+    const general = await import("../../../api/item-reports/templates/general/route");
+    const { generalStarterTemplate } = await import("../starter");
+    session = signedIn("storekeeper");
+    let r = await call(general.PUT, "/api/item-reports/templates/general", json("PUT", { template: generalStarterTemplate() }));
+    assert.equal(r.status, 403);
+    session = signedIn("manager");
+    r = await call(general.PUT, "/api/item-reports/templates/general", json("PUT", { template: { root: {}, content: [], zones: {} } }));
+    assert.equal(r.status, 400, "an empty general template");
+    r = await call(general.PUT, "/api/item-reports/templates/general", json("PUT", { template: generalStarterTemplate() }));
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    session = signedIn("storekeeper");
+    r = await call(general.GET, "/api/item-reports/templates/general");
+    assert.equal(r.status, 200);
+    assert.ok(r.body.routes >= 1, "the REPORT route uses it");
+    assert.deepEqual(r.body.steps, []);
+    assert.ok(!r.body.vars.some((x: { name: string }) => x.name.startsWith("step.") || x.name.startsWith("field.")), "only what every route has");
+
+    // The item's report: the general template, every station in its detail with what it saved.
+    const st = await status(8201);
+    assert.equal(st.state, "in_progress");
+    assert.equal(st.needsSignature, true);
+    await H.startTest({ itemId: 8201, stationId: H.STATION_FUNC_A, actionUuid: randomUUID() });
+    const submitted = await H.submitResult({
+      ItemID: 8201, StationID: H.STATION_FUNC_A, SubmitID: randomUUID(), Passed: true,
+      Details: { schema: schemaOf(UID.a, v), fields: { [VOLT.id]: { t: "number", value: 27.9 }, [LED.id]: { t: "choice_row", opt: "o_led00001" } } },
+    });
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body));
+    let html = (await getHtml(8201)).body as string;
+    assert.match(html, /פירוט לפי עמדה/);
+    assert.match(html, /class="pdf-stepdetail__head"/);
+    assert.match(html, /מתח כניסה/, "the route field, in the station's detail");
+
+    // Its own template wins; going back to the general one is deleting it.
+    await saveTemplate(R.report, template({ signature: false, marker: "OWN-TEMPLATE" }));
+    html = (await getHtml(8201)).body as string;
+    assert.match(html, /OWN-TEMPLATE/);
+    assert.doesNotMatch(html, /class="pdf-stepdetail__head"/);
+    session = signedIn("manager");
+    const del = await call(api.template.DELETE, `/api/item-reports/templates/${R.report}`, { method: "DELETE" }, { routeId: String(R.report) });
+    assert.equal(del.status, 204);
+    assert.match((await getHtml(8201)).body as string, /class="pdf-stepdetail__head"/);
+
+    // A kit's box gets no report, the general template notwithstanding.
+    const kit = await H.h().prisma.$transaction((tx: any) =>
+      H.h().createPackage(tx, {
+        customer: H.CUSTOMER_ID, shipment: H.SHIPMENT_ID, packageType: H.ITEM_TYPE_PACKAGE_CLOSE,
+        items: [{ itemType: H.ITEM_TYPE_IN_BOX, serialNumber: "SN-GEN-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR" }],
+      }),
+    );
+    assert.equal((await status(kit.packageId)).state, "no_template");
+    assert.equal((await status((kit.itemIds as number[])[0])).state, "in_progress", "its item does get one");
+  });
+
+  it("StepDetails prints each station's photos under it — every source (here the legacy popup's)", async () => {
+    await H.q("INSERT INTO report_general_template (id, template) VALUES (1, $1::jsonb)", [JSON.stringify((await import("../starter")).generalStarterTemplate())]);
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    await seedReportItem(8202, v);
+    await H.startTest({ itemId: 8202, stationId: H.STATION_FUNC_A, actionUuid: randomUUID() });
+    const r = await H.submitResult({
+      ItemID: 8202, StationID: H.STATION_FUNC_A, SubmitID: randomUUID(), Passed: true,
+      Details: { schema: schemaOf(UID.a, v), fields: { [VOLT.id]: { t: "number", value: 27.9 }, [LED.id]: { t: "choice_row", opt: "o_led00001" } }, photo: { photos: ["items/8202/a.jpg", "items/8202/b.jpg"] } },
+    });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const html = (await getHtml(8202)).body as string;
+    const detail = html.slice(html.indexOf("פירוט לפי עמדה"));
+    assert.equal((detail.match(/class="pdf-photo pdf-keep"/g) ?? []).length, 2, "both shots, under the station");
   });
 
   it("a signature sent with the finishing result signs it in the same request; refused before saving without the role", async () => {

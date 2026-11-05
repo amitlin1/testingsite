@@ -432,7 +432,8 @@ export function ReportTemplateEditor({
   value: Data | null | undefined;
   /** "מסלול 1 של מחשב" — shown in the toolbar. */
   title: string;
-  routeId: number;
+  /** The route whose template this is, or "general" for the general template (its preview). */
+  routeId: number | "general";
   vars: ReportVar[];
   steps: ReportStepRef[];
   saving?: boolean;

@@ -42,12 +42,13 @@ export function requiresFinalSignature(t: unknown): boolean {
   return found;
 }
 
-/** The template prints photos (a Photos block) — only then are they fetched. */
+/** The template prints photos (a Photos block, or StepDetails with its photos) — only then are
+ *  they fetched. */
 export function templateUsesPhotos(t: unknown): boolean {
   if (!isTemplate(t)) return false;
   let found = false;
   walk(t.content, (n) => {
-    if (n.type === "Photos") found = true;
+    if (n.type === "Photos" || (n.type === "StepDetails" && n.props?.showPhotos !== false)) found = true;
   });
   return found;
 }

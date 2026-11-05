@@ -1,7 +1,8 @@
 # דוחות PDF לפריטים — Item reports
 
-Every item gets a PDF report at the end of its route, built from a **template
-per route** and filled with the results of **every station the item passed**.
+Every item gets a PDF report at the end of its route, built from its route's
+template — or, when the route has none, from the **general template** — and filled
+with the results of **every station the item passed**.
 The engine is ported from ticketflow's ticket PDF (`ticketflow/src/lib/pdf`):
 a Puck document edited in a WYSIWYG editor, rendered to HTML on the server and
 printed to PDF by headless Chromium, stored in MinIO and frozen once final.
@@ -10,7 +11,7 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 
 | What | Where |
 |---|---|
-| Edit a route's template | הגדרות מערכת → מסלולי בדיקה → לשונית **דוח PDF** |
+| Edit the general template / a route's template | הגדרות מערכת → מסלולי בדיקה → לשונית **דוח PDF** (the general template's row leads it) |
 | Download / sign an item's report | היסטוריית פריט (`/items/<id>/history`) — the buttons under the status |
 | Sign a kit's reports at its closing | the closing template's "חתימה על הדוחות" step (`report_sign`) — see below |
 | Template components (shared by editor + server) | `src/app/lib/item-report/puck-config.tsx` |
@@ -19,11 +20,11 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 | Render + freeze + sign | `src/app/lib/item-report/generate.ts` |
 | Chromium | `src/app/lib/item-report/render.ts`, `html.ts` (fonts inlined — air-gap safe) |
 | Fonts | `src/app/lib/item-report/fonts.ts`, `public/fonts/` |
-| Starter template | `src/app/lib/item-report/starter.ts` |
+| Starter / general template | `src/app/lib/item-report/starter.ts` (`officialStarterTemplate`, `generalStarterTemplate`) |
 | Editor UI | `src/app/settings/testing-routes/components/report/` |
 | APIs | `src/app/api/item-reports/` |
-| DB | `report_templates`, `item_reports` (migration `20261020120000_item_reports`) |
-| Production SQL | `scripts/prod-item-reports/1-item-reports.sql` |
+| DB | `report_templates`, `item_reports` (migration `20261020120000_item_reports`); `report_general_template` (`20261104120000_report_general_template`) |
+| Production SQL | `scripts/prod-item-reports/1-item-reports.sql`, `scripts/prod-report-general-template/1-report-general-template.sql` |
 
 ## The look — an official document
 
@@ -41,14 +42,23 @@ black-and-white copy loses nothing:
   **טבלת פרטים** block for particulars, verdicts as words (✓ תקין / ✕ לא תקין).
 - A section heading never ends a page; it moves with what follows it.
 
-A new template starts from `officialStarterTemplate()` (`starter.ts`): פרטי
-הפריט, תוצאות הבדיקות, סיכום, אישור with the approver's signature.
+## The general template, and a route's own
 
-## Template = one per route
+Every item gets a report. Its template is chosen in `loadRouteAndTemplate`:
 
-A template belongs to a testing route (`testing_routes` row = item type + route
-number); an item gets the template of the route it runs. On a kit, the tab lists
-the routes of the kit's lines — the report is per **item**, the box gets none.
+1. the route's own (`report_templates`, one per `testing_routes` row = item type + route number) —
+   "מותאמת" in the tab;
+2. else the **general template** (`report_general_template`, one row) — "כללית";
+3. a kit's box gets none: the report is per **item** (on a kit, the tab lists the routes of the
+   kit's lines).
+
+The general template binds only what every route has — `item.*` and `report.*`, no step — and
+prints the tests from the item's own results: פרטי הפריט, the results table, **פירוט לפי עמדה**
+(StepDetails: every station with what it saved and its photos), סיכום, and אישור with the approver's
+signature (`generalStarterTemplate`; the migration seeds the same document). It cannot be deleted
+or saved empty; saving it asks first, naming how many routes use it (`GET …/templates/general` →
+`routes`). "התאמה למסלול" starts a route's own template from a copy of it; "חזרה לתבנית הכללית" deletes
+the route's template.
 
 ## Variables
 
@@ -76,6 +86,10 @@ Ticketflow's blocks (טקסט, כותרת — numbered by default, ערך ממש
 - **טבלת פרטים** — label / value rows, one or two pairs per row.
 - **טבלת תוצאות** — every step the item passed: עמדה, עובד, תאריך, תוצאה,
   הערות, and optionally the fields under each row.
+- **פירוט לפי עמדה** — every station the item passed, in route order, each with a head (עמדה ·
+  עובד · תאריך · תוצאה), a table of what it saved (the popup's components and the route's fields,
+  with status and note), its comments and its photos from every source. Binds no step, so the
+  general template uses it on every route.
 - **שדות של עמדה** — one step's fields as שדה / ערך / סטטוס / הערה.
 - **תמונות מעמדה** — the photos of a step's photo fields (or every step's).
 - **בלוק חתימה** — bound to **מאשר הדוח** (a hand-drawn signature given on the
@@ -119,9 +133,10 @@ the signature comes **before** anything is saved (`TemplatePackageClosing.tsx`, 
   refresh before "סגור מארז" saves nothing; after it, the box is closed with its reports signed.
 - The signer is the signed-in user. A signing that fails after the save (`failed`) leaves the report
   awaiting its signature: the done step names it, and the item page signs it.
-- Nothing to sign (no report template with the approver's signature, or a user who may not sign)
-  → the step says so and the box closes as before; reports waiting for someone else are counted on
-  the done step.
+- A user who may not sign (not `REPORT_SIGN_ROLES`) cannot close a box whose reports wait for the
+  approver's signature: "סגור מארז" stays blocked ("רק בודק או מנהל יכולים לחתום על הדוחות ולסגור את
+  המארז"). With the general template's signature that is every box.
+- Nothing to sign (no report with the approver's signature) → the step says so and the box closes.
 - Today's closing wizard (no template) and a template without the part are unchanged.
 
 ## Storage
@@ -159,7 +174,7 @@ Bucket `MINIO_BUCKET`, registered in `file_objects`:
 
 ## Deploy
 
-1. Run `scripts/prod-item-reports/1-item-reports.sql` (additive; the old image keeps working).
+1. Run `scripts/prod-item-reports/1-item-reports.sql`, then `scripts/prod-report-general-template/1-report-general-template.sql` (both additive; the old image keeps working).
 2. Build the image — the Dockerfile now installs Chromium in the runner stage
    (`PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`).
 3. The new npm dependency `@measured/puck@0.20.2` must be in the offline npm cache

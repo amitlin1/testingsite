@@ -8,7 +8,7 @@
 -- against the application database. It is NOT idempotent — run it once, on an
 -- empty database.
 --
--- Migrations included (36):
+-- Migrations included (37):
 --   0_init
 --   20260217140614_add_poc_and_stokekeeper
 --   20260218000000_dashboard_optimization
@@ -45,6 +45,7 @@
 --   20261027100000_shipment_box_lines
 --   20261029120000_field_photo_groups
 --   20261029130000_reference_images_by_station
+--   20261104120000_report_general_template
 -- ===========================================================================
 
 
@@ -3656,6 +3657,45 @@ ALTER TABLE "reference_item_images" ALTER COLUMN "photo_type_id" DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS "idx_reference_item_images_station" ON "reference_item_images"("test_station_type_id");
 
 
+-- ---------------------------------------------------------------------------
+-- migration: 20261104120000_report_general_template
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- The general report template (docs/ITEM_REPORTS.md): every item gets a PDF
+-- report. An item route with its own template (report_templates) uses it;
+-- every other item route uses this one. A kit's box gets no report.
+--
+--   report_general_template  one row (id = 1): a Puck document, edited in
+--                            מסלולי בדיקה → דוח PDF → "התבנית הכללית"
+--
+-- The row is seeded with the starting document (item-report/starter.ts
+-- generalStarterTemplate): the item's particulars, the results table, every
+-- station's detail with its photos (StepDetails), a summary and the approver's
+-- signature. ON CONFLICT keeps a template that was already edited.
+--
+-- Additive only: a new table, nothing existing changes. The previous image
+-- never reads it, so this runs any time before the new image. No
+-- metrics_schema_version bump: the ledger does not read it.
+--
+-- Idempotent: the air-gap procedure re-runs migration files against an
+-- already-migrated database.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS "report_general_template" (
+    "id"              SMALLINT     NOT NULL DEFAULT 1,
+    "template"        JSONB        NOT NULL,
+    "updated_at"      TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_by"      VARCHAR(255),
+    "updated_by_name" TEXT,
+    CONSTRAINT "report_general_template_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "report_general_template_one_row" CHECK ("id" = 1)
+);
+
+INSERT INTO "report_general_template" ("id", "template", "updated_by_name")
+VALUES (1, '{"root":{"props":{"header":{"show":true,"org":[{"text":"מדינת ישראל","b":true},{"text":"\nשם היחידה\nמעבדת הבדיקות"}],"meta":[{"text":"מספר: "},{"v":"item.item_id"},{"text":"\nתאריך: "},{"v":"report.generated_at"},{"text":"\nסימוכין: "},{"v":"item.shipment_code"}],"title":[{"text":"דוח בדיקה","b":true,"u":true}],"subtitle":[{"v":"item.item_type"},{"text":" · מק\"ט "},{"v":"item.makat"}],"rightLogo":"/report-logos/emblem-navy.png","leftLogo":"/report-logos/emblem-atom.jpg"},"footer":{"show":true,"text":"","textAlign":"center","pageNumbers":true,"pageNumberStyle":"of","pageNumberAlign":"center"},"border":"none","font":"david","classification":""}},"content":[{"type":"Section","props":{"id":"Section-general-1","heading":[{"text":"פרטי הפריט","b":true,"u":true}],"variant":"numbered","align":"right","width":"full"}},{"type":"DetailsTable","props":{"id":"DetailsTable-general-2","perRow":2,"rows":[{"label":"מספר פריט","value":[{"v":"item.item_id"}]},{"label":"מספר סידורי","value":[{"v":"item.serial_no"}]},{"label":"סוג פריט","value":[{"v":"item.item_type"}]},{"label":"מק\"ט","value":[{"v":"item.makat"}]},{"label":"דגם","value":[{"v":"item.model"}]},{"label":"יצרן","value":[{"v":"item.manufacturer_name"}]},{"label":"לקוח","value":[{"v":"item.customer"}]},{"label":"מספר משלוח","value":[{"v":"item.shipment_code"}]},{"label":"תאריך קליטה","value":[{"v":"item.created_at"}]},{"label":"תאריך סיום הבדיקות","value":[{"v":"item.finished_at"}]}],"width":"full"}},{"type":"Section","props":{"id":"Section-general-3","heading":[{"text":"תוצאות הבדיקות","b":true,"u":true}],"variant":"numbered","align":"right","width":"full"}},{"type":"ResultsTable","props":{"id":"ResultsTable-general-4","showFields":false,"showStation":true,"showWorker":true,"showDate":true,"showComments":true,"width":"full"}},{"type":"Section","props":{"id":"Section-general-5","heading":[{"text":"פירוט לפי עמדה","b":true,"u":true}],"variant":"numbered","align":"right","width":"full"}},{"type":"StepDetails","props":{"id":"StepDetails-general-6","showPhotos":true,"perRow":3,"height":45,"showComments":true,"width":"full"}},{"type":"Section","props":{"id":"Section-general-7","heading":[{"text":"סיכום","b":true,"u":true}],"variant":"numbered","align":"right","width":"full"}},{"type":"Text","props":{"id":"Text-general-8","content":[{"text":"הפריט עבר את שלבי מסלול הבדיקה המפורטים לעיל. תוצאה כוללת: "},{"v":"item.verdict"},{"text":"."}],"align":"justify","width":"full"}},{"type":"Section","props":{"id":"Section-general-9","heading":[{"text":"אישור","b":true,"u":true}],"variant":"numbered","align":"right","width":"full"}},{"type":"Spacer","props":{"id":"Spacer-general-10","height":6}},{"type":"Signature","props":{"id":"Signature-general-11","bind":"final","cells":[{"kind":"fullName","label":"שם ושם משפחה","text":"","weight":1},{"kind":"number","label":"מספר עובד","text":"","weight":1},{"kind":"date","label":"תאריך","text":"","weight":1},{"kind":"signature","label":"חתימה","text":"","weight":1}],"width":"full"}}],"zones":{}}'::jsonb, 'התבנית הכללית ההתחלתית')
+ON CONFLICT ("id") DO NOTHING;
+
+
 -- ===========================================================================
 -- Prisma migration bookkeeping
 -- ===========================================================================
@@ -3819,3 +3859,7 @@ INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
 SELECT gen_random_uuid()::text, 'ab03daa722dfbf7a0890feb896ac37b2bc521944a479e7fd1a037262e39db6c0', now(), '20261029130000_reference_images_by_station', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261029130000_reference_images_by_station');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '0f3b08ee6602bf081111b8c236822fa7abb879580030bd9bf1705335a9b5a857', now(), '20261104120000_report_general_template', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261104120000_report_general_template');

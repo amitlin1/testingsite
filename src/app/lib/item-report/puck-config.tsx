@@ -337,9 +337,10 @@ export const CLASSIFICATION_OPTIONS = [
 // ---------------------------------------------------------------- step-bound helpers
 
 /** The results to print for a step-bound block: the real ones in print; in the
- *  editor a placeholder per configured step, so the layout is visible. */
+ *  editor a placeholder per configured step, so the layout is visible; in the
+ *  preview without an item, sample stations (the general template's canvas). */
 function resultsFor(meta: PdfRenderMeta, uid: string): ReportStepResult[] {
-  const all = meta.mode === "edit" ? sampleResults(meta) : meta.results;
+  const all = meta.mode === "edit" ? sampleResults(meta) : meta.sample && meta.results.length === 0 ? GENERAL_SAMPLE : meta.results;
   return uid ? all.filter((r) => r.uid === uid) : all;
 }
 
@@ -361,6 +362,20 @@ function sampleResults(meta: PdfRenderMeta): ReportStepResult[] {
       .map((f) => ({ id: f.id, label: f.label, value: "ערך", tone: null, photos: f.type === "photo" ? [] : undefined })),
   }));
 }
+
+/** The general template's editor has no route, so no steps to sample: two stations that show
+ *  what the detail prints (a popup's component, a route field, a photo). */
+const GENERAL_SAMPLE: ReportStepResult[] = [
+  { label: "עמדה ראשונה", fields: [["מק״ט שנסרק", "ערך"], ["שדה של המסלול", "ערך"]] },
+  { label: "עמדה שנייה", fields: [["מק״ט שנסרק", "ערך"], ["משקל", "ערך"]] },
+].map((s, i) => ({
+  uid: `sample-${i + 1}`, position: i + 1, stationType: s.label, station: "עמדה", worker: "שם העובד", workerNumber: "",
+  date: "dd.mm.yyyy", time: "hh:mm", verdict: null, result: null, comments: "",
+  fields: [
+    ...s.fields.map(([label, value], j) => ({ id: `sample-${i}-${j}`, label, value, tone: null })),
+    { id: `sample-${i}-photo`, label: "תמונה מהעמדה", value: "", tone: null, photos: [] },
+  ],
+}));
 
 // ---------------------------------------------------------------- prop types
 
@@ -419,6 +434,14 @@ export interface StepFieldsProps extends WidthProp {
   /** Print "עמדה · עובד · תאריך" above the table. */
   showHeader: boolean;
   showNotes: boolean;
+}
+export interface StepDetailsProps extends WidthProp {
+  /** Print each station's photos under its fields. */
+  showPhotos: boolean;
+  perRow: number;
+  /** Height of each photo (mm). */
+  height: number;
+  showComments: boolean;
 }
 export interface PhotosProps extends WidthProp {
   /** The step uid; "" = every step. */
@@ -482,6 +505,7 @@ export interface PdfComponentProps {
   DetailsTable: DetailsTableProps;
   ResultsTable: ResultsTableProps;
   StepFields: StepFieldsProps;
+  StepDetails: StepDetailsProps;
   Photos: PhotosProps;
   Signature: SignatureProps;
   Spacer: SpacerProps;
@@ -564,7 +588,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
   },
   categories: {
     "תוכן": { title: "תוכן", components: ["Section", "Text", "DetailsTable", "FieldValue", "List", "Table"] },
-    "תוצאות": { title: "תוצאות הבדיקות", components: ["ResultsTable", "StepFields", "Photos"] },
+    "תוצאות": { title: "תוצאות הבדיקות", components: ["ResultsTable", "StepDetails", "StepFields", "Photos"] },
     "חתימות": { title: "חתימות וערכים", components: ["Signature", "FieldLine"] },
     "עיצוב": { title: "מרווחים ומפרידים", components: ["Spacer", "Divider"] },
     other: { visible: false },
@@ -975,6 +999,92 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                 ))}
               </tbody>
             </table>
+          </Block>
+        );
+      },
+    },
+
+    // Every station the item passed, in route order, each as its own part: a head (station ·
+    // worker · date · verdict), what it saved (the popup's components and the route's fields),
+    // the comments, and its photos. Binds no step, so the general template can use it on any
+    // route (docs/ITEM_REPORTS.md).
+    StepDetails: {
+      label: "פירוט לפי עמדה (כל העמדות)",
+      fields: {
+        showPhotos: { type: "radio", label: "להציג את התמונות של כל עמדה", options: BOOL_OPTIONS },
+        perRow: {
+          type: "select",
+          label: "תמונות בשורה",
+          options: [
+            { label: "1", value: 1 },
+            { label: "2", value: 2 },
+            { label: "3", value: 3 },
+            { label: "4", value: 4 },
+          ],
+        },
+        height: { type: "number", label: "גובה תמונה (מ\"מ)", min: 20, max: 200 },
+        showComments: { type: "radio", label: "להציג הערות", options: BOOL_OPTIONS },
+      },
+      defaultProps: { showPhotos: true, perRow: 3, height: 45, showComments: true, width: "full" },
+      render: ({ showPhotos, perRow, height, showComments, width, puck }) => {
+        const meta = readMeta(puck);
+        const rows = meta.mode === "edit" && meta.steps.length === 0 ? GENERAL_SAMPLE : resultsFor(meta, "");
+        const n = Math.max(1, Math.min(4, Number(perRow) || 3));
+        const h = Math.max(20, Math.min(200, Number(height) || 45));
+        if (rows.length === 0) {
+          return <Block width={width}><div className="pdf-stepdetail__empty">{meta.mode === "edit" ? "העמדות של הפריט יופיעו כאן" : "לא נרשמו תוצאות"}</div></Block>;
+        }
+        return (
+          <Block width={width}>
+            {rows.map((r) => {
+              const fields = r.fields.filter((f) => !f.photos);
+              const shots = r.fields.flatMap((f) => (f.photos ?? []).map((key) => ({ key, caption: f.label })));
+              if (meta.mode === "edit" || meta.sample) for (const f of r.fields) if (f.photos && f.photos.length === 0) shots.push({ key: "", caption: f.label });
+              return (
+                <div key={r.uid + r.position} className="pdf-stepdetail">
+                  <div className="pdf-stepdetail__head">
+                    <strong><bdi>{r.position}</bdi>. {r.stationType}</strong>
+                    <span className="pdf-stepdetail__meta">
+                      {[r.station, r.worker].filter(Boolean).join(" · ")}{" · "}<bdi>{r.date}{r.time ? ` ${r.time}` : ""}</bdi>{" · "}
+                      <VerdictChip verdict={r.verdict} />
+                    </span>
+                  </div>
+                  {fields.length > 0 ? (
+                    <table className="pdf-table pdf-stepfields">
+                      <tbody>
+                        {fields.map((f) => (
+                          <tr key={f.id} className="pdf-keep">
+                            <td className="pdf-stepfields__label" style={{ width: "38%" }}>{f.label}</td>
+                            <td><bdi>{f.value}</bdi> <ToneMark tone={f.tone} /></td>
+                            <td className="pdf-results__note" style={{ width: "28%" }}>{f.note ?? ""}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : null}
+                  {showComments && r.comments ? <div className="pdf-stepdetail__note">הערות: {r.comments}</div> : null}
+                  {showPhotos && shots.length > 0 ? (
+                    <div className="pdf-photos" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
+                      {shots.map((s, i) => {
+                        const src = s.key ? meta.photos[s.key] : undefined;
+                        return (
+                          <figure key={i} className="pdf-photo pdf-keep">
+                            <div className="pdf-photo__frame" style={{ height: `${h}mm` }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              {src ? <img src={src} alt="" /> : <span className="pdf-sign__placeholder">תמונה</span>}
+                            </div>
+                            <figcaption>{s.caption}</figcaption>
+                          </figure>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {fields.length === 0 && shots.length === 0 && !(showComments && r.comments) ? (
+                    <div className="pdf-stepdetail__empty">לא נשמרו נתונים בעמדה זו</div>
+                  ) : null}
+                </div>
+              );
+            })}
           </Block>
         );
       },

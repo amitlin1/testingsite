@@ -68,7 +68,7 @@ export const PUT = withAuth(async (req, { session }, routeCtx) => {
   }
 }, { role: REPORT_TEMPLATE_ROLES });
 
-/** DELETE — the route has no report any more (items on it get none; final copies stay). */
+/** DELETE — the route goes back to the general template (final copies stay). */
 export const DELETE = withAuth(async (_req, _ctx, routeCtx) => {
   const { routeId: raw } = await (routeCtx as RouteCtx<"routeId">).params;
   const routeId = parseRouteId(raw);

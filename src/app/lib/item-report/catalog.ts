@@ -125,3 +125,15 @@ export async function loadRouteCatalog(db: Db, testRouteId: number): Promise<Rou
     steps,
   };
 }
+
+/** The general template's catalog: what every route has — the item's and the report's
+ *  variables, no step to bind (its blocks print the item's own stations). */
+export function generalCatalog(): Pick<RouteCatalog, "vars" | "steps"> {
+  return buildCatalog([], {});
+}
+
+/** How many item routes use the general template: every route of an item type (not a kit)
+ *  without a template of its own. */
+export async function countGeneralRoutes(db: Db): Promise<number> {
+  return db.testing_routes.count({ where: { item_types: { is_package: false }, report_template: { is: null } } });
+}

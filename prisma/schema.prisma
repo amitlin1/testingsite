@@ -466,6 +466,17 @@ model report_templates {
   route           testing_routes @relation(fields: [test_route_id], references: [test_route_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_report_templates_route")
 }
 
+/// The general report template (docs/ITEM_REPORTS.md): one row (id = 1). Every
+/// item route without a template of its own (report_templates) uses it, so every
+/// item gets a report; a kit's box gets none.
+model report_general_template {
+  id              Int      @id @default(1) @db.SmallInt
+  template        Json
+  updated_at      DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  updated_by      String?  @db.VarChar(255)
+  updated_by_name String?  @db.Text
+}
+
 /// The FINAL report of an item (docs/ITEM_REPORTS.md). One row per item, only
 /// once the document is final: the route finished (item_routes.finished_at)
 /// and, when the template asks for one, the report was signed. The PDF lives

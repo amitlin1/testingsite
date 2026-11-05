@@ -155,17 +155,28 @@ async function loadRows(itemId: bigint): Promise<ResultRow[]> {
   return out;
 }
 
-/** The route an item runs, and that route's report template. */
+/** The general template (report_general_template), or null when there is none. */
+export async function loadGeneralTemplate(): Promise<Data | null> {
+  const row = await prisma.report_general_template.findUnique({ where: { id: 1 }, select: { template: true } });
+  return isTemplate(row?.template) ? (row!.template as unknown as Data) : null;
+}
+
+/** The route an item runs, and the template its report is built from: the route's own, else the
+ *  general one. A kit's box gets none — the report is per item. */
 async function loadRouteAndTemplate(item: ItemFacts) {
   const route = await prisma.testing_routes.findFirst({
     where: { item_type_id: item.item_type_id, route_number: item.route_number },
     orderBy: { test_route_id: "asc" },
-    select: { test_route_id: true, route_number: true, route_steps: true, step_uids: true, report_template: { select: { template: true } } },
+    select: {
+      test_route_id: true, route_number: true, route_steps: true, step_uids: true,
+      report_template: { select: { template: true } }, item_types: { select: { is_package: true } },
+    },
   });
   const raw = route?.report_template?.template;
+  const own = isTemplate(raw) && templateHasContent(raw) ? (raw as unknown as Data) : null;
   return {
     route: route ? { test_route_id: route.test_route_id, route_number: route.route_number, route_steps: route.route_steps, step_uids: route.step_uids } : null,
-    template: isTemplate(raw) ? (raw as unknown as Data) : null,
+    template: own ?? (route && !route.item_types.is_package ? await loadGeneralTemplate() : null),
   };
 }
 
@@ -298,6 +309,8 @@ export async function buildReportHtml(
     logos,
     draft: opts.draft,
     highlightBind: opts.draft && !sig ? FINAL_SIGNATURE_BIND : undefined,
+    // Only the preview without an item passes its own values (the variables' labels).
+    sample: opts.values != null,
   };
 
   const body = await renderTemplateBody(template, meta);

@@ -104,6 +104,9 @@ export interface ReportRenderMeta {
   highlightBind?: string;
   /** Not the final document — prints a "טיוטה" mark on the page. */
   draft?: boolean;
+  /** The editor's preview without an item: variables print their labels, and the blocks that list
+   *  the item's stations print sample ones, as the editor's canvas does. */
+  sample?: boolean;
 }
 
 /** The bind of the one hand-drawn signature: whoever signs the finished report. */

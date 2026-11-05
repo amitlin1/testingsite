@@ -184,6 +184,8 @@ function ClosingPopup({
     if (i === signIdx) {
       if (signLoadError) return REPORT_SIGN_TEXT.loadFailed;
       if (toSign == null) return CHECKING;
+      // A report that waits for a signature this user may not give: the box does not close.
+      if (othersSign > 0) return REPORT_SIGN_TEXT.cannotSign;
       return toSign.length > 0 && !padSigned ? REPORT_SIGN_TEXT.needsSignature : null;
     }
     if (closingStepKind(st) === "arrival") {
@@ -458,7 +460,7 @@ function ClosingPopup({
     );
   } else if (stepDef && isSign) {
     body = (
-      <ReportSignStep items={toSign} loadError={signLoadError} onRetry={() => void loadToSign()}
+      <ReportSignStep items={toSign} loadError={signLoadError} onRetry={() => void loadToSign()} cannotSign={othersSign > 0}
         canvasRef={padRef} signed={padSigned} onSignedChange={setPadSigned} />
     );
   } else if (stepDef) {
