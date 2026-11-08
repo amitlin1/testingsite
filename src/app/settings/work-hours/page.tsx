@@ -302,7 +302,7 @@ export default function WorkHoursPage() {
 
   const firstWeekday = weekdayOf(from); // 0..6 leading blanks
 
-  // The settings layout owns the frame (scroll, padding, 1180 column). Hover /
+  // The settings layout owns the frame (scroll, padding, 94% column). Hover /
   // press / focus of the tiles, cells and records live in settings.css (.wh-*).
   return (
     <div dir="rtl" style={{ color: INK }}>

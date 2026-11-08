@@ -1,8 +1,8 @@
 /* =========================================================================
    /settings/testing-routes — the route-fields screen (spec §5.2, §5.12; D6).
    rf-* classes only, tokens only (src/styles/tokens.css). The page sits in
-   the settings frame (settings.css); `.settings-wide` on its root lifts the
-   1180 column for the map and the editor (settings.css).
+   the settings frame (settings.css): its 94% column, like every settings
+   page, the map and the editor included.
    ========================================================================= */
 
 /* ------------------------------------------------------------ page --- */

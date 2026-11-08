@@ -2,7 +2,7 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Route } from "lucide-react";
-import { Alert, Button, Snackbar, cn } from "@/components/ui";
+import { Alert, Button, Snackbar } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import type { FieldId } from "@/app/lib/station-fields/schema";
@@ -65,8 +65,8 @@ import "./route-fields.css";
  * ALL view state is in the URL (lib/routeQuery.ts), changed with router.replace. Without a route
  * in the URL the page opens the route last opened in this browser (localStorage), else the empty
  * state "בחר סוג מארז ומספר מסלול". A route of an item type (an old link, an old remembered route)
- * is no route here: the screen opens kit routes only. The map and its editor take the whole frame
- * (`settings-wide`).
+ * is no route here: the screen opens kit routes only. Every view sits in the settings frame's
+ * 94% column (settings.css), the map and its editor too.
  *
  * Data: the item types and station types (the old page's options), the route list (the two
  * pickers and the header count), and GET …/fields-context for the kit route on screen
@@ -509,7 +509,7 @@ function RouteFieldsScreen({
   };
 
   return (
-    <div dir="rtl" className={cn("rf-page", view === "map" && "settings-wide")}>
+    <div dir="rtl" className="rf-page">
       <RouteFieldsHeader
         routeCount={kitRouteCount}
         routeChosen={ref != null}

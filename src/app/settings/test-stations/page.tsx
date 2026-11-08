@@ -30,7 +30,7 @@ function TestStationsView() {
     setSelectedTypeName(name);
   }, []);
 
-  // The settings layout owns the frame (scroll, padding, 1180 column).
+  // The settings layout owns the frame (scroll, padding, 94% column).
   return (
     <div dir="rtl">
       <SettingsToolbar

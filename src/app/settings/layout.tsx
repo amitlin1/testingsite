@@ -11,7 +11,7 @@ import "./settings.css";
  * full-viewport height — it fills the shell's content box with a
  * definite-height column: the sub-nav, then the ONE page frame every settings
  * page shares (settings.css `.settings-content` / `.settings-page`): its
- * scroll, its padding and the 1180 column live here, so no page adds a frame
+ * scroll, its padding and the 94% column live here, so no page adds a frame
  * of its own. A table page marks its root `.settings-fill` to fill the frame
  * and scroll the table inside instead.
  */

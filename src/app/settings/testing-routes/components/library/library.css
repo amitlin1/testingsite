@@ -2,8 +2,8 @@
    "ערכות ורשימות" — the field sets and option lists library (artboard 8,
    route-fields spec §5.9): the list pane, the set editor and the list
    detail. rf-lib-* classes only, tokens only (src/styles/tokens.css).
-   Logical properties throughout: the page is RTL. The page keeps the 1180
-   column here (spec §5.2).
+   Logical properties throughout: the page is RTL. The page keeps the settings
+   frame's 94% column here (settings.css).
    ========================================================================= */
 
 /* Two panes on the .stations-grid pattern (330px + flexible, 20 apart, one

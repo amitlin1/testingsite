@@ -247,7 +247,7 @@ export default function ReferenceItemsPage() {
   const newLabel = "ייחוס מארז חדש";
   const viewStations = stationsFor(stations, viewing?.item_type_id);
 
-  // The settings layout owns the frame (scroll, padding, 1180 column).
+  // The settings layout owns the frame (scroll, padding, 94% column).
   return (
     <div dir="rtl" style={{ color: C.ink }}>
       <SettingsToolbar
