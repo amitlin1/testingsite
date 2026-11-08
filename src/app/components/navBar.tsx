@@ -10,7 +10,7 @@ import { canSeeInNav } from "@/lib/routes";
 
 // Icons
 import { Settings as SettingsIcon } from "@/components/ui/icons";
-import { Dashboard as DashboardIcon } from "@/components/ui/icons";
+// import { Dashboard as DashboardIcon } from "@/components/ui/icons"; // של "דוחות וניהול פריטים", מוסתר מהתפריט
 import { Inventory as InventoryIcon } from "@/components/ui/icons";
 import { Science as ScienceIcon } from "@/components/ui/icons";
 import { Analytics as AnalyticsIcon } from "@/components/ui/icons";
@@ -125,7 +125,8 @@ export default function NavBar({
 
   const mainLinks = [
     { href: "/packages", label: "מארזים ופריטים", icon: <InventoryIcon fontSize={20} /> },
-    { href: "/", label: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> },
+    // מוסתר מהתפריט (הדף עצמו קיים ב-"/") — להחזרה: להסיר את ההערה כאן ובייבוא DashboardIcon למעלה.
+    // { href: "/", label: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> },
     { href: "/testing", label: "מסך בדיקה", icon: <ScienceIcon fontSize={20} /> },
     { href: "/dashboard/tests", label: "לוח ניהול", icon: <AnalyticsIcon fontSize={20} /> },
     { href: "/shipments", label: "משלוחים נכנסים", icon: <LocalShippingIcon fontSize={20} /> },
