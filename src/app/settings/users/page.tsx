@@ -28,8 +28,9 @@ import {
   Avatar,
 } from "@/components/ui";
 import DataTable, { RowActions, IconAction, type Column } from "@/components/DataTable";
-import { Pencil, KeyRound, Ban, Power, Trash2, Unlock } from "lucide-react";
+import { Pencil, KeyRound, Ban, Power, Trash2, Unlock, Info, HelpCircle } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
+import RoleInfoDrawer from "./RoleInfoDrawer";
 import { apiFetch } from "@/lib/api/client";
 import { useSession } from "next-auth/react";
 
@@ -68,11 +69,19 @@ const ROLE_DOT: Record<Role, string> = {
   mashan: "color-mix(in srgb, var(--color-primary) 45%, var(--color-canvas))",
 };
 
-function RoleTag({ role }: { role: Role }) {
-  return (
+function RoleTag({ role, onInfo }: { role: Role; onInfo?: () => void }) {
+  const tag = (
     <Tag tone="neutral" size="md" icon={<span className="role-dot" style={{ background: ROLE_DOT[role] }} aria-hidden />}>
       {ROLE_LABEL[role]}
+      {onInfo && <Info size={13} strokeWidth={2} className="role-tag-btn__info" aria-hidden />}
     </Tag>
+  );
+  if (!onInfo) return tag;
+  // The tag opens the role panel (RoleInfoDrawer): what this role may do.
+  return (
+    <button type="button" className="role-tag-btn" onClick={onInfo} aria-label={`${ROLE_LABEL[role]} — מה התפקיד יכול לעשות`} title="מה התפקיד יכול לעשות">
+      {tag}
+    </button>
   );
 }
 
@@ -159,6 +168,8 @@ export default function UsersPage() {
   const [phase, setPhase] = React.useState<"loading" | "ready" | "error">("loading");
   const [search, setSearch] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState<"all" | Role>("all");
+  // The role panel ("מה כל תפקיד יכול לעשות"); null = closed.
+  const [infoRole, setInfoRole] = React.useState<Role | null>(null);
 
   const [toast, setToast] = React.useState<{ open: boolean; msg: string; sev: "success" | "error" }>({
     open: false,
@@ -392,7 +403,7 @@ export default function UsersPage() {
       key: "role",
       header: "תפקיד",
       cell: (u) =>
-        u.role ? <RoleTag role={u.role} /> : <span style={{ color: "var(--color-ink-muted-48)" }}>—</span>,
+        u.role ? <RoleTag role={u.role} onInfo={() => setInfoRole(u.role)} /> : <span style={{ color: "var(--color-ink-muted-48)" }}>—</span>,
     },
     {
       key: "status",
@@ -457,6 +468,8 @@ export default function UsersPage() {
     { key: "mashan", label: "משאן", dot: ROLE_DOT.mashan, count: counts.mashan },
   ];
   const ready = phase === "ready";
+  const peopleByRole: Record<Role, string[]> = { manager: [], tester: [], storekeeper: [], mashan: [] };
+  for (const u of users) if (u.role) peopleByRole[u.role].push(u.fullName || u.username);
 
   // A table page: it fills the settings frame and scrolls its table inside.
   return (
@@ -487,6 +500,13 @@ export default function UsersPage() {
           <ToggleButton value="storekeeper">מחסנאי</ToggleButton>
           <ToggleButton value="mashan">משאן</ToggleButton>
         </ToggleButtonGroup>
+        <Button
+          variant="text"
+          startIcon={<HelpCircle size={18} strokeWidth={1.75} aria-hidden />}
+          onClick={() => setInfoRole(roleFilter === "all" ? "manager" : roleFilter)}
+        >
+          מה כל תפקיד יכול לעשות?
+        </Button>
       </SettingsToolbar>
 
       {/* KPI strip — counts per role ("—" until they are known) */}
@@ -711,6 +731,15 @@ export default function UsersPage() {
         busy={busy}
         onConfirm={submitDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <RoleInfoDrawer
+        role={infoRole}
+        onRoleChange={setInfoRole}
+        onClose={() => setInfoRole(null)}
+        labels={ROLE_LABEL}
+        dots={ROLE_DOT}
+        people={peopleByRole}
       />
 
       <Snackbar

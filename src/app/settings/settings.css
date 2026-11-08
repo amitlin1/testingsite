@@ -512,6 +512,114 @@
 }
 .role-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
+/* The role tag in the table opens the role panel (RoleInfoDrawer). */
+.role-tag-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  border-radius: var(--r-pill);
+  font: inherit;
+}
+.role-tag-btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.role-tag-btn__info { color: var(--color-primary); flex-shrink: 0; }
+
+/* ------------------------------------------------- role panel (drawer) --- */
+.role-drawer { position: fixed; inset: 0; z-index: 1300; }
+.role-drawer__scrim { position: absolute; inset: 0; background: var(--color-scrim); animation: role-drawer-fade 160ms var(--ease-out); }
+.role-drawer__panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 440px;
+  max-width: 100%;
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  animation: role-drawer-in 200ms var(--ease-out);
+}
+.role-drawer__head {
+  padding: var(--space-lg) var(--space-lg) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  border-bottom: 1px solid var(--color-hairline);
+}
+.role-drawer__bar { display: flex; justify-content: space-between; align-items: center; }
+.role-drawer__eyebrow { font-size: var(--text-small); color: var(--color-ink-muted-48); }
+.role-drawer__close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-70);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.role-drawer__close:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.role-drawer__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  background: var(--color-canvas-parchment);
+  border-radius: var(--r-md);
+  padding: 4px;
+}
+.role-drawer__tab {
+  border: 0;
+  border-radius: var(--r-sm);
+  min-height: 40px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-70);
+  cursor: pointer;
+}
+.role-drawer__tab[aria-selected="true"] {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-weight: var(--fw-bold);
+  box-shadow: 0 1px 3px var(--color-hairline-rgba);
+}
+.role-drawer__tab:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
+.role-drawer__title { margin: 0; font-size: var(--text-title); font-weight: var(--fw-bold); display: flex; align-items: center; gap: var(--space-xs); color: var(--color-ink); }
+.role-drawer__dot { width: 12px; height: 12px; }
+.role-drawer__desc { margin: 6px 0 0; font-size: var(--text-body-sm); line-height: 1.5; color: var(--color-ink-muted-48); }
+.role-drawer__reach { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-small); color: var(--color-ink-muted-70); }
+.role-drawer__meter { display: block; height: 6px; background: var(--color-canvas-parchment); border-radius: var(--r-full); overflow: hidden; }
+.role-drawer__meter > span { display: block; height: 100%; background: var(--color-primary); border-radius: var(--r-full); }
+.role-drawer__body { padding: var(--space-md) var(--space-lg) var(--space-lg); display: flex; flex-direction: column; gap: var(--space-lg); }
+.role-drawer__group { display: flex; flex-direction: column; gap: var(--space-xs); }
+.role-drawer__group-title { margin: 0; display: flex; justify-content: space-between; font-size: var(--text-body-sm); font-weight: var(--fw-bold); color: var(--color-ink); }
+.role-drawer__count { font-weight: var(--fw-regular); font-size: var(--text-small); color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; }
+.role-drawer__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.role-drawer__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-48);
+}
+.role-drawer__item--ok { background: var(--color-success-bg); color: var(--color-ink); }
+.role-drawer__icon-ok { color: var(--color-success-ink); flex-shrink: 0; }
+.role-drawer__no { margin-inline-start: auto; font-size: var(--text-fine); }
+.role-drawer__people { border-top: 1px solid var(--color-hairline); padding-top: var(--space-md); }
+.role-drawer__chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.role-drawer__chip { background: var(--color-canvas-parchment); border-radius: var(--r-pill); padding: 4px 12px; font-size: var(--text-small); color: var(--color-ink); }
+@keyframes role-drawer-in { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes role-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .role-drawer__panel, .role-drawer__scrim { animation: none; }
+}
+
 /* ---------------------------------------------------------- work hours --- */
 /* Base looks live in the classes (not inline), so :hover can win. */
 .wh-card { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--r-card); }
