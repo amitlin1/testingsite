@@ -320,7 +320,16 @@ export default function PackageRow({ pkg, expanded, onToggle, hit, hitItems, ite
 
   return (
     <div className="pb-pkg">
-      <div className={`pb-grid pb-pkg-row${hit ? " pb-pkg-row--hit" : ""}`}>
+      <div
+        className={`pb-grid pb-pkg-row pb-pkg-row--click${hit ? " pb-pkg-row--hit" : ""}`}
+        onClick={(e) => {
+          // The row toggles like the chevron — except clicks on its own
+          // controls (chevron, actions, links) and text being selected.
+          if ((e.target as HTMLElement).closest("button, a, input, select, textarea, label")) return;
+          if (window.getSelection()?.toString()) return;
+          onToggle();
+        }}
+      >
         <button type="button" className="pkg-iconbtn" onClick={onToggle} aria-expanded={open} aria-label={open ? "הסתרת פריטי המארז" : "הצגת פריטי המארז"}>
           <ChevronDown size={18} strokeWidth={1.75} aria-hidden className={`pb-chev${open ? "" : " pb-chev--closed"}`} />
         </button>

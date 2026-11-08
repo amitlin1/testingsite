@@ -38,6 +38,7 @@
 .pb-pkg { border-bottom: 1px solid var(--color-divider-soft); }
 .pb-pkg-row { padding: 10px 12px 10px 16px; }
 .pb-pkg-row--hit { background: var(--color-primary-tint); }
+.pb-pkg-row--click { cursor: pointer; }
 .pb-cell-main { font-size: var(--text-body-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pb-cell-sub { font-size: var(--text-fine); color: var(--color-ink-muted-48); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .pb-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
