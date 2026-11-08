@@ -7,6 +7,7 @@ import { recordNote, recordTransition } from "@/app/lib/metrics/record";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { isPackageLevelStationType, loadPackageContext } from "@/app/lib/packages/context";
 import { recheckPackageReadiness } from "@/app/lib/packages/readiness";
+import { withAuth } from "@/lib/auth/withAuth";
 
 export const runtime = "nodejs";
 
@@ -37,8 +38,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * Ledger: a "queued" transition at the earlier step, reason manual_override
  * (payload.action = "step_back") — the metrics count it as that step's next
  * attempt. An item inside a box rechecks the box's gate in the same tx.
+ *
+ * Managers only (role "manager"): anyone else gets 403 before anything is
+ * read, and the testing screen does not show them the button.
  */
-export async function POST(req: Request) {
+export const POST = withAuth(async (req) => {
   const schemaDenied = await metricsSchemaGate();
   if (schemaDenied) return schemaDenied;
 
@@ -163,4 +167,4 @@ export async function POST(req: Request) {
     console.error("Error stepping item back:", error);
     return NextResponse.json({ error: "שגיאה בהחזרת הפריט לעמדה הקודמת" }, { status: 500 });
   }
-}
+}, { role: "manager" });

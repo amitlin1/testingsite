@@ -1161,11 +1161,13 @@ function TestingPageView() {
   const [stepBackItem, setStepBackItem] = React.useState<ItemRow | null>(null);
   const [stepBackBusy, setStepBackBusy] = React.useState(false);
   const [steppedBack, setSteppedBack] = React.useState<{ stationName: string; routeStep: number } | null>(null);
+  // Managers only: the route refuses anyone else (403), so no one else sees the button.
+  const canStepBack = isAdmin(authSession?.roles ?? []);
   /** The station type a waiting item goes back to; null where it can't go back
-   *  (first step, a box, or the step before is the whole box's — its opening). */
+   *  (not a manager, first step, a box, or the step before is the whole box's — its opening). */
   const stepBackTarget = (item: ItemRow): TestStationType | null => {
     const step = item.current_route_step ?? 1;
-    if (item.current_status !== 2 || item.is_package || step <= 1) return null;
+    if (!canStepBack || item.current_status !== 2 || item.is_package || step <= 1) return null;
     const prevTypeId = item.route_steps?.[step - 2];
     const prev = prevTypeId != null ? stationTypes.find((t) => t.id === Number(prevTypeId)) : undefined;
     return prev && !prev.packageLevel ? prev : null;

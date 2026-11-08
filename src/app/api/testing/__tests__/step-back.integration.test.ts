@@ -2,16 +2,37 @@
 // route, waits there again, and the ledger counts it as that step's next attempt. Refused for an
 // item in test, a first step, a step back onto the box's own (package-level) step, a whole box,
 // and a stale card; two clicks never take an item back twice. An item that had reached the
-// closing station takes the box back to waiting for its items.
+// closing station takes the box back to waiting for its items. Managers only: anyone else (or
+// no session) is refused before anything moves.
 //
 // Runs ONLY when TEST_DATABASE_URL points at a throwaway database (the write-path harness).
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "crypto";
+import { createRequire } from "node:module";
+import path from "node:path";
+import type { AppRole } from "@/lib/auth/roles";
 import * as H from "../../../lib/metrics/__tests__/write-path-helpers";
 
 /** FUNC → FUNC: two regular steps (the fixture's other routes start at the package-level INTAKE). */
 const ITEM_TYPE_FUNC_TWICE = 8;
+
+// The session withAuth sees (as item-report.integration.test.ts stubs it).
+let session: unknown = null;
+const signedIn = (...roles: AppRole[]) => ({
+  user: { preferredUsername: "step-back", displayName: "בודק", name: "step-back", employeeNumber: "9001" },
+  roles,
+});
+function stubAuth(): void {
+  const req = createRequire(path.resolve(process.cwd(), "package.json"));
+  const authPath = req.resolve("./auth.ts");
+  const CjsModule = req("node:module") as any;
+  const stub = new CjsModule(authPath, null);
+  stub.filename = authPath;
+  stub.loaded = true;
+  stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
+  req.cache[authPath] = stub;
+}
 
 describe(
   "step back — one step back to the station before, or a refusal in words",
@@ -20,13 +41,15 @@ describe(
     let POST: (req: Request) => Promise<Response>;
 
     before(async () => {
+      stubAuth();
       await H.setup();
-      POST = (await import("../step-back/route")).POST;
+      POST = (await import("../step-back/route")).POST as unknown as typeof POST;
     });
     after(async () => {
       await H.teardown();
     });
     beforeEach(async () => {
+      session = signedIn("manager");
       await H.resetDb();
       await H.q(`INSERT INTO item_types (item_type_id, item_type_desc, is_package) VALUES ($1, 'FUNC_TWICE', false)`, [ITEM_TYPE_FUNC_TWICE]);
       await H.q(
@@ -82,6 +105,26 @@ describe(
       await pass(8101, route.test_station_id!);
       assert.deepEqual((await H.testResults(8101)).map((t) => t.route_step), [1, 1]);
       assert.equal((await H.routeRow(8101)).current_route_step, 2);
+      await assertNoDrift();
+    });
+
+    it("managers only: a tester, a storekeeper and no session are refused, and the item stays", async () => {
+      await H.seedItem({ itemId: 8104, itemTypeId: ITEM_TYPE_FUNC_TWICE, stationId: H.STATION_FUNC_A });
+      await pass(8104, H.STATION_FUNC_A);
+      const before = (await H.events(8104)).length;
+
+      for (const [who, status] of [[signedIn("tester"), 403], [signedIn("storekeeper", "mashan"), 403], [null, 401]] as const) {
+        session = who;
+        const r = await stepBack(8104, 2);
+        assert.equal(r.status, status, JSON.stringify(r.body));
+      }
+      const route = await H.routeRow(8104);
+      assert.deepEqual([route.current_route_step, route.current_status], [2, H.STATUS.queued]);
+      assert.equal((await H.events(8104)).length, before, "nothing written to the ledger");
+
+      session = signedIn("manager");
+      assert.equal((await stepBack(8104, 2)).status, 200);
+      assert.equal((await H.routeRow(8104)).current_route_step, 1);
       await assertNoDrift();
     });
 
