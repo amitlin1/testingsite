@@ -71,9 +71,12 @@ RUN sed -i 's|http://deb.debian.org/debian-security|http://archive.debian.org/de
     /usr/bin/chromium --version
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Create non-root user for security
+# Create non-root user for security — WITH a home directory: Chromium (the PDF
+# reports) starts chrome_crashpad_handler, which needs a writable folder under
+# $HOME; without one it exits ("--database is required") and every PDF fails.
 RUN groupadd --system --gid 1001 nodejs && \
-    useradd --system --uid 1001 --gid 1001 nextjs
+    useradd --system --create-home --uid 1001 --gid 1001 nextjs
+ENV HOME=/home/nextjs
 
 # Set production environment
 ENV NODE_ENV=production
