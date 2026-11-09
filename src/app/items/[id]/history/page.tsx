@@ -822,11 +822,11 @@ export default function ItemHistoryPage() {
 function BackLink() {
   return (
     <Link
-      href="/"
+      href="/packages"
       style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 32, fontSize: "var(--text-body-sm)", fontWeight: 600, color: BLUE, textDecoration: "none", marginBottom: "var(--space-sm)" }}
     >
       <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
-      חזרה לרשימת הפריטים
+      חזרה למארזים ופריטים
     </Link>
   );
 }

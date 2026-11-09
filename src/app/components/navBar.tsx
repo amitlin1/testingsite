@@ -70,13 +70,14 @@ function NavItem({ href, label, icon, active, onClose, isNested = false, collaps
 }
 
 /** The nav entry a path belongs to: the longest href that is the path itself
- *  or a parent of it ("/" only for itself and the item pages it opens), so
- *  /packages/12 lights the packages entry and /dashboard/tests/kpis the dashboard. */
+ *  or a parent of it, so /packages/12 lights the packages entry and
+ *  /dashboard/tests/kpis the dashboard. An item's pages (/items/…) belong to
+ *  מארזים ופריטים, where they are opened from and lead back to. */
 function activeHref(pathname: string | null, hrefs: string[]): string | null {
   if (!pathname) return null;
   let best: string | null = null;
   for (const h of hrefs) {
-    const hit = h === "/" ? pathname === "/" || pathname.startsWith("/items/") : pathname === h || pathname.startsWith(h + "/");
+    const hit = pathname === h || pathname.startsWith(h + "/") || (h === "/packages" && pathname.startsWith("/items/"));
     if (hit && (best === null || h.length > best.length)) best = h;
   }
   return best;
@@ -125,8 +126,8 @@ export default function NavBar({
 
   const mainLinks = [
     { href: "/packages", label: "מארזים ופריטים", icon: <InventoryIcon fontSize={20} /> },
-    // מוסתר מהתפריט (הדף עצמו קיים ב-"/") — להחזרה: להסיר את ההערה כאן ובייבוא DashboardIcon למעלה.
-    // { href: "/", label: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> },
+    // מוסתר מהתפריט (הדף עצמו קיים ב-"/items"; "/" פותח את מארזים ופריטים) — להחזרה: להסיר את ההערה כאן ובייבוא DashboardIcon למעלה.
+    // { href: "/items", label: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> },
     { href: "/testing", label: "מסך בדיקה", icon: <ScienceIcon fontSize={20} /> },
     { href: "/dashboard/tests", label: "לוח ניהול", icon: <AnalyticsIcon fontSize={20} /> },
     { href: "/shipments", label: "משלוחים נכנסים", icon: <LocalShippingIcon fontSize={20} /> },

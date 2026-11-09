@@ -189,13 +189,11 @@ function stationTypeHref(t: SearchStationType): string {
 }
 
 /**
- * The items list hides `current_status === 3` by default, so a deep link to a
- * finished item must also pin the status filter — otherwise we'd navigate to
- * an empty table and look broken.
+ * An item opens on מארזים ופריטים, searched for: the board finds a box or an
+ * item inside one whatever stage tab is open, finished ones too.
  */
 function itemHref(it: SearchItem): string {
-  const q = encodeURIComponent(it.serialNo || it.itemId);
-  return it.isFinished ? `/?q=${q}&status=3` : `/?q=${q}`;
+  return `/packages?q=${encodeURIComponent(it.serialNo || it.itemId)}`;
 }
 
 /**

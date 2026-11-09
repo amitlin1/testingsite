@@ -59,6 +59,7 @@ function usePageMeta(pathname: string | null) {
   if (pathname?.startsWith("/shipments")) return { title: "משלוחים נכנסים", icon: <LocalShippingIcon fontSize={20} /> };
   if (pathname?.startsWith("/files")) return { title: "ניהול קבצים", icon: <FolderCopyIcon fontSize={20} /> };
   if (pathname?.startsWith("/settings")) return { title: "הגדרות מערכת", icon: <SettingsIcon fontSize={20} /> };
+  if (pathname === "/items") return { title: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> };
   if (pathname?.startsWith("/items")) return { title: "היסטוריית פריט", icon: <HistoryIcon fontSize={20} /> };
   return { title: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> };
 }
