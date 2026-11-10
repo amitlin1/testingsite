@@ -11,10 +11,10 @@ test("a manager reaches everything", () => {
   assert.equal(s.allowed, s.total);
 });
 
-test("a tester tests and configures, but no users, customers, dashboard, shipments or step back", () => {
+test("a tester tests, configures and signs at the closing, but no users, customers, dashboard, shipments, step back or final signature", () => {
   const ok = okLabels("tester");
-  for (const l of ["מסך בדיקה", "מסלולי בדיקה", "חתימה על דוח פריט", "התחלת בדיקה ושליחת תוצאה"]) assert.ok(ok.has(l), l);
-  for (const l of ["משתמשים והרשאות", "לקוחות", "לוח ניהול", "משלוחים נכנסים", "חזרה לבדיקה הקודמת", "עבודה בשם עובד אחר"]) assert.ok(!ok.has(l), l);
+  for (const l of ["מסך בדיקה", "מסלולי בדיקה", "חתימה על הדוחות בסגירת מארז", "התחלת בדיקה ושליחת תוצאה"]) assert.ok(ok.has(l), l);
+  for (const l of ["משתמשים והרשאות", "לקוחות", "לוח ניהול", "משלוחים נכנסים", "חזרה לבדיקה הקודמת", "עבודה בשם עובד אחר", "חתימה סופית על דוח פריט"]) assert.ok(!ok.has(l), l);
 });
 
 test("a storekeeper: shipments and box intake, no testing", () => {

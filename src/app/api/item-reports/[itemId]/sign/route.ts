@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth/withAuth";
 import { ReportSignError, signItemReport } from "@/app/lib/item-report/generate";
-import { REPORT_SIGN_ROLES } from "@/app/lib/item-report/roles";
+import { REPORT_FINAL_SIGN_ROLES } from "@/app/lib/item-report/roles";
 import { actorOf, decodeImageDataUrl, parseItemId, type RouteCtx } from "@/app/lib/item-report/http";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/item-reports/[itemId]/sign { signature: "data:image/png;base64,…" }
- * Signs a finished item's report and freezes it → { version }.
+ * The approver's final signature on a finished item's report; freezes it → { version }.
  * 409 when there is nothing to sign (not finished / no signature block / signed).
  */
 export const POST = withAuth(async (req, { session }, routeCtx) => {
@@ -25,4 +25,4 @@ export const POST = withAuth(async (req, { session }, routeCtx) => {
     console.error(`[item-report] sign ${raw} failed`, e);
     return NextResponse.json({ error: "Failed to sign the report" }, { status: 500 });
   }
-}, { role: REPORT_SIGN_ROLES });
+}, { role: REPORT_FINAL_SIGN_ROLES });

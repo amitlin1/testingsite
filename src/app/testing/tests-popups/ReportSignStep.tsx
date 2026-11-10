@@ -8,46 +8,54 @@ import { AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, HAIR, INK, MUTED } from "@/app
 /**
  * "חתימה על הדוחות" — a closing template's last step (popup-templates schema `report_sign`,
  * docs/ITEM_REPORTS.md), the one its finish button ("סגור מארז") sits on: the reports of the items
- * that finish their route at this closing and wait for the approver's signature, each on screen,
- * and one signature for all of them. The signature travels with each item's closing result
- * (POST /api/testing/results `ReportSignature`), and the server signs in that same request — so
- * the box is never closed with its reports unsigned. The signer is the signed-in user, and only
- * REPORT_SIGN_ROLES may sign.
+ * that finish their route at this closing and ask for the closing signature, each on screen, and
+ * one signature for all of them. The signature travels with each item's closing result
+ * (POST /api/testing/results `ReportSignature`), and the server records it in that same request —
+ * so the box is never closed with its reports unsigned. It does not lock the reports: the
+ * approver's final signature, on the item page, does. The signer is the signed-in user, and only
+ * REPORT_CLOSING_SIGN_ROLES may sign.
  */
 
 export type SignItem = { item_id: string; badge: string; label: string; serial: string | null };
 
 export const REPORT_SIGN_TEXT = {
-  subtitle: "עברו על הדוחות של הפריטים וחתמו פעם אחת. החתימה נשמרת יחד עם סגירת המארז ונועלת את כל הדוחות.",
+  subtitle: "עברו על הדוחות של הפריטים וחתמו פעם אחת. החתימה נשמרת בכל הדוחות יחד עם סגירת המארז.",
   loading: "טוען את הדוחות…",
   loadFailed: "טעינת הדוחות נכשלה. בלי הדוחות אי אפשר לסגור את המארז — נסה שוב.",
   retry: "נסה שוב",
   needsSignature: "יש לחתום לפני סגירת המארז",
-  nothingToSign: "לאף פריט במארז אין דוח שממתין לחתימה. אפשר לסגור את המארז.",
+  nothingToSign: "לאף פריט במארז אין דוח שמחכה לחתימה בסגירה. אפשר לסגור את המארז.",
   cannotSign: "רק בודק או מנהל יכולים לחתום על הדוחות ולסגור את המארז",
-  cannotSignBody: "הדוחות של הפריטים במארז ממתינים לחתימה של בודק או מנהל, ובלי החתימה המארז לא נסגר. בקש מבודק או ממנהל לסגור את המארז.",
+  cannotSignBody: "הדוחות של הפריטים במארז צריכים חתימה של בודק או מנהל בסגירה, ובלי החתימה המארז לא נסגר. בקש מבודק או ממנהל לסגור את המארז.",
   preview: "תצוגת הדוח",
   previewNote: "הדוח מוצג כמו שהוא עכשיו. שורת סגירת המארז תתווסף אליו בשמירה.",
   previewLoading: "טוען את הדוח…",
   previewFailed: "לא הצלחנו להציג את הדוח.",
-  doneSigned: (n: number) => (n === 1 ? "הדוח נחתם וננעל" : `${n} דוחות נחתמו וננעלו`),
+  doneSigned: (n: number) => (n === 1 ? "החתימה נשמרה בדוח" : `החתימה נשמרה ב-${n} דוחות`),
+  doneAwaitingFinal: (n: number) => (n === 1 ? "הדוח ממתין לחתימה הסופית של מנהל" : `${n} דוחות ממתינים לחתימה הסופית של מנהל`),
   doneWaiting: (n: number) => (n === 1 ? "דוח אחד ממתין לחתימה של מנהל או בודק" : `${n} דוחות ממתינים לחתימה של מנהל או בודק`),
-  doneFailed: (labels: string) => `החתימה לא נשמרה בדוח של ${labels} — אפשר לחתום עליו בעמוד היסטוריית הפריט.`,
+  doneFailed: (labels: string) => `החתימה לא נשמרה בדוח של ${labels}. המקום שלה בדוח יישאר ריק.`,
 } as const;
 
-type StatusJson = { state: string; needsSignature: boolean; signedBy: string | null; canSign: boolean };
+type StatusJson = { state: string; needsClosingSignature: boolean; closingSignedBy: string | null; canSignClosing: boolean; needsSignature: boolean };
 
-/** Of the items about to finish at this closing, the reports this user signs with it, and how many
- *  wait for someone else who may sign. Throws when a status does not load — a required signature
- *  is never skipped silently. */
-export async function reportsToSign(ids: readonly string[]): Promise<{ mine: string[]; othersOnly: number }> {
+/** Of the items about to finish at this closing, the reports this user signs with it, how many wait
+ *  for someone else who may sign, and which of this user's will still wait for the final signature
+ *  afterwards. Throws when a status does not load — a required signature is never skipped
+ *  silently. */
+export async function reportsToSign(ids: readonly string[]): Promise<{ mine: string[]; othersOnly: number; awaitFinal: string[] }> {
   const statuses = await Promise.all(ids.map(async (id) => {
     const res = await apiFetch(`/api/item-reports/${id}/status`);
     if (!res.ok) throw new Error(String(res.status));
     return { id, s: (await res.json()) as StatusJson };
   }));
-  const waiting = statuses.filter((x) => x.s.needsSignature && x.s.state !== "final" && !x.s.signedBy);
-  return { mine: waiting.filter((x) => x.s.canSign).map((x) => x.id), othersOnly: waiting.filter((x) => !x.s.canSign).length };
+  const waiting = statuses.filter((x) => x.s.needsClosingSignature && x.s.state !== "final" && !x.s.closingSignedBy);
+  const mine = waiting.filter((x) => x.s.canSignClosing);
+  return {
+    mine: mine.map((x) => x.id),
+    othersOnly: waiting.filter((x) => !x.s.canSignClosing).length,
+    awaitFinal: mine.filter((x) => x.s.needsSignature).map((x) => x.id),
+  };
 }
 
 /** The live HTML of each report (the item page's signing preview), loaded once per item shown. */
@@ -72,7 +80,7 @@ export function ReportSignStep({
   items: SignItem[] | null;
   loadError: boolean;
   onRetry: () => void;
-  /** Reports wait for a signature this user may not give (not REPORT_SIGN_ROLES): the box stays open. */
+  /** Reports wait for a closing signature this user may not give (not REPORT_CLOSING_SIGN_ROLES): the box stays open. */
   cannotSign: boolean;
   canvasRef: React.RefObject<SignatureCanvas | null>;
   signed: boolean;

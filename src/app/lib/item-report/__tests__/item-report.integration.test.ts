@@ -86,6 +86,11 @@ const signedIn = (...roles: AppRole[]) => ({
   user: { preferredUsername: "report-http", displayName: "רונית כהן", name: "report-http", employeeNumber: "9001" },
   roles,
 });
+/** Another person (a tester who may not give the final signature). */
+const signedInOther = (...roles: AppRole[]) => ({
+  user: { preferredUsername: "report-approver", displayName: "דנה לוי", name: "report-approver", employeeNumber: "9002" },
+  roles,
+});
 function stubAuth(): void {
   const req = createRequire(path.resolve(process.cwd(), "package.json"));
   const authPath = req.resolve("./auth.ts");
@@ -119,7 +124,7 @@ const itemStep = (uid: string, fields: Field[]): StepConfig =>
 const config = (...steps: StepConfig[]): RouteFieldsConfig => ({ schema: 1, steps: Object.fromEntries(steps.map((s) => [s.uid, s])) });
 
 /** Text blocks bound to the variables the tests read back out of the HTML. */
-function template(opts: { signature: boolean; marker?: string }) {
+function template(opts: { signature: boolean; closing?: boolean; marker?: string }) {
   return {
     root: { props: { header: { show: true, org: "ORG", meta: "", title: "דוח בדיקה", subtitle: "", rightLogo: "", leftLogo: "" }, footer: { show: true, text: "", textAlign: "center", pageNumbers: true, pageNumberStyle: "of", pageNumberAlign: "center" }, border: "none", font: "david", classification: "בלמ\"ס" } },
     content: [
@@ -133,8 +138,11 @@ function template(opts: { signature: boolean; marker?: string }) {
         { text: " verdict=" }, { v: "item.verdict" },
       ] } },
       { type: "ResultsTable", props: { id: "rt", showFields: true, showStation: true, showWorker: true, showDate: true, showComments: true, width: "full" } },
+      ...(opts.closing
+        ? [{ type: "Signature", props: { id: "sgc", bind: "closing", width: "full", cells: [{ kind: "text", text: "CLOSING-ROW" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } }]
+        : []),
       ...(opts.signature
-        ? [{ type: "Signature", props: { id: "sg", bind: "final", width: "full", cells: [{ kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } }]
+        ? [{ type: "Signature", props: { id: "sg", bind: "final", width: "full", cells: [{ kind: "text", text: "FINAL-ROW" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } }]
         : []),
     ],
     zones: {},
@@ -264,12 +272,13 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     session = signedIn("storekeeper");
     return call(api.report.GET, `/api/item-reports/${itemId}?html=1`, {}, { itemId: String(itemId) });
   }
-  async function status(itemId: number) {
-    session = signedIn("tester");
+  async function status(itemId: number, as: unknown = signedIn("tester")) {
+    session = as;
     return (await call(api.status.GET, `/api/item-reports/${itemId}/status`, {}, { itemId: String(itemId) })).body;
   }
-  async function sign(itemId: number, roles: AppRole[] = ["tester"]) {
-    session = signedIn(...roles);
+  /** The final signature (the item page); only a manager may give it. */
+  async function sign(itemId: number, roles: AppRole[] = ["manager"], as = signedIn) {
+    session = as(...roles);
     return call(api.sign.POST, `/api/item-reports/${itemId}/sign`, json("POST", { signature: PNG }), { itemId: String(itemId) });
   }
 
@@ -407,9 +416,9 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.equal((detail.match(/class="pdf-photo pdf-keep"/g) ?? []).length, 2, "both shots, under the station");
   });
 
-  it("a signature sent with the finishing result signs it in the same request; refused before saving without the role", async () => {
+  it("the closing signature, sent with the finishing result, is recorded in the same request but does not lock; the final one locks it", async () => {
     const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
-    await saveTemplate(R.report, template({ signature: true }));
+    await saveTemplate(R.report, template({ signature: true, closing: true }));
     await seedReportItem(8101, v);
     const results = async () => (await H.q("SELECT 1 FROM test_results WHERE item_id = $1", [8101])).length;
     const start = async () => {
@@ -430,21 +439,97 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.equal(r.status, 400);
     assert.equal(await results(), 0);
 
-    // A step that does not finish the route: saved, nothing to sign yet.
+    // A step that does not finish the route: saved, nothing to sign yet. The draft marks the
+    // closing's spot, the one the closing signs.
     r = await send(UID.a, step1, PNG);
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.reportSign, "nothing_to_sign");
     assert.equal(await reportRow(8101), null);
+    let st = await status(8101);
+    assert.equal(st.needsClosingSignature, true);
+    assert.equal(st.canSignClosing, true, "a tester signs at the closing");
+    assert.equal(st.canSign, false, "…but never the final signature");
+    assert.match((await getHtml(8101)).body, /CLOSING-ROW[\s\S]*חתום\/י כאן[\s\S]*FINAL-ROW/);
 
-    // The finishing step: saved, signed and frozen before the answer.
+    // The finishing step: saved and signed before the answer — but not frozen: the final
+    // signature is still to come.
     await start();
+    session = signedIn("tester");
     r = await send(UID.b, { [CASE.id]: { t: "pass_fail", ok: "pass" } }, PNG);
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.reportSign, "signed");
-    const row = await reportRow(8101);
-    assert.ok(row?.signature_key && row.storage_key, "signed and frozen");
+    await new Promise((res) => setTimeout(res, 1500)); // the detached freeze has nothing to do
+    let row = await reportRow(8101);
+    assert.ok(row?.closing_signature_key && stored(row.closing_signature_key), "the closing signature, stored");
+    assert.equal(row.closing_signed_by_name, "רונית כהן");
+    assert.equal(row.closing_signed_by_number, "9001");
+    assert.equal(row.signature_key, null);
+    assert.equal(row.storage_key, null, "not locked by the closing signature");
+    st = await status(8101);
+    assert.equal(st.state, "awaiting_signature");
+    assert.equal(st.closingSignedBy, "רונית כהן");
+    assert.equal(st.signedBy, null);
+    let html = (await getHtml(8101)).body as string;
+    assert.match(html, /CLOSING-ROW[\s\S]*רונית כהן[\s\S]*<img src="data:image\/png;base64,[\s\S]*FINAL-ROW[\s\S]*חתום\/י כאן/, "signed at the closing; the final spot waits");
+    assert.match(html, /class="pdf-draftmark"/);
+
+    // A tester never gives the final signature.
+    assert.equal((await sign(8101, ["tester"], signedInOther)).status, 403);
+
+    // A manager does — the same person who signed at the closing too: frozen with both signatures.
+    st = await status(8101, signedIn("manager"));
+    assert.equal(st.canSign, true);
+    r = await sign(8101, ["manager"]);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.version, 1);
+    row = await reportRow(8101);
+    assert.ok(row.storage_key, "locked by the final signature");
     assert.equal(row.signed_by_name, "רונית כהן");
-    assert.equal((await status(8101)).state, "final");
+    assert.equal(row.closing_signed_by, row.signed_by, "one person, both signatures");
+    st = await status(8101);
+    assert.equal(st.state, "final");
+    html = (await getHtml(8101)).body as string;
+    assert.match(html, /CLOSING-ROW[\s\S]*רונית כהן[\s\S]*FINAL-ROW[\s\S]*רונית כהן/);
+    assert.equal((html.match(/<img src="data:image\/png;base64,/g) ?? []).length, 2, "both drawn signatures");
+    assert.doesNotMatch(html, /class="pdf-draftmark"/);
+  });
+
+  it("a template with only the closing signature: the closing signs and locks it; with only the final one the closing has nothing to sign", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    const finishWithSignature = async (itemId: number) => {
+      await seedReportItem(itemId, v);
+      await runStep(itemId, UID.a, v, { [VOLT.id]: { t: "number", value: 27.9 }, [LED.id]: { t: "choice_row", opt: "o_led00001" } });
+      session = signedIn("tester");
+      await H.startTest({ itemId, stationId: H.STATION_FUNC_A, actionUuid: randomUUID() });
+      const r = await H.submitResult({
+        ItemID: itemId, StationID: H.STATION_FUNC_A, SubmitID: randomUUID(), Passed: true,
+        Details: { schema: schemaOf(UID.b, v), fields: { [CASE.id]: { t: "pass_fail", ok: "pass" } } }, ReportSignature: PNG,
+      });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      return r.body.reportSign;
+    };
+
+    await saveTemplate(R.report, template({ signature: false, closing: true }));
+    assert.equal(await finishWithSignature(8102), "signed");
+    let row = await reportRow(8102);
+    assert.ok(row?.closing_signature_key && row.storage_key, "signed at the closing and frozen with it");
+    assert.equal((await status(8102)).state, "final");
+    assert.match((await getHtml(8102)).body, /CLOSING-ROW[\s\S]*רונית כהן/);
+
+    await saveTemplate(R.report, template({ signature: true }));
+    assert.equal(await finishWithSignature(8103), "nothing_to_sign");
+    row = await reportRow(8103);
+    assert.equal(row?.closing_signature_key ?? null, null);
+    const st = await status(8103);
+    assert.equal(st.state, "awaiting_signature", "waits for the final signature on the item page");
+    assert.equal(st.needsClosingSignature, false);
+
+    // A closing block on a route that never passes a closing: frozen at the finish, the spot blank.
+    await saveTemplate(R.report, template({ signature: false, closing: true }));
+    await seedReportItem(8104, v);
+    await finishRoute(8104, v);
+    await waitForFrozen(8104);
+    assert.equal((await status(8104)).state, "final");
   });
 
   it("no template → 204 and state no_template; unknown item → 404; malformed id → 400", async () => {
@@ -560,7 +645,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.ok(stored("reports/items/8004/v2.pdf"));
   });
 
-  it("a signature block: finished → awaiting the signature; only the signer roles, once, then frozen with it", async () => {
+  it("a final signature block: finished → awaiting the signature; only a manager, once, then frozen with it", async () => {
     const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
     await saveTemplate(R.report, template({ signature: true }));
     await seedReportItem(8005, v);
@@ -574,13 +659,15 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.equal(await reportRow(8005), null, "no final copy before the signature");
     let st = await status(8005);
     assert.equal(st.state, "awaiting_signature");
-    assert.equal(st.canSign, true);
+    assert.equal(st.canSign, false, "a tester does not give the final signature");
+    assert.equal((await status(8005, signedIn("manager"))).canSign, true);
     const draft = await getPdf(8005);
     assert.equal(draft.headers.get("x-report-final"), "0");
     assert.match((await getHtml(8005)).body, /חתום\/י כאן/);
 
     assert.equal((await sign(8005, ["storekeeper"])).status, 403);
-    session = signedIn("tester");
+    assert.equal((await sign(8005, ["tester"])).status, 403);
+    session = signedIn("manager");
     r = await call(api.sign.POST, "/api/item-reports/8005/sign", json("POST", { signature: "data:image/jpeg;base64,AAAA" }), { itemId: "8005" });
     assert.equal(r.status, 400, "PNG only");
 

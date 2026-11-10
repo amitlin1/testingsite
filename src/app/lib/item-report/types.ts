@@ -94,9 +94,9 @@ export interface ReportRenderMeta {
   results: ReportStepResult[];
   /** photo object key → image src (data URL in print). */
   photos: Record<string, string>;
-  /** Signature image keyed by the Signature block's bind ("final"). */
+  /** Signature image keyed by the Signature block's bind ("closing" / "final"). */
   signatures: Record<string, string>;
-  /** bind → the signer ("final" → who signed; "step:<uid>" → the worker). */
+  /** bind → the signer ("closing" / "final" → who signed; "step:<uid>" → the worker). */
   signerMeta: Record<string, ReportSignerInfo>;
   /** logo object key → image src (data URL in print; logo route URL in edit). */
   logos: Record<string, string>;
@@ -109,5 +109,10 @@ export interface ReportRenderMeta {
   sample?: boolean;
 }
 
-/** The bind of the one hand-drawn signature: whoever signs the finished report. */
+/** The bind of the final hand-drawn signature: the report's approver, on the item page. It locks
+ *  the report. */
 export const FINAL_SIGNATURE_BIND = "final";
+
+/** The bind of the hand-drawn signature given at the kit's closing (popup-templates `report_sign`),
+ *  before "סגור מארז". It does not lock the report: the final signature does. */
+export const CLOSING_SIGNATURE_BIND = "closing";

@@ -10,10 +10,14 @@
  * Lifecycle (docs/ITEM_REPORTS.md):
  *   in route            → every download renders a live DRAFT (not stored)
  *   finished, template
- *     wants a signature → still a draft, the signature spot marked, until
- *                         someone signs (signItemReport)
+ *     wants the final
+ *     signature         → still a draft, the signature spot marked, until the
+ *                         approver signs (signItemReport)
  *   finished (+ signed) → FINAL: rendered once, stored in MinIO, then served
  *                         byte-for-byte (item_reports.storage_key)
+ * A template may also ask for a signature at the kit's closing
+ * (signClosingSignature, with the closing result): it is printed, but never
+ * holds the report back and never locks it — only the final one does.
  * The final copy is valid only while item_routes.finished_at equals the
  * finished_at it was frozen against (item_reports.route_finished_at). A
  * reopened or retyped item (finished_at cleared, or a new one) no longer
@@ -33,12 +37,12 @@ import { renderPdf, type PageLine } from "./render";
 import { fontOf, type ReportFont } from "./fonts";
 import { renderTemplateBody } from "./render-react";
 import { DEFAULT_ROOT_PROPS, pageNumberTemplate } from "./puck-config";
-import { collectLogoKeys, isTemplate, requiresFinalSignature, templateHasContent, templateUsesPhotos } from "./template-utils";
+import { collectLogoKeys, isTemplate, requiresClosingSignature, requiresFinalSignature, templateHasContent, templateUsesPhotos } from "./template-utils";
 import { buildStepResults, buildValues, fieldOrderOf } from "./variables";
 import { parseRouteFieldsConfig } from "@/app/lib/station-fields/validate";
 import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
 import type { ResultRow } from "./variables";
-import { FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 import type { ReportRenderMeta, ReportSignerInfo, ReportStepResult } from "./types";
 
 // ---------------------------------------------------------------- storage keys
@@ -259,19 +263,23 @@ export interface BuiltReport {
 
 /**
  * The print HTML of an item's report. `signature` is the valid final signature
- * (or null); `draft` prints the "טיוטה" mark and highlights the unsigned spot.
+ * and `closingSignature` the valid closing one (or null); `draft` prints the
+ * "טיוטה" mark and highlights the spot that waits for a signature.
  */
 export async function buildReportHtml(
   src: ReportSource,
-  opts: { draft: boolean; signature: Signature; values?: Record<string, string> },
+  opts: { draft: boolean; signature: Signature; closingSignature?: Signature; values?: Record<string, string> },
 ): Promise<BuiltReport> {
   const template = src.template!;
   const results = stepResultsOf(src);
   const sig = opts.signature;
+  const closingSig = opts.closingSignature ?? null;
   const values = opts.values ?? buildValues(itemValues(src.item), results, {
     generated_at: formatReportDate(new Date()),
     signer: sig?.name ?? "",
     signed_at: sig ? formatReportDate(sig.at) : "",
+    closing_signer: closingSig?.name ?? "",
+    closing_signed_at: closingSig ? formatReportDate(closingSig.at) : "",
   }, { finished: src.item.finished_at != null });
 
   // Photos: only when the template prints them.
@@ -288,11 +296,19 @@ export async function buildReportHtml(
 
   const signatures: Record<string, string> = {};
   const signerMeta: Record<string, ReportSignerInfo> = {};
-  if (sig) {
-    const url = await dataUrlOf(sig.key);
-    if (url) signatures[FINAL_SIGNATURE_BIND] = url;
-    signerMeta[FINAL_SIGNATURE_BIND] = { fullName: sig.name, number: sig.number, date: formatReportDate(sig.at) };
+  for (const [bind, s] of [[FINAL_SIGNATURE_BIND, sig], [CLOSING_SIGNATURE_BIND, closingSig]] as const) {
+    if (!s) continue;
+    const url = await dataUrlOf(s.key);
+    if (url) signatures[bind] = url;
+    signerMeta[bind] = { fullName: s.name, number: s.number, date: formatReportDate(s.at) };
   }
+  // The spot a draft waits for: the closing's while the item is still on its route (the closing
+  // signs it), else the final one.
+  const highlightBind = !opts.draft
+    ? undefined
+    : src.item.finished_at == null && !closingSig && requiresClosingSignature(template)
+      ? CLOSING_SIGNATURE_BIND
+      : !sig ? FINAL_SIGNATURE_BIND : undefined;
   for (const r of results) {
     signerMeta[`step:${r.uid}`] = { fullName: r.worker, number: r.workerNumber, date: r.date, station: r.station };
   }
@@ -308,7 +324,7 @@ export async function buildReportHtml(
     signerMeta,
     logos,
     draft: opts.draft,
-    highlightBind: opts.draft && !sig ? FINAL_SIGNATURE_BIND : undefined,
+    highlightBind,
     // Only the preview without an item passes its own values (the variables' labels).
     sample: opts.values != null,
   };
@@ -362,15 +378,22 @@ async function bundledLogo(publicPath: string): Promise<string | null> {
 export type ReportState =
   | "no_template"   // the item's route has no report template
   | "in_progress"   // a live draft
-  | "awaiting_signature" // finished, the template wants a signature, not signed yet
+  | "awaiting_signature" // finished, the template wants the final signature, not signed yet
   | "final";        // finished (+ signed): the stored document
 
 export interface ReportStatus {
   state: ReportState;
   finished: boolean;
+  /** The template asks for the approver's final signature (it locks the report). */
   needsSignature: boolean;
+  /** The final signature: who gave it, when. */
   signedBy: string | null;
   signedAt: string | null;
+  /** The template asks for a signature at the kit's closing. */
+  needsClosingSignature: boolean;
+  /** The closing signature: who gave it, when. */
+  closingSignedBy: string | null;
+  closingSignedAt: string | null;
   version: number;
 }
 
@@ -380,16 +403,28 @@ async function loadReportRow(itemId: bigint) {
 
 type ReportRow = NonNullable<Awaited<ReturnType<typeof loadReportRow>>>;
 
+/** The final signature, valid only for the finish it was given for. */
 function validSignature(row: ReportRow | null, finishedAt: Date | null): Signature {
   if (!row?.signature_key || !row.signed_at || !sameInstant(row.signed_finished_at, finishedAt)) return null;
   return { key: row.signature_key, name: row.signed_by_name ?? row.signed_by ?? "", number: row.signed_by_number ?? "", at: row.signed_at };
+}
+
+/** The closing signature, valid only for the finish it was given for. */
+function validClosingSignature(row: ReportRow | null, finishedAt: Date | null): Signature {
+  if (!row?.closing_signature_key || !row.closing_signed_at || !sameInstant(row.closing_signed_finished_at, finishedAt)) return null;
+  return {
+    key: row.closing_signature_key, name: row.closing_signed_by_name ?? row.closing_signed_by ?? "",
+    number: row.closing_signed_by_number ?? "", at: row.closing_signed_at,
+  };
 }
 
 function stateOf(src: ReportSource, row: ReportRow | null): ReportStatus {
   const finished = src.item.finished_at != null;
   const hasTemplate = !!src.template && templateHasContent(src.template);
   const needsSignature = hasTemplate && requiresFinalSignature(src.template);
+  const needsClosingSignature = hasTemplate && requiresClosingSignature(src.template);
   const sig = validSignature(row, src.item.finished_at);
+  const closingSig = validClosingSignature(row, src.item.finished_at);
   // A copy frozen for THIS finish is the final document whatever the template
   // says now — edited (a signature block added later) or deleted.
   const frozen = !!row?.storage_key && sameInstant(row.route_finished_at, src.item.finished_at);
@@ -408,6 +443,9 @@ function stateOf(src: ReportSource, row: ReportRow | null): ReportStatus {
     needsSignature,
     signedBy: sig?.name ?? null,
     signedAt: sig ? sig.at.toISOString() : null,
+    needsClosingSignature,
+    closingSignedBy: closingSig?.name ?? null,
+    closingSignedAt: closingSig ? closingSig.at.toISOString() : null,
     version: frozen ? row!.version : 0,
   };
 }
@@ -425,9 +463,14 @@ export type ReportDocument =
   | { kind: "no_template" }
   | { kind: "pdf"; bytes: Buffer; final: boolean; version: number; filename: string };
 
+/** Both signatures of the row that are valid for the item's current finish. */
+function signaturesOf(row: ReportRow | null, finishedAt: Date | null) {
+  return { signature: validSignature(row, finishedAt), closingSignature: validClosingSignature(row, finishedAt) };
+}
+
 /** Render, store and point at the final copy. */
-async function freeze(src: ReportSource, row: ReportRow | null, sig: Signature): Promise<{ bytes: Buffer; version: number }> {
-  const built = await buildReportHtml(src, { draft: false, signature: sig });
+async function freeze(src: ReportSource, row: ReportRow | null): Promise<{ bytes: Buffer; version: number }> {
+  const built = await buildReportHtml(src, { draft: false, ...signaturesOf(row, src.item.finished_at) });
   const bytes = await renderPdf(built.html, pdfOpts(built));
   const itemId = src.item.item_id;
   const version = (row?.version ?? 0) + 1;
@@ -464,7 +507,6 @@ export async function getItemReport(itemId: bigint, opts: { force?: boolean } = 
   const row = await loadReportRow(itemId);
   const status = stateOf(head, row);
   if (status.state === "no_template") return { kind: "no_template" };
-  const sig = validSignature(row, head.item.finished_at);
   const full = async (): Promise<ReportSource> => (await loadReportSource(itemId)) ?? head;
 
   if (status.state === "final") {
@@ -481,22 +523,22 @@ export async function getItemReport(itemId: bigint, opts: { force?: boolean } = 
     }
     // Nothing to rebuild from once the template is gone too.
     if (!head.template || !templateHasContent(head.template)) return { kind: "no_template" };
-    const { bytes, version } = await freeze(await full(), row, sig);
+    const { bytes, version } = await freeze(await full(), row);
     return { kind: "pdf", bytes, final: true, version, filename: `item-${itemId}.pdf` };
   }
 
-  const built = await buildReportHtml(await full(), { draft: true, signature: sig });
+  const built = await buildReportHtml(await full(), { draft: true, ...signaturesOf(row, head.item.finished_at) });
   const bytes = await renderPdf(built.html, pdfOpts(built));
   return { kind: "pdf", bytes, final: false, version: 0, filename: built.filename };
 }
 
-/** The live HTML of the report (the signing dialog's preview). */
+/** The live HTML of the report (the signing previews). */
 export async function getItemReportHtml(itemId: bigint): Promise<string | null> {
   const src = await loadReportSource(itemId);
   if (!src?.template || !templateHasContent(src.template)) return null;
   const row = await loadReportRow(itemId);
   const status = stateOf(src, row);
-  const built = await buildReportHtml(src, { draft: status.state !== "final", signature: validSignature(row, src.item.finished_at) });
+  const built = await buildReportHtml(src, { draft: status.state !== "final", ...signaturesOf(row, src.item.finished_at) });
   return built.html;
 }
 
@@ -516,7 +558,7 @@ export async function freezeReportIfFinal(itemId: bigint): Promise<void> {
     if (!src?.template || !templateHasContent(src.template)) return;
     if (stateOf(src, row).state !== "final") return;
     if (row?.storage_key && sameInstant(row.route_finished_at, src.item.finished_at)) return;
-    await freeze(src, row, validSignature(row, src.item.finished_at));
+    await freeze(src, row);
   } catch (e) {
     console.error(`[item-report] freezing the report of item ${itemId} failed — it will be built on first download`, e);
   }
@@ -528,16 +570,25 @@ export class ReportSignError extends Error {
   }
 }
 
+type Signer = { username: string; name: string; number: string };
+
+/** Store a drawn signature (closing or final) in MinIO and register it. */
+async function storeSignature(itemId: bigint, png: Buffer, signer: Signer): Promise<string> {
+  const key = ReportKeys.signature(itemId);
+  const stored = await putObject(key, png, "image/png");
+  void registerFileObject({
+    objectKey: key, fileName: `signature-${itemId}.png`, contentType: "image/png", sizeBytes: stored.size,
+    checksum: stored.checksum, entityType: "item_report_signature", entityId: String(itemId), createdBy: signer.username,
+  });
+  return key;
+}
+
 /**
- * Sign a finished item's report: store the drawn signature and freeze the
- * document with it. Only once per finish — a reopened item that finishes again
- * needs a new signature.
+ * The approver's final signature on a finished item's report: store it and
+ * freeze the document with it. Only once per finish — a reopened item that
+ * finishes again needs a new one. Whoever signed at the closing may give it too.
  */
-export async function signItemReport(
-  itemId: bigint,
-  png: Buffer,
-  signer: { username: string; name: string; number: string },
-): Promise<{ version: number }> {
+export async function signItemReport(itemId: bigint, png: Buffer, signer: Signer): Promise<{ version: number }> {
   const src = await loadReportSource(itemId);
   if (!src) throw new ReportSignError(404, "NOT_FOUND", "Item not found");
   const row = await loadReportRow(itemId);
@@ -549,39 +600,55 @@ export async function signItemReport(
   // Frozen before the template gained its signature block: it stays as it was.
   if (status.state === "final") throw new ReportSignError(409, "ALREADY_FINAL", "The report is already final");
 
-  const key = ReportKeys.signature(itemId);
-  const stored = await putObject(key, png, "image/png");
-  void registerFileObject({
-    objectKey: key, fileName: `signature-${itemId}.png`, contentType: "image/png", sizeBytes: stored.size,
-    checksum: stored.checksum, entityType: "item_report_signature", entityId: String(itemId), createdBy: signer.username,
-  });
-  const at = new Date();
+  const key = await storeSignature(itemId, png, signer);
   const fields = {
-    signature_key: key, signed_by: signer.username, signed_by_name: signer.name, signed_by_number: signer.number,
-    signed_at: at, signed_finished_at: src.item.finished_at,
+    signature_key: key, signed_by: signer.username, signed_by_name: signer.name || signer.username, signed_by_number: signer.number,
+    signed_at: new Date(), signed_finished_at: src.item.finished_at,
   };
-  const next = await prisma.item_reports.upsert({
-    where: { item_id: itemId },
-    create: { item_id: itemId, ...fields },
-    update: fields,
-  });
-  const { version } = await freeze(src, next, { key, name: signer.name || signer.username, number: signer.number, at });
+  const next = await prisma.item_reports.upsert({ where: { item_id: itemId }, create: { item_id: itemId, ...fields }, update: fields });
+  const { version } = await freeze(src, next);
   return { version };
 }
 
 /**
- * Sign the report with a result that has just been saved (the closing's report signing,
- * popup-templates `report_sign`): "signed" when the report is signed now or already was,
- * "nothing_to_sign" when it does not wait for a signature (the result did not finish the route,
- * no template, no signature block). Anything else throws — the result itself stays saved.
+ * The signature given at the kit's closing (popup-templates `report_sign`), on a report whose
+ * template asks for one. It is kept with the finish it was given for and does not lock the report —
+ * unless the template asks for no final signature, in which case the report is final now and is
+ * frozen with it. Only once per finish.
  */
-export async function signReportWithResult(
-  itemId: bigint,
-  png: Buffer,
-  signer: { username: string; name: string; number: string },
-): Promise<"signed" | "nothing_to_sign"> {
+export async function signClosingSignature(itemId: bigint, png: Buffer, signer: Signer): Promise<{ version: number }> {
+  const src = await loadReportSource(itemId);
+  if (!src) throw new ReportSignError(404, "NOT_FOUND", "Item not found");
+  const row = await loadReportRow(itemId);
+  const status = stateOf(src, row);
+  if (status.state === "no_template") throw new ReportSignError(409, "NO_TEMPLATE", "The item's route has no report template");
+  if (!status.finished) throw new ReportSignError(409, "NOT_FINISHED", "The item has not finished its route");
+  if (status.closingSignedBy) throw new ReportSignError(409, "ALREADY_SIGNED", "The report is already signed at the closing");
+  if (!status.needsClosingSignature) throw new ReportSignError(409, "NO_SIGNATURE_BLOCK", "The template has no closing signature");
+  // Frozen for this finish (e.g. frozen before the template gained the block): it stays as it was.
+  if (status.version > 0) throw new ReportSignError(409, "ALREADY_FINAL", "The report is already final");
+
+  const key = await storeSignature(itemId, png, signer);
+  const fields = {
+    closing_signature_key: key, closing_signed_by: signer.username, closing_signed_by_name: signer.name || signer.username,
+    closing_signed_by_number: signer.number, closing_signed_at: new Date(), closing_signed_finished_at: src.item.finished_at,
+  };
+  const next = await prisma.item_reports.upsert({ where: { item_id: itemId }, create: { item_id: itemId, ...fields }, update: fields });
+  // No final signature to wait for: the report is final now, with this signature on it.
+  if (stateOf(src, next).state !== "final") return { version: 0 };
+  const { version } = await freeze(src, next);
+  return { version };
+}
+
+/**
+ * Sign the report at the closing with a result that has just been saved (popup-templates
+ * `report_sign`): "signed" when the closing signature is given now or already was,
+ * "nothing_to_sign" when the report does not ask for it (the result did not finish the route, no
+ * template, no closing signature block). Anything else throws — the result itself stays saved.
+ */
+export async function signReportWithResult(itemId: bigint, png: Buffer, signer: Signer): Promise<"signed" | "nothing_to_sign"> {
   try {
-    await signItemReport(itemId, png, signer);
+    await signClosingSignature(itemId, png, signer);
     return "signed";
   } catch (e) {
     if (e instanceof ReportSignError) {

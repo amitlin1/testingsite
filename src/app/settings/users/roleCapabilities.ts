@@ -12,7 +12,7 @@
 import { APP_ROLES, isAdmin, type AppRole } from "@/lib/auth/roles";
 import { resolveAccess } from "@/lib/routes";
 import { settingsLinks } from "../settingsNav";
-import { REPORT_SIGN_ROLES } from "@/app/lib/item-report/roles";
+import { REPORT_CLOSING_SIGN_ROLES, REPORT_FINAL_SIGN_ROLES } from "@/app/lib/item-report/roles";
 import { PUBLISH_ROLES } from "@/app/lib/station-fields/roles";
 
 export type Capability = { label: string; allowed: (role: AppRole) => boolean };
@@ -48,7 +48,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
     items: [
       { label: "קליטת מארז מהמשלוח", allowed: can("/api/packages/intake") },
       { label: "התחלת בדיקה ושליחת תוצאה", allowed: can("/api/testing/results") },
-      { label: "חתימה על דוח פריט", allowed: (r) => REPORT_SIGN_ROLES.includes(r) },
+      { label: "חתימה על הדוחות בסגירת מארז", allowed: (r) => REPORT_CLOSING_SIGN_ROLES.includes(r) },
+      { label: "חתימה סופית על דוח פריט", allowed: (r) => REPORT_FINAL_SIGN_ROLES.includes(r) },
       { label: "פרסום שדות לעמדות", allowed: (r) => PUBLISH_ROLES.includes(r) },
       // api/testing/step-back (withAuth role "manager") and its button (isAdmin).
       { label: "חזרה לבדיקה הקודמת", allowed: (r) => isAdmin([r]) },

@@ -29,7 +29,7 @@ import type {
   ReportStepResult,
   ReportTone,
 } from "./types";
-import { FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 import { FONT_STACK, REPORT_FONT_OPTIONS, fontOf, type ReportFont } from "./fonts";
 
 /** The page's font, as the --pdf-font the stylesheet reads. */
@@ -185,9 +185,10 @@ function ToneMark({ tone }: { tone: ReportTone | null }) {
 
 // A signature block is a single row of cells the author orders freely: the
 // drawn signature, any of the signer's auto-filled identity fields, or free
-// text. The signer is whoever the block's `bind` points at: "final" = the
-// person who signs the finished report; "step:<uid>" = the worker who ran that
-// station (no drawn signature — workers don't draw one at the station).
+// text. The signer is whoever the block's `bind` points at: "closing" = who
+// signed at the kit's closing; "final" = the approver whose signature locks the
+// finished report; "step:<uid>" = the worker who ran that station (no drawn
+// signature — workers don't draw one at the station).
 export interface SignCell {
   /** "signature" | "text" | a signer attribute (fullName / number / date / station). */
   kind: string;
@@ -234,7 +235,8 @@ export function signCellSummary(c: SignCell): string {
 
 // Human-readable "who signs here" for the editor canvas.
 function signerLabel(bind: string, meta: PdfRenderMeta): string {
-  if (bind === FINAL_SIGNATURE_BIND) return "חתימת מאשר הדוח";
+  if (bind === FINAL_SIGNATURE_BIND) return "חתימת מאשר הדוח (סופית)";
+  if (bind === CLOSING_SIGNATURE_BIND) return "חתימת החותם בסגירת המארז";
   const step = /^step:(.+)$/.exec(bind);
   if (step) {
     const s = meta.steps.find((x) => x.uid === step[1]);

@@ -8,14 +8,14 @@
 //   - FieldValue.field → a select of the variables
 //   - StepFields / Photos .step → a select of the route's steps (+ kit steps)
 //   - Photos.field → the photo fields of the chosen step
-//   - Signature.bind → "the report's signer" or a step's worker
+//   - Signature.bind → the closing signature, the approver's final one, or a step's worker
 //   - header logos → ReportLogoField (bundled emblems or an upload)
 
 import * as React from "react";
 import { FieldLabel } from "@measured/puck";
 import type { Config, CustomField } from "@measured/puck";
 import { puckConfig } from "@/app/lib/item-report/puck-config";
-import { FINAL_SIGNATURE_BIND } from "@/app/lib/item-report/types";
+import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "@/app/lib/item-report/types";
 import type { ReportStepRef, ReportVar } from "@/app/lib/item-report/types";
 import type { RichValue } from "@/app/lib/item-report/rich";
 import { RichTextField } from "./RichTextField";
@@ -202,7 +202,7 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
   };
   components.Photos = { ...ph, fields: photosFields(""), resolveFields: (data: any) => photosFields(data?.props?.step ?? "") };
 
-  // Signature: the report's signer (hand-drawn, at the end) or a step's worker.
+  // Signature: a hand-drawn signature (at the kit's closing, or the approver's final one) or a step's worker.
   const sig: any = components.Signature;
   components.Signature = {
     ...sig,
@@ -211,7 +211,8 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
       bind: groupedSelect(
         "חותם",
         [
-          { value: FINAL_SIGNATURE_BIND, label: "מאשר הדוח (חתימה ידנית בסיום)" },
+          { value: CLOSING_SIGNATURE_BIND, label: "החותם בסגירת המארז (חתימה ידנית)" },
+          { value: FINAL_SIGNATURE_BIND, label: "מאשר הדוח · חתימה סופית (חתימה ידנית, נועלת את הדוח)" },
           ...steps.map((s) => ({ value: `step:${s.uid}`, label: `העובד · ${s.label}`, group: s.group })),
         ],
         "בחר/י חותם…",

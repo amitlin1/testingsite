@@ -4,7 +4,7 @@ import {
   buildCatalog, buildStepResults, buildValues, formatFieldValue, overallVerdict, rowStepUid,
 } from "../variables";
 import type { CatalogRoute, ResultRow } from "../variables";
-import { requiresFinalSignature, collectLogoKeys } from "../template-utils";
+import { requiresClosingSignature, requiresFinalSignature, collectLogoKeys } from "../template-utils";
 import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
 
 const fmt = (iso: string) => ({ date: iso.slice(0, 10), time: iso.slice(11, 16) });
@@ -168,7 +168,19 @@ test("template-utils: final signature and logo keys", () => {
   assert.deepEqual(collectLogoKeys(sig([])), ["logos/a.png"]);
 });
 
-test("officialStarterTemplate: known blocks only, every variable in the catalog, wants the final signature", async () => {
+test("template-utils: the closing signature and the final one are told apart", () => {
+  const blocks = (...binds: string[]) => ({ content: binds.map((bind) => ({ type: "Signature", props: { bind, cells: [{ kind: "fullName" }, { kind: "signature" }] } })) });
+  assert.equal(requiresClosingSignature(blocks("closing")), true);
+  assert.equal(requiresFinalSignature(blocks("closing")), false, "a closing block never holds the report for the final signature");
+  assert.equal(requiresClosingSignature(blocks("final")), false);
+  assert.equal(requiresClosingSignature(blocks("closing", "final")), true);
+  assert.equal(requiresFinalSignature(blocks("closing", "final")), true);
+  assert.equal(requiresClosingSignature({ content: [{ type: "Signature", props: { bind: "closing", cells: [{ kind: "fullName" }] } }] }), false, "no drawn signature, nothing to sign");
+  assert.equal(requiresClosingSignature({ content: [{ type: "Signature", props: { bind: "closing" } }] }), true, "no cells → the default signature cell");
+});
+
+
+test("officialStarterTemplate: known blocks only, every variable in the catalog, wants both signatures", async () => {
   const { officialStarterTemplate } = await import("../starter");
   const { puckConfig } = await import("../puck-config");
   const { ITEM_VARS, REPORT_VARS } = await import("../variables");
@@ -179,10 +191,11 @@ test("officialStarterTemplate: known blocks only, every variable in the catalog,
   const used = JSON.stringify(t).match(/"v":"([^"]+)"/g)!.map((m) => m.slice(5, -1));
   for (const v of used) assert.ok(names.has(v), `unknown variable ${v}`);
   assert.equal(requiresFinalSignature(t), true);
+  assert.equal(requiresClosingSignature(t), true);
   assert.notStrictEqual(officialStarterTemplate().root, t.root, "a fresh copy every time");
 });
 
-test("generalStarterTemplate: binds only what every route has, prints each station with its photos, wants the final signature", async () => {
+test("generalStarterTemplate: binds only what every route has, prints each station with its photos, wants both signatures", async () => {
   const { generalStarterTemplate } = await import("../starter");
   const { puckConfig } = await import("../puck-config");
   const { templateUsesPhotos } = await import("../template-utils");
@@ -194,9 +207,15 @@ test("generalStarterTemplate: binds only what every route has, prints each stati
   const used = JSON.stringify(t).match(/"v":"([^"]+)"/g)!.map((m) => m.slice(5, -1));
   for (const v of used) assert.match(v, /^(item|report)\./, `a variable every route has: ${v}`);
   assert.equal(requiresFinalSignature(t), true);
+  assert.equal(requiresClosingSignature(t), true);
+  const sigs = t.content.filter((n) => n.type === "Signature");
+  assert.deepEqual(sigs.map((n) => n.props.bind), ["closing", "final"], "the closing row, then the final one");
   assert.equal(templateUsesPhotos(t), true);
-  // The migration seeds exactly this document.
+  // The migration seeds this document (with the final signature only — the closing one is added by
+  // 20261110130000_report_templates_both_signatures).
   const sql = readFileSync("prisma/migrations/20261104120000_report_general_template/migration.sql", "utf8");
-  const seeded = /VALUES \(1, '([\s\S]*?)'::jsonb/.exec(sql)![1];
-  assert.deepEqual(JSON.parse(seeded), JSON.parse(JSON.stringify(t)));
+  const seeded = JSON.parse(/VALUES \(1, '([\s\S]*?)'::jsonb/.exec(sql)![1]);
+  const noSignatures = (d: { content: { type: string }[] }) => ({ ...d, content: d.content.filter((n) => n.type !== "Signature") });
+  assert.deepEqual(noSignatures(seeded), noSignatures(JSON.parse(JSON.stringify(t))));
+  assert.deepEqual(seeded.content.filter((n: { type: string }) => n.type === "Signature").map((n: { props: { bind: string } }) => n.props.bind), ["final"]);
 });

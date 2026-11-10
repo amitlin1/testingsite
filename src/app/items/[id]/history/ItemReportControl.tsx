@@ -12,9 +12,9 @@ import { formatMoment } from "../../format";
  * The item's PDF report on its history page (docs/ITEM_REPORTS.md):
  *   - "דוח PDF" opens the report — a draft while the item is on its route, the
  *     locked final copy once it finished (and was signed, when the template asks);
- *   - "חתימה על הדוח" appears on a finished item whose template has a
- *     hand-drawn signature not given yet: the dialog shows the report as it
- *     will be locked, takes the signature, and locks it.
+ *   - "חתימה סופית על הדוח" appears on a finished item whose template asks for
+ *     the approver's final signature not given yet: the dialog shows the report
+ *     as it will be locked, takes the signature, and locks it.
  * Nothing renders when the item's route has no report template.
  */
 
@@ -24,15 +24,26 @@ type ReportStatus = {
   needsSignature: boolean;
   signedBy: string | null;
   signedAt: string | null;
+  needsClosingSignature: boolean;
+  closingSignedBy: string | null;
+  closingSignedAt: string | null;
   version: number;
   canSign: boolean;
 };
 
 const STATE_TEXT: Record<Exclude<ReportStatus["state"], "no_template">, string> = {
   in_progress: "טיוטה — הפריט עדיין במסלול",
-  awaiting_signature: "ממתין לחתימה",
+  awaiting_signature: "ממתין לחתימה הסופית",
   final: "דוח סופי, נעול",
 };
+
+/** "נחתם בסגירה ע״י … · נחתם סופית ע״י …" — the signatures the report carries. */
+function signedLine(s: ReportStatus): string {
+  const parts: string[] = [];
+  if (s.closingSignedBy) parts.push(`נחתם בסגירה ע״י ${s.closingSignedBy}${s.closingSignedAt ? ` ב-${formatMoment(s.closingSignedAt)}` : ""}`);
+  if (s.signedBy) parts.push(`${s.needsClosingSignature ? "נחתם סופית" : "נחתם"} ע״י ${s.signedBy}${s.signedAt ? ` ב-${formatMoment(s.signedAt)}` : ""}`);
+  return parts.join(" · ");
+}
 
 export default function ItemReportControl({ itemId }: { itemId: string }) {
   const [status, setStatus] = React.useState<ReportStatus | null>(null);
@@ -63,20 +74,25 @@ export default function ItemReportControl({ itemId }: { itemId: string }) {
   if (!status || status.state === "no_template") return null;
 
   const pdfHref = withBasePath(`/api/item-reports/${itemId}`);
+  const signed = signedLine(status);
+  // A column as narrow as its buttons, so the header keeps it beside the title: the state, who
+  // signed (wrapping under it), then the buttons.
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", flexWrap: "wrap", justifyContent: "flex-end" }}>
-      <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
-        {STATE_TEXT[status.state]}
-        {status.state === "final" && status.signedBy ? ` · נחתם ע״י ${status.signedBy}${status.signedAt ? ` ב-${formatMoment(status.signedAt)}` : ""}` : ""}
-      </span>
-      {status.state === "awaiting_signature" && status.canSign ? (
-        <Button size="small" variant="contained" startIcon={<PenLine size={14} />} onClick={() => setSignOpen(true)}>
-          חתימה על הדוח
-        </Button>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+      <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>{STATE_TEXT[status.state]}</span>
+      {signed ? (
+        <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", maxWidth: 340, textAlign: "end", fontVariantNumeric: "tabular-nums" }}>{signed}</span>
       ) : null}
-      <Button size="small" variant="outlined" startIcon={<FileText size={14} />} onClick={() => window.open(pdfHref, "_blank", "noopener")}>
-        {status.state === "final" ? "דוח PDF" : "טיוטת דוח PDF"}
-      </Button>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", flexWrap: "wrap", justifyContent: "flex-end", marginTop: 4 }}>
+        {status.state === "awaiting_signature" && status.canSign ? (
+          <Button size="small" variant="contained" startIcon={<PenLine size={14} />} onClick={() => setSignOpen(true)}>
+            חתימה סופית על הדוח
+          </Button>
+        ) : null}
+        <Button size="small" variant="outlined" startIcon={<FileText size={14} />} onClick={() => window.open(pdfHref, "_blank", "noopener")}>
+          {status.state === "final" ? "דוח PDF" : "טיוטת דוח PDF"}
+        </Button>
+      </div>
       {signOpen ? (
         <SignReportDialog
           itemId={itemId}
@@ -143,7 +159,7 @@ function SignReportDialog({ itemId, onClose, onSigned }: { itemId: string; onClo
 
   return (
     <Dialog open onClose={() => { if (!busy) onClose(); }} maxWidth="md" fullWidth>
-      <DialogTitle>חתימה על דוח פריט #{itemId}</DialogTitle>
+      <DialogTitle>חתימה סופית על דוח פריט #{itemId}</DialogTitle>
       <DialogContent>
         <p style={{ margin: "0 0 var(--space-sm)", fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-70)" }}>
           אחרי החתימה הדוח ננעל: הוא לא ישתנה, גם אם התבנית או פרטי העובדים ישתנו.
@@ -155,13 +171,13 @@ function SignReportDialog({ itemId, onClose, onSigned }: { itemId: string; onClo
             <div style={{ padding: "var(--space-md)", color: "var(--color-ink-muted-48)", fontSize: "var(--text-small)" }}>טוען את הדוח…</div>
           )}
         </div>
-        <ShipmentSignatureField canvasRef={canvasRef} signed={signed} onSignedChange={setSigned} hint="יש לחתום לפני נעילת הדוח" />
+        <ShipmentSignatureField canvasRef={canvasRef} signed={signed} onSignedChange={setSigned} hint="יש לחתום חתימה סופית לפני נעילת הדוח" />
         {error ? <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert> : null}
       </DialogContent>
       <DialogActions>
         <Button variant="text" onClick={onClose} disabled={busy}>ביטול</Button>
         <Button variant="contained" startIcon={<PenLine size={16} />} disabled={!signed} loading={busy} onClick={submit}>
-          חתימה ונעילת הדוח
+          חתימה סופית ונעילת הדוח
         </Button>
       </DialogActions>
     </Dialog>

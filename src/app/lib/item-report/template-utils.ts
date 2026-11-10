@@ -2,7 +2,7 @@
 // deps — safe to import anywhere (API routes, the history page, the editor).
 
 import type { Data } from "@measured/puck";
-import { FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 
 type PuckNodeLike = { type?: string; props?: Record<string, unknown> };
 
@@ -27,19 +27,31 @@ function walk(node: unknown, visit: (n: PuckNodeLike) => void): void {
   }
 }
 
-/** The template asks for the hand-drawn signature of whoever signs the
- *  finished report — the document stays a draft until it is signed. */
-export function requiresFinalSignature(t: unknown): boolean {
+/** The template has a Signature block bound to `bind` that prints a drawn signature. */
+function requiresSignature(t: unknown, bind: string): boolean {
   if (!isTemplate(t)) return false;
   let found = false;
   walk(t.content, (n) => {
-    if (n.type !== "Signature" || n.props?.bind !== FINAL_SIGNATURE_BIND) return;
+    if (n.type !== "Signature" || n.props?.bind !== bind) return;
     const cells = n.props?.cells;
-    // A block bound to "final" with no cells renders a signature cell (back-compat default).
+    // A block with no cells renders a signature cell (back-compat default).
     if (!Array.isArray(cells) || cells.length === 0) found = true;
     else if (cells.some((c) => (c as { kind?: string })?.kind === "signature")) found = true;
   });
   return found;
+}
+
+/** The template asks for the approver's final hand-drawn signature — the finished report stays a
+ *  draft until it is given, and it locks the report. */
+export function requiresFinalSignature(t: unknown): boolean {
+  return requiresSignature(t, FINAL_SIGNATURE_BIND);
+}
+
+/** The template asks for a hand-drawn signature at the kit's closing (given with the closing
+ *  result, before "סגור מארז"). It never holds the report back: a route that finishes elsewhere
+ *  freezes with the spot blank. */
+export function requiresClosingSignature(t: unknown): boolean {
+  return requiresSignature(t, CLOSING_SIGNATURE_BIND);
 }
 
 /** The template prints photos (a Photos block, or StepDetails with its photos) — only then are

@@ -44,10 +44,11 @@ import "@/app/packages/packages.css";
  * details keep the wizard's keys (packageTemplateModel.ts) — all under one submit id.
  *
  * A template that ends with "חתימה על הדוחות" (report_sign) has its finish button on that step: it
- * shows the reports of the items finishing here that wait for the approver's signature, and the
- * finish waits for one signature, which every such item's result carries (ReportSignature) — the
- * server signs it in the same request. Nothing is saved before the signature; a refresh before
- * "סגור מארז" only starts the closing over.
+ * shows the reports of the items finishing here that ask for the closing signature, and the finish
+ * waits for one signature, which every such item's result carries (ReportSignature) — the server
+ * records it in the same request. Nothing is saved before the signature; a refresh before
+ * "סגור מארז" only starts the closing over. The reports then wait for the approver's final
+ * signature on the item page, when their template asks for one.
  */
 
 const CLOSE_TEXT = {
@@ -120,11 +121,13 @@ function ClosingPopup({
   const signIdx = signStepDef ? cfg.steps.length - 1 : -1;
   const [toSign, setToSign] = React.useState<SignItem[] | null>(null);
   const [othersSign, setOthersSign] = React.useState(0);
+  // Of the reports signed here, those that still wait for the approver's final signature after it.
+  const awaitFinalRef = React.useRef<Set<string>>(new Set());
   const [signLoadError, setSignLoadError] = React.useState(false);
   const [padSigned, setPadSigned] = React.useState(false);
   const padRef = React.useRef<SignatureCanvas | null>(null);
   const signOutcomeRef = React.useRef<Map<string, boolean>>(new Map());
-  const [signDone, setSignDone] = React.useState<{ signed: number; failed: string[] }>({ signed: 0, failed: [] });
+  const [signDone, setSignDone] = React.useState<{ signed: number; awaitFinal: number; failed: string[] }>({ signed: 0, awaitFinal: 0, failed: [] });
   const uid = React.useId();
 
   // Station fields: the kit's answer (the popup opens on the box row → mode "package"), the box's
@@ -315,6 +318,7 @@ function ClosingPopup({
       const outcome = [...signOutcomeRef.current.entries()];
       setSignDone({
         signed: outcome.filter(([, ok]) => ok).length,
+        awaitFinal: outcome.filter(([id, ok]) => ok && awaitFinalRef.current.has(id)).length,
         failed: outcome.filter(([, ok]) => !ok).map(([id]) => { const it = items.find((x) => x.item_id === id); return it ? `${seq2(it.package_seq)} · ${it.item_type_desc}` : id; }),
       });
       setStep(lastStep + 1);
@@ -332,8 +336,9 @@ function ClosingPopup({
     setSignLoadError(false); setToSign(null);
     const finishing = items.filter((it) => arrived(it));
     try {
-      const { mine, othersOnly } = await reportsToSign(finishing.map((it) => it.item_id));
+      const { mine, othersOnly, awaitFinal } = await reportsToSign(finishing.map((it) => it.item_id));
       setOthersSign(othersOnly);
+      awaitFinalRef.current = new Set(awaitFinal);
       setToSign(finishing.filter((it) => mine.includes(it.item_id)).map((it) => ({
         item_id: it.item_id, badge: seq2(it.package_seq), label: it.item_type_desc, serial: it.serial_no,
       })));
@@ -477,7 +482,11 @@ function ClosingPopup({
         <div style={{ fontSize: 12.5, color: MUTED, marginTop: 9, fontVariantNumeric: "tabular-nums" }}>{items.filter((it) => decisions[it.item_id]?.decision !== "missing").length} פריטים נארזו · {pkg.item_type_desc}</div>
         {(signDone.signed > 0 || othersSign > 0) && (
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
-            {[signDone.signed > 0 ? REPORT_SIGN_TEXT.doneSigned(signDone.signed) : null, othersSign > 0 ? REPORT_SIGN_TEXT.doneWaiting(othersSign) : null].filter(Boolean).join(" · ")}
+            {[
+              signDone.signed > 0 ? REPORT_SIGN_TEXT.doneSigned(signDone.signed) : null,
+              signDone.awaitFinal > 0 ? REPORT_SIGN_TEXT.doneAwaitingFinal(signDone.awaitFinal) : null,
+              othersSign > 0 ? REPORT_SIGN_TEXT.doneWaiting(othersSign) : null,
+            ].filter(Boolean).join(" · ")}
           </div>
         )}
         {signDone.failed.length > 0 && (

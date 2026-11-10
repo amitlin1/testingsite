@@ -492,7 +492,7 @@ model item_reports {
   generated_at           DateTime? @db.Timestamptz(6)
   /// item_routes.finished_at the PDF was frozen against.
   route_finished_at      DateTime? @db.Timestamp(6)
-  /// The hand-drawn signature of whoever signed the finished report.
+  /// The approver's final hand-drawn signature (it locks the report).
   signature_key          String?   @db.VarChar(1024)
   signed_by              String?   @db.VarChar(255)
   signed_by_name         String?   @db.Text
@@ -500,6 +500,15 @@ model item_reports {
   signed_at              DateTime? @db.Timestamptz(6)
   /// item_routes.finished_at the signature was given for.
   signed_finished_at     DateTime? @db.Timestamp(6)
+  /// The hand-drawn signature given at the kit's closing (before "סגור מארז"); it does not lock
+  /// the report.
+  closing_signature_key        String?   @db.VarChar(1024)
+  closing_signed_by            String?   @db.VarChar(255)
+  closing_signed_by_name       String?   @db.Text
+  closing_signed_by_number     String?   @db.VarChar(64)
+  closing_signed_at            DateTime? @db.Timestamptz(6)
+  /// item_routes.finished_at the closing signature was given for.
+  closing_signed_finished_at   DateTime? @db.Timestamp(6)
 }
 
 /// Immutable history of published field configs, one row per (route, version).

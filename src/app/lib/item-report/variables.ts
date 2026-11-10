@@ -50,8 +50,10 @@ export const ITEM_VARS: { key: string; label: string }[] = [
 
 export const REPORT_VARS: { key: string; label: string }[] = [
   { key: "generated_at", label: "תאריך הפקת הדוח" },
-  { key: "signer", label: "חותם הדוח" },
-  { key: "signed_at", label: "תאריך החתימה" },
+  { key: "signer", label: "מאשר הדוח (חתימה סופית)" },
+  { key: "signed_at", label: "תאריך החתימה הסופית" },
+  { key: "closing_signer", label: "החותם בסגירת המארז" },
+  { key: "closing_signed_at", label: "תאריך החתימה בסגירה" },
 ];
 
 export const STEP_ATTRS: { key: string; label: string }[] = [

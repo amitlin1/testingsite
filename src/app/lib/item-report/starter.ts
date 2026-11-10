@@ -1,18 +1,21 @@
 /**
  * The templates a report starts from: an official document (מסמך רשמי) —
  * letterhead, numbered sections, the item's particulars, every station's
- * result, a summary and the approver's signature. The admin edits from here
+ * result, a summary and both signatures: the one given at the kit's closing
+ * and the approver's final one. The admin edits from here
  * instead of from a blank page. Pure.
  *
  *   officialStarterTemplate  a new route template, before the general one existed
  *   generalStarterTemplate   the general template (תבנית כללית): the report of
  *                            every item route without a template of its own —
  *                            the production migration seeds the same document
- *                            (20261104120000_report_general_template)
+ *                            (20261104120000_report_general_template), and
+ *                            20261110130000_report_templates_both_signatures
+ *                            adds the closing signature to it
  */
 import type { Data } from "@measured/puck";
 import { DEFAULT_ROOT_PROPS } from "./puck-config";
-import { FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 
 type Block = { type: string; props: Record<string, unknown> };
 
@@ -69,12 +72,14 @@ function blocks(prefix: string) {
       },
     }),
     spacer: (): Block => ({ type: "Spacer", props: { id: id("Spacer"), height: 6 } }),
-    signature: (): Block => ({
+    /** One signature row: its role first ("בודק" / "מאשר סופי"), then the signer and the drawing. */
+    signature: (bind: string, role: string): Block => ({
       type: "Signature",
       props: {
         id: id("Signature"),
-        bind: FINAL_SIGNATURE_BIND,
+        bind,
         cells: [
+          { kind: "text", label: "תפקיד", text: role, weight: 1 },
           { kind: "fullName", label: "שם ושם משפחה", text: "", weight: 1 },
           { kind: "number", label: "מספר עובד", text: "", weight: 1 },
           { kind: "date", label: "תאריך", text: "", weight: 1 },
@@ -83,6 +88,10 @@ function blocks(prefix: string) {
         width: "full",
       },
     }),
+    /** The closing signature, then the approver's final one. */
+    signatures(): Block[] {
+      return [this.signature(CLOSING_SIGNATURE_BIND, "בודק"), this.signature(FINAL_SIGNATURE_BIND, "מאשר סופי")];
+    },
   };
 }
 
@@ -95,7 +104,7 @@ export function officialStarterTemplate(): Data {
     b.section("פרטי הפריט"), b.details(),
     b.section("תוצאות הבדיקות"), b.results(true),
     b.section("סיכום"), b.summary(),
-    b.section("אישור"), b.spacer(), b.signature(),
+    b.section("אישור"), b.spacer(), ...b.signatures(),
   ]);
 }
 
@@ -108,6 +117,6 @@ export function generalStarterTemplate(): Data {
     b.section("תוצאות הבדיקות"), b.results(false),
     b.section("פירוט לפי עמדה"), b.stepDetails(),
     b.section("סיכום"), b.summary(),
-    b.section("אישור"), b.spacer(), b.signature(),
+    b.section("אישור"), b.spacer(), ...b.signatures(),
   ]);
 }

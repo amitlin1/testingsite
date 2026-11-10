@@ -11,7 +11,7 @@ import { GATE_FINISH_ON_REQUIRED } from "@/app/lib/station-fields/evaluate";
 import { FieldsSubmissionError, checkFieldsSubmission, resolveForSubmission } from "@/app/lib/station-fields/submit";
 import { freezeReportIfFinal, signReportWithResult } from "@/app/lib/item-report/generate";
 import { actorOf, decodeImageDataUrl } from "@/app/lib/item-report/http";
-import { REPORT_SIGN_ROLES } from "@/app/lib/item-report/roles";
+import { REPORT_CLOSING_SIGN_ROLES } from "@/app/lib/item-report/roles";
 import { hasAnyRole } from "@/lib/auth/roles";
 import { auth } from "@/../auth";
 
@@ -47,9 +47,10 @@ type TestResultRequest = {
   Passed?: boolean;
   Details?: unknown;
   // The closing's report signing (popup-templates report_sign, docs/ITEM_REPORTS.md): the
-  // approver's signature, a PNG data URL. When this result finishes the item's route, its report
-  // is signed in this same request — so a refresh can never leave the box closed and the report
-  // unsigned. Checked (shape + REPORT_SIGN_ROLES) before anything is saved.
+  // closing signature, a PNG data URL. When this result finishes the item's route, its report
+  // gets it in this same request — so a refresh can never leave the box closed and the report
+  // without it. It does not lock the report: the approver's final signature does. Checked (shape +
+  // REPORT_CLOSING_SIGN_ROLES) before anything is saved.
   ReportSignature?: string;
 };
 
@@ -201,7 +202,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "ReportSignature must be a PNG data URL" }, { status: 400 });
       }
       const session = await auth();
-      if (!session?.user || !hasAnyRole(session.roles ?? [], REPORT_SIGN_ROLES)) {
+      if (!session?.user || !hasAnyRole(session.roles ?? [], REPORT_CLOSING_SIGN_ROLES)) {
         return NextResponse.json({ error: "אין לך הרשאה לחתום על דוחות", code: "REPORT_SIGN_FORBIDDEN" }, { status: 403 });
       }
       reportSigning = { png: img.bytes, signer: actorOf(session) };
