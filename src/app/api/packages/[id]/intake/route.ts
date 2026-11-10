@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { withAuth } from "@/lib/auth/withAuth";
+import { INTAKE_ROLES } from "@/app/lib/packages/roles";
 import { prisma } from "@/app/lib/prisma";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { parseBarcode } from "@/app/lib/barcode-parser";
@@ -10,8 +12,10 @@ export const runtime = "nodejs";
 /**
  * DELETE /api/packages/[id]/intake — "בטל קליטה": the box goes back to
  * waiting for intake, while nobody has worked on it yet (boxes.ts undoIntake).
+ * INTAKE_ROLES only — the middleware's prefix rule cannot reach this path.
  */
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withAuth(async (_req: NextRequest, _ctx, routeCtx) => {
+  const { params } = routeCtx as { params: Promise<{ id: string }> };
   const schemaDenied = await metricsSchemaGate();
   if (schemaDenied) return schemaDenied;
 
@@ -28,4 +32,4 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     return packageErrorResponse(error, "ביטול הקליטה נכשל");
   }
-}
+}, { role: INTAKE_ROLES });

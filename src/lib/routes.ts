@@ -5,6 +5,7 @@
 
 import type { AppRole } from "@/lib/auth/roles";
 import { hasAnyRole } from "@/lib/auth/roles";
+import { INTAKE_ROLES } from "@/app/lib/packages/roles";
 
 // Routes that don't require a session. /login and /no-auth MUST stay here, or
 // the middleware redirects them to themselves — an infinite loop.
@@ -46,8 +47,7 @@ export const PUBLIC_ROUTES: readonly string[] = [
 //
 // Per-role page access. First match wins, so MORE-SPECIFIC prefixes come first.
 // Routes NOT listed here are open to ANY authenticated user (currently: "/" =
-// reports/items, "/items", "/dashboard", "/files"). Whether /dashboard and
-// /files should also be role-restricted is still open — confirm.
+// reports/items, "/items", "/packages").
 export const ROLE_PROTECTED: ReadonlyArray<{
   prefix: string;
   any: readonly AppRole[];
@@ -65,26 +65,37 @@ export const ROLE_PROTECTED: ReadonlyArray<{
   // by calling these directly. Every caller is the testing page and its
   // wizards (plus the manager-only dashboard's station list).
   { prefix: "/api/testing", any: ["manager", "tester"] },
+  // Box intake from its shipment — the shipments screen's roles (INTAKE_ROLES).
+  // Its undo, /api/packages/<id>/intake, can't be matched by prefix; both
+  // handlers self-gate with withAuth.
+  { prefix: "/api/packages/intake", any: INTAKE_ROLES },
   // Work-hours API — admin + timekeeper (משאן). Handlers also self-gate with withAuth.
   { prefix: "/api/settings/work-hours", any: ["manager", "mashan"] },
-  // Settings — specific pages are manager-only, the rest are open to all roles.
+  // Sources — not the tester's. Only the sources settings page reads this API.
+  { prefix: "/api/settings/sources", any: ["manager", "storekeeper"] },
+  // Settings pages — one rule per page, each naming who may open it. Pages
+  // only: the intake and the queues still read routes / stations / statuses
+  // through /api/settings/* (see the role plan).
   { prefix: "/settings/users", any: ["manager"] }, // user management — manager only
-  { prefix: "/settings/customers", any: ["manager"] }, // customer code — manager only
-  // Work-hours page — admin + timekeeper (משאן). MUST precede the generic /settings rule.
-  { prefix: "/settings/work-hours", any: ["manager", "mashan"] },
-  // Test configuration — not the storekeeper's (they don't test). MUST precede
-  // the generic /settings rule. Pages only: the intake and the queues still
-  // read routes / stations through /api/settings/* (see the role plan).
+  { prefix: "/settings/customers", any: ["manager", "storekeeper"] },
+  { prefix: "/settings/item-types", any: ["manager", "tester", "storekeeper"] },
+  { prefix: "/settings/packages", any: ["manager", "tester"] },
+  { prefix: "/settings/sources", any: ["manager", "storekeeper"] },
+  { prefix: "/settings/item-status", any: ["manager", "tester"] },
+  { prefix: "/settings/test-station-status", any: ["manager", "tester"] },
+  { prefix: "/settings/test-stations", any: ["manager", "tester"] },
   { prefix: "/settings/testing-routes", any: ["manager", "tester"] },
   { prefix: "/settings/popup-templates", any: ["manager", "tester"] },
-  { prefix: "/settings/test-stations", any: ["manager", "tester"] },
-  { prefix: "/settings/test-station-status", any: ["manager", "tester"] },
-  { prefix: "/settings", any: ["manager", "tester", "storekeeper"] }, // other settings — all roles
+  { prefix: "/settings/reference-items", any: ["manager", "tester", "storekeeper"] },
+  { prefix: "/settings/work-hours", any: ["manager", "mashan"] }, // admin + timekeeper (משאן)
+  // Any settings page not listed above — manager only until it gets its own rule.
+  { prefix: "/settings", any: ["manager"] },
   // Main sections — each role reaches its own area.
   { prefix: "/testing", any: ["manager", "tester"] }, // testing — not storekeeper
   { prefix: "/shipments", any: ["manager", "storekeeper"] }, // shipments — not tester
   { prefix: "/dashboard", any: ["manager"] }, // analytics dashboard — manager only
-  // "/files" and "/" (reports/items) stay open to any authenticated user.
+  { prefix: "/files", any: ["manager", "tester", "mashan"] }, // file management — not the storekeeper
+  // "/" and "/packages" (מארזים ופריטים) stay open to any authenticated user.
 ];
 
 export type AccessVerdict =

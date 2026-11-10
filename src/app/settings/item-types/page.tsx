@@ -1,9 +1,14 @@
 "use client";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { canSeeInNav } from "@/lib/routes";
 import { Tag } from "@/components/ui";
 import CrudTable, { Column } from "../components/CrudTable";
 
 export default function ItemTypesPage() {
+  const { data: session } = useSession();
+  // The storekeeper edits item types but not the packages screen — a plain tag then.
+  const packagesLink = canSeeInNav("/settings/packages", session?.roles ?? null);
   const columns: Column[] = [
     { field: "item_type_id", headerName: "מזהה", width: 80 },
     { field: "item_type_desc", headerName: "תיאור סוג פריט" },
@@ -13,13 +18,15 @@ export default function ItemTypesPage() {
       width: 140,
       readOnly: true,
       renderCell: (row) =>
-        row.is_package ? (
+        !row.is_package ? null : packagesLink ? (
           // The "מארז" tag (design/Settings.dc.html): a package type is an item
           // type flagged is_package; its contents are edited under /settings/packages.
           <Link href="/settings/packages" title="תכולת המארז מוגדרת במסך מארזים" aria-label="מארז: פתח את תכולת המארז במסך מארזים" style={{ textDecoration: "none" }}>
             <Tag tone="primary">מארז</Tag>
           </Link>
-        ) : null,
+        ) : (
+          <Tag tone="primary">מארז</Tag>
+        ),
     },
   ];
 

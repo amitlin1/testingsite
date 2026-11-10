@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { withAuth } from "@/lib/auth/withAuth";
+import { INTAKE_ROLES } from "@/app/lib/packages/roles";
 import { prisma } from "@/app/lib/prisma";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { parseBarcode } from "@/app/lib/barcode-parser";
@@ -12,8 +14,9 @@ export const runtime = "nodejs";
  * POST /api/packages/intake { barcode } — the box label scanned at intake:
  * the pending box enters its route and its items are created from the
  * template, without serials (lib/packages/boxes.ts). Answers 201 { package }.
+ * INTAKE_ROLES only.
  */
-export async function POST(req: Request) {
+export const POST = withAuth(async (req: NextRequest) => {
   const schemaDenied = await metricsSchemaGate();
   if (schemaDenied) return schemaDenied;
 
@@ -31,4 +34,4 @@ export async function POST(req: Request) {
   } catch (error) {
     return packageErrorResponse(error, "קליטת המארז נכשלה");
   }
-}
+}, { role: INTAKE_ROLES });

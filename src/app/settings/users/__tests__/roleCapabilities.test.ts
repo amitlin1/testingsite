@@ -11,16 +11,22 @@ test("a manager reaches everything", () => {
   assert.equal(s.allowed, s.total);
 });
 
-test("a tester tests, configures and signs at the closing, but no users, customers, dashboard, shipments, step back or final signature", () => {
+test("a tester tests, configures and signs at the closing, but no users, customers, sources, dashboard, shipments, box intake, step back or final signature", () => {
   const ok = okLabels("tester");
   for (const l of ["מסך בדיקה", "מסלולי בדיקה", "חתימה על הדוחות בסגירת מארז", "התחלת בדיקה ושליחת תוצאה"]) assert.ok(ok.has(l), l);
-  for (const l of ["משתמשים והרשאות", "לקוחות", "לוח ניהול", "משלוחים נכנסים", "חזרה לבדיקה הקודמת", "עבודה בשם עובד אחר", "חתימה סופית על דוח פריט"]) assert.ok(!ok.has(l), l);
+  for (const l of ["משתמשים והרשאות", "לקוחות", "לוח ניהול", "משלוחים נכנסים", "ניהול מקורות", "קליטת מארז מהמשלוח", "חזרה לבדיקה הקודמת", "עבודה בשם עובד אחר", "חתימה סופית על דוח פריט"]) assert.ok(!ok.has(l), l);
 });
 
-test("a storekeeper: shipments and box intake, no testing", () => {
-  const ok = okLabels("storekeeper");
-  for (const l of ["משלוחים נכנסים", "קליטת מארז מהמשלוח", "סוגי פריטים"]) assert.ok(ok.has(l), l);
-  for (const l of ["מסך בדיקה", "מסלולי בדיקה", "התחלת בדיקה ושליחת תוצאה"]) assert.ok(!ok.has(l), l);
+test("a storekeeper: boxes, shipments and intake, and exactly four settings pages", () => {
+  const s = summarizeRole("storekeeper");
+  const ok = (title: string) => s.groups.find((g) => g.title === title)!.items.filter((i) => i.ok).map((i) => i.label);
+  assert.deepEqual(ok("מסכים"), ["מארזים ופריטים", "משלוחים נכנסים"]);
+  assert.deepEqual(ok("הגדרות מערכת"), ["לקוחות", "סוגי פריטים", "ניהול מקורות", "פריטי ייחוס"]);
+  assert.deepEqual(ok("פעולות"), ["קליטת מארז מהמשלוח"]);
+});
+
+test("a mashan takes no box in", () => {
+  assert.ok(!okLabels("mashan").has("קליטת מארז מהמשלוח"));
 });
 
 test("a mashan: of the settings, only work hours", () => {

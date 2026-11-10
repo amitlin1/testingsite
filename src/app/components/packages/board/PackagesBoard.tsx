@@ -8,6 +8,7 @@ import type { PackageView } from "@/app/lib/packages/read";
 import { Alert, Skeleton, Snackbar } from "@/components/ui";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import PackageScanIntakeDialog from "@/app/components/packages/PackageScanIntakeDialog";
+import { useCanIntake } from "@/app/components/packages/useCanIntake";
 import PackageDeleteDialog from "@/app/components/packages/PackageDeleteDialog";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import BarcodeDialog from "@/app/components/BarcodeDialog";
@@ -157,6 +158,7 @@ export default function PackagesBoard() {
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   // Dialogs and the one toast.
+  const canIntake = useCanIntake();
   const [intakeOpen, setIntakeOpen] = React.useState(sp.get("new") === "1");
   const [labelsFor, setLabelsFor] = React.useState<PackageView | null>(null);
   const [deleteFor, setDeleteFor] = React.useState<PackageView | null>(null);
@@ -196,9 +198,9 @@ export default function PackagesBoard() {
           <h1 className="pb-title">מארזים ופריטים</h1>
           <p className="pb-sub">כל מארז והפריטים שבתוכו, איפה כל אחד עומד במסלול, ועריכה במקום.</p>
         </div>
-        <button type="button" className="pkg-pill pkg-pill--primary pkg-pill--lg" onClick={() => setIntakeOpen(true)}>
+        {canIntake && <button type="button" className="pkg-pill pkg-pill--primary pkg-pill--lg" onClick={() => setIntakeOpen(true)}>
           <Plus size={18} strokeWidth={2} aria-hidden />קליטת מארזים
-        </button>
+        </button>}
       </div>
 
       <div className="pb-filters">
@@ -301,7 +303,7 @@ export default function PackagesBoard() {
               hit={searching && hitPkgs.has(p.item_id)}
               hitItems={hitItems}
               itemTypes={itemTypes.data ?? []}
-              onIntake={() => intake.mutate(p.item_id)}
+              onIntake={canIntake ? () => intake.mutate(p.item_id) : undefined}
               intakeBusy={intake.isPending && intake.variables === p.item_id}
               onLabels={() => setLabelsFor(p)}
               onDelete={() => setDeleteFor(p)}
@@ -337,7 +339,7 @@ export default function PackagesBoard() {
         </div>
       </div>
 
-      <PackageScanIntakeDialog open={intakeOpen} onClose={() => setIntakeOpen(false)} onChanged={invalidate} />
+      <PackageScanIntakeDialog open={canIntake && intakeOpen} onClose={() => setIntakeOpen(false)} onChanged={invalidate} />
       <PackageDeleteDialog open={!!deleteFor} pkg={deleteFor} onClose={() => setDeleteFor(null)} onDeleted={() => { setDeleteFor(null); invalidate(); }} />
       {labelsFor && (
         <PackageLabelsDialog

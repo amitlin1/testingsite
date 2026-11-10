@@ -8,6 +8,7 @@ import DataTable, { StatusPill, ProgressCell, RowActions, IconAction, type Colum
 import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import ItemDialog from "./ItemDialog";
 import PackageScanIntakeDialog from "./packages/PackageScanIntakeDialog";
+import { useCanIntake } from "./packages/useCanIntake";
 import EditItemDialog from "@/components/EditItemDialog";
 import BarcodeDialog from "./BarcodeDialog";
 import { ItemRow, StatusOption, ItemTypeOption, Customers, Shipment } from "@/types";
@@ -44,6 +45,7 @@ export default function ItemTable() {
   // ?new=1 opens the package intake directly. Items are only ever created
   // inside a box (docs/packages/PLAN.md §9), so the old add-item form is gone
   // and "הוסף" here means "קליטת מארז".
+  const canIntake = useCanIntake();
   const [insertOpen, setInsertOpen] = React.useState(searchParams.get("new") === "1");
 
   // snackbar
@@ -283,7 +285,7 @@ export default function ItemTable() {
       <EmptyState
         title="עדיין אין פריטים במערכת"
         body="פריטים נוצרים בקליטת מארז."
-        action={
+        action={canIntake &&
           <Button variant="outlined" onClick={() => setInsertOpen(true)} startIcon={<Plus size={18} strokeWidth={2} aria-hidden />}>
             קליטת מארז
           </Button>
@@ -332,7 +334,7 @@ export default function ItemTable() {
         <ItemsToolbar
           search={search}
           onSearch={setSearch}
-          onAdd={() => setInsertOpen(true)}
+          onAdd={canIntake ? () => setInsertOpen(true) : undefined}
           addLabel="קליטת מארז"
           summary={summary}
           filters={[
@@ -406,7 +408,7 @@ export default function ItemTable() {
         />
       )}
 
-      <PackageScanIntakeDialog open={insertOpen} onClose={() => setInsertOpen(false)} onChanged={() => loadItems()} />
+      <PackageScanIntakeDialog open={canIntake && insertOpen} onClose={() => setInsertOpen(false)} onChanged={() => loadItems()} />
 
       <EditItemDialog
         open={!!editingItem}

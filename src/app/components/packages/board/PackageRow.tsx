@@ -300,7 +300,8 @@ export type PackageRowProps = {
   hit: boolean;
   hitItems: Set<string>;
   itemTypes: ItemTypeLite[];
-  onIntake: () => void;
+  /** Absent when the user may not take boxes in — the button hides. */
+  onIntake?: () => void;
   intakeBusy: boolean;
   onLabels: () => void;
   onDelete: () => void;
@@ -354,7 +355,7 @@ export default function PackageRow({ pkg, expanded, onToggle, hit, hitItems, ite
           <StatusPill label={readOnly ? "יצא במשלוח" : st.label} dot={readOnly ? "var(--color-ink-muted-48)" : st.dot} />
         </div>
         <div className="pb-actions">
-          {pkg.status === "pending" && !readOnly && (
+          {pkg.status === "pending" && !readOnly && onIntake && (
             <button type="button" className="pkg-pill pkg-pill--primary pkg-pill--sm" disabled={intakeBusy} onClick={onIntake} style={{ marginInlineEnd: 4 }}>
               {intakeBusy ? "קולט…" : "קליטה"}
             </button>

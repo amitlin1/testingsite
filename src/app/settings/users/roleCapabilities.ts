@@ -24,7 +24,7 @@ const can = (path: string) => (role: AppRole) => resolveAccess(path, [role]).kin
 export const ROLE_DESCRIPTION: Record<AppRole, string> = {
   manager: "גישה מלאה לכל המערכת: ניהול משתמשים ולקוחות, לוח הניהול, ופעולות שרק מנהל רשאי לבצע.",
   tester: "עובד בעמדות הבדיקה, ומגדיר מסלולים, שדות ותבניות לעמדות.",
-  storekeeper: "מטפל במשלוחים הנכנסים, בקליטת המארזים ובהגדרות הפריטים.",
+  storekeeper: "מטפל במשלוחים הנכנסים ובקליטת המארזים, ובהגדרות הלקוחות, הפריטים והמקורות.",
   mashan: "מנהל את שעות העבודה והחופשות.",
 };
 

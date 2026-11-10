@@ -34,7 +34,8 @@ type Props = {
   onSearch: (value: string) => void;
   searchPlaceholder?: string;
   filters: FilterDef[];
-  onAdd: () => void;
+  /** Absent when the user may not add — the button hides. */
+  onAdd?: () => void;
   addLabel?: string;
   /** Rendered between the title row and the filters (the KPI strip). */
   summary?: React.ReactNode;
@@ -69,9 +70,11 @@ export default function ItemsToolbar({
             כל הפריטים שנקלטו במערכת, הסטטוס וההתקדמות שלהם בתהליך הבדיקה.
           </p>
         </div>
-        <Button onClick={onAdd} startIcon={<Plus size={18} strokeWidth={2} aria-hidden />}>
-          {addLabel}
-        </Button>
+        {onAdd && (
+          <Button onClick={onAdd} startIcon={<Plus size={18} strokeWidth={2} aria-hidden />}>
+            {addLabel}
+          </Button>
+        )}
       </div>
 
       {summary}
