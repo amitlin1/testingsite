@@ -34,6 +34,7 @@ import { contentTypeFromName, getObjectBuffer, putObject, removeObject } from "@
 import { registerFileObject, markFileObjectDeleted } from "@/lib/file-registry";
 import { buildHtml } from "./html";
 import { renderPdf, type PageLine } from "./render";
+import { reportPhotoDataUrls } from "./photos";
 import { fontOf, type ReportFont } from "./fonts";
 import { renderTemplateBody } from "./render-react";
 import { DEFAULT_ROOT_PROPS, pageNumberTemplate } from "./puck-config";
@@ -282,15 +283,10 @@ export async function buildReportHtml(
     closing_signed_at: closingSig ? formatReportDate(closingSig.at) : "",
   }, { finished: src.item.finished_at != null });
 
-  // Photos: only when the template prints them.
-  const photos: Record<string, string> = {};
-  if (templateUsesPhotos(template)) {
-    const keys = [...new Set(results.flatMap((r) => r.fields.flatMap((f) => f.photos ?? [])))];
-    await Promise.all(keys.map(async (k) => {
-      const url = await dataUrlOf(k);
-      if (url) photos[k] = url;
-    }));
-  }
+  // Photos: only when the template prints them, each made small for the PDF (photos.ts).
+  const photos: Record<string, string> = templateUsesPhotos(template)
+    ? await reportPhotoDataUrls([...new Set(results.flatMap((r) => r.fields.flatMap((f) => f.photos ?? [])))])
+    : {};
 
   const logos = await logosOf(template);
 

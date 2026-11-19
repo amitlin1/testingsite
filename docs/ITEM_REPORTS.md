@@ -19,6 +19,7 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 | Route catalog (server) | `src/app/lib/item-report/catalog.ts` |
 | Render + freeze + sign | `src/app/lib/item-report/generate.ts` |
 | Chromium | `src/app/lib/item-report/render.ts`, `html.ts` (fonts inlined — air-gap safe) |
+| Photos in the PDF | `src/app/lib/item-report/photos.ts` — each photo over 300 KB goes into the report as a JPEG of at most 1600 px on its longer side (`PDF_PHOTO_MAX_PX`, made small by Chromium; EXIF orientation kept), kept in memory between renders by etag. The photo in MinIO is never changed |
 | Fonts | `src/app/lib/item-report/fonts.ts`, `public/fonts/` |
 | Starter / general template | `src/app/lib/item-report/starter.ts` (`officialStarterTemplate`, `generalStarterTemplate`) |
 | Editor UI | `src/app/settings/testing-routes/components/report/` |

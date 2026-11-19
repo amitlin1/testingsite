@@ -139,6 +139,50 @@ export async function renderPdf(
   }
 }
 
+/** A photo goes into the PDF at most this many pixels on its longer side: ~230 DPI on the widest
+ *  photo a template prints (one per row, 178 mm). A phone's 12 MP shot (4000 px, ~7 MB) comes down
+ *  to ~300–500 KB. */
+export const PDF_PHOTO_MAX_PX = 1600;
+const PDF_PHOTO_QUALITY = 0.85;
+
+// Runs in the page. A string, not a function, so the test runner's transform (tsx keeps function
+// names with a helper the page does not have) cannot reach it. Decoded through <img>, which applies
+// the photo's EXIF orientation, then drawn on white (a PNG's transparency) and encoded as JPEG.
+const SHRINK_IN_PAGE = `async (src, max, quality) => {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, w, h);
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = "high";
+  g.drawImage(img, 0, 0, w, h);
+  return c.toDataURL("image/jpeg", quality);
+}`;
+
+/** A photo (data URL) made small enough for the PDF: at most PDF_PHOTO_MAX_PX on its longer side,
+ *  as JPEG. Only the copy that goes into the report — the stored photo is never touched. Throws
+ *  when Chromium cannot decode it. */
+export async function shrinkPhotoForPdf(dataUrl: string): Promise<string> {
+  const page = await newPage();
+  try {
+    const shrink = await page.evaluateHandle(SHRINK_IN_PAGE);
+    return (await page.evaluate(
+      (fn, src, max, quality) => (fn as unknown as (s: string, m: number, q: number) => Promise<string>)(src, max, quality),
+      shrink, dataUrl, PDF_PHOTO_MAX_PX, PDF_PHOTO_QUALITY,
+    )) as string;
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
 /** Optional: full-page PNG screenshot of the rendered HTML (used for visual
  *  verification of fidelity; not used in the production PDF path). */
 export async function renderScreenshot(

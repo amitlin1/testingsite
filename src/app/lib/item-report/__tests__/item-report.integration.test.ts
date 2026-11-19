@@ -416,6 +416,51 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.equal((detail.match(/class="pdf-photo pdf-keep"/g) ?? []).length, 2, "both shots, under the station");
   });
 
+  it("a big photo goes into the report small (JPEG, ≤ PDF_PHOTO_MAX_PX), a small one as it is; MinIO keeps the original", async () => {
+    const { renderScreenshot, PDF_PHOTO_MAX_PX } = await import("../render");
+    // A camera-sized shot: 3000 px wide noise (it does not compress), a few MB as PNG.
+    const noise = `<canvas id="c" width="1500" height="1123"></canvas><script>
+      const c = document.getElementById("c"), g = c.getContext("2d"), d = g.createImageData(1500, 1123);
+      for (let i = 0; i < d.data.length; i++) d.data[i] = (Math.random() * 256) | 0;
+      g.putImageData(d, 0, 0);</script>`;
+    const big = await renderScreenshot(`<html><body style="margin:0">${noise}</body></html>`, 1500);
+    assert.ok(big.length > 1024 * 1024, `the test photo is big (${big.length} bytes)`);
+    const tiny = Buffer.from(PNG.split(",")[1]!, "base64");
+    objects.set("digitalfactory-files/items/8203/big.png", { body: big, type: "image/png" });
+    objects.set("digitalfactory-files/items/8203/tiny.png", { body: tiny, type: "image/png" });
+
+    await H.q("INSERT INTO report_general_template (id, template) VALUES (1, $1::jsonb)", [JSON.stringify((await import("../starter")).generalStarterTemplate())]);
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    await seedReportItem(8203, v);
+    await H.startTest({ itemId: 8203, stationId: H.STATION_FUNC_A, actionUuid: randomUUID() });
+    const r = await H.submitResult({
+      ItemID: 8203, StationID: H.STATION_FUNC_A, SubmitID: randomUUID(), Passed: true,
+      Details: { schema: schemaOf(UID.a, v), fields: { [VOLT.id]: { t: "number", value: 27.9 }, [LED.id]: { t: "choice_row", opt: "o_led00001" } }, photo: { photos: ["items/8203/big.png", "items/8203/tiny.png"] } },
+    });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+
+    const html = (await getHtml(8203)).body as string;
+    const srcs = [...html.matchAll(/<img src="(data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+)"/g)].map((m) => m[1]!);
+    const jpegs = srcs.filter((s) => s.startsWith("data:image/jpeg"));
+    assert.equal(jpegs.length, 1, "the big photo, as a JPEG");
+    const small = Buffer.from(jpegs[0]!.split(",")[1]!, "base64");
+    assert.ok(small.length < big.length / 4, `made small: ${big.length} → ${small.length} bytes`);
+    // The JPEG's size from its SOF marker.
+    let w = 0, h = 0;
+    for (let i = 2; i < small.length - 9; ) {
+      if (small[i] !== 0xff) { i++; continue; }
+      const m = small[i + 1]!;
+      if (m >= 0xc0 && m <= 0xc3) { h = small.readUInt16BE(i + 5); w = small.readUInt16BE(i + 7); break; }
+      i += 2 + small.readUInt16BE(i + 2);
+    }
+    assert.equal(Math.max(w, h), PDF_PHOTO_MAX_PX, `longer side ${w}×${h}`);
+    assert.ok(srcs.includes(PNG), "the small photo goes in as it is");
+    assert.deepEqual(stored("items/8203/big.png"), big, "the stored photo is untouched");
+
+    // The PDF itself renders with it.
+    assert.equal((await getPdf(8203)).status, 200);
+  });
+
   it("the closing signature, sent with the finishing result, is recorded in the same request but does not lock; the final one locks it", async () => {
     const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
     await saveTemplate(R.report, template({ signature: true, closing: true }));
