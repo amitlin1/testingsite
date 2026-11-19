@@ -252,7 +252,9 @@ export function stepResultsOf(src: ReportSource): ReportStepResult[] {
   return buildStepResults(src.rows, src.route, splitDate, kitUids, src.fieldOrder);
 }
 
-type Signature = { key: string; name: string; number: string; at: Date } | null;
+/** A given signature. `role` — the closing signer's "בודק" / "מנהל" ("" when not kept: the final one, or a
+ *  closing signature from before roles were kept). */
+type Signature = { key: string; name: string; number: string; at: Date; role?: string } | null;
 
 export interface BuiltReport {
   html: string;
@@ -280,6 +282,7 @@ export async function buildReportHtml(
     signer: sig?.name ?? "",
     signed_at: sig ? formatReportDate(sig.at) : "",
     closing_signer: closingSig?.name ?? "",
+    closing_signer_role: closingSig?.role ?? "",
     closing_signed_at: closingSig ? formatReportDate(closingSig.at) : "",
   }, { finished: src.item.finished_at != null });
 
@@ -296,7 +299,7 @@ export async function buildReportHtml(
     if (!s) continue;
     const url = await dataUrlOf(s.key);
     if (url) signatures[bind] = url;
-    signerMeta[bind] = { fullName: s.name, number: s.number, date: formatReportDate(s.at) };
+    signerMeta[bind] = { fullName: s.name, number: s.number, date: formatReportDate(s.at), role: s.role ?? "" };
   }
   // The spot a draft waits for: the closing's while the item is still on its route (the closing
   // signs it), else the final one.
@@ -410,7 +413,7 @@ function validClosingSignature(row: ReportRow | null, finishedAt: Date | null): 
   if (!row?.closing_signature_key || !row.closing_signed_at || !sameInstant(row.closing_signed_finished_at, finishedAt)) return null;
   return {
     key: row.closing_signature_key, name: row.closing_signed_by_name ?? row.closing_signed_by ?? "",
-    number: row.closing_signed_by_number ?? "", at: row.closing_signed_at,
+    number: row.closing_signed_by_number ?? "", at: row.closing_signed_at, role: row.closing_signed_by_role ?? "",
   };
 }
 
@@ -566,7 +569,8 @@ export class ReportSignError extends Error {
   }
 }
 
-type Signer = { username: string; name: string; number: string };
+/** `role` ("בודק" / "מנהל") is kept with a closing signature only — the final row prints its own text. */
+type Signer = { username: string; name: string; number: string; role?: string };
 
 /** Store a drawn signature (closing or final) in MinIO and register it. */
 async function storeSignature(itemId: bigint, png: Buffer, signer: Signer): Promise<string> {
@@ -627,7 +631,8 @@ export async function signClosingSignature(itemId: bigint, png: Buffer, signer: 
   const key = await storeSignature(itemId, png, signer);
   const fields = {
     closing_signature_key: key, closing_signed_by: signer.username, closing_signed_by_name: signer.name || signer.username,
-    closing_signed_by_number: signer.number, closing_signed_at: new Date(), closing_signed_finished_at: src.item.finished_at,
+    closing_signed_by_number: signer.number, closing_signed_by_role: signer.role || null,
+    closing_signed_at: new Date(), closing_signed_finished_at: src.item.finished_at,
   };
   const next = await prisma.item_reports.upsert({ where: { item_id: itemId }, create: { item_id: itemId, ...fields }, update: fields });
   // No final signature to wait for: the report is final now, with this signature on it.

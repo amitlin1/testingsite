@@ -53,6 +53,7 @@ export const REPORT_VARS: { key: string; label: string }[] = [
   { key: "signer", label: "מאשר הדוח (חתימה סופית)" },
   { key: "signed_at", label: "תאריך החתימה הסופית" },
   { key: "closing_signer", label: "החותם בסגירת המארז" },
+  { key: "closing_signer_role", label: "תפקיד החותם בסגירה" },
   { key: "closing_signed_at", label: "תאריך החתימה בסגירה" },
 ];
 

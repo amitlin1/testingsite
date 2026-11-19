@@ -80,6 +80,9 @@ export interface ReportSignerInfo {
   number: string;
   date: string;
   station?: string;
+  /** "בודק" / "מנהל" — the closing signer's role, kept with the signature. "" for a closing
+   *  signature given before roles were kept (the cell then prints its own text). */
+  role?: string;
 }
 
 export interface ReportRenderMeta {

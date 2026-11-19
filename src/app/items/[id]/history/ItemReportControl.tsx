@@ -14,7 +14,11 @@ import { formatMoment } from "../../format";
  *     locked final copy once it finished (and was signed, when the template asks);
  *   - "חתימה סופית על הדוח" appears on a finished item whose template asks for
  *     the approver's final signature not given yet: the dialog shows the report
- *     as it will be locked, takes the signature, and locks it.
+ *     as it will be locked, takes the signature, and locks it;
+ *   - "חתימה בסגירה" appears beside it while the closing signature is missing
+ *     (the box was closed before the template had it, or it was skipped): a
+ *     tester or a manager gives it here after the fact; it does not lock. Signing
+ *     the final one first warns that the closing spot then stays blank for good.
  * Nothing renders when the item's route has no report template.
  */
 
@@ -29,7 +33,15 @@ type ReportStatus = {
   closingSignedAt: string | null;
   version: number;
   canSign: boolean;
+  canSignClosing: boolean;
 };
+
+type SignKind = "final" | "closing";
+
+/** The report waits for its final signature and its closing one was never given: it can still be. */
+function closingMissing(s: ReportStatus): boolean {
+  return s.state === "awaiting_signature" && s.needsClosingSignature && !s.closingSignedBy;
+}
 
 const STATE_TEXT: Record<Exclude<ReportStatus["state"], "no_template">, string> = {
   in_progress: "טיוטה — הפריט עדיין במסלול",
@@ -47,7 +59,7 @@ function signedLine(s: ReportStatus): string {
 
 export default function ItemReportControl({ itemId }: { itemId: string }) {
   const [status, setStatus] = React.useState<ReportStatus | null>(null);
-  const [signOpen, setSignOpen] = React.useState(false);
+  const [signOpen, setSignOpen] = React.useState<SignKind | null>(null);
 
   // A failed read just leaves the button out.
   const fetchStatus = React.useCallback(
@@ -75,6 +87,7 @@ export default function ItemReportControl({ itemId }: { itemId: string }) {
 
   const pdfHref = withBasePath(`/api/item-reports/${itemId}`);
   const signed = signedLine(status);
+  const missing = closingMissing(status);
   // A column as narrow as its buttons, so the header keeps it beside the title: the state, who
   // signed (wrapping under it), then the buttons.
   return (
@@ -83,9 +96,15 @@ export default function ItemReportControl({ itemId }: { itemId: string }) {
       {signed ? (
         <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", maxWidth: 340, textAlign: "end", fontVariantNumeric: "tabular-nums" }}>{signed}</span>
       ) : null}
+      {missing ? <span style={{ fontSize: "var(--text-small)", color: "var(--color-warning-ink)" }}>חסרה חתימה בסגירה</span> : null}
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", flexWrap: "wrap", justifyContent: "flex-end", marginTop: 4 }}>
+        {missing && status.canSignClosing ? (
+          <Button size="small" variant="outlined" startIcon={<PenLine size={14} />} onClick={() => setSignOpen("closing")}>
+            חתימה בסגירה
+          </Button>
+        ) : null}
         {status.state === "awaiting_signature" && status.canSign ? (
-          <Button size="small" variant="contained" startIcon={<PenLine size={14} />} onClick={() => setSignOpen(true)}>
+          <Button size="small" variant="contained" startIcon={<PenLine size={14} />} onClick={() => setSignOpen("final")}>
             חתימה סופית על הדוח
           </Button>
         ) : null}
@@ -96,11 +115,16 @@ export default function ItemReportControl({ itemId }: { itemId: string }) {
       {signOpen ? (
         <SignReportDialog
           itemId={itemId}
-          onClose={() => setSignOpen(false)}
+          kind={signOpen}
+          closingMissing={missing}
+          canSignClosing={status.canSignClosing}
+          onClose={() => setSignOpen(null)}
           onSigned={() => {
-            setSignOpen(false);
+            const kind = signOpen;
+            setSignOpen(null);
             void load();
-            window.open(pdfHref, "_blank", "noopener");
+            // The final signature locks the report: show the locked copy. The closing one does not.
+            if (kind === "final") window.open(pdfHref, "_blank", "noopener");
           }}
         />
       ) : null}
@@ -108,7 +132,34 @@ export default function ItemReportControl({ itemId }: { itemId: string }) {
   );
 }
 
-function SignReportDialog({ itemId, onClose, onSigned }: { itemId: string; onClose: () => void; onSigned: () => void }) {
+const DIALOG_TEXT: Record<SignKind, { title: string; body: string; hint: string; submit: string; failed: string }> = {
+  final: {
+    title: "חתימה סופית על דוח פריט",
+    body: "אחרי החתימה הדוח ננעל: הוא לא ישתנה, גם אם התבנית או פרטי העובדים ישתנו.",
+    hint: "יש לחתום חתימה סופית לפני נעילת הדוח",
+    submit: "חתימה סופית ונעילת הדוח",
+    failed: "החתימה לא נשמרה. נסה שוב.",
+  },
+  closing: {
+    title: "חתימה בסגירה על דוח פריט",
+    body: "החתימה לא נועלת את הדוח. אחרי השמירה הוא ממתין לחתימה הסופית של מנהל. בדוח יופיעו השם שלך והתאריך של היום.",
+    hint: "יש לחתום לפני השמירה",
+    submit: "חתימה בסגירה",
+    failed: "החתימה לא נשמרה. נסה שוב.",
+  },
+};
+
+function SignReportDialog({ itemId, kind, closingMissing: missing, canSignClosing, onClose, onSigned }: {
+  itemId: string;
+  kind: SignKind;
+  /** Final only: the closing spot is still blank — locking now leaves it blank for good. */
+  closingMissing: boolean;
+  canSignClosing: boolean;
+  onClose: () => void;
+  onSigned: () => void;
+}) {
+  const T = DIALOG_TEXT[kind];
+  const warnBlank = kind === "final" && missing;
   const canvasRef = React.useRef<SignatureCanvas | null>(null);
   const [signed, setSigned] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -132,7 +183,7 @@ function SignReportDialog({ itemId, onClose, onSigned }: { itemId: string; onClo
     setBusy(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/item-reports/${itemId}/sign`, {
+      const res = await apiFetch(`/api/item-reports/${itemId}/${kind === "final" ? "sign" : "sign-closing"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signature: canvas.getCanvas().toDataURL("image/png") }),
@@ -141,17 +192,21 @@ function SignReportDialog({ itemId, onClose, onSigned }: { itemId: string; onClo
         const body = (await res.json().catch(() => null)) as { code?: string } | null;
         throw new Error(
           body?.code === "ALREADY_SIGNED"
-            ? "הדוח כבר נחתם."
+            ? kind === "final" ? "הדוח כבר נחתם." : "הדוח כבר נחתם בסגירה."
             : body?.code === "ALREADY_FINAL"
               ? "הדוח כבר סופי ונעול."
               : body?.code === "NOT_FINISHED"
                 ? "הפריט עוד לא סיים את המסלול."
-                : "החתימה לא נשמרה. נסה שוב.",
+                : body?.code === "NO_SIGNATURE_BLOCK"
+                  ? kind === "final" ? "בתבנית של הדוח אין חתימה סופית." : "בתבנית של הדוח אין חתימה בסגירה."
+                  : res.status === 403
+                    ? kind === "final" ? "רק מנהל חותם חתימה סופית." : "רק בודק או מנהל חותמים בסגירה."
+                    : T.failed,
         );
       }
       onSigned();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "החתימה לא נשמרה. נסה שוב.");
+      setError(e instanceof Error ? e.message : T.failed);
     } finally {
       setBusy(false);
     }
@@ -159,11 +214,17 @@ function SignReportDialog({ itemId, onClose, onSigned }: { itemId: string; onClo
 
   return (
     <Dialog open onClose={() => { if (!busy) onClose(); }} maxWidth="md" fullWidth>
-      <DialogTitle>חתימה סופית על דוח פריט #{itemId}</DialogTitle>
+      <DialogTitle>{T.title} #{itemId}</DialogTitle>
       <DialogContent>
         <p style={{ margin: "0 0 var(--space-sm)", fontSize: "var(--text-body-sm)", color: "var(--color-ink-muted-70)" }}>
-          אחרי החתימה הדוח ננעל: הוא לא ישתנה, גם אם התבנית או פרטי העובדים ישתנו.
+          {T.body}
         </p>
+        {warnBlank ? (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            שורת הבודק ריקה: לדוח הזה לא ניתנה חתימה בסגירה. אחרי הנעילה אי אפשר להוסיף אותה.
+            {canSignClosing ? " אפשר לחזור ולחתום קודם ב\"חתימה בסגירה\"." : " כדי למלא אותה, בקש מבודק לחתום ב\"חתימה בסגירה\" לפני החתימה הסופית."}
+          </Alert>
+        ) : null}
         <div style={{ border: "1px solid var(--color-hairline)", borderRadius: "var(--r-sm)", height: 360, overflow: "hidden", background: "var(--color-canvas-parchment)", marginBottom: "var(--space-md)" }}>
           {html ? (
             <iframe title="תצוגת הדוח" srcDoc={html} sandbox="" style={{ width: "100%", height: "100%", border: 0, background: "#fff" }} />
@@ -171,13 +232,13 @@ function SignReportDialog({ itemId, onClose, onSigned }: { itemId: string; onClo
             <div style={{ padding: "var(--space-md)", color: "var(--color-ink-muted-48)", fontSize: "var(--text-small)" }}>טוען את הדוח…</div>
           )}
         </div>
-        <ShipmentSignatureField canvasRef={canvasRef} signed={signed} onSignedChange={setSigned} hint="יש לחתום חתימה סופית לפני נעילת הדוח" />
+        <ShipmentSignatureField canvasRef={canvasRef} signed={signed} onSignedChange={setSigned} hint={T.hint} />
         {error ? <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert> : null}
       </DialogContent>
       <DialogActions>
-        <Button variant="text" onClick={onClose} disabled={busy}>ביטול</Button>
+        <Button variant="text" onClick={onClose} disabled={busy}>{warnBlank ? "חזרה" : "ביטול"}</Button>
         <Button variant="contained" startIcon={<PenLine size={16} />} disabled={!signed} loading={busy} onClick={submit}>
-          חתימה סופית ונעילת הדוח
+          {warnBlank ? "לנעול בלי חתימת בודק" : T.submit}
         </Button>
       </DialogActions>
     </Dialog>

@@ -72,14 +72,16 @@ function blocks(prefix: string) {
       },
     }),
     spacer: (): Block => ({ type: "Spacer", props: { id: id("Spacer"), height: 6 } }),
-    /** One signature row: its role first ("בודק" / "מאשר סופי"), then the signer and the drawing. */
-    signature: (bind: string, role: string): Block => ({
+    /** One signature row: its role first, then the signer and the drawing. The closing row's role
+     *  is the signer's own ("בודק" / "מנהל", kept when they sign — `roleKind: "role"`, with `role` as
+     *  what an older signature without one prints); the final row's is fixed text ("מאשר סופי"). */
+    signature: (bind: string, role: string, roleKind: "text" | "role" = "text"): Block => ({
       type: "Signature",
       props: {
         id: id("Signature"),
         bind,
         cells: [
-          { kind: "text", label: "תפקיד", text: role, weight: 1 },
+          { kind: roleKind, label: "תפקיד", text: role, weight: 1 },
           { kind: "fullName", label: "שם ושם משפחה", text: "", weight: 1 },
           { kind: "number", label: "מספר עובד", text: "", weight: 1 },
           { kind: "date", label: "תאריך", text: "", weight: 1 },
@@ -90,7 +92,7 @@ function blocks(prefix: string) {
     }),
     /** The closing signature, then the approver's final one. */
     signatures(): Block[] {
-      return [this.signature(CLOSING_SIGNATURE_BIND, "בודק"), this.signature(FINAL_SIGNATURE_BIND, "מאשר סופי")];
+      return [this.signature(CLOSING_SIGNATURE_BIND, "בודק", "role"), this.signature(FINAL_SIGNATURE_BIND, "מאשר סופי")];
     },
   };
 }

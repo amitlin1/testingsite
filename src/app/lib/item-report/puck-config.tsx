@@ -190,11 +190,12 @@ function ToneMark({ tone }: { tone: ReportTone | null }) {
 // finished report; "step:<uid>" = the worker who ran that station (no drawn
 // signature — workers don't draw one at the station).
 export interface SignCell {
-  /** "signature" | "text" | a signer attribute (fullName / number / date / station). */
+  /** "signature" | "text" | a signer attribute (fullName / number / date / station / role). */
   kind: string;
   /** Caption under the cell (e.g. "(תאריך)"). */
   label?: string;
-  /** Text for kind==="text" — supports {{name}} tokens + inline markdown. */
+  /** Text for kind==="text" — supports {{name}} tokens + inline markdown. For kind==="role", what
+   *  a signature without a kept role prints (one given before roles were kept), e.g. "בודק". */
   text?: string;
   /** Relative width within the row (flex-grow). Default 1 = equal cells. */
   weight?: number;
@@ -205,6 +206,8 @@ export const SIGNER_ATTRS: { suffix: keyof ReportSignerInfo; label: string }[] =
   { suffix: "number", label: "מספר עובד" },
   { suffix: "date", label: "תאריך" },
   { suffix: "station", label: "עמדה" },
+  // The closing signer's role ("בודק" / "מנהל"), kept when they signed.
+  { suffix: "role", label: "תפקיד החותם" },
 ];
 
 const ATTR_LABELS: Record<string, string> = Object.fromEntries(
@@ -222,6 +225,11 @@ function signerAttr(info: ReportSignerInfo | undefined, suffix: string): string 
   return (info as unknown as Record<string, string | undefined>)[suffix] ?? "";
 }
 
+/** A role cell's fallback text, as plain text (it is printed inside <bdi>, never as markup). */
+function renderPlainFallback(text: string | undefined): string {
+  return (text ?? "").trim();
+}
+
 // Readable summary for the array-field item chips in the editor.
 export function signCellSummary(c: SignCell): string {
   const base =
@@ -229,7 +237,9 @@ export function signCellSummary(c: SignCell): string {
       ? "✍ חתימה"
       : c.kind === "text"
         ? `טקסט: ${c.text || "—"}`
-        : ATTR_LABELS[c.kind] ?? c.kind;
+        : c.kind === "role" && c.text
+          ? `${ATTR_LABELS.role} (בלי תפקיד: ${c.text})`
+          : ATTR_LABELS[c.kind] ?? c.kind;
   return c.label ? `${base}  ·  ${c.label}` : base;
 }
 
@@ -1160,7 +1170,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
           arrayFields: {
             kind: { type: "select", label: "סוג התא", options: SIGN_CELL_KINDS },
             label: { type: "text", label: "כיתוב מתחת (לא חובה)" },
-            text: { type: "text", label: 'טקסט (רק ל"טקסט חופשי")' },
+            text: { type: "text", label: 'טקסט (ל"טקסט חופשי"; ב"תפקיד החותם" — מה שיודפס לחתימה ישנה בלי תפקיד)' },
             weight: { type: "number", label: "רוחב יחסי", min: 1 },
           },
           defaultItemProps: { kind: "signature", label: "", text: "", weight: 1 },
@@ -1202,7 +1212,9 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                 } else if (c.kind === "text") {
                   inner = <span>{renderRich(c.text ?? "", meta.values)}</span>;
                 } else {
-                  const val = signerAttr(info, c.kind);
+                  // A role cell of a given signature that kept no role (signed before roles were
+                  // kept, or a step's worker) prints the cell's own text, as the row did before.
+                  const val = signerAttr(info, c.kind) || (c.kind === "role" && info ? renderPlainFallback(c.text) : "");
                   inner = val ? (
                     <bdi>{val}</bdi>
                   ) : meta.mode === "edit" ? (

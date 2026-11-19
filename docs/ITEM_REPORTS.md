@@ -12,7 +12,7 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 | What | Where |
 |---|---|
 | Edit the general template / a route's template | הגדרות מערכת → מסלולי בדיקה → לשונית **דוח PDF** (the general template's row leads it) |
-| Download an item's report / give its final signature | היסטוריית פריט (`/items/<id>/history`) — the buttons under the status |
+| Download an item's report / give its final signature / a missing closing signature | היסטוריית פריט (`/items/<id>/history`) — the buttons under the status (`ItemReportControl.tsx`) |
 | Sign a kit's reports at its closing (the closing signature) | the closing template's "חתימה על הדוחות" step (`report_sign`) — see below |
 | Template components (shared by editor + server) | `src/app/lib/item-report/puck-config.tsx` |
 | Variables: catalog + values | `src/app/lib/item-report/variables.ts` (pure, unit-tested) |
@@ -24,8 +24,8 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 | Starter / general template | `src/app/lib/item-report/starter.ts` (`officialStarterTemplate`, `generalStarterTemplate`) |
 | Editor UI | `src/app/settings/testing-routes/components/report/` |
 | APIs | `src/app/api/item-reports/` |
-| DB | `report_templates`, `item_reports` (migration `20261020120000_item_reports`); `report_general_template` (`20261104120000_report_general_template`); `item_reports.closing_*` (`20261110120000_report_closing_signature`); both signatures in every template (`20261110130000_report_templates_both_signatures`) |
-| Production SQL | `scripts/prod-item-reports/1-item-reports.sql`, `scripts/prod-report-general-template/1-report-general-template.sql`, `scripts/prod-report-closing-signature/1-report-closing-signature.sql` + `2-report-templates-both-signatures.sql` |
+| DB | `report_templates`, `item_reports` (migration `20261020120000_item_reports`); `report_general_template` (`20261104120000_report_general_template`); `item_reports.closing_*` (`20261110120000_report_closing_signature`); both signatures in every template (`20261110130000_report_templates_both_signatures`); the closing signer's role (`20261119120000_report_closing_signer_role`) |
+| Production SQL | `scripts/prod-item-reports/1-item-reports.sql`, `scripts/prod-report-general-template/1-report-general-template.sql`, `scripts/prod-report-closing-signature/1-report-closing-signature.sql` + `2-report-templates-both-signatures.sql`, `scripts/prod-report-closing-role/1-report-closing-role.sql` |
 
 ## The look — an official document
 
@@ -100,7 +100,13 @@ Ticketflow's blocks (טקסט, כותרת — numbered by default, ערך ממש
     route finished. It locks the report;
   - a step's worker — name / number / date, no drawn signature.
 
-  The role's name ("בודק", "מאשר סופי") is a "טקסט חופשי" cell of the row. Every template has both
+  The closing row's role is a **"תפקיד החותם"** cell (`kind: "role"`): the signer's role when they
+  signed — "בודק" for a tester, "מנהל" for a manager (also one who is a tester too;
+  `signerRoleLabel` in `roles.ts`), kept in `item_reports.closing_signed_by_role` and in
+  `report.closing_signer_role`. It is empty until someone signs; a closing signature given before
+  roles were kept prints the cell's own text ("בודק"). The final row's role stays a "טקסט חופשי"
+  cell ("מאשר סופי"). Migration `20261119120000_report_closing_signer_role` turned every closing
+  row's "בודק" text cell into a role cell (a cell an author wrote other text in was left). Every template has both
   signatures: the starters (`starter.ts`) begin with a "בודק" row (closing) and a "מאשר סופי" row
   (final), and migration `20261110130000_report_templates_both_signatures` added the closing row to
   every template that existed. A report has the signatures its template has blocks for, so removing
@@ -158,6 +164,20 @@ the signature comes **before** anything is saved (`TemplatePackageClosing.tsx`, 
 - Nothing to sign (no report with a closing signature block) → the step says so and the box closes.
 - Today's closing wizard (no template) and a template without the part are unchanged.
 
+### A closing signature given later, on the item page
+
+A finished item whose report waits for the final signature and was never signed at a closing (its
+box closed before the template had the block, or the closing had no "חתימה על הדוחות") shows
+"חסרה חתימה בסגירה" and a **"חתימה בסגירה"** button on the item page
+(`POST /api/item-reports/<id>/sign-closing`, the same `signClosingSignature`):
+
+- `REPORT_CLOSING_SIGN_ROLES` (`canSignClosing` in `/status`), once per finish; it does not lock.
+- It prints the signer and the day it is given, not the closing's date.
+- Only before the lock: the final signature freezes the report, and after that the closing spot stays
+  blank (409 `ALREADY_FINAL`). So the final signature's dialog warns while the closing one is
+  missing ("לנעול בלי חתימת בודק") — a warning, not a block.
+- A report frozen before the update is not touched; reopening the item is the only way to sign it again.
+
 ## The final signature
 
 On the item page, "חתימה סופית על הדוח" (`POST /api/item-reports/<id>/sign`, `signItemReport`):
@@ -200,7 +220,7 @@ Bucket `MINIO_BUCKET`, registered in `file_objects`:
 
 ## Deploy
 
-1. Run `scripts/prod-item-reports/1-item-reports.sql`, then `scripts/prod-report-general-template/1-report-general-template.sql`, then `scripts/prod-report-closing-signature/1-report-closing-signature.sql` and `2-report-templates-both-signatures.sql` (the first additive; the second adds the closing signature row to every report template — the old image keeps working with both).
+1. Run `scripts/prod-item-reports/1-item-reports.sql`, then `scripts/prod-report-general-template/1-report-general-template.sql`, then `scripts/prod-report-closing-signature/1-report-closing-signature.sql` and `2-report-templates-both-signatures.sql` (the first additive; the second adds the closing signature row to every report template — the old image keeps working with both). Then, right before the new image, `scripts/prod-report-closing-role/1-report-closing-role.sql` (a column + the closing row's role cell; the old image prints that cell empty until the new one is up).
 2. Build the image — the Dockerfile now installs Chromium in the runner stage
    (`PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`).
 3. The new npm dependency `@measured/puck@0.20.2` must be in the offline npm cache

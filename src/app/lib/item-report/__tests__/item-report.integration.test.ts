@@ -160,6 +160,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     report: typeof import("../../../api/item-reports/[itemId]/route");
     status: typeof import("../../../api/item-reports/[itemId]/status/route");
     sign: typeof import("../../../api/item-reports/[itemId]/sign/route");
+    signClosing: typeof import("../../../api/item-reports/[itemId]/sign-closing/route");
     template: typeof import("../../../api/item-reports/templates/[routeId]/route");
     preview: typeof import("../../../api/item-reports/templates/[routeId]/preview/route");
     logo: typeof import("../../../api/item-reports/logo/route");
@@ -180,6 +181,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
       report: await import("../../../api/item-reports/[itemId]/route"),
       status: await import("../../../api/item-reports/[itemId]/status/route"),
       sign: await import("../../../api/item-reports/[itemId]/sign/route"),
+      signClosing: await import("../../../api/item-reports/[itemId]/sign-closing/route"),
       template: await import("../../../api/item-reports/templates/[routeId]/route"),
       preview: await import("../../../api/item-reports/templates/[routeId]/preview/route"),
       logo: await import("../../../api/item-reports/logo/route"),
@@ -280,6 +282,11 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
   async function sign(itemId: number, roles: AppRole[] = ["manager"], as = signedIn) {
     session = as(...roles);
     return call(api.sign.POST, `/api/item-reports/${itemId}/sign`, json("POST", { signature: PNG }), { itemId: String(itemId) });
+  }
+  /** The closing signature given on the item page after the fact; a tester or a manager. */
+  async function signClosing(itemId: number, roles: AppRole[] = ["tester"], as = signedIn) {
+    session = as(...roles);
+    return call(api.signClosing.POST, `/api/item-reports/${itemId}/sign-closing`, json("POST", { signature: PNG }), { itemId: String(itemId) });
   }
 
   // -------------------------------------------------------------------------------------------
@@ -508,6 +515,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.ok(row?.closing_signature_key && stored(row.closing_signature_key), "the closing signature, stored");
     assert.equal(row.closing_signed_by_name, "רונית כהן");
     assert.equal(row.closing_signed_by_number, "9001");
+    assert.equal(row.closing_signed_by_role, "בודק", "the closing keeps the signer's role");
     assert.equal(row.signature_key, null);
     assert.equal(row.storage_key, null, "not locked by the closing signature");
     st = await status(8101);
@@ -537,6 +545,126 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.match(html, /CLOSING-ROW[\s\S]*רונית כהן[\s\S]*FINAL-ROW[\s\S]*רונית כהן/);
     assert.equal((html.match(/<img src="data:image\/png;base64,/g) ?? []).length, 2, "both drawn signatures");
     assert.doesNotMatch(html, /class="pdf-draftmark"/);
+  });
+
+  it("the closing signature after the fact, on the item page: a tester or a manager, once, before the lock; the final one then locks with both", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    await saveTemplate(R.report, template({ signature: true, closing: true }));
+
+    // Still in its route: nothing to sign yet.
+    await seedReportItem(8111, v);
+    let r = await signClosing(8111);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "NOT_FINISHED");
+
+    // Finished without the closing signature (the box closed before the template had it).
+    await seedReportItem(8112, v);
+    await finishRoute(8112, v);
+    await new Promise((res) => setTimeout(res, 1500)); // the detached freeze has nothing to do
+    let st = await status(8112);
+    assert.equal(st.state, "awaiting_signature");
+    assert.equal(st.needsClosingSignature, true);
+    assert.equal(st.closingSignedBy, null, "the closing signature is missing");
+
+    // Only a tester or a manager; and a PNG.
+    assert.equal((await signClosing(8112, ["storekeeper"])).status, 403);
+    session = signedIn("tester");
+    r = await call(api.signClosing.POST, "/api/item-reports/8112/sign-closing", json("POST", { signature: "data:image/jpeg;base64,AAAA" }), { itemId: "8112" });
+    assert.equal(r.status, 400);
+    assert.equal((await reportRow(8112))?.closing_signature_key ?? null, null);
+
+    // A tester signs: kept with this finish, the report still waits for the final signature.
+    r = await signClosing(8112);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.version, 0, "not locked");
+    let row = await reportRow(8112);
+    assert.ok(row?.closing_signature_key && stored(row.closing_signature_key), "the closing signature, stored");
+    assert.equal(row.closing_signed_by_name, "רונית כהן");
+    assert.equal(row.storage_key, null);
+    st = await status(8112);
+    assert.equal(st.state, "awaiting_signature");
+    assert.equal(st.closingSignedBy, "רונית כהן");
+    assert.match((await getHtml(8112)).body, /CLOSING-ROW[\s\S]*רונית כהן[\s\S]*<img src="data:image\/png;base64,[\s\S]*FINAL-ROW[\s\S]*חתום\/י כאן/);
+
+    // Once per finish.
+    r = await signClosing(8112, ["manager"]);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "ALREADY_SIGNED");
+
+    // The final signature locks it with both.
+    assert.equal((await sign(8112)).status, 200);
+    row = await reportRow(8112);
+    assert.ok(row.storage_key, "locked");
+    const html = (await getHtml(8112)).body as string;
+    assert.equal((html.match(/<img src="data:image\/png;base64,/g) ?? []).length, 2, "both drawn signatures");
+
+    // The other order: the final signature first locks the report with the closing spot blank —
+    // after that the closing signature can no longer be given.
+    await seedReportItem(8113, v);
+    await finishRoute(8113, v);
+    assert.equal((await sign(8113)).status, 200);
+    r = await signClosing(8113, ["manager"]);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "ALREADY_FINAL");
+    assert.equal((await reportRow(8113)).closing_signature_key, null);
+
+    // A template without the closing block: nothing to sign there.
+    await saveTemplate(R.report, template({ signature: true }));
+    await seedReportItem(8114, v);
+    await finishRoute(8114, v);
+    r = await signClosing(8114);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "NO_SIGNATURE_BLOCK");
+  });
+
+  it("the closing row's role cell prints the signer's role when they signed (בודק / מנהל); the final row keeps its text", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    const t = template({ signature: false });
+    t.content.push(
+      { type: "Text", props: { id: "rv", align: "right", width: "full", content: [{ text: "ROLEVAR=" }, { v: "report.closing_signer_role" }, { text: "=END" }] } } as any,
+      { type: "Signature", props: { id: "sgc", bind: "closing", width: "full", cells: [{ kind: "text", text: "CLOSING-ROW" }, { kind: "role", label: "תפקיד", text: "OLD-ROLE" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } } as any,
+      { type: "Signature", props: { id: "sg", bind: "final", width: "full", cells: [{ kind: "text", text: "FINAL-ROW" }, { kind: "text", label: "תפקיד", text: "מאשר סופי" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } } as any,
+    );
+    await saveTemplate(R.report, t);
+    const closingRow = async (itemId: number) => {
+      const html = (await getHtml(itemId)).body as string;
+      return { closing: html.slice(html.indexOf("CLOSING-ROW"), html.indexOf("FINAL-ROW")), final: html.slice(html.indexOf("FINAL-ROW")), html };
+    };
+    const finished = async (itemId: number) => { await seedReportItem(itemId, v); await finishRoute(itemId, v); };
+
+    // Not signed yet: the role cell is empty (its text is only for an older signature).
+    await finished(8121);
+    let rows = await closingRow(8121);
+    assert.doesNotMatch(rows.closing, /OLD-ROLE|בודק|מנהל/);
+    assert.match(rows.final, /מאשר סופי/);
+
+    // A tester signs: "בודק", kept with the signature; the variable has it too.
+    assert.equal((await signClosing(8121, ["tester"])).status, 200);
+    assert.equal((await reportRow(8121)).closing_signed_by_role, "בודק");
+    rows = await closingRow(8121);
+    assert.match(rows.closing, /בודק/);
+    assert.match(rows.html, /ROLEVAR=(?:<[^>]*>)*בודק(?:<[^>]*>)*=END/, "the variable, between its markup");
+    // The manager's final signature locks it — the closing row keeps "בודק", the final row its text.
+    assert.equal((await sign(8121)).status, 200);
+    rows = await closingRow(8121);
+    assert.match(rows.closing, /בודק/);
+    assert.doesNotMatch(rows.closing, /מנהל/);
+    assert.match(rows.final, /מאשר סופי/);
+    assert.doesNotMatch(rows.final, /מנהל/);
+
+    // A manager signs at the closing: "מנהל" — also one who is a tester too.
+    await finished(8122);
+    assert.equal((await signClosing(8122, ["manager"])).status, 200);
+    assert.match((await closingRow(8122)).closing, /מנהל/);
+    await finished(8123);
+    assert.equal((await signClosing(8123, ["tester", "manager"])).status, 200);
+    assert.equal((await reportRow(8123)).closing_signed_by_role, "מנהל");
+
+    // A closing signature from before roles were kept prints the cell's own text.
+    await H.q("UPDATE item_reports SET closing_signed_by_role = NULL WHERE item_id = 8123");
+    rows = await closingRow(8123);
+    assert.match(rows.closing, /OLD-ROLE/);
+    assert.doesNotMatch(rows.closing, /מנהל/);
   });
 
   it("a template with only the closing signature: the closing signs and locks it; with only the final one the closing has nothing to sign", async () => {

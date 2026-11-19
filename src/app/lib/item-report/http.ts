@@ -1,5 +1,6 @@
 /** Small request helpers shared by the /api/item-reports routes. Server-only. */
 import type { Session } from "next-auth";
+import { signerRoleLabel } from "./roles";
 
 export type RouteCtx<K extends string> = { params: Promise<Record<K, string>> };
 
@@ -25,12 +26,15 @@ export function decodeImageDataUrl(dataUrl: unknown, maxBytes: number): { bytes:
   return { bytes, ext, type: m[1]! };
 }
 
-export function actorOf(session: Session): { username: string; name: string; number: string } {
+/** The signed-in user as a report signer: who, their number, and the role a closing signature
+ *  prints ("בודק" / "מנהל", from their roles now — kept with the signature). */
+export function actorOf(session: Session): { username: string; name: string; number: string; role: string } {
   const u = session.user;
   return {
     username: u.preferredUsername || u.email || "",
     name: u.displayName || u.name || u.preferredUsername || "",
     number: u.employeeNumber ? String(u.employeeNumber) : "",
+    role: signerRoleLabel(session.roles ?? []),
   };
 }
 
