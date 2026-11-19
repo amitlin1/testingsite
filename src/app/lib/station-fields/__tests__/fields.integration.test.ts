@@ -38,7 +38,10 @@ import { GATE_FINISH_ON_REQUIRED } from "../evaluate";
 import { UNDRAWN_TEXT, KIT_ROUTE_LABEL, fieldsGateText, routeOfTypeLabel } from "../labels";
 import { FIELDS_EDIT_ROLES, PUBLISH_ROLES } from "../roles";
 import { ID_PATTERNS } from "../schema";
-import type { ChoiceOption, ChoiceRowField, Field, FieldGroup, RouteFieldsConfig, StepConfig, Tone } from "../schema";
+import type { ChoiceOption, ChoiceRowField, Field, FieldGroup, PhotoField, RouteFieldsConfig, StepConfig, Tone } from "../schema";
+
+/** A JSON answer as the route sends it, read by its keys. */
+type Json = Record<string, unknown>;
 
 // ---------------------------------------------------------------------------
 // Fixture. On top of the write-path world (station types 10 INTAKE and 40 CLOSE package-level,
@@ -131,8 +134,8 @@ const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 function scriptUidDraws(t: TestContext, suffixes: string[]): () => number {
   const queue = [...suffixes];
   const webCrypto = globalThis.crypto;
-  const real = webCrypto.getRandomValues.bind(webCrypto);
-  t.mock.method(webCrypto, "getRandomValues", (array: any) => {
+  const real = webCrypto.getRandomValues.bind(webCrypto); // the real one, taken before the mock replaces it
+  t.mock.method(webCrypto, "getRandomValues", <A extends ArrayBufferView>(array: A): A => {
     if (array instanceof Uint8Array && !Buffer.isBuffer(array) && array.length === 16 && queue.length > 0) {
       const word = queue.shift()!;
       array.fill(255);   // rejected bytes: only the spelled ones count
@@ -163,8 +166,8 @@ const signedIn = (...roles: AppRole[]) => ({
 function stubAuth(): void {
   const req = createRequire(path.resolve(process.cwd(), "package.json"));
   const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as any;
-  const stub = new CjsModule(authPath, null);
+  const CjsModule = req("node:module") as typeof import("node:module");
+  const stub = new CjsModule(authPath);
   stub.filename = authPath;
   stub.loaded = true;
   stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
@@ -325,7 +328,7 @@ describe(
     }
 
     async function createKit(itemTypes: number[]): Promise<{ packageId: number; itemIds: number[] }> {
-      return H.h().prisma.$transaction((tx: any) =>
+      return H.h().prisma.$transaction((tx) =>
         H.h().createPackage(tx, {
           customer: H.CUSTOMER_ID,
           shipment: H.SHIPMENT_ID,
@@ -338,7 +341,7 @@ describe(
     }
 
     async function addKitItem(packageId: number, itemType: number, serialNumber: string): Promise<number> {
-      const added = await H.h().prisma.$transaction((tx: any) =>
+      const added = await H.h().prisma.$transaction((tx) =>
         H.h().addPackageItem(tx, BigInt(packageId), { itemType, serialNumber, makat: "MK-1", model: "MODEL", manufacturer: "MFR" }),
       );
       return added.itemId;
@@ -375,10 +378,10 @@ describe(
     }
 
     /** GET /api/testing/station-fields, invoked as Next would. */
-    async function stationFields(itemId: number | string, stationId?: number): Promise<{ status: number; body: any }> {
+    async function stationFields<B = Json>(itemId: number | string, stationId?: number): Promise<{ status: number; body: B }> {
       const qs = `itemId=${itemId}` + (stationId !== undefined ? `&stationId=${stationId}` : "");
       const res = await getStationFields(new Request(`http://localhost/api/testing/station-fields?${qs}`));
-      return { status: res.status, body: await res.json() };
+      return { status: res.status, body: (await res.json()) as B };
     }
 
     /** POST /api/testing/results with a fresh SubmitID. */
@@ -386,7 +389,7 @@ describe(
       return H.submitResult({ ItemID: itemId, StationID: stationId, SubmitID: randomUUID(), ...extra });
     }
 
-    type StoredResult = { result: number | null; passed: boolean | null; comments: string | null; details: any };
+    type StoredResult = { result: number | null; passed: boolean | null; comments: string | null; details: { fields?: Record<string, unknown> } & Record<string, unknown> };
     function storedResults(itemId: number): Promise<StoredResult[]> {
       return H.q<StoredResult>(
         "SELECT result, passed, comments, details FROM test_results WHERE item_id = $1 ORDER BY test_result_id",
@@ -408,12 +411,12 @@ describe(
 
     /** One admin handler call as Next makes it: a JSON body (or `raw` text), the dynamic route's
      *  params, the body of the answer parsed. */
-    async function httpCall(
+    async function httpCall<B = Json>(
       handler: unknown,
       method: string,
       url: string,
       opts: { body?: unknown; raw?: string; params?: Record<string, string> } = {},
-    ): Promise<{ status: number; body: any }> {
+    ): Promise<{ status: number; body: B }> {
       const req = new Request(`http://localhost${url}`, {
         method,
         headers: { "content-type": "application/json" },
@@ -422,7 +425,7 @@ describe(
       const call = handler as (req: Request, ctx?: { params: Promise<Record<string, string>> }) => Promise<Response>;
       const res = await call(req, opts.params ? { params: Promise.resolve(opts.params) } : undefined);
       const text = await res.text();
-      return { status: res.status, body: text ? JSON.parse(text) : null };
+      return { status: res.status, body: (text ? JSON.parse(text) : null) as B };
     }
 
     /**
@@ -1137,7 +1140,7 @@ describe(
         confirmPackageReset: true, workerId: H.WORKER_ID, workerName: H.WORKER_NAME,
       });
       assert.equal(reset.status, 200, JSON.stringify(reset.body));
-      assert.deepEqual(reset.body.packageReset.map(Number).sort(), [kit.packageId, a, b].sort());
+      assert.deepEqual(reset.body.packageReset?.map(Number).sort(), [kit.packageId, a, b].sort());
       assert.equal(await versionOf(kit.packageId), 2, "the box: the kit route's current version");
       assert.equal(await versionOf(a), 3, "the retyped item: its NEW route's current version");
       assert.equal(await versionOf(b), 2, "the other item: its route's current version");
@@ -1460,9 +1463,9 @@ describe(
 
       await seedFrozenItem(6421, 1);
       await seedFrozenItem(6422, 1);
-      const read = await stationFields(6421, H.STATION_FUNC_A);
+      const read = await stationFields<{ fields: Field[] }>(6421, H.STATION_FUNC_A);
       assert.equal(read.status, 200);
-      assert.equal(read.body.fields.find((f: Field) => f.id === SHOT.id).photo_type, code);
+      assert.equal(read.body.fields.find((f): f is PhotoField => f.id === SHOT.id && f.type === "photo")?.photo_type, code);
 
       const shot = (photo_type: string) => ({ ...validFields(), [SHOT.id]: { t: "photo", photo_type, photos: ["items/6421/a.png"] } });
       const stale = await submitAt(6422, H.STATION_FUNC_A, { Details: { schema: itemSchema(), fields: shot("product") } });
@@ -1470,7 +1473,7 @@ describe(
       assert.equal(stale.body.code, "FIELDS_INVALID");
       const saved = await submitAt(6421, H.STATION_FUNC_A, { Details: { schema: itemSchema(), fields: shot(code) } });
       assert.equal(saved.status, 200, JSON.stringify(saved.body));
-      assert.deepEqual((await storedResults(6421))[0].details.fields[SHOT.id], { t: "photo", label: "צילום הלוח", photo_type: code, photos: ["items/6421/a.png"] });
+      assert.deepEqual((await storedResults(6421))[0].details.fields?.[SHOT.id], { t: "photo", label: "צילום הלוח", photo_type: code, photos: ["items/6421/a.png"] });
 
       // A rename follows on the next publish; a field that leaves the route keeps its group.
       await publish(R.fields, config(itemStep(UID.f1, [LED, GND, { ...SHOT, label: "צילום הלוח מלפנים" }])));
@@ -1788,7 +1791,7 @@ describe(
     it("http: every station-field write needs a session (401) and FIELDS_EDIT_ROLES (403, naming them) — publish PUBLISH_ROLES — while reads stay open; nothing is written when refused", async () => {
       const id = String(R.fields);
       const rev = await saveDraft(R.fields, config(itemStep(UID.f1, [LED])));
-      const writes: { name: string; roles: AppRole[]; call: () => Promise<{ status: number; body: any }> }[] = [
+      const writes: { name: string; roles: AppRole[]; call: () => Promise<{ status: number; body: Json }> }[] = [
         { name: "POST route", roles: FIELDS_EDIT_ROLES, call: () => httpCall(http.routes.POST, "POST", "/api/settings/testing-routes", {
           body: { item_type_id: ITEM_TYPE_ROUTED, route_number: 1, route_steps: [H.TYPE_FUNC] } }) },
         { name: "PUT route", roles: FIELDS_EDIT_ROLES, call: () => httpCall(http.route.PUT, "PUT", `/api/settings/testing-routes/${id}`, {
@@ -1814,7 +1817,7 @@ describe(
 
       // Reads are not wrapped: the middleware signs them in, whatever the roles (spec §3.0).
       session = null;
-      const list = await httpCall(http.routes.GET, "GET", `/api/settings/testing-routes?itemTypeId=${ITEM_TYPE_FIELDS}&routeNumber=1`);
+      const list = await httpCall<{ test_route_id: number; has_draft: boolean }[]>(http.routes.GET, "GET", `/api/settings/testing-routes?itemTypeId=${ITEM_TYPE_FIELDS}&routeNumber=1`);
       assert.equal(list.status, 200);
       assert.deepEqual(list.body.map((r: { test_route_id: number; has_draft: boolean }) => [r.test_route_id, r.has_draft]), [[R.fields, true]]);
       const read = await httpCall(http.fields.GET, "GET", `/api/settings/testing-routes/${id}/fields`, { params: { id } });
@@ -1824,7 +1827,7 @@ describe(
 
     it("http: a tester may do every write; open decision §10.2-1 flipped the one-line way (PUBLISH_ROLES = manager) leaves the tester the preview but not the publish, and the manager's publish records who published", async () => {
       session = signedIn("tester");
-      const created = await httpCall(http.routes.POST, "POST", "/api/settings/testing-routes", {
+      const created = await httpCall<{ test_route_id: number; step_uids: string[] }>(http.routes.POST, "POST", "/api/settings/testing-routes", {
         body: { item_type_id: ITEM_TYPE_ROUTED, route_number: 1, route_steps: [H.TYPE_FUNC, H.TYPE_FUNC] },
       });
       assert.equal(created.status, 200, JSON.stringify(created.body));
@@ -1904,7 +1907,7 @@ describe(
       assert.deepEqual([notJson.status, notJson.body.code], [400, "INVALID_BODY"]);
 
       await saveDraft(R.second, config(itemStep(UID.s1, [{ ...INSULATION, label: " " }])));
-      const lint = await httpCall(http.preview.POST, "POST", "/api/settings/testing-routes/fields/publish-preview", { body: { route_ids: [R.second] } });
+      const lint = await httpCall<{ code?: string; issues: RouteIssue[] }>(http.preview.POST, "POST", "/api/settings/testing-routes/fields/publish-preview", { body: { route_ids: [R.second] } });
       assert.equal(lint.status, 422);
       assert.equal(lint.body.code, "LINT_ERRORS");
       assert.ok(lint.body.issues.some((i: RouteIssue) => i.route_id === R.second && i.code === "FIELD_LABEL_EMPTY" && i.level === "error"));

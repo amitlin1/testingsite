@@ -3,6 +3,7 @@ import React, { forwardRef } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
+import Image from "next/image";
 
 /* ---------------------------------------------------------------- Fab ---- */
 export interface FabProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "color"> {
@@ -66,10 +67,8 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(function Avatar(
       }}
       {...rest}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- design-system primitive
-          taking an arbitrary caller-supplied URL; next/image needs known dimensions
-          and a configured remote host. */}
-      {src ? <img src={src} alt={alt} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : children}
+      {/* Any caller-supplied URL: unoptimized (no loader, no remote-host list), sized by the frame. */}
+      {src ? <Image src={src} alt={alt ?? ""} width={0} height={0} unoptimized style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : children}
     </div>
   );
 });
@@ -211,20 +210,25 @@ export const Stepper = forwardRef<HTMLDivElement, StepperProps>(function Stepper
   return (
     <div ref={ref} style={{ display: "flex", flexDirection: vertical ? "column" : "row", alignItems: vertical ? "stretch" : "center", gap: 0, ...sxToStyle(sx), ...style }} {...rest}>
       {steps.map((step, i) => {
-        const completed = (step as React.ReactElement<any>).props.completed ?? i < activeStep;
-        const active = (step as React.ReactElement<any>).props.active ?? i === activeStep;
+        // Each child is a <Step>: its own active / completed win over the position.
+        const { props } = step as React.ReactElement<StepState>;
+        const completed = props.completed ?? i < activeStep;
+        const active = props.active ?? i === activeStep;
         return (
           <React.Fragment key={i}>
             {i > 0 && (
               <div style={{ flex: vertical ? undefined : 1, height: vertical ? 24 : 0, width: vertical ? 0 : "auto", borderTop: vertical ? undefined : "1px solid var(--color-hairline)", borderInlineStart: vertical ? "1px solid var(--color-hairline)" : undefined, margin: vertical ? "0 0 0 15px" : "0 8px", alignSelf: alternativeLabel ? "flex-start" : "center" }} />
             )}
-            {React.cloneElement(step as React.ReactElement<any>, { index: i, active, completed })}
+            {React.cloneElement(step as React.ReactElement<StepState>, { index: i, active, completed })}
           </React.Fragment>
         );
       })}
     </div>
   );
 });
+
+/** What a Stepper hands each <Step>, and a Step each of its children (StepLabel…). */
+type StepState = { completed?: boolean; active?: boolean; index?: number };
 
 export interface StepProps extends React.HTMLAttributes<HTMLDivElement> {
   completed?: boolean;
@@ -238,7 +242,7 @@ export const Step = forwardRef<HTMLDivElement, StepProps>(function Step(
 ) {
   return (
     <div ref={ref} style={{ display: "flex", alignItems: "center", ...sxToStyle(sx), ...style }} {...rest}>
-      {React.Children.map(children, (c) => (React.isValidElement(c) ? React.cloneElement(c as React.ReactElement<any>, { active, completed, index }) : c))}
+      {React.Children.map(children, (c) => (React.isValidElement(c) ? React.cloneElement(c as React.ReactElement<StepState>, { active, completed, index }) : c))}
     </div>
   );
 });

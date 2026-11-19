@@ -1,6 +1,6 @@
 // Smoke: login, every package-model screen renders, the read APIs answer with the
 // upgraded data. Screenshots land in e2e/shots.
-import { launch, login, api, goto, shot, bodyHas, check, summary, BASE, resolveConfig } from "./lib.mjs";
+import { launch, login, api, goto, shot, bodyHas, check, summary, resolveConfig } from "./lib.mjs";
 
 const { browser, page, errors } = await launch();
 try {

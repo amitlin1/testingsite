@@ -8,6 +8,11 @@ import DataTable, { RowActions, IconAction, type Column as DTColumn } from "@/co
 import { Pencil, Trash2, Plus } from "lucide-react";
 import SettingsToolbar from "./SettingsToolbar";
 import { apiFetch } from "@/lib/api/client";
+import { omit } from "@/lib/omit";
+import { errorMessage } from "@/lib/errors";
+
+/** A row as the settings API returns it: a JSON record, read by the columns' field names. */
+export type Row = Record<string, unknown>;
 
 export interface Column {
   field: string;
@@ -15,7 +20,7 @@ export interface Column {
   width?: string | number;
   /** Custom cell (a pill, a link…). Display only — the edit dialog still
    *  binds the field as text, so pair it with `readOnly` for derived fields. */
-  renderCell?: (row: any) => React.ReactNode;
+  renderCell?: (row: Row) => React.ReactNode;
   /** Shown in the table, left out of the add/edit form and the required check. */
   readOnly?: boolean;
   align?: "start" | "center" | "end";
@@ -36,7 +41,7 @@ interface CrudTableProps {
 }
 
 /** The table's rows, or null when they could not be read. */
-async function readRows(apiUrl: string): Promise<any[] | null> {
+async function readRows(apiUrl: string): Promise<Row[] | null> {
   try {
     const res = await apiFetch(apiUrl);
     if (!res.ok) return null;
@@ -48,20 +53,20 @@ async function readRows(apiUrl: string): Promise<any[] | null> {
 }
 
 export default function CrudTable({ apiUrl, columns, idField, nameField, entityName, title, subtitle, countLabel }: CrudTableProps) {
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   // A failed load is not an empty table: it gets its own band and a retry.
   const [loadError, setLoadError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingRow, setEditingRow] = useState<any | null>(null);
-  const [formData, setFormData] = useState<any>({});
+  const [editingRow, setEditingRow] = useState<Row | null>(null);
+  const [formData, setFormData] = useState<Row>({});
   // Validation is shown on the field it is about, not in a toast.
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saveLoading, setSaveLoading] = useState(false);
 
-  const [rowToDelete, setRowToDelete] = useState<any | null>(null);
+  const [rowToDelete, setRowToDelete] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
@@ -69,7 +74,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
   });
   const showSnackbar = (message: string, severity: "success" | "error") => setSnackbar({ open: true, message, severity });
 
-  const applyRows = useCallback((list: any[] | null) => {
+  const applyRows = useCallback((list: Row[] | null) => {
     if (list) setRows(list);
     else setLoadError(true);
     setLoading(false);
@@ -92,8 +97,8 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
   useEffect(() => { readRows(apiUrl).then(applyRows); }, [apiUrl, applyRows]);
 
   const handleAdd = () => { setEditingRow(null); setFormData({}); setFormErrors({}); setOpenDialog(true); };
-  const handleEdit = (row: any) => { setEditingRow(row); setFormData({ ...row }); setFormErrors({}); setOpenDialog(true); };
-  const handleDeleteClick = (row: any) => { setRowToDelete(row); };
+  const handleEdit = (row: Row) => { setEditingRow(row); setFormData({ ...row }); setFormErrors({}); setOpenDialog(true); };
+  const handleDeleteClick = (row: Row) => { setRowToDelete(row); };
 
   const handleSave = async () => {
     const errors: Record<string, string> = {};
@@ -105,7 +110,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
     }
     if (Object.keys(errors).length > 0) { setFormErrors(errors); return; }
     const isDuplicate = rows.some((r) =>
-      r[nameField].toLowerCase().trim() === formData[nameField].toLowerCase().trim() &&
+      String(r[nameField] ?? "").toLowerCase().trim() === String(formData[nameField] ?? "").toLowerCase().trim() &&
       r[idField] !== editingRow?.[idField]
     );
     if (isDuplicate) { setFormErrors({ [nameField]: "ערך זה כבר קיים. בחר ערך אחר." }); return; }
@@ -121,7 +126,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "השמירה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
       }
-      const savedRow = await res.json();
+      const savedRow: Row = await res.json();
       if (editingRow && savedRow) {
         setRows(rows.map((r) => (r[idField] === savedRow[idField] ? savedRow : r)));
         showSnackbar(`${entityName} עודכן בהצלחה`, "success");
@@ -130,8 +135,8 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
         showSnackbar(`${entityName} נוצר בהצלחה`, "success");
       }
       setOpenDialog(false);
-    } catch (err: any) {
-      showSnackbar(err.message, "error");
+    } catch (err) {
+      showSnackbar(errorMessage(err), "error");
     } finally {
       setSaveLoading(false);
     }
@@ -148,8 +153,8 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
       }
       setRows(rows.filter((r) => r[idField] !== rowToDelete[idField]));
       showSnackbar(`${entityName} נמחק בהצלחה`, "success");
-    } catch (err: any) {
-      showSnackbar(err.message, "error");
+    } catch (err) {
+      showSnackbar(errorMessage(err), "error");
     } finally {
       setDeleting(false);
       setRowToDelete(null);
@@ -161,11 +166,11 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
     return columns.some((col) => String(row[col.field]).toLowerCase().includes(searchTerm.toLowerCase()));
   });
 
-  const dtColumns: DTColumn<any>[] = [
+  const dtColumns: DTColumn<Row>[] = [
     ...columns.map((col) => ({
       key: col.field,
       header: col.headerName,
-      cell: (row: any) => (col.renderCell ? col.renderCell(row) : (row[col.field] ?? "—")) as React.ReactNode,
+      cell: (row: Row) => (col.renderCell ? col.renderCell(row) : (row[col.field] ?? "—")) as React.ReactNode,
       width: typeof col.width === "number" ? col.width : undefined,
       align: col.align,
       nowrap: true,
@@ -176,7 +181,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
       header: "פעולות",
       align: "center" as const,
       width: 120,
-      cell: (row: any) => (
+      cell: (row: Row) => (
         <RowActions>
           <IconAction title={`ערוך את ${row[nameField] ?? entityName}`} onClick={() => handleEdit(row)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
           <IconAction title={`מחק את ${row[nameField] ?? entityName}`} danger onClick={() => handleDeleteClick(row)}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
@@ -227,7 +232,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
           <DataTable
             columns={dtColumns}
             rows={filteredRows}
-            getRowKey={(r) => r[idField]}
+            getRowKey={(r) => String(r[idField])}
             loading={loading}
             minWidth={520}
             maxHeight="100%"
@@ -247,10 +252,10 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
                 <TextField
                   key={col.field}
                   label={col.headerName}
-                  value={formData[col.field] || ""}
+                  value={String(formData[col.field] ?? "")}
                   onChange={(e) => {
                     setFormData({ ...formData, [col.field]: e.target.value });
-                    if (formErrors[col.field]) setFormErrors(({ [col.field]: _drop, ...rest }) => rest);
+                    if (formErrors[col.field]) setFormErrors((errors) => omit(errors, [col.field]));
                   }}
                   error={!!formErrors[col.field]}
                   helperText={formErrors[col.field]}

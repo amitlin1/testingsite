@@ -1,6 +1,6 @@
 // Build the single all-in-one upgrade script an operator runs in DBeaver.
 //
-//   node scripts/build-upgrade-sql.js
+//   node scripts/build-upgrade-sql.mjs
 //
 // Concatenates, in the order they must run:
 //   1. research_history.item_id  int4 -> bigint
@@ -20,11 +20,11 @@
 // Regenerate this whenever any of the four source files changes — the embedded
 // checksums are computed from them at build time.
 
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
 
-const repo = path.join(__dirname, "..");
+const repo = path.join(import.meta.dirname, "..");
 const out = path.join(repo, "release", "db-scripts", "UPGRADE_ALL_IN_ONE.sql");
 
 const SRC = {

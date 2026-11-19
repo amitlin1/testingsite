@@ -15,7 +15,7 @@ export async function GET() {
       orderBy: { name: "asc" },
     });
 
-    const customers: CustomerOption[] = rows.map((row: any) => ({
+    const customers: CustomerOption[] = rows.map((row) => ({
       id: row.id,
       name: (row.name ?? "").trim(),
       customer_code: row.customer_code ?? "",

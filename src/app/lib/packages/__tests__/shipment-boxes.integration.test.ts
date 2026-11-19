@@ -8,7 +8,9 @@
 // migration); borrows the write-path harness and its fixture.
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import type { Prisma } from "@prisma/client";
 import * as H from "../../metrics/__tests__/write-path-helpers";
+import { errorCode } from "@/lib/errors";
 
 const BOX_TYPE = H.ITEM_TYPE_PACKAGE_CLOSE; // route [INTAKE, CLOSE]
 const OTHER_CUSTOMER = 8;
@@ -21,7 +23,7 @@ let lines: Lines;
 const ROW1 = "1|M-1|SONY|V1|111||1|1|PO-1|SHIP-1";
 const ROW2 = "2|M-2|SONY|V2|222||1|1|PO-2|SHIP-1";
 
-const tx = <T>(fn: (tx: any) => Promise<T>) => H.h().prisma.$transaction(fn) as Promise<T>;
+const tx = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) => H.h().prisma.$transaction(fn);
 const sync = () => tx((t) => boxes.syncShipmentBoxes(t, H.SHIPMENT_ID));
 
 /** Saves the shipment's lines as a form would send them, then syncs its boxes. */
@@ -112,9 +114,9 @@ describe("shipment boxes follow their lines", { skip: H.skipReason() }, () => {
     await tx((t) => boxes.intakeBox(t, BigInt(b1.item_id)));
     await tx((t) => boxes.intakeBox(t, BigInt(b2.item_id)));
 
-    await assert.rejects(save([line(ROW2)]), (e: any) => e.code === "SHIPMENT_LINE_TAKEN_IN");
-    await assert.rejects(save([line(ROW1, { line_id: l1, item_type_id: H.ITEM_TYPE_PACKAGE })]), (e: any) => e.code === "SHIPMENT_LINE_TAKEN_IN");
-    await assert.rejects(save([line(ROW1, { line_id: l1, quantity: 1 })]), (e: any) => e.code === "SHIPMENT_BOXES_TAKEN_IN");
+    await assert.rejects(save([line(ROW2)]), (e) => errorCode(e) === "SHIPMENT_LINE_TAKEN_IN");
+    await assert.rejects(save([line(ROW1, { line_id: l1, item_type_id: H.ITEM_TYPE_PACKAGE })]), (e) => errorCode(e) === "SHIPMENT_LINE_TAKEN_IN");
+    await assert.rejects(save([line(ROW1, { line_id: l1, quantity: 1 })]), (e) => errorCode(e) === "SHIPMENT_BOXES_TAKEN_IN");
     const kept = await save([line(ROW1, { line_id: l1, quantity: 2 })]);
     assert.deepEqual(kept.removed, [b3.item_id], "only the pending box goes");
     assert.deepEqual((await boxRows()).map((b) => b.item_id), [b1.item_id, b2.item_id]);
@@ -174,7 +176,7 @@ describe("shipment boxes follow their lines", { skip: H.skipReason() }, () => {
     // A row of another certificate is refused; a row the shipment never scanned only fills the serial.
     await assert.rejects(
       tx((t) => boxes.bindCertificateRow(t, BigInt(a.item_id), "2^1|M-1|SONY|V1|111|SN-9|1|1|PO-1|SHIP-OTHER")),
-      (e: any) => e.code === "CERT_ROW_OTHER_SHIPMENT",
+      (e) => errorCode(e) === "CERT_ROW_OTHER_SHIPMENT",
     );
     const unknown = await tx((t) => boxes.bindCertificateRow(t, BigInt(a.item_id), "2^9|M-9|LG|V9|999|SN-9|1|1|PO-9"));
     assert.equal(unknown.matched, false);

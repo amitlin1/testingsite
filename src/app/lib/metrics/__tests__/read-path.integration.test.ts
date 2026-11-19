@@ -4,7 +4,7 @@
 //
 // WHY IT EXISTS. Stage 5 shipped ten converted endpoints and eight query
 // builders with ZERO tests; the only thing watching them was
-// scripts/dashboard-parity.js, and it was watching the wrong object — its
+// scripts/dashboard-parity.mjs, and it was watching the wrong object — its
 // default mode graded a second copy of each route's mapping, and its row
 // comparison only ever looked at fields the OLD response carried, so every
 // §2.8 addition was stamped NEW_ONLY and never read. That is how four
@@ -512,7 +512,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
   const workerName = (id: number | null) =>
     id === WORKER_A ? WORKER_A_NAME : id === WORKER_B ? WORKER_B_NAME : null;
 
-  async function q<T = Record<string, any>>(sql: string, params: any[] = []): Promise<T[]> {
+  async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
     return (await pool.query(sql, params)).rows as T[];
   }
 
@@ -531,8 +531,8 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     // only way to reach a withAuth-wrapped handler in-process.
     const req = createRequire(path.resolve(process.cwd(), "package.json"));
     const authPath = req.resolve("./auth.ts");
-    const CjsModule = req("node:module") as any;
-    const stub = new CjsModule(authPath, null);
+    const CjsModule = req("node:module") as typeof import("node:module");
+    const stub = new CjsModule(authPath);
     stub.filename = authPath;
     stub.loaded = true;
     stub.exports = {
@@ -604,7 +604,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     const [row] = await q<{ version: number | null; has_fold: boolean }>(`
       SELECT (SELECT version FROM metrics_schema_version WHERE id = 1) AS version,
              to_regprocedure('metrics_open_run(bigint,timestamptz)') IS NOT NULL AS has_fold
-    `).catch(() => [] as any);
+    `).catch((): { version: number | null; has_fold: boolean }[] => []);
     if (!row?.has_fold || row.version == null) {
       throw new Error(
         "TEST_DATABASE_URL does not carry the metrics ledger schema — apply " +
@@ -1184,9 +1184,12 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     return sp.toString();
   }
 
-  async function call(name: string, query = defaultQuery()): Promise<{ status: number; body: any; headers: Headers }> {
+  /** A dashboard row (or the KPI object), read by its wire names. */
+  type Row = Record<string, unknown>;
+  /** Calls a dashboard route; `B` is the shape it answers with (most answer rows). */
+  async function call<B = Row[]>(name: string, query = defaultQuery()): Promise<{ status: number; body: B; headers: Headers }> {
     const res = await routes[name](new Request(`http://localhost/api/dashboard/${name}?${query}`) as never);
-    return { status: res.status, body: await res.json(), headers: res.headers };
+    return { status: res.status, body: (await res.json()) as B, headers: res.headers };
   }
 
   /** Every plain object in a response, however deeply nested (the history
@@ -1205,7 +1208,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
 
   it("every converted endpoint answers 200 on the default window and returns rows", async () => {
     for (const name of CONVERTED) {
-      const { status, body } = await call(name);
+      const { status, body } = await call<Row | Row[]>(name);
       assert.equal(status, 200, `${name} answered ${status}: ${JSON.stringify(body).slice(0, 200)}`);
       const n = Array.isArray(body) ? body.length : Object.keys(body).length;
       assert.ok(n > 0, `${name} answered an empty response — the fixture should fill every screen`);
@@ -1254,13 +1257,13 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     }
     // The type's queue repeats across the stations of a type and is never the
     // station's own: TY_A's 8 closed queue-hours are reported on ST_A's row.
-    const a = body.find((r: any) => r.stationId === ST_A)!;
+    const a = body.find((r) => r.stationId === ST_A)!;
     assert.equal(a._new_typeWaitWorkHours, 8);
     assert.equal(a._new_typeWaitAvgWorkMinutes, 60);
-    const b = body.find((r: any) => r.stationId === ST_B)!;
+    const b = body.find((r) => r.stationId === ST_B)!;
     assert.equal(b._new_typeWaitWorkHours, 6);
     // ST_R's own flow numbers, from the two research closures.
-    const r = body.find((r: any) => r.stationId === ST_R)!;
+    const r = body.find((r) => r.stationId === ST_R)!;
     assert.equal(r.totalProcessedInPeriod, 2);
     assert.equal(r._new_typeWaitWorkHours, 2);
   });
@@ -1297,7 +1300,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
   });
 
   it("the KPI card's numbers are the ledger's, and its queue pair sits on both clocks", async () => {
-    const { body: k, headers } = await call("tests/kpis");
+    const { body: k, headers } = await call<Row>("tests/kpis");
     assert.equal(k.itemsCurrentlyInQueue, 4); // 3 queued + 1 queued_research
     assert.equal(k.itemsCurrentlyInTest, 3); // 2 testing + 1 in_research
     assert.equal(k.totalItemsProcessed, 2);
@@ -1314,7 +1317,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     // The lab-wide total ships under its own name and is larger: every type
     // plus the station-less research pool.
     assert.equal(k._new_labWaitWorkSeconds, (8 + 6 + 2 + 3) * 3600);
-    assert.ok(k._new_labWaitWallSeconds >= k._new_labWaitWorkSeconds);
+    assert.ok(Number(k._new_labWaitWallSeconds) >= Number(k._new_labWaitWorkSeconds));
     // §6.3 — the window the server actually queried, reported as headers.
     assert.equal(headers.get("x-metrics-period-from"), windowFrom());
     assert.equal(headers.get("x-metrics-period-to"), windowTo());
@@ -1326,13 +1329,13 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     // D20, D19, D15, D14, D5, D4, D3, D2 — eight days had a closure. D1 (7306
     // arriving in the queue) is not a bucket: §5.0(7), no gap filling.
     assert.deepEqual(
-      body.map((p: any) => p.date),
+      body.map((p) => p.date),
       [D(20), D(19), D(15), D(14), D(5), D(4), D(3), D(2)],
     );
     for (const p of body) {
       assert.ok(p.avgWaitingMinutes !== null, `${p.date} waiting`);
       assert.ok(p.avgProcessingMinutes !== null, `${p.date} processing`);
-      assert.ok(p.recordCount > 0 && p._new_waitRecordCount > 0, p.date);
+      assert.ok(Number(p.recordCount) > 0 && Number(p._new_waitRecordCount) > 0, String(p.date));
     }
     // D20: one 60-minute queue and one 120-minute test, on both clocks.
     const d20 = body[0];
@@ -1361,7 +1364,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     assert.equal(res.status, 400);
     assert.equal((await res.json()).error, "startDate and endDate are required");
 
-    const bad = await call("tests/kpis", "startDate=not-a-date&endDate=also-not");
+    const bad = await call<{ error?: string }>("tests/kpis", "startDate=not-a-date&endDate=also-not");
     assert.equal(bad.status, 400);
     assert.equal(bad.body.error, "Invalid date format");
   });

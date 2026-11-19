@@ -255,7 +255,7 @@ export default function WorkHoursPage() {
     key: string; sort: string; when: React.ReactNode; desc: string;
     source: string; details: React.ReactNode; onEdit: () => void; onDelete: () => void;
   };
-  const entryRows: EntryRow[] = React.useMemo(() => {
+  const entryRows: EntryRow[] = (() => {
     const rows: EntryRow[] = [];
     for (const h of holidays) {
       rows.push({
@@ -281,8 +281,7 @@ export default function WorkHoursPage() {
       });
     }
     return rows.sort((a, b) => a.sort.localeCompare(b.sort));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holidays, monthOverrides, daysByDate]);
+  })();
 
   const entryColumns: Column<EntryRow>[] = [
     { key: "when", header: "תאריך", nums: true, cell: (r) => r.when },

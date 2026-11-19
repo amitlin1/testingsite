@@ -101,7 +101,8 @@ type Handlers = {
   deleteItem: ItemRouteHandler;
   createPackage: typeof import("../../packages/create-package").createPackage;
   addPackageItem: typeof import("../../packages/create-package").addPackageItem;
-  prisma: { $disconnect: () => Promise<void>; $transaction: (fn: (tx: any) => Promise<any>) => Promise<any> };
+  /** The app's own Prisma client (src/app/lib/prisma), pointed at TEST_DATABASE_URL by setup(). */
+  prisma: typeof import("../../prisma").prisma;
 };
 
 let handlers: Handlers | null = null;
@@ -112,7 +113,7 @@ export function h(): Handlers {
   return handlers;
 }
 
-export async function q<T = Record<string, any>>(sql: string, params: any[] = []): Promise<T[]> {
+export async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
   if (!pool) throw new Error("setup() has not run");
   const res = await pool.query(sql, params);
   return res.rows as T[];
@@ -124,9 +125,9 @@ export async function q<T = Record<string, any>>(sql: string, params: any[] = []
  * anything inside a transaction block — and for anything that must not be
  * spread across two pooled connections.
  */
-export async function inTransaction<T = Record<string, any>>(
+export async function inTransaction<T = Record<string, unknown>>(
   sql: string,
-  params: any[] = [],
+  params: unknown[] = [],
 ): Promise<T[]> {
   if (!pool) throw new Error("setup() has not run");
   const client = await pool.connect();
@@ -143,7 +144,7 @@ export async function inTransaction<T = Record<string, any>>(
   }
 }
 
-export async function one<T = Record<string, any>>(sql: string, params: any[] = []): Promise<T> {
+export async function one<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T> {
   const rows = await q<T>(sql, params);
   if (rows.length !== 1) throw new Error(`expected exactly 1 row, got ${rows.length}: ${sql}`);
   return rows[0];
@@ -182,7 +183,7 @@ export async function setup(): Promise<void> {
     deleteItem: itemMod.DELETE as ItemRouteHandler,
     createPackage: createPackageMod.createPackage,
     addPackageItem: createPackageMod.addPackageItem,
-    prisma: prismaMod.prisma as unknown as Handlers["prisma"],
+    prisma: prismaMod.prisma,
   };
 
   await seedWorkCalendar();
@@ -482,69 +483,90 @@ export function jsonRequest(
   });
 }
 
-export type HandlerResult = { status: number; body: any };
+/**
+ * What the write-path routes answer, as far as the suites read it — each field only on the answers
+ * that carry it (a refusal carries error / code, a success its own fields).
+ */
+export type ApiRefusal = { error?: string; code?: string; missing?: unknown };
+/** POST /api/testing/results */
+export type ResultsBody = ApiRefusal & {
+  ok?: boolean;
+  success?: boolean;
+  replay?: boolean;
+  isLastStep?: boolean;
+  isLastStation?: boolean;
+  researchId?: number | null;
+  logId?: number | null;
+  reportSign?: "signed" | "nothing_to_sign" | "failed";
+  packageGate?: { packageId: string; status: number | null; blockingItemIds: string[] };
+};
+/** POST /api/testing/start-test */
+export type StartTestBody = ApiRefusal & { success?: boolean; item?: { startedPackageItems: string[] } };
+/** POST /api/testing/release-test */
+export type ReleaseTestBody = ApiRefusal & { success?: boolean };
+/** PUT /api/items/[id] */
+export type UpdateItemBody = ApiRefusal & { ok?: boolean; item_id?: string; retyped?: boolean; packageReset?: string[] | null };
+/** DELETE /api/items/[id] */
+export type DeleteItemBody = ApiRefusal & { ok?: boolean; deletedConnectedCount?: number };
+/** POST /api/cron/release-stale-tests */
+export type ReaperBody = ApiRefusal & { success?: boolean; releasedCount: number; itemIds: string[]; stationsFreed: number };
 
-async function call(
+/** A route's answer: its status and its JSON (null when the body is not JSON). */
+export type HandlerResult<B = ApiRefusal> = { status: number; body: B };
+
+/** The route's JSON as the type its route answers with (this suite reads what that route sends). */
+async function jsonOf<B>(res: Response): Promise<B> {
+  try {
+    return (await res.json()) as B;
+  } catch {
+    // Not JSON: the suites read fields of a body, and find none on this one.
+    return {} as B;
+  }
+}
+
+async function call<B>(
   handler: RouteHandler,
   path: string,
   body: unknown,
   headers?: Record<string, string>,
-): Promise<HandlerResult> {
+): Promise<HandlerResult<B>> {
   const res = await handler(jsonRequest(path, body, headers));
-  let parsed: any = null;
-  try {
-    parsed = await res.json();
-  } catch {
-    parsed = null;
-  }
-  return { status: res.status, body: parsed };
+  return { status: res.status, body: await jsonOf<B>(res) };
 }
 
-export function startTest(body: Record<string, unknown>): Promise<HandlerResult> {
-  return call(h().startTest, "/api/testing/start-test", body);
+export function startTest(body: Record<string, unknown>): Promise<HandlerResult<StartTestBody>> {
+  return call<StartTestBody>(h().startTest, "/api/testing/start-test", body);
 }
 
-export function releaseTest(body: Record<string, unknown>): Promise<HandlerResult> {
-  return call(h().releaseTest, "/api/testing/release-test", body);
+export function releaseTest(body: Record<string, unknown>): Promise<HandlerResult<ReleaseTestBody>> {
+  return call<ReleaseTestBody>(h().releaseTest, "/api/testing/release-test", body);
 }
 
 /** PUT /api/items/[id] — the edit / retype path (docs/packages/PLAN.md §4). */
-export async function updateItem(itemId: number, body: Record<string, unknown>): Promise<HandlerResult> {
+export async function updateItem(itemId: number, body: Record<string, unknown>): Promise<HandlerResult<UpdateItemBody>> {
   const req = new Request(`http://localhost/api/items/${itemId}`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   const res = await h().updateItem(req, { params: Promise.resolve({ id: String(itemId) }) });
-  let parsed: any;
-  try {
-    parsed = await res.json();
-  } catch {
-    parsed = null;
-  }
-  return { status: res.status, body: parsed };
+  return { status: res.status, body: await jsonOf<UpdateItemBody>(res) };
 }
 
 /** DELETE /api/items/[id]. */
-export async function deleteItem(itemId: number, body: Record<string, unknown> = {}): Promise<HandlerResult> {
+export async function deleteItem(itemId: number, body: Record<string, unknown> = {}): Promise<HandlerResult<DeleteItemBody>> {
   const req = new Request(`http://localhost/api/items/${itemId}`, {
     method: "DELETE",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   const res = await h().deleteItem(req, { params: Promise.resolve({ id: String(itemId) }) });
-  let parsed: any;
-  try {
-    parsed = await res.json();
-  } catch {
-    parsed = null;
-  }
-  return { status: res.status, body: parsed };
+  return { status: res.status, body: await jsonOf<DeleteItemBody>(res) };
 }
 
 /** POST /api/testing/results with the worker snapshot every real client sends. */
-export function submitResult(body: Record<string, unknown>): Promise<HandlerResult> {
-  return call(h().results, "/api/testing/results", {
+export function submitResult(body: Record<string, unknown>): Promise<HandlerResult<ResultsBody>> {
+  return call<ResultsBody>(h().results, "/api/testing/results", {
     WorkerID: WORKER_ID,
     WorkerName: WORKER_NAME,
     Result: 1,
@@ -552,8 +574,8 @@ export function submitResult(body: Record<string, unknown>): Promise<HandlerResu
   });
 }
 
-export function runReaper(): Promise<HandlerResult> {
-  return call(h().releaseStale, "/api/cron/release-stale-tests", {}, {
+export function runReaper(): Promise<HandlerResult<ReaperBody>> {
+  return call<ReaperBody>(h().releaseStale, "/api/cron/release-stale-tests", {}, {
     "x-cron-secret": process.env.CRON_SECRET as string,
   });
 }
@@ -578,7 +600,7 @@ export type EventRow = {
   reason: string;
   submit_id: string | null;
   is_trusted: boolean;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
 };
 
 /** Every event of an item in the canonical (occurred_at, seq, event_id) order. */

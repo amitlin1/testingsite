@@ -1,6 +1,6 @@
 // Produce a PRODUCTION realm import TEMPLATE from the dev export.
 //
-//   node keycloak/make-prod-realm-template.js
+//   node keycloak/make-prod-realm-template.mjs
 //
 // Reads  keycloak/import/testing-realm.json            (the dev export)
 // Writes keycloak/import-prod/testing-realm.template.json
@@ -25,11 +25,11 @@
 // token lifespans, the shifthouse login theme — carries over untouched, which is
 // the point: production comes up configured identically to dev.
 
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import path from "node:path";
 
-const inPath = path.join(__dirname, "import", "testing-realm.json");
-const outDir = path.join(__dirname, "import-prod");
+const inPath = path.join(import.meta.dirname, "import", "testing-realm.json");
+const outDir = path.join(import.meta.dirname, "import-prod");
 const outPath = path.join(outDir, "testing-realm.template.json");
 
 const DEV_TEST_USERS = new Set(["manager1", "bodek1", "mahsan1"]);

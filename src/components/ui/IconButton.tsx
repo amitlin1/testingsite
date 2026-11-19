@@ -16,7 +16,6 @@ export interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLBut
   color?: Color;
   /** Round translucent variant, e.g. floating over a photo. */
   round?: boolean;
-  edge?: "start" | "end" | false;
   href?: string;
   download?: string | boolean;
   target?: string;
@@ -25,7 +24,7 @@ export interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLBut
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { size = "medium", color = "default", round, edge: _edge, className, sx, style, href, component, children, type, disabled, ...rest },
+  { size = "medium", color = "default", round, className, sx, style, href, component, children, type, disabled, ...rest },
   ref,
 ) {
   const classes = cn(

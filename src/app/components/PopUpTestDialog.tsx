@@ -32,6 +32,7 @@ import { BLOCK_TITLE, VARIANT_SPEC } from "@/app/testing/fields/fieldsBlockModel
 import { useFieldsState } from "@/app/testing/fields/useFieldsState";
 import { useStationFields } from "@/app/testing/fields/useStationFields";
 import type { StationTestDialogProps } from "@/types";
+import { errorMessage } from "@/lib/errors";
 
 type SubmitAction = 'save' | 'sendToResearch' | 'returnToRoute' | 'finishRoute';
 
@@ -180,9 +181,9 @@ export default function PopUpTestDialog({
       fx.reset();
       setTried(false);
       onClose();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error submitting test result:", error);
-      setError(error?.message || "שגיאה בשמירת תוצאת בדיקה");
+      setError(errorMessage(error) || "שגיאה בשמירת תוצאת בדיקה");
       // 409 FIELDS_SCHEMA_MISMATCH: the route's fields changed while the dialog
       // was open. Load them again, whatever the last answer was; what the
       // worker entered stays, by FieldId.

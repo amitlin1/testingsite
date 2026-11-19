@@ -18,6 +18,7 @@ import {
   fmtDate, fmtDateTime, seq2,
 } from "@/app/components/packages/packageUi";
 import "../packages.css";
+import type { Customers, ItemTypeOption, Shipment } from "@/types";
 
 /**
  * ניהול מארזים — design/Packages.dc.html (list + side panel). Five columns,
@@ -137,9 +138,9 @@ function PackagesPageInner() {
   // The first load: `loading` starts true, so only the reply sets state.
   React.useEffect(() => { readPackages().then(applyPackages); }, [applyPackages]);
   React.useEffect(() => {
-    apiFetch("/api/customers").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setCustomers((Array.isArray(d) ? d : []).map((c) => ({ value: String(c.id), label: c.customer_code ? `${c.name} (${c.customer_code})` : c.name })))).catch(() => {});
-    apiFetch("/api/shipments").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setShipments((Array.isArray(d) ? d : []).map((s) => ({ value: String(s.id), label: s.shipment_code })))).catch(() => {});
-    apiFetch("/api/settings/package-types").then((r) => (r.ok ? r.json() : [])).then((d: any[]) => setTypes((Array.isArray(d) ? d : []).map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })))).catch(() => {});
+    apiFetch("/api/customers").then((r) => (r.ok ? r.json() : [])).then((d: Customers[]) => setCustomers((Array.isArray(d) ? d : []).map((c) => ({ value: String(c.id), label: c.customer_code ? `${c.name} (${c.customer_code})` : c.name })))).catch(() => {});
+    apiFetch("/api/shipments").then((r) => (r.ok ? r.json() : [])).then((d: Shipment[]) => setShipments((Array.isArray(d) ? d : []).map((s) => ({ value: String(s.id), label: s.shipment_code })))).catch(() => {});
+    apiFetch("/api/settings/package-types").then((r) => (r.ok ? r.json() : [])).then((d: ItemTypeOption[]) => setTypes((Array.isArray(d) ? d : []).map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })))).catch(() => {});
   }, []);
 
   const today = fmtDate(new Date().toISOString());

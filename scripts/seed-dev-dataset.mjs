@@ -8,10 +8,10 @@
 //   CRON_SECRET=seed-cron-secret npx next dev -p 3000
 //
 //   # 2. then, from the repo root:
-//   node scripts/seed-dev-dataset.js --confirm --reset
-//   node scripts/seed-dev-dataset.js --confirm --reset --months 13 --items-per-month 38
-//   node scripts/seed-dev-dataset.js --confirm --skip-history      # API exercise only
-//   node scripts/seed-dev-dataset.js --confirm --reset --skip-api  # history only (ref data must exist)
+//   node scripts/seed-dev-dataset.mjs --confirm --reset
+//   node scripts/seed-dev-dataset.mjs --confirm --reset --months 13 --items-per-month 38
+//   node scripts/seed-dev-dataset.mjs --confirm --skip-history      # API exercise only
+//   node scripts/seed-dev-dataset.mjs --confirm --reset --skip-api  # history only (ref data must exist)
 //
 // EXIT CODE: 0 only when every call answered 2xx and every invariant held.
 // Any system finding exits 1 — the findings are the point, not an afterthought.
@@ -86,8 +86,10 @@
 //     attracting work and scatter the demo data. --keep-foreign-stations turns
 //     that off.
 
-const { Pool } = require("pg");
-const crypto = require("crypto");
+import crypto from "node:crypto";
+import pg from "pg";
+
+const { Pool } = pg;
 
 // ---- args ------------------------------------------------------------------
 const argv = process.argv.slice(2);
@@ -125,7 +127,7 @@ const PROD_LOOKING = /(^|[^a-z])(prod|production|inventorydb)([^a-z]|$)/i;
 function usage(msg) {
   console.error("\n" + msg);
   console.error(`
-usage: node scripts/seed-dev-dataset.js --confirm [options]
+usage: node scripts/seed-dev-dataset.mjs --confirm [options]
 
   --confirm                 required; nothing happens without it
   --reset                   TRUNCATE transactional + ledger tables first
@@ -1045,7 +1047,8 @@ async function phaseALive() {
     }
 
     const body = makeItemBody(customer, ship, typeEntry, routeNumber);
-    if (inlineSubs.length) body.subItems = inlineSubs.map(({ typeEntry: _t, ...rest }) => rest);
+    // The sub-items as the API takes them: without our typeEntry.
+    if (inlineSubs.length) body.subItems = inlineSubs.map((sub) => { const out = { ...sub }; delete out.typeEntry; return out; });
     const created = await api("POST", "/api/items", { body });
     if (!created.ok || !created.json?.itemId) continue;
     counters.apiItems++;
@@ -1690,7 +1693,7 @@ async function phaseBHistory() {
           if (t0 === null) { await client.query("ROLLBACK"); counters.skippedItems++; continue; }
 
           const parentId = nextItemId(customer.id, t0, dayCounter);
-          const parent = await writeHistoryItem(client, {
+          await writeHistoryItem(client, {
             ladder, t0, itemId: parentId, customer, ship, typeEntry, routeNumber, steps,
             plan: parentPlan, parentItemId: null, stationsByType, maxAt: historyEndUs,
           });

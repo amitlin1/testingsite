@@ -25,7 +25,7 @@
 
 - [ ] **גיבוי טרי של ה‑DB**, ואימות שהוא נטען. גיבוי שלא נבדק אינו גיבוי.
 - [ ] `npm run db:airgap-schema` על מכונת הפיתוח — מרענן את `02-app-schema.sql` מהמיגרציות. `sync-to-usb.ps1` בודק שהקובץ **קיים**, לא שהוא עדכני.
-- [ ] `node scripts/check-migration-safety.js` → OK.
+- [ ] `node scripts/check-migration-safety.mjs` → OK.
 - [ ] `scripts/build-airgap-bundle.ps1` ואז `scripts/sync-to-usb.ps1 -Destination E:\prod-deploy`.
 - [ ] לוודא שהדיסק מכיל: `db-server\metrics-ledger\` (‏3 קבצי SQL) ו‑`app-server\scheduler\` (‏3 קבצי `.bat`). ה‑sync נכשל אם הם חסרים.
 

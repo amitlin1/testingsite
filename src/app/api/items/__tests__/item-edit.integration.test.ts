@@ -59,7 +59,7 @@ describe(
     });
 
     it("an item inside a box, and the box itself, save with the details empty", async () => {
-      const kit = await H.h().prisma.$transaction((tx: any) =>
+      const kit = await H.h().prisma.$transaction((tx) =>
         H.h().createPackage(tx, {
           customer: H.CUSTOMER_ID, shipment: H.SHIPMENT_ID, packageType: H.ITEM_TYPE_PACKAGE_CLOSE,
           items: [{ itemType: H.ITEM_TYPE_IN_BOX, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR" }],

@@ -81,7 +81,7 @@ should be reworded before a pull request; and because phases 1/3a/3c import
   "קליטה וצילום" / "אריזה" wizards (`Photo.tsx`, `Packaging.tsx`).
 - **Prisma**: `prisma/schema.prisma`, `prisma/migrations/20260915120000_package_model/migration.sql`.
   The migration replaces a CHECK constraint on a metrics table; that is declared to
-  `scripts/check-migration-safety.js` with a `-- metrics-guard: intentional-drop` marker (see
+  `scripts/check-migration-safety.mjs` with a `-- metrics-guard: intentional-drop` marker (see
   `docs/PRISMA_UNMANAGED_OBJECTS.md`).
 
 ---

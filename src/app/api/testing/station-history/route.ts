@@ -28,7 +28,22 @@ export async function GET(req: Request) {
       );
     }
 
-    const rows = await prisma.$queryRaw<any[]>`
+    const rows = await prisma.$queryRaw<{
+      logId: number | bigint;
+      itemId: bigint;
+      currentRouteStep: number;
+      testStationId: number;
+      queueStartTime: Date | null;
+      processingStartTime: Date | null;
+      processingEndTime: Date | null;
+      workerId: number | null;
+      serialNo: string | null;
+      makat: string;
+      model: string;
+      manufacturerName: string;
+      manufacturerNo: string;
+      itemTypeDesc: string | null;
+    }[]>`
       SELECT
         irh.log_id AS "logId",
         irh.item_id AS "itemId",
@@ -53,7 +68,7 @@ export async function GET(req: Request) {
       LIMIT 100
     `;
 
-    const normalizedRows = rows.map((row: any) => ({
+    const normalizedRows = rows.map((row) => ({
       ...row,
       logId: Number(row.logId),
       itemId: Number(row.itemId),

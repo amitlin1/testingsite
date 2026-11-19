@@ -66,10 +66,18 @@ function validConfig() {
 }
 
 type Mutable = ReturnType<typeof validConfig>;
+/**
+ * A node of the config as the raw JSON a client sends: keys of any name, values of any shape. The
+ * parser takes `unknown`, and these tests turn the valid config into what no type allows — so they
+ * edit it through this view. (A typed node fits it as it is: `node(x)` only names the view.)
+ */
+type RawNode = Record<string, unknown>;
+const node = (v: RawNode): RawNode => v;
+const nodes = (v: RawNode[]): RawNode[] => v;
 /** A fresh valid config, changed by `edit`, then parsed. */
-function parseEdited(edit: (c: Mutable & Record<string, any>) => void): RouteFieldsConfig {
+function parseEdited(edit: (c: Mutable & RawNode) => void): RouteFieldsConfig {
   const c = validConfig();
-  edit(c as Mutable & Record<string, any>);
+  edit(c);
   return parseRouteFieldsConfig(c);
 }
 function assertShape(fn: () => unknown, pathPart: string, msgPart?: string): void {
@@ -81,7 +89,7 @@ function assertShape(fn: () => unknown, pathPart: string, msgPart?: string): voi
     return true;
   });
 }
-const elecFields = (c: any): any[] => c.steps.s_elec0001.groups[0].fields;
+const elecFields = (c: Mutable): RawNode[] => c.steps.s_elec0001.groups[0].fields;
 
 // ---- structure ----------------------------------------------------------------------
 test("parse: a valid config comes back equal, as a deep copy", () => {
@@ -92,7 +100,7 @@ test("parse: a valid config comes back equal, as a deep copy", () => {
   assert.notEqual(cfg.steps.s_elec0001, raw.steps.s_elec0001);
   assert.notEqual(cfg.steps.s_open0001.layout, raw.steps.s_open0001.layout);
   // Mutating the input afterwards cannot reach the parsed copy.
-  (raw.steps.s_elec0001.groups[0].fields[1] as any).label = "שונה";
+  node(raw.steps.s_elec0001.groups[0].fields[1]).label = "שונה";
   raw.steps.s_open0001.layout.nested.a.push(2);
   assert.equal(cfg.steps.s_elec0001.groups[0].fields[1].label, "נורית מתח");
   assert.deepEqual(cfg.steps.s_open0001.layout, { fields_placement: "in_step", nested: { a: [1, "x", null, true] } });
@@ -101,13 +109,13 @@ test("parse: a valid config comes back equal, as a deep copy", () => {
 test("parse: the sanitizer keeps known keys only, at every level", () => {
   const cfg = parseEdited((c) => {
     c.extra = 1;
-    (c.steps.s_elec0001 as any).color = "red";
-    (c.steps.s_elec0001.groups[0] as any).collapsed = true;
+    node(c.steps.s_elec0001).color = "red";
+    node(c.steps.s_elec0001.groups[0]).collapsed = true;
     elecFields(c)[1].evil = "<script>";
     elecFields(c)[1].options = LED.map((o) => ({ ...o, weight: 3 }));
     elecFields(c)[1].list_ref = { id: 4, ver: 2, name: "מצב נורית" };
     elecFields(c)[0].required = true;   // a section has no "required"
-    (c.steps.s_open0001.groups[2].fields[0] as any).items[0].done = true;
+    (node(c.steps.s_open0001.groups[2].fields[0]).items as RawNode[])[0].done = true;
   });
   assert.deepEqual(Object.keys(cfg), ["schema", "steps"]);
   assert.deepEqual(Object.keys(cfg.steps.s_elec0001), ["uid", "station_type_id", "station_label", "scope", "groups"]);
@@ -143,12 +151,12 @@ test("parse: __proto__ / constructor keys are dropped and never reach a prototyp
 
 test("parse: an inherited (polluted) property is never read as a field key", () => {
   const raw = validConfig();
-  delete (elecFields(raw)[2] as any).out_of_range_fail;
+  delete elecFields(raw)[2].out_of_range_fail;
   Object.defineProperty(Object.prototype, "out_of_range_fail", { value: true, configurable: true, writable: true });
   try {
     assertShape(() => parseRouteFieldsConfig(raw), "$.steps.s_elec0001.groups[0].fields[2]", "out_of_range_fail");
   } finally {
-    delete (Object.prototype as any).out_of_range_fail;
+    delete (Object.prototype as RawNode).out_of_range_fail;
   }
 });
 
@@ -157,7 +165,7 @@ test("parse: null on an optional key means not set", () => {
     elecFields(c)[1].list_ref = null;
     elecFields(c)[2].help = null;
     elecFields(c)[2].min = null;
-    (c.steps.s_open0001 as any).layout = null;
+    node(c.steps.s_open0001).layout = null;
   });
   assert.equal("list_ref" in cfg.steps.s_elec0001.groups[0].fields[1], false);
   assert.equal("help" in cfg.steps.s_elec0001.groups[0].fields[2], false);
@@ -177,14 +185,14 @@ test("parse: structural rejections name the path", () => {
   assertShape(() => parseRouteFieldsConfig(null), "$", "expected {schema:1, steps:{}}");
   assertShape(() => parseRouteFieldsConfig({ schema: 2, steps: {} }), "$");
   assertShape(() => parseRouteFieldsConfig({ schema: 1, steps: [] }), "$");
-  assertShape(() => parseEdited((c) => { (c.steps.s_elec0001 as any).uid = "s_open0001"; }), "s_elec0001", "uid mismatch");
-  assertShape(() => parseEdited((c) => { (c.steps.s_elec0001 as any).station_type_id = 2.5; }), "s_elec0001", "station");
-  assertShape(() => parseEdited((c) => { (c.steps.s_elec0001 as any).station_label = "א".repeat(51); }), "s_elec0001", "station");
-  assertShape(() => parseEdited((c) => { (c.steps.s_elec0001 as any).scope = "kit"; }), "s_elec0001", "scope");
-  assertShape(() => parseEdited((c) => { (c.steps.s_elec0001 as any).groups = {}; }), "s_elec0001", "groups");
-  assertShape(() => parseEdited((c) => { (c.steps.s_open0001 as any).layout = [1, 2]; }), "s_open0001", "layout");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_elec0001).uid = "s_open0001"; }), "s_elec0001", "uid mismatch");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_elec0001).station_type_id = 2.5; }), "s_elec0001", "station");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_elec0001).station_label = "א".repeat(51); }), "s_elec0001", "station");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_elec0001).scope = "kit"; }), "s_elec0001", "scope");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_elec0001).groups = {}; }), "s_elec0001", "groups");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_open0001).layout = [1, 2]; }), "s_open0001", "layout");
   assertShape(() => parseEdited((c) => { c.steps.s_open0001.groups[0].target = "item"; }), "groups[0].target", "package step target");
-  assertShape(() => parseEdited((c) => { (c.steps.s_open0001.groups[2] as any).target = { item_type_id: "14" }; }), "groups[2].target", "package step target");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_open0001.groups[2]).target = { item_type_id: "14" }; }), "groups[2].target", "package step target");
   assertShape(() => parseEdited((c) => { elecFields(c)[1].type = "slider"; }), "fields[1]", 'unknown type "slider"');
   assertShape(() => parseEdited((c) => { elecFields(c)[1].id = "f_LED"; }), "fields[1]", "field id");
   assertShape(() => parseEdited((c) => { elecFields(c)[1].label = "א".repeat(81); }), "fields[1]", "label");
@@ -197,18 +205,18 @@ test("parse: structural rejections name the path", () => {
 
 test("parse: one group per target in a step", () => {
   assertShape(() => parseEdited((c) => { c.steps.s_elec0001.groups.push({ target: "item", fields: [] }); }), "groups[1].target", "duplicate target item");
-  assertShape(() => parseEdited((c) => { (c.steps.s_open0001.groups as any[]).push({ target: "box", fields: [] }); }), "groups[3].target", "duplicate target box");
-  assertShape(() => parseEdited((c) => { (c.steps.s_open0001.groups as any[]).push({ target: "each_item", fields: [] }); }), "groups[3].target", "duplicate target each_item");
-  assertShape(() => parseEdited((c) => { (c.steps.s_open0001.groups as any[]).push({ target: { item_type_id: 14 }, fields: [] }); }), "groups[3].target", "duplicate target type:14");
+  assertShape(() => parseEdited((c) => { nodes(c.steps.s_open0001.groups).push({ target: "box", fields: [] }); }), "groups[3].target", "duplicate target box");
+  assertShape(() => parseEdited((c) => { nodes(c.steps.s_open0001.groups).push({ target: "each_item", fields: [] }); }), "groups[3].target", "duplicate target each_item");
+  assertShape(() => parseEdited((c) => { nodes(c.steps.s_open0001.groups).push({ target: { item_type_id: 14 }, fields: [] }); }), "groups[3].target", "duplicate target type:14");
   // Different item types are different targets.
-  const cfg = parseEdited((c) => { (c.steps.s_open0001.groups as any[]).push({ target: { item_type_id: 15 }, fields: [] }); });
+  const cfg = parseEdited((c) => { nodes(c.steps.s_open0001.groups).push({ target: { item_type_id: 15 }, fields: [] }); });
   assert.deepEqual(cfg.steps.s_open0001.groups.map((g) => targetKey(g.target)), ["box", "each_item", "type:14", "type:15"]);
 });
 
 test("parse: field ids are unique per step, across its groups", () => {
-  assertShape(() => parseEdited((c) => { (c.steps.s_open0001.groups[1].fields[0] as any).id = "f_box00001"; }), "groups[1].fields[0]", "field id (unique per step)");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_open0001.groups[1].fields[0]).id = "f_box00001"; }), "groups[1].fields[0]", "field id (unique per step)");
   // The same id in another step is fine.
-  const cfg = parseEdited((c) => { (c.steps.s_open0001.groups[1].fields[0] as any).id = "f_led00001"; });
+  const cfg = parseEdited((c) => { node(c.steps.s_open0001.groups[1].fields[0]).id = "f_led00001"; });
   assert.equal(cfg.steps.s_open0001.groups[1].fields[0].id, "f_led00001");
 });
 
@@ -238,7 +246,7 @@ test("parse: number — finite numbers, unit ≤ 12, tol_pct only with ref", () 
 });
 
 test("parse: checklist — ≤ 20 items, unique c_ ids, label ≤ 80", () => {
-  const items = (c: any): any => c.steps.s_open0001.groups[2].fields[0];
+  const items = (c: Mutable): RawNode => c.steps.s_open0001.groups[2].fields[0];
   assertShape(() => parseEdited((c) => { items(c).items = [{ id: "c_stand001", label: "א" }, { id: "c_stand001", label: "ב" }]; }), "items[1]", "item id");
   assertShape(() => parseEdited((c) => { items(c).items = [{ id: "x_stand001", label: "א" }]; }), "items[0]", "item id");
   assertShape(() => parseEdited((c) => { items(c).items = [{ id: "c_stand001", label: "א".repeat(81) }]; }), "items[0]", "item label");
@@ -247,7 +255,7 @@ test("parse: checklist — ≤ 20 items, unique c_ ids, label ≤ 80", () => {
 });
 
 test("parse: photo — a type code ≤ 50 and an integer minimum 0..20", () => {
-  const photo = (c: any): any => c.steps.s_open0001.groups[2].fields[1];
+  const photo = (c: Mutable): RawNode => c.steps.s_open0001.groups[2].fields[1];
   assertShape(() => parseEdited((c) => { photo(c).min = 21; }), "fields[1]", "photo");
   assertShape(() => parseEdited((c) => { photo(c).min = -1; }), "fields[1]", "photo");
   assertShape(() => parseEdited((c) => { photo(c).min = 1.5; }), "fields[1]", "photo");
@@ -257,12 +265,12 @@ test("parse: photo — a type code ≤ 50 and an integer minimum 0..20", () => {
 
 test("parse: size limits — 60 fields per group, 512000 characters of JSON", () => {
   const many = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `f_many${String(i).padStart(4, "0")}`, type: "section", label: "מקטע" }));
-  assert.equal(parseEdited((c) => { c.steps.s_elec0001.groups[0].fields = many(60) as any; }).steps.s_elec0001.groups[0].fields.length, 60);
-  assertShape(() => parseEdited((c) => { c.steps.s_elec0001.groups[0].fields = many(61) as any; }), "groups[0]", "too many fields");
-  assertShape(() => parseEdited((c) => { (c.steps.s_open0001 as any).layout = { blob: "x".repeat(LIMITS.configJson) }; }), "$", "config too large");
+  assert.equal(parseEdited((c) => { node(c.steps.s_elec0001.groups[0]).fields = many(60); }).steps.s_elec0001.groups[0].fields.length, 60);
+  assertShape(() => parseEdited((c) => { node(c.steps.s_elec0001.groups[0]).fields = many(61); }), "groups[0]", "too many fields");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_open0001).layout = { blob: "x".repeat(LIMITS.configJson) }; }), "$", "config too large");
   const cyclic: Record<string, unknown> = {};
   cyclic.self = cyclic;
-  assertShape(() => parseEdited((c) => { (c.steps.s_open0001 as any).layout = cyclic; }), "$", "not JSON");
+  assertShape(() => parseEdited((c) => { node(c.steps.s_open0001).layout = cyclic; }), "$", "not JSON");
 });
 
 test("parseFieldList / parseOptionList reuse the same checks", () => {

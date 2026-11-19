@@ -2,13 +2,14 @@
 import * as React from "react";
 import { apiFetch } from "@/lib/api/client";
 import { CustomerOption, Option } from "@/types/dashboard";
+import type { Shipment } from "@/types";
 
 export interface DashboardOptions {
   customers: CustomerOption[];
   stations: Option[];
   stationTypes: Option[];
   itemTypes: Option[];
-  shipments: any[];
+  shipments: Shipment[];
   loading: boolean;
 }
 
@@ -21,7 +22,7 @@ export function useDashboardOptions(): DashboardOptions {
   const [stations, setStations] = React.useState<Option[]>([]);
   const [stationTypes, setStationTypes] = React.useState<Option[]>([]);
   const [itemTypes, setItemTypes] = React.useState<Option[]>([]);
-  const [shipments, setShipments] = React.useState<any[]>([]);
+  const [shipments, setShipments] = React.useState<Shipment[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {

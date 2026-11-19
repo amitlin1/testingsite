@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cronSecretGuard } from "@/lib/auth/cron-secret";
 import { rebuildWorkCalendarInTx, type RebuildWorkCalendarResult } from "@/lib/work-calendar";
 import { runJob } from "@/app/lib/metrics/jobRun";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -45,10 +46,10 @@ export async function POST(req: Request) {
     // which is exactly what the old in-function skip reported.
     const calendar: RebuildWorkCalendarResult = outcome.detail ?? { status: "skipped_overlap" };
     return NextResponse.json({ success: true, jobRunId: outcome.jobRunId, ...calendar });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error rebuilding work calendar:", error);
     return NextResponse.json(
-      { error: "Failed to rebuild work calendar", message: error.message || "Unknown error" },
+      { error: "Failed to rebuild work calendar", message: errorMessage(error) || "Unknown error" },
       { status: 500 }
     );
   }

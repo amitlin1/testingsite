@@ -281,7 +281,7 @@ export default function NavBar({
 
           {/* Settings Links — hidden in collapsed mode (the gear expands the rail first) */}
           {!collapsed && (
-            <Collapse in={settingsOpen} timeout="auto" unmountOnExit>
+            <Collapse in={settingsOpen} unmountOnExit>
               <Box sx={{ pr: 1 }}>
                 {visibleSettingsLinks.map((item) => {
                   const Icon = item.icon;

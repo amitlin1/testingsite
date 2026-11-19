@@ -79,12 +79,11 @@ export const TableFooter = forwardRef<HTMLTableSectionElement, React.HTMLAttribu
 );
 
 export interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
-  hover?: boolean;
   selected?: boolean;
   sx?: SxInput;
 }
 export const TableRow = forwardRef<HTMLTableRowElement, TableRowProps>(function TableRow(
-  { hover: _hover, selected, sx, style, className, children, ...rest },
+  { selected, sx, style, className, children, ...rest },
   ref,
 ) {
   return (

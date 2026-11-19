@@ -11,6 +11,7 @@ import {
 } from "@/app/lib/metrics/selfcheck";
 import type { RebuildWorkCalendarResult } from "@/lib/work-calendar";
 import type { TransactionClient } from "@/app/lib/prisma";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -168,10 +169,10 @@ export async function POST(req: Request) {
       anomalies: detail ? selfcheckAnomalies(detail.checks) : [],
       checks: detail?.checks ?? [],
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error running metrics selfcheck:", error);
     return NextResponse.json(
-      { error: "Failed to run metrics selfcheck", message: error.message || "Unknown error" },
+      { error: "Failed to run metrics selfcheck", message: errorMessage(error) || "Unknown error" },
       { status: 500 }
     );
   }

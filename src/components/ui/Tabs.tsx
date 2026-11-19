@@ -13,24 +13,20 @@ export interface TabProps {
   wrapped?: boolean;
 }
 
-/** Props holder — actual rendering is handled by <Tabs>. */
-export function Tab(_props: TabProps) {
-  return null;
-}
+/** Props holder: <Tabs> reads each <Tab>'s props and renders the tab itself. */
+export const Tab: React.FC<TabProps> = () => null;
 
 export interface TabsProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange"> {
   value?: unknown;
-  onChange?: (event: React.SyntheticEvent, value: any) => void;
+  onChange?: (event: React.SyntheticEvent, value: unknown) => void;
   variant?: "standard" | "scrollable" | "fullWidth";
   centered?: boolean;
   orientation?: "horizontal" | "vertical";
-  textColor?: string;
-  indicatorColor?: string;
   sx?: SxInput;
 }
 
 export const Tabs = forwardRef<HTMLDivElement, TabsProps>(function Tabs(
-  { value, onChange, variant, centered, orientation = "horizontal", textColor: _t, indicatorColor: _i, sx, style, className, children, ...rest },
+  { value, onChange, variant, centered, orientation = "horizontal", sx, style, className, children, ...rest },
   ref,
 ) {
   const vertical = orientation === "vertical";

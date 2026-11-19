@@ -2,7 +2,7 @@ import { newChecklistItemId, newFieldId, newOptionId } from "@/app/lib/station-f
 import { targetKey } from "@/app/lib/station-fields/schema";
 import type {
   ChecklistField, ChecklistItem, ChecklistItemId, ChoiceOption, ChoiceRowField, Field, FieldId, FieldType, GroupTarget,
-  MultiChoiceField, OptionId, PhotoField, Tone,
+  MultiChoiceField, OptionId, Tone,
 } from "@/app/lib/station-fields/schema";
 import { LIMITS } from "@/app/lib/station-fields/validate";
 import type { Issue } from "@/app/lib/station-fields/validate";

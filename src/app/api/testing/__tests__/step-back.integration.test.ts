@@ -26,8 +26,8 @@ const signedIn = (...roles: AppRole[]) => ({
 function stubAuth(): void {
   const req = createRequire(path.resolve(process.cwd(), "package.json"));
   const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as any;
-  const stub = new CjsModule(authPath, null);
+  const CjsModule = req("node:module") as typeof import("node:module");
+  const stub = new CjsModule(authPath);
   stub.filename = authPath;
   stub.loaded = true;
   stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
@@ -162,7 +162,7 @@ describe(
     });
 
     it("a box item: never back onto the opening; from the closing station the box waits for it again", async () => {
-      const box = await H.h().prisma.$transaction((tx: any) =>
+      const box = await H.h().prisma.$transaction((tx) =>
         H.h().createPackage(tx, {
           customer: H.CUSTOMER_ID, shipment: H.SHIPMENT_ID, packageType: H.ITEM_TYPE_PACKAGE_CLOSE,
           items: [{ itemType: H.ITEM_TYPE_IN_BOX, serialNumber: "SN-BOX-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR" }],

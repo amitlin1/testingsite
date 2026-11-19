@@ -31,6 +31,10 @@ import type { FieldSetView, LibraryUse, OptionListView } from "../library";
 import { FIELDS_EDIT_ROLES } from "../roles";
 import { ID_PATTERNS } from "../schema";
 import type { ChoiceOption, Field, FieldGroup, RouteFieldsConfig, StepConfig, Tone } from "../schema";
+import { omit } from "@/lib/omit";
+
+/** A JSON answer as the route sends it, read by its keys. */
+type Json = Record<string, unknown>;
 
 // ---------------------------------------------------------------------------
 // The wire contract, checked by the compiler
@@ -148,8 +152,8 @@ const signedIn = (...roles: AppRole[]) => ({
 function stubAuth(): void {
   const req = createRequire(path.resolve(process.cwd(), "package.json"));
   const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as any;
-  const stub = new CjsModule(authPath, null);
+  const CjsModule = req("node:module") as typeof import("node:module");
+  const stub = new CjsModule(authPath);
   stub.filename = authPath;
   stub.loaded = true;
   stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
@@ -282,12 +286,12 @@ describe(
     }
 
     /** One handler call as Next makes it: a JSON body (or `raw` text), the dynamic route's params. */
-    async function httpCall(
+    async function httpCall<B = Json>(
       handler: unknown,
       method: string,
       url: string,
       opts: { body?: unknown; raw?: string; params?: Record<string, string> } = {},
-    ): Promise<{ status: number; body: any }> {
+    ): Promise<{ status: number; body: B }> {
       const req = new Request(`http://localhost${url}`, {
         method,
         headers: { "content-type": "application/json" },
@@ -296,12 +300,13 @@ describe(
       const call = handler as (req: Request, ctx?: { params: Promise<Record<string, string>> }) => Promise<Response>;
       const res = await call(req, opts.params ? { params: Promise.resolve(opts.params) } : undefined);
       const text = await res.text();
-      return { status: res.status, body: text ? JSON.parse(text) : null };
+      return { status: res.status, body: (text ? JSON.parse(text) : null) as B };
     }
 
     /** A server value as the client receives it. `any`, like an HTTP body: assert.deepEqual would
      *  otherwise narrow the body it is compared with. */
-    const json = (v: unknown): any => JSON.parse(JSON.stringify(v));
+    /** `v` as it crosses the wire (Dates become strings): what a route's JSON is compared with. */
+    const json = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
 
     /**
      * The common world of the usage / propagate / delete tests:
@@ -343,8 +348,7 @@ describe(
     it("option lists: POST stores the trimmed name at version 1, GET lists it with its usage, PUT saves version + 1, and a stale base_version is a 409 VERSION_CONFLICT carrying the current row", async () => {
       const created = await Lib.createOptionList(prisma, { name: "  מצב נורית  ", options: LED_OPTIONS }, ACTOR);
       assert.ok(created.updated_at instanceof Date);
-      const { updated_at: _at, ...rest } = created;
-      assert.deepEqual(rest, {
+      assert.deepEqual(omit(created, ["updated_at"]), {
         id: created.id, name: "מצב נורית", options: LED_OPTIONS, version: 1, updated_by: ACTOR.username, usage: { fields: 0, routes: 0 },
       });
       const second = await Lib.createOptionList(prisma, { name: "מצב חיצוני", options: EXT_OPTIONS }, ACTOR);
@@ -614,11 +618,8 @@ describe(
       const kit = (await routeState(R.kit)).fields_draft;
       const alpha = (await routeState(R.alpha)).fields_draft;
       /** A cell's fields without their ids, and their ids. */
-      const strip = (fields: Field[]) => fields.map(({ id: _id, ...rest }) => rest);
-      const linked2 = (f: Field) => {
-        const { id: _id, ...rest } = fromSet(f, LIB.S, 2);
-        return rest;
-      };
+      const strip = (fields: Field[]) => fields.map((f) => omit(f, ["id"]));
+      const linked2 = (f: Field) => omit(fromSet(f, LIB.S, 2), ["id"]);
       const template = [S_NEW, S_EXT_V2, S_GND].map(linked2);
       assert.deepEqual(strip(cell(kit, UID.kClose, 0)), [strip([OWN1])[0], ...template, strip([OWN2])[0]], "in place, between the cell's own fields");
       assert.deepEqual(strip(cell(kit, UID.kClose, 1)), template);
@@ -742,7 +743,7 @@ describe(
       await seedWorld();
       const L = String(LIB.L);
       const S = String(LIB.S);
-      const writes: { name: string; call: () => Promise<{ status: number; body: any }> }[] = [
+      const writes: { name: string; call: () => Promise<{ status: number; body: Json }> }[] = [
         { name: "POST list", call: () => httpCall(http.lists.POST, "POST", "/api/settings/option-lists", { body: { name: "חדשה", options: [] } }) },
         { name: "PUT list", call: () => httpCall(http.list.PUT, "PUT", `/api/settings/option-lists/${L}`, { body: { name: "x", options: [], base_version: 1 }, params: { id: L } }) },
         { name: "DELETE list", call: () => httpCall(http.list.DELETE, "DELETE", `/api/settings/option-lists/${L}`, { params: { id: L } }) },
@@ -768,7 +769,7 @@ describe(
         { status: 200, body: json(await Lib.optionListUsage(prisma, LIB.L)) });
       assert.deepEqual(await httpCall(http.setUsage.GET, "GET", `/api/settings/field-sets/${S}/usage`, { params: { id: S } }),
         { status: 200, body: json(await Lib.fieldSetUsage(prisma, LIB.S)) });
-      const listed = (await httpCall(http.lists.GET, "GET", "/api/settings/option-lists")).body as OptionListJson[];
+      const listed = (await httpCall<OptionListJson[]>(http.lists.GET, "GET", "/api/settings/option-lists")).body;
       assert.equal(typeof listed[0].updated_at, "string");
 
       // A tester may write; the session's preferredUsername is the author.
@@ -781,7 +782,7 @@ describe(
       assert.equal(createdSet.status, 201, JSON.stringify(createdSet.body));
       assert.deepEqual(createdSet.body, json((await Lib.listFieldSets(prisma)).find((s) => s.id === createdSet.body.id)));
 
-      const put = await httpCall(http.list.PUT, "PUT", `/api/settings/option-lists/${L}`, { body: { name: "מצב נורית", options: LED_OPTIONS_V2, base_version: 1 }, params: { id: L } });
+      const put = await httpCall<{ version: number; linked: unknown[] }>(http.list.PUT, "PUT", `/api/settings/option-lists/${L}`, { body: { name: "מצב נורית", options: LED_OPTIONS_V2, base_version: 1 }, params: { id: L } });
       assert.equal(put.status, 200, JSON.stringify(put.body));
       assert.deepEqual([put.body.version, put.body.linked.length], [2, 6]);
       const stale = await httpCall(http.list.PUT, "PUT", `/api/settings/option-lists/${L}`, { body: { name: "x", options: [], base_version: 1 }, params: { id: L } });

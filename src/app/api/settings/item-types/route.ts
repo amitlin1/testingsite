@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { parseDefaultRoute } from "@/app/lib/packages/settings";
+import { errorCode, errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -73,14 +74,14 @@ export async function POST(req: Request) {
       default_route_number: created.default_route_number,
       contents_count: 0,
     });
-  } catch (error: any) {
-    const msg = String(error?.message ?? "");
-    if (error?.code === "P2002" || /unique constraint/i.test(msg)) {
+  } catch (error) {
+    const msg = errorMessage(error);
+    if (errorCode(error) === "P2002" || /unique constraint/i.test(msg)) {
       return NextResponse.json({ error: "סוג פריט זה כבר קיים במערכת" }, { status: 400 });
     }
     console.error("Error creating item type:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create item type" },
+      { error: errorMessage(error) || "Failed to create item type" },
       { status: 500 }
     );
   }

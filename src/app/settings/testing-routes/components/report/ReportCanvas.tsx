@@ -18,6 +18,7 @@ import * as React from "react";
 import { usePuck } from "@measured/puck";
 import { Copy, GripVertical, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { puckConfig, HeaderBand, WIDTH_MM, pageFontStyle, pageNumberTemplate } from "@/app/lib/item-report/puck-config";
+import type { FooterSettings, HeaderSettings, RootProps } from "@/app/lib/item-report/puck-config";
 import type { ReportRenderMeta as PdfRenderMeta } from "@/app/lib/item-report/types";
 import { Button, ConfirmDialog } from "@/components/ui";
 
@@ -27,7 +28,14 @@ type Node = { type: string; props: Record<string, unknown> & { id?: string } };
 // on every render while the store has no content yet.
 const NO_NODES: Node[] = [];
 
-const COMPONENTS = puckConfig.components as any;
+/** A block's component as the canvas sees it: found by the block's type name, rendered with the
+ *  block's own props (the canvas holds the document as plain nodes, not typed per component). */
+type CanvasBlock = {
+  label?: string;
+  defaultProps?: Record<string, unknown>;
+  render: (props: Record<string, unknown>) => React.ReactNode;
+};
+const COMPONENTS = puckConfig.components as unknown as Record<string, CanvasBlock | undefined>;
 
 const labelOf = (t: string): string => COMPONENTS[t]?.label ?? t;
 
@@ -79,7 +87,7 @@ interface ConfirmState {
 
 // ---- palette (custom, HTML5-draggable) ----------------------------------
 export function BlockPalette() {
-  const cats = (puckConfig.categories ?? {}) as Record<string, any>;
+  const cats = puckConfig.categories ?? {};
   return (
     <div className="pdfpal">
       {Object.entries(cats).map(([key, cat]) => {
@@ -133,24 +141,25 @@ type Drop =
   | { page: number; kind: "newrow"; atLocalKey: number };
 
 export function PageCanvas({ metadata }: { metadata: PdfRenderMeta }) {
-  const { appState, dispatch, history } = usePuck() as any;
+  const { appState, dispatch, history } = usePuck();
   const content = (appState?.data?.content ?? NO_NODES) as Node[];
-  const rootProps = (appState?.data?.root?.props ?? {}) as any;
-  const header = rootProps.header ?? {};
-  const footer = rootProps.footer ?? {};
+  // The document's settings (RootProps), as far as the store has them yet.
+  const rootProps: Partial<RootProps> = appState?.data?.root?.props ?? {};
+  const header: Partial<HeaderSettings> = rootProps.header ?? {};
+  const footer: Partial<FooterSettings> = rootProps.footer ?? {};
   const border: string = rootProps.border ?? "none";
   const classification: string = typeof rootProps.classification === "string" ? rootProps.classification.trim() : "";
   const selIdx = (appState?.ui?.itemSelector?.index ?? null) as number | null;
 
   const setContent = React.useCallback(
     (next: Node[]) => {
-      dispatch({ type: "setData", data: { content: next } } as any);
+      dispatch({ type: "setData", data: { content: next } });
     },
     [dispatch],
   );
   const select = React.useCallback(
     (index: number | null) => {
-      dispatch({ type: "setUi", ui: { itemSelector: index == null ? null : { index } } } as any);
+      dispatch({ type: "setUi", ui: { itemSelector: index == null ? null : { index } } });
     },
     [dispatch],
   );

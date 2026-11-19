@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cronSecretGuard } from "@/lib/auth/cron-secret";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { runJob } from "@/app/lib/metrics/jobRun";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -177,10 +178,10 @@ export async function POST(req: Request) {
       itemIds: outcome.detail?.itemIds ?? [],
       stationsFreed: outcome.detail?.stationsFreed ?? 0,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error releasing stale tests:", error);
     return NextResponse.json(
-      { error: "Failed to release stale tests", message: error.message || "Unknown error" },
+      { error: "Failed to release stale tests", message: errorMessage(error) || "Unknown error" },
       { status: 500 }
     );
   }

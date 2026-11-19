@@ -42,6 +42,11 @@ import type { ItemTypeRow, RouteRow } from "./lib/routePickModel";
 import { HEADER_TEXT, NO_ROUTE_TEXT } from "./lib/labels";
 import "./route-fields.css";
 
+/** /api/settings/item-types, the fields this page reads. */
+type ItemTypeJson = { item_type_id: number; item_type_desc: string; is_package?: boolean; default_route_number?: number | null };
+/** /api/settings/test-stations-type, the fields this page reads. */
+type StationTypeJson = { test_station_type_id: number; test_type_desc: string; package_level?: boolean };
+
 /**
  * /settings/testing-routes — "מסלולי בדיקה" (route-fields spec §5.1, §5.2; D6): the shell of the
  * route-fields screen. Header (RouteFieldsHeader) → context card "מסלול נבחר" (hidden on the
@@ -179,13 +184,13 @@ function TestingRoutesShell() {
       }),
       loadRoutes(),
     ]).then(([items, stations, routesOk]) => {
-      setItemTypes(Array.isArray(items) ? (items as any[]).map((i) => ({
+      setItemTypes(Array.isArray(items) ? (items as ItemTypeJson[]).map((i) => ({
         id: i.item_type_id,
         label: i.item_type_desc,
         isPackage: i.is_package === true,
         defaultRoute: typeof i.default_route_number === "number" ? i.default_route_number : null,
       })) : []);
-      setStationTypes(Array.isArray(stations) ? (stations as any[]).map((s) => ({ id: s.test_station_type_id, label: s.test_type_desc, packageLevel: s.package_level === true })) : []);
+      setStationTypes(Array.isArray(stations) ? (stations as StationTypeJson[]).map((s) => ({ id: s.test_station_type_id, label: s.test_type_desc, packageLevel: s.package_level === true })) : []);
       setOptionsLoaded(true);
       // Without the route list the "מסלול" combobox cannot offer a route: the same band.
       if (!routesOk) setOptionsError(true);

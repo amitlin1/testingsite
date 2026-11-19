@@ -5,6 +5,7 @@ import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { recordTransition } from "@/app/lib/metrics/record";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { isPackageLevelStationType, loadPackageContext } from "@/app/lib/packages/context";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -80,7 +81,13 @@ export async function POST(req: Request) {
       const routeNumber = existingRoute.route_number;
 
       // 1. Update item_routes: status to targetStatus, set processing_start_time, update test_station_id
-      const updateResult = await tx.$queryRaw<any[]>`
+      const updateResult = await tx.$queryRaw<{
+        item_id: bigint;
+        current_status: number;
+        processing_start_time: Date | null;
+        test_station_id: number | null;
+        current_route_step: number;
+      }[]>`
         UPDATE item_routes
         SET current_status = ${targetStatus},
             processing_start_time = ${currentUtcDate}::timestamp,
@@ -179,14 +186,14 @@ export async function POST(req: Request) {
       ok: true,
       item: normalizedRow,
     });
-  } catch (error: any) {
-    if (error.message === "STATION_NOT_FOUND") {
+  } catch (error) {
+    if (errorMessage(error) === "STATION_NOT_FOUND") {
       return NextResponse.json(
         { error: "Station not found" },
         { status: 404 }
       );
     }
-    if (error.message === "ITEM_NOT_FOUND_OR_NOT_WAITING") {
+    if (errorMessage(error) === "ITEM_NOT_FOUND_OR_NOT_WAITING") {
       return NextResponse.json(
         { error: "Item not found or not in waiting status" },
         { status: 404 }

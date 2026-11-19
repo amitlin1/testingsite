@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 
+/** One send of the shipment (shipment_history) with its item type's name. */
+type SendRow = {
+    log_id: number;
+    shipment_id: number;
+    sent_shipment_code: string;
+    sent_date: Date;
+    sending_worker_id: number | null;
+    sending_worker_name: string | null;
+    item_type_id: number | null;
+    item_type_desc: string | null;
+    makat: string | null;
+    amount: number;
+    signature_path: string | null;
+};
+
 // GET: Fetch history for a specific shipment
 export async function GET(
     request: Request,
@@ -9,7 +24,7 @@ export async function GET(
     const { shipmentId } = await context.params;
 
     try {
-        const rows = await prisma.$queryRaw<any[]>`
+        const rows = await prisma.$queryRaw<SendRow[]>`
             SELECT
                 sh.log_id,
                 sh.shipment_id,
@@ -29,7 +44,7 @@ export async function GET(
         `;
 
         // Transform signature_path to API URL
-        const transformedRows = rows.map((row: any) => ({
+        const transformedRows = rows.map((row) => ({
             ...row,
             signature_path: row.signature_path
                 ? `/api/shipments/${shipmentId}/files/${row.signature_path}`

@@ -22,6 +22,7 @@ import { fmtId } from "@/app/components/packages/packageUi";
 import ShipmentLineScanDialog, { BIG_SHIPMENT, LineCertNote, declaredBoxes, lineIsEmpty, lineProblem, placeScannedLines, scannedRows, type ShipmentLine } from "./ShipmentLineScanDialog";
 import ShipmentDuplicateDialog, { duplicateOf, type DuplicateShipment } from "./ShipmentDuplicateDialog";
 import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
+import { omit } from "@/lib/omit";
 
 type ShipmentUpdatePopupProps = {
     open: boolean;
@@ -139,7 +140,7 @@ export default function ShipmentUpdatePopup({
             // Each saved line goes back with its id (line_id), so the server
             // keeps that line's boxes. A legacy shipment without lines starts
             // from its single item type.
-            let initialItems: ShipmentLine[] = (shipment.shipment_items || []).map(({ id, item_type_desc: _desc, ...line }) => ({ ...line, line_id: id ?? null }));
+            let initialItems: ShipmentLine[] = (shipment.shipment_items || []).map(({ id, ...line }) => ({ ...omit(line, ["item_type_desc"]), line_id: id ?? null }));
             if (initialItems.length === 0 && shipment.item_type_id) {
                 initialItems = [{
                     item_type_id: shipment.item_type_id,

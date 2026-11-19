@@ -6,7 +6,6 @@ type AnyProps = Record<string, unknown>;
 
 /* -------------------------------------------------------------- Paper ---- */
 export interface PaperProps extends React.HTMLAttributes<HTMLElement>, Partial<SystemProps> {
-  elevation?: number;
   square?: boolean;
   variant?: "elevation" | "outlined";
   component?: React.ElementType;
@@ -15,7 +14,7 @@ export interface PaperProps extends React.HTMLAttributes<HTMLElement>, Partial<S
 
 /** Flat surface — never a shadow. Outlined variant adds a hairline. */
 export const Paper = forwardRef<HTMLElement, PaperProps>(function Paper(
-  { elevation: _e, square, variant, component: Component = "div", children, ...props },
+  { square, variant, component: Component = "div", children, ...props },
   ref,
 ) {
   const { style, rest } = splitSystemProps(props as AnyProps);
@@ -33,14 +32,12 @@ export const Paper = forwardRef<HTMLElement, PaperProps>(function Paper(
 
 /* --------------------------------------------------------------- Card ---- */
 export interface CardProps extends React.HTMLAttributes<HTMLElement>, Partial<SystemProps> {
-  variant?: "elevation" | "outlined";
-  elevation?: number;
   component?: React.ElementType;
   sx?: SxInput;
 }
 
 export const Card = forwardRef<HTMLElement, CardProps>(function Card(
-  { variant: _v, elevation: _e, component: Component = "div", children, ...props },
+  { component: Component = "div", children, ...props },
   ref,
 ) {
   const { style, rest } = splitSystemProps(props as AnyProps);

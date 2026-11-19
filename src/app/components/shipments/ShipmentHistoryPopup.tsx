@@ -12,7 +12,7 @@ import {
 import { PictureAsPdf as PdfIcon } from "@/components/ui/icons";
 import DataTable, { IconAction, type Column } from "@/components/DataTable";
 import { useReactToPrint } from 'react-to-print';
-import { ShipmentPDFDocument } from './ShipmentPDFDocument';
+import { ShipmentPDFDocument, type ShipmentPdfData } from './ShipmentPDFDocument';
 import { Shipment } from "@/types";
 import { DISPLAY_TIMEZONE, formatDate } from "@/app/lib/datetime";
 import { apiFetch } from "@/lib/api/client";
@@ -73,13 +73,14 @@ export default function ShipmentHistoryPopup({
 
     // PDF printing
     const pdfRef = React.useRef<HTMLDivElement>(null);
-    const [pdfData, setPdfData] = useState<{ shipment: Shipment | any; type: 'received' | 'sent'; historyGroup?: any } | null>(null);
+    const [pdfData, setPdfData] = useState<ShipmentPdfData | null>(null);
 
     const handlePrint = useReactToPrint({
         contentRef: pdfRef,
     });
 
     const handlePDFClick = (group: GroupedHistory) => {
+        if (!shipment) return;
         setPdfData({ shipment, type: 'sent', historyGroup: group });
         setTimeout(() => handlePrint(), 100);
     };

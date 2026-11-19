@@ -27,7 +27,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       status: updated.status,
       is_research: updated.is_research,
     });
-  } catch (error: any) {
+  } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2025"
@@ -52,7 +52,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       });
 
       return NextResponse.json({ success: true, id });
-    } catch (dbError: any) {
+    } catch (dbError) {
       // Check for FK constraint
       if (
         dbError instanceof Prisma.PrismaClientKnownRequestError &&

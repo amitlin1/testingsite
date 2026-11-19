@@ -1,6 +1,6 @@
 "use client";
 import React, { forwardRef } from "react";
-import { cn } from "./utils";
+import { cn, omit } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
 import { Select } from "./Select";
 
@@ -21,13 +21,10 @@ export interface TextFieldProps
   multiline?: boolean;
   rows?: number;
   minRows?: number;
-  maxRows?: number;
   /** multiline only: stretch the field to fill its parent's height. */
   fullHeight?: boolean;
-  hiddenLabel?: boolean;
+  /** MUI-compatible; the field has one size. */
   size?: "small" | "medium";
-  variant?: string;
-  margin?: string;
   select?: boolean;
   InputProps?: {
     startAdornment?: React.ReactNode;
@@ -37,8 +34,6 @@ export interface TextFieldProps
   };
   inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
   inputRef?: React.Ref<HTMLInputElement>;
-  InputLabelProps?: Record<string, unknown>;
-  FormHelperTextProps?: Record<string, unknown>;
   sx?: SxInput;
   containerClassName?: string;
   wrapClassName?: string;
@@ -53,18 +48,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     multiline,
     rows,
     minRows,
-    maxRows: _mr,
     fullHeight,
-    hiddenLabel: _hl,
-    size,
-    variant: _v,
-    margin: _m,
     select,
     InputProps,
     inputProps,
     inputRef,
-    InputLabelProps: _il,
-    FormHelperTextProps: _fh,
     sx,
     style,
     className,
@@ -75,10 +63,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     disabled,
     children,
     type = "text",
-    ...rest
+    ...props
   },
   ref,
 ) {
+  const rest = omit(props, ["size"]);
   const fill = Boolean(multiline && fullHeight);
   // Every field gets an id, so its <label> and helper text are tied to it
   // for assistive tech even when the caller passes none.

@@ -36,7 +36,7 @@ the rows below and re-verified. In review order:
 | The integration suite was permanently red on one §2.8 test | The by-station p95 queue age now ships its work-clock twin (`_new_p95QueueAgeWorkMinutes`). |
 | The browser suites hard-coded dev-config ids | `resolveConfig(page)` in `lib.mjs` resolves them by name after login; env overrides documented in the README. Suites 04 and 06 never existed — noted there. |
 | The backup script only listed the dump's table of contents | It now restores the dump into `<db>_restorecheck`, compares row counts (taken before the dump), and drops it (`-SkipRestoreCheck` to skip). |
-| `legacy_id_map` is outside Prisma's model | Added to the guard list in `scripts/check-migration-safety.js` and to `docs/PRISMA_UNMANAGED_OBJECTS.md`. |
+| `legacy_id_map` is outside Prisma's model | Added to the guard list in `scripts/check-migration-safety.mjs` and to `docs/PRISMA_UNMANAGED_OBJECTS.md`. |
 
 ---
 

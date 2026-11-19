@@ -9,6 +9,7 @@ import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import { apiFetch } from "@/lib/api/client";
 import type { ItemRow } from "@/types";
 import "./items.css";
+import { errorMessage } from "@/lib/errors";
 
 /* =========================================================================
    EditItemDialog — "עריכת פריט". Built on the shared Dialog (Radix: focus
@@ -132,8 +133,8 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
       }
       onSaved(true);
       onClose();
-    } catch (e: any) {
-      onSaved(false, e.message);
+    } catch (e) {
+      onSaved(false, errorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -158,8 +159,8 @@ export default function EditItemDialog({ open, item, customerOptions, itemTypeOp
       }
       onDeleted(true);
       onClose();
-    } catch (e: any) {
-      onDeleted(false, e.message);
+    } catch (e) {
+      onDeleted(false, errorMessage(e));
       setConfirmOpen(false);
     } finally {
       setDeleting(false);

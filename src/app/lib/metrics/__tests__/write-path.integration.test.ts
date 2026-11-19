@@ -28,6 +28,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import * as H from "./write-path-helpers";
+import { errorCode } from "@/lib/errors";
 
 /** The drift detector must be silent after every covered path. */
 async function assertNoDrift(): Promise<void> {
@@ -59,7 +60,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
   // -------------------------------------------------------------------------
 
   it("#1 create-package emits item_created for the box and each item, opening their runs and queued intervals in the same tx", async () => {
-    const created = await H.h().prisma.$transaction((tx: any) =>
+    const created = await H.h().prisma.$transaction((tx) =>
       H.h().createPackage(tx, {
         customer: H.CUSTOMER_ID,
         shipment: H.SHIPMENT_ID,
@@ -151,7 +152,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
   });
 
   it("#1b add-package-item takes the next position and refuses once the box is past its opening step", async () => {
-    const created = await H.h().prisma.$transaction((tx: any) =>
+    const created = await H.h().prisma.$transaction((tx) =>
       H.h().createPackage(tx, {
         customer: H.CUSTOMER_ID,
         shipment: H.SHIPMENT_ID,
@@ -160,7 +161,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
       }),
     );
 
-    const added = await H.h().prisma.$transaction((tx: any) =>
+    const added = await H.h().prisma.$transaction((tx) =>
       H.h().addPackageItem(tx, BigInt(created.packageId), {
         itemType: H.ITEM_TYPE_ONE_STEP, serialNumber: "SN-LATE", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
       }),
@@ -179,12 +180,12 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     assert.equal(res.status, 200);
 
     await assert.rejects(
-      H.h().prisma.$transaction((tx: any) =>
+      H.h().prisma.$transaction((tx) =>
         H.h().addPackageItem(tx, BigInt(created.packageId), {
           itemType: H.ITEM_TYPE_ONE_STEP, serialNumber: "SN-TOO-LATE", makat: "MK-1", model: "MODEL", manufacturer: "MFR",
         }),
       ),
-      (e: any) => e?.code === "PACKAGE_NOT_OPENING",
+      (e) => errorCode(e) === "PACKAGE_NOT_OPENING",
     );
 
     await assertNoDrift();
@@ -196,7 +197,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
   // -------------------------------------------------------------------------
 
   async function createBox(items: number[]): Promise<{ packageId: number; itemIds: number[] }> {
-    return H.h().prisma.$transaction((tx: any) =>
+    return H.h().prisma.$transaction((tx) =>
       H.h().createPackage(tx, {
         customer: H.CUSTOMER_ID,
         shipment: H.SHIPMENT_ID,
@@ -215,7 +216,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     const startUuid = randomUUID();
     const started = await H.startTest({ itemId: box.packageId, stationId: H.STATION_INTAKE, actionUuid: startUuid });
     assert.equal(started.status, 200);
-    assert.deepEqual(started.body.item.startedPackageItems, [String(a), String(b)]);
+    assert.deepEqual(started.body.item?.startedPackageItems, [String(a), String(b)]);
 
     for (const id of [box.packageId, a, b]) {
       const route = await H.routeRow(id);
@@ -258,8 +259,8 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
 
     // Items are at FUNC (step 2); the box advanced to CLOSE (step 2 of ITS
     // route) and must wait for them.
-    assert.equal(boxOpened.body.packageGate.status, 6);
-    assert.deepEqual(boxOpened.body.packageGate.blockingItemIds.sort(), [String(a), String(b)].sort());
+    assert.equal(boxOpened.body.packageGate?.status, 6);
+    assert.deepEqual(boxOpened.body.packageGate?.blockingItemIds.sort(), [String(a), String(b)].sort());
     const boxRoute = await H.routeRow(box.packageId);
     assert.equal(boxRoute.current_status, 6);
     assert.equal(boxRoute.current_route_step, 2);
@@ -272,16 +273,16 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     await H.startTest({ itemId: a, stationId: H.STATION_FUNC_A, actionUuid: randomUUID() });
     const aDone = await H.submitResult({ ItemID: a, StationID: H.STATION_FUNC_A, SubmitID: randomUUID(), Passed: true });
     assert.equal(aDone.status, 200);
-    assert.equal(aDone.body.packageGate.status, 6);
-    assert.deepEqual(aDone.body.packageGate.blockingItemIds, [String(b)]);
+    assert.equal(aDone.body.packageGate?.status, 6);
+    assert.deepEqual(aDone.body.packageGate?.blockingItemIds, [String(b)]);
     assert.equal((await H.routeRow(a)).current_route_step, 3);
 
     // Second item through FUNC: everyone is at CLOSE, the box queues NOW.
     await H.startTest({ itemId: b, stationId: H.STATION_FUNC_B, actionUuid: randomUUID() });
     const bDone = await H.submitResult({ ItemID: b, StationID: H.STATION_FUNC_B, SubmitID: randomUUID(), Passed: true });
     assert.equal(bDone.status, 200);
-    assert.equal(bDone.body.packageGate.status, H.STATUS.queued);
-    assert.deepEqual(bDone.body.packageGate.blockingItemIds, []);
+    assert.equal(bDone.body.packageGate?.status, H.STATUS.queued);
+    assert.deepEqual(bDone.body.packageGate?.blockingItemIds, []);
 
     const boxRoute2 = await H.routeRow(box.packageId);
     assert.equal(boxRoute2.current_status, H.STATUS.queued);
@@ -302,7 +303,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
 
     // Closing: group start again, one result per item and the box; all done.
     const closeStart = await H.startTest({ itemId: box.packageId, stationId: H.STATION_CLOSE, actionUuid: randomUUID() });
-    assert.deepEqual(closeStart.body.item.startedPackageItems.sort(), [String(a), String(b)].sort());
+    assert.deepEqual(closeStart.body.item?.startedPackageItems.sort(), [String(a), String(b)].sort());
     const closeSubmit = randomUUID();
     for (const id of [a, b, box.packageId]) {
       const r = await H.submitResult({ ItemID: id, StationID: H.STATION_CLOSE, SubmitID: closeSubmit, Passed: true });
@@ -371,7 +372,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     });
     assert.equal(reset.status, 200);
     assert.equal(reset.body.retyped, true);
-    assert.deepEqual(reset.body.packageReset.map(Number).sort(), [box.packageId, a, b].sort());
+    assert.deepEqual(reset.body.packageReset?.map(Number).sort(), [box.packageId, a, b].sort());
     const retyped = await H.one(`SELECT item_type_id FROM items WHERE item_id = $1`, [a]);
     assert.equal(retyped.item_type_id, H.ITEM_TYPE_IN_BOX_ALT);
     assert.equal((await H.runs(a))[1].item_type_id, H.ITEM_TYPE_IN_BOX_ALT, "the new run is planned against the new type");
@@ -1792,7 +1793,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
    * it must honour — the item_routes UPDATE and the event in ONE transaction.
    */
   async function manualOverride(itemId: number): Promise<void> {
-    await H.h().prisma.$transaction(async (tx: any) => {
+    await H.h().prisma.$transaction(async (tx) => {
       await tx.$executeRaw`
         UPDATE item_routes
            SET current_status = 2, current_route_step = 1, is_finished = false,

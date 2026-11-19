@@ -393,7 +393,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     },
   ];
 
-  async function q<T = Record<string, any>>(sql: string, params: any[] = []): Promise<T[]> {
+  async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
     return (await pool.query(sql, params)).rows as T[];
   }
 
@@ -408,8 +408,8 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
 
     const req = createRequire(path.resolve(process.cwd(), "package.json"));
     const authPath = req.resolve("./auth.ts");
-    const CjsModule = req("node:module") as any;
-    const stub = new CjsModule(authPath, null);
+    const CjsModule = req("node:module") as typeof import("node:module");
+    const stub = new CjsModule(authPath);
     stub.filename = authPath;
     stub.loaded = true;
     stub.exports = {
@@ -493,7 +493,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     const [row] = await q<{ version: number | null; has_fold: boolean }>(`
       SELECT (SELECT version FROM metrics_schema_version WHERE id = 1) AS version,
              to_regprocedure('metrics_open_run(bigint,timestamptz)') IS NOT NULL AS has_fold
-    `).catch(() => [] as any);
+    `).catch((): { version: number | null; has_fold: boolean }[] => []);
     if (!row?.has_fold || row.version == null) {
       throw new Error(
         "TEST_DATABASE_URL does not carry the metrics ledger schema — apply " +
@@ -910,19 +910,23 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   // 4. THE FOUR ROUTES
   // =========================================================================
 
-  type Res = { status: number; body: any; headers: Headers };
+  /** One day of an entity's history: its date, whether it is today, and the day's metrics by wire name. */
+  type HistoryPoint = { date: string; isToday?: boolean } & Record<string, unknown>;
+  type Res<B> = { status: number; body: B; headers: Headers };
 
-  async function call(
-    name: keyof typeof routes,
-    id: string | number,
-    query = "period=alldays",
-  ): Promise<Res> {
+  async function request<B>(name: keyof typeof routes, id: string | number, query: string): Promise<Res<B>> {
     const url = `http://localhost/api/dashboard/${name}/${id}/history?${query}`;
     const res = await routes[name](new Request(url) as never, {
       params: Promise.resolve({ id: String(id) }),
     });
-    return { status: res.status, body: await res.json(), headers: res.headers };
+    return { status: res.status, body: (await res.json()) as B, headers: res.headers };
   }
+  /** A history the route answers with: the day series. */
+  const call = (name: keyof typeof routes, id: string | number, query = "period=alldays") =>
+    request<HistoryPoint[]>(name, id, query);
+  /** A history the route refuses: its error. */
+  const refused = (name: keyof typeof routes, id: string | number, query = "period=alldays") =>
+    request<{ error?: string }>(name, id, query);
 
   /** Every route, the id that HAS data, and the id that has none. */
   const ROUTE_CASES = [
@@ -946,7 +950,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
       assert.equal(body[0].date, capFloor, `${c.name}: first day`);
       assert.equal(body[body.length - 1].date, T(), `${c.name}: last day`);
       assert.equal(body[body.length - 1].isToday, true);
-      assert.equal(body.filter((r: any) => r.isToday === true).length, 1);
+      assert.equal(body.filter((r) => r.isToday === true).length, 1);
       // §5.0(1): a history endpoint is pinned to scope=all and says so.
       assert.equal(headers.get("x-metrics-scope"), "all", `${c.name}: scope header`);
       assert.equal(headers.get("x-metrics-period-from"), capFloor);
@@ -1048,8 +1052,8 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   it("the entity dialogs' series is the one entityHistory() computed, under the right wire name", async () => {
     for (const c of ROUTE_CASES.filter((x) => x.finished)) {
       const { body } = await call(c.name, c.live, `startDate=${from()}&endDate=${to()}`);
-      const byDay = new Map(body.map((r: any) => [r.date, r]));
-      const day = (d: string) => byDay.get(d) as any;
+      const byDay = new Map(body.map((r) => [r.date, r]));
+      const day = (d: string): HistoryPoint => byDay.get(d) ?? { date: d };
       // The same three facts the unit tests proved, now over HTTP-shaped JSON:
       // every slice occupied on D3, an empty day at D9, and the cumulative line
       // stepping twice under this endpoint's own name.
@@ -1085,7 +1089,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
           continue;
         }
         pairs++;
-        const work = (row as any)[sib];
+        const work = row[sib];
         // §5.0(7) again, at the pair level: a day is measured on BOTH clocks or
         // on neither. One half null and the other a number would be a duration
         // that half-exists.
@@ -1110,8 +1114,8 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
 
   it("the station dialog's numbers, and its gap: D9 closed nothing and reads NULL, not 0", async () => {
     const { body } = await call("stations", ST_A, `startDate=${from()}&endDate=${to()}`);
-    const byDay = new Map(body.map((r: any) => [r.date, r]));
-    const day = (d: string) => byDay.get(d) as any;
+    const byDay = new Map(body.map((r) => [r.date, r]));
+    const day = (d: string): HistoryPoint => byDay.get(d) ?? { date: d };
 
     // D10: one 60-minute wait and one 180-minute test closed here.
     assert.equal(day(D(10)).totalProcessed, 1);
@@ -1124,7 +1128,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     // D8: the overnight wait closes here — 120 work-minutes inside 18 wall-hours.
     assert.equal(day(D(8))._new_waitWorkMin, 120);
     assert.equal(day(D(8))._new_waitWallMin, minutesBetween("8302-a", "8302-b"));
-    assert.ok(day(D(8))._new_waitWallMin > day(D(8))._new_waitWorkMin);
+    assert.ok(Number(day(D(8))._new_waitWallMin) > Number(day(D(8))._new_waitWorkMin));
     assert.equal(day(D(8))._new_handleWorkMin, 240);
 
     // D9 — THE GAP. Nothing closed, so all four durations are null and the
@@ -1151,7 +1155,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   });
 
   it("the station route: 404 for a station that does not exist, 400 for an id that is not one", async () => {
-    const missing = await call("stations", 999999, `startDate=${from()}&endDate=${to()}`);
+    const missing = await refused("stations", 999999, `startDate=${from()}&endDate=${to()}`);
     assert.equal(missing.status, 404);
     assert.equal(missing.body.error, "Station not found");
 
@@ -1161,13 +1165,13 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
       ["item-types", "Item Type ID is required"],
       ["stations", "Station ID is required"],
     ] as const) {
-      const bad = await call(name, "not-a-number");
+      const bad = await refused(name, "not-a-number");
       assert.equal(bad.status, 400, name);
       assert.equal(bad.body.error, message);
     }
 
     // A malformed window is still a 400 with the message the clients know.
-    const badDates = await call("customers", CUSTOMER, "startDate=nope&endDate=also-nope");
+    const badDates = await refused("customers", CUSTOMER, "startDate=nope&endDate=also-nope");
     assert.equal(badDates.status, 400);
     assert.equal(badDates.body.error, "Invalid date format");
   });

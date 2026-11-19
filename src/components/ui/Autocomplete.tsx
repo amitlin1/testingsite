@@ -5,6 +5,7 @@ import { DismissableLayerBranch } from "@radix-ui/react-dismissable-layer";
 import { X, ChevronDown } from "lucide-react";
 import { CircularProgress } from "./Progress";
 import { sxToStyle, type SxInput } from "./sx";
+import { omit } from "./utils";
 
 /* =============================================================================
    Autocomplete — Shifthouse (final)
@@ -52,16 +53,12 @@ type Reason = "selectOption" | "removeOption" | "clear" | "createOption" | "blur
 /** Props handed to renderOption for one row. Spread them on the <li>. */
 export type OptionLiProps = React.LiHTMLAttributes<HTMLLIElement> & { key?: React.Key; "data-highlighted"?: "" };
 
-export interface AutocompleteProps<
-  T,
-  _Multiple = boolean | undefined,
-  _DisableClearable = boolean | undefined,
-  _FreeSolo = boolean | undefined,
-> {
+export interface AutocompleteProps<T> {
   options: T[];
   value?: T | T[] | null;
   defaultValue?: T | T[] | null;
-  onChange?: (event: React.SyntheticEvent, value: any, reason: Reason) => void;
+  /** The new selection: one option (or null), or the options of a `multiple` one. */
+  onChange?: (event: React.SyntheticEvent, value: T | T[] | null, reason: Reason) => void;
   onOpen?: (event?: React.SyntheticEvent) => void;
   onClose?: (event?: React.SyntheticEvent, reason?: string) => void;
   inputValue?: string;
@@ -103,7 +100,6 @@ export interface RenderInputParams {
   disabled?: boolean;
   fullWidth?: boolean;
   size?: "small" | "medium";
-  InputLabelProps: Record<string, unknown>;
   InputProps: { ref?: React.Ref<HTMLDivElement>; startAdornment?: React.ReactNode; endAdornment?: React.ReactNode; className?: string };
   inputProps: React.InputHTMLAttributes<HTMLInputElement> & { ref?: React.Ref<HTMLInputElement> };
 }
@@ -116,12 +112,7 @@ const MENU_MAX_H = 264;
 const GAP = 6;
 const EDGE = 8;
 
-export function Autocomplete<
-  T,
-  _Multiple = boolean | undefined,
-  _DisableClearable = boolean | undefined,
-  _FreeSolo = boolean | undefined,
->(props: AutocompleteProps<T>) {
+export function Autocomplete<T>(props: AutocompleteProps<T>) {
   const {
     options, value, defaultValue, onChange, onOpen, onClose, inputValue: inputValueProp, onInputChange,
     getOptionLabel = defaultLabel as (o: T) => string,
@@ -356,7 +347,6 @@ export function Autocomplete<
     disabled,
     fullWidth,
     size,
-    InputLabelProps: {},
     InputProps: { startAdornment: tags, endAdornment },
     inputProps: {
       value: displayValue,
@@ -461,8 +451,7 @@ export function Autocomplete<
                   style: selected ? { color: "var(--color-primary)", fontWeight: 600 } : undefined,
                 };
                 if (renderOption) return renderOption(liProps, o, { selected, highlighted });
-                const { key: _k, ...liRest } = liProps;
-                return <li key={i} {...liRest}>{getOptionLabel(o)}</li>;
+                return <li key={i} {...omit(liProps, ["key"])}>{getOptionLabel(o)}</li>;
               })
             )}
             {listFooter != null && listFooter !== false && (

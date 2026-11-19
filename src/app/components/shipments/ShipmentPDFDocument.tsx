@@ -12,11 +12,22 @@ import {
 } from '@/app/components/reports/ReportKit';
 import { formatReportDate } from '@/app/components/reports/reportTheme';
 
-type ShipmentPDFProps = {
-    shipment: Shipment | any;
-    type: 'received' | 'sent';
-    historyGroup?: any;
+/** One outgoing certificate: the sends ShipmentHistoryPopup groups under one sent code. */
+export type SentGroup = {
+    sent_shipment_code: string;
+    sent_date: string;
+    sending_worker_name: string;
+    items: { item_type_desc: string | null; makat: number | string | null; amount: number }[];
+    signature_path?: string | null;
 };
+
+/** A row of the certificate's table: a received line (quantity) or a sent one (amount). */
+type CertificateRow = { item_type_desc?: string | null; makat?: number | string | null; quantity?: number; amount?: number };
+
+/** What ShipmentTable / ShipmentHistoryPopup print: the shipment, and for a sent one, its group. */
+export type ShipmentPdfData = { shipment: Shipment; type: 'received' | 'sent'; historyGroup?: SentGroup };
+
+type ShipmentPDFProps = ShipmentPdfData;
 
 /** Shipment certificate (received / sent) on the unified report template. */
 export const ShipmentPDFDocument = React.forwardRef<HTMLDivElement, ShipmentPDFProps>(
@@ -28,11 +39,11 @@ export const ShipmentPDFDocument = React.forwardRef<HTMLDivElement, ShipmentPDFP
         const shipmentCode: string | undefined = isReceived ? shipment.shipment_code : historyGroup?.sent_shipment_code;
         const date = formatReportDate(isReceived ? shipment.shipment_date : historyGroup?.sent_date);
         const workerName: string | undefined = isReceived
-            ? shipment.recieving_worker_name
+            ? (shipment.recieving_worker_name ?? undefined)
             : historyGroup?.sending_worker_name;
-        const items: any[] = isReceived ? (shipment.shipment_items || []) : (historyGroup?.items || []);
-        const signaturePath: string | undefined = isReceived ? shipment.signature_path : historyGroup?.signature_path;
-        const qty = (it: any) => Number(it.quantity ?? it.amount ?? 0);
+        const items: CertificateRow[] = isReceived ? (shipment.shipment_items || []) : (historyGroup?.items || []);
+        const signaturePath: string | undefined = (isReceived ? shipment.signature_path : historyGroup?.signature_path) ?? undefined;
+        const qty = (it: CertificateRow) => Number(it.quantity ?? it.amount ?? 0);
         const total = items.reduce((n, it) => n + qty(it), 0);
 
         const workerSlot = { name: workerName, date, signatureSrc: signaturePath };
@@ -64,9 +75,9 @@ export const ShipmentPDFDocument = React.forwardRef<HTMLDivElement, ShipmentPDFP
                     <ReportTable
                         columns={[
                             { header: '#', width: '44px', align: 'center', render: (_r, i) => i + 1 },
-                            { header: 'סוג מארז', render: (r: any) => r.item_type_desc || 'לא צוין' },
-                            { header: 'מק״ט', width: '160px', mono: true, render: (r: any) => r.makat || '—' },
-                            { header: 'כמות', width: '80px', align: 'center', render: (r: any) => qty(r) },
+                            { header: 'סוג מארז', render: (r: CertificateRow) => r.item_type_desc || 'לא צוין' },
+                            { header: 'מק״ט', width: '160px', mono: true, render: (r: CertificateRow) => r.makat || '—' },
+                            { header: 'כמות', width: '80px', align: 'center', render: (r: CertificateRow) => qty(r) },
                         ]}
                         rows={items}
                         totals={['', 'סה״כ', '', total]}

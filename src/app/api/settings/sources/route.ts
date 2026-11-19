@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { errorCode, errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -48,14 +49,14 @@ export async function POST(req: Request) {
       source_id: created.source_id,
       source_desc: created.source_desc.trim(),
     });
-  } catch (error: any) {
-    const msg = String(error?.message ?? "");
-    if (error?.code === "P2002" || /unique constraint/i.test(msg)) {
+  } catch (error) {
+    const msg = errorMessage(error);
+    if (errorCode(error) === "P2002" || /unique constraint/i.test(msg)) {
       return NextResponse.json({ error: "מקור בשם זה כבר קיים במערכת" }, { status: 400 });
     }
     console.error("Error creating source:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create source" },
+      { error: errorMessage(error) || "Failed to create source" },
       { status: 500 }
     );
   }

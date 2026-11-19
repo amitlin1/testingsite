@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { Prisma, type item_route_history } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
 import { parseBarcode } from "@/app/lib/barcode-parser";
@@ -26,6 +26,7 @@ import { resetPackageToOpening } from "@/app/lib/packages/reset";
 import { loadPackage } from "@/app/lib/packages/read";
 import { assertSerialFreeForItem } from "@/app/lib/packages/serials";
 import { workDoneOn } from "@/app/lib/packages/untouched";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,48 @@ function serializeBigInts(obj: unknown): unknown {
   return obj;
 }
 
+/** The item with its route, status and the stations of its route. */
+type ItemRow = {
+  item_id: bigint;
+  makat: string;
+  serial_no: string | null;
+  package_id: bigint | null;
+  package_seq: number | null;
+  is_package: boolean;
+  item_type_desc: string | null;
+  current_status: number | null;
+  item_status_id: number | null;
+  item_status_desc: string | null;
+  route_steps: number[] | null;
+  test_type_desc: string | null;
+  current_route_step: number | null;
+  test_station_id: number | null;
+  test_station_desc: string | null;
+  created_at: Date | null;
+  finished_at: Date | null;
+  is_finished: boolean | null;
+  route_stations: { id: number; desc: string }[] | null;
+};
+
+/** The other items of the item's box (or its members), each with its status. */
+type ConnectedRow = {
+  item_id: bigint;
+  serial_no: string | null;
+  item_type_desc: string;
+  current_status: number | null;
+  item_status_desc: string | null;
+  relation_type: "Parent" | "Child";
+};
+
+/** One step of the item's history (item_route_history) with its station and net work time. */
+type HistoryRow = item_route_history & {
+  test_station_desc: string | null;
+  test_station_type_id: number | null;
+  test_station_type_desc: string | null;
+  /** numeric: a Decimal, NULL while the step is still open. */
+  net_work_seconds: Prisma.Decimal | null;
+};
+
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -47,7 +90,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (itemIdBig == null) return BAD_ID();
 
     const [itemResult, connectedResult, historyResult, workersDirectory] = await Promise.all([
-      prisma.$queryRaw<any[]>`
+      prisma.$queryRaw<ItemRow[]>`
         SELECT
           i.item_id,
           i.makat,
@@ -93,7 +136,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       ORDER BY i.item_id DESC
       LIMIT 1
       `,
-      prisma.$queryRaw<any[]>`
+      prisma.$queryRaw<ConnectedRow[]>`
         SELECT
           i.item_id,
           i.serial_no,
@@ -116,7 +159,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           )
           AND i.item_id != ${itemIdBig}
       `,
-      prisma.$queryRaw<any[]>`
+      prisma.$queryRaw<HistoryRow[]>`
         SELECT
           h.*,
           -- The station the step actually ran at, plus its type. The history row
@@ -176,7 +219,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     }
 
     const workerNameById = new Map(workersDirectory.map((w) => [w.worker_id, w.worker_name]));
-    const normalizedHistory = historyResult.map((row: any) => ({
+    const normalizedHistory = historyResult.map((row) => ({
       ...row,
       worker_name: row.worker_id != null ? (workerNameById.get(Number(row.worker_id)) ?? null) : null,
       queue_start_time: normalizeToUtcIso(row.queue_start_time),
@@ -409,7 +452,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     });
 
     return NextResponse.json({ ok: true, item_id: result.item_id, retyped: result.retyped, packageReset: result.packageReset });
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof PackageError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     }
@@ -417,7 +460,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: "הפריט לא נמצא" }, { status: 404 });
     }
     console.error("Error updating item:", error);
-    return NextResponse.json({ error: error.message || "עדכון הפריט נכשל" }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) || "עדכון הפריט נכשל" }, { status: 500 });
   }
 }
 
@@ -523,7 +566,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     });
 
     return NextResponse.json({ ok: true, deletedConnectedCount: children.length });
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof PackageError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     }

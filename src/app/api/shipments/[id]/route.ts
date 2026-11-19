@@ -8,6 +8,8 @@ import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 import { dropShipmentBoxes, syncShipmentBoxes, type BoxSync } from "@/app/lib/packages/boxes";
 import { PackageError, packageErrorResponse } from "@/app/lib/packages/errors";
 import { SHIPMENT_TX, duplicateShipmentError, findDuplicateShipment, readShipmentLines, saveShipmentLines } from "@/app/lib/shipments/lines";
+import { errorMessage } from "@/lib/errors";
+import type { shipments } from "@prisma/client";
 
 /** withAuth passes only (req, ctx); recover the [id] from the path. */
 function idFromReq(req: NextRequest): number {
@@ -97,7 +99,7 @@ export const PUT = withAuth(async (request: NextRequest, { session }: WithAuthCt
             }
 
             // Update shipment with CASE logic for shipment_sent_date
-            const updateResult = await tx.$queryRaw<any[]>`
+            const updateResult = await tx.$queryRaw<shipments[]>`
                 UPDATE shipments
                 SET shipment_code = ${shipment_code},
                     customer_id = ${customer_id},
@@ -131,10 +133,10 @@ export const PUT = withAuth(async (request: NextRequest, { session }: WithAuthCt
         }, SHIPMENT_TX);
 
         return NextResponse.json({ ...result.shipment, boxes: result.boxes });
-    } catch (e: any) {
+    } catch (e) {
         if (e instanceof DryRun) return NextResponse.json({ dry_run: true, boxes: e.boxes });
         if (e instanceof PackageError) return packageErrorResponse(e, "");
-        if (e.message === "SHIPMENT_NOT_FOUND") {
+        if (errorMessage(e) === "SHIPMENT_NOT_FOUND") {
             return NextResponse.json({ error: "המשלוח לא נמצא" }, { status: 404 });
         }
         console.error("Error updating shipment:", e);
@@ -193,7 +195,7 @@ export const DELETE = withAuth(async (request: NextRequest) => {
 
         return NextResponse.json({ message: "המשלוח נמחק בהצלחה" }, { status: 200 });
 
-    } catch (e: any) {
+    } catch (e) {
         // 400, as the shipments table and its tests expect for "boxes were taken in".
         if (e instanceof PackageError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });
         console.error("Error deleting shipment:", e);

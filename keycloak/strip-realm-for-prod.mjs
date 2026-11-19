@@ -1,6 +1,6 @@
 // Produce a PRODUCTION realm import from the dev export.
 //
-//   node keycloak/strip-realm-for-prod.js
+//   node keycloak/strip-realm-for-prod.mjs
 //
 // Reads keycloak/import/testing-realm.json (the dev export) and writes
 // keycloak/import-prod/testing-realm.json with:
@@ -12,11 +12,11 @@
 // The prod compose (docker-compose.keycloak.prod.yml) mounts import-prod, so the
 // dev realm file is never imported in production.
 
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import path from "node:path";
 
-const inPath = path.join(__dirname, "import", "testing-realm.json");
-const outDir = path.join(__dirname, "import-prod");
+const inPath = path.join(import.meta.dirname, "import", "testing-realm.json");
+const outDir = path.join(import.meta.dirname, "import-prod");
 const outPath = path.join(outDir, "testing-realm.json");
 
 const DEV_TEST_USERS = new Set(["manager1", "bodek1", "mahsan1"]);

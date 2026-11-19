@@ -28,7 +28,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "since (ISO timestamp) is required" }, { status: 400 });
     }
 
-    const rows = await prisma.$queryRaw<any[]>`
+    const rows = await prisma.$queryRaw<{ count: bigint }[]>`
       SELECT COUNT(*) AS count
       FROM item_route_history
       WHERE test_station_id = ${stationIdNum}

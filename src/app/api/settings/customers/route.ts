@@ -3,6 +3,7 @@ import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
 import { Prisma } from "@prisma/client";
 import { CUSTOMER_CODE_RULE, idCustomerCode } from "@/app/lib/packages/ids";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
       name: created.name.trim(),
       customer_code: created.customer_code.trim(),
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error creating customer:", error);
 
     // If duplicate key, fix sequence and retry
@@ -83,7 +84,7 @@ export async function POST(req: Request) {
           name: retryCreated.name.trim(),
           customer_code: retryCreated.customer_code.trim(),
         });
-      } catch (retryError: any) {
+      } catch (retryError) {
         console.error("Retry after sequence fix failed:", retryError);
         return NextResponse.json(
           { error: "שגיאה ביצירת לקוח. נא לנסות שוב." },
@@ -93,7 +94,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { error: error.message || "שגיאה ביצירת לקוח" },
+      { error: errorMessage(error) || "שגיאה ביצירת לקוח" },
       { status: 500 }
     );
   }

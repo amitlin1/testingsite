@@ -9,6 +9,7 @@ import { Paperclip, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { apiFetch } from "@/lib/api/client";
 import { withBasePath } from "@/lib/base-path";
+import Image from "next/image";
 
 const BUNDLED = [
   { path: "/report-logos/emblem-navy.png", label: "סמל כחול" },
@@ -64,8 +65,7 @@ export function ReportLogoField({ value, onChange }: { value: string; onChange: 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <div className="rpted-logo-box">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {src ? <img src={src} alt="" /> : <span>אין לוגו</span>}
+        {src ? <Image src={src} alt="" width={0} height={0} unoptimized style={{ width: "auto", height: "auto" }} /> : <span>אין לוגו</span>}
       </div>
       <div className="rpted-logo-bundled" role="group" aria-label="סמלים מובנים">
         {BUNDLED.map((b) => (
@@ -78,8 +78,7 @@ export function ReportLogoField({ value, onChange }: { value: string; onChange: 
             className={`rpted-logo-pick${value === b.path ? " is-on" : ""}`}
             onClick={() => onChange(b.path)}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={withBasePath(b.path)} alt="" />
+            <Image src={withBasePath(b.path)} alt="" width={0} height={0} unoptimized style={{ width: "auto", height: "auto" }} />
           </button>
         ))}
       </div>

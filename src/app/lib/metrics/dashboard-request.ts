@@ -20,7 +20,7 @@
 //     first rule is that a filter must never be dropped in silence.
 //
 // The `_new_` prefix on the two-clock additions is deliberate and matches the
-// parity harness (scripts/dashboard-parity.js): it marks a field the OLD
+// parity harness (scripts/dashboard-parity.mjs): it marks a field the OLD
 // response never had, so the harness reports it as an addition rather than as
 // a changed number, and so stage 6 can find every field the components have
 // not adopted yet with one grep.

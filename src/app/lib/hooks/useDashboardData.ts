@@ -251,8 +251,10 @@ export interface DashboardData {
 type Store = Partial<Record<ResourceKey, Resource<unknown>>>;
 
 export function useDashboardData(state: DashboardState): DashboardData {
-  const urls = React.useMemo(() => endpointsFor(state), [state]);
-  const urlKey = React.useMemo(() => JSON.stringify(urls), [urls]);
+  // The endpoints by their text: a new `state` object with the same filters keeps the same
+  // `urls`, so the fetch below runs only when an endpoint's URL really changes.
+  const urlKey = React.useMemo(() => JSON.stringify(endpointsFor(state)), [state]);
+  const urls = React.useMemo(() => JSON.parse(urlKey) as Partial<Record<ResourceKey, string>>, [urlKey]);
 
   const [store, setStore] = React.useState<Store>({});
   const [lastUpdatedAt, setLastUpdatedAt] = React.useState<number | null>(null);
@@ -339,8 +341,8 @@ export function useDashboardData(state: DashboardState): DashboardData {
       cancelled = true;
       controller.abort();
     };
-    // `tick` is the refresh pulse; `urlKey` is every filter, tab and range.
-  }, [urlKey, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+    // `tick` is the refresh pulse; `urls` is every filter, tab and range.
+  }, [urls, tick]);
 
   // 60s auto-refresh — never while the tab is hidden, and a tab coming back
   // after more than one period refetches at once rather than waiting out the

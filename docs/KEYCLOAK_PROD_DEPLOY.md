@@ -45,7 +45,7 @@ builds its own tables on first boot. Set the password there = `KC_DB_PASSWORD`
 
 ### The realm JSON
 `keycloak/import-prod/testing-realm.json` is generated from the current dev realm
-by `node keycloak/strip-realm-for-prod.js` — it reproduces everything here **minus
+by `node keycloak/strip-realm-for-prod.mjs` — it reproduces everything here **minus
 the dev test users and minus the baked client secrets** (Keycloak regenerates
 those). It already exists in the repo; re-run the script if you change realm config.
 

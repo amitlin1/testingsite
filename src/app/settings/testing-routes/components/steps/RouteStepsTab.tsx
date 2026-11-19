@@ -17,6 +17,7 @@ import type { RouteRef } from "../../lib/routeQuery";
 import {
   NO_ROUTE_TEXT, STEPS_PARTS_TEXT, lineRouteMissingText, lineSubText, qtyText, routeNumberText, sharedStepsNoticeText, stepsTitleText,
 } from "../../lib/labels";
+import { errorMessage } from "@/lib/errors";
 
 /**
  * The "שלבי המסלול" tab (route-fields spec §5.13, §3.5; reworked 2026-10-26). The context card
@@ -445,8 +446,8 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
         setSnackbar({ open: true, message: "מסלול נשמר בהצלחה", severity: "success" });
       }
       onSaved();
-    } catch (err: any) {
-      if (alive.current) setSnackbar({ open: true, message: err.message || "שמירת המסלול נכשלה. נסה שוב.", severity: "error" });
+    } catch (err) {
+      if (alive.current) setSnackbar({ open: true, message: errorMessage(err) || "שמירת המסלול נכשלה. נסה שוב.", severity: "error" });
     } finally {
       if (alive.current) setSaving(false);
     }

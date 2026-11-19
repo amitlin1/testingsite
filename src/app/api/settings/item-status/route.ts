@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { errorCode, errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -48,14 +49,14 @@ export async function POST(req: Request) {
       item_status_id: created.item_status_id,
       item_status_desc: created.item_status_desc.trim(),
     });
-  } catch (error: any) {
-    const msg = String(error?.message ?? "");
-    if (error?.code === "P2002" || /unique constraint/i.test(msg)) {
+  } catch (error) {
+    const msg = errorMessage(error);
+    if (errorCode(error) === "P2002" || /unique constraint/i.test(msg)) {
       return NextResponse.json({ error: "סטטוס פריט בשם זה כבר קיים במערכת" }, { status: 400 });
     }
     console.error("Error creating item status:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create item status" },
+      { error: errorMessage(error) || "Failed to create item status" },
       { status: 500 }
     );
   }

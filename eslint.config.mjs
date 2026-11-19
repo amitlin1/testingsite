@@ -7,21 +7,6 @@ const eslintConfig = [
   ...nextCoreWebVitals,
   ...nextTypescript,
   {
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "off",
-      "react/no-unescaped-entities": "off",
-      "prefer-const": "off",
-    },
-  },
-  {
-    // Plain CommonJS Node scripts – require() is correct there.
-    files: ["scripts/**/*.js", "keycloak/**/*.js"],
-    rules: {
-      "@typescript-eslint/no-require-imports": "off",
-    },
-  },
-  {
     ignores: [
       "node_modules/**",
       ".next/**",
@@ -29,6 +14,9 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       ".tmp-testingsite-next-app/**",
+      // A design handoff (static .dc.html mockups and their support.js): never compiled, never
+      // imported by the app — not app code.
+      "route-fields-handoff/**",
     ],
   },
 ];

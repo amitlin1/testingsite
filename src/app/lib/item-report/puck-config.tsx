@@ -468,10 +468,9 @@ export interface PhotosProps extends WidthProp {
 export interface SpacerProps {
   height: number;
 }
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface DividerProps {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface PageBreakProps {}
+/** Blocks with no settings of their own. */
+export type DividerProps = Record<string, never>;
+export type PageBreakProps = Record<string, never>;
 
 export interface HeaderSettings {
   show: boolean;

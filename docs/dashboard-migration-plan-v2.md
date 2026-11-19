@@ -1737,7 +1737,7 @@ UPDATE item_state_interval i
 - `src/app/api/health/schema/route.ts` — **כאן, לא בשלב מאוחר**: אימות שלב 2 קורא לו, וההגנה מפני app-קודם-DB תלויה בו; נשאר public בכוונה (ל־`4-verify.ps1` אין session)
 - `prod-deploy/app-server/scheduler/run_rebuild_work_calendar.bat`
 - `docs/PRISMA_UNMANAGED_OBJECTS.md` — כולל חובת `migrate dev --create-only` + diff לפני commit
-- `scripts/check-migration-safety.js` + pre-commit hook
+- `scripts/check-migration-safety.mjs` + pre-commit hook
 - `scripts/restore.sh` (שכתוב) + עדכון `docs/RUNBOOK_DB_SERVER.md` — ראה תיקון הגיבוי למטה
 
 שונה:
@@ -1747,7 +1747,7 @@ UPDATE item_state_interval i
 
 > **תיקון גיבוי ↔ שחזור כזוג אטומי.** גרסה 1 החליפה את פורמט הגיבוי ל־`-Fc` אבל השאירה את `restore.sh` על `gunzip | psql` ואת ה־RUNBOOK על `psql < backup.sql` — ארכיון `-Fc` הוא בינארי ש־psql לא מסוגל להריץ, כלומר בליל האסון הראשון אף נוהל שחזור לא היה עובד. בגרסה 2, באותו PR: הסייד־קאר כותב `.dump`; `restore.sh` מזהה סיומת — `.dump` ⇒ `docker exec ... pg_restore --clean --if-exists -j 4`, ‏`.sql.gz` (ישן) ⇒ המסלול הקודם עם `ON_ERROR_STOP`; סעיפי ה־RUNBOOK מיושרים לשמות הקבצים החדשים עם `-j 4`.
 
-> **`check-migration-safety.js` — ה־regex המורחב.** Prisma לא תפלוט `DROP TABLE` על טבלאות שמוצהרות ב־schema — היא תפלוט `DROP INDEX` / `ALTER TABLE ... DROP CONSTRAINT` / `DROP EXPRESSION` על מה שהיא לא יודעת לבטא: האינדקסים החלקיים, ה־GiST, ה־EXCLUDE, ו־`offhours_seconds GENERATED`. ה־hook בודק, מול רשימת שמות שכוללת **גם את שמות האינדקסים וה־constraints עצמם** (`isi_no_overlap`, `isi_one_open_per_item`, `route_run_one_open`, `wcv_one_current`, `work_span_no_overlap`, ...): `DROP TABLE|DROP FUNCTION|DROP TRIGGER|DROP INDEX|DROP CONSTRAINT|ALTER TABLE <metrics> ... DROP|DROP EXPRESSION|DROP EXTENSION`. אחרת מיגרציה שגרתית בעוד שלושה חודשים הייתה מפילה בשקט את ה־constraint שהוא "ה־test suite של ה־rebuild".
+> **`check-migration-safety.mjs` — ה־regex המורחב.** Prisma לא תפלוט `DROP TABLE` על טבלאות שמוצהרות ב־schema — היא תפלוט `DROP INDEX` / `ALTER TABLE ... DROP CONSTRAINT` / `DROP EXPRESSION` על מה שהיא לא יודעת לבטא: האינדקסים החלקיים, ה־GiST, ה־EXCLUDE, ו־`offhours_seconds GENERATED`. ה־hook בודק, מול רשימת שמות שכוללת **גם את שמות האינדקסים וה־constraints עצמם** (`isi_no_overlap`, `isi_one_open_per_item`, `route_run_one_open`, `wcv_one_current`, `work_span_no_overlap`, ...): `DROP TABLE|DROP FUNCTION|DROP TRIGGER|DROP INDEX|DROP CONSTRAINT|ALTER TABLE <metrics> ... DROP|DROP EXPRESSION|DROP EXTENSION`. אחרת מיגרציה שגרתית בעוד שלושה חודשים הייתה מפילה בשקט את ה־constraint שהוא "ה־test suite של ה־rebuild".
 
 **אימות לפני מעבר:**
 1. `SELECT * FROM metrics_selfcheck();` — `calendar_horizon_days > 300`, `calendar_sanity_net_minutes = 455`.
@@ -2105,7 +2105,7 @@ UPDATE metrics_schema_version SET version = 2, applied_at = now();
 
 ### 9.4א הבדלים שנפסקו בפועל ברתמת שלב 5 — עם המספרים
 
-**הרצה:** `scripts/dashboard-parity.js`, DB `testingsite` (630 פריטים · 10,202 events · 6,426 intervals · 630 route_run · 607 סגורים · 13 חודשי היסטוריה · 77 משלוחים · 2,458 שורות `item_route_history`).
+**הרצה:** `scripts/dashboard-parity.mjs`, DB `testingsite` (630 פריטים · 10,202 events · 6,426 intervals · 630 route_run · 607 סגורים · 13 חודשי היסטוריה · 77 משלוחים · 2,458 שורות `item_route_history`).
 **שני הצדדים רצו כשרתים נפרדים מול אותו DB:** הישן מ־worktree של `2fb5664` (‏`--old-api-base :3001`), החדש מעץ העבודה (‏`--new http --new-api-base :3000`) — כלומר ה־endpoints שנשלחים באמת, ולא האדפטרים הפנימיים של הרתמה. הרתמה הורחבה לשם כך ב־`--old-api-base` / `--new impl|http` / `--new-api-base`, בשתי משפחות מקרים נוספות, ובמדידת זמנים.
 **מטריצה:** 6 חלונות (`today`, `7d`, `30d`, `90d`, `12mo`, `13mo`) × 11 פילטרים (ללא · לקוח · משלוח · סוג פריט · תחנה · סוג תחנה · עובד · מספר סידורי · `status=queue|processing|finished`) × 2 ערכי `scope` = **132 מקרים ל־endpoint × 10 endpoints (1,320 השוואות)**. תוצאה: **0 הפרשי שדה/שורה בלתי מוסברים, 0 שגיאות — PARITY: GREEN.**
 
@@ -2332,7 +2332,7 @@ export async function runJob(name: string, fn: (tx) => Promise<JobResult>) {
 | 14 | טריגר ה־drift: רץ מיום המיגרציה מול ledger ריק ⇒ drift_open תקוע לנצח | §3.8/§8 — נוצר DISABLED, מופעל בסוף Tier-1 |
 | 15 | טריגר ה־drift: הפעלה פר־row-version ⇒ שורת drift מזויפת לכל השלמת מסלול | §3.8 — השוואה מול השורה המחויבת (re-read), לא מול NEW |
 | 16 | `pg_dump -Fc` בלי שכתוב restore ⇒ אף נוהל שחזור לא עובד ביום האסון | §8 שלב 2/§10.3 — `.dump` + `pg_restore -j 4` + `restore.sh` דו־דורי + RUNBOOK, באותו PR |
-| 17 | `check-migration-safety.js` מחפש DROP TABLE אבל Prisma תפלוט DROP INDEX/CONSTRAINT | §8 שלב 2 — regex מורחב + רשימת שמות הכוללת אינדקסים/constraints + חובת `--create-only` |
+| 17 | `check-migration-safety.mjs` מחפש DROP TABLE אבל Prisma תפלוט DROP INDEX/CONSTRAINT | §8 שלב 2 — regex מורחב + רשימת שמות הכוללת אינדקסים/constraints + חובת `--create-only` |
 | 18 | `/api/health/schema` + שער הגרסה נוצרים בשלב מאוחר מדי | §8 — ה־route בשלב 2, הסירוב־לשרת ב־image של שלב 3, ניסוח §10.2(4) תוקן |
 | 19 | `/api/health/jobs` תחת prefix ציבורי — הגנת middleware לא תעבוד | §8 שלב 5/§10.2 — self-gate ב־handler + שתי בדיקות; health/schema נשאר public במוצהר |
 | 20 | Tier-1 שביר: יתומים מפרים את שוויון הספירות; `finished_at < created_at` מפיל CHECK | §8 שלב 4 — clamp `GREATEST` (גם ב־(ב)), אימות עם JOIN, דוח pre-flight שלישי |

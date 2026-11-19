@@ -12,6 +12,7 @@ import {
 import DataTable, { type Column } from "@/components/DataTable";
 import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import SettingsToolbar from "../components/SettingsToolbar";
+import { omit } from "@/lib/omit";
 
 /**
  * הגדרות → מארזים — docs/packages/PLAN.md §3, design
@@ -202,8 +203,8 @@ export default function PackagesSettingsPage() {
   const total = draft.reduce((n, r) => n + (Number(r.quantity) || 0), 0);
   const dirty = contents != null && (
     draftRoute !== (contents.default_route_number == null ? "" : String(contents.default_route_number)) ||
-    JSON.stringify(draft.map(({ key: _k, route_warning: _w, ...rest }) => rest)) !==
-      JSON.stringify(contents.lines.map(toDraft).map(({ key: _k, route_warning: _w, ...rest }) => rest))
+    JSON.stringify(draft.map((r) => omit(r, ["key", "route_warning"]))) !==
+      JSON.stringify(contents.lines.map(toDraft).map((r) => omit(r, ["key", "route_warning"])))
   );
   const badIndex = draft.findIndex((r) => r.route_warning);
   const warningTitle = contents?.package_route_warnings[0] ?? (badIndex >= 0 ? draft[badIndex].route_warning : null);

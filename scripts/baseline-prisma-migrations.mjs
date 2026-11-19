@@ -15,16 +15,16 @@
  *
  * Usage:
  *   DATABASE_URL="postgres://USER:PASS@HOST:PORT/DB?schema=public" \
- *       node scripts/baseline-prisma-migrations.js
+ *       node scripts/baseline-prisma-migrations.mjs
  *
  * Re-running is safe: migrations that are already recorded will be skipped.
  */
 
-const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
+import fs from "node:fs";
+import path from "node:path";
+import { execSync } from "node:child_process";
 
-const migrationsDir = path.join(__dirname, "..", "prisma", "migrations");
+const migrationsDir = path.join(import.meta.dirname, "..", "prisma", "migrations");
 
 if (!fs.existsSync(migrationsDir)) {
   console.error(`✗ Cannot find ${migrationsDir}`);
@@ -34,8 +34,8 @@ if (!fs.existsSync(migrationsDir)) {
 if (!process.env.DATABASE_URL) {
   console.error(
     "✗ DATABASE_URL is not set. Point it at the database you want to baseline, e.g.:\n" +
-      '  $env:DATABASE_URL="postgres://..."; node scripts/baseline-prisma-migrations.js  # PowerShell\n' +
-      '  DATABASE_URL="postgres://..." node scripts/baseline-prisma-migrations.js          # bash'
+      '  $env:DATABASE_URL="postgres://..."; node scripts/baseline-prisma-migrations.mjs  # PowerShell\n' +
+      '  DATABASE_URL="postgres://..." node scripts/baseline-prisma-migrations.mjs          # bash'
   );
   process.exit(1);
 }

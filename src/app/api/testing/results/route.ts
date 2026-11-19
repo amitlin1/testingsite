@@ -14,9 +14,34 @@ import { actorOf, decodeImageDataUrl } from "@/app/lib/item-report/http";
 import { REPORT_CLOSING_SIGN_ROLES } from "@/app/lib/item-report/roles";
 import { hasAnyRole } from "@/lib/auth/roles";
 import { auth } from "@/../auth";
+import { errorDetail, errorMessage } from "@/lib/errors";
 
 
 export const runtime = "nodejs";
+
+/** item_routes as the transaction locks it (FOR UPDATE). */
+type LockedRouteRow = {
+  route_number: number;
+  current_status: number;
+  item_type_id: number;
+  current_route_step: number;
+  fields_version: number | null;
+};
+
+/** What every item_routes UPDATE below hands back (RETURNING). */
+type RouteUpdateRow = { current_status: number; current_route_step: number; item_type_id: number; route_number: number };
+
+/** A route's step at an index, and its length (testing_routes.route_steps). */
+type RouteStepRow = { next_station_type_id: number | null; route_length: number | null };
+
+/** A station of the next step's type with its queue (COUNT → bigint). */
+type StationLoadRow = { test_station_id: number; test_station_desc: string | null; waiting_count: bigint; in_test_count: bigint; total_active: bigint };
+
+/** The least loaded research station (COUNT → bigint). */
+type ResearchStationRow = { test_station_id: number; test_station_desc: string | null; test_station_type_id: number; station_type_name: string; current_load: bigint };
+
+/** The research station the item was sent to, as the client shows it. */
+type ResearchStation = { stationId: number; stationDesc: string; stationTypeId: number; stationTypeName: string; currentLoad: number };
 
 type TestResultRequest = {
   ItemID: number;
@@ -142,7 +167,14 @@ export async function POST(req: Request) {
     const payloadBase = clientSubmitId ? {} : { server_generated_submit_id: true };
 
     if (CurrentRouteStep === undefined || RouteStepsLength === undefined || !QueueStartTime || !ItemTypeId || !CreatedAt) {
-      const infoRows = await prisma.$queryRaw<any[]>`
+      const infoRows = await prisma.$queryRaw<{
+        current_route_step: number;
+        queue_start_time: Date;
+        processing_start_time: Date | null;
+        item_type_id: number;
+        created_at: Date;
+        route_len: number;
+      }[]>`
         SELECT ir.current_route_step, ir.queue_start_time, ir.processing_start_time, ir.item_type_id, ir.created_at,
                COALESCE(array_length(tr.route_steps, 1), 0) AS route_len
         FROM item_routes ir
@@ -239,7 +271,7 @@ export async function POST(req: Request) {
       //
       // item_type_id / current_route_step / fields_version: the station-fields
       // check below resolves the step from THIS locked row, never from the body.
-      const routeInfoRows = await tx.$queryRaw<any[]>`
+      const routeInfoRows = await tx.$queryRaw<LockedRouteRow[]>`
         SELECT route_number, current_status, item_type_id, current_route_step, fields_version
         FROM item_routes
         WHERE item_id = ${itemIdBig}
@@ -298,7 +330,7 @@ export async function POST(req: Request) {
 
       // Station type of the submitting station — resolved early because the
       // ledger events carry it, and the test_results insert below reuses it.
-      const stationTypeRows = await tx.$queryRaw<any[]>`
+      const stationTypeRows = await tx.$queryRaw<{ test_station_type_id: number }[]>`
         SELECT test_station_type_id FROM test_stations WHERE test_station_id = ${StationID}
       `;
       const testStationTypeId = stationTypeRows[0]?.test_station_type_id ?? null;
@@ -353,9 +385,9 @@ export async function POST(req: Request) {
       let stateEventId: bigint | null = null;
 
       // 1. INSERT into item_route_history
-      let historyLogId: any = null;
+      let historyLogId: number | null = null;
       if (shouldWriteToItemRouteHistory) {
-        const historyRows = await tx.$queryRaw<any[]>`
+        const historyRows = await tx.$queryRaw<{ log_id: number }[]>`
           INSERT INTO item_route_history (
             item_id, test_station_id, current_route_step,
             queue_start_time, processing_start_time, processing_end_time,
@@ -384,7 +416,7 @@ export async function POST(req: Request) {
         // current_route_step guard on the normal path): if a concurrent action
         // already moved the item out of research, this matches 0 rows instead
         // of blindly re-queuing it.
-        const updateRows = await tx.$queryRaw<any[]>`
+        const updateRows = await tx.$queryRaw<RouteUpdateRow[]>`
           UPDATE item_routes
           SET current_status = 2, queue_start_time = ${currentUtcDate}::timestamp
           WHERE item_id = ${itemIdBig} AND route_number = ${routeNumber} AND finished_at IS NULL
@@ -416,7 +448,7 @@ export async function POST(req: Request) {
       } else if (isResearchStatus && finishRoute === true) {
         // Finish route (5→3): don't touch current_route_step.
         // current_status = 5 — optimistic guard, see returnToRoute above.
-        const updateRows = await tx.$queryRaw<any[]>`
+        const updateRows = await tx.$queryRaw<RouteUpdateRow[]>`
           UPDATE item_routes
           SET current_status = 3, finished_at = ${currentUtcDate}::timestamp, is_finished = true
           WHERE item_id = ${itemIdBig} AND route_number = ${routeNumber} AND finished_at IS NULL
@@ -447,7 +479,7 @@ export async function POST(req: Request) {
         // Status 5 regular: don't update item_routes, only save in research_history
         updatedStatus = currentStatus;
         updatedRouteStep = CurrentRouteStep;
-        const itemTypeRows = await tx.$queryRaw<any[]>`
+        const itemTypeRows = await tx.$queryRaw<{ item_type_id: number }[]>`
           SELECT item_type_id FROM item_routes WHERE item_id = ${itemIdBig} AND route_number = ${routeNumber}
         `;
         updatedItemTypeId = itemTypeRows[0]?.item_type_id || ItemTypeId;
@@ -471,7 +503,7 @@ export async function POST(req: Request) {
         // Send to research: don't increment current_route_step, set status to 4.
         // current_status = 1 — optimistic guard: sendToResearch is only valid
         // from "in test"; a duplicate submit (item already 4) matches 0 rows.
-        const updateRows = await tx.$queryRaw<any[]>`
+        const updateRows = await tx.$queryRaw<RouteUpdateRow[]>`
           UPDATE item_routes
           SET current_status = 4, queue_start_time = ${currentUtcDate}::timestamp, processing_start_time = NULL
           WHERE item_id = ${itemIdBig} AND route_number = ${routeNumber} AND finished_at IS NULL
@@ -530,7 +562,7 @@ export async function POST(req: Request) {
         // had the item's wizard open at once) from advancing the route twice —
         // the second submit's CurrentRouteStep no longer matches the row the
         // first submit already advanced, so it matches 0 rows and fails below.
-        const updateRows = await tx.$queryRaw<any[]>`
+        const updateRows = await tx.$queryRaw<RouteUpdateRow[]>`
           UPDATE item_routes
           SET current_status = 2, current_route_step = current_route_step + 1, queue_start_time = ${currentUtcDate}::timestamp
           WHERE item_id = ${itemIdBig} AND route_number = ${routeNumber} AND finished_at IS NULL
@@ -594,7 +626,7 @@ export async function POST(req: Request) {
       if (sendToResearch !== true && !(isResearchStatus && !returnToRoute && !finishRoute) && !(isResearchStatus && returnToRoute === true)) {
         if (updatedStatus !== 3) {
           // Check if the updated route_step points to a valid step in route_steps
-          const checkRows = await tx.$queryRaw<any[]>`
+          const checkRows = await tx.$queryRaw<RouteStepRow[]>`
             SELECT
               route_steps[${updatedRouteStep}] AS next_station_type_id,
               array_length(route_steps, 1) AS route_length
@@ -636,9 +668,9 @@ export async function POST(req: Request) {
       }
 
       // 3. INSERT into research_history
-      let researchId: any = null;
+      let researchId: number | null = null;
       if (shouldWriteToResearchHistory) {
-        const researchRows = await tx.$queryRaw<any[]>`
+        const researchRows = await tx.$queryRaw<{ research_id: number }[]>`
           INSERT INTO research_history (
             item_id, station_id, result, comments, worker_id, sent_at, return_at
           )
@@ -678,16 +710,16 @@ export async function POST(req: Request) {
       });
 
       // 4. Calculate research station recommendation if sendToResearch
-      let recommendedResearchStation: any = null;
+      let recommendedResearchStation: ResearchStation | null = null;
       if (sendToResearch === true) {
         // Only the RECOMMENDATION QUERY is best-effort. The writes it implies
         // (the station assignment and its ledger note) are NOT: they used to
         // sit inside this catch, so a failing note left the transaction poisoned
         // while the handler carried on toward a success shape. Read here, write
         // below, outside the guard.
-        let researchStationRows: any[] = [];
+        let researchStationRows: ResearchStationRow[] = [];
         try {
-          researchStationRows = await tx.$queryRaw<any[]>`
+          researchStationRows = await tx.$queryRaw<ResearchStationRow[]>`
             WITH research_stations AS (
               SELECT ts.test_station_id, ts.test_station_desc, ts.test_station_type_id,
                      COALESCE(tst.test_type_desc, '') AS station_type_name
@@ -719,7 +751,7 @@ export async function POST(req: Request) {
               stationDesc: (station.test_station_desc || "").trim(),
               stationTypeId: station.test_station_type_id,
               stationTypeName: (station.station_type_name || "").trim(),
-              currentLoad: parseInt(station.current_load || "0", 10),
+              currentLoad: Number(station.current_load ?? 0),
             };
 
             await tx.$executeRaw`
@@ -781,7 +813,7 @@ export async function POST(req: Request) {
           } else {
             const stepIndex = (isResearchStatus && returnToRoute === true) ? CurrentRouteStep : updatedRouteStep;
 
-            const nextStationTypeResult = await tx.$queryRaw<any[]>`
+            const nextStationTypeResult = await tx.$queryRaw<RouteStepRow[]>`
               SELECT
                 route_steps[${stepIndex}] AS next_station_type_id,
                 array_length(route_steps, 1) AS route_length
@@ -826,10 +858,11 @@ export async function POST(req: Request) {
               updatedStatus = 3;
               nextStationRecommendation = { isLastStation: true };
             } else {
-              const nextStationTypeId = nextStationTypeResult[0].next_station_type_id;
+              // Known here: the branch above handled a step with no station type.
+              const nextStationTypeId = nextStationTypeIdValue;
 
               // Find all stations of this type with load calculation
-              const stationsWithLoadResult = await tx.$queryRaw<any[]>`
+              const stationsWithLoadResult = await tx.$queryRaw<StationLoadRow[]>`
                 WITH candidate_stations AS (
                   SELECT ts.test_station_id, ts.test_station_desc, ts.test_station_type_id
                   FROM test_stations ts
@@ -878,16 +911,16 @@ export async function POST(req: Request) {
                 // Find stations with minimum waiting_count
                 const minWaitingCount = Number(stationsWithLoadResult[0].waiting_count) || 0;
                 const stationsWithMinWaiting = stationsWithLoadResult.filter(
-                  (row: any) => (Number(row.waiting_count) || 0) === minWaitingCount
+                  (row) => (Number(row.waiting_count) || 0) === minWaitingCount
                 );
 
                 if (stationsWithMinWaiting.length === 0) {
                   nextStationRecommendation = { isLastStation: true };
                 } else {
-                  const totalActiveValues = stationsWithMinWaiting.map((row: any) => Number(row.total_active) || 0);
+                  const totalActiveValues = stationsWithMinWaiting.map((row) => Number(row.total_active) || 0);
                   const minTotalActive = Math.min(...totalActiveValues);
                   const stationsWithMinLoad = stationsWithMinWaiting.filter(
-                    (row: any) => (Number(row.total_active) || 0) === minTotalActive
+                    (row) => (Number(row.total_active) || 0) === minTotalActive
                   );
 
                   if (stationsWithMinLoad.length === 0) {
@@ -937,7 +970,7 @@ export async function POST(req: Request) {
             }
           }
         }
-      } catch (calcError: any) {
+      } catch (calcError) {
         console.error("Error calculating next station recommendation:", calcError);
 
         // Call site #11(c) (§4.5): the error fallback — mark the item finished
@@ -1017,7 +1050,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, success: true, replay: true, ...(await whereItemIsNow(itemIdBig)), ...(await signReport()) });
     }
 
-    const responseData: any = {
+    const responseData: Record<string, unknown> = {
       ok: true,
       success: true,
       researchId: txResult.researchId,
@@ -1047,7 +1080,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(responseData);
-  } catch (error: any) {
+  } catch (error) {
     // Station fields refused the Details (409 schema / 400 value or note /
     // 422 gate / 413). Before the generic branch, or it would answer 500.
     if (error instanceof FieldsSubmissionError) {
@@ -1056,34 +1089,34 @@ export async function POST(req: Request) {
         { status: error.status }
       );
     }
-    if (error.message === "PACKAGE_CANNOT_GO_TO_RESEARCH") {
+    if (errorMessage(error) === "PACKAGE_CANNOT_GO_TO_RESEARCH") {
       return NextResponse.json(
         { error: "מארז לא נשלח למחקר — הפניה למחקר היא של פריטים בלבד", code: "PACKAGE_CANNOT_GO_TO_RESEARCH" },
         { status: 409 }
       );
     }
-    if (error.message === "ITEM_ROUTE_NOT_FOUND") {
+    if (errorMessage(error) === "ITEM_ROUTE_NOT_FOUND") {
       return NextResponse.json(
         { error: "Item route not found" },
         { status: 404 }
       );
     }
-    if (error.message === "ITEM_ROUTE_NOT_FOUND_OR_FINISHED") {
+    if (errorMessage(error) === "ITEM_ROUTE_NOT_FOUND_OR_FINISHED") {
       return NextResponse.json(
         { error: "Item route not found or already finished" },
         { status: 404 }
       );
     }
-    if (error.message === "FAILED_TO_UPDATE_ITEM_ROUTE") {
+    if (errorMessage(error) === "FAILED_TO_UPDATE_ITEM_ROUTE") {
       return NextResponse.json(
         { error: "Failed to update item route" },
         { status: 500 }
       );
     }
     console.error("Error saving test result:", error);
-    const errorMessage = error?.message || error?.detail || "Failed to save test result";
+    const message = errorMessage(error) || errorDetail(error) || "Failed to save test result";
     return NextResponse.json(
-      { error: errorMessage },
+      { error: message },
       { status: 500 }
     );
   }

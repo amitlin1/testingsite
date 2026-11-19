@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,16 @@ export async function GET(
       );
     }
 
-    const rows = await prisma.$queryRaw<any[]>`
+    const rows = await prisma.$queryRaw<{
+      id: number;
+      shipment_id: number;
+      item_type_id: number;
+      item_type_desc: string | null;
+      is_package: boolean;
+      total_quantity: number;
+      makat: string | null;
+      sample_count: bigint | number; // COUNT(*) comes back as a bigint
+    }[]>`
       SELECT
         si.id,
         si.shipment_id,
@@ -52,16 +62,16 @@ export async function GET(
     `;
 
     // Convert BigInt values to Number for JSON serialization
-    const serializedRows = rows.map((row: any) => ({
+    const serializedRows = rows.map((row) => ({
       ...row,
       sample_count: Number(row.sample_count),
     }));
 
     return NextResponse.json(serializedRows);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error fetching shipment items:", error);
     return NextResponse.json(
-      { error: "Failed to fetch shipment items", details: error.message },
+      { error: "Failed to fetch shipment items", details: errorMessage(error) },
       { status: 500 }
     );
   }

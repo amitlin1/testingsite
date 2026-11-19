@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
+import { errorCode, errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -87,9 +88,9 @@ export async function POST(req: Request) {
       package_level: created.package_level,
       stale_after_minutes: created.stale_after_minutes,
     });
-  } catch (error: any) {
-    const msg = String(error?.message ?? "");
-    const isDup = error?.code === "P2002" || /unique constraint/i.test(msg);
+  } catch (error) {
+    const msg = errorMessage(error);
+    const isDup = errorCode(error) === "P2002" || /unique constraint/i.test(msg);
 
     // Real duplicate NAME → clean message (distinct from a PK/sequence desync).
     if (isDup && msg.includes("test_type_desc")) {
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
           package_level: retryCreated.package_level,
           stale_after_minutes: retryCreated.stale_after_minutes,
         });
-      } catch (retryError: any) {
+      } catch (retryError) {
         console.error("Retry after sequence fix failed:", retryError);
         return NextResponse.json(
           { error: "שגיאה ביצירת סוג עמדה. נא לנסות שוב." },
@@ -122,7 +123,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { error: error.message || "Failed to create test station type" },
+      { error: errorMessage(error) || "Failed to create test station type" },
       { status: 500 }
     );
   }

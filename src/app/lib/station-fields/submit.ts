@@ -8,6 +8,7 @@ import type { ResolveKitItem, ResolveRoute } from "./resolve";
 import type {
   Field, FieldId, FieldValue, FieldsSchemaRef, InputField, KitItemFields, StationFieldsResponse,
 } from "./schema";
+import { omit } from "@/lib/omit";
 
 /**
  * Station fields on the server (route-fields spec §3.3, §3.4). SERVER ONLY: it reads the database.
@@ -419,8 +420,7 @@ function verdictInputOf(raw: unknown): { ok?: "pass" | "fail"; note?: string } {
 /** A decision without our keys — the same object when it has none. */
 function withoutFields(d: Obj): Obj {
   if (!Object.prototype.hasOwnProperty.call(d, "fields") && !Object.prototype.hasOwnProperty.call(d, "suggested")) return d;
-  const { fields: _fields, suggested: _suggested, ...rest } = d;
-  return rest;
+  return omit(d, ["fields", "suggested"]);
 }
 
 /** One answered field list: the row's own, or a close-wizard decision's (item_id). */

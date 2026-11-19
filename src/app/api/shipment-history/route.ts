@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const rows = await prisma.$queryRaw<any[]>`
+        const rows = await prisma.$queryRaw<{ item_type_id: number | null; makat: string | null; total_sent: number }[]>`
             SELECT
                 item_type_id,
                 makat,
@@ -78,12 +78,12 @@ export const POST = withAuth(async (request: NextRequest, { session }: WithAuthC
             }
 
             // Check if shipment is finished
-            const totalReceivedRows = await tx.$queryRaw<any[]>`
+            const totalReceivedRows = await tx.$queryRaw<{ total: number }[]>`
                 SELECT COALESCE(SUM(quantity), 0)::int as total FROM shipment_items WHERE shipment_id = ${shipment_id}
             `;
             const totalReceived = totalReceivedRows[0]?.total || 0;
 
-            const totalSentRows = await tx.$queryRaw<any[]>`
+            const totalSentRows = await tx.$queryRaw<{ total: number }[]>`
                 SELECT COALESCE(SUM(amount), 0)::int as total FROM shipment_history WHERE shipment_id = ${shipment_id}
             `;
             const totalSent = totalSentRows[0]?.total || 0;

@@ -11,7 +11,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
  * default is left out of the URL. Updates use router.replace (no history entry
  * per keystroke) and keep any query key the screen does not own.
  */
-export function useUrlState<K extends string>(defaults: Record<K, string>) {
+export function useUrlState<K extends string>(defaultsArg: Record<K, string>) {
+  // A literal per screen, re-created each render: kept as first given, so it is a stable dep.
+  const [defaults] = React.useState(defaultsArg);
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -20,9 +22,7 @@ export function useUrlState<K extends string>(defaults: Record<K, string>) {
     const out = {} as Record<K, string>;
     for (const k of Object.keys(defaults) as K[]) out[k] = sp.get(k) ?? defaults[k];
     return out;
-    // defaults is a literal per screen; its identity does not matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sp]);
+  }, [sp, defaults]);
 
   // Several set() calls in one tick must build on each other, not on the
   // render-time query string.
@@ -42,8 +42,7 @@ export function useUrlState<K extends string>(defaults: Record<K, string>) {
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
       });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sp, pathname, router],
+    [sp, pathname, router, defaults],
   );
 
   return [values, set] as const;

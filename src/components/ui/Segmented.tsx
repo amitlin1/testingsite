@@ -29,7 +29,7 @@ export interface ToggleButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLB
   selected?: boolean;
   color?: TColor;
   size?: "small" | "medium" | "large";
-  onChange?: (e: any, value: any) => void;
+  onChange?: (e: React.MouseEvent, value: unknown) => void;
   sx?: SxInput;
 }
 
@@ -86,7 +86,7 @@ export const ToggleButton = forwardRef<HTMLButtonElement, ToggleButtonProps>(fun
 export interface ToggleButtonGroupProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange"> {
   value?: unknown;
   exclusive?: boolean;
-  onChange?: (event: any, value: any) => void;
+  onChange?: (event: React.MouseEvent, value: unknown) => void;
   size?: "small" | "medium" | "large";
   color?: TColor;
   orientation?: "horizontal" | "vertical";
@@ -138,7 +138,7 @@ export const ToggleButtonGroup = forwardRef<HTMLDivElement, ToggleButtonGroupPro
               borderTop: i > 0 && vertical ? "1px solid var(--color-hairline)" : undefined,
             }}
           >
-            {React.cloneElement(child as React.ReactElement<any>, { style: { flex: 1, ...(child as React.ReactElement<any>).props.style } })}
+            {React.cloneElement(child as React.ReactElement<{ style?: React.CSSProperties }>, { style: { flex: 1, ...(child as React.ReactElement<{ style?: React.CSSProperties }>).props.style } })}
           </div>
         ))}
       </div>

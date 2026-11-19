@@ -21,10 +21,8 @@ export interface GridProps extends React.HTMLAttributes<HTMLDivElement> {
   md?: number | "auto" | boolean;
   lg?: number | "auto" | boolean;
   xl?: number | "auto" | boolean;
-  direction?: React.CSSProperties["flexDirection"];
   alignItems?: string;
   justifyContent?: string;
-  wrap?: React.CSSProperties["flexWrap"];
   sx?: SxInput;
   component?: React.ElementType;
 }
@@ -42,7 +40,7 @@ function resolveSpan(p: GridProps): number | "auto" | undefined {
 }
 
 export const Grid = forwardRef<HTMLDivElement, GridProps>(function Grid(
-  { container, item, spacing = 0, rowSpacing, columnSpacing, columns = 12, size, xs, sm, md, lg, xl, direction, alignItems, justifyContent, wrap, sx, style, component: Component = "div", children, ...rest },
+  { container, item, spacing = 0, rowSpacing, columnSpacing, columns = 12, size, xs, sm, md, lg, xl, alignItems, justifyContent, sx, style, component: Component = "div", children, ...rest },
   ref,
 ) {
   const span = resolveSpan({ size, xs, sm, md, lg, xl });
@@ -68,14 +66,13 @@ export const Grid = forwardRef<HTMLDivElement, GridProps>(function Grid(
 
 /* --------------------------------------------------------------- List ---- */
 export interface ListProps extends React.HTMLAttributes<HTMLUListElement>, Partial<SystemProps> {
-  dense?: boolean;
   disablePadding?: boolean;
   subheader?: React.ReactNode;
   component?: React.ElementType;
   sx?: SxInput;
 }
 export const List = forwardRef<HTMLUListElement, ListProps>(function List(
-  { dense: _d, disablePadding, subheader, component: Component = "ul", children, ...props },
+  { disablePadding, subheader, component: Component = "ul", children, ...props },
   ref,
 ) {
   const { style, rest } = splitSystemProps(props as AnyProps);
@@ -127,13 +124,12 @@ export interface ListItemButtonProps extends React.HTMLAttributes<HTMLDivElement
   selected?: boolean;
   disabled?: boolean;
   disableGutters?: boolean;
-  dense?: boolean;
   component?: React.ElementType;
   href?: string;
   sx?: SxInput;
 }
 export const ListItemButton = forwardRef<HTMLDivElement, ListItemButtonProps>(function ListItemButton(
-  { selected, disabled, disableGutters, dense: _dn, component, href, children, className, ...props },
+  { selected, disabled, disableGutters, component, href, children, className, ...props },
   ref,
 ) {
   const { style, rest } = splitSystemProps(props as AnyProps);
@@ -168,7 +164,7 @@ export function ListItemIcon({ children, style, sx, ...rest }: React.HTMLAttribu
     </span>
   );
 }
-export function ListItemText({ primary, secondary, style, sx, primaryTypographyProps: _p, secondaryTypographyProps: _s, ...rest }: { primary?: React.ReactNode; secondary?: React.ReactNode; sx?: SxInput; primaryTypographyProps?: unknown; secondaryTypographyProps?: unknown } & React.HTMLAttributes<HTMLSpanElement>) {
+export function ListItemText({ primary, secondary, style, sx, ...rest }: { primary?: React.ReactNode; secondary?: React.ReactNode; sx?: SxInput } & React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, ...sxToStyle(sx), ...style }} {...rest}>
       {primary != null && <span style={{ fontSize: 15 }}>{primary}</span>}
@@ -192,12 +188,11 @@ export function ListSubheader({ children, style, ...rest }: React.HTMLAttributes
 export interface CollapseProps extends React.HTMLAttributes<HTMLDivElement> {
   in?: boolean;
   orientation?: "vertical" | "horizontal";
-  timeout?: number | "auto";
   unmountOnExit?: boolean;
   sx?: SxInput;
 }
 export const Collapse = forwardRef<HTMLDivElement, CollapseProps>(function Collapse(
-  { in: open = false, orientation = "vertical", timeout: _t, unmountOnExit, sx, style, children, ...rest },
+  { in: open = false, orientation = "vertical", unmountOnExit, sx, style, children, ...rest },
   ref,
 ) {
   if (unmountOnExit && !open) return null;
@@ -245,13 +240,10 @@ export const Toolbar = forwardRef<HTMLDivElement, ToolbarProps>(function Toolbar
 /* ---------------------------------------------------------- Breadcrumbs -- */
 export interface BreadcrumbsProps extends React.HTMLAttributes<HTMLElement> {
   separator?: React.ReactNode;
-  maxItems?: number;
-  itemsAfterCollapse?: number;
-  itemsBeforeCollapse?: number;
   sx?: SxInput;
 }
 export const Breadcrumbs = forwardRef<HTMLElement, BreadcrumbsProps>(function Breadcrumbs(
-  { separator = "/", maxItems: _mi, itemsAfterCollapse: _ac, itemsBeforeCollapse: _bc, sx, style, children, ...rest },
+  { separator = "/", sx, style, children, ...rest },
   ref,
 ) {
   const items = React.Children.toArray(children).filter(Boolean);

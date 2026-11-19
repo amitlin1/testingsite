@@ -3,6 +3,7 @@ import { prisma } from "@/app/lib/prisma";
 import { withAuth } from "@/lib/auth/withAuth";
 import { FIELDS_EDIT_ROLES } from "@/app/lib/station-fields/roles";
 import { RouteStepsError, createRoute, listRoutes } from "@/app/lib/station-fields/route-steps";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -37,13 +38,13 @@ export const POST = withAuth(async (req) => {
   try {
     const created = await createRoute(prisma, body);
     return NextResponse.json(created);
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof RouteStepsError) {
       return NextResponse.json(error.body, { status: error.status });
     }
     console.error("Error creating testing route:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create testing route" },
+      { error: errorMessage(error) || "Failed to create testing route" },
       { status: 500 }
     );
   }

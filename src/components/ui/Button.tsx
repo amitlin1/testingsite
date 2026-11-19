@@ -24,7 +24,6 @@ export interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonE
   startIcon?: React.ReactNode;
   endIcon?: React.ReactNode;
   fullWidth?: boolean;
-  disableElevation?: boolean;
   /** In-flight: disables the button, announces busy, and swaps the start icon
    *  for a spinner (so callers stop hand-building `busy ? <Spinner/> : icon`). */
   loading?: boolean;
@@ -41,7 +40,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     startIcon,
     endIcon,
     fullWidth,
-    disableElevation: _e,
     loading,
     className,
     sx,

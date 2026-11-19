@@ -95,7 +95,7 @@ To enforce it locally without any dependency, each developer can create
 
 ```sh
 #!/bin/sh
-node scripts/check-migration-safety.js || exit 1
+node scripts/check-migration-safety.mjs || exit 1
 ```
 
 and make it executable (`chmod +x .git/hooks/pre-commit`; on Windows,
@@ -144,7 +144,7 @@ exactly what `--create-only` is for:
 ## Why the safety net is a name list, not "no drops ever"
 
 Ordinary migrations legitimately drop things — old app indexes, retired
-columns. `scripts/check-migration-safety.js` therefore blocks only the
+columns. `scripts/check-migration-safety.mjs` therefore blocks only the
 destructive statement classes from the migration plan
 (`DROP TABLE|DROP FUNCTION|DROP TRIGGER|DROP INDEX|DROP CONSTRAINT|DROP EXPRESSION|DROP EXTENSION`
 and any `ALTER TABLE <metrics table> ... DROP`) **when they touch a guarded

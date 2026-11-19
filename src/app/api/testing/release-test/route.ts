@@ -4,6 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 import { recordTransition } from "@/app/lib/metrics/record";
 import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
 import { isPackageLevelStationType, loadPackageContext } from "@/app/lib/packages/context";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -129,8 +130,8 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
-    if (error.message === "STATION_NOT_FOUND") {
+  } catch (error) {
+    if (errorMessage(error) === "STATION_NOT_FOUND") {
       return NextResponse.json({ error: "Station not found" }, { status: 404 });
     }
     console.error("Error releasing test:", error);

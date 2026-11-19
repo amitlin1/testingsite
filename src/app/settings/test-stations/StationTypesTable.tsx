@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import { Plus, Pencil, Trash2, LayoutTemplate } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import { errorMessage } from "@/lib/errors";
 
 interface StationType {
   test_station_type_id: number;
@@ -18,6 +19,12 @@ interface StationType {
   stale_after_minutes?: number;
   station_count?: number;
 }
+
+/** The add / edit form: a station type as typed — the number fields hold the input's text. */
+type StationTypeForm = Partial<Omit<StationType, "test_station_type_id" | "stale_after_minutes">> & {
+  test_station_type_id?: number | string;
+  stale_after_minutes?: number | string;
+};
 
 interface StationTypesTableProps {
   selectedId: number | null;
@@ -49,8 +56,8 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   const [searchTerm, setSearchTerm] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingRow, setEditingRow] = useState<any | null>(null);
-  const [formData, setFormData] = useState<any>({});
+  const [editingRow, setEditingRow] = useState<StationType | null>(null);
+  const [formData, setFormData] = useState<StationTypeForm>({});
   // Validation is shown on the field it is about, not in a toast.
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [saveLoading, setSaveLoading] = useState(false);
@@ -103,8 +110,8 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     setOpenDialog(true);
   };
   const openEdit = (r: StationType) => { setEditingRow(r); setFormData({ ...r }); setFormErrors({}); setOpenDialog(true); };
-  const setField = (key: string, value: unknown, err?: keyof FormErrors) => {
-    setFormData((f: any) => ({ ...f, [key]: value }));
+  const setField = <K extends keyof StationTypeForm>(key: K, value: StationTypeForm[K], err?: keyof FormErrors) => {
+    setFormData((f) => ({ ...f, [key]: value }));
     if (err && formErrors[err]) setFormErrors((e) => ({ ...e, [err]: undefined }));
   };
 
@@ -141,8 +148,8 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
       }
       setOpenDialog(false);
       setSnackbar({ open: true, message: "סוג העמדה נשמר", severity: "success" });
-    } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || "שמירת סוג העמדה נכשלה. נסה שוב.", severity: "error" });
+    } catch (err) {
+      setSnackbar({ open: true, message: errorMessage(err) || "שמירת סוג העמדה נכשלה. נסה שוב.", severity: "error" });
     } finally {
       setSaveLoading(false);
     }
@@ -160,8 +167,8 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
       setRows(rows.filter((r) => r.test_station_type_id !== rowToDelete.test_station_type_id));
       if (selectedId === rowToDelete.test_station_type_id) onSelect(0, "");
       setSnackbar({ open: true, message: "סוג העמדה נמחק", severity: "success" });
-    } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || "מחיקת סוג העמדה נכשלה. נסה שוב.", severity: "error" });
+    } catch (err) {
+      setSnackbar({ open: true, message: errorMessage(err) || "מחיקת סוג העמדה נכשלה. נסה שוב.", severity: "error" });
     } finally {
       setDeleting(false);
       setRowToDelete(null);

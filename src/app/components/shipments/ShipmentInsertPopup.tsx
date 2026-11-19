@@ -253,11 +253,11 @@ export default function ShipmentInsertPopup({
                     setCustomers(Array.isArray(custData) ? custData : []);
                     setWorkers(Array.isArray(workersData) ? workersData : []);
                     setItemTypes((Array.isArray(typesData) ? typesData : []).filter((t: { is_package?: boolean }) => t.is_package === true));
-                    const loadedSources = Array.isArray(sourcesData) ? sourcesData : [];
+                    const loadedSources: { id: number; desc: string }[] = Array.isArray(sourcesData) ? sourcesData : [];
                     setSources(loadedSources);
 
                     // Default source to ID 1 if exists
-                    if (loadedSources.find((s: any) => s.id === 1)) {
+                    if (loadedSources.find((s) => s.id === 1)) {
                         setValue("source_id", 1);
                     }
                 }

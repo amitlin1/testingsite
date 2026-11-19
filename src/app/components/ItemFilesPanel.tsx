@@ -36,6 +36,7 @@ import OnlyOfficeEditorModal from "./OnlyOfficeEditorModal";
 import { apiFetch } from "@/lib/api/client";
 import { uploadItemFiles, replaceItemFile } from "@/lib/api/direct-upload";
 import "@/components/items.css";
+import Image from "next/image";
 
 type ItemFile = {
   objectKey: string;
@@ -420,7 +421,7 @@ export default function ItemFilesPanel({
           <Box sx={{ textAlign: "center", py: compact ? 3 : 5, px: 2, color: "text.secondary" }}>
             <CloudUploadIcon sx={{ fontSize: 36, opacity: 0.5, mb: 0.5 }} />
             <Typography variant="body2">אין קבצים מצורפים</Typography>
-            <Typography variant="caption">גרור קבצים לכאן או לחץ "העלה קובץ"</Typography>
+            <Typography variant="caption">גרור קבצים לכאן או לחץ &quot;העלה קובץ&quot;</Typography>
           </Box>
         ) : (
           <Stack divider={<Divider />}>
@@ -451,12 +452,13 @@ export default function ItemFilesPanel({
                   }}
                 >
                   {isImage(file.fileName) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={downloadUrl(file.objectKey)}
                       alt={file.fileName}
+                      width={0}
+                      height={0}
+                      unoptimized
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      loading="lazy"
                     />
                   ) : (
                     <FileIcon name={file.fileName} sx={{ fontSize: 28 }} />

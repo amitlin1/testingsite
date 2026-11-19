@@ -1,6 +1,6 @@
 // Refuse to commit a Prisma migration that drops a guarded metrics object.
 //
-//   node scripts/check-migration-safety.js        (or: npm run db:check-migration)
+//   node scripts/check-migration-safety.mjs        (or: npm run db:check-migration)
 //
 // WHY: the metrics ledger lives on objects Prisma cannot express - partial
 // indexes, GiST, EXCLUDE constraints, triggers, functions, a GENERATED
@@ -18,10 +18,10 @@
 // with the offending file + statement. See docs/PRISMA_UNMANAGED_OBJECTS.md
 // for the workflow this enforces and the recovery move.
 
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import path from "node:path";
 
-const repoRoot = path.join(__dirname, "..");
+const repoRoot = path.join(import.meta.dirname, "..");
 const migrationsDir = path.join(repoRoot, "prisma", "migrations");
 
 // Every migration whose name sorts AFTER this one is "new" and gets scanned.

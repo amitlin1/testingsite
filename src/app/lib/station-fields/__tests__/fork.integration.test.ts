@@ -24,6 +24,9 @@ import type { AdminFieldsError } from "../admin";
 import { FIELDS_EDIT_ROLES } from "../roles";
 import type { Field, RouteFieldsConfig, StepConfig } from "../schema";
 
+/** A JSON answer as the route sends it, read by its keys. */
+type Json = Record<string, unknown>;
+
 // ---------------------------------------------------------------------------
 // Fixture. On top of the write-path world (station types 10 INTAKE and 40 CLOSE package-level,
 // 20 FUNC per item; the kit PACKAGE_CLOSE = [INTAKE, CLOSE] with its items IN_BOX / IN_BOX_ALT =
@@ -90,8 +93,8 @@ const signedIn = (...roles: AppRole[]) => ({
 function stubAuth(): void {
   const req = createRequire(path.resolve(process.cwd(), "package.json"));
   const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as any;
-  const stub = new CjsModule(authPath, null);
+  const CjsModule = req("node:module") as typeof import("node:module");
+  const stub = new CjsModule(authPath);
   stub.filename = authPath;
   stub.loaded = true;
   stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
@@ -242,7 +245,7 @@ describe(
 
     /** One kit of `kitType` holding `itemTypes`, taken in as the intake does (createPackage). */
     async function createKit(kitType: number, itemTypes: number[]): Promise<{ packageId: number; itemIds: number[] }> {
-      return H.h().prisma.$transaction((tx: any) =>
+      return H.h().prisma.$transaction((tx) =>
         H.h().createPackage(tx, {
           customer: H.CUSTOMER_ID,
           shipment: H.SHIPMENT_ID,
@@ -260,7 +263,7 @@ describe(
     }
 
     /** POST …/[id]/fork, invoked as Next would: a JSON body (or `raw` text), the params. */
-    async function httpFork(id: string, opts: { body?: unknown; raw?: string }): Promise<{ status: number; body: any }> {
+    async function httpFork<B = Json>(id: string, opts: { body?: unknown; raw?: string }): Promise<{ status: number; body: B }> {
       const req = new Request(`http://localhost/api/settings/testing-routes/${id}/fork`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -268,7 +271,7 @@ describe(
       });
       const res = await postFork(req, { params: Promise.resolve({ id }) });
       const text = await res.text();
-      return { status: res.status, body: text ? JSON.parse(text) : null };
+      return { status: res.status, body: (text ? JSON.parse(text) : null) as B };
     }
 
     // -------------------------------------------------------------------------------------
@@ -282,7 +285,7 @@ describe(
 
       const res = await fork(R.inBox, KIT);
       assert.equal(res.route_number, 3, "IN_BOX has routes 1 and 2: the next is 3, not source + 1");
-      assert.ok(!before.routes.some((r: any) => r.test_route_id === res.test_route_id), "a new testing_routes row");
+      assert.ok(!before.routes.some((r) => r.test_route_id === res.test_route_id), "a new testing_routes row");
       assert.deepEqual(Object.keys(res).sort(), ["route_number", "test_route_id"]);
 
       const created = await routeRow(res.test_route_id);
@@ -305,7 +308,7 @@ describe(
         [OTHER_KIT, H.ITEM_TYPE_IN_BOX, 1],
       ]);
       const after = await footprint();
-      assert.deepEqual(after.routes.filter((r: any) => r.test_route_id !== res.test_route_id), before.routes, "no other route changed");
+      assert.deepEqual(after.routes.filter((r) => r.test_route_id !== res.test_route_id), before.routes, "no other route changed");
       assert.deepEqual(after.versions, before.versions, "no version is copied or touched");
       assert.deepEqual(after.itemRoutes, before.itemRoutes);
 
@@ -481,7 +484,7 @@ describe(
         assert.deepEqual([r.status, r.body.code], [400, "INVALID_ID"], bad);
       }
 
-      const created = await httpFork(id, { body: { package_type_id: KIT } });
+      const created = await httpFork<{ test_route_id: number; route_number: number }>(id, { body: { package_type_id: KIT } });
       assert.equal(created.status, 201, JSON.stringify(created.body));
       assert.deepEqual(Object.keys(created.body).sort(), ["route_number", "test_route_id"]);
       assert.equal(created.body.route_number, 3);

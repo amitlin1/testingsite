@@ -436,7 +436,7 @@ onClose();</code></pre>
 <p><b>ב-PUT</b>, העדכון עבר לתוך טרנזקציה, ובסופה נקרא <code>resyncItemDims</code>. בנוסף, השדה <code>item_routes.item_type_id</code> עודכן יחד עם <code>items.item_type_id</code>, כי זו אותה עובדה בשני מקומות, והלדג'ר קורא את הסוג דווקא מ-<code>item_routes</code>.</p>
 
 <h3>6.5 סקריפטי ההתקנה</h3>
-<p>הקובץ <code>release/db-scripts/UPGRADE_ALL_IN_ONE.sql</code> (קובץ ה-SQL האחד שמריצים בשדרוג של השרת בייצור) קיבל חלק חמישי עם ה-migration החדש. במקביל עודכנו <code>scripts/build-upgrade-sql.js</code>, שבונה אותו, ו-<code>scripts/check-migration-safety.js</code>, שבודק שה-migration בטוח. בתיעוד <code>docs/PRISMA_UNMANAGED_OBJECTS.md</code> נרשמו הפונקציות החדשות, כי Prisma לא מנהלת אותן בעצמה.</p>
+<p>הקובץ <code>release/db-scripts/UPGRADE_ALL_IN_ONE.sql</code> (קובץ ה-SQL האחד שמריצים בשדרוג של השרת בייצור) קיבל חלק חמישי עם ה-migration החדש. במקביל עודכנו <code>scripts/build-upgrade-sql.mjs</code>, שבונה אותו, ו-<code>scripts/check-migration-safety.mjs</code>, שבודק שה-migration בטוח. בתיעוד <code>docs/PRISMA_UNMANAGED_OBJECTS.md</code> נרשמו הפונקציות החדשות, כי Prisma לא מנהלת אותן בעצמה.</p>
 
 <!-- ================================================================== -->
 <h2 id="c3">7. שלב 3: שינוי סוג = מסלול חדש <span class="tag api">abac1a5</span></h2>
@@ -616,7 +616,7 @@ onClose();</code></pre>
 <tr><td><code>src/app/lib/metrics/item-lifecycle.ts</code></td><td><code>forgetItem</code>, <code>resyncItemDims</code>, <code>abandonRun</code></td><td>2, 3</td></tr>
 <tr><td><code>prisma/migrations/20260902000000_metrics_item_lifecycle/migration.sql</code></td><td>פונקציות ה-SQL ופתח המילוט בטריגר</td><td>2, 3</td></tr>
 <tr><td><code>release/db-scripts/UPGRADE_ALL_IN_ONE.sql</code></td><td>קובץ השדרוג לייצור</td><td>2, 3</td></tr>
-<tr><td><code>scripts/build-upgrade-sql.js</code>, <code>scripts/check-migration-safety.js</code></td><td>בניית קובץ השדרוג ובדיקת בטיחות</td><td>2, 3</td></tr>
+<tr><td><code>scripts/build-upgrade-sql.mjs</code>, <code>scripts/check-migration-safety.mjs</code></td><td>בניית קובץ השדרוג ובדיקת בטיחות</td><td>2, 3</td></tr>
 </table></div>
 
 <p style="color:var(--muted);font-size:14px;margin-top:40px">המסמך מבוסס על הקומיטים <code>c6926ca</code>, <code>a75d79b</code>, <code>abac1a5</code> ועל מצב הקוד בענף <code>menachem</code> (קומיט <code>4dd2fee</code>).</p>

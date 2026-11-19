@@ -6,6 +6,7 @@ import { Close as CloseIcon } from "@/components/ui/icons";
 import { CloudUploadOutlined as CloudUploadOutlinedIcon } from "@/components/ui/icons";
 import { Star as StarIcon } from "@/components/ui/icons";
 import type { FormImage, ReferenceStation, StationsFor } from "./referenceForm";
+import Image from "next/image";
 
 /**
  * The images of a reference item's form, by station (docs/popup-templates/PLAN.md §5ג): the station
@@ -147,8 +148,7 @@ function ImageThumb({ img, isPrimary, onPrimary, onRemove, move }: {
     <div className="ri-thumb">
       <div className="ri-thumb__frame" data-primary={isPrimary || undefined}>
         {/* contain so the full image is visible in the square preview */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={img.url} alt={img.fileName} />
+        <Image src={img.url} alt={img.fileName} width={0} height={0} unoptimized />
         <div className="ri-thumb__actions">
           <IconButton size="small" round color={isPrimary ? "primary" : "default"}
             title={isPrimary ? "תמונת הכריכה" : `הגדר את ${img.fileName} כתמונת כריכה`} aria-pressed={isPrimary}

@@ -113,7 +113,7 @@ Keycloak's own interchange format is a realm JSON file, and this project can
 still produce one:
 
 ```powershell
-node keycloak\make-prod-realm-template.js
+node keycloak\make-prod-realm-template.mjs
 ```
 
 It writes `keycloak/import-prod/testing-realm.template.json` with placeholders

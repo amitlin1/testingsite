@@ -25,7 +25,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       test_station_status_id: updated.test_station_status_id,
       test_station_status_desc: updated.test_station_status_desc.trim(),
     });
-  } catch (error: any) {
+  } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2025"
@@ -53,7 +53,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       });
 
       return NextResponse.json({ success: true, id });
-    } catch (dbError: any) {
+    } catch (dbError) {
       if (
         dbError instanceof Prisma.PrismaClientKnownRequestError &&
         dbError.code === "P2003"

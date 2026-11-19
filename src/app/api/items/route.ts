@@ -4,9 +4,35 @@ import { normalizeToUtcIso } from "@/app/lib/datetime";
 
 export const runtime = "nodejs";
 
+/** One row of the query below — the item, its route, and the names around them. */
+type ItemListRow = {
+  item_id: bigint;
+  serial_no: string | null;
+  item_type_id: number;
+  item_type_desc: string | null;
+  current_status: number | null;
+  item_status_desc: string | null;
+  current_route_step: number | null;
+  test_station_id: number | null;
+  test_station_desc: string | null;
+  created_at: Date | null;
+  finished_at: Date | null;
+  is_finished: boolean | null;
+  customer_id: number;
+  customer_code: string | null;
+  makat: string;
+  manufacturer_name: string;
+  manufacturer_no: string;
+  model: string;
+  total_steps: number;
+  shipment_id: number;
+  shipment_code: string | null;
+  source_id: number | null;
+};
+
 export async function GET() {
   try {
-    const rows = await prisma.$queryRaw<any[]>`
+    const rows = await prisma.$queryRaw<ItemListRow[]>`
       SELECT
     i.item_id,
     i.serial_no,
@@ -44,7 +70,7 @@ ORDER BY i.item_id DESC
     `;
 
     // Normalize all timestamp fields to UTC ISO strings and handle BigInt
-    const normalizedRows = rows.map((row: any) => ({
+    const normalizedRows = rows.map((row) => ({
       ...row,
       created_at: normalizeToUtcIso(row.created_at),
       finished_at: normalizeToUtcIso(row.finished_at),

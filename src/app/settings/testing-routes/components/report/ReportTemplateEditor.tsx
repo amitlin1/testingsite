@@ -14,7 +14,7 @@
 // next to another puts them on the same row — no wrapper block.
 
 import * as React from "react";
-import { Puck, usePuck, type Data } from "@measured/puck";
+import { Puck, usePuck, type ComponentData, type Data } from "@measured/puck";
 // no-external.css, NOT puck.css: puck.css starts with
 // `@import "https://rsms.me/inter/inter.css"`, which can't resolve in the
 // air-gap. A failed @import makes the browser fire `error` on the chunk's
@@ -51,10 +51,10 @@ const COMPONENT_LABELS: Record<string, string> = Object.fromEntries(
 );
 // Stable fallback so `content` (an effect dependency) doesn't change identity
 // on every render while the store has no content yet.
-const NO_BLOCKS: Array<{ type?: string }> = [];
+const NO_BLOCKS: ComponentData[] = [];
 function DocOutline() {
   const { appState, dispatch } = usePuck();
-  const content = (appState?.data?.content ?? NO_BLOCKS) as Array<{ type?: string }>;
+  const content = appState?.data?.content ?? NO_BLOCKS;
   // Currently-selected block (kept in sync with the canvas: clicking a block on
   // the canvas sets the same itemSelector, so the outline marks it too).
   const selIdx = (appState?.ui?.itemSelector?.index ?? null) as number | null;
@@ -68,7 +68,7 @@ function DocOutline() {
   const overRef = React.useRef<number | null>(null);
 
   const select = (index: number) => {
-    dispatch({ type: "setUi", ui: { itemSelector: { index } } } as any);
+    dispatch({ type: "setUi", ui: { itemSelector: { index } } });
   };
 
   const computeOver = (clientY: number): number => {
@@ -99,8 +99,8 @@ function DocOutline() {
           let ins = to;
           if (from < to) ins -= 1;
           next.splice(ins, 0, m);
-          dispatch({ type: "setData", data: { content: next } } as any);
-          dispatch({ type: "setUi", ui: { itemSelector: { index: ins } } } as any);
+          dispatch({ type: "setData", data: { content: next } });
+          dispatch({ type: "setUi", ui: { itemSelector: { index: ins } } });
         }
       }
       setFromIdx(null);
@@ -183,10 +183,7 @@ const WIDTH_PRESETS = [
 function WidthQuickBar() {
   const { appState, dispatch } = usePuck();
   const idx = appState?.ui?.itemSelector?.index;
-  const content = (appState?.data?.content ?? []) as Array<{
-    type?: string;
-    props?: Record<string, unknown>;
-  }>;
+  const content = appState?.data?.content ?? NO_BLOCKS;
   if (idx == null || idx < 0 || idx >= content.length) return null;
   const node = content[idx];
   const cur = node?.props?.width as string | undefined;
@@ -196,7 +193,7 @@ function WidthQuickBar() {
     const next = content.map((n, i) =>
       i === idx ? { ...n, props: { ...(n.props ?? {}), width: w } } : n,
     );
-    dispatch({ type: "setData", data: { content: next } } as any);
+    dispatch({ type: "setData", data: { content: next } });
   };
   return (
     <div className="pdfed__wbar">

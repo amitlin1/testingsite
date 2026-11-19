@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 // Never cached — a cached version would defeat the app-before-DB guard.
@@ -31,10 +32,10 @@ export async function GET() {
       );
     }
     return NextResponse.json({ version }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error reading metrics schema version:", error);
     return NextResponse.json(
-      { error: "Failed to read metrics schema version", message: error.message || "Unknown error" },
+      { error: "Failed to read metrics schema version", message: errorMessage(error) || "Unknown error" },
       { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }

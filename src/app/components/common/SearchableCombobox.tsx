@@ -10,6 +10,7 @@ import {
 } from "@/components/ui";
 import { useTheme } from "@/components/ui";
 import { Check as CheckIcon, Lock as LockIcon } from "@/components/ui/icons";
+import { omit } from "@/lib/omit";
 
 /**
  * Shared searchable combobox used everywhere a value is selected (the
@@ -35,7 +36,7 @@ import { Check as CheckIcon, Lock as LockIcon } from "@/components/ui/icons";
 
 export interface ComboboxProps<T>
   extends Omit<
-    AutocompleteProps<T, false, boolean, false>,
+    AutocompleteProps<T>,
     "renderInput" | "renderOption" | "value" | "onChange" | "multiple" | "freeSolo"
   > {
   value: T | null;
@@ -167,10 +168,11 @@ export default function SearchableCombobox<T>({
           )}
         </Typography>
       )}
-      <Autocomplete<T, false, boolean, false>
+      <Autocomplete<T>
         {...rest}
         value={value}
-        onChange={(_, v) => onChange(v)}
+        // Single selection: the primitive hands one option (never an array here).
+        onChange={(_, v) => onChange(Array.isArray(v) ? null : v)}
         filterOptions={filter}
         disabled={disabled}
         loading={loading}
@@ -186,7 +188,7 @@ export default function SearchableCombobox<T>({
           if (dense) {
             // The selected row is shown by its tint and check (ui.css), not by
             // the primitive's blue bold text.
-            const { style: _selectedText, className: _itemClass, ...denseProps } = liProps;
+            const denseProps = omit(liProps, ["style", "className"]);
             return (
               <li key={key} {...denseProps} className="sh-select-item sh-combo-option">
                 <span className="sh-combo-check">{selected && <CheckIcon fontSize={15} />}</span>

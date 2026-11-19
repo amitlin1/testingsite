@@ -1,6 +1,4 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- rendered into the react-to-print
-   pipeline, where next/image's lazy loading and srcset never resolve. */
 /**
  * Building blocks of the unified TESTINGSITE print template. Every printed
  * document is a <ReportPage> holding <ReportSection>s; see
@@ -18,6 +16,7 @@ import {
     ReportStatus,
     formatReportDate,
 } from "./reportTheme";
+import Image from "next/image";
 
 const printExact: React.CSSProperties = {
     WebkitPrintColorAdjust: "exact",
@@ -173,7 +172,9 @@ function LogoPair({ srcs, align }: { srcs: readonly string[]; align: "flex-start
     return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: align, gap: 10, flex: "0 0 130px" }}>
             {srcs.map((src) => (
-                <img key={src} src={src} alt="" style={{ height: 56, width: "auto", maxWidth: 60, objectFit: "contain" }} />
+                // Printed (react-to-print prints what has loaded): eager, not next/image's lazy default.
+                <Image key={src} src={src} alt="" width={0} height={0} unoptimized loading="eager"
+                    style={{ height: 56, width: "auto", maxWidth: 60, objectFit: "contain" }} />
             ))}
         </div>
     );
@@ -324,7 +325,8 @@ export function SignatureBlock({ slots }: { slots: SignatureSlot[] }) {
                     </div>
                     <div style={{ height: 60, borderBottom: `1px solid ${C.ink}`, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
                         {s.signatureSrc
-                            ? <img src={s.signatureSrc} alt="חתימה" style={{ maxHeight: 56, maxWidth: "80%", objectFit: "contain" }} />
+                            ? <Image src={s.signatureSrc} alt="חתימה" width={0} height={0} unoptimized loading="eager"
+                                style={{ width: "auto", height: "auto", maxHeight: 56, maxWidth: "80%", objectFit: "contain" }} />
                             : <span style={{ fontSize: 10, color: "#8A93A8", paddingBottom: 4 }}>חתימה</span>}
                     </div>
                 </div>

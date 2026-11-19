@@ -7,6 +7,7 @@ import { TONE_WORD, type ChoiceOption } from "@/app/lib/station-fields/schema";
 import { choiceCountText } from "./labels";
 import { ToneDot } from "./ToneDot";
 import "./choice.css";
+import { omit } from "@/lib/omit";
 
 /**
  * ChoiceAutocomplete — the control of a `choice_row` field in the worker
@@ -431,7 +432,8 @@ export function MultiChoiceAutocomplete({
         fullWidth
         options={options}
         value={chosen}
-        onChange={(_e, next: ChoiceOption[]) => report(new Set(next.map((o) => o.id)))}
+        // multiple: the primitive hands the chosen options as an array.
+        onChange={(_e, next) => report(new Set((Array.isArray(next) ? next : []).map((o) => o.id)))}
         isOptionEqualToValue={sameOption}
         filterOptions={filterOptions}
         inputValue={query}
@@ -444,7 +446,8 @@ export function MultiChoiceAutocomplete({
         }
         renderOption={(props, o, { selected: isSelected }) => {
           // SearchableCombobox's dense row: its tint and check mark the selection.
-          const { key, style: _selectedText, className: _itemClass, ...li } = props;
+          const { key, ...rest } = props;
+          const li = omit(rest, ["style", "className"]);
           return (
             <li key={key} {...li} className="sh-select-item sh-combo-option">
               <span className="sh-combo-check">{isSelected && <Check size={15} strokeWidth={1.75} />}</span>

@@ -28,14 +28,13 @@ import "./testing.css";
 import { toneOfStatus, TONE_DOT } from "@/app/lib/status-tones";
 import { useGlobalScanner } from "./useGlobalScanner";
 import {TestStationType, TestStation, ItemRow, StationLite} from "../../types";
-import type { NextStationResult } from "../../types";
+import type { NextStationResult, TestResultData } from "../../types";
 import { apiFetch } from "@/lib/api/client";
 import { newActionId } from "@/app/lib/metrics/action-id";
 import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
 import { useSession } from "next-auth/react";
 import { isAdmin } from "@/lib/auth/roles";
 // Icons
-import { Search as SearchIcon } from "@/components/ui/icons";
 import { Clear as ClearIcon } from "@/components/ui/icons";
 import { Science as ScienceIcon } from "@/components/ui/icons";
 import { CheckCircleOutline as CheckCircleOutlineIcon } from "@/components/ui/icons";
@@ -969,18 +968,21 @@ function TestingPageView() {
   // item's station and open it narrowed to that item. With ?station= as well
   // (the command palette) the station is already known: just filter.
   const itemLinkDone = React.useRef(false);
+  // The deep link's work, with this render's handlers (handleBarcodeScan is a fresh closure each
+  // render); the effect below decides when — once, when the item and the station types are known.
+  const openItemLink = React.useEffectEvent((item: string, station: string) => {
+    if (station) {
+      // The field follows the URL's q (useUrlTextField).
+      setUrl({ item: "", q: item });
+    } else {
+      // Off the effect's own tick: the lookup sets loading state.
+      void Promise.resolve().then(() => handleBarcodeScan(item, { filterTo: true }));
+    }
+  });
   React.useEffect(() => {
     if (itemLinkDone.current || !url.item || stationTypes.length === 0) return;
     itemLinkDone.current = true;
-    if (url.station) {
-      // The field follows the URL's q (useUrlTextField).
-      setUrl({ item: "", q: url.item });
-    } else {
-      // Off the effect's own tick: the lookup sets loading state.
-      void Promise.resolve().then(() => handleBarcodeScan(url.item, { filterTo: true }));
-    }
-    // One-shot (itemLinkDone): handleBarcodeScan is a fresh closure each render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    openItemLink(url.item, url.station);
   }, [url.item, url.station, stationTypes.length]);
 
   // Enter in the search field: a code that names an item in this queue
@@ -1067,7 +1069,7 @@ function TestingPageView() {
     }
   };
 
-  const handleSubmitTestResult = async (testData: Record<string, any>): Promise<NextStationResult | void> => {
+  const handleSubmitTestResult = async (testData: TestResultData): Promise<NextStationResult | void> => {
     if (!selectedItem || !selectedStation) return;
     const routeStepsLength = selectedItem.route_steps?.length || 0;
     if (routeStepsLength === 0) throw new Error("Route steps information is missing.");

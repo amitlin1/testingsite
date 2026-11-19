@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { fixSequence } from "@/app/lib/fix-sequence";
+import { errorCode, errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -55,9 +56,9 @@ export async function POST(req: Request) {
       test_station_status_id: created.test_station_status_id,
       test_station_status_desc: created.test_station_status_desc.trim(),
     });
-  } catch (error: any) {
-    const msg = String(error?.message ?? "");
-    const isDup = error?.code === "P2002" || /unique constraint/i.test(msg);
+  } catch (error) {
+    const msg = errorMessage(error);
+    const isDup = errorCode(error) === "P2002" || /unique constraint/i.test(msg);
 
     if (isDup && msg.includes("test_station_status_desc")) {
       return NextResponse.json({ error: "סטטוס עמדה בשם זה כבר קיים במערכת" }, { status: 400 });
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
           test_station_status_id: retryCreated.test_station_status_id,
           test_station_status_desc: retryCreated.test_station_status_desc.trim(),
         });
-      } catch (retryError: any) {
+      } catch (retryError) {
         console.error("Retry after sequence fix failed:", retryError);
         return NextResponse.json(
           { error: "שגיאה ביצירת סטטוס. נא לנסות שוב." },
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { error: error.message || "Failed to create test station status" },
+      { error: errorMessage(error) || "Failed to create test station status" },
       { status: 500 }
     );
   }

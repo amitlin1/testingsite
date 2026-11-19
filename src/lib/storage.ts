@@ -176,8 +176,8 @@ export async function listKeys(prefix: string, recursive = true, bucket: string 
   await ensureBucket(bucket);
   return new Promise<string[]>((resolve, reject) => {
     const keys: string[] = [];
-    const stream = minioClient.listObjectsV2(bucket, prefix, recursive) as any;
-    stream.on('data', (obj: any) => {
+    const stream = minioClient.listObjectsV2(bucket, prefix, recursive);
+    stream.on('data', (obj) => {
       if (obj.name) keys.push(obj.name as string);
     });
     stream.on('end', () => resolve(keys));

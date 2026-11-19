@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { fixSequence } from "@/app/lib/fix-sequence";
 import { getStationLiveCounters } from "@/lib/station-counters";
+import { errorCode, errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -10,10 +12,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const typeId = searchParams.get("typeId");
 
-    const where: any = {};
-    if (typeId) {
-      where.test_station_type_id = parseInt(typeId, 10);
-    }
+    const where: Prisma.test_stationsWhereInput = typeId ? { test_station_type_id: parseInt(typeId, 10) } : {};
 
     const rows = await prisma.test_stations.findMany({
       where,
@@ -94,9 +93,9 @@ export async function POST(req: Request) {
       status: created.status,
       is_research: created.is_research,
     });
-  } catch (error: any) {
-    const msg = String(error?.message ?? "");
-    const isDup = error?.code === "P2002" || /unique constraint/i.test(msg);
+  } catch (error) {
+    const msg = errorMessage(error);
+    const isDup = errorCode(error) === "P2002" || /unique constraint/i.test(msg);
 
     if (isDup && msg.includes("test_station_desc")) {
       return NextResponse.json({ error: "עמדה בשם זה כבר קיימת במערכת" }, { status: 400 });
@@ -124,7 +123,7 @@ export async function POST(req: Request) {
           status: retryCreated.status,
           is_research: retryCreated.is_research,
         });
-      } catch (retryError: any) {
+      } catch (retryError) {
         console.error("Retry after sequence fix failed:", retryError);
         return NextResponse.json(
           { error: "שגיאה ביצירת עמדה. נא לנסות שוב." },
@@ -134,7 +133,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { error: error.message || "Failed to create test station" },
+      { error: errorMessage(error) || "Failed to create test station" },
       { status: 500 }
     );
   }

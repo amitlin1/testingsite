@@ -25,7 +25,7 @@
 // published config (a "legacy" answer) every request is exactly as before.
 // Boxes taken in after scripts/seed-station-fields-demo.mjs carry the fields.
 //
-// Auth follows scripts/seed-dev-dataset.js: an Auth.js session cookie is
+// Auth follows scripts/seed-dev-dataset.mjs: an Auth.js session cookie is
 // minted offline with AUTH_SECRET (taken from the environment, else from
 // .env.local), so the app must share that secret. Refuses any API base that
 // is not localhost unless --allow-remote.

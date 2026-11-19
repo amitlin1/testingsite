@@ -8,6 +8,7 @@ import {
   type JobHealthRow,
   type JobsHealthPayload,
 } from "@/app/lib/metrics/selfcheck";
+import { errorMessage } from "@/lib/errors";
 
 export const runtime = "nodejs";
 // Never cached — a cached payload would keep reporting a job healthy after it
@@ -108,12 +109,12 @@ export const GET = withAuth(
         checks,
       };
       return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
-    } catch (error: any) {
+    } catch (error) {
       // Unlike /api/health (pure liveness), this one MUST touch Postgres — an
       // unreachable DB is a 500, not a masked healthy 200.
       console.error("Error reading job health:", error);
       return NextResponse.json(
-        { error: "Failed to read job health", message: error.message || "Unknown error" },
+        { error: "Failed to read job health", message: errorMessage(error) || "Unknown error" },
         { status: 500, headers: { "Cache-Control": "no-store" } }
       );
     }

@@ -22,6 +22,9 @@ import type { FieldsContextJson } from "../admin-types";
 import type { FieldsContext } from "../context";
 import type { Field, RouteFieldsConfig, StepConfig } from "../schema";
 
+/** A JSON answer as the route sends it, read by its keys. */
+type Json = Record<string, unknown>;
+
 // ---------------------------------------------------------------------------
 // The wire contract, checked by the compiler
 // ---------------------------------------------------------------------------
@@ -175,7 +178,7 @@ describe(
     }
 
     /** GET …/fields-context?<qs>, invoked as Next would. */
-    async function httpContext(qs: string): Promise<{ status: number; body: any }> {
+    async function httpContext(qs: string): Promise<{ status: number; body: Json }> {
       const res = await getContext(new Request(`http://localhost/api/settings/testing-routes/fields-context?${qs}`));
       const text = await res.text();
       return { status: res.status, body: text ? JSON.parse(text) : null };
@@ -269,7 +272,7 @@ describe(
       assert.equal(res.status, 200);
       const contents = (await res.json()) as { lines: { item_type_id: number; quantity: number }[] };
       const units = contents.lines.flatMap((l) => Array.from({ length: Math.max(1, l.quantity) }, () => l.item_type_id));
-      const kit = await H.h().prisma.$transaction((tx: any) =>
+      const kit = await H.h().prisma.$transaction((tx) =>
         H.h().createPackage(tx, {
           customer: H.CUSTOMER_ID,
           shipment: H.SHIPMENT_ID,

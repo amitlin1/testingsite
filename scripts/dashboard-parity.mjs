@@ -1,10 +1,10 @@
 // Old-vs-new parity harness for the dashboard read path (§9.3 of
 // docs/dashboard-migration-plan-v2.md, stage 5).
 //
-//   node --import tsx scripts/dashboard-parity.js --database-url "postgres://..."
-//   node --import tsx scripts/dashboard-parity.js --old direct
-//   node --import tsx scripts/dashboard-parity.js --endpoint tests/kpis --verbose
-//   node --import tsx scripts/dashboard-parity.js --json out/parity.json
+//   node --import tsx scripts/dashboard-parity.mjs --database-url "postgres://..."
+//   node --import tsx scripts/dashboard-parity.mjs --old direct
+//   node --import tsx scripts/dashboard-parity.mjs --endpoint tests/kpis --verbose
+//   node --import tsx scripts/dashboard-parity.mjs --json out/parity.json
 //
 // EXIT CODE: 0 only when every compared field either MATCHES or is listed in
 // §9.4 as an intentional difference. Anything else is a failure — including a
@@ -79,7 +79,10 @@
 // Rows present on one side only are listed separately; they are a failure
 // unless the endpoint declares rowsetMayDiffer.
 
-const { Pool } = require("pg");
+import fs from "node:fs";
+import pg from "pg";
+
+const { Pool } = pg;
 
 // ---- args ------------------------------------------------------------------
 const argv = process.argv.slice(2);
@@ -113,7 +116,7 @@ const LIST_CASES = flag("list-cases");
 function usage(msg) {
   console.error("\n" + msg);
   console.error(`
-usage: node --import tsx scripts/dashboard-parity.js [options]
+usage: node --import tsx scripts/dashboard-parity.mjs [options]
 
   --database-url URL   default $DATABASE_URL
   --old http|direct    where the OLD numbers come from (default http)
@@ -162,7 +165,7 @@ const dbClient = {
 // ---- http ------------------------------------------------------------------
 let sessionCookie = null;
 
-/** Mint an Auth.js session cookie offline — the same recipe seed-dev-dataset.js
+/** Mint an Auth.js session cookie offline — the same recipe seed-dev-dataset.mjs
  *  uses. IS_DEV=1 bypasses the middleware but not withAuth(), and all 14
  *  dashboard routes are withAuth(role:"manager"). */
 async function mintSession() {
@@ -188,23 +191,7 @@ async function mintSession() {
   });
 }
 
-async function httpGet(path, base = OLD_API_BASE) {
-  const res = await fetch(base + path, {
-    method: "GET",
-    headers: sessionCookie ? { cookie: `authjs.session-token=${sessionCookie}` } : {},
-  });
-  const text = await res.text();
-  let json = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    /* not json */
-  }
-  if (!res.ok) throw new Error(`GET ${path} -> ${res.status} ${text.slice(0, 200)}`);
-  return json;
-}
-
-/** Same as httpGet but also returns status + headers, for the shape probes. */
+/** A GET against the API that also returns status + headers, for the shape probes. */
 async function httpGetRaw(path, base) {
   const t0 = Date.now();
   const res = await fetch(base + path, {
@@ -253,7 +240,7 @@ async function loadModules() {
   } catch (e) {
     usage(
       `cannot import the TypeScript query layer (${e.message}).\n` +
-        "Run this script as:  node --import tsx scripts/dashboard-parity.js"
+        "Run this script as:  node --import tsx scripts/dashboard-parity.mjs"
     );
   }
   if (OLD_MODE === "direct") {
@@ -1086,7 +1073,6 @@ function compareRow(endpoint, oldRow, newRow, out) {
   const expected = EXPECTED[endpoint] || {};
   const oldKeys = Object.keys(oldRow || {});
   const newKeys = Object.keys(newRow || {}).filter((k) => !k.startsWith("_new_"));
-  const newOnly = Object.keys(newRow || {}).filter((k) => k.startsWith("_new_"));
 
   for (const k of oldKeys) {
     const ov = oldRow[k];
@@ -1549,7 +1535,7 @@ latency (ms) — n / p50 / p95 / max, by side x endpoint x window`);
   }
 
   if (JSON_OUT) {
-    require("fs").writeFileSync(JSON_OUT, JSON.stringify(report, null, 2));
+    fs.writeFileSync(JSON_OUT, JSON.stringify(report, null, 2));
     console.log(`json written to ${JSON_OUT}`);
   }
 

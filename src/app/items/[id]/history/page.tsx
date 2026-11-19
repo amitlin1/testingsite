@@ -363,11 +363,14 @@ export default function ItemHistoryPage() {
     (statusId != null ? STATUS_NAMES[statusId] ?? `סטטוס ${statusId}` : EM_DASH);
 
   /** Station name for a history row: the actual station, else its type. */
-  const stationNameOf = (h: HistoryRow) =>
-    trim(h.test_station_desc) ||
-    trim(h.test_station_type_desc) ||
-    routeStations[h.current_route_step - 1]?.desc ||
-    EM_DASH;
+  const stationNameOf = React.useCallback(
+    (h: HistoryRow) =>
+      trim(h.test_station_desc) ||
+      trim(h.test_station_type_desc) ||
+      routeStations[h.current_route_step - 1]?.desc ||
+      EM_DASH,
+    [routeStations],
+  );
 
   const summary = React.useMemo(() => {
     const endRef = item?.finished_at || nowRef;
@@ -397,8 +400,7 @@ export default function ItemHistoryPage() {
         label: longestIdx === -1 ? "התחנה הארוכה ביותר" : `התחנה הארוכה ביותר · ${stationNameOf(chron[longestIdx])}`,
       },
     ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, nowRef, chron, nets, totalSteps]);
+  }, [item, nowRef, chron, nets, totalSteps, stationNameOf]);
 
   /* ----- connected items -----
    * Package model: an item in a box gets the "המארז שלי" card (siblings and

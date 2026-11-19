@@ -15,8 +15,14 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import type { AppRole } from "@/lib/auth/roles";
+import type { item_reports } from "@prisma/client";
+import type { Data } from "@measured/puck";
+import type { RootProps } from "../puck-config";
+import { NextRequest } from "next/server";
 import * as H from "../../metrics/__tests__/write-path-helpers";
 import type { Field, RouteFieldsConfig, StepConfig } from "../../station-fields/schema";
+import type { ReportStepRef, ReportVar } from "../types";
+import type { ReportStatus } from "../generate";
 
 const CHROMIUM = process.env.PUPPETEER_EXECUTABLE_PATH ?? "";
 const SKIP = !H.TEST_DATABASE_URL
@@ -76,7 +82,8 @@ function startFakeS3(): Promise<http.Server> {
   });
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
 }
-const stored = (key: string) => objects.get(`digitalfactory-files/${key}`)?.body;
+/** The fake MinIO object under a key (none for a row whose key column is still NULL). */
+const stored = (key: string | null) => (key == null ? undefined : objects.get(`digitalfactory-files/${key}`)?.body);
 
 // ---------------------------------------------------------------------------
 // The session withAuth sees (as fields.integration.test.ts stubs it).
@@ -94,8 +101,8 @@ const signedInOther = (...roles: AppRole[]) => ({
 function stubAuth(): void {
   const req = createRequire(path.resolve(process.cwd(), "package.json"));
   const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as any;
-  const stub = new CjsModule(authPath, null);
+  const CjsModule = req("node:module") as typeof import("node:module");
+  const stub = new CjsModule(authPath);
   stub.filename = authPath;
   stub.loaded = true;
   stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
@@ -124,7 +131,7 @@ const itemStep = (uid: string, fields: Field[]): StepConfig =>
 const config = (...steps: StepConfig[]): RouteFieldsConfig => ({ schema: 1, steps: Object.fromEntries(steps.map((s) => [s.uid, s])) });
 
 /** Text blocks bound to the variables the tests read back out of the HTML. */
-function template(opts: { signature: boolean; closing?: boolean; marker?: string }) {
+function template(opts: { signature: boolean; closing?: boolean; marker?: string }): Data<Record<string, Record<string, unknown>>, RootProps> {
   return {
     root: { props: { header: { show: true, org: "ORG", meta: "", title: "דוח בדיקה", subtitle: "", rightLogo: "", leftLogo: "" }, footer: { show: true, text: "", textAlign: "center", pageNumbers: true, pageNumberStyle: "of", pageNumberAlign: "center" }, border: "none", font: "david", classification: "בלמ\"ס" } },
     content: [
@@ -216,18 +223,39 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
   const ACTOR = { username: "report-suite", name: "Report Suite" };
   async function publish(routeId: number, cfg: RouteFieldsConfig): Promise<number> {
     const { draft_rev } = await H.one<{ draft_rev: number }>("SELECT draft_rev FROM testing_routes WHERE test_route_id = $1", [routeId]);
-    const saved = await A.saveFieldsDraft(H.h().prisma as any, routeId, { config: cfg, base_rev: draft_rev }, ACTOR);
-    const res = await A.publishFields(H.h().prisma as any, { route_ids: [routeId], base_revs: { [routeId]: saved.draft_rev }, apply_mode: "new_only" }, ACTOR);
+    const saved = await A.saveFieldsDraft(H.h().prisma, routeId, { config: cfg, base_rev: draft_rev }, ACTOR);
+    const res = await A.publishFields(H.h().prisma, { route_ids: [routeId], base_revs: { [routeId]: saved.draft_rev }, apply_mode: "new_only" }, ACTOR);
     return res.versions[routeId];
   }
 
-  async function call(handler: (req: any, ctx?: any) => Promise<Response>, url: string, init: RequestInit = {}, params?: Record<string, string>) {
-    const res = await handler(new Request(`http://localhost${url}`, init) as any, params ? { params: Promise.resolve(params) } : undefined);
+  /** The JSON answers of the report routes, as far as the tests read them (each field only where sent). */
+  type ReportApiJson = {
+    error?: string;
+    code?: string;
+    /** sign / sign-closing: the frozen copy's version (0 = not frozen). */
+    version?: number;
+    /** templates GET: the template, what it can bind, who saved it last, how many routes use it. */
+    template?: Data | null;
+    steps?: ReportStepRef[];
+    vars?: ReportVar[];
+    updated_by_name?: string | null;
+    routes?: number;
+    /** logo upload: the stored object's key. */
+    key?: string;
+  };
+  /** templates GET (a route's or the general one): what the editor opens with. */
+  type Catalog = { template: Data | null; steps: ReportStepRef[]; vars: ReportVar[]; updated_by_name: string | null; routes?: number };
+  /** A route handler as withAuth exports it. */
+  type Handler = (req: NextRequest, routeCtx?: unknown) => Promise<Response>;
+  /** Calls a handler; the body is its JSON, a PDF's bytes or the text — `B` names which the caller reads. */
+  type Init = ConstructorParameters<typeof NextRequest>[1];
+  async function call<B = ReportApiJson>(handler: Handler, url: string, init: Init = {}, params?: Record<string, string>) {
+    const res = await handler(new NextRequest(`http://localhost${url}`, init), params ? { params: Promise.resolve(params) } : undefined);
     const type = res.headers.get("content-type") ?? "";
-    const body = type.includes("json") ? await res.json() : type.includes("pdf") ? Buffer.from(await res.arrayBuffer()) : await res.text();
-    return { status: res.status, headers: res.headers, body: body as any };
+    const body: unknown = type.includes("json") ? await res.json() : type.includes("pdf") ? Buffer.from(await res.arrayBuffer()) : await res.text();
+    return { status: res.status, headers: res.headers, body: body as B };
   }
-  const json = (method: string, body: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const json = (method: string, body: unknown): Init => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
   async function saveTemplate(routeId: number, t: unknown) {
     session = signedIn("manager");
@@ -254,8 +282,10 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     await runStep(itemId, UID.b, v, { [CASE.id]: { t: "pass_fail", ok: "pass" } });
     assert.ok((await H.routeRow(itemId)).finished_at, "the route finished");
   }
+  /** An item_reports row as pg reads it here (the suite's parser turns BIGINT into a number). */
+  type ReportRowDb = Omit<item_reports, "item_id" | "size_bytes"> & { item_id: number; size_bytes: number };
   async function reportRow(itemId: number) {
-    return (await H.q("SELECT * FROM item_reports WHERE item_id = $1", [itemId]))[0] ?? null;
+    return (await H.q<ReportRowDb>("SELECT * FROM item_reports WHERE item_id = $1", [itemId]))[0] ?? null;
   }
   /** The freeze runs after the response (detached here — outside a request after() throws). */
   async function waitForFrozen(itemId: number, version = 1) {
@@ -268,15 +298,15 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
   }
   async function getPdf(itemId: number) {
     session = signedIn("storekeeper");
-    return call(api.report.GET, `/api/item-reports/${itemId}`, {}, { itemId: String(itemId) });
+    return call<Buffer>(api.report.GET, `/api/item-reports/${itemId}`, {}, { itemId: String(itemId) });
   }
   async function getHtml(itemId: number) {
     session = signedIn("storekeeper");
-    return call(api.report.GET, `/api/item-reports/${itemId}?html=1`, {}, { itemId: String(itemId) });
+    return call<string>(api.report.GET, `/api/item-reports/${itemId}?html=1`, {}, { itemId: String(itemId) });
   }
   async function status(itemId: number, as: unknown = signedIn("tester")) {
     session = as;
-    return (await call(api.status.GET, `/api/item-reports/${itemId}/status`, {}, { itemId: String(itemId) })).body;
+    return (await call<ReportStatus & { canSign: boolean; canSignClosing: boolean }>(api.status.GET, `/api/item-reports/${itemId}/status`, {}, { itemId: String(itemId) })).body;
   }
   /** The final signature (the item page); only a manager may give it. */
   async function sign(itemId: number, roles: AppRole[] = ["manager"], as = signedIn) {
@@ -296,12 +326,12 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
   it("the route's catalog: its steps, their fields, the item and report variables", async () => {
     await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
     session = signedIn("storekeeper");
-    const r = await call(api.template.GET, `/api/item-reports/templates/${R.report}`, {}, { routeId: String(R.report) });
+    const r = await call<Catalog>(api.template.GET, `/api/item-reports/templates/${R.report}`, {}, { routeId: String(R.report) });
     assert.equal(r.status, 200);
     assert.equal(r.body.template, null);
-    assert.deepEqual(r.body.steps.map((s: any) => s.uid), [UID.a, UID.b]);
-    assert.deepEqual(r.body.steps[0].fields.map((f: any) => f.id), [VOLT.id, LED.id]);
-    const names = new Set(r.body.vars.map((v: any) => v.name));
+    assert.deepEqual(r.body.steps.map((s) => s.uid), [UID.a, UID.b]);
+    assert.deepEqual(r.body.steps[0].fields.map((f) => f.id), [VOLT.id, LED.id]);
+    const names = new Set(r.body.vars.map((v) => v.name));
     for (const n of ["item.serial_no", "report.generated_at", `step.${UID.a}.worker`, `field.${UID.a}.${VOLT.id}`, `field.${UID.b}.${CASE.id}.status`]) {
       assert.ok(names.has(n), n);
     }
@@ -317,12 +347,12 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     }));
     await H.q("INSERT INTO package_contents (package_type_id, item_type_id, quantity, route_number) VALUES ($1, $2, 1, 1)", [H.ITEM_TYPE_PACKAGE_CLOSE, H.ITEM_TYPE_IN_BOX]);
     session = signedIn("storekeeper");
-    const r = await call(api.template.GET, `/api/item-reports/templates/${R.inBox}`, {}, { routeId: String(R.inBox) });
+    const r = await call<Catalog>(api.template.GET, `/api/item-reports/templates/${R.inBox}`, {}, { routeId: String(R.inBox) });
     assert.equal(r.status, 200);
-    const kitStep = r.body.steps.find((s: any) => s.uid === UID.kOpen);
+    const kitStep = r.body.steps.find((s) => s.uid === UID.kOpen);
     assert.ok(kitStep, "the kit's opening step is offered");
-    assert.deepEqual(kitStep.fields.map((f: any) => f.id), [each.id, own.id]);
-    assert.ok(!r.body.steps.some((s: any) => s.uid === UID.kClose && s.fields.length > 0));
+    assert.deepEqual(kitStep.fields.map((f) => f.id), [each.id, own.id]);
+    assert.ok(!r.body.steps.some((s) => s.uid === UID.kClose && s.fields.length > 0));
   });
 
   it("template writes: roles, shape, size; DELETE removes it", async () => {
@@ -366,11 +396,11 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     r = await call(general.PUT, "/api/item-reports/templates/general", json("PUT", { template: generalStarterTemplate() }));
     assert.equal(r.status, 200, JSON.stringify(r.body));
     session = signedIn("storekeeper");
-    r = await call(general.GET, "/api/item-reports/templates/general");
-    assert.equal(r.status, 200);
-    assert.ok(r.body.routes >= 1, "the REPORT route uses it");
-    assert.deepEqual(r.body.steps, []);
-    assert.ok(!r.body.vars.some((x: { name: string }) => x.name.startsWith("step.") || x.name.startsWith("field.")), "only what every route has");
+    const cat = await call<Catalog>(general.GET, "/api/item-reports/templates/general");
+    assert.equal(cat.status, 200);
+    assert.ok((cat.body.routes ?? 0) >= 1, "the REPORT route uses it");
+    assert.deepEqual(cat.body.steps, []);
+    assert.ok(!cat.body.vars.some((x: { name: string }) => x.name.startsWith("step.") || x.name.startsWith("field.")), "only what every route has");
 
     // The item's report: the general template, every station in its detail with what it saved.
     const st = await status(8201);
@@ -398,7 +428,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.match((await getHtml(8201)).body as string, /class="pdf-stepdetail__head"/);
 
     // A kit's box gets no report, the general template notwithstanding.
-    const kit = await H.h().prisma.$transaction((tx: any) =>
+    const kit = await H.h().prisma.$transaction((tx) =>
       H.h().createPackage(tx, {
         customer: H.CUSTOMER_ID, shipment: H.SHIPMENT_ID, packageType: H.ITEM_TYPE_PACKAGE_CLOSE,
         items: [{ itemType: H.ITEM_TYPE_IN_BOX, serialNumber: "SN-GEN-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR" }],
@@ -532,9 +562,9 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     // A manager does — the same person who signed at the closing too: frozen with both signatures.
     st = await status(8101, signedIn("manager"));
     assert.equal(st.canSign, true);
-    r = await sign(8101, ["manager"]);
-    assert.equal(r.status, 200, JSON.stringify(r.body));
-    assert.equal(r.body.version, 1);
+    const signed = await sign(8101, ["manager"]);
+    assert.equal(signed.status, 200, JSON.stringify(signed.body));
+    assert.equal(signed.body.version, 1);
     row = await reportRow(8101);
     assert.ok(row.storage_key, "locked by the final signature");
     assert.equal(row.signed_by_name, "רונית כהן");
@@ -621,9 +651,9 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
     const t = template({ signature: false });
     t.content.push(
-      { type: "Text", props: { id: "rv", align: "right", width: "full", content: [{ text: "ROLEVAR=" }, { v: "report.closing_signer_role" }, { text: "=END" }] } } as any,
-      { type: "Signature", props: { id: "sgc", bind: "closing", width: "full", cells: [{ kind: "text", text: "CLOSING-ROW" }, { kind: "role", label: "תפקיד", text: "OLD-ROLE" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } } as any,
-      { type: "Signature", props: { id: "sg", bind: "final", width: "full", cells: [{ kind: "text", text: "FINAL-ROW" }, { kind: "text", label: "תפקיד", text: "מאשר סופי" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } } as any,
+      { type: "Text", props: { id: "rv", align: "right", width: "full", content: [{ text: "ROLEVAR=" }, { v: "report.closing_signer_role" }, { text: "=END" }] } },
+      { type: "Signature", props: { id: "sgc", bind: "closing", width: "full", cells: [{ kind: "text", text: "CLOSING-ROW" }, { kind: "role", label: "תפקיד", text: "OLD-ROLE" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } },
+      { type: "Signature", props: { id: "sg", bind: "final", width: "full", cells: [{ kind: "text", text: "FINAL-ROW" }, { kind: "text", label: "תפקיד", text: "מאשר סופי" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } },
     );
     await saveTemplate(R.report, t);
     const closingRow = async (itemId: number) => {
@@ -954,7 +984,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     const url = `/api/item-reports/templates/${R.report}/preview`;
     assert.equal((await call(api.preview.POST, url, json("POST", { template: template({ signature: true }) }), { routeId: String(R.report) })).status, 403);
     session = signedIn("tester");
-    let r = await call(api.preview.POST, url, json("POST", { template: template({ signature: true }), item_id: "8011" }), { routeId: String(R.report) });
+    let r = await call<Buffer>(api.preview.POST, url, json("POST", { template: template({ signature: true }), item_id: "8011" }), { routeId: String(R.report) });
     assert.equal(r.status, 200);
     assert.equal(r.body.subarray(0, 5).toString(), "%PDF-");
     r = await call(api.preview.POST, url, json("POST", { template: template({ signature: true }) }), { routeId: String(R.report) });
@@ -968,11 +998,11 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
 
   it("logos: upload images only, read back only under reports/logos/", async () => {
     session = signedIn("tester");
-    let r = await call(api.logo.POST, "/api/item-reports/logo", json("POST", { dataUrl: "data:text/html;base64,PHNjcmlwdD4=" }));
+    let r = await call<{ key?: string; error?: string }>(api.logo.POST, "/api/item-reports/logo", json("POST", { dataUrl: "data:text/html;base64,PHNjcmlwdD4=" }));
     assert.equal(r.status, 400);
     r = await call(api.logo.POST, "/api/item-reports/logo", json("POST", { dataUrl: PNG }));
     assert.equal(r.status, 200);
-    assert.match(r.body.key, /^reports\/logos\/[0-9a-f-]{36}\.png$/);
+    assert.match(r.body.key ?? "", /^reports\/logos\/[0-9a-f-]{36}\.png$/);
     const key = r.body.key as string;
     session = signedIn("storekeeper");
     r = await call(api.logo.GET, `/api/item-reports/logo?key=${encodeURIComponent(key)}`);
@@ -987,8 +1017,9 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
 
   it("the template's text is escaped: markup in a label or a worker's value never becomes HTML", async () => {
     const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED, SEAL]), itemStep(UID.b, [CASE])));
-    const t = template({ signature: false, marker: "<img src=x onerror=alert(1)>" }) as any;
-    t.content[0].props.content.push({ text: " seal=" }, { v: `field.${UID.a}.${SEAL.id}` });
+    const t = template({ signature: false, marker: "<img src=x onerror=alert(1)>" });
+    // The marker Text block's rich content (template() builds it as an array of runs).
+    (t.content[0].props.content as unknown[]).push({ text: " seal=" }, { v: `field.${UID.a}.${SEAL.id}` });
     await saveTemplate(R.report, t);
     await seedReportItem(8012, v);
     await runStep(8012, UID.a, v, { [VOLT.id]: { t: "number", value: 28 }, [LED.id]: { t: "choice_row", opt: "o_led00001" }, [SEAL.id]: { t: "text", value: "<script>x</script>" } });
@@ -1016,7 +1047,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
       ],
       zones: {},
     });
-    const kit = await H.h().prisma.$transaction((tx: any) =>
+    const kit = await H.h().prisma.$transaction((tx) =>
       H.h().createPackage(tx, {
         customer: H.CUSTOMER_ID, shipment: H.SHIPMENT_ID, packageType: H.ITEM_TYPE_PACKAGE_CLOSE,
         items: [{ itemType: H.ITEM_TYPE_IN_BOX, serialNumber: "SN-KIT-1", makat: "MK-1", model: "MODEL", manufacturer: "MFR" }],

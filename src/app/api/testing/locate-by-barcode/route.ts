@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { parseBarcode } from "@/app/lib/barcode-parser";
 import { computePackageGate } from "@/app/lib/packages/readiness";
+import { omit } from "@/lib/omit";
 
 export const runtime = "nodejs";
 
@@ -41,7 +42,18 @@ async function resolveLegacyId(legacyId: bigint): Promise<bigint | null> {
 }
 
 async function locate(itemIdBig: bigint): Promise<Located> {
-    const rows = await prisma.$queryRaw<any[]>`
+    const rows = await prisma.$queryRaw<{
+        itemId: bigint;
+        currentStatus: number;
+        currentRouteStep: number;
+        testStationId: number | null;
+        isFinished: boolean;
+        finishedAt: Date | null;
+        routeSteps: number[] | null;
+        serialNo: string | null;
+        makat: string;
+        model: string;
+    }[]>`
         SELECT
             ir.item_id              AS "itemId",
             ir.current_status       AS "currentStatus",
@@ -201,8 +213,7 @@ export async function GET(req: Request) {
             }
         }
 
-        const { notFound: _nf, ...body } = found.body;
-        return NextResponse.json(body, { status: found.status });
+        return NextResponse.json(omit(found.body, ["notFound"]), { status: found.status });
     } catch (error) {
         console.error("Error locating item by barcode:", error);
         return NextResponse.json({ error: "שגיאה באיתור הפריט" }, { status: 500 });

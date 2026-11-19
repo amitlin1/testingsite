@@ -61,16 +61,16 @@ describe("package opening from the shipment", { skip: H.skipReason() }, () => {
        VALUES ($1, $2, 1, $3, $4, $5, $6, '1', '1|CERT-NO|CERT-MFR|CERT-MODEL|CERT-MK||1|1|PO-1')`,
       [H.SHIPMENT_ID, BOX_TYPE, CERT.makat, CERT.model, CERT.manufacturer_name, CERT.manufacturer_no],
     );
-    const synced = await H.h().prisma.$transaction((tx: any) => boxes.syncShipmentBoxes(tx, H.SHIPMENT_ID));
+    const synced = await H.h().prisma.$transaction((tx) => boxes.syncShipmentBoxes(tx, H.SHIPMENT_ID));
     assert.equal(synced.created, 1);
     const [box] = await H.q<{ item_id: string }>("SELECT item_id::text FROM items WHERE shipment_id = $1 AND package_id IS NULL", [H.SHIPMENT_ID]);
     boxId = box.item_id;
   });
 
   it("1. intake: every item takes the box's details (the certificate row), never the template's", async () => {
-    const [box] = await H.q("SELECT makat, model, manufacturer_name, manufacturer_no FROM items WHERE item_id = $1", [boxId]);
-    assert.equal(detailsOf(box as any), CERT_LINE, "the pending box carries its line's details");
-    const created = await H.h().prisma.$transaction((tx: any) => boxes.intakeBox(tx, BigInt(boxId)));
+    const [box] = await H.q<Parameters<typeof detailsOf>[0]>("SELECT makat, model, manufacturer_name, manufacturer_no FROM items WHERE item_id = $1", [boxId]);
+    assert.equal(detailsOf(box), CERT_LINE, "the pending box carries its line's details");
+    const created = await H.h().prisma.$transaction((tx) => boxes.intakeBox(tx, BigInt(boxId)));
     assert.equal(created.itemIds.length, 3);
     const items = await members(boxId);
     assert.deepEqual(items.map(detailsOf), [CERT_LINE, CERT_LINE, CERT_LINE]);
@@ -78,12 +78,12 @@ describe("package opening from the shipment", { skip: H.skipReason() }, () => {
   });
 
   it("2. the whole opening: start, contents (refusals, removal, an added item, a second save), results", async () => {
-    await H.h().prisma.$transaction((tx: any) => boxes.intakeBox(tx, BigInt(boxId)));
+    await H.h().prisma.$transaction((tx) => boxes.intakeBox(tx, BigInt(boxId)));
     const [a, b, c] = await members(boxId);
 
     const started = await H.startTest({ itemId: Number(boxId), stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
     assert.equal(started.status, 200, JSON.stringify(started.body));
-    assert.equal(started.body.item.startedPackageItems.length, 3);
+    assert.equal(started.body.item?.startedPackageItems.length, 3);
 
     const kept = (serials: [string, string, string]) => [a, b, c].map((it, i) => ({
       itemId: it.item_id, serialNumber: serials[i], makat: CERT.makat, model: CERT.model, manufacturer: CERT.manufacturer_name, manufacturerNo: CERT.manufacturer_no,
@@ -145,7 +145,7 @@ describe("package opening from the shipment", { skip: H.skipReason() }, () => {
   });
 
   it("3. a photo already taken of an item: it can still be corrected, not removed — until the photo is taken back", async () => {
-    await H.h().prisma.$transaction((tx: any) => boxes.intakeBox(tx, BigInt(boxId)));
+    await H.h().prisma.$transaction((tx) => boxes.intakeBox(tx, BigInt(boxId)));
     const [a, b, c] = await members(boxId);
     await H.startTest({ itemId: Number(boxId), stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
     const all = (s: string) => [a, b, c].map((it, i) => ({ itemId: it.item_id, serialNumber: `${s}-${i}`, makat: CERT.makat, model: CERT.model, manufacturer: CERT.manufacturer_name, manufacturerNo: CERT.manufacturer_no }));
@@ -172,7 +172,7 @@ describe("package opening from the shipment", { skip: H.skipReason() }, () => {
   });
 
   it("4. a long opening: the reaper releases the box mid-wizard — contents and results still go through", async () => {
-    await H.h().prisma.$transaction((tx: any) => boxes.intakeBox(tx, BigInt(boxId)));
+    await H.h().prisma.$transaction((tx) => boxes.intakeBox(tx, BigInt(boxId)));
     const items = await members(boxId);
     await H.startTest({ itemId: Number(boxId), stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
     for (const id of [boxId, ...items.map((i) => i.item_id)]) await H.ageProcessingStart(Number(id), 45);
@@ -193,7 +193,7 @@ describe("package opening from the shipment", { skip: H.skipReason() }, () => {
   });
 
   it("5. the wizard reopened after its items were submitted but the box was not: no item moves twice, the box still finishes", async () => {
-    await H.h().prisma.$transaction((tx: any) => boxes.intakeBox(tx, BigInt(boxId)));
+    await H.h().prisma.$transaction((tx) => boxes.intakeBox(tx, BigInt(boxId)));
     const items = await members(boxId);
     await H.startTest({ itemId: Number(boxId), stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
     await contents(boxId, { items: items.map((m, i) => ({ itemId: m.item_id, serialNumber: `D-${i}`, makat: CERT.makat, model: CERT.model, manufacturer: CERT.manufacturer_name, manufacturerNo: CERT.manufacturer_no })), remove: [], add: [] });

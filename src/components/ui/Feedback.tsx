@@ -2,7 +2,6 @@
 import React, { forwardRef, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Info, CheckCircle2, AlertTriangle, XCircle, X } from "lucide-react";
-import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
 
 type Severity = "info" | "success" | "warning" | "error";
@@ -18,7 +17,6 @@ const SEVERITY: Record<Severity, { color: string; bg: string; border: string; ro
 
 export interface AlertProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   severity?: Severity;
-  variant?: "standard" | "filled" | "outlined";
   icon?: React.ReactNode | false;
   onClose?: (e: React.MouseEvent) => void;
   action?: React.ReactNode;
@@ -26,7 +24,7 @@ export interface AlertProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "
 }
 
 export const Alert = forwardRef<HTMLDivElement, AlertProps>(function Alert(
-  { severity = "info", variant: _v, icon, onClose, action, sx, style, className, children, ...rest },
+  { severity = "info", icon, onClose, action, sx, style, className, children, ...rest },
   ref,
 ) {
   const { color, bg, border, role, Icon } = SEVERITY[severity];

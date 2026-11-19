@@ -27,6 +27,9 @@ import assert from "node:assert/strict";
 import * as H from "../../metrics/__tests__/write-path-helpers";
 import type { RouteFieldsConfig, StepConfig } from "../schema";
 
+/** A JSON answer as the route sends it, read by its keys. */
+type Json = Record<string, unknown>;
+
 /** A plain item type whose route visits TYPE_FUNC twice: {FUNC, INTAKE, FUNC}. */
 const ITEM_TYPE_TWICE = 8;
 /** The id TYPE_FUNC is renamed to — free in the fixture. */
@@ -124,7 +127,7 @@ describe(
       return rows.map((r) => Number(r.item_id)).sort((a, b) => a - b);
     }
 
-    async function renameType(oldId: number, newId: number, desc: string): Promise<{ status: number; body: any }> {
+    async function renameType(oldId: number, newId: number, desc: string): Promise<{ status: number; body: Json }> {
       // The body the settings form sends: the edited id arrives as the text
       // input's string value.
       const req = new Request(`http://localhost/api/settings/test-stations-type/${oldId}`, {
@@ -245,7 +248,8 @@ describe(
     });
 
     /** GET /api/testing/station-fields for an item, opened on FUNC-A. */
-    async function stationFieldsOf(itemId: number): Promise<any> {
+    /** The station-fields answer, as far as these tests read it (its mode; the rest compared whole). */
+    async function stationFieldsOf(itemId: number): Promise<{ mode?: string } & Record<string, unknown>> {
       const res = await stationFields(new Request(`http://localhost/api/testing/station-fields?itemId=${itemId}&stationId=${H.STATION_FUNC_A}`));
       assert.equal(res.status, 200);
       return res.json();

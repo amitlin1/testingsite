@@ -27,8 +27,8 @@ export async function GET(request: Request) {
     const items: FileItem[] = [];
 
     await new Promise<void>((resolve, reject) => {
-      const stream = minioClient.listObjectsV2(BUCKET, prefix, false) as any;
-      stream.on('data', (obj: any) => {
+      const stream = minioClient.listObjectsV2(BUCKET, prefix, false);
+      stream.on('data', (obj) => {
         if (obj.prefix) {
           const rawName = (obj.prefix as string).slice(prefix.length);
           const folderName = rawName.replace(/\/$/, '');

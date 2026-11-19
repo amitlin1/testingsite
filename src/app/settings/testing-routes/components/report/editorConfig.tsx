@@ -13,16 +13,33 @@
 
 import * as React from "react";
 import { FieldLabel } from "@measured/puck";
-import type { Config, CustomField } from "@measured/puck";
+import type { ArrayField, Config, CustomField, Field, Fields, ObjectField } from "@measured/puck";
 import { puckConfig } from "@/app/lib/item-report/puck-config";
+import type { PdfComponentProps, RootProps, TableProps } from "@/app/lib/item-report/puck-config";
 import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "@/app/lib/item-report/types";
 import type { ReportStepRef, ReportVar } from "@/app/lib/item-report/types";
 import type { RichValue } from "@/app/lib/item-report/rich";
 import { RichTextField } from "./RichTextField";
 import { ReportLogoField } from "./ReportLogoField";
 
-// Puck's component/field types are heavily generic; this builder does shallow
-// structural overrides, so we work in `any` locally and re-assert Config.
+type EditorConfig = Config<PdfComponentProps, RootProps>;
+type Align = "right" | "center" | "left";
+
+/** A component's own fields (every component of puckConfig declares them). */
+function fieldsOf<F>(fields: F | undefined, name: string): F {
+  if (!fields) throw new Error(`report editor: ${name} declares no fields`);
+  return fields;
+}
+/** A field puckConfig declares as an array (its rows) — checked, so its arrayFields can be swapped. */
+function arrayOf<T extends { [key: string]: unknown }[]>(f: Field<T>, name: string): ArrayField<T> {
+  if (f.type !== "array") throw new Error(`report editor: ${name} is not an array field`);
+  return f;
+}
+/** A field puckConfig declares as an object — checked, so its objectFields can be swapped. */
+function objectOf<T>(f: Field<T>, name: string): ObjectField<T> {
+  if (f.type !== "object") throw new Error(`report editor: ${name} is not an object field`);
+  return f;
+}
 
 /** A <select> with <optgroup>s — Puck's own select field has no groups. */
 function groupedSelect(
@@ -33,7 +50,7 @@ function groupedSelect(
   return {
     type: "custom",
     label,
-    render: ({ onChange, value }: any) => {
+    render: ({ onChange, value }) => {
       const groups = new Map<string, { value: string; label: string }[]>();
       const loose: { value: string; label: string }[] = [];
       for (const o of options) {
@@ -65,20 +82,20 @@ function groupedSelect(
 
 export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRef[] }): Config {
   const { vars, steps } = opts;
-  const components: any = { ...(puckConfig.components as any) };
+  const components: EditorConfig["components"] = { ...puckConfig.components };
 
   // Alignment as an icon button group (ימין / מרכז / שמאל) instead of a select.
-  const alignField = (): CustomField<string> => ({
+  const alignField = <A extends string>(): CustomField<A> => ({
     type: "custom",
     label: "יישור",
-    render: ({ onChange, value }: any) => {
+    render: ({ onChange, value }) => {
       const cur = value || "right";
-      const choices: { d: "right" | "center" | "left"; t: string }[] = [
+      const choices: { d: Align; t: string }[] = [
         { d: "right", t: "ימין" },
         { d: "center", t: "מרכז" },
         { d: "left", t: "שמאל" },
       ];
-      const bars: Record<string, [number, number][]> = {
+      const bars: Record<Align, [number, number][]> = {
         right: [[3, 13], [7, 13], [5, 13]],
         left: [[3, 13], [3, 9], [3, 11]],
         center: [[3, 13], [5, 11], [4, 12]],
@@ -94,10 +111,11 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
               aria-label={t}
               aria-pressed={cur === d}
               className={`pdf-alignbtn${cur === d ? " is-on" : ""}`}
-              onClick={() => onChange(d)}
+              // Every choice here is a value of the component's own align (A includes these three).
+              onClick={() => onChange(d as A)}
             >
               <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor" aria-hidden="true">
-                {bars[d]!.map(([x1, x2], i) => (
+                {bars[d].map(([x1, x2], i) => (
                   <rect key={i} x={x1} y={1 + i * 4} width={x2 - x1} height="2" rx="1" />
                 ))}
               </svg>
@@ -109,47 +127,53 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
     },
   });
 
-  const richField = (label: string, minHeight?: number): CustomField<RichValue> => ({
+  const richField = (label: string, minHeight?: number): CustomField<string | RichValue> => ({
     type: "custom",
     label,
-    render: ({ onChange, value }: any) => (
+    render: ({ onChange, value }) => (
       <FieldLabel label={label} el="div">
         <RichTextField value={value} onChange={onChange} variables={vars} minHeight={minHeight} />
       </FieldLabel>
     ),
   });
 
-  const text: any = components.Text;
-  components.Text = { ...text, fields: { ...text.fields, content: richField("תוכן", 72), align: alignField() } };
+  const text = components.Text;
+  const textFields = fieldsOf(text.fields, "Text");
+  components.Text = { ...text, fields: { ...textFields, content: richField("תוכן", 72), align: alignField() } };
 
-  const list: any = components.List;
+  const list = components.List;
+  const listFields = fieldsOf(list.fields, "List");
   components.List = {
     ...list,
-    fields: { ...list.fields, items: { ...list.fields.items, arrayFields: { content: richField("טקסט", 48) } } },
+    fields: { ...listFields, items: { ...arrayOf(listFields.items, "List.items"), arrayFields: { content: richField("טקסט", 48) } } },
   };
 
-  const section: any = components.Section;
+  const section = components.Section;
+  const sectionFields = fieldsOf(section.fields, "Section");
   components.Section = {
     ...section,
-    fields: { ...section.fields, heading: richField("טקסט הכותרת", 44), align: alignField() },
+    fields: { ...sectionFields, heading: richField("טקסט הכותרת", 44), align: alignField() },
   };
 
-  const fieldLine: any = components.FieldLine;
-  components.FieldLine = { ...fieldLine, fields: { ...fieldLine.fields, value: richField("ערך", 44) } };
+  const fieldLine = components.FieldLine;
+  components.FieldLine = { ...fieldLine, fields: { ...fieldsOf(fieldLine.fields, "FieldLine"), value: richField("ערך", 44) } };
 
   // Table cells → WYSIWYG, each cell labelled by its column's header.
-  const table: any = components.Table;
-  const columnName = (columns: any[], i = 0): string => {
+  const table = components.Table;
+  const tableBase = fieldsOf(table.fields, "Table");
+  const tableRows = arrayOf(tableBase.rows, "Table.rows");
+  const tableCells = arrayOf(tableRows.arrayFields.cells, "Table.rows.cells");
+  const columnName = (columns: TableProps["columns"], i = 0): string => {
     const h = columns?.[i]?.header;
     return typeof h === "string" && h.trim() ? h.trim() : "תא";
   };
-  const tableFields = (columns: any[]) => ({
-    ...table.fields,
+  const tableFields = (columns: TableProps["columns"]): Fields<TableProps> => ({
+    ...tableBase,
     rows: {
-      ...table.fields.rows,
+      ...tableRows,
       arrayFields: {
         cells: {
-          ...table.fields.rows.arrayFields.cells,
+          ...tableCells,
           arrayFields: { content: richField("תוכן", 40) },
           getItemSummary: (_cell: unknown, i?: number) => columnName(columns, i ?? 0),
         },
@@ -159,55 +183,58 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
   components.Table = {
     ...table,
     fields: tableFields(table.defaultProps?.columns ?? []),
-    resolveFields: (data: any) => tableFields(data?.props?.columns ?? []),
+    resolveFields: (data) => tableFields(data?.props?.columns ?? []),
   };
 
   // DetailsTable: each row's value takes variables.
-  const dt: any = components.DetailsTable;
+  const dt = components.DetailsTable;
+  const dtFields = fieldsOf(dt.fields, "DetailsTable");
+  const dtRows = arrayOf(dtFields.rows, "DetailsTable.rows");
   components.DetailsTable = {
     ...dt,
     fields: {
-      ...dt.fields,
+      ...dtFields,
       rows: {
-        ...dt.fields.rows,
-        arrayFields: { label: dt.fields.rows.arrayFields.label, value: richField("ערך", 36) },
+        ...dtRows,
+        arrayFields: { label: dtRows.arrayFields.label, value: richField("ערך", 36) },
       },
     },
   };
 
   // FieldValue: one variable, from the grouped list.
-  const fv: any = components.FieldValue;
+  const fv = components.FieldValue;
   components.FieldValue = {
     ...fv,
     fields: {
-      ...fv.fields,
+      ...fieldsOf(fv.fields, "FieldValue"),
       field: groupedSelect("משתנה (ימולא אוטומטית)", vars.map((v) => ({ value: v.name, label: v.label, group: v.group })), "בחר/י משתנה…"),
     },
   };
 
   const stepOptions = steps.map((s) => ({ value: s.uid, label: s.label, group: s.group }));
 
-  const sf: any = components.StepFields;
-  components.StepFields = { ...sf, fields: { ...sf.fields, step: groupedSelect("עמדה", stepOptions, "בחר/י עמדה…") } };
+  const sf = components.StepFields;
+  components.StepFields = { ...sf, fields: { ...fieldsOf(sf.fields, "StepFields"), step: groupedSelect("עמדה", stepOptions, "בחר/י עמדה…") } };
 
   // Photos: the step, then that step's photo fields (rebuilt when the step changes).
-  const ph: any = components.Photos;
-  const photosFields = (stepUid: string) => {
+  const ph = components.Photos;
+  const phFields = fieldsOf(ph.fields, "Photos");
+  const photosFields = (stepUid: string): typeof phFields => {
     const photoFields = steps.find((s) => s.uid === stepUid)?.fields.filter((f) => f.type === "photo") ?? [];
     return {
-      ...ph.fields,
+      ...phFields,
       step: groupedSelect("עמדה", stepOptions, "כל העמדות"),
       field: groupedSelect("שדה צילום", photoFields.map((f) => ({ value: f.id, label: f.label })), "כל שדות הצילום"),
     };
   };
-  components.Photos = { ...ph, fields: photosFields(""), resolveFields: (data: any) => photosFields(data?.props?.step ?? "") };
+  components.Photos = { ...ph, fields: photosFields(""), resolveFields: (data) => photosFields(data?.props?.step ?? "") };
 
   // Signature: a hand-drawn signature (at the kit's closing, or the approver's final one) or a step's worker.
-  const sig: any = components.Signature;
+  const sig = components.Signature;
   components.Signature = {
     ...sig,
     fields: {
-      ...sig.fields,
+      ...fieldsOf(sig.fields, "Signature"),
       bind: groupedSelect(
         "חותם",
         [
@@ -223,21 +250,23 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
   const logoField = (label: string): CustomField<string> => ({
     type: "custom",
     label,
-    render: ({ onChange, value }: any) => (
+    render: ({ onChange, value }) => (
       <FieldLabel label={label} el="div">
         <ReportLogoField value={value ?? ""} onChange={onChange} />
       </FieldLabel>
     ),
   });
-  const root: any = puckConfig.root;
-  const newRoot = {
+  const root = puckConfig.root;
+  const rootFields = fieldsOf(root?.fields, "root");
+  const header = objectOf(rootFields.header, "root.header");
+  const newRoot: EditorConfig["root"] = {
     ...root,
     fields: {
-      ...root.fields,
+      ...rootFields,
       header: {
-        ...root.fields.header,
+        ...header,
         objectFields: {
-          ...root.fields.header.objectFields,
+          ...header.objectFields,
           org: richField("הגוף המוציא (שורה לכל רמה)", 64),
           meta: richField("פרטי המסמך (מספר, תאריך, סימוכין)", 64),
           title: richField("כותרת המסמך", 40),
@@ -249,5 +278,7 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
     },
   };
 
-  return { ...(puckConfig as any), components, root: newRoot } as Config;
+  const config: EditorConfig = { ...puckConfig, components, root: newRoot };
+  // <Puck> takes the untyped Config; ours is the same object with its props spelled out.
+  return config as unknown as Config;
 }

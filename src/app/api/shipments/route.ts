@@ -8,6 +8,49 @@ import { nonPackageTypeIds } from "@/app/lib/packages/shipment-types";
 import { syncShipmentBoxes } from "@/app/lib/packages/boxes";
 import { PackageError, packageErrorResponse } from "@/app/lib/packages/errors";
 import { SHIPMENT_TX, duplicateShipmentError, findDuplicateShipment, readShipmentLines, saveShipmentLines } from "@/app/lib/shipments/lines";
+import type { shipments } from "@prisma/client";
+
+/** One shipment line as the list query builds it (json_build_object below). */
+type ShipmentLineJson = {
+  id: number;
+  item_type_id: number | null;
+  quantity: number;
+  makat: string | null;
+  model: string | null;
+  manufacturer_name: string | null;
+  manufacturer_no: string | null;
+  cert_row_no: string | null;
+  serial_no: string | null;
+  batch_size: string | null;
+  qty_to_test: number | null;
+  purchase_order: string | null;
+  cert_row_raw: string | null;
+  item_type_desc: string | null;
+};
+
+/** One row of the shipments list query: the shipment's own columns, its names, and its counts. */
+type ShipmentListRow = Pick<
+  shipments,
+  | "id" | "shipment_code" | "customer_id" | "shipment_date" | "amount" | "makat" | "signature_path"
+  | "received_at" | "recieving_worker_id" | "recieving_worker_name" | "source_id" | "sending_worker_id"
+  | "sending_worker_name" | "poc_details" | "shipment_sent_date" | "is_sent" | "finished_at"
+> & {
+  customer_code: string;
+  customer_name: string;
+  item_type_id: number | null;
+  item_type_desc: string | null;
+  source_desc: string | null;
+  total_items: number;
+  in_work_items: number;
+  valid_items: number;
+  sampled_amount: number;
+  valid_amount: number;
+  finished_sampled_amount: number;
+  started_sampled_amount: number;
+  sent_amount: number;
+  shipment_items: ShipmentLineJson[] | null;
+};
+
 
 // GET: Fetch all shipments
 export async function GET() {
@@ -21,7 +64,7 @@ export async function GET() {
     //              waiting for items / finished)
     //   finished = boxes that closed (route finished)
     //   sent     = boxes returned to the customer (shipment_history)
-    const rows = await prisma.$queryRawUnsafe<any[]>(`
+    const rows = await prisma.$queryRawUnsafe<ShipmentListRow[]>(`
       WITH shipment_counts AS (
         SELECT
           i.shipment_id,
@@ -108,7 +151,7 @@ export async function GET() {
     console.log(`Found ${rows.length} shipments`);
 
     // Normalize all timestamp fields to UTC ISO strings and build signature URLs
-    const normalizedRows = rows.map((row: any) => ({
+    const normalizedRows = rows.map((row) => ({
       ...row,
       shipment_date: normalizeToUtcIso(row.shipment_date),
       // timestamptz: already an instant, no zone guessing.

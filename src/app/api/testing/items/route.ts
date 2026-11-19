@@ -1,7 +1,43 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
-import { loadPackages } from "@/app/lib/packages/read";
+import { loadPackages, type PackageView } from "@/app/lib/packages/read";
+
+/** One queue row of the query below: the item's route, the item, and the names around them. */
+type QueueRow = {
+    item_id: bigint;
+    item_type_id: number;
+    current_status: number;
+    current_route_step: number;
+    test_station_id: number | null;
+    created_at: Date;
+    processing_start_time: Date | null;
+    queue_start_time: Date;
+    finished_at: Date | null;
+    is_finished: boolean;
+    item_status_desc: string;
+    route_steps: number[];
+    serial_no: string | null;
+    makat: string;
+    model: string;
+    customer_code: string | null;
+    manufacturer_name: string;
+    manufacturer_no: string;
+    item_type_desc: string | null;
+    is_package: boolean | null;
+    customer_name: string | null;
+    customer_id: number;
+    shipment_id: number;
+    shipment_code: string | null;
+    route_number: number;
+    package_id: bigint | null;
+    package_seq: number | null;
+    parent_serial_no: string | null;
+    last_sku: string | null;
+    has_children: boolean;
+    /** json_agg: the item's box mates (or its own members); ids as JSON numbers. */
+    connected_items: { item_id: number; serial_no: string | null }[] | null;
+};
 
 export const runtime = "nodejs";
 
@@ -19,7 +55,7 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "Invalid stationId" }, { status: 400 });
         }
 
-        const rows = await prisma.$queryRaw<any[]>`
+        const rows = await prisma.$queryRaw<QueueRow[]>`
      WITH selected_station AS (
     SELECT
         st.test_station_type_id,
@@ -139,7 +175,7 @@ ORDER BY
 
         // Normalize snake_case rows to the ItemRow shape: numeric ids, UTC ISO
         // timestamps, and route_steps guaranteed to be an array.
-        const normalizedRows = rows.map((row: any) => ({
+        const normalizedRows = rows.map((row) => ({
             ...row,
             item_id: row.item_id != null ? Number(row.item_id) : null,
             test_station_id: row.test_station_id != null ? Number(row.test_station_id) : null,
@@ -149,10 +185,12 @@ ORDER BY
             queue_start_time: normalizeToUtcIso(row.queue_start_time),
             finished_at: normalizeToUtcIso(row.finished_at),
             route_steps: Array.isArray(row.route_steps) ? row.route_steps : (row.route_steps ? [row.route_steps] : []),
-            connected_items: row.connected_items?.map((ci: any) => ({
+            connected_items: row.connected_items?.map((ci) => ({
                 ...ci,
                 item_id: ci.item_id != null ? Number(ci.item_id) : null,
             })),
+            // Filled below from the one package read for the whole queue.
+            package: null as PackageView | null,
         }));
 
         // Package model (docs/packages/PLAN.md): every row carries its box —

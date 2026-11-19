@@ -5,8 +5,7 @@
 import type { CSSProperties } from "react";
 
 // Type aliases so `import type { SxProps } from "@/components/ui"` works.
-// Generic to accept the MUI `SxProps<Theme>` form; the param is ignored.
-export type SxProps<_T = unknown> = import("./sx").SxInput;
+export type SxProps = import("./sx").SxInput;
 export type { SxInput } from "./sx";
 export { sxToStyle, resolveColor, splitSystemProps } from "./sx";
 export { cn } from "./utils";

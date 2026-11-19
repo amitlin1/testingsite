@@ -13,7 +13,7 @@ import ShipmentUpdatePopup from "./ShipmentUpdatePopup";
 import ShipmentSendPopup from "./ShipmentSendPopup";
 import ShipmentHistoryPopup from "./ShipmentHistoryPopup";
 import { useReactToPrint } from "react-to-print";
-import { ShipmentPDFDocument } from "./ShipmentPDFDocument";
+import { ShipmentPDFDocument, type ShipmentPdfData } from "./ShipmentPDFDocument";
 import ShipmentBarcodesDialog from "./ShipmentBarcodesDialog";
 import { apiFetch } from "@/lib/api/client";
 
@@ -106,7 +106,7 @@ export default function ShipmentTable() {
 
     // PDF printing
     const pdfRef = React.useRef<HTMLDivElement>(null);
-    const [pdfData, setPdfData] = useState<{ shipment: Shipment | any; type: "received" | "sent"; historyGroup?: any } | null>(null);
+    const [pdfData, setPdfData] = useState<ShipmentPdfData | null>(null);
 
     const handlePrint = useReactToPrint({ contentRef: pdfRef });
 

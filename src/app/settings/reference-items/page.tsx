@@ -24,6 +24,7 @@ import {
   stationsFor,
   type ItemType, type ReferenceItem, type ReferenceStations, type TemplateLine,
 } from "./referenceForm";
+import Image from "next/image";
 
 // ---- Design tokens (Shifthouse) --------------------------------------------
 // States (hover / focus / drag) live in settings.css (.ri-*): inline styles
@@ -479,8 +480,7 @@ export default function ReferenceItemsPage() {
                     {viewing.images.map((img) => (
                       <figure key={img.id} style={{ margin: 0, border: `1px solid ${C.hairline}`, borderRadius: "var(--r-md)", overflow: "hidden", background: "var(--color-canvas-parchment)" }}>
                         <a href={img.url} target="_blank" rel="noreferrer" style={{ display: "block" }} aria-label={`פתיחת ${img.file_name}`}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={img.url} alt="" style={{ width: "100%", height: 110, objectFit: "contain", display: "block" }} />
+                          <Image src={img.url} alt="" width={0} height={0} unoptimized style={{ width: "100%", height: 110, objectFit: "contain", display: "block" }} />
                         </a>
                         <figcaption style={{ padding: "6px 8px", fontSize: "var(--text-fine)", color: C.muted, background: C.card }}>
                           {img.station_type_id != null ? viewStations.nameOf(img.station_type_id) : "לא משויכת לעמדה"}
@@ -580,10 +580,12 @@ function ReferenceCard({ item, lines, onEdit, viewOnly = false }: { item: Refere
       {item.cover_url ? (
         <span style={{ display: "block", position: "relative", background: "var(--color-canvas-parchment)" }}>
           {/* contain (not cover) so the whole reference image is visible, not cropped */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={item.cover_url}
             alt=""
+            width={0}
+            height={0}
+            unoptimized
             style={{ width: "100%", height: 172, objectFit: "contain", display: "block" }}
           />
           {item.image_count > 1 && (

@@ -2,7 +2,7 @@
 import React, { forwardRef } from "react";
 import * as RSelect from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
-import { cn } from "./utils";
+import { cn, omit } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
 
 /** Radix forbids an empty-string item value; MUI uses "" freely. Bridge it. */
@@ -10,8 +10,10 @@ const EMPTY = "__sh_empty__";
 const toRadix = (v: unknown) => (v === "" || v == null ? EMPTY : String(v));
 
 export interface MenuItemProps extends Omit<React.LiHTMLAttributes<HTMLLIElement>, "value"> {
+  /** The option's value: read by Select from the props, never put on the <li>. */
   value?: unknown;
   disabled?: boolean;
+  /** MUI-compatible; the menu has one density. */
   dense?: boolean;
   selected?: boolean;
   divider?: boolean;
@@ -21,8 +23,9 @@ export interface MenuItemProps extends Omit<React.LiHTMLAttributes<HTMLLIElement
 }
 
 /** Dual purpose: read as an option by Select, or rendered standalone in a Menu. */
-export function MenuItem({ value: _v, danger, dense: _d, selected, divider, sx, style, className, children, ...rest }: MenuItemProps) {
-  const disabled = (rest as { disabled?: boolean }).disabled;
+export function MenuItem({ danger, selected, divider, sx, style, className, children, ...props }: MenuItemProps) {
+  const rest = omit(props, ["value", "dense"]);
+  const disabled = rest.disabled;
   return (
     <li
       // Focusable by the menu's arrow keys (Menu.tsx); Enter / Space activate.
@@ -59,7 +62,7 @@ function collectOptions(children: React.ReactNode): Option[] {
   return out;
 }
 
-type ChangeHandler = (e: { target: { value: any; name?: string } }, child?: React.ReactNode) => void;
+type ChangeHandler = (e: { target: { value: unknown; name?: string } }, child?: React.ReactNode) => void;
 
 export interface SelectProps {
   value?: unknown;
@@ -142,17 +145,12 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
 /* --------------------------------------------------- FormControl/Label --- */
 export interface FormControlProps extends React.HTMLAttributes<HTMLDivElement> {
   fullWidth?: boolean;
-  size?: "small" | "medium";
-  error?: boolean;
-  disabled?: boolean;
-  variant?: string;
-  margin?: string;
   sx?: SxInput;
   component?: React.ElementType;
 }
 
 export const FormControl = forwardRef<HTMLDivElement, FormControlProps>(function FormControl(
-  { fullWidth, size: _s, error: _e, disabled: _d, variant: _v, margin: _m, sx, style, children, ...rest },
+  { fullWidth, sx, style, children, ...rest },
   ref,
 ) {
   return (
@@ -168,11 +166,10 @@ export const FormControl = forwardRef<HTMLDivElement, FormControlProps>(function
 
 export interface InputLabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
   error?: boolean;
-  shrink?: boolean;
   sx?: SxInput;
 }
 
-export function InputLabel({ error, shrink: _sh, sx, style, className, children, ...rest }: InputLabelProps) {
+export function InputLabel({ error, sx, style, className, children, ...rest }: InputLabelProps) {
   return (
     <label className={cn("sh-field-label", error && "sh-field-label--error", className)} style={{ ...sxToStyle(sx), ...style }} {...rest}>
       {children}
