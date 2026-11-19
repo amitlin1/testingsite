@@ -155,7 +155,9 @@ type Zoom = { mode: "width" } | { mode: "page" } | { mode: "free"; scale: number
 
 /** On screen the print HTML has no page margins (those live in @page), so the preview gets them —
  *  the report wraps at the same width as in the PDF — and a fixed A4 width. */
-const SCREEN_CSS = `<style>@media screen{body{width:${A4_W}px;box-sizing:border-box;padding:14mm 16mm;}}</style>`;
+// The body is exactly A4 wide, so the iframe never needs a horizontal scrollbar: only the vertical
+// one, which SCROLLBAR leaves room for.
+const SCREEN_CSS = `<style>@media screen{html{overflow-x:hidden;}body{width:${A4_W}px;box-sizing:border-box;padding:14mm 16mm;}}</style>`;
 function previewDoc(html: string): string {
   return html.includes("</head>") ? html.replace("</head>", `${SCREEN_CSS}</head>`) : SCREEN_CSS + html;
 }
@@ -163,7 +165,8 @@ function previewDoc(html: string): string {
 function scaleFor(zoom: Zoom, box: { w: number; h: number }): number {
   if (zoom.mode === "free") return zoom.scale;
   const s = zoom.mode === "width" ? (box.w - GAP * 2) / (A4_W + SCROLLBAR) : (box.h - GAP * 2) / A4_H;
-  return Math.min(Z_MAX, Math.max(Z_MIN / 2, s));
+  // Floored: a fitted sheet a fraction of a pixel wider than the frame would overflow it.
+  return Math.min(Z_MAX, Math.max(Z_MIN / 2, Math.floor(s * 1000) / 1000));
 }
 
 function ZoomBar({ zoom, shownScale, onZoom }: { zoom: Zoom; shownScale: number | null; onZoom: (z: Zoom) => void }) {
@@ -201,7 +204,11 @@ function ReportViewer({ title, html, zoom, onScale }: { title: string; html: str
   React.useEffect(() => {
     const el = frameRef.current;
     if (!el) return;
-    const measure = () => setBox((b) => (b && b.w === el.clientWidth && b.h === el.clientHeight ? b : { w: el.clientWidth, h: el.clientHeight }));
+    const measure = () => {
+      const w = Math.floor(el.clientWidth);
+      const h = Math.floor(el.clientHeight);
+      setBox((b) => (b && b.w === w && b.h === h ? b : { w, h }));
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -213,8 +220,12 @@ function ReportViewer({ title, html, zoom, onScale }: { title: string; html: str
 
   const sheetW = s ? (A4_W + SCROLLBAR) * s : 0;
   const sheetH = box ? box.h - GAP * 2 : 0;
+  // A fitted sheet always fits, so the frame has no scrollbars: a scrollbar that appears takes width
+  // or height, which refits the sheet, which hides the scrollbar again — the frame flickered. Only a
+  // zoom the reader set can be larger than the frame, and only then does it scroll.
+  const scrolls = zoom.mode === "free";
   return (
-    <div ref={frameRef} style={{ flex: 1, minHeight: 260, position: "relative", overflow: "auto", border: `1px solid ${HAIR}`, borderRadius: 10, background: "var(--color-canvas-parchment)" }}>
+    <div ref={frameRef} style={{ flex: 1, minHeight: 260, position: "relative", overflow: scrolls ? "auto" : "hidden", border: `1px solid ${HAIR}`, borderRadius: 10, background: "var(--color-canvas-parchment)" }}>
       {!doc || !s || !box ? (
         <div style={{ padding: 14, fontSize: 13, color: MUTED }}>{html === "failed" ? T_FAILED : T_LOADING}</div>
       ) : (

@@ -502,6 +502,8 @@ function ClosingPopup({
   return (
     <>
       <PackageWizardShell
+        // Wider than the other wizards: its report signing step shows the reports at A4 width.
+        width="min(1180px, 96vw)"
         open={open} onClose={onClose}
         stationName={station.test_station_desc} stationCode={String(station.test_station_id)}
         title={CLOSE_TEXT.title} pkg={pkg} workerName={workerName}

@@ -27,7 +27,7 @@ export default function PackageWizardShell({
   open, onClose, stationName, stationCode, title, pkg, workerName,
   steps, stepIndex, onStep, itemStepper, itemProgress,
   stepTitle, stepSubtitle, stepCounter, systemMsg, footNote,
-  backDisabled, onBack, nextLabel, nextEnabled, onNext, busy, children,
+  backDisabled, onBack, nextLabel, nextEnabled, onNext, busy, children, width = "min(1040px, 96vw)",
 }: {
   open: boolean;
   onClose: () => void;
@@ -53,11 +53,13 @@ export default function PackageWizardShell({
   onNext: () => void;
   busy?: boolean;
   children: React.ReactNode;
+  /** The dialog's width; a wizard that shows a document (the closing's report signing) is wider. */
+  width?: string;
 }) {
   if (!open) return null;
   return (
     // Moved by the rail's title or the step title (data-drag-handle).
-    <PackageDialog open onClose={onClose} busy={busy} width="min(1040px, 96vw)" height="min(720px, 92vh)" fullScreenBelow760>
+    <PackageDialog open onClose={onClose} busy={busy} width={width} height="min(720px, 92vh)" fullScreenBelow760>
       <div className="pkg-wiz">
         {/* Rail */}
         <div className="pkg-wiz-rail" style={{ width: 268, padding: "20px 18px" }}>
