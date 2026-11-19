@@ -20,12 +20,15 @@ export default function ShipmentSignatureField({
     signed,
     onSignedChange,
     hint,
+    height = 120,
 }: {
     canvasRef: React.RefObject<SignatureCanvas | null>;
     signed: boolean;
     onSignedChange: (signed: boolean) => void;
     /** What the empty pad blocks, e.g. "יש לחתום לפני הוספת המשלוח". */
     hint: string;
+    /** The pad's height in px — lower where the screen above it needs the room (the report signing step). */
+    height?: number;
 }) {
     const labelId = React.useId();
     const hintId = React.useId();
@@ -59,7 +62,7 @@ export default function ShipmentSignatureField({
                     ref={canvasRef}
                     canvasProps={{
                         width: 800,
-                        height: 120,
+                        height,
                         className: "sigCanvas",
                         role: "img",
                         "aria-labelledby": labelId,
