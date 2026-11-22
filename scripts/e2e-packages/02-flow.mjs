@@ -34,9 +34,10 @@ try {
   });
   check("POST /api/packages creates a box with 3 items", create.status === 201 && create.json?.packageId, `status ${create.status} ${create.json?.error ?? ""} ${create.text ?? ""}`);
   const pkgId = String(create.json?.packageId ?? "");
-  check("new id is 16 digits ending 00", pkgId.length === 16 && pkgId.endsWith("00"), pkgId);
+  // lib/packages/ids.ts: 15 digits since 2026-11-01 (16 before it), the box at position 00.
+  check("new id is new-format, ending 00", [15, 16].includes(pkgId.length) && pkgId.endsWith("00"), pkgId);
   let view = (await api(page, `/api/packages/${pkgId}`)).json?.package;
-  check("box waits at opening with 3 items 01..03", view?.status === "queue" && view.items.map((i) => i.package_seq).join(",") === "1,2,3" && view.items.every((i) => String(i.item_id) === pkgId.slice(0, 14) + String(i.package_seq).padStart(2, "0")), JSON.stringify(view?.items.map((i) => [i.item_id, i.state])));
+  check("box waits at opening with 3 items 01..03", view?.status === "queue" && view.items.map((i) => i.package_seq).join(",") === "1,2,3" && view.items.every((i) => String(i.item_id) === pkgId.slice(0, -2) + String(i.package_seq).padStart(2, "0")), JSON.stringify(view?.items.map((i) => [i.item_id, i.state])));
 
   // guard rails
   if (OTHER_PKG_TYPE == null) {
@@ -55,7 +56,13 @@ try {
 
   // ---- 2. testing screen: opening queue shows the box -------------------------
   await goto(page, `/testing?type=${OPENING_TYPE}&station=${openSt.test_station_id}`);
-  check("opening queue is a package grid with the new box", await bodyHas(page, "מארזים בתור") && await bodyHas(page, "התחל פתיחת מארז") && await bodyHas(page, pkgId.slice(0, 4)), "");
+  // The box's own card: the one with "התחל פתיחת מארז" whose id (shown in groups, "702 221126 0001 00")
+  // is this box's — polled, the grid fills in from a client fetch.
+  const cardShown = await page.waitForFunction((id) => [...document.querySelectorAll("button")]
+    .filter((b) => (b.innerText || "").includes("התחל פתיחת מארז"))
+    .some((b) => { let c = b; for (let i = 0; i < 4 && c.parentElement; i++) c = c.parentElement; return (c.innerText || "").replace(/\s+/g, "").includes(id); }),
+    { timeout: 15000 }, pkgId).then(() => true, () => false);
+  check("opening queue is a package grid with the new box", await bodyHas(page, "מארזים בתור") && cardShown, "");
   await shot(page, "20-opening-queue");
 
   const queue = (await api(page, `/api/testing/items?stationId=${openSt.test_station_id}`)).json || [];

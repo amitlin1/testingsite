@@ -8,7 +8,7 @@
 -- against the application database. It is NOT idempotent — run it once, on an
 -- empty database.
 --
--- Migrations included (39):
+-- Migrations included (40):
 --   0_init
 --   20260217140614_add_poc_and_stokekeeper
 --   20260218000000_dashboard_optimization
@@ -48,6 +48,7 @@
 --   20261104120000_report_general_template
 --   20261110120000_report_closing_signature
 --   20261110130000_report_templates_both_signatures
+--   20261119120000_report_closing_signer_role
 -- ===========================================================================
 
 
@@ -3828,6 +3829,82 @@ UPDATE "report_templates"
 DROP FUNCTION pg_temp.report_with_both_signatures(jsonb);
 
 
+-- ---------------------------------------------------------------------------
+-- migration: 20261119120000_report_closing_signer_role
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- The closing signature's row prints the signer's own role (docs/ITEM_REPORTS.md):
+-- "בודק" when a tester signed, "מנהל" when a manager did — taken from the
+-- signed-in user's roles at the moment they sign, and kept with the signature.
+--
+--   * item_reports.closing_signed_by_role: the role, kept with the closing
+--     signature. Empty for every closing signature given before this change —
+--     those rows keep printing the text the template had ("בודק").
+--   * In the general template and every route's own template, the closing
+--     signature block's role cell — a free-text cell whose text is exactly
+--     "בודק" (what the starters and 20261110130000 put there) — becomes a
+--     "תפקיד החותם" cell (kind "role"), keeping "בודק" as what an older
+--     signature without a kept role prints. A cell an author wrote other text
+--     in is left as it is. The final signature's row ("מאשר סופי") is not
+--     touched. Only top-level blocks are looked at (signature blocks are never
+--     nested).
+--
+-- Reports already final are frozen PDFs and do not change.
+--
+-- Additive: the previous image never reads the column. It does not know the
+-- "role" cell and prints it empty — so between running this and the new image a
+-- draft's closing row shows no role; run it right before the new image.
+-- Idempotent: a second run finds no "בודק" text cell in a closing block and
+-- changes nothing.
+-- ============================================================================
+
+ALTER TABLE "item_reports" ADD COLUMN IF NOT EXISTS "closing_signed_by_role" VARCHAR(32);
+
+CREATE OR REPLACE FUNCTION pg_temp.report_closing_role_cell(t jsonb) RETURNS jsonb
+LANGUAGE plpgsql AS $fn$
+DECLARE
+  content     jsonb := t->'content';
+  out_content jsonb := '[]'::jsonb;
+  n           jsonb;
+  cells       jsonb;
+BEGIN
+  IF t IS NULL OR jsonb_typeof(content) IS DISTINCT FROM 'array' THEN
+    RETURN t;
+  END IF;
+  FOR n IN SELECT e.value FROM jsonb_array_elements(content) WITH ORDINALITY AS e(value, i) ORDER BY e.i LOOP
+    IF n->>'type' = 'Signature' AND n->'props'->>'bind' = 'closing' AND jsonb_typeof(n->'props'->'cells') = 'array' THEN
+      SELECT COALESCE(jsonb_agg(
+               CASE WHEN c.value->>'kind' = 'text' AND btrim(c.value->>'text') = 'בודק'
+                    THEN jsonb_set(c.value, '{kind}', '"role"')
+                    ELSE c.value END
+               ORDER BY c.i), '[]'::jsonb)
+        INTO cells
+        FROM jsonb_array_elements(n->'props'->'cells') WITH ORDINALITY AS c(value, i);
+      n := jsonb_set(n, '{props,cells}', cells);
+    END IF;
+    out_content := out_content || jsonb_build_array(n);
+  END LOOP;
+  RETURN jsonb_set(t, '{content}', out_content);
+END
+$fn$;
+
+UPDATE "report_general_template"
+   SET "template" = pg_temp.report_closing_role_cell("template"::jsonb),
+       "updated_at" = CURRENT_TIMESTAMP,
+       "updated_by" = 'migration',
+       "updated_by_name" = 'עדכון מערכת: תפקיד החותם בסגירה'
+ WHERE pg_temp.report_closing_role_cell("template"::jsonb) IS DISTINCT FROM "template"::jsonb;
+
+UPDATE "report_templates"
+   SET "template" = pg_temp.report_closing_role_cell("template"::jsonb),
+       "updated_at" = CURRENT_TIMESTAMP,
+       "updated_by" = 'migration',
+       "updated_by_name" = 'עדכון מערכת: תפקיד החותם בסגירה'
+ WHERE pg_temp.report_closing_role_cell("template"::jsonb) IS DISTINCT FROM "template"::jsonb;
+
+DROP FUNCTION pg_temp.report_closing_role_cell(jsonb);
+
+
 -- ===========================================================================
 -- Prisma migration bookkeeping
 -- ===========================================================================
@@ -4003,3 +4080,7 @@ INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
 SELECT gen_random_uuid()::text, '0a495eb74eb9d3ac580d5cadb039b92c5956b6b59a8c0eb3d724a5c96318c28b', now(), '20261110130000_report_templates_both_signatures', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261110130000_report_templates_both_signatures');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '77e0570962546021882ce72aa00f70059ae3f1407a991d1cab7174ed730702be', now(), '20261119120000_report_closing_signer_role', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261119120000_report_closing_signer_role');

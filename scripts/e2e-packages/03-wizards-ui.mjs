@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import { launch, login, api, goto, shot, bodyHas, check, summary, S, resolveConfig } from "./lib.mjs";
+import { launch, login, api, goto, shot, bodyHas, check, summary, S, resolveConfig, reachCloseButton } from "./lib.mjs";
 
 // Ids are resolved by name from the running app after login (lib.mjs resolveConfig).
 let OPENING_TYPE, CLOSING_TYPE, PKG_TYPE_AMP, TYPES;
@@ -89,7 +89,7 @@ try {
   const create = await api(page, "/api/packages", { method: "POST", body: JSON.stringify({ customer: ship.customer_id, shipment: ship.id, packageType: PKG_TYPE_AMP, makat,
     items: [{ itemType: TYPES.amp, serialNumber: "UAMP-" + tag, makat: "MK-6130", model: "A1", manufacturer: "Acme" }, { itemType: TYPES.kit, serialNumber: "UKIT-" + tag, makat: "745781", model: "K1", manufacturer: "Acme" }] }) });
   const pkgId = String(create.json?.packageId ?? "");
-  check("fixture package created", create.status === 201 && pkgId.length === 16, pkgId);
+  check("fixture package created", create.status === 201 && [15, 16].includes(pkgId.length), pkgId); // ids.ts: 15 digits since 2026-11-01
 
   // ---- package dialogs ---------------------------------------------------------
   await goto(page, `/packages/${pkgId}`);
@@ -102,7 +102,7 @@ try {
   await shot(page, "31-edit-dialog");
   await closeDialog(page);
   await goto(page, "/packages");
-  await clickExact(page, "קליטת מארז");
+  await clickExact(page, "קליטת מארזים"); // the /packages board's button
   check("intake dialog opens: scan box labels", await waitText(page, "קליטת מארזים", 8000) && await page.$('input[aria-label="מדבקת מארז"]') != null);
   await shot(page, "32-intake-dialog");
   await closeDialog(page);
@@ -110,7 +110,7 @@ try {
   // ---- command palette ---------------------------------------------------------
   await page.keyboard.down("Control"); await page.keyboard.press("KeyK"); await page.keyboard.up("Control");
   await sleep(500);
-  await page.keyboard.type(pkgId.slice(0, 14));
+  await page.keyboard.type(pkgId.slice(0, -2));
   await sleep(1500);
   check("palette shows the box with the מארז tag and its page", await bodyHas(page, "עמוד המארז") && await bodyHas(page, "מארז"));
   await shot(page, "33-palette");
@@ -123,7 +123,7 @@ try {
     const cards = [...document.querySelectorAll("button")].filter((b) => (b.innerText || "").includes("התחל פתיחת מארז"));
     const mine = cards.find((b) => (b.parentElement?.innerText || "").replace(/\s/g, "").includes(head));
     mine?.click(); return !!mine;
-  }, pkgId.slice(0, 14));
+  }, pkgId.slice(0, -2));
   check("clicked התחל פתיחת מארז", started);
   check("opening wizard opened", await waitText(page, "סריקת מק״ט המארז", 15000));
   await shot(page, "40-open-scan");
@@ -215,7 +215,7 @@ try {
     const cards = [...document.querySelectorAll("button")].filter((b) => (b.innerText || "").includes("התחל סגירת מארז"));
     const mine = cards.find((b) => (b.parentElement?.innerText || "").replace(/\s/g, "").includes(head));
     mine?.click(); return !!mine;
-  }, pkgId.slice(0, 14));
+  }, pkgId.slice(0, -2));
   check("clicked התחל סגירת מארז", startedClose);
   check("closing wizard opened", await waitText(page, "סגירת מארז", 15000) && await waitText(page, "סריקת מק״ט המארז", 15000));
   await typeInto(page, "סרוק את מק״ט היצרן", makat);
@@ -232,6 +232,11 @@ try {
   const checks = await page.evaluate(() => { const spans = [...document.querySelectorAll("span")].filter((s) => ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת המארז קריאה"].includes((s.innerText || "").trim())); spans.forEach((s) => s.click()); return spans.length; });
   check("ticked the 3 packing checks", checks === 3, `${checks}`);
   await shot(page, "52-close-checks");
+  // A closing template that ends with "חתימה על הדוחות" (report_sign, docs/ITEM_REPORTS.md) has its
+  // finish button there: continue to it and sign the reports, as the worker does, then close.
+  const reached = await reachCloseButton(page);
+  await shot(page, "53-close-sign");
+  check("the closing can finish (signing the reports when the template asks)", reached != null, String(reached));
   await clickExact(page, "סגור מארז");
   check("closing finished", await waitText(page, "המארז נסגר", 40000));
   await shot(page, "53-close-done");

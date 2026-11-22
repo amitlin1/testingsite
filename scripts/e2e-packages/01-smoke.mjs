@@ -15,7 +15,8 @@ try {
   const pkgs = Array.isArray(pk.json) ? pk.json : [];
   // A box waiting for intake (minted with its shipment, PLAN.md §6) has no items yet.
   const takenIn = pkgs.filter((p) => p.status !== "pending");
-  check("packages have 16-digit ids; boxes taken in have items", takenIn.length > 0 && pkgs.every((p) => String(p.item_id).length === 16) && takenIn.every((p) => Array.isArray(p.items) && p.items.length > 0),
+  // lib/packages/ids.ts: 15 digits since 2026-11-01 (the customer's 3-digit code), 16 before it.
+  check("packages have new-format ids; boxes taken in have items", takenIn.length > 0 && pkgs.every((p) => [15, 16].includes(String(p.item_id).length)) && takenIn.every((p) => Array.isArray(p.items) && p.items.length > 0),
     `${pkgs.length} boxes, ${pkgs.length - takenIn.length} waiting for intake`);
   check("package status keys valid", pkgs.every((p) => ["pending", "queue", "test", "waitItems", "readyClose", "done"].includes(p.status)), [...new Set(pkgs.map((p) => p.status))].join(","));
 
@@ -24,7 +25,8 @@ try {
 
   const st = await api(page, "/api/testing/stations");
   const pkgLevel = (st.json || []).filter((t) => t.packageLevel).map((t) => `${t.id}:${t.name}`);
-  check("station types expose packageLevel (opening + closing)", st.ok && pkgLevel.length === 2, pkgLevel.join(" | "));
+  // At least the opening and the closing; a site may flag more station types package-level.
+  check("station types expose packageLevel (opening + closing)", st.ok && pkgLevel.length >= 2, pkgLevel.join(" | "));
 
   const sh = await api(page, "/api/shipments");
   check("GET /api/shipments has package counters", sh.ok && Array.isArray(sh.json) && sh.json.length > 0 && "sent_amount" in sh.json[0] && "sampled_amount" in sh.json[0], `status ${sh.status}`);
@@ -39,7 +41,7 @@ try {
   const it = await api(page, `/api/items/${item0.item_id}`);
   check("GET /api/items/[id] carries the package view", it.ok && it.json?.package?.item_id === String(first.item_id) && it.json?.item?.package_seq === item0.package_seq, `status ${it.status}`);
 
-  const srch = await api(page, `/api/search/items?q=${String(first.item_id).slice(0, 14)}`);
+  const srch = await api(page, `/api/search/items?q=${String(first.item_id).slice(0, -2)}`);
   const hits = srch.json || [];
   check("search finds the box and its items by id prefix", srch.ok && hits.some((h) => h.isPackage) && hits.some((h) => h.packageId === String(first.item_id)), `${hits.length} hits`);
 

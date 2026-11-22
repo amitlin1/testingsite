@@ -34,8 +34,20 @@ export async function launch() {
   page.setDefaultTimeout(30000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(`pageerror @ ${page.url()}: ${e.message.slice(0, 140)}`));
-  page.on("console", (m) => { if (m.type() === "error") errors.push(`console: ${m.text()}`); });
-  page.on("response", (r) => { if (r.status() >= 500) errors.push(`http ${r.status()} ${r.url()}`); });
+  // Every failed load is judged by the response listener below, which knows its URL: Chrome's own
+  // "Failed to load resource" console line carries none.
+  page.on("console", (m) => {
+    if (m.type() !== "error") return;
+    if (/^Failed to load resource: the server responded with a status of \d{3}\b/.test(m.text())) return;
+    errors.push(`console: ${m.text()}`);
+  });
+  page.on("response", (r) => {
+    const status = r.status();
+    if (status >= 500) errors.push(`http ${status} ${r.url()}`);
+    // A 4xx from the API is a refusal the suites ask for on purpose (409 / 422 / 403 …) and check
+    // themselves; one for anything else — a page, a script chunk, an image, a font — is broken.
+    else if (status >= 400 && !new URL(r.url()).pathname.startsWith("/api/")) errors.push(`http ${status} ${r.url()}`);
+  });
   return { browser, page, errors };
 }
 
@@ -52,14 +64,52 @@ export async function shot(page, name) {
 export async function login(page) {
   const loginBase = process.env.E2E_LOGIN_BASE ?? BASE;
   await page.goto(`${loginBase}/`, { waitUntil: "networkidle2", timeout: 120000 });
-  if (page.url().includes("/auth/realms/")) {
-    await page.waitForSelector("#username");
+  // Keycloak's login form, by its fields — /auth/realms/… behind nginx, /realms/… on the dev
+  // Keycloak, …/login-actions/… after an expired auth session.
+  if (/\/realms\//.test(page.url()) && (await page.$("#username"))) {
     await page.type("#username", creds.username);
     await page.type("#password", creds.password);
     await Promise.all([page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }), page.click("#kc-login")]);
   }
   if (loginBase !== BASE) await page.goto(`${BASE}/`, { waitUntil: "networkidle2", timeout: 120000 });
   return page.url();
+}
+
+/** The closing wizard's finish: a closing template that ends with "חתימה על הדוחות" (report_sign,
+ *  docs/ITEM_REPORTS.md) has "סגור מארז" on that step. Walks on with "המשך" until it is there, draws
+ *  a signature on the pad when the step shows one (as the worker does), and waits out a step still
+ *  checking. Returns "closing" or "signed" once "סגור מארז" is enabled, null if it never is. */
+export async function reachCloseButton(page, timeoutMs = 45000) {
+  // One look at the wizard: which of its buttons are there, enabled, and an empty visible pad.
+  const look = () => page.evaluate(() => {
+    const btn = (l) => [...document.querySelectorAll("button")].find((b) => (b.innerText || "").trim() === l);
+    const close = btn("סגור מארז"), next = btn("המשך");
+    const pad = document.querySelector("canvas.sigCanvas");
+    const r = pad?.getBoundingClientRect();
+    return { close: close ? !close.disabled : null, next: next ? !next.disabled : null, pad: !!r && r.width > 0 && r.height > 0 };
+  });
+  let signed = false;
+  for (const end = Date.now() + timeoutMs; Date.now() < end; ) {
+    const s = await look();
+    if (s.close === true) return signed ? "signed" : "closing";
+    if (s.pad && !signed) {
+      const box = await (await page.$("canvas.sigCanvas"))?.boundingBox();
+      if (box) {
+        await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.6);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3, { steps: 8 });
+        await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.6, { steps: 8 });
+        await page.mouse.up();
+        signed = true;
+      }
+    } else if (s.close === null && s.next === true) {
+      // Not on the finish step yet (photos / fields / the signing step after the checks): go on.
+      await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => (b.innerText || "").trim() === "המשך" && !b.disabled)?.click());
+    }
+    // Otherwise the step is still checking (its buttons disabled for now): wait.
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return null;
 }
 
 /** Same-origin fetch inside the page (carries the session cookie). */

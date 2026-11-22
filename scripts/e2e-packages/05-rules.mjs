@@ -2,7 +2,7 @@
 // item, nested package, add-after-opening, cascade delete, shipments declare
 // package types only, package-type settings API, the "item that never arrived"
 // decision in the closing wizard, dashboard render.
-import { launch, login, api, goto, shot, bodyHas, check, summary, resolveConfig } from "./lib.mjs";
+import { launch, login, api, goto, shot, bodyHas, check, summary, resolveConfig, reachCloseButton } from "./lib.mjs";
 
 // Ids are resolved by name from the running app after login (lib.mjs resolveConfig).
 let OPENING_TYPE, CLOSING_TYPE, RESEARCH_TYPE, PKG_TYPE_AMP, TYPES;
@@ -70,7 +70,7 @@ try {
 
   // ---- A. retype after opening = warning + whole-box reset ----------------------
   const A = String(await mk([{ itemType: TYPES.amp, serialNumber: "RA-" + tag, makat: "MK-1", model: "m", manufacturer: "x" }, { itemType: TYPES.kit, serialNumber: "RK-" + tag, makat: "MK-2", model: "m", manufacturer: "x" }], "RULES-A-" + tag));
-  check("A: box created", A.length === 16, A);
+  check("A: box created", [15, 16].includes(A.length), A); // ids.ts: 15 digits since 2026-11-01
   const addBefore = await api(page, `/api/packages/${A}/items`, { method: "POST", body: JSON.stringify({ itemType: TYPES.cable, serialNumber: "RC-" + tag, makat: "MK-3", model: "m", manufacturer: "x" }) });
   check("A: adding an item while still at opening is allowed", addBefore.status === 201, `status ${addBefore.status} ${addBefore.json?.error ?? ""}`);
   const nested = await api(page, `/api/packages/${A}/items`, { method: "POST", body: JSON.stringify({ itemType: PKG_TYPE_AMP, serialNumber: "RN-" + tag, makat: "MK-9", model: "m", manufacturer: "x" }) });
@@ -140,7 +140,7 @@ try {
   check("E: other item arrived; box ready to close with one item not arrived", vE.status === "readyClose" && vE.items.some((i) => !i.arrived_at_closing && i.state === "done"), `${vE.status} ${JSON.stringify(vE.items.map((i) => [i.state, i.arrived_at_closing]))}`);
 
   await goto(page, `/testing?type=${CLOSING_TYPE}&station=${closeSt.test_station_id}`);
-  const startedClose = await page.evaluate((head) => { const b = [...document.querySelectorAll("button")].filter((x) => (x.innerText || "").includes("התחל סגירת מארז")).find((x) => (x.parentElement?.innerText || "").replace(/\s/g, "").includes(head)); b?.click(); return !!b; }, E.slice(0, 14));
+  const startedClose = await page.evaluate((head) => { const b = [...document.querySelectorAll("button")].filter((x) => (x.innerText || "").includes("התחל סגירת מארז")).find((x) => (x.parentElement?.innerText || "").replace(/\s/g, "").includes(head)); b?.click(); return !!b; }, E.slice(0, -2));
   check("E: closing wizard started from the card", startedClose);
   await sleep(1500);
   await page.type('input[placeholder="סרוק את מק״ט היצרן"]', "RULES-E-" + tag);
@@ -162,6 +162,8 @@ try {
   await sleep(600);
   await page.evaluate(() => { [...document.querySelectorAll("span")].filter((s) => ["כל הפריטים שסומנו נמצאים בקופסה", "האריזה סגורה ותקינה", "מדבקת המארז קריאה"].includes((s.innerText || "").trim())).forEach((s) => s.click()); });
   await sleep(300);
+  // The closing template's report signing step, when it has one (lib.mjs reachCloseButton).
+  check("E: the closing can finish (signing the reports when the template asks)", (await reachCloseButton(page)) != null);
   await clickEnabled(page, "סגור מארז");
   let closed = false; for (let i = 0; i < 60 && !closed; i++) { await sleep(500); closed = await bodyHas(page, "המארז נסגר"); }
   check("E: closing finished with a recorded decision", closed);

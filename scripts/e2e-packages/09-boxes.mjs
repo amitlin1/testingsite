@@ -36,7 +36,8 @@ try {
   const savedLine = ((await api(page, "/api/shipments")).json || []).find((s) => s.id === sid)?.shipment_items?.[0];
   check("the line keeps the whole certificate row", rowOf(savedLine) && certOf(savedLine) === CERT, JSON.stringify(savedLine));
   let boxes = (await post(page, `/api/shipments/${sid}/boxes`, {})).json?.boxes ?? [];
-  check("3 pending boxes, ids ending 00, the line's certificate details", boxes.length === 3 && boxes.every((b) => b.status === "pending" && /^1\d{13}00$/.test(b.item_id) && certOf(b) === CERT), JSON.stringify(boxes.map((b) => [b.item_id, b.status, certOf(b)])));
+  // ids.ts: 15 digits (CCC ddMMyy NNNN SS) since 2026-11-01, 16 ("1" + 15) before; labels group them as 3-6-4-2 / 4-4-4-2.
+  check("3 pending boxes, ids ending 00, the line's certificate details", boxes.length === 3 && boxes.every((b) => b.status === "pending" && /^(1\d{13}|[1-9]\d{12})00$/.test(b.item_id) && certOf(b) === CERT), JSON.stringify(boxes.map((b) => [b.item_id, b.status, certOf(b)])));
   const ids = boxes.map((b) => b.item_id);
   const loc = await api(page, `/api/testing/locate-by-barcode?barcode=${ids[0]}`);
   check("a station scan of a pending box says it was not taken in", loc.status === 404 && loc.json?.pendingIntake === true, JSON.stringify(loc.json));
@@ -64,7 +65,7 @@ try {
   }, tag);
   await page.waitForFunction(() => [...document.querySelectorAll('[role="dialog"]')].some((d) => d.innerText.includes("יודפסו")), { timeout: 20000 }).catch(() => {});
   const labelText = await page.evaluate(() => [...document.querySelectorAll('[role="dialog"]')].map((d) => d.innerText.replace(/\s+/g, " ")).pop() ?? "");
-  check("labels: one per box, with the box ids", opened && labelText.includes("יודפסו 2 מדבקות") && (labelText.match(/\d{4} \d{4} \d{4} \d{2} 00/g) ?? []).length === 2, labelText.slice(0, 200));
+  check("labels: one per box, with the box ids", opened && labelText.includes("יודפסו 2 מדבקות") && (labelText.match(/(\d{4} \d{4} \d{4} \d{2}|\d{3} \d{6} \d{4}) 00/g) ?? []).length === 2, labelText.slice(0, 200));
   await shot(page, "90-shipment-box-labels");
   await page.keyboard.press("Escape");
   await sleep(400);
@@ -77,7 +78,7 @@ try {
   const said = () => page.evaluate(() => document.querySelector('[role="dialog"] [role="alert"], [role="dialog"] [role="status"]')?.textContent ?? "");
   await scan(ship0.shipment_code.replace(/\D/g, "").slice(0, 6) || "2111");
   check("a shipment label is not a box label", (await said()).includes("אינו") || (await said()).includes("לא נמצא"), await said());
-  await scan(`${ids[0].slice(0, 14)}01`);
+  await scan(`${ids[0].slice(0, -2)}01`);
   check("an item label is refused", (await said()).includes("פריט בתוך מארז"), await said());
   await scan(ids[0]);
   check("box 1 taken in, its template items with it", (await said()).includes("נקלט") && (await said()).includes(`${units} פריטים`), await said());
@@ -130,7 +131,7 @@ try {
     const b = [...document.querySelectorAll("button")].filter((x) => (x.innerText || "").includes("התחל פתיחת מארז"))
       .find((x) => (x.parentElement?.innerText || "").replace(/\s/g, "").includes(head));
     b?.click(); return !!b;
-  }, ids[0].slice(0, 14));
+  }, ids[0].slice(0, -2));
   check("the box waits at the opening station", started);
   const waitText = async (t, ms = 20000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await bodyHas(page, t)) return true; await sleep(300); } return false; };
   const click = (label) => page.evaluate((t) => { const els = [...document.querySelectorAll("button")].filter((e) => (e.innerText || "").trim() === t && !e.disabled); els.at(-1)?.click(); return els.length > 0; }, label);
