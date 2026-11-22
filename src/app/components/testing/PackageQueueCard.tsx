@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
-import { Play } from "lucide-react";
-import type { PackageView } from "@/app/lib/packages/read";
+import { Play, Undo2 } from "lucide-react";
+import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 import PackageIdText from "@/app/components/packages/PackageIdText";
 import { AMBER, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, MUTED, seq2 } from "@/app/components/packages/packageUi";
 import "@/app/packages/packages.css";
@@ -11,6 +11,10 @@ import "@/app/packages/packages.css";
  * Packages.dc.html (pkgCards): type, id, customer + shipment, wait, the
  * item mini-strip with "N פריטים בתכולה" / "N/M הגיעו לסגירה", an in-card
  * items list, and the 44px start button.
+ *
+ * At a closing station a manager may send one item of a waiting box back to
+ * the test before the closing ("החזר" in the items list, api/testing/step-back):
+ * the box then waits for that item again.
  */
 
 /** The page's live "HH:MM:SS" → the artboard's wait label: "12 דק׳" under an
@@ -25,7 +29,7 @@ function waitLabel(elapsed: string): string {
 }
 
 export default function PackageQueueCard({
-  pkg, kind, wait, inTest, onStart, disabled,
+  pkg, kind, wait, inTest, onStart, disabled, onStepBackItem,
 }: {
   pkg: PackageView;
   kind: "open" | "close";
@@ -35,6 +39,9 @@ export default function PackageQueueCard({
   inTest: boolean;
   onStart: () => void;
   disabled?: boolean;
+  /** Given only where an item may go back (a manager, a closing station, the
+   *  box waiting — not in test). The card offers it per item that can. */
+  onStepBackItem?: (item: PackageItemView) => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const listId = React.useId();
@@ -44,6 +51,11 @@ export default function PackageQueueCard({
     title: `${seq2(it.package_seq)} · ${it.item_type_desc} · ${kind === "open" ? "טרם נפתח" : it.arrived_at_closing ? "הגיע לסגירה" : `לא הגיע · ${it.station_name ?? "—"}`}`,
   }));
   const itemNote = kind === "open" ? `${pkg.items.length} פריטים בתכולה` : `${arrived}/${pkg.items.length} הגיעו לסגירה`;
+  // An item waiting at the closing step whose step before is an item-level one
+  // (not the box's opening) — the same rule the step-back route checks.
+  const canStepBack = (it: PackageItemView) =>
+    kind === "close" && !inTest && it.arrived_at_closing && it.current_status === 2 &&
+    it.prev_step_desc != null && !it.prev_step_package_level;
   const cta = inTest ? (kind === "open" ? "המשך פתיחת מארז" : "המשך סגירת מארז") : kind === "open" ? "התחל פתיחת מארז" : "התחל סגירת מארז";
 
   return (
@@ -81,6 +93,13 @@ export default function PackageQueueCard({
                 <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{it.makat ?? "—"} · {it.serial_no ?? "ללא סריאלי"}</div>
               </div>
               <span style={{ fontSize: 11.5, color: MUTED, whiteSpace: "nowrap" }}>{kind === "open" ? "טרם נפתח" : it.arrived_at_closing ? "הגיע" : it.station_name ?? it.state_label}</span>
+              {onStepBackItem && canStepBack(it) && (
+                <button type="button" className="tst-step-back" onClick={() => onStepBackItem(it)}
+                  title={`החזרה ל${it.prev_step_desc}`} aria-label={`החזרת ${it.item_type_desc} ל${it.prev_step_desc}`}>
+                  <Undo2 size={12} strokeWidth={2} aria-hidden />
+                  החזר
+                </button>
+              )}
             </div>
           ))}
         </div>

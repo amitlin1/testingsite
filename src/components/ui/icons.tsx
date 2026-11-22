@@ -19,7 +19,7 @@ import {
   TriangleAlert as _TriangleAlert, Image as _Image, FileArchive as _FileArchive, FileVideo as _FileVideo,
   Folder as _Folder, File as _File, FileAudio as _FileAudio, Code as _Code, SlidersHorizontal as _SlidersHorizontal,
   Lock as _Lock, Users as _Users, Database as _Database, CalendarDays as _CalendarDays, Route as _Route,
-  Images as _Images, ChevronRight as _ChevronRight, ChevronLeft as _ChevronLeft,
+  Images as _Images, ChevronRight as _ChevronRight, ChevronLeft as _ChevronLeft, Undo2 as _Undo2,
 } from "lucide-react";
 import { sxToStyle, type SxInput } from "./sx";
 import { cn } from "./utils";
@@ -134,6 +134,7 @@ export const EditNote = wrap(_PenLine);
 export const EditOutlined = wrap(_Pencil);
 export const Error = wrap(_CircleAlert);
 export const ErrorOutline = wrap(_CircleAlert);
+export const Undo = wrap(_Undo2);
 export const ExpandMore = wrap(_ChevronDown);
 export const FilterList = wrap(_ListFilter);
 export const FolderCopy = wrap(_Folders);

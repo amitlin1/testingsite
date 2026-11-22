@@ -48,11 +48,12 @@ import { Star as StarIcon } from "@/components/ui/icons";
 import { Check as CheckIcon } from "@/components/ui/icons";
 import { Queue as QueueIcon } from "@/components/ui/icons";
 import { ArrowBack as ArrowBackIcon } from "@/components/ui/icons";
+import { Undo as UndoIcon, ErrorOutline as ErrorOutlineIcon } from "@/components/ui/icons";
 // MoreVertIcon removed
 import { PackageTestDialog, StartTestDialog, hasStartTestDialog } from "./tests-popups/mainPopUp";
 import StationHistoryDialog from "../components/StationHistoryDialog";
 import TestingDock from "../components/testing/TestingDock";
-import type { PackageView } from "@/app/lib/packages/read";
+import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 import PackageIdText from "../components/packages/PackageIdText";
 import PackageQueueCard from "../components/testing/PackageQueueCard";
 import { ITEM_STATES, seq2 } from "../components/packages/packageUi";
@@ -117,6 +118,10 @@ const noStoredWorkerId = (): number | null => null;
 /** Start-test failed (someone else took the item, or the server refused). */
 const START_FAILED_ITEM = "לא ניתן להתחיל בדיקה — ייתכן שפריט זה כבר נתפס על ידי עובד אחר.";
 const START_FAILED_PACKAGE = "לא ניתן להתחיל את המארז — ייתכן שהוא כבר נתפס על ידי עובד אחר.";
+
+/** "חזרה לבדיקה הקודמת" for one item: the step it waits at now (the route
+ *  moves it only from that step) and the station type it goes back to. */
+type StepBackRequest = { itemId: string; routeStep: number; toName: string; inBox: boolean };
 /** The station queue could not be loaded (network / server). */
 const QUEUE_LOAD_FAILED = "לא ניתן לטעון את התור של העמדה. בדוק את החיבור ונסה שוב.";
 /** Scanner fallback: auto-submit after this pause when the scan sends no Enter. */
@@ -464,6 +469,7 @@ function PackageQueueEntry({
   onStartTest,
   onRefresh,
   onStartError,
+  onStepBackItem,
 }: {
   item: ItemRow;
   kind: "open" | "close";
@@ -472,6 +478,8 @@ function PackageQueueEntry({
   onRefresh: () => void;
   /** Shows a start-test failure in the page's error toast. */
   onStartError: (message: string) => void;
+  /** "החזר" on an item of the box (a closing station, managers only). */
+  onStepBackItem?: (item: PackageItemView) => void;
 }) {
   const isInTest = item.current_status === 1;
   const elapsed = useElapsedTime(isInTest ? item.processing_start_time : item.queue_start_time);
@@ -484,6 +492,8 @@ function PackageQueueEntry({
       wait={elapsed}
       inTest={isInTest}
       disabled={starting}
+      // Only a box waiting in the queue: once the closing started its items are in test.
+      onStepBackItem={item.current_status === 2 ? onStepBackItem : undefined}
       onStart={async () => {
         if (isInTest) { onAddTestResult(item); return; }
         setStarting(true);
@@ -716,6 +726,9 @@ function TestingPageView() {
     };
     finishedFromResearch?: boolean;
     finishedAtStep?: number;
+    /** The item and the station type it was just tested at — set where it may
+     *  go back there (not a box's own step); the dialog still asks canStepBack. */
+    stepBackFrom?: { itemId: string; stationName: string };
   } | null>(null);
   const [researchDialogOpen, setResearchDialogOpen] = React.useState(false);
   const [researchStationInfo, setResearchStationInfo] = React.useState<{
@@ -1139,7 +1152,11 @@ function TestingPageView() {
         nextStation: result.nextStation || undefined,
         finishedFromResearch: is_researchStatus && isFinishRoute,
         finishedAtStep: selectedItem.current_route_step ?? undefined,
+        stepBackFrom: selectedStationType && !selectedStationType.packageLevel && selectedItem.current_status !== 5
+          ? { itemId: String(selectedItem.item_id), stationName: selectedStationType.name }
+          : undefined,
       });
+      setNextStepBack({ phase: "idle" });
       setNextStationDialogOpen(true);
     }
     return result;
@@ -1160,7 +1177,7 @@ function TestingPageView() {
   // "חזרה לבדיקה הקודמת" (api/testing/step-back): the card offers it, a
   // dialog confirms, and the answer says where the item went back to — like
   // the next-station dialog after a result. The server checks everything again.
-  const [stepBackItem, setStepBackItem] = React.useState<ItemRow | null>(null);
+  const [stepBackReq, setStepBackReq] = React.useState<StepBackRequest | null>(null);
   const [stepBackBusy, setStepBackBusy] = React.useState(false);
   const [steppedBack, setSteppedBack] = React.useState<{ stationName: string; routeStep: number } | null>(null);
   // Managers only: the route refuses anyone else (403), so no one else sees the button.
@@ -1174,35 +1191,66 @@ function TestingPageView() {
     const prev = prevTypeId != null ? stationTypes.find((t) => t.id === Number(prevTypeId)) : undefined;
     return prev && !prev.packageLevel ? prev : null;
   };
-  const confirmStepBack = async () => {
-    const it = stepBackItem;
-    if (!it || stepBackBusy) return;
-    setStepBackBusy(true);
+  /** POST api/testing/step-back. The answer, or the refusal in words. */
+  const postStepBack = async (req: StepBackRequest): Promise<{ ok: true; stationName: string; routeStep: number } | { ok: false; error: string }> => {
     try {
       const res = await apiFetch("/api/testing/step-back", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          itemId: String(it.item_id), currentRouteStep: it.current_route_step,
+          itemId: req.itemId, currentRouteStep: req.routeStep,
           workerId: activeWorkerId ?? undefined, workerName: activeWorkerName || undefined, actionId: newActionId(),
         }),
       });
       const data = await res.json().catch(() => ({}));
-      setStepBackItem(null);
-      if (!res.ok) {
-        setStartError(data?.error || "שגיאה בהחזרת הפריט לעמדה הקודמת");
-      } else {
-        setSteppedBack({ stationName: data.stationDesc || data.stationTypeDesc || "", routeStep: Number(data.routeStep) });
-      }
       handleRefreshItems();
+      if (!res.ok) return { ok: false, error: data?.error || "שגיאה בהחזרת הפריט לעמדה הקודמת" };
+      return { ok: true, stationName: data.stationDesc || data.stationTypeDesc || req.toName, routeStep: Number(data.routeStep) };
     } catch {
-      setStepBackItem(null);
-      setStartError("שגיאה בתקשורת עם השרת");
-    } finally {
-      setStepBackBusy(false);
+      return { ok: false, error: "שגיאה בתקשורת עם השרת" };
     }
   };
-  const stepBackTo = stepBackItem ? stepBackTarget(stepBackItem) : null;
+  const confirmStepBack = async () => {
+    const req = stepBackReq;
+    if (!req || stepBackBusy) return;
+    setStepBackBusy(true);
+    const out = await postStepBack(req);
+    setStepBackBusy(false);
+    setStepBackReq(null);
+    if (out.ok) setSteppedBack({ stationName: out.stationName, routeStep: out.routeStep });
+    else setStartError(out.error);
+  };
+  /** The queue card's button: a waiting item, one step back. */
+  const askStepBack = (item: ItemRow) => {
+    const to = stepBackTarget(item);
+    if (!to) return;
+    setStepBackReq({ itemId: String(item.item_id), routeStep: item.current_route_step ?? 2, toName: to.name, inBox: false });
+  };
+  /** A box's item at the closing station: back to the test before the closing. */
+  const askStepBackBoxItem = (it: PackageItemView) => {
+    if (!canStepBack || it.current_route_step == null || !it.prev_step_desc) return;
+    setStepBackReq({ itemId: it.item_id, routeStep: it.current_route_step, toName: it.prev_step_desc, inBox: true });
+  };
+
+  // The next-station dialog's own "חזרה לבדיקה הקודמת": the item just left this
+  // station, so it goes back to the test it just finished. Asked and answered
+  // inside the same dialog. Offered where the queue card would offer it on the
+  // item where it now waits: a manager, not the last step, and this station
+  // is not the box's own (opening / closing).
+  const [nextStepBack, setNextStepBack] = React.useState<
+    { phase: "idle" | "confirm" | "busy" } | { phase: "done"; stationName: string; routeStep: number } | { phase: "error"; error: string }
+  >({ phase: "idle" });
+  const nextStepBackReq: StepBackRequest | null =
+    canStepBack && nextStationInfo?.stepBackFrom && nextStationInfo.nextStation && !nextStationInfo.isLastStation && !nextStationInfo.finishedFromResearch
+      ? { itemId: nextStationInfo.stepBackFrom.itemId, routeStep: nextStationInfo.nextStation.routeStep, toName: nextStationInfo.stepBackFrom.stationName, inBox: false }
+      : null;
+  const confirmNextStepBack = async () => {
+    if (!nextStepBackReq || nextStepBack.phase === "busy") return;
+    setNextStepBack({ phase: "busy" });
+    const out = await postStepBack(nextStepBackReq);
+    setNextStepBack(out.ok ? { phase: "done", stationName: out.stationName, routeStep: out.routeStep } : { phase: "error", error: out.error });
+  };
+  const closeNextStationDialog = () => setNextStationDialogOpen(false);
 
   // The queue on screen belongs to another (or no) station yet: skeletons and
   // "—" until the selected station's queue answers. A station id the station
@@ -1213,7 +1261,7 @@ function TestingPageView() {
   // Keep the search field ready for the next scan: focus it whenever no
   // dialog is open and nothing else holds the focus.
   const anyDialogOpen = dialogOpen || scannerOpen || finishedDialogOpen || nextStationDialogOpen || researchDialogOpen || historyDialogOpen
-    || stepBackItem != null || steppedBack != null;
+    || stepBackReq != null || steppedBack != null;
   React.useEffect(() => {
     if (anyDialogOpen) return;
     const t = setTimeout(() => {
@@ -1400,6 +1448,7 @@ function TestingPageView() {
                                             onStartTest={handleStartTest}
                                             onRefresh={handleRefreshItems}
                                             onStartError={setStartError}
+                                            onStepBackItem={canStepBack ? askStepBackBoxItem : undefined}
                                         />
                                     ))}
                                 </Box>
@@ -1424,7 +1473,7 @@ function TestingPageView() {
                                             onRefresh={handleRefreshItems}
                                             onStartError={setStartError}
                                             highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
-                                            onStepBack={stepBackTarget(item) ? () => setStepBackItem(item) : undefined}
+                                            onStepBack={stepBackTarget(item) ? () => askStepBack(item) : undefined}
                                         />
                                     ))}
                                 </Box>
@@ -1454,7 +1503,7 @@ function TestingPageView() {
                                         highlighted={highlightedItemId != null && Number(item.item_id) === Number(highlightedItemId)}
                                         priority={priorityItemId != null && Number(item.item_id) === Number(priorityItemId)}
                                         hasWizard={hasWizard}
-                                        onStepBack={stepBackTarget(item) ? () => setStepBackItem(item) : undefined}
+                                        onStepBack={stepBackTarget(item) ? () => askStepBack(item) : undefined}
                                     />
                                 ))}
                             </Box>
@@ -1538,21 +1587,63 @@ function TestingPageView() {
             />
         )}
 
-        {/* Next Station Dialog */}
+        {/* Next Station Dialog — with its own "חזרה לבדיקה הקודמת" (nextStepBack):
+            the question and the answer replace the content, in the same window. */}
         <Dialog
             open={nextStationDialogOpen}
-            onClose={() => setNextStationDialogOpen(false)}
+            onClose={nextStepBack.phase === "busy" ? undefined : closeNextStationDialog}
             maxWidth="xs"
             fullWidth
         >
-            <DialogTitle onClose={() => setNextStationDialogOpen(false)}>
+            <DialogTitle onClose={nextStepBack.phase === "busy" ? undefined : closeNextStationDialog}>
                 <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
-                    <CheckCircleOutlineIcon fontSize={24} color="success" aria-hidden />
-                    {nextStationInfo?.finishedFromResearch ? "המסלול הסתיים" : "הבדיקה הושלמה בהצלחה!"}
+                    {nextStepBack.phase === "confirm" || nextStepBack.phase === "busy" ? (
+                        <>
+                            <UndoIcon fontSize={24} htmlColor="var(--color-primary)" aria-hidden />
+                            {`להחזיר את הפריט ל${nextStepBackReq?.toName ?? "עמדה הקודמת"}?`}
+                        </>
+                    ) : nextStepBack.phase === "done" ? (
+                        <>
+                            <CheckCircleOutlineIcon fontSize={24} color="success" aria-hidden />
+                            הפריט הוחזר לבדיקה הקודמת
+                        </>
+                    ) : nextStepBack.phase === "error" ? (
+                        <>
+                            <ErrorOutlineIcon fontSize={24} color="warning" aria-hidden />
+                            אי אפשר להחזיר את הפריט
+                        </>
+                    ) : (
+                        <>
+                            <CheckCircleOutlineIcon fontSize={24} color="success" aria-hidden />
+                            {nextStationInfo?.finishedFromResearch ? "המסלול הסתיים" : "הבדיקה הושלמה בהצלחה!"}
+                        </>
+                    )}
                 </Box>
             </DialogTitle>
             <DialogContent>
-                {nextStationInfo?.finishedFromResearch ? (
+                {nextStepBack.phase === "confirm" || nextStepBack.phase === "busy" ? (
+                    <>
+                        <Typography sx={{ fontSize: "var(--text-body)" }}>
+                            הפריט יחזור ל{nextStepBackReq?.toName} (שלב {(nextStepBackReq?.routeStep ?? 2) - 1}) וימתין שם לבדיקה חוזרת, במקום להמשיך ל{nextStationInfo?.nextStation?.testStationDesc || "תחנה הבאה"}.
+                        </Typography>
+                        <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", mt: "8px" }}>
+                            התוצאה שנשמרה עכשיו נשארת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.
+                        </Typography>
+                    </>
+                ) : nextStepBack.phase === "done" ? (
+                    <>
+                        <Typography sx={{ fontSize: "var(--text-body)", color: "var(--color-ink-muted-48)" }}>העמדה שהפריט חזר אליה:</Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: "12px", mt: "10px" }}>
+                            <ArrowBackIcon fontSize={22} htmlColor="var(--color-ink-muted-48)" aria-hidden />
+                            <Box>
+                                <Typography sx={{ fontSize: "var(--text-lead)", fontWeight: 600 }}>{nextStepBack.stationName || "לא ידוע"}</Typography>
+                                <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>שלב {nextStepBack.routeStep}</Typography>
+                            </Box>
+                        </Box>
+                    </>
+                ) : nextStepBack.phase === "error" ? (
+                    <Typography role="alert" sx={{ fontSize: "var(--text-body)" }}>{nextStepBack.error}</Typography>
+                ) : nextStationInfo?.finishedFromResearch ? (
                     <Typography sx={{ fontSize: "var(--text-body)" }}>
                         העובד סיים את המסלול בשלב {nextStationInfo?.finishedAtStep}
                     </Typography>
@@ -1578,23 +1669,35 @@ function TestingPageView() {
                 )}
             </DialogContent>
             <DialogActions>
-                <Button onClick={() => setNextStationDialogOpen(false)}>
-                    אישור
-                </Button>
+                {nextStepBack.phase === "confirm" || nextStepBack.phase === "busy" ? (
+                    <>
+                        <Button variant="outlined" onClick={() => setNextStepBack({ phase: "idle" })} disabled={nextStepBack.phase === "busy"}>ביטול</Button>
+                        <Button onClick={confirmNextStepBack} loading={nextStepBack.phase === "busy"}>החזר</Button>
+                    </>
+                ) : (
+                    <>
+                        {nextStepBack.phase === "idle" && nextStepBackReq && (
+                            <Button variant="outlined" startIcon={<UndoIcon sx={{ fontSize: 18 }} aria-hidden />} onClick={() => setNextStepBack({ phase: "confirm" })}>
+                                חזרה לבדיקה הקודמת
+                            </Button>
+                        )}
+                        <Button onClick={closeNextStationDialog}>{nextStepBack.phase === "error" ? "סגור" : "אישור"}</Button>
+                    </>
+                )}
             </DialogActions>
         </Dialog>
 
         {/* "חזרה לבדיקה הקודמת": the question, then where the item went back to. */}
         <ConfirmDialog
-            open={stepBackItem != null}
-            title={`להחזיר את הפריט ל${stepBackTo?.name ?? "עמדה הקודמת"}?`}
-            message={stepBackItem
-              ? `הפריט יחזור לשלב ${(stepBackItem.current_route_step ?? 2) - 1} וימתין שם לבדיקה חוזרת. התוצאה הקודמת נשמרת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.`
+            open={stepBackReq != null}
+            title={`להחזיר את הפריט ל${stepBackReq?.toName || "עמדה הקודמת"}?`}
+            message={stepBackReq
+              ? `הפריט יחזור לשלב ${stepBackReq.routeStep - 1} וימתין שם לבדיקה חוזרת.${stepBackReq.inBox ? " המארז יצא מתור הסגירה ויחכה לו, וכשהפריט יגיע שוב לסגירה המארז יחזור לתור." : ""} התוצאה הקודמת נשמרת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.`
               : undefined}
             confirmText="החזר"
             busy={stepBackBusy}
             onConfirm={confirmStepBack}
-            onCancel={() => setStepBackItem(null)}
+            onCancel={() => setStepBackReq(null)}
         />
         <Dialog open={steppedBack != null} onClose={() => setSteppedBack(null)} maxWidth="xs" fullWidth>
             <DialogTitle onClose={() => setSteppedBack(null)}>

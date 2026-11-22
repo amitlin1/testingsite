@@ -58,6 +58,11 @@ export type PackageItemView = {
   station_name: string | null;
   /** True when the item is at the package's closing step (waiting or in test). */
   arrived_at_closing: boolean;
+  /** The station type of the step before the current one — where "חזרה לבדיקה
+   *  הקודמת" sends the item; null at step 1. */
+  prev_step_desc: string | null;
+  /** That step is package-level (the box's opening): an item can't go back to it. */
+  prev_step_package_level: boolean;
   /** Closing decision recorded on the box for this item, when any. */
   pack_decision: "packed" | "packed_anyway" | "missing" | null;
   pack_note: string | null;
@@ -178,6 +183,8 @@ type MemberRow = {
   step_type_desc: string | null;
   station_name: string | null;
   last_step_type_id: number | null;
+  prev_step_desc: string | null;
+  prev_step_package_level: boolean | null;
 };
 
 type Decision = { item_id: string; decision: "packed" | "packed_anyway" | "missing"; note?: string | null };
@@ -277,13 +284,16 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
            tr.route_steps[ir.current_route_step] AS step_type_id,
            stt.test_type_desc AS step_type_desc,
            ts.test_station_desc AS station_name,
-           tr.route_steps[array_length(tr.route_steps, 1)] AS last_step_type_id
+           tr.route_steps[array_length(tr.route_steps, 1)] AS last_step_type_id,
+           TRIM(pvt.test_type_desc) AS prev_step_desc,
+           pvt.package_level AS prev_step_package_level
     FROM items i
     JOIN item_types it ON it.item_type_id = i.item_type_id
     LEFT JOIN item_routes ir ON ir.item_id = i.item_id
     LEFT JOIN testing_routes tr ON tr.item_type_id = i.item_type_id AND tr.route_number = ir.route_number
     LEFT JOIN test_stations_type stt ON stt.test_station_type_id = tr.route_steps[ir.current_route_step]
     LEFT JOIN test_stations ts ON ts.test_station_id = ir.test_station_id
+    LEFT JOIN test_stations_type pvt ON pvt.test_station_type_id = tr.route_steps[ir.current_route_step - 1]
     WHERE i.package_id = ANY(${pkgIds}::bigint[])
     ORDER BY i.package_id, i.package_seq NULLS LAST, i.item_id
   `;
@@ -327,6 +337,8 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
         state_label: ITEM_STATE_LABEL[state],
         station_name: stationText(m),
         arrived_at_closing: atClosing,
+        prev_step_desc: m.prev_step_desc || null,
+        prev_step_package_level: m.prev_step_package_level === true,
         pack_decision: decision?.decision ?? null,
         pack_note: decision?.note ?? null,
       };
