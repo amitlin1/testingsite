@@ -224,15 +224,14 @@ function FilmTile({ src, label, active, shot, badge, onClick }: {
  * PhotoUploader — the reference images and the worker's photos are two rows,
  * both always on screen: a photo never covers the reference it is compared
  * with, however many are taken. The counter still reads photos against the
- * reference count. Large focused frame + big capture button + the two rows.
+ * reference count. Large focused frame + big upload button + the two rows.
  */
 export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
   photos: Shot[]; refImages: RefImg[]; onPick: (file: File) => void; onRemove: (idx: number) => void;
 }) {
-  // Two pickers, because one input cannot do both: where the browser honours
-  // `capture` it ignores `multiple`. Camera = one shot at a time; the gallery
-  // picker takes several images in one go, like the reference-items screen.
-  const cameraRef = React.useRef<HTMLInputElement>(null);
+  // One picker: the device's files, several images in one go, like the
+  // reference-items screen. No direct camera — `capture` makes the browser
+  // ignore `multiple`, and the stations do not run on https anyway.
   const galleryRef = React.useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = React.useState(false);
   // Files the last pick refused, listed until the next pick replaces them.
@@ -252,7 +251,6 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
     setActive(captured > 0 ? { kind: "shot", idx: captured - 1 } : { kind: "ref", idx: 0 });
   }
 
-  const openCamera = () => cameraRef.current?.click();
   const openGallery = () => galleryRef.current?.click();
 
   // Every image in the selection becomes its own shot (one upload each, so a
@@ -341,15 +339,10 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
         {activeShot?.uploading && <CircularProgress size={26} aria-label="מעלה תמונה" sx={{ position: "absolute", inset: 0, margin: "auto" }} />}
       </Box>
 
-      {/* Camera (one shot) + gallery picker (several images at once) */}
-      <Box sx={{ display: "flex", gap: 1.25 }}>
-        <Button onClick={openCamera} size="large" className="tst-photo-btn" startIcon={<AddAPhotoIcon fontSize={20} aria-hidden />} sx={{ flex: 2 }}>
-          {hasSlots && captured >= total ? "צלם מחדש" : "צלם"}
-        </Button>
-        <Button onClick={openGallery} variant="outlined" size="large" className="tst-photo-btn" startIcon={<PhotoLibraryIcon fontSize={20} aria-hidden />} sx={{ flex: 1 }}>
-          העלה תמונות
-        </Button>
-      </Box>
+      {/* The device's files — several images at once */}
+      <Button onClick={openGallery} size="large" className="tst-photo-btn" startIcon={<PhotoLibraryIcon fontSize={20} aria-hidden />}>
+        העלה תמונות
+      </Button>
 
       {alertMsg && <Alert severity="error">{alertMsg}</Alert>}
 
@@ -380,14 +373,12 @@ export function PhotoUploader({ photos, refImages, onPick, onRemove }: {
             </Box>
           ) : (
             <Box sx={{ border: `1.5px dashed ${HAIR}`, borderRadius: "13px", p: 2, textAlign: "center", color: MUTED, fontSize: "var(--text-body-sm)" }}>
-              עוד לא צילמת. לחץ &quot;צלם&quot; או &quot;העלה תמונות&quot;.
+              עוד לא העלית תמונות. לחץ &quot;העלה תמונות&quot; או גרור לכאן.
             </Box>
           )}
         </Box>
       )}
 
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden
-        onChange={(e) => { takeFiles(e.target.files); e.target.value = ""; }} />
       <input ref={galleryRef} type="file" accept="image/*" multiple hidden
         onChange={(e) => { takeFiles(e.target.files); e.target.value = ""; }} />
     </Box>
