@@ -121,7 +121,11 @@ const START_FAILED_PACKAGE = "לא ניתן להתחיל את המארז — י�
 
 /** "חזרה לבדיקה הקודמת" for one item: the step it waits at now (the route
  *  moves it only from that step) and the station type it goes back to. */
-type StepBackRequest = { itemId: string; routeStep: number; toName: string; inBox: boolean };
+type StepBackRequest = {
+  itemId: string; routeStep: number; toName: string; inBox: boolean;
+  /** Asked from inside the box's closing wizard: the closing stops, the wizard closes. */
+  fromWizard?: boolean;
+};
 /** The station queue could not be loaded (network / server). */
 const QUEUE_LOAD_FAILED = "לא ניתן לטעון את התור של העמדה. בדוק את החיבור ונסה שוב.";
 /** Scanner fallback: auto-submit after this pause when the scan sends no Enter. */
@@ -1217,8 +1221,16 @@ function TestingPageView() {
     const out = await postStepBack(req);
     setStepBackBusy(false);
     setStepBackReq(null);
-    if (out.ok) setSteppedBack({ stationName: out.stationName, routeStep: out.routeStep });
-    else setStartError(out.error);
+    if (out.ok) {
+      if (req.fromWizard) {
+        // The server already put the box and its items back to waiting: close
+        // the wizard as if it submitted — no release, nothing parked.
+        dialogSubmittedRef.current = true;
+        setDialogOpen(false);
+        setParked(null);
+      }
+      setSteppedBack({ stationName: out.stationName, routeStep: out.routeStep });
+    } else setStartError(out.error);
   };
   /** The queue card's button: a waiting item, one step back. */
   const askStepBack = (item: ItemRow) => {
@@ -1227,9 +1239,9 @@ function TestingPageView() {
     setStepBackReq({ itemId: String(item.item_id), routeStep: item.current_route_step ?? 2, toName: to.name, inBox: false });
   };
   /** A box's item at the closing station: back to the test before the closing. */
-  const askStepBackBoxItem = (it: PackageItemView) => {
+  const askStepBackBoxItem = (it: PackageItemView, fromWizard = false) => {
     if (!canStepBack || it.current_route_step == null || !it.prev_step_desc) return;
-    setStepBackReq({ itemId: it.item_id, routeStep: it.current_route_step, toName: it.prev_step_desc, inBox: true });
+    setStepBackReq({ itemId: it.item_id, routeStep: it.current_route_step, toName: it.prev_step_desc, inBox: true, fromWizard });
   };
 
   // The next-station dialog's own "חזרה לבדיקה הקודמת": the item just left this
@@ -1547,6 +1559,8 @@ function TestingPageView() {
     workerId: activeWorkerId,
     workerName: activeWorkerName,
     onSubmit: handleSubmitTestResult,
+    // The closing wizard's "החזר" (managers): an item of the box back to the test before.
+    onStepBackItem: canStepBack ? (it: PackageItemView) => askStepBackBoxItem(it, true) : undefined,
   };
   // A box at a package-level station gets the opening / closing wizard by the
   // station type's flag (PLAN §4) — from the type's package template when it has
@@ -1692,7 +1706,7 @@ function TestingPageView() {
             open={stepBackReq != null}
             title={`להחזיר את הפריט ל${stepBackReq?.toName || "עמדה הקודמת"}?`}
             message={stepBackReq
-              ? `הפריט יחזור לשלב ${stepBackReq.routeStep - 1} וימתין שם לבדיקה חוזרת.${stepBackReq.inBox ? " המארז יצא מתור הסגירה ויחכה לו, וכשהפריט יגיע שוב לסגירה המארז יחזור לתור." : ""} התוצאה הקודמת נשמרת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.`
+              ? `הפריט יחזור לשלב ${stepBackReq.routeStep - 1} וימתין שם לבדיקה חוזרת.${stepBackReq.fromWizard ? " סגירת המארז תיעצר, ומה שסומן באשף לא יישמר." : ""}${stepBackReq.inBox ? " המארז יצא מתור הסגירה ויחכה לו, וכשהפריט יגיע שוב לסגירה המארז יחזור לתור." : ""} התוצאה הקודמת נשמרת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.`
               : undefined}
             confirmText="החזר"
             busy={stepBackBusy}

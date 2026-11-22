@@ -193,5 +193,41 @@ describe(
       assert.equal((await H.routeRow(box.packageId)).current_status, 6, "the box waits for its item again");
       await assertNoDrift();
     });
+
+    it("from inside the closing wizard: the closing stops, the item goes back, the box waits for it", async () => {
+      const box = await H.h().prisma.$transaction((tx) =>
+        H.h().createPackage(tx, {
+          customer: H.CUSTOMER_ID, shipment: H.SHIPMENT_ID, packageType: H.ITEM_TYPE_PACKAGE_CLOSE,
+          items: [
+            { itemType: H.ITEM_TYPE_IN_BOX, serialNumber: "SN-BOX-A", makat: "MK-1", model: "MODEL", manufacturer: "MFR" },
+            { itemType: H.ITEM_TYPE_IN_BOX, serialNumber: "SN-BOX-B", makat: "MK-1", model: "MODEL", manufacturer: "MFR" },
+          ],
+        }),
+      );
+      const [itemA, itemB] = box.itemIds as number[];
+      await H.startTest({ itemId: box.packageId, stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
+      const submitId = randomUUID();
+      for (const id of [itemA, itemB, box.packageId]) {
+        assert.equal((await H.submitResult({ ItemID: id, StationID: H.STATION_INTAKE, SubmitID: submitId, Passed: true })).status, 200);
+      }
+      await pass(itemA, H.STATION_FUNC_A);
+      await pass(itemB, H.STATION_FUNC_A);
+      assert.equal((await H.routeRow(box.packageId)).current_status, H.STATUS.queued);
+
+      // The closing wizard opens: the box and both items are in test together.
+      assert.equal((await H.startTest({ itemId: box.packageId, stationId: H.STATION_CLOSE, actionUuid: randomUUID() })).status, 200);
+      assert.equal((await H.routeRow(itemA)).current_status, H.STATUS.testing);
+
+      // In test, but inside its box's open closing: taken.
+      const r = await stepBack(itemA, 3);
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      assert.equal(r.body.closingStopped, true);
+      const a = await H.routeRow(itemA);
+      assert.equal(a.current_route_step, 2);
+      assert.equal(a.current_status, H.STATUS.queued);
+      assert.equal((await H.routeRow(itemB)).current_status, H.STATUS.queued, "the other item waits at the closing again");
+      assert.equal((await H.routeRow(box.packageId)).current_status, 6, "the box waits for the item that went back");
+      await assertNoDrift();
+    });
   },
 );

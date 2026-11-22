@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma, type TransactionClient } from "@/app/lib/prisma";
 import { getCurrentUtcIso } from "@/app/lib/datetime";
 import { findStationForRouteStep } from "@/app/lib/station-assignment";
 import { recordNote, recordTransition } from "@/app/lib/metrics/record";
@@ -18,6 +18,68 @@ class StepBackError extends Error {
   }
 }
 
+/** A box whose closing is open at a station: in test at a package-level step. */
+type OpenClosing = { packageId: bigint; stationId: number; stepNo: number; stepTypeId: number };
+
+/**
+ * The box's closing, open at the item's station and step type — or null. The
+ * box row is locked: the item's row is, and the release below writes both.
+ */
+async function openClosingOf(
+  tx: TransactionClient, packageId: bigint, itemStationId: number | null, itemStepTypeId: number | null,
+): Promise<OpenClosing | null> {
+  if (itemStationId == null || itemStepTypeId == null) return null;
+  const rows = await tx.$queryRaw<{
+    current_status: number; current_route_step: number; test_station_id: number | null;
+    route_steps: number[] | null; is_finished: boolean;
+  }[]>`
+    SELECT ir.current_status, ir.current_route_step, ir.test_station_id, tr.route_steps, ir.is_finished
+      FROM item_routes ir
+      LEFT JOIN testing_routes tr
+        ON tr.item_type_id = ir.item_type_id AND tr.route_number = ir.route_number
+     WHERE ir.item_id = ${packageId}
+     FOR UPDATE OF ir
+  `;
+  const box = rows[0];
+  if (!box || box.is_finished || box.current_status !== 1 || box.test_station_id !== itemStationId) return null;
+  const boxTypeId = box.route_steps?.[box.current_route_step - 1];
+  if (boxTypeId == null || Number(boxTypeId) !== itemStepTypeId || box.current_route_step <= 1) return null;
+  if (!(await isPackageLevelStationType(tx, Number(boxTypeId)))) return null;
+  return { packageId, stationId: itemStationId, stepNo: box.current_route_step, stepTypeId: Number(boxTypeId) };
+}
+
+/** release-test's group release, for the box whose closing stops: the box and
+ *  every item in test with it at that station back to waiting, an event each. */
+async function releaseClosing(
+  tx: TransactionClient, c: OpenClosing, now: Date,
+  who: { actionId: string; workerId: number | null; workerName: string | null },
+): Promise<void> {
+  const released = await tx.$queryRaw<{ item_id: bigint; current_route_step: number; is_box: boolean }[]>`
+    UPDATE item_routes ir
+       SET current_status = 2, processing_start_time = NULL, queue_start_time = ${now}::timestamp
+     WHERE ir.current_status = 1 AND ir.test_station_id = ${c.stationId} AND ir.finished_at IS NULL
+       AND (ir.item_id = ${c.packageId}
+            OR ir.item_id IN (SELECT i.item_id FROM items i WHERE i.package_id = ${c.packageId}))
+    RETURNING ir.item_id, ir.current_route_step, (ir.item_id = ${c.packageId}) AS is_box
+  `;
+  if (released.length === 0) return;
+  await tx.test_stations.update({ where: { test_station_id: c.stationId }, data: { status: 2 } });
+  for (const r of released) {
+    await recordTransition(tx, {
+      eventKey: `released_by_user:${who.actionId}:${r.item_id}`,
+      itemId: r.item_id,
+      toState: "queued",
+      stepNo: r.current_route_step,
+      stationTypeId: c.stepTypeId,
+      workerId: who.workerId,
+      workerName: who.workerName,
+      reason: "released_by_user",
+      submitId: who.actionId,
+      payload: { package_id: String(c.packageId), group_release: !r.is_box, site: "step_back_closing" },
+    });
+  }
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -32,6 +94,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * Refused (409, the reason in words): an item in test or in research, a
  * finished one, one at the first step, a whole box, and a step back onto a
  * package-level step (the box opening is the whole box's, not one item's).
+ *
+ * One item in test is taken: an item of a box whose closing is open — the
+ * closing wizard's "החזר". The box and its items are in test there together
+ * (the group start, packages PLAN §4), so the closing stops first: the box
+ * and every item started with it go back to waiting (as release-test does),
+ * then the item goes back, and the box's gate makes it wait for that item.
  * `currentRouteStep` is the step the card showed: the UPDATE matches only
  * that step and status, so two clicks never take the item back twice.
  *
@@ -62,9 +130,10 @@ export const POST = withAuth(async (req) => {
       const rows = await tx.$queryRaw<{
         item_type_id: number; route_number: number; current_status: number;
         current_route_step: number; is_finished: boolean; route_steps: number[] | null;
+        test_station_id: number | null;
       }[]>`
         SELECT ir.item_type_id, ir.route_number, ir.current_status, ir.current_route_step,
-               ir.is_finished, tr.route_steps
+               ir.is_finished, tr.route_steps, ir.test_station_id
           FROM item_routes ir
           LEFT JOIN testing_routes tr
             ON tr.item_type_id = ir.item_type_id AND tr.route_number = ir.route_number
@@ -77,16 +146,20 @@ export const POST = withAuth(async (req) => {
       const pkgCtx = await loadPackageContext(tx, itemIdBig);
       if (pkgCtx?.isPackage) throw new StepBackError("מארז שלם לא מוחזר מכאן — רק פריט בודד.", 409);
       if (row.is_finished || row.current_status === 3) throw new StepBackError("הפריט סיים את המסלול.", 409);
-      if (row.current_status === 1) throw new StepBackError("הפריט בבדיקה כרגע. צריך לצאת מהבדיקה לפני שמחזירים אותו.", 409);
+      const steps = row.route_steps ?? [];
+      const fromTypeId = steps[row.current_route_step - 1] != null ? Number(steps[row.current_route_step - 1]) : null;
+      // In test: only inside its box's open closing (the closing wizard).
+      const closing = row.current_status === 1 && pkgCtx?.packageId != null
+        ? await openClosingOf(tx, pkgCtx.packageId, row.test_station_id, fromTypeId)
+        : null;
+      if (row.current_status === 1 && !closing) throw new StepBackError("הפריט בבדיקה כרגע. צריך לצאת מהבדיקה לפני שמחזירים אותו.", 409);
       if (row.current_status === 4 || row.current_status === 5) throw new StepBackError("הפריט במחקר — הוא חוזר למסלול דרך עמדת המחקר.", 409);
-      if (row.current_status !== 2) throw new StepBackError("הפריט לא ממתין בעמדה, ולכן אי אפשר להחזיר אותו.", 409);
+      if (row.current_status !== 2 && !closing) throw new StepBackError("הפריט לא ממתין בעמדה, ולכן אי אפשר להחזיר אותו.", 409);
       if (row.current_route_step !== shownStep) throw new StepBackError("הפריט זז בינתיים. רענן את התור ונסה שוב.", 409);
 
       const step = row.current_route_step;
       if (step <= 1) throw new StepBackError("זו העמדה הראשונה במסלול — אין עמדה קודמת.", 409);
-      const steps = row.route_steps ?? [];
       const toTypeId = steps[step - 2] != null ? Number(steps[step - 2]) : null;
-      const fromTypeId = steps[step - 1] != null ? Number(steps[step - 1]) : null;
       if (toTypeId == null) throw new StepBackError("העמדה הקודמת לא נמצאה במסלול.", 409);
 
       const toType = await tx.test_stations_type.findUnique({
@@ -101,6 +174,12 @@ export const POST = withAuth(async (req) => {
       const toStep = step - 1;
       const stationId = await findStationForRouteStep(tx, row.item_type_id, row.route_number, toStep);
       const now = new Date(getCurrentUtcIso());
+
+      // The closing stops: the box and the items started with it wait again —
+      // this item too, so the UPDATE below finds it waiting like any other.
+      if (closing) {
+        await releaseClosing(tx, closing, now, { actionId, workerId, workerName });
+      }
       const moved = await tx.$executeRaw`
         UPDATE item_routes
            SET current_route_step = ${toStep}, current_status = 2, queue_start_time = ${now}::timestamp,
@@ -156,6 +235,8 @@ export const POST = withAuth(async (req) => {
         stationTypeDesc: toTypeDesc,
         stationId,
         stationDesc: station?.test_station_desc?.trim() ?? null,
+        /** The box's closing was open and stopped (the wizard closes). */
+        closingStopped: closing != null,
       };
     });
 

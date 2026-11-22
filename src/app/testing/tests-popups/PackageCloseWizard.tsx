@@ -19,6 +19,7 @@ import { buildFieldsBlock, inputFieldCount, useFieldsState, type Drafts } from "
 import { findKitItem, kitItemDefs, useStationFields } from "@/app/testing/fields/useStationFields";
 import PackageWizardShell, { type WizardStep } from "./PackageWizardShell";
 import PackageDecisionDialog, { type PackDecision } from "./PackageDecisionDialog";
+import { StepBackButton } from "./StepBackButton";
 import { NextStationList, nextStopOf, type NextStop, type NextStopRow } from "./nextStation";
 import { ScanField, closingSkuSuggestions, useReferenceLookup, useReferenceSkus } from "./referenceScan";
 import {
@@ -83,7 +84,7 @@ function missText(m: { required: number; notes: number }): string | null {
   return m.required + m.notes > 0 ? missLabel(m.required, m.notes) : null;
 }
 
-export default function PackageCloseWizard({ open, onClose, item, station, workerId, workerName, onSubmit }: StationTestDialogProps) {
+export default function PackageCloseWizard({ open, onClose, item, station, workerId, workerName, onSubmit, onStepBackItem }: StationTestDialogProps) {
   const pkg = item.package as PackageView | null;
   const [step, setStep] = React.useState(0);
   const [scan, setScan] = React.useState("");
@@ -326,7 +327,10 @@ export default function PackageCloseWizard({ open, onClose, item, station, worke
                   <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: `1px solid ${HAIR_2}`, background: isArr ? "var(--color-canvas)" : AMBER_BG, flexWrap: "wrap" }}>
                     <span style={{ width: 34, height: 34, borderRadius: 9, background: isArr ? "var(--color-canvas-parchment)" : "color-mix(in srgb, var(--color-warning-ink) 10%, transparent)", color: isArr ? MUTED : AMBER_INK, fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{seq2(it.package_seq)}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 15, fontWeight: 600 }}>{it.item_type_desc}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 15, fontWeight: 600 }}>{it.item_type_desc}</span>
+                        <StepBackButton it={it} onStepBackItem={submitting ? undefined : onStepBackItem} />
+                      </div>
                       <div style={{ fontSize: 12.5, color: isArr ? MUTED : AMBER_INK, marginTop: 2 }}>
                         {isArr ? `הגיע לסגירה · ${it.serial_no ?? "ללא סריאלי"}` : `לא הגיע · סיים את המסלול ${it.station_name ? `בעמדת ${it.station_name}` : "במקום אחר"}`}
                       </div>

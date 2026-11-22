@@ -1,4 +1,4 @@
-import type { PackageView } from "@/app/lib/packages/read";
+import type { PackageItemView, PackageView } from "@/app/lib/packages/read";
 
 export type ItemRow = {
   item_id: number;
@@ -202,6 +202,9 @@ export interface StationTestDialogProps {
    *  resolves with the server's answer, so a wizard with its own done step (a package's) can say
    *  where the row goes next. */
   onSubmit: (data: TestResultData) => Promise<NextStationResult | void>;
+  /** "החזר" on an item of the box in the closing wizard — given to managers only; the page asks,
+   *  sends it back (the closing stops) and closes the wizard. */
+  onStepBackItem?: (item: PackageItemView) => void;
 }
 export interface TestStationType {
   id: number;
