@@ -1,8 +1,8 @@
 "use client";
 /**
- * Building blocks of the unified TESTINGSITE print template. Every printed
- * document is a <ReportPage> holding <ReportSection>s; see
- * docs/REPORT_TEMPLATE.md for the layout rules.
+ * Building blocks of the shipment documents (תעודות). Every one is a
+ * <ReportPage> holding <ReportSection>s; see docs/REPORT_TEMPLATE.md for the
+ * layout rules. (Item reports are the template-built PDFs of lib/item-report.)
  */
 import React from "react";
 import {
@@ -12,10 +12,8 @@ import {
     REPORT_LOGOS,
     REPORT_MONO,
     REPORT_ORG_NAME,
-    STATUS_STYLE,
-    ReportStatus,
-    formatReportDate,
 } from "./reportTheme";
+import { formatDocDate } from "@/app/lib/datetime";
 import Image from "next/image";
 
 const printExact: React.CSSProperties = {
@@ -67,7 +65,7 @@ export const ReportPage = React.forwardRef<HTMLDivElement, ReportPageProps>(
         const generated = generatedAt ?? new Date();
         const metaItems: ReportMetaItem[] = [
             ...(documentNumber ? [{ label: "מס׳ מסמך", value: documentNumber, mono: true }] : []),
-            { label: "תאריך הפקה", value: formatReportDate(generated, true) },
+            { label: "תאריך הפקה", value: formatDocDate(generated, true) },
             ...(generatedBy ? [{ label: "הופק ע״י", value: generatedBy }] : []),
             ...meta,
         ];
@@ -151,7 +149,7 @@ export const ReportPage = React.forwardRef<HTMLDivElement, ReportPageProps>(
                         {REPORT_CLASSIFICATION && (
                             <span style={{ fontWeight: 700, letterSpacing: 2, color: C.ink }}>{REPORT_CLASSIFICATION}</span>
                         )}
-                        <span>{formatReportDate(generated, true)}</span>
+                        <span>{formatDocDate(generated, true)}</span>
                     </div>
                 </div>
             </div>
@@ -181,7 +179,7 @@ function LogoPair({ srcs, align }: { srcs: readonly string[]; align: "flex-start
 }
 
 /** The four-color band taken from the emblems (6:2:1:1). */
-export function EmblemStrip({ height }: { height: number }) {
+function EmblemStrip({ height }: { height: number }) {
     return (
         <div style={{ display: "flex", height, ...printExact }}>
             <div style={{ flex: 6, background: C.navy }} />
@@ -295,21 +293,6 @@ export function ReportTable<T>({ columns, rows, totals, emptyText = "אין נת
     );
 }
 
-const STATUS_LABEL: Record<ReportStatus, string> = { pass: "✓ עבר", fail: "✕ נכשל", pending: "ממתין", none: "—" };
-
-/** Status pill — always a mark plus a word, never color alone. */
-export function StatusChip({ status, label }: { status: ReportStatus; label?: string }) {
-    const s = STATUS_STYLE[status];
-    return (
-        <span style={{
-            display: "inline-block", padding: "2px 10px", borderRadius: 999, fontSize: 10.5, fontWeight: 700,
-            background: s.bg, color: s.fg, whiteSpace: "nowrap", ...printExact,
-        }}>
-            {label ?? STATUS_LABEL[status]}
-        </span>
-    );
-}
-
 export type SignatureSlot = { role: string; name?: string | null; date?: string | null; signatureSrc?: string | null };
 
 /** Signature boxes side by side; an empty slot leaves lines to sign by hand. */
@@ -334,5 +317,3 @@ export function SignatureBlock({ slots }: { slots: SignatureSlot[] }) {
         </div>
     );
 }
-
-export { REPORT_COLORS, REPORT_MONO } from "./reportTheme";

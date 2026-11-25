@@ -1,179 +1,63 @@
 /**
- * Centralized datetime utilities for consistent time handling across the application.
- * 
- * Strategy:
- * - All timestamps in DB are stored in UTC
- * - APIs always send/receive time as ISO 8601 strings in UTC (ending with Z)
- * - Frontend converts for display according to user's timezone (default: Asia/Jerusalem)
+ * Instants on the wire, on screen and in printed documents. Timestamps are stored in UTC and
+ * travel as ISO 8601 strings ending in Z; screens and documents show them in the business timezone.
  */
 
-/**
- * Display timezone - can be changed to browser default or another timezone
- */
-export const DISPLAY_TIMEZONE = "Asia/Jerusalem";
+import { BUSINESS_TZ } from "@/lib/time/civil";
 
-/**
- * Normalizes a date value to UTC ISO string.
- * Handles various input formats (Date, string, null, undefined).
- * 
- * @param date - Date value to normalize (can be Date, string, null, or undefined)
- * @returns UTC ISO string (e.g., "2025-11-25T19:45:00.000Z") or null if input is null/undefined
- */
+/** A Date or a date string as a UTC ISO string; null for nothing or an invalid date. */
 export function normalizeToUtcIso(date: Date | string | null | undefined): string | null {
-  if (!date) {
-    return null;
-  }
-
-  try {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
-
-    // Check if date is valid
-    if (isNaN(dateObj.getTime())) {
-      return null;
-    }
-
-    return dateObj.toISOString();
-  } catch (error) {
-    console.error("Error normalizing date to UTC ISO:", error);
-    return null;
-  }
+  if (!date) return null;
+  const d = typeof date === "string" ? new Date(date) : date;
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-/**
- * Formats a UTC ISO string for display in the configured timezone.
- * 
- * @param utcIsoString - UTC ISO string (e.g., "2025-11-25T19:45:00.000Z")
- * @param options - Intl.DateTimeFormatOptions for custom formatting
- * @returns Formatted date string in local timezone, or "-" if input is invalid
- */
-export function formatUtcToLocal(
-  utcIsoString: string | null | undefined,
-  options?: Intl.DateTimeFormatOptions
-): string {
-  if (!utcIsoString) {
-    return "-";
-  }
-
-  try {
-    const date = new Date(utcIsoString);
-
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      return "-";
-    }
-
-    const defaultOptions: Intl.DateTimeFormatOptions = {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-      timeZone: DISPLAY_TIMEZONE,
-    };
-
-    return new Intl.DateTimeFormat("he-IL", {
-      ...defaultOptions,
-      ...options,
-    }).format(date);
-  } catch (error) {
-    console.error("Error formatting UTC to local:", error);
-    return "-";
-  }
-}
-
-/**
- * Formats a UTC ISO string for display with date and time (full format).
- * 
- * @param utcIsoString - UTC ISO string
- * @returns Formatted string like "25/11/2025, 21:45:00" or "-"
- */
-export function formatDateTime(utcIsoString: string | null | undefined): string {
-  return formatUtcToLocal(utcIsoString);
-}
-
-/**
- * Formats a UTC ISO string for display with date only.
- * 
- * @param utcIsoString - UTC ISO string
- * @returns Formatted string like "25/11/2025" or "-"
- */
-export function formatDate(utcIsoString: string | null | undefined): string {
-  return formatUtcToLocal(utcIsoString, {
+/** A UTC ISO string in the business timezone ("25/11/2025, 21:45:00" by default); null for nothing or an
+ *  invalid date — each formatter below prints its own blank. */
+function localText(utcIsoString: string | null | undefined, options?: Intl.DateTimeFormatOptions): string | null {
+  if (!utcIsoString) return null;
+  const date = new Date(utcIsoString);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("he-IL", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    hour: undefined,
-    minute: undefined,
-    second: undefined,
-  });
-}
-
-/**
- * Formats a UTC ISO string for display with time only.
- * 
- * @param utcIsoString - UTC ISO string
- * @returns Formatted string like "21:45:00" or "-"
- */
-export function formatTime(utcIsoString: string | null | undefined): string {
-  return formatUtcToLocal(utcIsoString, {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-    year: undefined,
-    month: undefined,
-    day: undefined,
-  });
+    timeZone: BUSINESS_TZ,
+    ...options,
+  }).format(date);
 }
 
-/**
- * Gets current UTC time as ISO string.
- * 
- * @returns Current UTC time as ISO string (e.g., "2025-11-25T19:45:00.000Z")
- */
-export function getCurrentUtcIso(): string {
-  return new Date().toISOString();
+const DATE_ONLY: Intl.DateTimeFormatOptions = { hour: undefined, minute: undefined, second: undefined };
+const EM_DASH = "—";
+
+/** "25/11/2025, 21:45:00"; "—" for nothing or an invalid date. */
+export function formatDateTime(utcIsoString: string | null | undefined): string {
+  return localText(utcIsoString) ?? EM_DASH;
 }
 
-/**
- * Converts a local datetime input (from datetime-local input) to UTC ISO string.
- * 
- * @param localDateTimeString - Local datetime string from input (e.g., "2025-11-25T21:45")
- * @returns UTC ISO string or null if input is invalid
- */
-export function localDateTimeToUtcIso(localDateTimeString: string | null | undefined): string | null {
-  if (!localDateTimeString) {
-    return null;
-  }
-
-  try {
-    // Create date from local string (browser interprets as local time)
-    const localDate = new Date(localDateTimeString);
-
-    if (isNaN(localDate.getTime())) {
-      return null;
-    }
-
-    return localDate.toISOString();
-  } catch (error) {
-    console.error("Error converting local datetime to UTC ISO:", error);
-    return null;
-  }
+/** "25/11/2025"; "-" for nothing or an invalid date. */
+export function formatDate(utcIsoString: string | null | undefined): string {
+  return localText(utcIsoString, DATE_ONLY) ?? "-";
 }
 
-/**
- * Formats a duration in milliseconds to a human-readable string.
- * 
- * @param milliseconds - Duration in milliseconds
- * @param format - Format style: "short" (e.g., "12m 30s") or "long" (e.g., "01:23:45")
- * @returns Formatted duration string or "-" if input is invalid
- */
+/** The item screens' moment (items table and dialog, files panel, item history, report
+ *  templates): date + time without seconds; "—" for nothing or an invalid date. */
+export function formatMoment(iso: string | null | undefined): string {
+  return localText(iso, { second: undefined }) ?? EM_DASH;
+}
+
+/** The item screens' day (table columns, the route stepper); "—" for nothing or an invalid date. */
+export function formatDay(iso: string | null | undefined): string {
+  return localText(iso, DATE_ONLY) ?? EM_DASH;
+}
+
+/** "12m 30s" (short) or "01:23:45" (long); "-" for nothing or a negative duration. */
 export function formatDuration(milliseconds: number | null | undefined, format: "short" | "long" = "long"): string {
-  if (milliseconds === null || milliseconds === undefined || isNaN(milliseconds) || milliseconds < 0) {
-    return "-";
-  }
+  if (milliseconds === null || milliseconds === undefined || isNaN(milliseconds) || milliseconds < 0) return "-";
 
   const totalSeconds = Math.floor(milliseconds / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -181,15 +65,34 @@ export function formatDuration(milliseconds: number | null | undefined, format: 
   const seconds = totalSeconds % 60;
 
   if (format === "short") {
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    } else {
-      return `${seconds}s`;
-    }
-  } else {
-    // Long format: HH:MM:SS
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
   }
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+type DateInput = Date | string | null | undefined;
+
+function docPartsOf(d: DateInput): { date: string; time: string } | null {
+  if (!d) return null;
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    date: date.toLocaleDateString("he-IL", { timeZone: BUSINESS_TZ, day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "."),
+    time: date.toLocaleTimeString("he-IL", { timeZone: BUSINESS_TZ, hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+/** A printed document's date (item reports, shipment documents): "dd.mm.yyyy", or
+ *  "dd.mm.yyyy · HH:mm" with the time; "—" when there is no date. */
+export function formatDocDate(d: DateInput, withTime = false): string {
+  const p = docPartsOf(d);
+  if (!p) return "—";
+  return withTime ? `${p.date} · ${p.time}` : p.date;
+}
+
+/** A printed document's date and time apart (a report's step columns); "—" and "" when there is no date. */
+export function docDateParts(d: DateInput): { date: string; time: string } {
+  return docPartsOf(d) ?? { date: "—", time: "" };
 }

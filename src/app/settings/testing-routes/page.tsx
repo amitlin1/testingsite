@@ -1,9 +1,11 @@
 "use client";
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useReplaceQuery } from "@/lib/hooks/useUrlState";
 import { Route } from "lucide-react";
-import { Alert, Button, Snackbar } from "@/components/ui";
-import { apiFetch } from "@/lib/api/client";
+import { Alert, Button } from "@/components/ui";
+import { getArray } from "@/lib/api/client";
+import { settingsPackagesHref } from "@/app/lib/links";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import type { FieldId } from "@/app/lib/station-fields/schema";
 import SettingsToolbar from "../components/SettingsToolbar";
@@ -11,7 +13,8 @@ import RouteFieldsHeader from "./components/RouteFieldsHeader";
 import RouteContextCard from "./components/RouteContextCard";
 import RouteViewTabs from "./components/RouteViewTabs";
 import RouteStepsTab from "./components/steps/RouteStepsTab";
-import RouteReportTab from "./components/report/RouteReportTab";
+import type { StationOption } from "./components/steps/RouteStepsTab";
+import RouteReportTab from "./components/RouteReportTab";
 import {
   MapLoadErrorState, MapLoadingState, MapNoContentsState, MapNoStepsState,
 } from "./components/map/MapViewStates";
@@ -23,29 +26,30 @@ import { EditorBreadcrumb } from "./components/editor/EditorBreadcrumb";
 import PublishDialog from "./components/dialogs/PublishDialog";
 import ApplyFieldSetDialog from "./components/dialogs/ApplyFieldSetDialog";
 import FieldLibrary from "./components/library/FieldLibrary";
-import { useFieldSetNames, useFieldSetVersions } from "./lib/useLibrary";
-import { DraftStoreProvider, useFieldsMap, useStepsOutOfContextKey } from "./lib/draftStore";
+import { NoticeSnackbar, useNotice } from "./components/shared/Notice";
+import { useFieldSetNames, useFieldSetVersions, useRoutes } from "./lib/resources";
+import { DraftStoreProvider, useOnContextStale } from "./lib/draftStore";
+import { useFieldsMap } from "./lib/useFieldsMap";
 import { findCell, relevantCells } from "./lib/mapModel";
-import type { CellBinding, MapCell } from "./lib/mapModel";
+import type { MapCell } from "./lib/mapModel";
+import type { CellBinding } from "./lib/cellGroups";
 import { firstColumnCells } from "./lib/applySetModel";
-import type { PasteCounts } from "./lib/bulkModel";
+import type { PasteCounts } from "./lib/cellFill";
 import { pastedText } from "./lib/bulkLabels";
 import { useFieldsContext } from "./lib/useFieldsContext";
 import type { FieldsContextState, FieldsContextSubject } from "./lib/useFieldsContext";
 import {
-  backToMap, isEditorOpen, parseRouteQuery, readLastRoute, routeQueryHref, routeRefOf, sameRouteQuery,
+  backToMap, isEditorOpen, parseRouteQuery, readLastRoute, routeQueryHref, routeRefOf, sameRouteQuery, serializeRouteQuery,
   withEditor, withItem, withLastRoute, withLibrary, withRoute, withView, writeLastRoute,
 } from "./lib/routeQuery";
 import type { RouteQuery, RouteRef, RouteView } from "./lib/routeQuery";
 import { kitTypeOptions, routeForKitType, routeNumberOptions } from "./lib/routePickModel";
-import type { ItemTypeRow, RouteRow } from "./lib/routePickModel";
-import { HEADER_TEXT, NO_ROUTE_TEXT } from "./lib/labels";
+import type { ItemTypeRow } from "./lib/routePickModel";
+import { API } from "./lib/wire";
+import type { ItemTypeSettingsRow, StationTypeRow } from "@/app/lib/lookups/contract";
+import { HEADER_TEXT, MAP_STATE_TEXT, NO_ROUTE_TEXT } from "./lib/labels";
+import { PAGE_TEXT } from "./lib/stepsLabels";
 import "./route-fields.css";
-
-/** /api/settings/item-types, the fields this page reads. */
-type ItemTypeJson = { item_type_id: number; item_type_desc: string; is_package?: boolean; default_route_number?: number | null };
-/** /api/settings/test-stations-type, the fields this page reads. */
-type StationTypeJson = { test_station_type_id: number; test_type_desc: string; package_level?: boolean };
 
 /**
  * /settings/testing-routes — "מסלולי בדיקה" (route-fields spec §5.1, §5.2; D6): the shell of the
@@ -70,23 +74,14 @@ type StationTypeJson = { test_station_type_id: number; test_type_desc: string; p
  * ALL view state is in the URL (lib/routeQuery.ts), changed with router.replace. Without a route
  * in the URL the page opens the route last opened in this browser (localStorage), else the empty
  * state "בחר סוג מארז ומספר מסלול". A route of an item type (an old link, an old remembered route)
- * is no route here: the screen opens kit routes only. Every view sits in the settings frame's
- * 94% column (settings.css), the map and its editor too.
+ * is no route here: the screen opens kit routes only.
  *
- * Data: the item types and station types (the old page's options), the route list (the two
- * pickers and the header count), and GET …/fields-context for the kit route on screen
+ * Data: the item types and station types (the old page's options), the route list (resources: the
+ * two pickers and the header count), and GET …/fields-context for the kit route on screen
  * (useFieldsContext), whose answer feeds the page's one DraftStoreProvider. The context is asked
  * for again whenever a route's steps change: after a steps save, and when the draft store read a
  * route back with other steps (409 STEP_UNKNOWN) — the map's columns are the context's.
  */
-
-interface Option {
-  id: number;
-  label: string;
-  /** Station types only: a package-level (opening / closing) station type. */
-  packageLevel?: boolean;
-}
-
 
 // ---- the route last opened (localStorage) ----------------------------------------------------------
 // Read through useSyncExternalStore: the server snapshot is "unknown" (null), so the first client
@@ -107,20 +102,6 @@ function parseRefKey(key: string | null): RouteRef | null {
 // ---- the map's id: the header's "בעיה אחת לתיקון" brings it into view ------------------------------
 const MAP_REGION_ID = "rf-map-region";
 
-/** The testing routes, or null when they could not be read. */
-async function readRoutes(): Promise<RouteRow[] | null> {
-  try {
-    const res = await apiFetch("/api/settings/testing-routes");
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data)) throw new Error("not a list");
-    return data as RouteRow[];
-  } catch (err) {
-    console.error("Failed to load testing routes", err);
-    return null;
-  }
-}
-
 export default function TestingRoutesPage() {
   // useSearchParams needs a Suspense boundary.
   return (
@@ -132,7 +113,7 @@ export default function TestingRoutesPage() {
 
 function TestingRoutesShell() {
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const replaceQuery = useReplaceQuery();
   const pathname = usePathname();
 
   // ---- URL state ------------------------------------------------------------------------------
@@ -147,71 +128,54 @@ function TestingRoutesShell() {
   useEffect(() => {
     const ref = routeRefOf(urlQuery);
     if (ref) writeLastRoute(ref);
-    else if (lastRef) router.replace(routeQueryHref(pathname, withLastRoute(urlQuery, lastRef)), { scroll: false });
-  }, [urlQuery, lastRef, router, pathname]);
+    else if (lastRef) replaceQuery(serializeRouteQuery(withLastRoute(urlQuery, lastRef)));
+  }, [urlQuery, lastRef, replaceQuery]);
 
   const navigate = useCallback((next: RouteQuery) => {
-    if (!sameRouteQuery(next, query)) router.replace(routeQueryHref(pathname, next), { scroll: false });
-  }, [query, router, pathname]);
+    if (!sameRouteQuery(next, query)) replaceQuery(serializeRouteQuery(next));
+  }, [query, replaceQuery]);
 
   // ---- options: item types, station types, routes ----------------------------------------------
   const [itemTypes, setItemTypes] = useState<ItemTypeRow[]>([]);
-  const [stationTypes, setStationTypes] = useState<Option[]>([]);
-  const [routes, setRoutes] = useState<RouteRow[] | null>(null);
+  const [stationTypes, setStationTypes] = useState<StationOption[]>([]);
   const [optionsLoaded, setOptionsLoaded] = useState(false);
   const [optionsLoading, setOptionsLoading] = useState(true);
   // A failed options load is not "no item types": it gets a band and a retry.
-  const [optionsError, setOptionsError] = useState(false);
-
-  // Read, then applied in the promise's callback, so the effects below can run these.
-  const loadRoutes = useCallback(
-    (): Promise<boolean> => readRoutes().then((rows) => {
-      if (rows) setRoutes(rows);
-      return rows !== null;
-    }),
-    [],
-  );
+  const [typesError, setTypesError] = useState(false);
+  const routesRes = useRoutes();
+  const routes = routesRes.data;
+  // Without the route list the "מסלול" combobox cannot offer a route: the same band.
+  const optionsError = typesError || (routesRes.state.status === "error" && !routesRes.state.retrying);
 
   const fetchOptions = useCallback(() => {
-    Promise.all([
-      apiFetch("/api/settings/item-types").then(async res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      }),
-      apiFetch("/api/settings/test-stations-type").then(async res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      }),
-      loadRoutes(),
-    ]).then(([items, stations, routesOk]) => {
-      setItemTypes(Array.isArray(items) ? (items as ItemTypeJson[]).map((i) => ({
+    Promise.all([getArray<ItemTypeSettingsRow>(API.itemTypes), getArray<StationTypeRow>(API.stationTypes)]).then(([items, stations]) => {
+      setItemTypes(items.map((i) => ({
         id: i.item_type_id,
         label: i.item_type_desc,
         isPackage: i.is_package === true,
         defaultRoute: typeof i.default_route_number === "number" ? i.default_route_number : null,
-      })) : []);
-      setStationTypes(Array.isArray(stations) ? (stations as StationTypeJson[]).map((s) => ({ id: s.test_station_type_id, label: s.test_type_desc, packageLevel: s.package_level === true })) : []);
+      })));
+      setStationTypes(stations.map((s) => ({ id: s.test_station_type_id, label: s.test_type_desc })));
       setOptionsLoaded(true);
-      // Without the route list the "מסלול" combobox cannot offer a route: the same band.
-      if (!routesOk) setOptionsError(true);
     }).catch(err => {
       console.error("Failed to load options", err);
       setItemTypes([]);
       setStationTypes([]);
-      // Without the item types a route is neither kit nor item: the context is not asked for
-      // (a retry that fails after an earlier success must not ask for it as an item route).
+      // Without the item types a route is not known to be a kit's: the context is not asked for.
       setOptionsLoaded(false);
-      setOptionsError(true);
+      setTypesError(true);
     }).finally(() => {
       setOptionsLoading(false);
     });
-  }, [loadRoutes]);
+  }, []);
   // The retry clears the band and shows the spinner first (the first load starts that way).
+  const reloadRoutes = routesRes.reload;
   const loadOptions = useCallback(() => {
-    setOptionsError(false);
+    setTypesError(false);
     setOptionsLoading(true);
     fetchOptions();
-  }, [fetchOptions]);
+    void reloadRoutes();
+  }, [fetchOptions, reloadRoutes]);
 
   useEffect(() => { fetchOptions(); }, [fetchOptions]);
 
@@ -223,13 +187,11 @@ function TestingRoutesShell() {
     return itemTypes.find((t) => t.id === r.type)?.isPackage ? r : null;
   }, [query, optionsLoaded, itemTypes]);
 
-  // ---- the fields context of the route on screen --------------------------------------------------
-  // Kit or item decides the request; it is known once the item types are in.
-  const subject = useMemo((): FieldsContextSubject | null => {
-    if (!ref || !optionsLoaded) return null;
-    const type = itemTypes.find((t) => t.id === ref.type);
-    return { itemTypeId: ref.type, isPackage: type?.isPackage === true, routeNumber: ref.route };
-  }, [ref, optionsLoaded, itemTypes]);
+  // ---- the fields context of the route on screen (asked for once the item types say it is a kit's) --
+  const subject = useMemo(
+    (): FieldsContextSubject | null => (ref && optionsLoaded ? { packageTypeId: ref.type, routeNumber: ref.route } : null),
+    [ref, optionsLoaded],
+  );
   const ctx = useFieldsContext(subject);
   const context = ctx.status === "ready" ? ctx.data : null;
 
@@ -237,9 +199,9 @@ function TestingRoutesShell() {
   // columns follow the steps).
   const reloadContext = ctx.status === "idle" ? null : ctx.reload;
   const onStepsSaved = useCallback(() => {
-    void loadRoutes();
+    void reloadRoutes();
     reloadContext?.();
-  }, [loadRoutes, reloadContext]);
+  }, [reloadRoutes, reloadContext]);
 
   return (
     <DraftStoreProvider context={context}>
@@ -273,8 +235,8 @@ type ScreenProps = {
   navigate: (next: RouteQuery) => void;
   pathname: string;
   itemTypes: ItemTypeRow[];
-  stationTypes: Option[];
-  routes: RouteRow[] | null;
+  stationTypes: StationOption[];
+  routes: ReturnType<typeof useRoutes>["data"];
   optionsError: boolean;
   optionsLoading: boolean;
   optionsLoaded: boolean;
@@ -297,19 +259,8 @@ function RouteFieldsScreen({
   const editorOpen = isEditorOpen(query);
 
   // ---- a route read back with other steps (409 STEP_UNKNOWN): the context again ----------------
-  // The map's columns are the context's, so it follows the route's steps; once per change.
   const reloadContext = ctx.status === "idle" ? null : ctx.reload;
-  const stepsKey = useStepsOutOfContextKey();
-  const reloadedFor = useRef("");
-  useEffect(() => {
-    if (!stepsKey) {
-      reloadedFor.current = "";
-      return;
-    }
-    if (!reloadContext || reloadedFor.current === stepsKey) return;
-    reloadedFor.current = stepsKey;
-    reloadContext();
-  }, [stepsKey, reloadContext]);
+  useOnContextStale(reloadContext);
 
   // ---- the two pickers: "סוג מארז", then "מספר מסלול" ---------------------------------------------
   const typeById = useMemo(() => new Map(itemTypes.map((t) => [t.id, t])), [itemTypes]);
@@ -329,14 +280,14 @@ function RouteFieldsScreen({
   const stepsCount = useMemo(() => {
     if (!ref || !routes) return null;
     const row = routes.find((r) => r.item_type_id === ref.type && r.route_number === ref.route);
-    return row ? (row.route_steps ?? []).length : null;
+    return row ? row.route_steps.length : null;
   }, [ref, routes]);
 
   // ---- context card tags ---------------------------------------------------------------------------
   // "מארז · {k} סוגי פריטים · {u} יחידות": k = the template's lines, u = their quantities (spec
   // §5.2). A kit without contents has its own state under the tabs instead.
   const kit = useMemo(() => {
-    if (!context || context.kind !== "package" || context.lines.length === 0) return null;
+    if (!context || context.lines.length === 0) return null;
     return { kinds: context.lines.length, units: context.lines.reduce((n, l) => n + l.quantity, 0) };
   }, [context]);
   const coverage = map && map.emptyState == null ? map.coverage : null;
@@ -378,7 +329,7 @@ function RouteFieldsScreen({
     navigate(withRoute(query, { type: typeId, route }));
   }, [ref, routes, typeById, navigate, query]);
   const hrefOfItem = useCallback((item: number | null) => routeQueryHref(pathname, withItem(query, item)), [pathname, query]);
-  const packagesHref = ref ? `/settings/packages?type=${ref.type}` : "/settings/packages";
+  const packagesHref = settingsPackagesHref(ref?.type);
 
   // ---- the map and its cell editor ----------------------------------------------------------------
   const openCell = useCallback(
@@ -395,15 +346,17 @@ function RouteFieldsScreen({
 
   // ---- "החלת ערכת שדות" (artboard 9; session 2e) ---------------------------------------------------
   // The cells stay with a closed dialog, so its text does not change while it closes. `returnFocus`:
-  // ui/Dialog has no trigger to give the focus back to — the control that opened it takes it, or the
-  // map region when that control is gone (the onboarding card leaves once a cell has fields).
+  // the control that opened it takes the focus back once the dialog closes, or the map region when
+  // that control is gone (the onboarding card leaves once a cell has fields).
   const [applyBox, setApplyBox] = useState<{ open: boolean; cells: MapCell[]; returnFocus: HTMLElement | null }>(
     { open: false, cells: [], returnFocus: null },
   );
+  // Set by closeApply only: a dialog closed by a route change leaves the focus where it is.
+  const applyClosedFrom = useRef<{ back: HTMLElement | null } | null>(null);
   // The library's "החל על תאים…": the set the next opening starts on.
   const [pendingSetId, setPendingSetId] = useState<number | null>(null);
-  // The message after an apply (the paste's undrawn words); a new one restarts the Snackbar.
-  const [applyNotice, setApplyNotice] = useState<{ text: string; seq: number } | null>(null);
+  // The message after an apply (the paste's undrawn words).
+  const { notice: applyNotice, say: sayApplied, close: closeApplyNotice } = useNotice();
   const openApply = useCallback((cells: MapCell[], returnFocus?: HTMLElement | null) => {
     if (cells.length === 0) return;
     const active = typeof document === "undefined" ? null : document.activeElement;
@@ -411,17 +364,19 @@ function RouteFieldsScreen({
     setApplyBox({ open: true, cells, returnFocus: returnFocus ?? opener });
   }, []);
   const closeApply = useCallback(() => {
-    const back = applyBox.returnFocus;
+    applyClosedFrom.current = { back: applyBox.returnFocus };
     setApplyBox((b) => ({ ...b, open: false }));
-    window.setTimeout(() => {
-      if (back?.isConnected) back.focus({ preventScroll: true });
-      else mapRegionRef.current?.focus({ preventScroll: true });
-    }, 0);
   }, [applyBox.returnFocus]);
+  const applyReturnFocus = useCallback(() => {
+    const closed = applyClosedFrom.current;
+    applyClosedFrom.current = null;
+    if (!closed) return null;
+    return closed.back?.isConnected ? closed.back : mapRegionRef.current;
+  }, []);
   const onApplied = useCallback((counts: PasteCounts) => {
     setPendingSetId(null);
-    setApplyNotice((n) => ({ text: pastedText(counts), seq: (n?.seq ?? 0) + 1 }));
-  }, []);
+    sayApplied(pastedText(counts));
+  }, [sayApplied]);
   const openSetsLibrary = useCallback((setId: number | null) => navigate(withLibrary(query, "sets", setId)), [navigate, query]);
   const applyToCellsFromLibrary = useCallback((setId: number) => {
     setPendingSetId(setId);
@@ -456,7 +411,7 @@ function RouteFieldsScreen({
         </div>
       );
     }
-    // The options decide kit or item: without them the context cannot be asked for.
+    // The item types say whether the route is a kit's: without them the context is not asked for.
     if (!optionsLoaded) {
       return optionsError ? <MapLoadErrorState retrying={optionsLoading} onRetry={onRetryOptions} /> : <MapLoadingState />;
     }
@@ -479,7 +434,6 @@ function RouteFieldsScreen({
               model={map}
               query={query}
               onNavigate={navigate}
-              breadcrumbOutside
               onApplySet={openApply}
               reloadContext={ctx.reload}
             />
@@ -532,23 +486,17 @@ function RouteFieldsScreen({
           model={map}
           preferredSetId={pendingSetId}
           onClose={closeApply}
+          returnFocus={applyReturnFocus}
           onApplied={onApplied}
           onOpenLibrary={openSetsLibrary}
         />
       )}
-      <Snackbar
-        key={applyNotice?.seq ?? 0}
-        open={applyNotice != null}
-        message={applyNotice?.text}
-        autoHideDuration={5000}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        onClose={() => setApplyNotice(null)}
-      />
+      <NoticeSnackbar notice={applyNotice} onClose={closeApplyNotice} />
 
       {optionsError && (
         <div className="settings-card settings-error">
-          <Alert severity="error">טעינת סוגי הפריטים והעמדות נכשלה, ולכן אי אפשר לבחור מסלול. בדוק את החיבור לשרת ונסה שוב.</Alert>
-          <Button variant="outlined" color="inherit" size="small" onClick={onRetryOptions}>נסה שוב</Button>
+          <Alert severity="error">{PAGE_TEXT.optionsFailed}</Alert>
+          <Button variant="outlined" color="inherit" size="small" onClick={onRetryOptions}>{MAP_STATE_TEXT.retry}</Button>
         </div>
       )}
 

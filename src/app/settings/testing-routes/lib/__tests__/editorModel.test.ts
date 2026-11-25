@@ -5,23 +5,24 @@ import type {
   ChecklistField, ChoiceRowField, Field, NumberField, PassFailField, PhotoField, RouteFieldsConfig, SectionField,
 } from "@/app/lib/station-fields/schema";
 import { lintRouteFieldsConfig, parseFieldList } from "@/app/lib/station-fields/validate";
-import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
-import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, setGroupFields, summarize } from "../draftModel";
-import { buildFieldsMap, findCell, getCell } from "../mapModel";
+import { setGroupFields } from "../cellGroups";
+import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer } from "../draftModel";
+import { buildFieldsMap, findCell } from "../mapModel";
 import type { MapCell } from "../mapModel";
+import { addOption, removeOption, renameOption, setOptionTone } from "../optionFields";
 import {
   EDITOR_UNDRAWN_TEXT, EDITOR_TEXT, editorFooterText, editorSubText, editorTitleText, fieldsTabText, listLinkText, nextStationText,
   noteMaxAria, noteMaxOptionText, noteMaxText, notesModeAria, optionEditLabel, optionsGroupLabel, requiredAria, rowGripLabel,
   rowMoreLabel, sharedNoticeText, stopSubText, targetChipText,
 } from "../labels";
 import {
-  addChecklistItem, addOption, canAddChecklistItem, defaultOptions, dropField, duplicateField, editorCounts, issuesOfField,
-  issuesOfGroup, lockedRowTexts, moveField, moveFieldBy, namedFieldCount, neighbourStop, newField, opensExpanded,
-  packageWizardAt, parsePhotoMin, popoverFieldId, popupKindOf, removeChecklistItem, removeField, removeOption,
-  renameChecklistItem, renameOption, replaceField, setOptionTone, stopTargetCell, targetChips, timelineStops, withFieldHelp,
+  addChecklistItem, canAddChecklistItem, defaultOptions, dropField, duplicateField, editorCounts, issuesOfField,
+  issuesOfGroup, kitStepRole, lockedRowTexts, moveField, moveFieldBy, namedFieldCount, neighbourStop, newField, opensExpanded,
+  parsePhotoMin, popupKindOf, removeChecklistItem, removeField, renameChecklistItem, replaceField, stopTargetCell, targetChips,
+  timelineStops, withFieldHelp,
 } from "../editorModel";
 import type { IdSource } from "../editorModel";
-import { PC, artboard1, choice } from "./fixtures";
+import { PC, artboard1, choice, mapFor } from "./fixtures";
 
 /** Deterministic ids in the real formats. */
 function ids(): IdSource & { n: number } {
@@ -36,13 +37,8 @@ function ids(): IdSource & { n: number } {
   return s;
 }
 
-function mapOf(ctx: FieldsContextJson) {
-  const model = draftReducer(EMPTY_DRAFT_MODEL, { type: "load", context: ctx });
-  return buildFieldsMap({ context: ctx, configs: currentConfigs(model), issues: summarize(model).issuesByRoute });
-}
-
-const asCell = (c: ReturnType<typeof getCell>): MapCell => {
-  assert.ok(c && !c.na, "expected a relevant cell");
+const asCell = (c: MapCell | null): MapCell => {
+  assert.ok(c, "expected a relevant cell");
   return c;
 };
 
@@ -112,7 +108,7 @@ test("any change to an option unlinks the field from its shared list (artboard 2
   assert.deepEqual(removed.options.map((o) => o.id), base.options.slice(1).map((o) => o.id));
   assert.equal(removed.list_ref, undefined);
 
-  const added = addOption(base, ids());
+  const added = addOption(base, ids().option);
   assert.equal(added.field.options.length, 5);
   assert.deepEqual(added.field.options[4], { id: added.optionId, label: "אפשרות חדשה", tone: "neutral" });
   assert.equal(added.field.list_ref, undefined);
@@ -239,16 +235,9 @@ test("issues of a field and of a group", () => {
   assert.deepEqual(issuesOfGroup(issues, "s_a0000000", { item_type_id: 4 }).map((i) => i.message), ["x"]);
 });
 
-test("the open popover's row", () => {
-  assert.equal(popoverFieldId({ kind: "notes", fieldId: "f_1" }), "f_1");
-  assert.equal(popoverFieldId({ kind: "checkItem", fieldId: "f_2", itemId: "c_00000001" }), "f_2");
-  assert.equal(popoverFieldId({ kind: "picker" }), null);
-  assert.equal(popoverFieldId(null), null);
-});
-
 // ---- the popup the station opens (spec §10.3) ---------------------------------------------------------
 test("locked rows follow the popup the station really opens", () => {
-  const lookup = { hasWizard: (id: number) => id === 3 || id === 2, isVerdict: (id: number) => id === 3 };
+  const lookup = { hasTemplate: () => false };
   assert.equal(popupKindOf(3, false, lookup), "verdict");
   assert.equal(popupKindOf(2, false, lookup), "photo");
   assert.equal(popupKindOf(12, false, lookup), "dialog");
@@ -266,18 +255,22 @@ test("locked rows follow the popup the station really opens", () => {
   assert.deepEqual(lockedRowTexts("photo", null, "item"), station);
   assert.deepEqual(lockedRowTexts("dialog", null, "item"), { top: EDITOR_UNDRAWN_TEXT.lockedTopDialog, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomDialog });
 
-  assert.equal(packageWizardAt(0, 2), "open");
-  assert.equal(packageWizardAt(1, 2), "close");
-  assert.equal(packageWizardAt(0, 1), "open");
-  assert.deepEqual(lockedRowTexts("package", "open", "box"), { top: EDITOR_UNDRAWN_TEXT.lockedTopOpenBox, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomOpenBox });
-  assert.deepEqual(lockedRowTexts("package", "open", "each_item"), { top: EDITOR_UNDRAWN_TEXT.lockedTopOpenItem, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomOpenItem });
-  assert.deepEqual(lockedRowTexts("package", "close", "box"), { top: EDITOR_UNDRAWN_TEXT.lockedTopCloseBox, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomClose });
-  assert.deepEqual(lockedRowTexts("package", "close", { item_type_id: 3 }), { top: EDITOR_UNDRAWN_TEXT.lockedTopCloseItem, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomClose });
+  // The kit route's last step (of more than one) closes the kit; every other step opens it.
+  const ctx = artboard1();
+  assert.equal(kitStepRole(ctx, "s_kitopen1"), "opening");
+  assert.equal(kitStepRole(ctx, "s_kitclos1"), "closing");
+  assert.equal(kitStepRole(ctx, "s_pcelec00"), null, "not a step of the kit route");
+  const oneStep = { ...ctx, kit: ctx.kit && { ...ctx.kit, route: { ...ctx.kit.route, route_steps: [11], step_uids: ["s_kitopen1"] } } };
+  assert.equal(kitStepRole(oneStep, "s_kitopen1"), "opening");
+  assert.deepEqual(lockedRowTexts("package", "opening", "box"), { top: EDITOR_UNDRAWN_TEXT.lockedTopOpenBox, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomOpenBox });
+  assert.deepEqual(lockedRowTexts("package", "opening", "each_item"), { top: EDITOR_UNDRAWN_TEXT.lockedTopOpenItem, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomOpenItem });
+  assert.deepEqual(lockedRowTexts("package", "closing", "box"), { top: EDITOR_UNDRAWN_TEXT.lockedTopCloseBox, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomClose });
+  assert.deepEqual(lockedRowTexts("package", "closing", { item_type_id: 3 }), { top: EDITOR_UNDRAWN_TEXT.lockedTopCloseItem, bottom: EDITOR_UNDRAWN_TEXT.lockedBottomClose });
 });
 
 // ---- station bar and target chips (artboard 1's kit, artboard 2's numbers) ----------------------------
 test("the station bar: artboard 2's stops — 10 / 8 / שגיאה / 12 / 3", () => {
-  const m = mapOf(artboard1());
+  const m = mapFor(artboard1());
   const cell = asCell(findCell(m, "s_pcelec00", "item"));
   const stops = timelineStops(m, cell);
   assert.deepEqual(stops.map((s) => [s.n, s.name, s.packageLevel, s.current, s.sub]), [
@@ -299,14 +292,14 @@ test("the station bar: artboard 2's stops — 10 / 8 / שגיאה / 12 / 3", () 
 });
 
 test("stop targets from the fixed rows: the box row goes to an item column's first cell", () => {
-  const m = mapOf(artboard1());
+  const m = mapFor(artboard1());
   const elecColumn = m.columns[1].key;
   assert.equal(stopTargetCell(m, elecColumn, "box")?.rowKey, "line:1");
   assert.equal(stopTargetCell(m, m.columns[0].key, "box")?.rowKey, "box");
 });
 
 test("target chips: 'מחשב · 5', 'מסך ×2 · 3' on an item column; artboard 7's on a package-level one", () => {
-  const m = mapOf(artboard1());
+  const m = mapFor(artboard1());
   const ctx = artboard1();
   const model = draftReducer(EMPTY_DRAFT_MODEL, { type: "load", context: ctx });
   const named = (c: MapCell) => {

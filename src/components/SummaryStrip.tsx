@@ -1,8 +1,8 @@
 "use client";
 import React from "react";
 import { Skeleton } from "@/components/ui";
-import { TONE_DOT, type StatusTone } from "@/app/lib/status-tones";
-import "./items.css";
+import { TONE_DOT, type StatusTone } from "@/lib/item-status";
+import "./summary-strip.css";
 
 /*
  * SummaryStrip — shared KPI strip used under the page title (Items /
@@ -10,25 +10,8 @@ import "./items.css";
  * Values are ink at the KPI size with tabular figures; the icon is a neutral
  * glyph (blue is for things you can press); a status is shown the way every
  * other screen shows one — a small dot in the one status palette
- * (status-tones), never a tinted tile.
+ * (item-status), never a tinted tile.
  */
-
-/**
- * A tile's status tone. The status-tones names are preferred ("waiting" /
- * "active" / "done" / "neutral" — no dot). The older colour names still work
- * and map onto them: blue → active, amber → waiting, green → done.
- */
-export type SummaryTone = StatusTone | "blue" | "amber" | "green";
-
-const LEGACY_TONE: Record<"blue" | "amber" | "green", StatusTone> = {
-    blue: "active",
-    amber: "waiting",
-    green: "done",
-};
-
-function statusToneOf(tone: SummaryTone): StatusTone {
-    return tone === "blue" || tone === "amber" || tone === "green" ? LEGACY_TONE[tone] : tone;
-}
 
 const gridStyle: React.CSSProperties = {
     display: "grid",
@@ -61,14 +44,14 @@ export function SummaryTile({
     active = false,
 }: {
     icon: React.ReactNode;
-    tone: SummaryTone;
+    /** The status tone of its dot; "neutral" draws none. */
+    tone: StatusTone;
     value: React.ReactNode;
     label: string;
     /** When provided, the tile becomes a toggle button (used to filter the table). */
     onClick?: () => void;
     active?: boolean;
 }) {
-    const st = statusToneOf(tone);
     const content = (
         <>
             <span style={iconBox} aria-hidden>
@@ -97,8 +80,8 @@ export function SummaryTile({
                         color: "var(--color-ink-muted-48)",
                     }}
                 >
-                    {st !== "neutral" && (
-                        <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: TONE_DOT[st], flexShrink: 0 }} />
+                    {tone !== "neutral" && (
+                        <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: TONE_DOT[tone], flexShrink: 0 }} />
                     )}
                     {label}
                 </span>

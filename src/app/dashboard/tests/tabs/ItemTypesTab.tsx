@@ -2,11 +2,11 @@
 
 // §8.9 — performance by item type.
 //
-// `מסלולים` IS NOT `סה״כ`. `totalItems` was redefined as the routed population
-// — a count of route runs — and it is emphatically not `SUM(shipments.amount)`,
-// which is an inventory number summed once per shipment LINE and 0 wherever
-// nobody filled it in. The declared amount survives as its own column,
-// `הוצהרו`, with its own name and an em dash when it is null.
+// `מסלולים` IS NOT `סה״כ`. `totalItems` is the routed population — a count of
+// route runs — and emphatically not `SUM(shipments.amount)`, which is an
+// inventory number summed once per shipment LINE and 0 wherever nobody filled it
+// in. The declared amount is its own column, `הוצהרו`, with an em dash when it
+// is null.
 //
 // Grouped by item type the unit is the route RUN, never a distinct unit_id: an
 // accessory shares its parent's unit but carries its own type, so unit_id
@@ -19,24 +19,25 @@
 
 import * as React from "react";
 
-import DataCard, { IgnoredFiltersPill, NeutralPill } from "@/app/components/dashboard/DataCard";
-import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
-import { ProgressCell } from "@/app/components/dashboard/LoadBar";
-import TwinDuration from "@/app/components/dashboard/TwinDuration";
-import type { ItemTypeWire } from "@/app/lib/dashboard/api-types";
+import DataCard, { IgnoredFiltersPill, NeutralPill } from "../_components/DataCard";
+import DenseTable, { type Column } from "../_components/DenseTable";
+import { ProgressCell } from "../_components/LoadBar";
+import TwinDuration from "../_components/TwinDuration";
+import type { ItemTypeView } from "@/app/lib/dashboard/contract";
 import {
   completionTone,
   describeIgnoredFilters,
   formatCount,
   formatMinutes,
-} from "@/app/lib/dashboard/format";
+  workTwin,
+} from "../_lib/format";
 import type { TabProps } from "./tabTypes";
 
 export default function ItemTypesTab({ api, data, openHistory }: TabProps) {
-  const types = data.get<ItemTypeWire[]>("types");
+  const types = data.get("types");
   const ignored = describeIgnoredFilters(types.meta.ignoredFilters);
 
-  const columns: Array<Column<ItemTypeWire>> = [
+  const columns: Array<Column<ItemTypeView>> = [
     {
       key: "name",
       header: "סוג פריט",
@@ -55,10 +56,10 @@ export default function ItemTypesTab({ api, data, openHistory }: TabProps) {
       header: "הוצהרו",
       numeric: true,
       secondary: true,
-      sortValue: (r) => r._new_declaredAmount,
+      sortValue: (r) => r.declaredAmount,
       render: (r) => (
         <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
-          {formatCount(r._new_declaredAmount)}
+          {formatCount(r.declaredAmount)}
         </span>
       ),
     },
@@ -96,16 +97,12 @@ export default function ItemTypesTab({ api, data, openHistory }: TabProps) {
       key: "avg",
       header: "זמן ממוצע · ברוטו",
       numeric: true,
-      sortValue: (r) => r._new_routeTurnaroundWallMinutes,
+      sortValue: (r) => r.routeTurnaroundWallMinutes,
       // The work twin is printed under the wall figure (§16.1).
       render: (r) => (
         <TwinDuration
-          value={formatMinutes(r._new_routeTurnaroundWallMinutes)}
-          twin={
-            r._new_routeTurnaroundWallMinutes === null
-              ? null
-              : `נטו ${formatMinutes(r._new_routeTurnaroundWorkMinutes)}`
-          }
+          value={formatMinutes(r.routeTurnaroundWallMinutes)}
+          twin={workTwin(r.routeTurnaroundWallMinutes, r.routeTurnaroundWorkMinutes)}
         />
       ),
     },

@@ -1,5 +1,9 @@
-import { prisma } from "@/app/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { listedAtStation } from "@/app/lib/testing/queue-rule";
+import { DEFAULT_ROUTE_NUMBER } from "@/app/lib/packages/template-wire";
+import { ITEM_SEARCH_LIMIT, ITEM_SEARCH_MIN_QUERY, type SearchItem } from "@/app/lib/search/contract";
 
 export const runtime = "nodejs";
 
@@ -10,41 +14,6 @@ export const runtime = "nodejs";
 // fetching everything and calling String.includes per keystroke — what the
 // existing screens do — does not scale. This matches across every identifier
 // a user might actually type at us, capped and ranked in SQL.
-
-/** Result cap. The palette shows a handful; more is noise, not help. */
-const LIMIT = 8;
-/** Shorter than this and a substring match returns half the table. */
-const MIN_QUERY = 2;
-
-export interface SearchItem {
-  itemId: string;
-  serialNo: string;
-  makat: string | null;
-  model: string | null;
-  manufacturerName: string | null;
-  manufacturerNo: string | null;
-  customerCode: string | null;
-  shipmentCode: string | null;
-  itemTypeDesc: string | null;
-  statusDesc: string | null;
-  stationDesc: string | null;
-  isFinished: boolean;
-  /** Package model (docs/packages/PLAN.md): this row is a box. */
-  isPackage: boolean;
-  /** The box this item sits in (null for a box or a legacy loose item). */
-  packageId: string | null;
-  packageSeq: number | null;
-  /**
-   * The station whose testing-screen queue this item actually shows up in, or
-   * null when it shows up in none (finished, or no matching station). Resolved
-   * in SQL against the same rules /api/testing/items uses to build a queue —
-   * see the LATERAL below — so the palette never offers a link that lands on an
-   * empty queue.
-   */
-  queueStationId: number | null;
-  queueStationTypeId: number | null;
-  queueStationDesc: string | null;
-}
 
 /**
  * Escape the LIKE metacharacters so a user typing "100%" searches for a
@@ -57,7 +26,7 @@ function likePattern(q: string): string {
 
 export async function GET(req: Request) {
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
-  if (q.length < MIN_QUERY) return NextResponse.json([]);
+  if (q.length < ITEM_SEARCH_MIN_QUERY) return NextResponse.json([]);
 
   try {
     const pattern = likePattern(q);
@@ -97,28 +66,23 @@ export async function GET(req: Request) {
       LEFT JOIN test_stations ts  ON ts.test_station_id  = ir.test_station_id
       LEFT JOIN customers     c   ON c.id                = i.customer_id
       LEFT JOIN shipments     sh  ON sh.id               = i.shipment_id
-      -- Which station's queue would actually list this item? Mirrors the WHERE
-      -- in /api/testing/items: status 1/5 sit AT a station, status 2 waits for
-      -- any station of the current route step's type, status 4 waits for any
-      -- research station, and a package_level type never lists an accessory.
+      -- The station whose testing queue lists this item (lib/testing/queue-rule.ts).
       LEFT JOIN LATERAL (
         SELECT s.test_station_id, s.test_station_type_id, s.test_station_desc
         FROM test_stations s
         LEFT JOIN test_stations_type stt ON stt.test_station_type_id = s.test_station_type_id
         WHERE COALESCE(ir.is_finished, false) = false
-          AND ir.finished_at IS NULL
-          AND (COALESCE(stt.package_level, false) = false OR i.package_id IS NULL)
-          AND (
-               (ir.current_status = 1 AND s.test_station_id = ir.test_station_id)
-            OR (ir.current_status = 5 AND s.test_station_id = ir.test_station_id AND s.is_research)
-            OR (ir.current_status = 4 AND s.is_research)
-            OR (ir.current_status = 2 AND s.test_station_type_id = (
-                  SELECT tr.route_steps[ir.current_route_step]
-                  FROM testing_routes tr
-                  WHERE tr.item_type_id = i.item_type_id
-                    AND tr.route_number = COALESCE(ir.route_number, 1)
-                  LIMIT 1))
-          )
+          AND ${listedAtStation({
+            route: "ir",
+            item: "i",
+            stationId: Prisma.sql`s.test_station_id`,
+            stationTypeId: Prisma.sql`s.test_station_type_id`,
+            stationIsResearch: Prisma.sql`s.is_research`,
+            stationPackageLevel: Prisma.sql`stt.package_level`,
+            currentStepTypeId: Prisma.sql`(SELECT tr.route_steps[ir.current_route_step] FROM testing_routes tr
+                                            WHERE tr.item_type_id = i.item_type_id AND tr.route_number = COALESCE(ir.route_number, ${DEFAULT_ROUTE_NUMBER})
+                                            LIMIT 1)`,
+          })}
         -- Prefer the station the route already points at, then a working one.
         ORDER BY (s.test_station_id = ir.test_station_id) DESC, s.status ASC, s.test_station_id ASC
         LIMIT 1
@@ -135,7 +99,7 @@ export async function GET(req: Request) {
         OR sh.shipment_code     ILIKE ${pattern}
         OR it.item_type_desc    ILIKE ${pattern}
       ORDER BY score DESC, i.item_id DESC
-      LIMIT ${LIMIT}
+      LIMIT ${ITEM_SEARCH_LIMIT}
     `;
 
     const items: SearchItem[] = rows.map((r) => ({

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     Dialog,
     DialogTitle,
@@ -7,45 +7,51 @@ import {
     DialogActions,
     Button,
     TextField,
-    IconButton,
-    Alert
+    Alert,
+    SearchableCombobox,
+    FieldLabel,
 } from "@/components/ui";
-import { Add as AddIcon, Delete as DeleteIcon, QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
-import SearchableCombobox from "../common/SearchableCombobox";
-import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
-import { Shipment, NewShipment, Customers } from "@/types";
-import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
-import { apiFetch } from "@/lib/api/client";
-import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
-import { fmtId } from "@/app/components/packages/packageUi";
-import ShipmentLineScanDialog, { BIG_SHIPMENT, LineCertNote, declaredBoxes, lineIsEmpty, lineProblem, placeScannedLines, scannedRows, type ShipmentLine } from "./ShipmentLineScanDialog";
-import ShipmentDuplicateDialog, { duplicateOf, type DuplicateShipment } from "./ShipmentDuplicateDialog";
-import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
+import { Shipment, NewShipment, Customers, SHIPMENT_CODE_MAX, type BoxSync, type DuplicateShipment } from "@/app/lib/shipments/contract";
+import { BIG_SHIPMENT, declaredBoxes, lineIsEmpty, lineProblem, placeScannedLines, scannedRows, type ShipmentLine } from "@/app/lib/shipments/form";
+import type { DirectoryWorker } from "@/lib/users/rules";
+import { formatIdText } from "@/app/lib/packages/ids";
+import { ApiError, sendJson } from "@/lib/api/client";
+import { useCustomers, useItemTypeRows, useSources, useWorkersDirectory } from "@/app/components/lookups";
+import { useShipmentWorker } from "./useShipmentWorker";
+import ShipmentLineScanDialog from "./ShipmentLineScanDialog";
+import ShipmentDuplicateDialog, { duplicateOf } from "./ShipmentDuplicateDialog";
+import { SHIPMENT_FORM_NO_ANSWER, ShipmentDateField, ShipmentLinesSection, WorkerField, WorkerUnknownAlert } from "./ShipmentFormFields";
+import { failureText } from "@/app/components/failureText";
 import { omit } from "@/lib/omit";
 
 type ShipmentUpdatePopupProps = {
     open: boolean;
     onClose: () => void;
-    onUpdate: (success: boolean) => void;
+    onUpdated: () => void;
     shipment: Shipment | null;
 };
 
 /** What a save would do to the boxes (PUT dry_run): pending boxes that go —
  *  their labels stop being valid — and boxes re-minted for a new customer. */
-type BoxChanges = { removed: string[]; reminted: number };
+type BoxChanges = Pick<BoxSync, "removed" | "reminted">;
+
+const NO_CUSTOMERS: Customers[] = [];
+const NO_WORKERS: DirectoryWorker[] = [];
+const NO_SOURCES: { id: number; desc: string }[] = [];
 
 export default function ShipmentUpdatePopup({
     open,
     onClose,
-    onUpdate,
+    onUpdated,
     shipment,
 }: ShipmentUpdatePopupProps) {
-    const [customers, setCustomers] = useState<Customers[]>([]);
-    const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; roles: string[] }[]>([]);
+    const customers = useCustomers().data ?? NO_CUSTOMERS;
+    const workers = useWorkersDirectory().data ?? NO_WORKERS;
+    const allTypes = useItemTypeRows().data;
     // Package types only (docs/packages/PLAN.md §9.10) — a shipment declares boxes.
-    const [itemTypes, setItemTypes] = useState<{ id: number; name: string; is_package?: boolean }[]>([]);
-    const [sources, setSources] = useState<{ id: number; desc: string }[]>([]);
+    const itemTypes = useMemo(() => (allTypes ?? []).filter((t) => t.is_package === true), [allTypes]);
+    const sources = useSources().data ?? NO_SOURCES;
     const fieldId = React.useId();
 
     // A refused save (or a form with no package line) keeps the dialog open
@@ -90,7 +96,6 @@ export default function ShipmentUpdatePopup({
         void trigger('shipment_items');
     };
 
-    // The declared total = Σ quantities of the started lines.
     const shipmentItems = useWatch({ control, name: "shipment_items" });
     const shipmentCode = useWatch({ control, name: "shipment_code" });
     const customerId = useWatch({ control, name: "customer_id" });
@@ -106,48 +111,10 @@ export default function ShipmentUpdatePopup({
     }
 
     useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const [custRes, workersRes, typesRes, sourcesRes] = await Promise.all([
-                    apiFetch("/api/customers"),
-                    apiFetch("/api/workers-directory"),
-                    apiFetch("/api/item-types"),
-                    apiFetch("/api/sources")
-                ]);
-                const custData = await custRes.json();
-                const workersData = await workersRes.json();
-                const typesData = await typesRes.json();
-                const sourcesData = await sourcesRes.json();
-
-                if (!cancelled) {
-                    setCustomers(Array.isArray(custData) ? custData : []);
-                    setWorkers(Array.isArray(workersData) ? workersData : []);
-                    setItemTypes((Array.isArray(typesData) ? typesData : []).filter((t: { is_package?: boolean }) => t.is_package === true));
-                    setSources(Array.isArray(sourcesData) ? sourcesData : []);
-                }
-            } catch (error) {
-                console.error("Error loading data:", error);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    useEffect(() => {
         if (open && shipment) {
             // Each saved line goes back with its id (line_id), so the server
-            // keeps that line's boxes. A legacy shipment without lines starts
-            // from its single item type.
+            // keeps that line's boxes.
             let initialItems: ShipmentLine[] = (shipment.shipment_items || []).map(({ id, ...line }) => ({ ...omit(line, ["item_type_desc"]), line_id: id ?? null }));
-            if (initialItems.length === 0 && shipment.item_type_id) {
-                initialItems = [{
-                    item_type_id: shipment.item_type_id,
-                    quantity: shipment.amount || 0,
-                    makat: shipment.makat
-                }];
-            }
             if (initialItems.length === 0) {
                 initialItems = [{ item_type_id: 0, quantity: 0 }];
             }
@@ -207,19 +174,13 @@ export default function ShipmentUpdatePopup({
         });
     };
 
-    const put = (payload: object) => apiFetch(`/api/shipments/${shipment!.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
+    const put = (payload: object) => sendJson<{ boxes?: BoxChanges }>(`/api/shipments/${shipment!.id}`, "PUT", payload);
 
     const buildPayload = (data: NewShipment, validItems: ShipmentLine[]) => ({
         ...data,
         amount: declaredBoxes(validItems),
         shipment_date: data.shipment_date ? new Date(data.shipment_date).toISOString() : null,
         shipment_items: validItems,
-        // Legacy support
-        item_type_id: validItems[0]?.item_type_id || null,
         allow_duplicate: allowDuplicateRef.current,
         // Every saved line goes back with its line_id: a line without one is new.
         line_ids: true,
@@ -251,42 +212,26 @@ export default function ShipmentUpdatePopup({
 
         // The dialog closes only once the server has accepted the change; a
         // refusal keeps everything typed.
-        let saved = false;
         try {
             const payload = buildPayload(data, validItems);
             if (!confirmed && mayDropBoxes(validItems)) {
-                const dry = await put({ ...payload, dry_run: true });
-                if (!dry.ok) {
-                    const existing = await duplicateOf(dry);
-                    if (existing) setDuplicate(existing);
-                    else setSubmitError(await serverErrorMessage(dry, "השינויים לא נשמרו. בדוק את הפרטים ונסה שוב."));
-                    return;
-                }
-                const plan = (await dry.json().catch(() => null))?.boxes as BoxChanges | undefined;
+                const plan = (await put({ ...payload, dry_run: true })).boxes;
                 if (plan && (plan.removed.length > 0 || plan.reminted > 0)) {
                     setPending(plan);
                     return;
                 }
             }
-
-            const res = await put(payload);
-            if (res.ok) {
-                saved = true;
-            } else {
-                const existing = await duplicateOf(res);
-                if (existing) setDuplicate(existing);
-                else setSubmitError(await serverErrorMessage(res, "השינויים לא נשמרו. בדוק את הפרטים ונסה שוב."));
-            }
+            await put(payload);
         } catch (error) {
-            console.error(error);
-            setSubmitError(NETWORK_ERROR);
-        } finally {
-            if (saved) {
-                setPending(null);
-                onUpdate(true);
-                onClose();
-            }
+            const existing = duplicateOf(error);
+            if (existing) setDuplicate(existing);
+            else setSubmitError(failureText(error, "השינויים לא נשמרו. בדוק את הפרטים ונסה שוב.", SHIPMENT_FORM_NO_ANSWER));
+            if (!(error instanceof ApiError)) console.error(error);
+            return;
         }
+        setPending(null);
+        onUpdated();
+        onClose();
     };
 
     const confirmPending = () => {
@@ -323,11 +268,7 @@ export default function ShipmentUpdatePopup({
             />
             <form onSubmit={(e) => handleSubmit((data) => onSubmit(data))(e)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
-                    {receiverBlocked && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            לא ניתן לזהות אותך — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
-                        </Alert>
-                    )}
+                    {receiverBlocked && <WorkerUnknownAlert />}
                     <div className="shp-form-grid">
                         <div>
                             <FieldLabel required htmlFor={`${fieldId}-code`}>מס&apos; משלוח</FieldLabel>
@@ -336,7 +277,7 @@ export default function ShipmentUpdatePopup({
                                 control={control}
                                 rules={{
                                     required: "שדה חובה",
-                                    maxLength: { value: 20, message: "מקסימום 20 תווים" },
+                                    maxLength: { value: SHIPMENT_CODE_MAX, message: `מקסימום ${SHIPMENT_CODE_MAX} תווים` },
                                 }}
                                 render={({ field }) => (
                                     <TextField
@@ -348,7 +289,7 @@ export default function ShipmentUpdatePopup({
                                         error={!!errors.shipment_code}
                                         helperText={errors.shipment_code?.message}
                                         // A code reads left to right; aligned with the Hebrew fields.
-                                        inputProps={{ maxLength: 20, dir: "ltr", style: { textAlign: "right" } }}
+                                        inputProps={{ maxLength: SHIPMENT_CODE_MAX, dir: "ltr", style: { textAlign: "right" } }}
                                     />
                                 )}
                             />
@@ -380,30 +321,24 @@ export default function ShipmentUpdatePopup({
                                 <div className="sh-field-helper" style={{ color: "var(--color-warning-ink)" }}>שינוי הלקוח מחליף את מזהי המארזים — יש להדפיס את המדבקות מחדש</div>
                             )}
                         </div>
-                        <div>
-                            <Controller
-                                name="recieving_worker_id"
-                                control={control}
-                                render={({ field: { onChange, value } }) => (
-                                    <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
-                                        label="עובד מקבל"
-                                        options={receiver.options}
-                                        getOptionLabel={(option) => option.worker_name}
-                                        isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
-                                        value={workers.find((w) => w.worker_id === value) || null}
-                                        onChange={(newValue) => {
-                                            onChange(newValue?.worker_id ?? null);
-                                            setValue("recieving_worker_name", newValue?.worker_name ?? null);
-                                        }}
-                                        disabled={receiver.locked}
-                                        placeholder={receiver.locked ? "מזוהה מההתחברות" : "בחר עובד…"}
-                                        error={!!errors.recieving_worker_id}
-                                        helperText={errors.recieving_worker_id?.message}
-                                    />
-                                )}
-                            />
-                            {receiver.locked && !receiverBlocked && <div className="sh-field-helper">{receiverAlreadySet ? "רק מנהל יכול לשנות" : "מזוהה מההתחברות"}</div>}
-                        </div>
+                        <Controller
+                            name="recieving_worker_id"
+                            control={control}
+                            render={({ field: { onChange, value } }) => (
+                                <WorkerField
+                                    label="עובד מקבל"
+                                    options={receiver.options}
+                                    workers={workers}
+                                    value={value}
+                                    onChange={(worker) => {
+                                        onChange(worker?.worker_id ?? null);
+                                        setValue("recieving_worker_name", worker?.worker_name ?? null);
+                                    }}
+                                    locked={receiver.locked}
+                                    helper={receiver.locked && !receiverBlocked ? (receiverAlreadySet ? "רק מנהל יכול לשנות" : "מזוהה מההתחברות") : null}
+                                />
+                            )}
+                        />
                         <div>
                             <Controller
                                 name="source_id"
@@ -423,122 +358,21 @@ export default function ShipmentUpdatePopup({
                                 )}
                             />
                         </div>
-                        <div>
-                            <FieldLabel required htmlFor={`${fieldId}-date`}>תאריך משלוח</FieldLabel>
-                            <Controller
-                                name="shipment_date"
-                                control={control}
-                                rules={{
-                                    required: "שדה חובה",
-                                }}
-                                render={({ field: { onChange, value } }) => (
-                                    <TextField
-                                        id={`${fieldId}-date`}
-                                        type="date"
-                                        fullWidth
-                                        size="small"
-                                        value={value ? new Date(value).toLocaleDateString('en-CA', { timeZone: DISPLAY_TIMEZONE }) : ""}
-                                        onChange={(e) => onChange(e.target.value ? new Date(e.target.value) : null)}
-                                        error={!!errors.shipment_date}
-                                        helperText={errors.shipment_date?.message}
-                                    />
-                                )}
-                            />
-                        </div>
+                        <ShipmentDateField control={control} fieldId={fieldId} errors={errors} />
 
                     </div>
 
-                    {/* Dynamic Items Section */}
-                    <div style={{ marginTop: "var(--space-lg)", borderTop: "1px solid var(--color-hairline)", paddingTop: "var(--space-md)" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                            <div style={{ fontSize: "var(--text-body)", fontWeight: 600 }}>מארזים במשלוח</div>
-                            <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap" }}>
-                                <Button variant="outlined" size="small" startIcon={<QrCodeScannerIcon fontSize={16} aria-hidden />} onClick={() => setLineScanOpen(true)}>
-                                    סרוק או הזן שורה מהתעודה
-                                </Button>
-                                <Button variant="outlined" size="small" startIcon={<AddIcon fontSize={16} aria-hidden />} onClick={() => append({ item_type_id: 0, quantity: 0 })}>
-                                    הוסף סוג מארז
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="shp-items-head" aria-hidden>
-                            <span>סוג מארז</span>
-                            <span>כמות</span>
-                            <span />
-                        </div>
-                        {fields.map((item, index) => (
-                            <div key={item.id} className="shp-items-row">
-                                <div style={{ minWidth: 0 }}>
-                                    <Controller
-                                        name={`shipment_items.${index}.item_type_id` as const}
-                                        control={control}
-                                        rules={{
-                                            // A started line needs its type; 0 is "none", not a type.
-                                            validate: (_v, values) => {
-                                                const line = values.shipment_items?.[index];
-                                                return lineIsEmpty(line) || line?.item_type_id ? true : "יש לבחור סוג מארז";
-                                            },
-                                            deps: [`shipment_items.${index}.quantity`],
-                                        }}
-                                        render={({ field: { onChange, value } }) => (
-                                            <SearchableCombobox<{ id: number; name: string }>
-                                                options={itemTypes}
-                                                getOptionLabel={(option) => option.name}
-                                                isOptionEqualToValue={(o, v) => o.id === v.id}
-                                                value={itemTypes.find((t) => t.id === value) || null}
-                                                onChange={(newValue) => onChange(newValue?.id ?? 0)}
-                                                placeholder="סוג מארז"
-                                                error={!!errors.shipment_items?.[index]?.item_type_id}
-                                                helperText={errors.shipment_items?.[index]?.item_type_id?.message}
-                                            />
-                                        )}
-                                    />
-                                    <LineCertNote line={shipmentItems?.[index]} />
-                                </div>
-
-                                <Controller
-                                    name={`shipment_items.${index}.quantity` as const}
-                                    control={control}
-                                    rules={{
-                                        validate: (_v, values) => {
-                                            const line = values.shipment_items?.[index];
-                                            if (lineIsEmpty(line)) return true;
-                                            const qty = Number(line?.quantity);
-                                            return Number.isInteger(qty) && qty >= 1 ? true : "מינימום 1";
-                                        },
-                                        deps: [`shipment_items.${index}.item_type_id`],
-                                    }}
-                                    render={({ field }) => (
-                                        <TextField
-                                            {...field}
-                                            placeholder="כמות"
-                                            type="number"
-                                            required
-                                            size="small"
-                                            fullWidth
-                                            inputProps={{ "aria-label": `כמות, שורה ${index + 1}`, style: { fontVariantNumeric: "tabular-nums" } }}
-                                            value={field.value === 0 ? '' : field.value ?? ''}
-                                            onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                                            error={!!errors.shipment_items?.[index]?.quantity}
-                                            helperText={errors.shipment_items?.[index]?.quantity?.message}
-                                        />
-                                    )}
-                                />
-                                {fields.length > 1 ? (
-                                    <IconButton size="small" color="error" title="הסר שורה" onClick={() => remove(index)}>
-                                        <DeleteIcon fontSize={16} aria-hidden />
-                                    </IconButton>
-                                ) : <span />}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Auto-calculated total = Σ quantities */}
-                    <div style={{ marginTop: "var(--space-md)", display: 'flex', justifyContent: 'flex-end', fontSize: "var(--text-body-sm)", fontWeight: 600 }}>
-                        <span>
-                            סה״כ מארזים (מחושב): <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{total}</span>
-                        </span>
-                    </div>
+                    <ShipmentLinesSection
+                        control={control}
+                        errors={errors}
+                        fields={fields}
+                        lines={shipmentItems}
+                        itemTypes={itemTypes}
+                        total={total}
+                        onScan={() => setLineScanOpen(true)}
+                        append={append}
+                        remove={remove}
+                    />
                 </DialogContent>
                 {(submitError || pending || confirmBig) && (
                     <div style={{ padding: "0 var(--space-lg) var(--space-sm)" }}>
@@ -550,7 +384,7 @@ export default function ShipmentUpdatePopup({
                                     <div>
                                         השמירה תמחק {pending.removed.length === 1 ? "מארז אחד שממתין" : `${pending.removed.length} מארזים שממתינים`} לקליטה. אם המדבקה כבר הודבקה — יש להסיר אותה מהקופסה:
                                         <div dir="ltr" style={{ marginTop: 4, fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
-                                            {pending.removed.map((id) => { const { head, suffix } = fmtId(id); return `${head} ${suffix}`; }).join(" · ")}
+                                            {pending.removed.map((id) => formatIdText(id)).join(" · ")}
                                         </div>
                                     </div>
                                 )}

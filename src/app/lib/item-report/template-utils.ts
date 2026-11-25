@@ -2,7 +2,7 @@
 // deps — safe to import anywhere (API routes, the history page, the editor).
 
 import type { Data } from "@measured/puck";
-import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND, signCellsOf } from "./types";
 
 type PuckNodeLike = { type?: string; props?: Record<string, unknown> };
 
@@ -33,10 +33,7 @@ function requiresSignature(t: unknown, bind: string): boolean {
   let found = false;
   walk(t.content, (n) => {
     if (n.type !== "Signature" || n.props?.bind !== bind) return;
-    const cells = n.props?.cells;
-    // A block with no cells renders a signature cell (back-compat default).
-    if (!Array.isArray(cells) || cells.length === 0) found = true;
-    else if (cells.some((c) => (c as { kind?: string })?.kind === "signature")) found = true;
+    if (signCellsOf(n.props?.cells).some((c) => c?.kind === "signature")) found = true;
   });
   return found;
 }
@@ -65,14 +62,14 @@ export function templateUsesPhotos(t: unknown): boolean {
   return found;
 }
 
-/** Uploaded logo object keys referenced by the header (bundled emblems — paths
- *  starting with "/" — are not object keys). */
-export function collectLogoKeys(t: unknown): string[] {
+/** The header's logos (its "…Logo" settings), each once: uploaded object keys and bundled emblem
+ *  paths (isBundledLogo). */
+export function headerLogos(t: unknown): string[] {
   if (!isTemplate(t)) return [];
   const props = ((t.root as { props?: { header?: Record<string, unknown> } } | undefined)?.props?.header ?? {}) as Record<string, unknown>;
-  const keys = new Set<string>();
+  const logos = new Set<string>();
   for (const [k, val] of Object.entries(props)) {
-    if (/logo$/i.test(k) && typeof val === "string" && val && !val.startsWith("/")) keys.add(val);
+    if (/logo$/i.test(k) && typeof val === "string" && val) logos.add(val);
   }
-  return [...keys];
+  return [...logos];
 }

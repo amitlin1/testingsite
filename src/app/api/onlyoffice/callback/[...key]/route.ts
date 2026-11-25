@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import { prisma } from "@/lib/db";
 import { putObject } from '@/lib/storage';
 import { registerFileObject } from '@/lib/file-registry';
-import { verifyJwt } from '@/lib/onlyoffice-jwt';
+import { JWT_ENABLED } from '@/lib/onlyoffice/jwt';
+import { verifyCallback, type CallbackBody } from '@/lib/onlyoffice/tokens';
+import { ItemKeys } from '@/lib/storage/keys';
 
 export const runtime = 'nodejs';
 
@@ -27,38 +29,6 @@ export const runtime = 'nodejs';
 
 const INTERNAL_URL = (process.env.ONLYOFFICE_INTERNAL_URL || 'http://onlyoffice').replace(/\/+$/, '');
 
-type CallbackBody = {
-  key?: string;
-  status?: number;
-  url?: string;
-  users?: string[];
-  token?: string; // JWT signed copy of the body — sent when JWT is enabled
-  // OnlyOffice may also embed everything under .payload — defensive parse below.
-};
-
-/**
- * OnlyOffice with JWT_ENABLED sends the JWT in either:
- *   - `Authorization: Bearer <jwt>` header  (JWT_HEADER mode)
- *   - the `token` field on the body
- * We accept both and require one of them to verify against our secret.
- */
-async function extractAndVerifyToken(
-  request: Request,
-  body: CallbackBody,
-): Promise<CallbackBody | null> {
-  const authHeader = request.headers.get('authorization') || '';
-  const bearer = authHeader.toLowerCase().startsWith('bearer ')
-    ? authHeader.slice(7).trim()
-    : '';
-  const token = bearer || body.token || '';
-  if (!token) return null;
-  // jose returns the signed payload — for the header form OnlyOffice embeds the
-  // full body under a `payload` claim; for the inline form the token IS the body.
-  const decoded = await verifyJwt<CallbackBody & { payload?: CallbackBody }>(token);
-  if (!decoded) return null;
-  return decoded.payload ?? decoded;
-}
-
 function rewriteToInternal(url: string): string {
   // OnlyOffice ships the file URL using whatever host it knows itself as.
   // When the DocServer lives next to us on the prod-network, we always pull
@@ -67,6 +37,7 @@ function rewriteToInternal(url: string): string {
     const u = new URL(url);
     return `${INTERNAL_URL}${u.pathname}${u.search}`;
   } catch {
+    console.warn('OnlyOffice callback: the save url is not a URL — fetching it as sent', url);
     return url;
   }
 }
@@ -79,18 +50,19 @@ export async function POST(
     const { key: keyParts } = await context.params;
     const objectKey = keyParts.join('/');
 
-    // Same anti-tamper check as everywhere else: key must live under items/.
-    if (!objectKey.match(/^items\/\d+\//) || objectKey.includes('..')) {
+    const itemId = ItemKeys.itemIdOf(objectKey);
+    if (itemId == null) {
       return NextResponse.json({ error: 1, message: 'invalid key' });
     }
 
     const rawBody = (await request.json()) as CallbackBody;
-    const body = (await extractAndVerifyToken(request, rawBody)) ?? rawBody;
-
-    // If JWT is enforced on the OnlyOffice side, refuse unsigned callbacks.
-    if (process.env.ONLYOFFICE_JWT_SECRET && body === rawBody && !rawBody.token && !request.headers.get('authorization')) {
+    const { verified, signed } = await verifyCallback(request, rawBody);
+    // With JWT enforced, an unsigned callback is refused. (A token that does
+    // not verify still falls back to the raw body — bug B1, an owner decision.)
+    if (JWT_ENABLED && !signed) {
       return NextResponse.json({ error: 1, message: 'token required' }, { status: 401 });
     }
+    const body = verified ?? rawBody;
 
     const status = body.status ?? 0;
 
@@ -122,7 +94,7 @@ export async function POST(
       select: { file_name: true, entity_id: true },
     });
     const fileName = existing?.file_name ?? objectKey.split('/').pop() ?? 'file';
-    const entityId = existing?.entity_id ?? objectKey.split('/')[1] ?? null;
+    const entityId = existing?.entity_id ?? itemId;
 
     const stored = await putObject(objectKey, buffer, contentType);
 

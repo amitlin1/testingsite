@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { adminFieldsErrorResponse } from "@/app/lib/station-fields/admin";
+import { prisma } from "@/lib/db";
+import { errorResponse } from "@/lib/http/errors";
 import { buildFieldsContext, fieldsContextQuery } from "@/app/lib/station-fields/context";
 
 export const runtime = "nodejs";
@@ -17,6 +17,6 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     return NextResponse.json(await buildFieldsContext(prisma, fieldsContextQuery(searchParams)));
   } catch (error) {
-    return adminFieldsErrorResponse(error, "Failed to load the fields context");
+    return errorResponse(error, "Failed to load the fields context");
   }
 }

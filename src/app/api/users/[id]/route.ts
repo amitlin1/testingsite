@@ -1,6 +1,6 @@
 // User-management API — update (profile / role / enabled) + delete. Manager-only.
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
+import { withAuth } from "@/lib/auth/withAuth";
 import {
   updateUserProfile,
   setUserRole,
@@ -8,73 +8,51 @@ import {
   deleteUser,
   getUsername,
   isLastEnabledManager,
-  AdminError,
+  adminErrorResponse,
 } from "@/lib/keycloak-admin";
-import { APP_ROLES } from "@/lib/auth/roles";
+import { ACCESS, ADMIN_ROLE, isAppRole } from "@/lib/auth/roles";
+import { readJsonObject } from "@/lib/http/request";
+import { cleanName, employeeNumberEdit, isSameAccount, isServiceAccount, isUserId } from "@/lib/users/rules";
 
 export const runtime = "nodejs";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const FAILED = "הפעולה נכשלה. נסה שוב.";
 
-/** withAuth passes only (req, ctx); recover the [id] from the path. */
-function idFromReq(req: NextRequest): string {
-  const parts = req.nextUrl.pathname.split("/").filter(Boolean); // api / users / <id>
-  const i = parts.indexOf("users");
-  return i >= 0 ? (parts[i + 1] ?? "") : "";
-}
-
-/** Map any thrown error to a client-safe response (never leak Keycloak bodies). */
-function fail(e: unknown): NextResponse {
-  const status = e instanceof AdminError ? e.status : 502;
-  const message = e instanceof AdminError ? e.message : "הפעולה נכשלה. נסה שוב.";
-  if (!(e instanceof AdminError)) console.error("users API error", e);
-  return NextResponse.json({ error: message }, { status });
-}
-
-export const PUT = withAuth(
-  async (req: NextRequest, ctx: WithAuthCtx) => {
-    const id = idFromReq(req);
-    if (!UUID_RE.test(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
-    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!body) return NextResponse.json({ error: "invalid input" }, { status: 400 });
-
-    // Resolve the target once; refuse to touch Keycloak service accounts.
-    const targetUsername = await getUsername(id);
-    if (targetUsername.startsWith("service-account-")) {
-      return NextResponse.json({ error: "לא ניתן לפעול על חשבון שירות" }, { status: 400 });
-    }
-    const isSelf = !!targetUsername && targetUsername === ctx.session.user.preferredUsername;
-
-    // One body can trip both the role guard and the enabled guard; the answer
-    // can't change mid-request, so resolve it at most once.
-    let lastManager: boolean | undefined;
-    const isLastManager = async () =>
-      (lastManager ??= await isLastEnabledManager(id));
-
+export const PUT = withAuth<{ id: string }>(
+  async (req: NextRequest, { session, params: { id } }) => {
+    if (!isUserId(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
     try {
+      const body = await readJsonObject(req, "invalid input");
+      const targetUsername = await getUsername(id);
+      if (isServiceAccount(targetUsername)) {
+        return NextResponse.json({ error: "לא ניתן לפעול על חשבון שירות" }, { status: 400 });
+      }
+      const isSelf = isSameAccount(targetUsername, session.user.preferredUsername);
+
+      // One body can trip both the role guard and the enabled guard; the answer
+      // can't change mid-request, so resolve it at most once.
+      let lastManager: boolean | undefined;
+      const isLastManager = async () =>
+        (lastManager ??= await isLastEnabledManager(id));
+
       if (
         typeof body.firstName === "string" ||
         typeof body.lastName === "string" ||
         body.employeeNumber !== undefined
       ) {
         await updateUserProfile(id, {
-          firstName: typeof body.firstName === "string" ? body.firstName.trim().slice(0, 100) : undefined,
-          lastName: typeof body.lastName === "string" ? body.lastName.trim().slice(0, 100) : undefined,
-          employeeNumber:
-            body.employeeNumber === undefined
-              ? undefined
-              : body.employeeNumber
-                ? String(body.employeeNumber).trim().slice(0, 32)
-                : null,
+          firstName: cleanName(body.firstName),
+          lastName: cleanName(body.lastName),
+          employeeNumber: employeeNumberEdit(body.employeeNumber),
         });
       }
       if (typeof body.role === "string") {
-        if (!(APP_ROLES as readonly string[]).includes(body.role)) {
+        if (!isAppRole(body.role)) {
           return NextResponse.json({ error: "invalid role" }, { status: 400 });
         }
         // Lockout guard: block demoting YOURSELF, or the LAST enabled manager,
         // away from the manager role (would leave 0 managers).
-        if (body.role !== "manager") {
+        if (body.role !== ADMIN_ROLE) {
           if (isSelf) {
             return NextResponse.json({ error: "לא ניתן להוריד לעצמך את הרשאת המנהל" }, { status: 400 });
           }
@@ -82,7 +60,7 @@ export const PUT = withAuth(
             return NextResponse.json({ error: "לא ניתן להסיר את המנהל האחרון מהמערכת" }, { status: 400 });
           }
         }
-        await setUserRole(id, body.role as (typeof APP_ROLES)[number]);
+        await setUserRole(id, body.role);
       }
       if (typeof body.enabled === "boolean") {
         if (body.enabled === false) {
@@ -97,22 +75,21 @@ export const PUT = withAuth(
       }
       return NextResponse.json({ ok: true });
     } catch (e) {
-      return fail(e);
+      return adminErrorResponse(e, FAILED);
     }
   },
-  { role: "manager" },
+  { role: ACCESS.usersAdmin },
 );
 
-export const DELETE = withAuth(
-  async (req: NextRequest, ctx: WithAuthCtx) => {
-    const id = idFromReq(req);
-    if (!UUID_RE.test(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
+export const DELETE = withAuth<{ id: string }>(
+  async (_req: NextRequest, { session, params: { id } }) => {
+    if (!isUserId(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
     try {
       const targetUsername = await getUsername(id);
-      if (targetUsername.startsWith("service-account-")) {
+      if (isServiceAccount(targetUsername)) {
         return NextResponse.json({ error: "לא ניתן לפעול על חשבון שירות" }, { status: 400 });
       }
-      if (targetUsername && targetUsername === ctx.session.user.preferredUsername) {
+      if (isSameAccount(targetUsername, session.user.preferredUsername)) {
         return NextResponse.json({ error: "לא ניתן למחוק את המשתמש שאיתו אתה מחובר" }, { status: 400 });
       }
       if (await isLastEnabledManager(id)) {
@@ -121,8 +98,8 @@ export const DELETE = withAuth(
       await deleteUser(id);
       return NextResponse.json({ ok: true });
     } catch (e) {
-      return fail(e);
+      return adminErrorResponse(e, FAILED);
     }
   },
-  { role: "manager" },
+  { role: ACCESS.usersAdmin },
 );

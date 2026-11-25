@@ -1,6 +1,7 @@
 "use client";
 import React, { forwardRef } from "react";
-import { cn, omit } from "./utils";
+import { omit } from "@/lib/omit";
+import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
 import { Select } from "./Select";
 

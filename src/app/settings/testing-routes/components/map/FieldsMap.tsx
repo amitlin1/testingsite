@@ -1,37 +1,33 @@
 "use client";
 import * as React from "react";
 import { Layers, Link2, Package } from "lucide-react";
-import { ConfirmDialog, Snackbar, Tag } from "@/components/ui";
+import { ConfirmDialog, DialogReturnFocus, Tag } from "@/components/ui";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import type { FieldId } from "@/app/lib/station-fields/schema";
 import { columnNavKey, filterCounts, findCell, mapErrorBar, mapNavGrid, visibleRows } from "../../lib/mapModel";
-import type { CellBinding, FieldsMapModel, MapCell, MapColumn, MapFilter, MapRow } from "../../lib/mapModel";
+import type { FieldsMapModel, MapCell, MapColumn, MapFilter, MapRow } from "../../lib/mapModel";
+import type { CellBinding } from "../../lib/cellGroups";
 import type { RouteQuery } from "../../lib/routeQuery";
 import { BULK_TEXT, MAP_TEXT, columnCoverageText, columnPickLabel, sharedRowTitle } from "../../lib/labels";
 import { BULK_UNDRAWN_TEXT, clearCellsMessage, clearCellsTitle, copiedText, pastedText } from "../../lib/bulkLabels";
-import FieldsMapBulkBar, { PasteTextDialog, readClipboardText, useBulkActions, writeClipboardText } from "./FieldsMapBulkBar";
+import FieldsMapBulkBar from "./FieldsMapBulkBar";
+import { useBulkActions } from "./useBulkActions";
+import { PasteTextDialog } from "../shared/PasteTextDialog";
+import { NoticeSnackbar, useNotice } from "../shared/Notice";
+import { readClipboardText, writeClipboardText } from "../shared/clipboard";
 import FieldsMapCell from "./FieldsMapCell";
 import FieldsMapErrorBar from "./FieldsMapErrorBar";
 import FieldsMapFooter from "./FieldsMapFooter";
 import FieldsMapToolbar from "./FieldsMapToolbar";
-import { useGridNavigation } from "./useGridNavigation";
+import { navKeyOf, useGridNavigation } from "./useGridNavigation";
 import { useGridSelection } from "./useGridSelection";
 import "./map.css";
 
 /**
  * "מפת שדות" — stations × the kit's rows (route-fields spec §5.4; artboard 1, and artboard 11 for a
- * route that holds no fields of its own). Top to bottom:
- *   the error bar (only with an error) → the toolbar (filter chips; none on artboard 11's map of a
- *   route without fields of its own — the page draws FieldsOnboarding above the map then) → the
- *   selection bar (while a cell is selected) → the map card: <section aria-label="מפת שדות">, white,
- *   hairline, radius 16; a
- *   horizontal scroller (min-width 1120) with the grid `240px repeat(N, minmax(176px, 1fr))`, its
- *   first column sticky; the footer.
- *
- * Rows and columns come from mapModel (FieldsMapModel); a kit's map has "הקופסה", "כל פריט במארז"
- * and a row per template line, a single item route one row (no artboard — spec §5.4.1). A
- * package-level column is one continuous frame ("כרטיס אחד לכל המארז"); a per-item column separate
- * tiles (FieldsMapCell).
+ * route that holds no fields of its own: no filter chips then — the page draws FieldsOnboarding
+ * above the map). Rows and columns come from mapModel; a package-level column is one continuous
+ * frame ("כרטיס אחד לכל המארז"), a per-item column separate tiles (FieldsMapCell).
  *
  * A click on a cell OPENS ITS EDITOR (spec §10.3: artboard 11's "לחיצה על תא פותחת את עורך השדות"
  * over artboard 1's click-to-select demo). Keyboard: role="grid", roving tabindex, arrows between
@@ -43,8 +39,8 @@ import "./map.css";
  * mix freely. The selection lives here: opening a cell's editor leaves the map, and with it the
  * selection.
  *
- * Actions (FieldsMapBulkBar, bulkModel): "העתק" / Ctrl C, "הדבק" / Ctrl V, "נקה" (after a confirm —
- * undrawn) and "החל ערכת שדות…" (`onApplySet`, artboard 9). They act on the selected cells; with
+ * Actions (FieldsMapBulkBar, useBulkActions): "העתק" / Ctrl C, "הדבק" / Ctrl V, "נקה" (after a
+ * confirm — undrawn) and "החל ערכת שדות…" (`onApplySet`, artboard 9). They act on the selected cells; with
  * none selected, Ctrl C / Ctrl V act on the focused cell, like a spreadsheet. Ctrl C writes the TSV
  * through the copy event and Ctrl V reads the paste event (both work on plain http); when a browser
  * sends no such event for a focused button, the clipboard API is the fallback. Every change is a
@@ -62,20 +58,11 @@ export type FieldsMapProps = {
   /** Open the cell editor on a cell (withEditor(query, step_uid, target, field)); `field` from the
    *  error bar's "עבור לשדה". */
   onOpenCell: (binding: CellBinding, field?: FieldId) => void;
-  /** A column header was activated ("בחירת כל התאים בעמדה {name}"); the map has already selected
-   *  the column's cells. */
-  onSelectColumn?: (columnKey: string) => void;
   /** Field-set names by id, for a cell's "ערכה: {name}" tag. The fields context carries none (the
    *  library's API is session 2d's); a cell whose set name is unknown shows no tag. */
   setNames?: Readonly<Record<number, string>>;
-  /** The selection bar's "החל ערכת שדות…" (artboard 9's dialog): the selected cells, in map order.
-   *  Without it the button is not drawn. */
-  onApplySet?: (cells: MapCell[]) => void;
-};
-
-const navKeyOf = (target: EventTarget | null): string | null => {
-  const el = target instanceof Element ? target.closest<HTMLElement>("[data-nav-key]") : null;
-  return el?.dataset.navKey ?? null;
+  /** The selection bar's "החל ערכת שדות…" (artboard 9's dialog): the selected cells, in map order. */
+  onApplySet: (cells: MapCell[]) => void;
 };
 
 /** Ctrl / ⌘ + C or V on any keyboard layout (a Hebrew layout's key reads "ב" / "ה"). */
@@ -86,7 +73,7 @@ function clipboardShortcut(e: React.KeyboardEvent): "copy" | "paste" | null {
   return null;
 }
 
-export default function FieldsMap({ context, model, query, onOpenCell, onSelectColumn, setNames, onApplySet }: FieldsMapProps) {
+export default function FieldsMap({ context, model, query, onOpenCell, setNames, onApplySet }: FieldsMapProps) {
   const [filterChoice, setFilterChoice] = React.useState<MapFilter>("all");
   const counts = React.useMemo(() => filterCounts(model), [model]);
   // A filter that has nothing left to show (its last cell fixed) gives way to "הכל" — for good, so
@@ -96,16 +83,16 @@ export default function FieldsMap({ context, model, query, onOpenCell, onSelectC
   // Artboard 11 draws no toolbar over a route without fields of its own: the whole map shows.
   const filter: MapFilter = stale || model.onboarding ? "all" : filterChoice;
   const rows = React.useMemo(() => visibleRows(model, filter), [model, filter]);
-  const grid = React.useMemo(() => mapNavGrid(model.columns, rows), [model.columns, rows]);
+  const { grid, bodyStart } = React.useMemo(() => mapNavGrid(model.columns, rows), [model.columns, rows]);
 
   const [initialKey] = React.useState<string | null>(() =>
     query.step != null && query.target != null ? findCell(model, query.step, query.target)?.key ?? null : null);
   const gridRef = React.useRef<HTMLDivElement>(null);
-  const selection = useGridSelection(grid, 1);
+  const selection = useGridSelection(grid, bodyStart);
   const { extend: extendSelection, toggle: toggleSelection, selectColumn, clear: clearSelection } = selection;
   // Shift + arrows: the focus moved from `from` to `to` — the range grows to `to`.
   const onExtend = React.useCallback((from: string, to: string) => extendSelection(to, from), [extendSelection]);
-  const { gridProps, tabIndexOf, focusKey, activeKey } = useGridNavigation(gridRef, grid, { initialKey, bodyStart: 1, onExtend });
+  const { gridProps, tabIndexOf, focusKey, activeKey } = useGridNavigation(gridRef, grid, { initialKey, bodyStart, onExtend });
 
   const errorBar = React.useMemo(() => mapErrorBar(model, context), [model, context]);
   // Artboard 11: while the route holds no fields of its own, a filled cell is another kit's.
@@ -135,17 +122,16 @@ export default function FieldsMap({ context, model, query, onOpenCell, onSelectC
     onOpenCell(cell.binding);
   }, [toggleSelection, extendSelection, activeKey, focusKey, onOpenCell]);
 
-  const pickColumn = React.useCallback((columnIndex: number, columnKey: string, add: boolean) => {
+  const pickColumn = React.useCallback((columnIndex: number, add: boolean) => {
     selectColumn(columnIndex, add);
-    onSelectColumn?.(columnKey);
-    for (let r = 1; r < grid.length; r++) {
+    for (let r = bodyStart; r < grid.length; r++) {
       const key = grid[r][columnIndex];
       if (key != null) {
         focusKey(key);
         return;
       }
     }
-  }, [selectColumn, onSelectColumn, grid, focusKey]);
+  }, [selectColumn, grid, bodyStart, focusKey]);
 
   /** "בטל בחירה" / Escape: the bar goes, so the focus goes back to the grid. */
   const deselect = React.useCallback((refocus: boolean) => {
@@ -153,19 +139,16 @@ export default function FieldsMap({ context, model, query, onOpenCell, onSelectC
     if (refocus && activeKey != null) focusKey(activeKey);
   }, [clearSelection, activeKey, focusKey]);
 
-  /** After the paste box or the clear confirm: ui/Dialog has no trigger to give the focus back to, so
-   *  it would drop to the page — the grid takes it, once the dialog has let go of it. */
-  const refocusGridSoon = React.useCallback(() => {
-    window.setTimeout(() => {
-      if (activeKey != null) focusKey(activeKey);
-    }, 0);
-  }, [activeKey, focusKey]);
+  /** After the paste box or the clear confirm the grid's active cell takes the focus back. */
+  const activeCellElement = React.useCallback(
+    () => [...(gridRef.current?.querySelectorAll<HTMLElement>("[data-nav-key]") ?? [])].find((el) => el.dataset.navKey === activeKey) ?? null,
+    [activeKey],
+  );
 
   // ---- actions -------------------------------------------------------------------------------------
   const bulk = useBulkActions(model);
-  // The message after a copy or a paste; a new one restarts the Snackbar (its key).
-  const [notice, setNoticeState] = React.useState<{ text: string; seq: number } | null>(null);
-  const setNotice = React.useCallback((text: string) => setNoticeState((n) => ({ text, seq: (n?.seq ?? 0) + 1 })), []);
+  // The message after a copy or a paste.
+  const { notice, say: setNotice, close: closeNotice } = useNotice();
   // The cells stay with a closed dialog, so its text does not change while it closes.
   const [clearBox, setClearBox] = React.useState<{ open: boolean; cells: MapCell[] }>({ open: false, cells: [] });
   const [pasteBox, setPasteBox] = React.useState<{ open: boolean; cells: MapCell[] }>({ open: false, cells: [] });
@@ -282,7 +265,7 @@ export default function FieldsMap({ context, model, query, onOpenCell, onSelectC
         {selectedCells.length > 0 && (
           <FieldsMapBulkBar
             count={selectedCells.length}
-            onApplySet={onApplySet ? () => onApplySet(selectedCells) : undefined}
+            onApplySet={() => onApplySet(selectedCells)}
             onPaste={() => pasteFromClipboard(selectedCells)}
             onCopy={() => copyCellsOut(selectedCells, null)}
             onClear={() => setClearBox({ open: true, cells: selectedCells })}
@@ -313,7 +296,7 @@ export default function FieldsMap({ context, model, query, onOpenCell, onSelectC
                       column={col}
                       navKey={key}
                       tabIndex={tabIndexOf(key)}
-                      onPick={(add) => pickColumn(i, col.key, add)}
+                      onPick={(add) => pickColumn(i, add)}
                     />
                   );
                 })}
@@ -351,44 +334,30 @@ export default function FieldsMap({ context, model, query, onOpenCell, onSelectC
       </div>
 
       {/* Outside the view: their keys and paste events are not the map's. */}
-      <ConfirmDialog
-        open={clearBox.open}
-        title={clearCellsTitle(clearCount)}
-        message={clearCellsMessage(clearCount)}
-        confirmText={BULK_TEXT.clear}
-        cancelText={BULK_UNDRAWN_TEXT.clearCancel}
-        destructive
-        draggable={false}
-        onCancel={() => {
-          setClearBox((b) => ({ ...b, open: false }));
-          refocusGridSoon();
-        }}
-        onConfirm={() => {
-          bulk.clear(clearBox.cells);
-          setClearBox((b) => ({ ...b, open: false }));
-          refocusGridSoon();
-        }}
-      />
-      <PasteTextDialog
-        open={pasteBox.open}
-        onCancel={() => {
-          setPasteBox((b) => ({ ...b, open: false }));
-          refocusGridSoon();
-        }}
-        onPaste={(text) => {
-          setPasteBox((b) => ({ ...b, open: false }));
-          pasteCellsIn(pasteBox.cells, text);
-          refocusGridSoon();
-        }}
-      />
-      <Snackbar
-        key={notice?.seq ?? 0}
-        open={notice != null}
-        message={notice?.text}
-        autoHideDuration={5000}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        onClose={() => setNoticeState(null)}
-      />
+      <DialogReturnFocus.Provider value={activeCellElement}>
+        <ConfirmDialog
+          open={clearBox.open}
+          title={clearCellsTitle(clearCount)}
+          message={clearCellsMessage(clearCount)}
+          confirmText={BULK_TEXT.clear}
+          cancelText={BULK_UNDRAWN_TEXT.clearCancel}
+          destructive
+          onCancel={() => setClearBox((b) => ({ ...b, open: false }))}
+          onConfirm={() => {
+            bulk.clear(clearBox.cells);
+            setClearBox((b) => ({ ...b, open: false }));
+          }}
+        />
+        <PasteTextDialog
+          open={pasteBox.open}
+          onCancel={() => setPasteBox((b) => ({ ...b, open: false }))}
+          onPaste={(text) => {
+            setPasteBox((b) => ({ ...b, open: false }));
+            pasteCellsIn(pasteBox.cells, text);
+          }}
+        />
+      </DialogReturnFocus.Provider>
+      <NoticeSnackbar notice={notice} onClose={closeNotice} />
     </>
   );
 }
@@ -402,10 +371,8 @@ type ColumnHeaderProps = {
   onPick: (add: boolean) => void;
 };
 
-/** A station's header (spec §5.4.2): the number in a 20px blue circle, the name (13/600), the Tag
- *  "כרטיס מארז" (Package 12px) on a package-level column or "לכל פריט בנפרד", and "מוגדרים {x}/{y}".
- *  The header cell is named by the station; its button by artboard 1's "בחירת כל התאים בעמדה
- *  {name}", with the rest as its description. */
+/** A station's header (spec §5.4.2). The header cell is named by the station; its button by
+ *  columnPickLabel, with the rest as its description. */
 function ColumnHeader({ column, navKey, tabIndex, onPick }: ColumnHeaderProps) {
   const metaId = React.useId();
   return (
@@ -437,10 +404,7 @@ function ColumnHeader({ column, navKey, tabIndex, onPick }: ColumnHeaderProps) {
 }
 
 // ---- row headers --------------------------------------------------------------------------------
-/** A row's header (spec §5.4.1): "הקופסה" / "כל פריט במארז" on a 30px soft-blue tile (Package /
- *  Layers) with their sub-lines; a template line "{item} ×{qty}" after its 26px parchment seq badge,
- *  "מסלול {r} · {n} עמדות" under it, and Link2 ("משותף ל: {kits}") when other kits run its route.
- *  A single item route's row has no tile. */
+/** A row's header (spec §5.4.1). */
 function RowHeader({ row }: { row: MapRow }) {
   return (
     <div role="rowheader" className="rf-map__rowhead">

@@ -1,18 +1,41 @@
 import { NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
-import { newPrefixedId } from "@/app/lib/station-fields/step-uids";
-import type { RandomSource } from "@/app/lib/station-fields/step-uids";
-import type { ComponentId, PopupTemplateConfig, TemplateStepId } from "./schema";
-import { TEMPLATE_DEFAULTS } from "./labels";
+import { newPrefixedId, type RandomSource } from "@/lib/random-id";
+import type { ComponentId, ComponentKind, PopupTemplateConfig, TemplateComponent, TemplateStepId } from "./schema";
+import { COMPONENT_NAME, TEMPLATE_DEFAULTS } from "./labels";
 
 /**
- * Ids, and the templates that reproduce today's popups (docs/popup-templates/PLAN.md §4, step 1.5):
- * a station type seeded with one of these opens exactly the popup it opened before, from the template.
- * Titles use {עמדה}, as the popups use the station type's name from the DB — no name lives here.
+ * Ids, a new component's defaults, and the templates that reproduce today's popups
+ * (docs/popup-templates/PLAN.md §4, step 1.5): a station type seeded with one of these opens exactly
+ * the popup it opened before, from the template. Titles use {עמדה}, as the popups use the station
+ * type's name from the DB — no name lives here.
  */
 
 /** Minted in the browser (the editor) and by the seed; the shape check enforces format and uniqueness. */
 export const newTemplateStepId = (random?: RandomSource): TemplateStepId => newPrefixedId("p_", random);
 export const newComponentId = (random?: RandomSource): ComponentId => newPrefixedId("k_", random);
+export const newChecklistRowId = (random?: RandomSource): string => newPrefixedId("i_", random);
+
+/** A new component of a kind, with the defaults today's popups use. A photo component's group is
+ *  its own: its code is its id. */
+export function newComponent(kind: ComponentKind, random?: RandomSource): TemplateComponent {
+  const id = newComponentId(random);
+  switch (kind) {
+    case "sku_scan": return { id, kind, required: true, carry_last: true, lookup_reference: true };
+    case "message": return { id, kind, text: "" };
+    case "photo": return { id, kind, title: TEMPLATE_DEFAULTS.photoTitle, photo_code: id, min: 0, show_reference: true };
+    case "weight": return { id, kind, required: true, tolerance_pct: TEMPLATE_DEFAULTS.weightTolerancePct };
+    case "route_fields": return { id, kind };
+    case "verdict": return { id, kind, question: TEMPLATE_DEFAULTS.verdictQuestion, note_max: NOTE_MAX_DEFAULT };
+    case "checklist": return { id, kind, title: COMPONENT_NAME.checklist, items: [{ id: newChecklistRowId(random), label: "" }] };
+    case "notes": return { id, kind, label: COMPONENT_NAME.notes };
+    case "contents":
+    case "items":
+    case "labels":
+    case "arrival":
+    case "report_sign":
+      return { id, kind };
+  }
+}
 
 /** The first step of both popups: the manufacturer SKU, carried on from the previous station. */
 function skuStep(lookupReference: boolean, random?: RandomSource) {
@@ -46,7 +69,7 @@ export function photoStationTemplate(photoCode: string, random?: RandomSource): 
 }
 
 /**
- * Today's opening wizard (tests-popups/PackageOpenWizard.tsx) as a package template (PLAN.md §5.2):
+ * Today's opening wizard (tests-popups/opening/PackageOpenWizard.tsx) as a package template (PLAN.md §5.2):
  * the box's label → the box's photos, its fields and "האריזה תקינה?" → contents and serials → every
  * item (scan → photo, its fields and "הפריט תקין?" → weigh, ±5%) → labels. `boxCode` / `itemCode`:
  * the photo groups the wizard captures into today, so the reference images stay where they are.
@@ -82,7 +105,7 @@ export function openingTemplate(boxCode: string, itemCode: string, random?: Rand
       ] },
       { id: newTemplateStepId(random), title: "שקילה", desc: "", components: [
         { id: newComponentId(random), kind: "message", text: TEMPLATE_DEFAULTS.weighMessage },
-        { id: newComponentId(random), kind: "weight", required: true, tolerance_pct: 5 },
+        { id: newComponentId(random), kind: "weight", required: true, tolerance_pct: TEMPLATE_DEFAULTS.weightTolerancePct },
       ] },
     ],
     finish_label: TEMPLATE_DEFAULTS.openFinish,
@@ -90,7 +113,7 @@ export function openingTemplate(boxCode: string, itemCode: string, random?: Rand
 }
 
 /**
- * Today's closing wizard (tests-popups/PackageCloseWizard.tsx) as a package template: the box's
+ * Today's closing wizard (tests-popups/closing/PackageCloseWizard.tsx) as a package template: the box's
  * label (starting from the one scanned at the opening) → arrival and packing → the box's fields,
  * the three packing checks and the packing note.
  */
@@ -107,7 +130,7 @@ export function closingTemplate(random?: RandomSource): PopupTemplateConfig {
       { id: newTemplateStepId(random), title: "תקינות האריזה", desc: "אישור סופי", components: [
         { id: newComponentId(random), kind: "route_fields" },
         { id: newComponentId(random), kind: "checklist", title: "בדיקות האריזה",
-          items: TEMPLATE_DEFAULTS.packChecks.map((label) => ({ id: newPrefixedId("i_", random), label })) },
+          items: TEMPLATE_DEFAULTS.packChecks.map((label) => ({ id: newChecklistRowId(random), label })) },
         { id: newComponentId(random), kind: "notes", label: TEMPLATE_DEFAULTS.packNote },
       ] },
     ],
@@ -123,7 +146,7 @@ export function verdictStationTemplate(random?: RandomSource): PopupTemplateConf
       skuStep(false, random),
       {
         id: newTemplateStepId(random),
-        title: "בדיקת {עמדה}",
+        title: TEMPLATE_DEFAULTS.checkStepTitle,
         desc: "בצע את הבדיקה לפי ההנחיה ואשר את תקינות הפריט.",
         components: [
           { id: newComponentId(random), kind: "message", text: "נא לבצע את הבדיקה עפ״י מק״ט {מק״ט}" },

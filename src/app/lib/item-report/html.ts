@@ -11,20 +11,20 @@
 
 import fs from "fs";
 import path from "path";
+import { escapeHtml } from "@/lib/html-escape";
 import { PDF_CSS } from "./pdf-styles";
+import { PAGE } from "./document";
 import { FONT_FILES, fontFaceRules, type FontFile, type ReportFont } from "./fonts";
 
 const cache = new Map<string, string>();
 
-/** The @font-face rules of one font (or all), with the files inlined. Logged,
- *  not thrown, when a file is missing — the report then falls back to the
- *  next family of the stack. */
-export function getFontFaceCss(font?: ReportFont): string {
-  const key = font ?? "all";
-  const hit = cache.get(key);
+/** The @font-face rules of a font, with its files inlined. Logged, not
+ *  thrown, when a file is missing — the report then falls back to the next
+ *  family of the stack. */
+export function getFontFaceCss(font: ReportFont): string {
+  const hit = cache.get(font);
   if (hit != null) return hit;
-  const family = font === "rubik" ? "Rubik" : font === "david" ? "David Libre" : null;
-  const files = FONT_FILES.filter((f) => family == null || f.family === family);
+  const files = FONT_FILES.filter((f) => f.font === font);
   const present: FontFile[] = [];
   const data = new Map<FontFile, string>();
   for (const f of files) {
@@ -36,29 +36,23 @@ export function getFontFaceCss(font?: ReportFont): string {
     }
   }
   const css = fontFaceRules(present, (f) => `data:font/${f.format === "woff2" ? "woff2" : "ttf"};base64,${data.get(f)}`);
-  cache.set(key, css);
+  cache.set(font, css);
   return css;
 }
 
-export interface BuildHtmlOptions {
-  /** Page margins (mm). */
-  marginMm?: { top: number; right: number; bottom: number; left: number };
-  /** Embedded as the PDF's /Title (the browser tab title of the opened PDF). */
-  title?: string;
-  font?: ReportFont;
-}
+const { top, side, bottom } = PAGE.marginMm;
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-export function buildHtml(bodyHtml: string, opts: BuildHtmlOptions = {}): string {
-  const m = opts.marginMm ?? { top: 14, right: 16, bottom: 14, left: 16 };
+export function buildHtml(
+  bodyHtml: string,
+  opts: {
+    /** Page margins (mm). */
+    marginMm?: { top: number; right: number; bottom: number; left: number };
+    /** Embedded as the PDF's /Title (the browser tab title of the opened PDF). */
+    title?: string;
+    font: ReportFont;
+  },
+): string {
+  const m = opts.marginMm ?? { top, right: side, bottom, left: side };
   const titleTag = opts.title ? `<title>${escapeHtml(opts.title)}</title>` : "";
   return (
     `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8"/>${titleTag}` +

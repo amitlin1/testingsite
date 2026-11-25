@@ -4,59 +4,56 @@
 //
 // THE SERVER ORDERS BY THE WORK CLOCK, and the client does not re-sort by wall
 // time. "What sat through a weekend" and "what the lab spent time on" are
-// different questions, and this screen answers the second one; the row set is
-// deliberately different from the old screen's.
+// different questions, and this screen answers the second one.
 //
 // `עמדה בשלב` is the station of the step that was SLOW, taken from the
-// interval — not the item's current station, which is what the old query
-// reported and what made this list look random. `שלב` is that step's number.
+// interval — not the item's current station. `שלב` is that step's number.
 //
-// `ניסיון` is why the tab stops being a list of random stuck items: it tells a
-// first pass apart from a retest and from a restart after the reaper abandoned
-// the step.
+// `ניסיון` is meant to tell a first pass apart from a retest and from a restart
+// after the reaper abandoned the step (see formatAttempt for what it can tell
+// today).
 //
 // `לקוח` is the owner AT THE TIME OF THE STEP, read off the interval's frozen
 // dimension rather than off `items` — the item's CURRENT owner can differ (a
 // retype restarts the route), and a row that contradicted the customer filter
 // which selected it would be worse than no column at all.
 //
-// `serialNo` / `makat` are STRINGS (they were mistyped as numbers upstream and
-// the column is not parsed here). Accessories never appear at all — their
-// testing interval is a synthetic ~0-length pair and can never be a slow step.
+// `serialNo` / `makat` are strings and are shown as they are. Accessories never
+// appear at all — their testing interval is a synthetic ~0-length pair and can
+// never be a slow step.
 
 import * as React from "react";
 
-import DataCard from "@/app/components/dashboard/DataCard";
-import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
-import Segmented from "@/app/components/dashboard/Segmented";
-import TwinDuration from "@/app/components/dashboard/TwinDuration";
-import type { SlowItemWire } from "@/app/lib/dashboard/api-types";
+import DataCard from "../_components/DataCard";
+import DenseTable, { type Column } from "../_components/DenseTable";
+import Segmented from "../_components/Segmented";
+import TwinDuration from "../_components/TwinDuration";
+import type { SlowItemView } from "@/app/lib/dashboard/contract";
 import {
-  DASH_COLORS,
   EM_DASH,
   formatAttempt,
   formatMinutes,
   stuckTone,
-} from "@/app/lib/dashboard/format";
-import type { StuckHours } from "@/app/lib/hooks/useDashboardState";
+  toneText,
+  workTwin,
+} from "../_lib/format";
+import { STUCK_HOURS_OPTIONS, type StuckHours } from "../_lib/state";
 import type { TabProps } from "./tabTypes";
 
 const THRESHOLDS: Array<{ value: string; label: string; hours: StuckHours }> = [
-  { value: "24", label: "24 ש׳+", hours: 24 },
-  { value: "48", label: "48 ש׳+", hours: 48 },
-  { value: "72", label: "72 ש׳+", hours: 72 },
+  ...STUCK_HOURS_OPTIONS.map((hours) => ({ value: String(hours), label: `${hours} ש׳+`, hours })),
   { value: "all", label: "הכל", hours: null },
 ];
 
 /** The threshold is a client-side cut of the page the server returned. */
-export function passesThreshold(row: SlowItemWire, stuckHours: StuckHours): boolean {
+export function passesThreshold(row: SlowItemView, stuckHours: StuckHours): boolean {
   if (stuckHours === null) return true;
   const wall = row.queueTimeMinutes ?? row.totalTimeMinutes;
   return wall !== null && wall >= stuckHours * 60;
 }
 
 export default function SlowItemsTab({ api, data }: TabProps) {
-  const slow = data.get<SlowItemWire[]>("slow");
+  const slow = data.get("slow");
   const { stuckHours } = api.state;
 
   const rows = React.useMemo(
@@ -64,7 +61,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
     [slow.data, stuckHours],
   );
 
-  const columns: Array<Column<SlowItemWire>> = [
+  const columns: Array<Column<SlowItemView>> = [
     {
       key: "serial",
       header: "סריאלי",
@@ -96,10 +93,10 @@ export default function SlowItemsTab({ api, data }: TabProps) {
     {
       key: "customer",
       header: "לקוח",
-      sortValue: (r) => r._new_customerName ?? "",
+      sortValue: (r) => r.customerName ?? "",
       render: (r) => (
         <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
-          {r._new_customerName ?? EM_DASH}
+          {r.customerName ?? EM_DASH}
         </span>
       ),
     },
@@ -122,8 +119,8 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       numeric: true,
       secondary: true,
       render: (r) => {
-        const attempt = formatAttempt(r._new_attemptNo, r._new_entryReason);
-        return <span style={{ fontSize: "var(--text-fine)", color: attempt.tone }}>{attempt.text}</span>;
+        const attempt = formatAttempt(r.attemptNo, r.entryReason);
+        return <span style={{ fontSize: "var(--text-fine)", color: toneText(attempt.tone) }}>{attempt.text}</span>;
       },
     },
     {
@@ -137,7 +134,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
           value={formatMinutes(r.queueTimeMinutes)}
           tone={stuckTone(r.queueTimeMinutes)}
           bold
-          twin={r.queueTimeMinutes === null ? null : `נטו ${formatMinutes(r._new_queueWorkMinutes)}`}
+          twin={workTwin(r.queueTimeMinutes, r.queueWorkMinutes)}
         />
       ),
     },
@@ -145,13 +142,13 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       key: "processing",
       header: "בביצוע · נטו",
       numeric: true,
-      sortValue: (r) => r._new_processingWorkMinutes,
+      sortValue: (r) => r.processingWorkMinutes,
       render: (r) => (
         <TwinDuration
-          value={formatMinutes(r._new_processingWorkMinutes)}
-          tone={DASH_COLORS.muted}
+          value={formatMinutes(r.processingWorkMinutes)}
+          tone="muted"
           twin={
-            r._new_processingWorkMinutes === null && r.processingTimeMinutes === null
+            r.processingWorkMinutes === null && r.processingTimeMinutes === null
               ? null
               : `ברוטו ${formatMinutes(r.processingTimeMinutes)}`
           }
@@ -171,7 +168,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       numeric: true,
       render: (r) => (
         <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
-          {r._new_workerName ?? EM_DASH}
+          {r.workerName ?? EM_DASH}
         </span>
       ),
     },
@@ -202,7 +199,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       <DenseTable
         columns={columns}
         rows={slow.data === null ? null : rows}
-        rowKey={(row) => `${row.itemId}-${row.routeStep}-${row._new_attemptNo}`}
+        rowKey={(row) => `${row.itemId}-${row.routeStep}-${row.attemptNo}`}
         loading={slow.loading}
         empty={{
           text: "אין פריטים תקועים בסף הזה.",

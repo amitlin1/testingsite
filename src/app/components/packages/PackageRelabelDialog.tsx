@@ -1,10 +1,13 @@
 "use client";
 import React from "react";
 import { useReactToPrint } from "react-to-print";
-import type { PackageView } from "@/app/lib/packages/read";
-import { BLUE, INK, INK_2, MUTED, AMBER_INK, AMBER_BG, AMBER_BORDER, fmtId, pressKeys } from "./packageUi";
-import { PackageDialog, PackageDialogHeader } from "./PackageDialog";
-import { CopiesStepper, LabelSheet, Tick, packageLabels, type LabelSpec } from "./PackageLabelsDialog";
+import type { PackageView } from "@/app/lib/packages/contract";
+import { BLUE, INK, INK_2, MUTED, AMBER_INK, AMBER_BG, AMBER_BORDER } from "@/components/ui/colors";
+import { formatIdText } from "@/app/lib/packages/ids";
+import { CopiesStepper, Tick, pressKeys } from "@/components/ui/ArtboardControls";
+import { usePrintWhenReady } from "@/lib/hooks/usePrintWhenReady";
+import { ArtboardDialog, ArtboardDialogHeader } from "@/components/ui/ArtboardDialog";
+import { LabelSheet, packageLabels, type LabelSpec } from "@/app/components/labels/Labels";
 
 /**
  * New labels for the boxes the production upgrade converted from legacy
@@ -28,8 +31,6 @@ export type PackageRelabelDialogProps = {
   /** Called after the print dialog closes, with the boxes that were printed. */
   onPrinted?: (packageIds: string[]) => void;
 };
-
-const codeOf = (id: string | number) => { const f = fmtId(id); return `${f.head} ${f.suffix}`.trim(); };
 
 export default function PackageRelabelDialog({ open, onClose, packages, onPrinted }: PackageRelabelDialogProps) {
   const [on, setOn] = React.useState<boolean[]>(() => packages.map(() => true));
@@ -57,6 +58,7 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
     documentTitle: "Converted-packages-labels",
     onAfterPrint: () => setAskConfirm(true),
   });
+  const printShown = usePrintWhenReady(handlePrint);
 
   if (!open) return null;
 
@@ -72,8 +74,8 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
   const toggle = (i: number) => setOn((v) => v.map((x, j) => (j === i ? !x : x)));
 
   return (
-    <PackageDialog open onClose={onClose} width="min(880px, 96vw)">
-      <PackageDialogHeader
+    <ArtboardDialog open onClose={onClose} width="min(880px, 96vw)">
+      <ArtboardDialogHeader
         title="מדבקות חדשות למארזים שהוסבו"
         onClose={onClose}
         subtitle={
@@ -93,14 +95,14 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
         <div className="no-print" role="group" aria-label="מארזים להדפסה" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 9 }}>
           {packages.map(({ pkg, legacyIds }, i) => (
             <div key={pkg.item_id} role="checkbox" aria-checked={on[i]} tabIndex={0}
-              aria-label={`${pkg.item_type_desc} · ${pkg.customer_name ?? pkg.customer_code ?? ""} · ${codeOf(pkg.item_id)}`}
+              aria-label={`${pkg.item_type_desc} · ${pkg.customer_name ?? pkg.customer_code ?? ""} · ${formatIdText(pkg.item_id)}`}
               onClick={() => toggle(i)} onKeyDown={pressKeys(() => toggle(i))}
               className="pkg-choice" style={{ display: "flex", alignItems: "center", gap: 13, borderRadius: 14, padding: "11px 14px" }}>
               <Tick on={on[i]} />
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600 }}>{pkg.item_type_desc} · {pkg.customer_name ?? pkg.customer_code ?? ""}</div>
                 <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums", display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ direction: "ltr", unicodeBidi: "isolate" }}>{codeOf(pkg.item_id)}</span>
+                  <span style={{ direction: "ltr", unicodeBidi: "isolate" }}>{formatIdText(pkg.item_id)}</span>
                   <span>מזהה ישן: <span style={{ direction: "ltr", unicodeBidi: "isolate" }}>{legacyIds.join(", ") || "—"}</span></span>
                 </div>
               </div>
@@ -137,12 +139,12 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
           <button type="button" onClick={onClose} className="pkg-pill pkg-pill--ghost" style={{ padding: "11px 20px" }}>ביטול</button>
           <button type="button" onClick={() => setPreview((p) => !p)} aria-pressed={preview} className="pkg-pill pkg-pill--ghost" style={{ padding: "11px 20px" }}>{preview ? "הסתר תצוגה מקדימה" : "תצוגה מקדימה"}</button>
           <button type="button" disabled={chosen.length === 0}
-            onClick={() => { setPrinted(chosen.map((c) => c.pkg.item_id)); setPreview(true); setTimeout(() => handlePrint(), 50); }}
+            onClick={() => { setPrinted(chosen.map((c) => c.pkg.item_id)); setPreview(true); printShown(); }}
             className="pkg-pill pkg-pill--primary" style={{ padding: "11px 24px", fontSize: 15 }}>
             {chosen.length === 0 ? "הדפס" : `הדפס ${sheets} מדבקות`}
           </button>
         </div>
       </div>
-    </PackageDialog>
+    </ArtboardDialog>
   );
 }

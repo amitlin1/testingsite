@@ -11,7 +11,6 @@ import {
   DialogActions,
   ConfirmDialog,
   TextField,
-  Snackbar,
   Alert,
   LinearProgress,
   Tooltip,
@@ -21,6 +20,7 @@ import {
   Skeleton,
   Stack,
   Divider,
+  useToast,
 } from "@/components/ui";
 import DataTable, { type Column } from "@/components/DataTable";
 import { UploadFile as UploadFileIcon } from "@/components/ui/icons";
@@ -39,17 +39,24 @@ import { CheckCircle as CheckCircleIcon } from "@/components/ui/icons";
 import { Error as ErrorIcon } from "@/components/ui/icons";
 import SettingsToolbar from "@/app/settings/components/SettingsToolbar";
 import { FileIcon } from "@/app/components/files/FileIcon";
-import { formatFileSize, formatDate } from "@/lib/minioFileUtils";
-import { apiFetch } from "@/lib/api/client";
-import { uploadFileManagerFile, mapWithConcurrency } from "@/lib/api/direct-upload";
+import { fileDownloadUrl, formatFileSize } from "@/lib/file-types";
+import { FileManagerKeys } from "@/lib/storage/keys";
+import type { FileItem } from "@/lib/storage/contract";
+import { getArray, sendJson } from "@/lib/api/client";
+import { mapWithConcurrency } from "@/lib/async";
+import { uploadFileManagerFile } from "@/lib/api/direct-upload";
+import { failureText } from "@/app/components/failureText";
 import "./files.css";
 
-interface FileItem {
-  name: string;
-  fullPath: string;
-  size: number;
-  lastModified: string;
-  isFolder: boolean;
+/** Date and time as the browser's locale and time zone print them. */
+function formatDate(iso: string): string {
+  return new Intl.DateTimeFormat("he-IL", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
 
 interface UploadFileState {
@@ -62,17 +69,13 @@ interface UploadFileState {
 /** The folder's entries, or null when they could not be read. */
 async function readFiles(prefix: string): Promise<FileItem[] | null> {
   try {
-    const res = await apiFetch(`/api/files?prefix=${encodeURIComponent(prefix)}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return await getArray<FileItem>(`/api/files?prefix=${encodeURIComponent(prefix)}`);
   } catch {
     return null;
   }
 }
 
 export default function FilesPage() {
-  // Core state
   const [currentPath, setCurrentPath] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,11 +84,9 @@ export default function FilesPage() {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [isDragging, setIsDragging] = useState(false);
 
-  // Item action menu
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [menuItem, setMenuItem] = useState<FileItem | null>(null);
 
-  // Dialogs
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFileStates, setUploadFileStates] = useState<UploadFileState[]>(
     []
@@ -99,16 +100,10 @@ export default function FilesPage() {
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Snackbar
-  const [snack, setSnack] = useState({
-    open: false,
-    msg: "",
-    severity: "success" as "success" | "error",
-  });
+  const toast = useToast();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Data fetching ────────────────────────────────────────────────────────────
   const applyFiles = useCallback((list: FileItem[] | null) => {
     setLoadError(list === null);
     setFiles(list ?? []);
@@ -133,7 +128,6 @@ export default function FilesPage() {
     readFiles(currentPath).then(applyFiles);
   }, [currentPath, applyFiles]);
 
-  // ── Breadcrumb ───────────────────────────────────────────────────────────────
   const pathSegments = currentPath
     ? currentPath.split("/").filter(Boolean)
     : [];
@@ -142,7 +136,6 @@ export default function FilesPage() {
     setCurrentPath(pathSegments.slice(0, index + 1).join("/") + "/");
   };
 
-  // ── Upload ───────────────────────────────────────────────────────────────────
   const handleFileSelect = useCallback(
     (selectedFiles: File[]) => {
       if (selectedFiles.length === 0) return;
@@ -177,7 +170,7 @@ export default function FilesPage() {
         } catch (e) {
           patch(index, {
             status: "error",
-            error: e instanceof Error ? e.message : "שגיאה בהעלאה",
+            error: failureText(e, "שגיאה בהעלאה"),
           });
         }
       });
@@ -204,25 +197,16 @@ export default function FilesPage() {
       const failed = uploadFileStates.filter((f) => f.status === "error").length;
       const timer = setTimeout(() => {
         if (failed > 0) {
-          setSnack({
-            open: true,
-            msg: `${failed} מתוך ${uploadFileStates.length} קבצים נכשלו בהעלאה`,
-            severity: "error",
-          });
+          toast.show(`${failed} מתוך ${uploadFileStates.length} קבצים נכשלו בהעלאה`, "error");
           return;
         }
         closeUpload();
-        setSnack({
-          open: true,
-          msg: "הקבצים הועלו בהצלחה",
-          severity: "success",
-        });
+        toast.show("הקבצים הועלו בהצלחה", "success");
       }, failed > 0 ? 0 : 1500);
       return () => clearTimeout(timer);
     }
-  }, [uploadFileStates, closeUpload]);
+  }, [uploadFileStates, closeUpload, toast]);
 
-  // ── Drag & Drop ──────────────────────────────────────────────────────────────
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -235,35 +219,24 @@ export default function FilesPage() {
     if (dropped.length > 0) handleFileSelect(dropped);
   };
 
-  // ── Download ─────────────────────────────────────────────────────────────────
   const handleDownload = (item: FileItem) => {
-    const encodedPath = item.fullPath
-      .split("/")
-      .map(encodeURIComponent)
-      .join("/");
     const a = document.createElement("a");
-    a.href = `/api/files/download/${encodedPath}`;
+    a.href = fileDownloadUrl(item.fullPath);
     a.download = item.name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
 
-  // ── Delete ───────────────────────────────────────────────────────────────────
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setActionLoading(true);
     try {
-      const res = await apiFetch("/api/files", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paths: [deleteTarget.fullPath] }),
-      });
-      if (!res.ok) throw new Error("delete failed");
-      setSnack({ open: true, msg: "הפריט נמחק בהצלחה", severity: "success" });
+      await sendJson("/api/files", "DELETE", { paths: [deleteTarget.fullPath] });
+      toast.show("הפריט נמחק בהצלחה", "success");
       fetchFiles();
     } catch {
-      setSnack({ open: true, msg: "שגיאה במחיקת הפריט", severity: "error" });
+      toast.show("שגיאה במחיקת הפריט", "error");
     } finally {
       setActionLoading(false);
       setDeleteOpen(false);
@@ -271,33 +244,17 @@ export default function FilesPage() {
     }
   };
 
-  // ── Rename ───────────────────────────────────────────────────────────────────
   const handleRename = async () => {
     if (!renameTarget || !renameName.trim()) return;
     setActionLoading(true);
     try {
-      const isFolder = renameTarget.isFolder;
-      const fullPath = renameTarget.fullPath;
-      const lastSlash = isFolder
-        ? fullPath.lastIndexOf("/", fullPath.length - 2)
-        : fullPath.lastIndexOf("/");
-      const parentPath = lastSlash >= 0 ? fullPath.slice(0, lastSlash + 1) : "";
-      const newPath = parentPath + renameName.trim() + (isFolder ? "/" : "");
-
-      const res = await apiFetch("/api/files", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPath: fullPath, newPath }),
-      });
-      if (!res.ok) throw new Error("rename failed");
-      setSnack({
-        open: true,
-        msg: "שם הפריט שונה בהצלחה",
-        severity: "success",
-      });
+      const { fullPath, isFolder } = renameTarget;
+      const newPath = FileManagerKeys.renamed(fullPath, isFolder, renameName.trim());
+      await sendJson("/api/files", "PATCH", { oldPath: fullPath, newPath });
+      toast.show("שם הפריט שונה בהצלחה", "success");
       fetchFiles();
     } catch {
-      setSnack({ open: true, msg: "שגיאה בשינוי שם", severity: "error" });
+      toast.show("שגיאה בשינוי שם", "error");
     } finally {
       setActionLoading(false);
       setRenameOpen(false);
@@ -306,25 +263,15 @@ export default function FilesPage() {
     }
   };
 
-  // ── Create Folder ────────────────────────────────────────────────────────────
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     setActionLoading(true);
     try {
-      const res = await apiFetch("/api/files/folder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: currentPath + newFolderName.trim() + "/" }),
-      });
-      if (!res.ok) throw new Error("create folder failed");
-      setSnack({
-        open: true,
-        msg: "התיקייה נוצרה בהצלחה",
-        severity: "success",
-      });
+      await sendJson("/api/files/folder", "POST", { path: currentPath + newFolderName.trim() + "/" });
+      toast.show("התיקייה נוצרה בהצלחה", "success");
       fetchFiles();
     } catch {
-      setSnack({ open: true, msg: "שגיאה ביצירת תיקייה", severity: "error" });
+      toast.show("שגיאה ביצירת תיקייה", "error");
     } finally {
       setActionLoading(false);
       setNewFolderOpen(false);
@@ -332,7 +279,6 @@ export default function FilesPage() {
     }
   };
 
-  // ── Context Menu ─────────────────────────────────────────────────────────────
   const handleMenuOpen = (
     e: React.MouseEvent<HTMLElement>,
     item: FileItem
@@ -357,7 +303,6 @@ export default function FilesPage() {
     handleMenuClose();
   };
 
-  // ── List columns ─────────────────────────────────────────────────────────────
   const openItem = (item: FileItem) => {
     if (item.isFolder) {
       setCurrentPath(item.fullPath);
@@ -403,7 +348,6 @@ export default function FilesPage() {
   const canCloseUpload = uploadFinished && uploadFailed > 0;
   const lastSegment = pathSegments.length - 1;
 
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="files-page">
       <SettingsToolbar
@@ -411,11 +355,8 @@ export default function FilesPage() {
         subtitle="מאגר הקבצים המשותף: תיקיות, העלאה, הורדה ושינוי שם. אפשר גם לגרור קבצים אל הרשימה."
       />
 
-      {/* Main Container — one flat card */}
       <div className="files-card">
-        {/* Toolbar */}
         <div className="files-toolbar">
-          {/* Breadcrumb */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <Breadcrumbs separator="/" aria-label="מיקום בתיקיות">
               <button
@@ -441,7 +382,6 @@ export default function FilesPage() {
             </Breadcrumbs>
           </div>
 
-          {/* Action buttons */}
           <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "center" }}>
             <Button
               size="small"
@@ -477,7 +417,6 @@ export default function FilesPage() {
           </div>
         </div>
 
-        {/* Content area with drag-and-drop */}
         <div
           className={"files-drop" + (isDragging ? " files-drop--over" : "")}
           onDragOver={handleDragOver}
@@ -496,7 +435,6 @@ export default function FilesPage() {
               <Button variant="outlined" color="inherit" size="small" onClick={fetchFiles}>נסה שוב</Button>
             </div>
           ) : !loading && files.length === 0 ? (
-            /* Empty state */
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px var(--space-lg)", gap: "var(--space-xs)", textAlign: "center" }}>
               <InboxIcon fontSize={56} color="var(--color-ink-muted-48)" aria-hidden />
               <div style={{ fontSize: "var(--text-lead)", fontWeight: 600, color: "var(--color-ink)", marginTop: "var(--space-xs)" }}>
@@ -507,7 +445,7 @@ export default function FilesPage() {
               </div>
             </div>
           ) : viewMode === "list" ? (
-            /* ── List view: a row opens (Enter / Space too) ── */
+            /* A row opens (Enter / Space too). */
             <DataTable<FileItem>
               columns={columns}
               rows={files}
@@ -525,7 +463,6 @@ export default function FilesPage() {
               ))}
             </div>
           ) : (
-            /* ── Grid view ── */
             <div className="files-grid">
               {files.map((item) => (
                 <div key={item.fullPath} className="files-tile">
@@ -562,7 +499,6 @@ export default function FilesPage() {
         </div>
       </div>
 
-      {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -577,7 +513,6 @@ export default function FilesPage() {
         }}
       />
 
-      {/* ── Context Menu ── */}
       <Menu
         anchorEl={menuAnchor}
         open={Boolean(menuAnchor)}
@@ -612,9 +547,6 @@ export default function FilesPage() {
         </MenuItem>
       </Menu>
 
-      {/* ── Upload Progress Dialog ──
-          A clean run closes by itself; if any file failed it stays open with
-          each file's error, and closes when the user says so. */}
       <Dialog open={uploadOpen} onClose={canCloseUpload ? closeUpload : undefined} maxWidth="sm" fullWidth>
         <DialogTitle onClose={canCloseUpload ? closeUpload : undefined}>העלאת קבצים</DialogTitle>
         <DialogContent>
@@ -684,7 +616,6 @@ export default function FilesPage() {
         )}
       </Dialog>
 
-      {/* ── New Folder Dialog ── */}
       <Dialog
         open={newFolderOpen}
         onClose={() => setNewFolderOpen(false)}
@@ -718,7 +649,6 @@ export default function FilesPage() {
         </DialogActions>
       </Dialog>
 
-      {/* ── Rename Dialog ── */}
       <Dialog
         open={renameOpen}
         onClose={() => setRenameOpen(false)}
@@ -751,9 +681,7 @@ export default function FilesPage() {
         </DialogActions>
       </Dialog>
 
-      {/* ── Delete Confirmation ── */}
       <ConfirmDialog
-        draggable={false}
         open={deleteOpen}
         title={deleteTarget?.isFolder ? "מחיקת תיקייה" : "מחיקת קובץ"}
         message={
@@ -768,20 +696,6 @@ export default function FilesPage() {
         onCancel={() => setDeleteOpen(false)}
       />
 
-      {/* ── Snackbar ── */}
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={4000}
-        onClose={() => setSnack((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert
-          severity={snack.severity}
-          onClose={() => setSnack((s) => ({ ...s, open: false }))}
-        >
-          {snack.msg}
-        </Alert>
-      </Snackbar>
     </div>
   );
 }

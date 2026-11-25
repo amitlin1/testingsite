@@ -18,11 +18,14 @@ object so we can list, audit, and detect orphans as the dataset grows.
 
 | Layer | File | Responsibility |
 | :--- | :--- | :--- |
-| Client | [`src/lib/minio.ts`](../src/lib/minio.ts) | Low-level MinIO client + `ensureBucket()` (enables **versioning**). |
-| Storage service | [`src/lib/storage.ts`](../src/lib/storage.ts) | The **only** module that talks to MinIO: put/get/stat/remove/copy/list, `presignPost` / `inspectUploadedObject`, web-stream helper, sha256. |
+| Client | [`src/lib/storage/minio.ts`](../src/lib/storage/minio.ts) | Low-level MinIO client + `ensureBucket()` (enables **versioning**). |
+| Storage service | [`src/lib/storage/index.ts`](../src/lib/storage/index.ts) (`@/lib/storage`) | The **only** module that talks to MinIO: put/get/stat/remove/copy/list, `presignPost` / `inspectUploadedObject`, `serveObject` (a streamed Response), `readDataUrl`, the folder listing and marker. |
+| Key layout | [`src/lib/storage/keys.ts`](../src/lib/storage/keys.ts) | Every key family below, written once (pure; the browser and the tests read it too). |
+| File manager | [`src/lib/storage/file-manager.ts`](../src/lib/storage/file-manager.ts) | List / create folder / delete / rename for `/files`; the `/api/files` routes are thin adapters. |
+| File types | [`src/lib/file-types.ts`](../src/lib/file-types.ts) | Kind, text-editable / OnlyOffice-editable, content type, download URL — one catalog for the UI and the routes. |
 | Direct upload | [`src/lib/directUpload/`](../src/lib/directUpload/) · [`src/lib/api/direct-upload.ts`](../src/lib/api/direct-upload.ts) | Presigned POST tickets (server) and the browser helper that uploads straight to MinIO. See **Direct uploads** below. |
 | Registry | [`src/lib/file-registry.ts`](../src/lib/file-registry.ts) | Keeps the `file_objects` table in sync (best-effort, never blocks the primary op). |
-| Signatures | [`src/lib/file-utils.ts`](../src/lib/file-utils.ts) | `saveSignature` / `deleteSignature` — store at `shipments/{id}/{file}`. |
+| Shipment signatures | [`src/app/lib/shipments/signatures.ts`](../src/app/lib/shipments/signatures.ts) | `saveSignature` / `deleteSignature` — store at `shipments/{id}/{file}`. |
 
 ### Object key layout
 
@@ -33,6 +36,7 @@ object so we can list, audit, and detect orphans as the dataset grows.
 | File-manager file | `<user path>/<filename>` | `entity_type = file_manager` |
 | Item attachment | `items/{itemId}/{uuid}_{safeName}` | `entity_type = item_attachment` |
 | Reference image (RU bucket) | `reference-items/{refId or new}/{ts}-{id8}-{safeName}` | `entity_type = reference_item_image` |
+| Item report, its signatures, header logos | see [ITEM_REPORTS.md](ITEM_REPORTS.md#storage) | `item_report`, `item_report_signature`, `report_logo` |
 
 The DB columns `shipments.signature_path` / `shipment_history.signature_path`
 still store **only the filename**, so the serving URL

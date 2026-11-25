@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { Maximize2, X } from "lucide-react";
 import { AnchoredPopover, Button, IconButton, cn } from "@/components/ui";
 import { NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
+import { NOTE_COUNTER_FROM } from "./labels";
 import "./notes.css";
 
 /* =============================================================================
@@ -138,9 +139,6 @@ export interface NotesFieldProps {
    *  border and aria-invalid alone, no words: a required textarea field left empty after a save
    *  attempt (artboard 14 `tried`), which is no note to explain. */
   errorStyle?: "line" | "placeholder" | "edge";
-  /** Override of the legend's background (default: the row's colour over the box's white, from
-   *  `rowTone` — artboard 14's `legendBg`). */
-  legendBg?: string;
   /** More ids for the textarea's aria-describedby (e.g. the row's help text). */
   describedBy?: string;
   /** On the root (layout only — e.g. a host-side max-width). */
@@ -152,7 +150,7 @@ export interface NotesFieldProps {
 export function NotesField({
   id, value, onChange, max = NOTE_MAX_DEFAULT, required = false, error = false,
   placeholder, editorTitle, size = "row", look = "plain", rowTone = "normal", labelText,
-  requiredLabel = "above", errorStyle = "line", legendBg, describedBy, className, ref,
+  requiredLabel = "above", errorStyle = "line", describedBy, className, ref,
 }: NotesFieldProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const noteRef = React.useRef<HTMLTextAreaElement>(null);
@@ -174,7 +172,7 @@ export function NotesField({
   const len = value.length;
   const lines = countLines(value, perLine ?? Infinity);
   const collapsed = folded !== undefined && !focused && lines > folded;
-  const near = len >= Math.ceil(max * 0.8);
+  const near = len >= Math.ceil(max * NOTE_COUNTER_FROM);
   const showExpand = focused || lines > 1 || wasLast || editorOpen;
   const legend = required && requiredLabel === "legend";
   const errorAsPlaceholder = error && errorStyle === "placeholder";
@@ -290,7 +288,6 @@ export function NotesField({
         legend && "tst-note--legend",
         className,
       )}
-      style={legendBg ? ({ "--tst-note-legend-bg": legendBg } as React.CSSProperties) : undefined}
     >
       {required && requiredLabel !== "none" ? (
         <label htmlFor={id} className={requiredLabel === "legend" ? "tst-note-legend" : "tst-note-req"}>
@@ -414,5 +411,3 @@ function Counter({ len, max, live, look, countFirst = false }: {
     </span>
   );
 }
-
-export default NotesField;

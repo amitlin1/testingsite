@@ -1,15 +1,15 @@
 "use client";
 import * as React from "react";
 import { Eye, LayoutTemplate, PackageOpen, Save, Undo2 } from "lucide-react";
-import { Alert, Button, ConfirmDialog, Skeleton, Snackbar, Tag, TextField } from "@/components/ui";
-import { apiFetch } from "@/lib/api/client";
-import type { PackageRole, PopupTemplateConfig, PopupTemplateJson, TemplateBase } from "@/app/lib/popup-templates/schema";
+import { Alert, Button, ConfirmDialog, Skeleton, Tag, TextField, useToast } from "@/components/ui";
+import { ApiError, getJson, sendJson } from "@/lib/api/client";
+import { TEMPLATE_CONFLICT, TEMPLATE_LIMITS, type PackageRole, type PopupTemplateConfig, type PopupTemplateJson, type TemplateBase } from "@/app/lib/popup-templates/schema";
 import { soleRole } from "@/app/lib/popup-templates/placement";
-import { lintPopupTemplate, TEMPLATE_LIMITS } from "@/app/lib/popup-templates/validate";
+import { lintPopupTemplate } from "@/app/lib/popup-templates/validate";
 import type { TemplateIssue } from "@/app/lib/popup-templates/validate";
 import type { CodePopup } from "@/app/lib/popup-templates/codePopups";
 import { TemplatePopup } from "@/app/testing/tests-popups/TemplateStation";
-import type { ItemRow, TestStation } from "@/types";
+import type { QueueRow, TestStation } from "@/app/lib/testing/contract";
 import { blankTemplate, catalogFor, codeTemplateFor, packageCodeTemplate, sameConfig, setFinishLabel, templateIssues } from "../lib/editorModel";
 import { EDITOR_TEXT } from "../lib/labels";
 import { StepsEditor, VariablesHint } from "./StepsEditor";
@@ -50,11 +50,10 @@ export type TemplateEditorProps = {
 /** A station type's template: null when it has none, "error" when it could not be read. */
 async function readTemplate(typeId: number): Promise<PopupTemplateJson | null | "error"> {
   try {
-    const res = await apiFetch(`/api/settings/popup-templates/${typeId}`);
-    if (res.status === 404) return null;
-    if (!res.ok) return "error";
-    return (await res.json()) as PopupTemplateJson;
-  } catch {
+    return await getJson<PopupTemplateJson>(`/api/settings/popup-templates/${typeId}`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    console.error("Popup template read failed", e);
     return "error";
   }
 }
@@ -69,8 +68,8 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, placeRole
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [previewOpen, setPreviewOpen] = React.useState(false);
-  const [notice, setNotice] = React.useState<{ text: string; severity: "success" | "error"; seq: number } | null>(null);
-  const say = (text: string, severity: "success" | "error" = "success") => setNotice((n) => ({ text, severity, seq: (n?.seq ?? 0) + 1 }));
+  const toast = useToast();
+  const say = (text: string, severity: "success" | "error" = "success") => toast.show({ message: text, severity, dismissible: false });
 
   // Read (readTemplate), then applied in the promise's callback, so nothing is set in an effect's
   // own body; a reload ("נסה שוב", "טען מחדש") first shows loading.
@@ -103,22 +102,20 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, placeRole
     setSaving(true);
     setServerIssues(null);
     try {
-      const res = await apiFetch(`/api/settings/popup-templates/${type.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base, config: draft, expected_version: saved?.version ?? null }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (res.status === 409 && body.code === "TEMPLATE_CONFLICT") { setConflict(true); return; }
-      if (res.status === 422 && Array.isArray(body.issues)) { setServerIssues(body.issues as TemplateIssue[]); return; }
-      if (!res.ok) { say(typeof body.error === "string" ? body.error : EDITOR_TEXT.saveFailed, "error"); return; }
-      const next = body as PopupTemplateJson;
+      const next = await sendJson<PopupTemplateJson>(
+        `/api/settings/popup-templates/${type.id}`,
+        "PUT",
+        { base, config: draft, expected_version: saved?.version ?? null },
+        EDITOR_TEXT.saveFailed,
+      );
       setLoad({ status: "ready", saved: next });
       setDraft(next.config);
       say(EDITOR_TEXT.saved);
       onSaved();
-    } catch {
-      say(EDITOR_TEXT.saveFailed, "error");
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && e.body.code === TEMPLATE_CONFLICT) setConflict(true);
+      else if (e instanceof ApiError && e.status === 422 && Array.isArray(e.body.issues)) setServerIssues(e.body.issues as TemplateIssue[]);
+      else say(e instanceof ApiError ? e.message : EDITOR_TEXT.saveFailed, "error");
     } finally {
       setSaving(false);
     }
@@ -127,8 +124,10 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, placeRole
   const remove = async () => {
     setDeleting(true);
     try {
-      const res = await apiFetch(`/api/settings/popup-templates/${type.id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) throw new Error(String(res.status));
+      // Already gone (404) is what was asked for.
+      await sendJson(`/api/settings/popup-templates/${type.id}`, "DELETE").catch((e: unknown) => {
+        if (!(e instanceof ApiError && e.status === 404)) throw e;
+      });
       setLoad({ status: "ready", saved: null });
       setDraft(null);
       say(EDITOR_TEXT.deleted);
@@ -160,7 +159,6 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, placeRole
       </div>
     );
   } else if (!draft && type.packageLevel) {
-    // Today's opening first, unless the type's place closes the box.
     const order: PackageRole[] = placeRole === "closing" ? ["closing", "opening"] : ["opening", "closing"];
     body = (
       <div className="settings-empty" style={{ padding: "48px var(--space-lg)" }}>
@@ -254,7 +252,6 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, placeRole
         confirmText={EDITOR_TEXT.deleteConfirm}
         destructive
         busy={deleting}
-        draggable={false}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => void remove()}
       />
@@ -262,10 +259,6 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, placeRole
       {previewOpen && draft && !type.packageLevel && (
         <PreviewPopup type={type} config={draft} version={saved?.version ?? 0} onClose={() => setPreviewOpen(false)} />
       )}
-
-      <Snackbar key={notice?.seq ?? 0} open={notice != null} autoHideDuration={4000} onClose={() => setNotice(null)}>
-        <Alert severity={notice?.severity ?? "success"}>{notice?.text}</Alert>
-      </Snackbar>
     </div>
   );
 }
@@ -274,15 +267,15 @@ export default function TemplateEditor({ type, codePopup, photoCodeOf, placeRole
 function PreviewPopup({ type, config, version, onClose }: { type: EditorType; config: PopupTemplateConfig; version: number; onClose: () => void }) {
   const item = React.useMemo(() => ({
     item_id: "0", model: EDITOR_TEXT.previewItem, serial_no: "SN-0001", makat: null, last_sku: null, item_type_id: null,
-  }) as unknown as ItemRow, []);
+  }) as unknown as QueueRow, []);
   const station = React.useMemo(() => ({
-    test_station_id: 0, test_station_desc: EDITOR_TEXT.previewNote, test_station_type_id: type.id, status: 0, is_research: false,
-  }) as unknown as TestStation, [type.id]);
+    test_station_id: 0, test_station_desc: EDITOR_TEXT.previewNote, test_station_type_id: type.id,
+  }) satisfies TestStation, [type.id]);
   const template = React.useMemo((): PopupTemplateJson => ({
     station_type_id: type.id, base: "item", version, config, updated_at: new Date(0).toISOString(), updated_by: null,
   }), [type.id, version, config]);
   return (
-    <TemplatePopup open onClose={onClose} item={item} station={station} stationTypeName={type.name}
+    <TemplatePopup onClose={onClose} item={item} station={station} stationTypeName={type.name}
       workerId={0} workerName={EDITOR_TEXT.previewNote} onSubmit={async () => undefined} template={template} preview />
   );
 }

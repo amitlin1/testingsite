@@ -249,7 +249,7 @@ A neutral Apple-like greyscale with one saturated action blue. Status hues are f
 - **Success Ink** (success-ink): success text, the success Tag, and the success button fill.
 - **Warning Ink** (warning-ink): warning text and the warning button. warning-bg and warning-border carry the band.
 - **Destructive** (destructive): error text, destructive buttons, the danger Tag, invalid field borders. danger-bg is the error band and the remove-row wash.
-- **Status dots** (status-late, status-approved): dots, bars and chart fills only, never text. The single status-to-tone map (`src/app/lib/status-tones.ts`) colours waiting amber (status-late), in-test blue (action-blue), done green (status-approved) and neutral grey (ink-muted-48).
+- **Status dots** (status-late, status-approved): dots, bars and chart fills only, never text. The single status-to-tone map (`src/lib/item-status.ts`) colours waiting amber (status-late), in-test blue (action-blue), done green (status-approved) and neutral grey (ink-muted-48).
 
 ### Neutral
 - **Ink** (ink): all body text and headings, and the dark utility button and tooltip fill.

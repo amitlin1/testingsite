@@ -1,26 +1,13 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { listJson, listStations } from "@/app/lib/lookups";
 
 export const runtime = "nodejs";
 
+/** The station's name only — the internal id meant nothing to the workers (the pickers show the
+ *  station type under the name). */
 export async function GET() {
-  try {
-    const rows = await prisma.test_stations.findMany({
-      orderBy: { test_station_desc: "asc" },
-    });
-
-    // The station's name only — the internal id meant nothing to the workers
-    // (the pickers show the station type under the name).
-    const stations = rows.map((row) => ({
-      id: row.test_station_id,
-      name: (row.test_station_desc ?? "").trim(),
-      typeId: row.test_station_type_id,
-    }));
-
-    return NextResponse.json(stations);
-  } catch (error) {
-    console.error("Error loading stations:", error);
-    // Return empty array instead of error to prevent frontend crashes
-    return NextResponse.json([]);
-  }
+  return listJson(
+    async () => (await listStations()).map((s) => ({ id: s.test_station_id, name: s.test_station_desc, typeId: s.test_station_type_id })),
+    "Error loading stations:",
+    { emptyOnError: true },
+  );
 }

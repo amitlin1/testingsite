@@ -7,10 +7,9 @@ import { VIEW_TAB_TEXT } from "../lib/labels";
 import type { RouteView } from "../lib/routeQuery";
 
 /**
- * The view tabs of /settings/testing-routes (route-fields spec §5.2; artboards 1, 8, 11):
- * <nav aria-label="תצוגות"> with "מפת שדות" | "שלבי המסלול" | "ערכות ורשימות" | "דוח PDF". Each tab is a link to
- * the same page with another `view` (the URL holds the state, routeQuery.ts) — it replaces the
- * history entry, like every other change of the screen's state.
+ * The view tabs of /settings/testing-routes (route-fields spec §5.2; artboards 1, 8, 11). Each tab is
+ * a link to the same page with another `view` (the URL holds the state, routeQuery.ts) — it replaces
+ * the history entry, like every other change of the screen's state.
  *
  * "שלבי המסלול" carries a count chip: the steps of the SELECTED route (spec §10.3 — the artboards'
  * "5" counts the map's merged columns; the decision is the route's own steps). No chip while the
@@ -19,14 +18,13 @@ import type { RouteView } from "../lib/routeQuery";
  * The active tab is aria-current="page" — except while the cell editor is open under "מפת שדות":
  * then the editor's breadcrumb holds the page, and the tab is aria-current="true" (artboard 2).
  *
- * The tabs sit in a row of their own (the hairline under it) whose inline end takes `trailing` —
- * artboard 2 puts the editor's breadcrumb there.
+ * The row's inline end takes `trailing` — artboard 2 puts the editor's breadcrumb there.
  */
 
 export type RouteViewTabsProps = {
   view: RouteView;
   /** The cell editor is open (view=map with step and target). */
-  editorOpen?: boolean;
+  editorOpen: boolean;
   /** The link of each tab (the page builds it with routeQuery's withView). */
   hrefOf: (view: RouteView) => string;
   /** route_steps.length of the selected route; null = unknown (no chip). */
@@ -42,7 +40,7 @@ const TABS: readonly { view: RouteView; label: string; Icon: LucideIcon }[] = [
   { view: "report", label: VIEW_TAB_TEXT.report, Icon: FileText },
 ];
 
-export default function RouteViewTabs({ view, editorOpen = false, hrefOf, stepsCount, trailing }: RouteViewTabsProps) {
+export default function RouteViewTabs({ view, editorOpen, hrefOf, stepsCount, trailing }: RouteViewTabsProps) {
   const current = editorOpen && view === "map" ? "true" : "page";
   return (
     <div className="rf-view-bar">

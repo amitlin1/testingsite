@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { theme, type Theme } from "./theme";
+import { toneColors } from "./tones";
 
 /**
  * Minimal MUI-`sx`-compatible → React inline-style translator, backed by
@@ -13,30 +13,18 @@ import { theme, type Theme } from "./theme";
  */
 
 export interface SxObject {
-  [key: string]: string | number | boolean | null | undefined | ((theme: Theme) => string | number | boolean) | SxObject;
+  [key: string]: string | number | boolean | null | undefined | SxObject;
 }
-export type SxInput = SxObject | ((theme: Theme) => SxObject) | undefined | false | null;
+export type SxInput = SxObject | undefined | false | null;
 
 const SPACE = 8; // MUI spacing unit (this app's theme uses the default 8px)
 
-// MUI theme color paths → Shifthouse token vars.
+// MUI theme color paths → Shifthouse token vars. The tone names are used for
+// text and for fills under white text: their ink (tones.ts).
 const COLOR_TOKENS: Record<string, string> = {
-  primary: "var(--color-primary)",
-  "primary.main": "var(--color-primary)",
+  ...toneColors("ink"),
   "primary.dark": "var(--color-primary-hover)",
   "primary.light": "var(--color-primary-focus)",
-  secondary: "var(--color-ink-muted-80)",
-  "secondary.main": "var(--color-ink-muted-80)",
-  error: "var(--color-destructive)",
-  "error.main": "var(--color-destructive)",
-  // These names are used for text and for fills under white text, so they map
-  // to the AA-safe *-ink shades, not the bare status colours.
-  success: "var(--color-success-ink)",
-  "success.main": "var(--color-success-ink)",
-  warning: "var(--color-warning-ink)",
-  "warning.main": "var(--color-warning-ink)",
-  info: "var(--color-primary)",
-  "info.main": "var(--color-primary)",
   "text.primary": "var(--color-ink)",
   "text.secondary": "var(--color-ink-muted-48)",
   "text.disabled": "var(--color-ink-muted-40)",
@@ -102,21 +90,6 @@ function numberToUnit(key: string, v: number): string | number {
   return v + "px";
 }
 
-const BREAKPOINT_ORDER = ["xl", "lg", "md", "sm", "xs"] as const;
-const BREAKPOINTS = new Set<string>(BREAKPOINT_ORDER);
-
-/** `{ xs: …, md: … }` — a MUI responsive value, not a nested selector block. */
-function isBreakpointObject(v: object): v is Record<string, unknown> {
-  const keys = Object.keys(v);
-  return keys.length > 0 && keys.every((k) => BREAKPOINTS.has(k));
-}
-
-/** The value of the largest breakpoint present, whatever order it was written in. */
-function largestBreakpoint(v: Record<string, unknown>): unknown {
-  for (const bp of BREAKPOINT_ORDER) if (bp in v) return v[bp];
-  return undefined;
-}
-
 // Dev-only: say once per key that an sx entry was dropped, so new hover /
 // media rules that silently do nothing are caught while they are written.
 const warned = new Set<string>();
@@ -129,22 +102,13 @@ function warnDropped(key: string) {
 /** Translate one MUI `sx` object into a flat React style object. */
 function translateOne(sx: Record<string, unknown>): CSSProperties {
   const out: Record<string, unknown> = {};
-  for (const [key, raw] of Object.entries(sx)) {
-    if (raw == null) continue;
+  for (const [key, value] of Object.entries(sx)) {
+    if (value == null) continue;
     // Selectors / media / nested objects can't be inline styles — skip.
-    if (key.startsWith("&") || key.startsWith("@") || key.startsWith(":") ||
-        (typeof raw === "object" && !Array.isArray(raw) && !isBreakpointObject(raw))) {
+    if (key.startsWith("&") || key.startsWith("@") || key.startsWith(":") || typeof value === "object") {
       warnDropped(key);
       continue;
     }
-    // Responsive values (array or { xs, md }) → the largest breakpoint, the
-    // same desktop-first choice the arrays always had. Dropping them outright
-    // collapsed grids and forms to one column; a real breakpoint needs CSS.
-    let value: unknown = Array.isArray(raw)
-      ? raw[raw.length - 1]
-      : typeof raw === "object" ? largestBreakpoint(raw as Record<string, unknown>) : raw;
-    // Per-property theme callback: sx={{ color: (theme) => ... }}.
-    if (typeof value === "function") value = (value as (t: Theme) => unknown)(theme);
 
     if (key in SPACING_MAP) {
       out[SPACING_MAP[key] as string] = scaledSpace(value);
@@ -159,15 +123,12 @@ function translateOne(sx: Record<string, unknown>): CSSProperties {
   return out as CSSProperties;
 }
 
-/** Merge one or more `sx` inputs into a single style object. Resolves the
- *  `sx={(theme) => ({...})}` callback form against the compat theme. */
+/** Merge one or more `sx` inputs into a single style object. */
 export function sxToStyle(...inputs: SxInput[]): CSSProperties {
   let acc: CSSProperties = {};
   for (const input of inputs) {
     if (!input) continue;
-    const obj = typeof input === "function" ? input(theme) : input;
-    if (!obj) continue;
-    acc = { ...acc, ...translateOne(obj as Record<string, unknown>) };
+    acc = { ...acc, ...translateOne(input as Record<string, unknown>) };
   }
   return acc;
 }

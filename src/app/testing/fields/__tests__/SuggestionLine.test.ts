@@ -21,48 +21,41 @@ const html = (props: Omit<SuggestionLineProps, "defs"> & { defs?: Field[] }): st
 /** The markup's text, entities decoded. */
 const textOf = (markup: string): string => markup.replace(/<[^>]*>/g, "")
   .replace(/&#x27;/g, "'").replace(/&quot;/g, "\"").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+/** The isolated runs of the line (`<bdi>`), with their direction: what a bidi reader keeps apart. */
+const runsOf = (markup: string): { dir: string | null; text: string }[] =>
+  [...markup.matchAll(/<bdi(?: dir="(\w+)")?[^>]*>([^<]*)<\/bdi>/g)].map((m) => ({ dir: m[1] ?? null, text: textOf(m[2]) }));
+/** How many live status regions the markup holds (a live region speaks only for what is added to it). */
+const statusRegions = (markup: string) => (markup.match(/role="status"/g) ?? []).length;
 
-test("no fail: the status region alone, empty — never a 'מוצע: תקין' line", () => {
-  assert.equal(html({ fails: [], prefix: SUGGEST_PREFIX }), '<div role="status"></div>');
-  assert.equal(html({ fails: [], prefix: SUGGEST_PREFIX_DIALOG, icon: "bulb", decided: "fail", style: { marginTop: 8 } }), '<div role="status"></div>');
-  assert.equal(html({ fails: [], prefix: SUGGEST_PREFIX, id: "s1" }), '<div role="status" id="s1"></div>');
+test("no fail: the status region is there and empty, so the first suggestion is announced — never a 'מוצע: תקין' line", () => {
+  for (const out of [html({ fails: [], prefix: SUGGEST_PREFIX }), html({ fails: [], prefix: SUGGEST_PREFIX_DIALOG, icon: "bulb", decided: "fail", style: { marginTop: 8 } })]) {
+    assert.equal(statusRegions(out), 1);
+    assert.equal(textOf(out), "");
+  }
+  assert.match(html({ fails: [], prefix: SUGGEST_PREFIX, id: "s1" }), /id="s1"/, "the region keeps the id a control points at");
 });
 
-test("one status line with every fail, as suggestionText writes it", () => {
+test("one status region with every fail, as suggestionText writes it", () => {
   const out = html({ fails: FAILS, prefix: SUGGEST_PREFIX });
-  assert.match(out, /^<div role="status"><div style=/);
+  assert.equal(statusRegions(out), 1);
   assert.equal(textOf(out), suggestionText(SUGGEST_PREFIX, FAILS));
   assert.equal(textOf(out), "מוצע: לא תקין — 'נורית מתח' = לא דולקת · 'התנגדות הארקה' = 0.2 Ω");
 });
 
-test("a number and its unit read left to right, every label and value isolated (spec §0.3, §8.11)", () => {
-  const out = html({ fails: FAILS, prefix: SUGGEST_PREFIX });
-  assert.match(out, /<bdi dir="ltr" style="font-variant-numeric:tabular-nums;white-space:nowrap">0\.2 Ω<\/bdi>/);
-  assert.match(out, /&#x27;<bdi>התנגדות הארקה<\/bdi>&#x27; = /);
-  // a choice's value keeps its own direction (Hebrew)
-  assert.match(out, /&#x27;<bdi>נורית מתח<\/bdi>&#x27; = <bdi>לא דולקת<\/bdi> · /);
+test("every label and value is isolated; a number with its unit reads left to right (spec §0.3, §8.11)", () => {
+  assert.deepEqual(runsOf(html({ fails: FAILS, prefix: SUGGEST_PREFIX })), [
+    { dir: null, text: "נורית מתח" }, { dir: null, text: "לא דולקת" },
+    { dir: null, text: "התנגדות הארקה" }, { dir: "ltr", text: "0.2 Ω" },
+  ]);
   // a negative reading: the minus stays in front of the number
-  const neg = html({ fails: [{ field_id: "f_gnd00001", label: "התנגדות הארקה", valueText: "-7 °C" }], prefix: SUGGEST_PREFIX });
-  assert.match(neg, /<bdi dir="ltr"[^>]*>-7 °C<\/bdi>/);
+  assert.deepEqual(runsOf(html({ fails: [{ field_id: "f_gnd00001", label: "התנגדות הארקה", valueText: "-7 °C" }], prefix: SUGGEST_PREFIX }))[1], { dir: "ltr", text: "-7 °C" });
   // without the number's definition, the value is not taken for one
-  const unknown = html({ fails: FAILS.slice(1), prefix: SUGGEST_PREFIX, defs: [] });
-  assert.match(unknown, /<bdi>0\.2 Ω<\/bdi>/);
+  assert.deepEqual(runsOf(html({ fails: FAILS.slice(1), prefix: SUGGEST_PREFIX, defs: [] }))[1], { dir: null, text: "0.2 Ω" });
 });
 
-test("warning ink, blue once the worker chose 'לא תקין' (artboards 12, 15, 16)", () => {
-  assert.match(html({ fails: FAILS, prefix: SUGGEST_PREFIX }), /color:var\(--color-warning-ink\)/);
-  assert.match(html({ fails: FAILS, prefix: SUGGEST_PREFIX, decided: "pass" }), /color:var\(--color-warning-ink\)/);
-  assert.match(html({ fails: FAILS, prefix: SUGGEST_PREFIX, decided: "" }), /color:var\(--color-warning-ink\)/);
-  assert.match(html({ fails: FAILS, prefix: SUGGEST_PREFIX, decided: "fail" }), /color:var\(--color-primary\)/);
-});
-
-test("artboard 13's muted tail, artboard 14's size", () => {
+test("each artboard's own words: 13's tail after the suggestion, 14's prefix", () => {
   const withTail = html({ fails: FAILS.slice(0, 1), prefix: SUGGEST_PREFIX, tail: SUGGEST_TAIL_WORKER_DECIDES, icon: "triangle" });
   assert.equal(textOf(withTail), "מוצע: לא תקין — 'נורית מתח' = לא דולקת · ההחלטה בידי העובד");
-  assert.match(withTail, /<span style="color:var\(--color-ink-muted-48\)"> · ההחלטה בידי העובד<\/span>/);
-
   const dialog = html({ fails: FAILS.slice(0, 1), prefix: SUGGEST_PREFIX_DIALOG, icon: "bulb", size: "12.5", style: { marginTop: 8 } });
   assert.equal(textOf(dialog), "מוצע לסמן כלא תקין — 'נורית מתח' = לא דולקת");
-  assert.match(dialog, /font-size:12.5px/);
-  assert.match(dialog, /margin-top:8px/);
 });

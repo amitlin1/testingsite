@@ -2,26 +2,33 @@
 import * as React from "react";
 import { ChevronDown, Link2, Minus, Pencil, Plus, Send, X } from "lucide-react";
 import {
-  Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Snackbar, Tag,
+  Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Tag,
 } from "@/components/ui";
-import { apiFetch } from "@/lib/api/client";
 import { VERSION_NOTE_MAX } from "@/app/lib/station-fields/admin-types";
+import { useSettingsToast } from "../../../components/useSettingsToast";
 import type { FieldsContextJson, PublishImpactJson } from "@/app/lib/station-fields/admin-types";
 import { useDraftSnapshot, useDraftStore } from "../../lib/draftStore";
 import type { FieldsMapModel } from "../../lib/mapModel";
 import { UNDRAWN_TEXT, HEADER_TEXT, MAP_STATE_TEXT, routeOptionText } from "../../lib/labels";
 import {
-  CHANGE_BADGE_TEXT, PUBLISH_UNDRAWN_TEXT, PUBLISH_TEXT, countTagsText, infoNoteText, publishButtonText, publishTitleText,
-  publishedSnackText, replacesVersionText, scopeAllSubText, scopeAllTitleText, scopeLabelText, scopeNotStartedSubText,
+  CHANGE_BADGE_TEXT, PUBLISH_UNDRAWN_TEXT, PUBLISH_TEXT, SCOPE_UNDRAWN_TEXT, countTagsText, infoNoteText, publishButtonText,
+  publishTitleText, publishedSnackText, replacesVersionText, scopeAllTitleText, scopeLabelText, scopeNotStartedSubText,
   scopeNotStartedTitleText, scopePendingSubText, scopePendingTitleText,
 } from "../../lib/publishLabels";
 import {
-  APPLY_MODE_DEFAULT, FIELD_SETS_URL, PUBLISH_PREVIEW_URL, PUBLISH_URL, buildPublishGroups, contextKitId, errorCode,
-  fromSetIds, ownRouteId, parsePublishImpact, parsePublishResult, parseSetNames, pendingVersion, previewRequestBody,
-  publishRequestBody, publishVersion, publishedVersionOf, scopeCount, sharedNoteText,
+  buildPublishGroups, pendingVersion, previewRequestBody, publishRequestBody, publishVersion, publishedVersionOf, scopeCount,
+  sharedNoteText,
 } from "../../lib/publishModel";
-import type { PublishBadge, PublishScope } from "../../lib/publishModel";
-import "@/app/packages/packages.css";
+import type { PublishBadge } from "../../lib/publishModel";
+import { APPLY_MODE_DEFAULT } from "../../lib/publishScopes";
+import type { PublishScope } from "../../lib/publishScopes";
+import { kitIdOf, ownRouteId } from "../../lib/fieldsContext";
+import { request } from "../../lib/api";
+import { API, BadBody, errorCode, parsePublishImpact, parsePublishResult } from "../../lib/wire";
+import { useFieldSetNames } from "../../lib/resources";
+import { radioArrowStep, ringStep } from "../shared/radioGroup";
+import { useSessionPerOpen } from "../shared/useSessionPerOpen";
+import "@/components/ui/controls.css";
 import "./publish-dialog.css";
 
 /**
@@ -37,7 +44,7 @@ import "./publish-dialog.css";
  *      the count tags, "מה השתנה" grouped by (route, station), the shared-kits warning, the info note
  *      for the chosen scope, the scope radiogroup and "הערת גרסה";
  *   4. "פרסם גרסה {v}" → POST …/fields/publish { route_ids, base_revs (the preview's), apply_mode,
- *      note }: 200 → close, reload the context (drafts gone, versions up) and an undrawn Snackbar;
+ *      note }: 200 → close, reload the context (drafts gone, versions up) and an undrawn toast;
  *      409 DRAFT_CONFLICT → an undrawn note with "טען מחדש" (context and preview again); 422 →
  *      as in 2.
  *
@@ -45,8 +52,8 @@ import "./publish-dialog.css";
  * (spec §5.11, §10.4), so the footer holds "ביטול" and the primary only.
  *
  * Each opening is a session of its own (PublishSession, keyed): its state starts fresh, and it stays
- * mounted after closing so the dialog's exit animation keeps its content. The Snackbar lives outside
- * the session — it outlives the dialog.
+ * mounted after closing so the dialog's exit animation keeps its content. The toast after a publish
+ * outlives the dialog.
  */
 
 export type PublishDialogProps = {
@@ -61,28 +68,12 @@ export type PublishDialogProps = {
 };
 
 export default function PublishDialog(props: PublishDialogProps) {
-  const { open } = props;
   // A new session per opening: state from the previous one never leaks into the next.
-  const [session, setSession] = React.useState(0);
-  const [wasOpen, setWasOpen] = React.useState(false);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setSession((s) => s + 1);
-  }
-  const [snack, setSnack] = React.useState<string | null>(null);
-  const closeSnack = React.useCallback(() => setSnack(null), []);
-  const onPublished = React.useCallback((version: number) => setSnack(publishedSnackText(version)), []);
+  const session = useSessionPerOpen(props.open);
+  const notify = useSettingsToast({ duration: 6000 });
+  const onPublished = React.useCallback((version: number) => notify(publishedSnackText(version)), [notify]);
 
-  return (
-    <>
-      {session > 0 && props.context && (
-        <PublishSession key={session} {...props} context={props.context} onPublished={onPublished} />
-      )}
-      <Snackbar open={snack != null} autoHideDuration={6000} onClose={closeSnack} anchorOrigin={{ vertical: "bottom", horizontal: "left" }}>
-        <Alert severity="success" onClose={closeSnack}>{snack}</Alert>
-      </Snackbar>
-    </>
-  );
+  return session > 0 && props.context ? <PublishSession key={session} {...props} context={props.context} onPublished={onPublished} /> : null;
 }
 
 // ---- one opening ---------------------------------------------------------------------------------------
@@ -110,23 +101,13 @@ type SessionProps = Omit<PublishDialogProps, "context"> & {
   onPublished: (version: number) => void;
 };
 
-const JSON_HEADERS = { "Content-Type": "application/json" };
-
-async function readBody(res: Response): Promise<unknown> {
+/** `parse(body)`, or null when the body is not what it should be. */
+function parsedOrNull<T>(parse: (body: unknown) => T, body: unknown): T | null {
   try {
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-/** The field sets' names, for "מולאו מהערכה '{set}'" — best effort: {} on any failure. */
-async function loadSetNames(): Promise<Record<number, string>> {
-  try {
-    const res = await apiFetch(FIELD_SETS_URL, { cache: "no-store" });
-    return res.ok ? parseSetNames(await readBody(res)) : {};
-  } catch {
-    return {};
+    return parse(body);
+  } catch (e) {
+    if (e instanceof BadBody) return null;
+    throw e;
   }
 }
 
@@ -145,7 +126,7 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
   const [mode, setMode] = React.useState<PublishScope>(APPLY_MODE_DEFAULT);
   const [note, setNote] = React.useState("");
   const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set());
-  const [setNames, setSetNames] = React.useState<Record<number, string>>({});
+  const setNames = useFieldSetNames();
   /** Each run of prepare() takes a number; an answer to an older run is dropped. */
   const runRef = React.useRef(0);
   const scopeRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
@@ -156,7 +137,7 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
   const noteHelpId = baseId + "-note-help";
 
   const ownId = ownRouteId(context);
-  const kitId = contextKitId(context);
+  const kitId = kitIdOf(context);
 
   /** A refusal for lint errors (422): the header's "בעיה אחת לתיקון" takes over. */
   const closeForIssues = () => {
@@ -173,23 +154,10 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
     const routeIds = store.getSnapshot().summary.draftRouteIds;
     // Nothing left to publish (the drafts went meanwhile).
     if (routeIds.length === 0) return { kind: "close" };
-    let status = 0;
-    let body: unknown = null;
-    try {
-      const res = await apiFetch(PUBLISH_PREVIEW_URL, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify(previewRequestBody(routeIds, kitId)),
-        cache: "no-store",
-      });
-      status = res.status;
-      body = await readBody(res);
-    } catch {
-      status = 0;
-    }
+    const { status, body } = await request(API.publishPreview, { method: "POST", body: previewRequestBody(routeIds, kitId) });
     if (!live()) return { kind: "stale" };
     if (status === 422 && errorCode(body) === "LINT_ERRORS") return { kind: "issues" };
-    const impact = status === 200 ? parsePublishImpact(body) : null;
+    const impact = status === 200 ? parsedOrNull(parsePublishImpact, body) : null;
     if (!impact) return { kind: "previewFailed" };
     if (impact.routes.length === 0) return { kind: "close" };
     return { kind: "ready", impact, routeIds };
@@ -213,9 +181,6 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
           return;
         case "ready":
           setLoad(prepared);
-          if (fromSetIds(prepared.impact).length > 0) {
-            void loadSetNames().then((names) => { if (live()) setSetNames(names); });
-          }
           return;
         default:
           setLoad(prepared);
@@ -284,24 +249,11 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
     const run = runRef.current;
     setPublishing(true);
     setPublishError(null);
-    let status = 0;
-    let body: unknown = null;
-    try {
-      const res = await apiFetch(PUBLISH_URL, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        body: JSON.stringify(publishRequestBody(ready.routeIds, ready.impact, mode, note)),
-        cache: "no-store",
-      });
-      status = res.status;
-      body = await readBody(res);
-    } catch {
-      status = 0;
-    }
+    const { status, body } = await request(API.publish, { method: "POST", body: publishRequestBody(ready.routeIds, ready.impact, mode, note) });
     setPublishing(false);
     if (run !== runRef.current) return;
     if (status === 200) {
-      const published = publishedVersionOf(parsePublishResult(body), ownId) ?? view?.version ?? null;
+      const published = publishedVersionOf(parsedOrNull(parsePublishResult, body), ownId) ?? view?.version ?? null;
       runRef.current += 1;
       onReloadContext();
       if (published != null) onPublished(published);
@@ -319,21 +271,21 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
     setPublishError("failed");
   };
 
-  // ---- the scope radiogroup (arrows move and choose, as PackageDecisionDialog) ----------------------
+  // ---- the scope radiogroup (arrows move and choose) -----------------------------------------------
   const scopes: { mode: PublishScope; title: string; sub: string }[] = ready && view
     ? [
         { mode: "not_started", title: scopeNotStartedTitleText(ready.impact.not_started), sub: scopeNotStartedSubText(view.fromVersion) },
         { mode: "not_reached", title: scopePendingTitleText(ready.impact.not_reached), sub: scopePendingSubText(view.version) },
-        { mode: "all", title: scopeAllTitleText(ready.impact.items_on_routes), sub: scopeAllSubText() },
+        { mode: "all", title: scopeAllTitleText(ready.impact.items_on_routes), sub: SCOPE_UNDRAWN_TEXT.allSub },
       ]
     : [];
   const onScopeKey = (e: React.KeyboardEvent, i: number) => {
-    const step = e.key === "ArrowDown" || e.key === "ArrowLeft" ? 1 : e.key === "ArrowUp" || e.key === "ArrowRight" ? -1 : 0;
+    const step = radioArrowStep(e);
     if (!step) return;
     e.preventDefault();
-    const next = (i + step + scopes.length) % scopes.length;
-    setMode(scopes[next].mode);
-    scopeRefs.current[next]?.focus();
+    const next = ringStep(scopes, i, step);
+    setMode(next.mode);
+    scopeRefs.current[scopes.indexOf(next)]?.focus();
   };
 
   // ---- the body, by state -----------------------------------------------------------------------------
@@ -377,7 +329,7 @@ function PublishSession({ open, onClose, context, map, onReloadContext, onPublis
     }
   };
 
-  const sharedNote = ready ? sharedNoteText(ready.impact, context) : null;
+  const sharedNote = ready ? sharedNoteText(ready.impact) : null;
   const infoText = ready && view
     ? infoNoteText({
         scope: mode,

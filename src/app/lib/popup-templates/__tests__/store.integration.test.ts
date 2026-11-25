@@ -12,9 +12,10 @@ import assert from "node:assert/strict";
 import { Pool } from "pg";
 import type { PopupTemplateConfig } from "../schema";
 import { closingTemplate, openingTemplate, photoStationTemplate, verdictStationTemplate } from "../templates";
+import { HttpError } from "@/lib/http/errors";
+import { LEDGER_TRUNCATE_LOCK } from "@/test-support/ledger-lock";
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
-const LEDGER_TRUNCATE_LOCK = 526050825;
 
 /** Fixture station types — ids far above the seeded ones. */
 const ITEM_TYPE = 9101;
@@ -44,7 +45,7 @@ describe("popup-template store", { skip: TEST_DATABASE_URL ? false : "TEST_DATAB
     lock = await pool.connect();
     await lock.query("SELECT pg_advisory_lock($1)", [LEDGER_TRUNCATE_LOCK]);
     store = await import("../store");
-    const { prisma } = await import("../../prisma");
+    const { prisma } = await import("@/lib/db");
     disconnect = () => prisma.$disconnect();
   });
 
@@ -71,7 +72,7 @@ describe("popup-template store", { skip: TEST_DATABASE_URL ? false : "TEST_DATAB
   const save = (typeId: number, config: PopupTemplateConfig, expected: number | null, base: "item" | "package" = "item") =>
     store.saveTemplate(typeId, { base, config, expectedVersion: expected }, ACTOR);
   const rejects = async (p: Promise<unknown>, status: number, code: string) => {
-    await assert.rejects(p, (e: unknown) => e instanceof store.TemplateStoreError && e.status === status && e.code === code, code);
+    await assert.rejects(p, (e: unknown) => e instanceof HttpError && e.status === status && e.code === code, code);
   };
   const group = async (code: string) =>
     (await q<{ test_station_type_id: number | null; component_id: string | null; is_active: boolean; photo_type_desc: string }>(

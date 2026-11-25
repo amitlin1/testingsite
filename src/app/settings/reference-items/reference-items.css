@@ -1,0 +1,198 @@
+/* פריטי ייחוס: hover / focus / drag states inline styles cannot express. */
+
+/* ------------------------------------------------------ reference items --- */
+.ri-step-card { padding: var(--space-lg); margin-top: var(--space-lg); overflow: visible; }
+.ri-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: var(--space-ml);
+  margin-top: var(--space-lg);
+}
+/* A card opens the item for editing: a real button, with hover and focus. */
+.ri-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ri-card:hover { border-color: var(--color-border-strong); }
+}
+.ri-card:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+/* SP-1: the dialog's two-column form stacks on narrow screens. */
+.ri-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
+@media (max-width: 600px) {
+  .ri-form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* Reference images by station (docs/popup-templates/PLAN.md §5ג): one section per station of the
+   item's route, in route order, each with its images and its own drop target. */
+.ri-stations-hint { margin: 2px 0 10px; font-size: var(--text-small); color: var(--color-ink-muted-48); }
+.ri-stations-empty {
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  font-size: var(--text-small);
+  color: var(--color-ink);
+  background: var(--color-surface-pearl);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+}
+.ri-stations { display: flex; flex-direction: column; gap: 10px; }
+.ri-station {
+  padding: 12px 14px 14px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.ri-station--over { border-color: var(--color-primary); background: var(--color-primary-tint); }
+.ri-station--unassigned { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
+.ri-station__head { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; min-height: 32px; }
+.ri-station__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: var(--text-fine);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-radius: var(--r-pill);
+}
+.ri-station__name { font-size: var(--text-body-sm); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.ri-station__count { flex: 1; font-size: var(--text-fine); color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; }
+.ri-station__note { margin: 6px 0 0; font-size: var(--text-small); color: var(--color-ink-muted-70); }
+.ri-station__drop {
+  margin-top: 10px;
+  padding: 14px;
+  text-align: center;
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-70);
+  cursor: pointer;
+  background: var(--color-surface-pearl);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ri-station__drop:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
+}
+.ri-station__drop:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.ri-station__drop-link { color: var(--color-primary); font-weight: var(--fw-semibold); }
+.ri-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--space-sm); margin-top: 10px; }
+.ri-thumb { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ri-thumb__frame {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+}
+.ri-thumb__frame[data-primary] { border: 2px solid var(--color-primary); }
+.ri-thumb__frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.ri-thumb__actions { position: absolute; top: 4px; inset-inline-start: 4px; display: flex; gap: 4px; }
+.ri-thumb__cover {
+  position: absolute;
+  bottom: 0;
+  inset-inline: 0;
+  padding: 2px 0;
+  text-align: center;
+  font-size: var(--text-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+}
+.ri-assign {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: var(--text-fine);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--r-xs);
+}
+.ri-assign:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
+/* The package reference dialog: the box and its content lines in a rail
+   beside the form. The rail stacks above the form on narrow screens. */
+.ri-pkg { display: flex; flex-wrap: wrap; min-height: 560px; }
+.ri-pkg-nav {
+  flex: 1 1 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 12px;
+  background: var(--color-surface-pearl);
+  border-inline-end: 1px solid var(--color-hairline);
+}
+.ri-pkg-pane { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-ml); padding: 20px 24px 24px; }
+.ri-pkg-group { padding: 6px 12px 4px; font-size: var(--text-fine); font-weight: var(--fw-bold); color: var(--color-ink-muted-48); }
+.ri-pkg-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ri-pkg-row:hover { background: var(--color-canvas-parchment); }
+}
+.ri-pkg-row[aria-current="true"] { background: var(--color-canvas); border-color: var(--color-primary); }
+.ri-pkg-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.ri-pkg-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  font-size: var(--text-small);
+  font-weight: var(--fw-bold);
+  color: var(--color-ink-muted-70);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+}
+.ri-pkg-sub { display: block; font-size: var(--text-fine); color: var(--color-ink-muted-48); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ri-pkg-progress { height: 6px; margin-top: 8px; overflow: hidden; background: var(--color-hairline); border-radius: var(--r-pill); }
+.ri-pkg-progress > span { display: block; height: 100%; border-radius: var(--r-pill); }
+.ri-pkg-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 24px;
+  text-align: center;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--r-lg);
+}
+.ri-pkg-note {
+  padding: 12px 14px;
+  font-size: var(--text-small);
+  background: var(--color-primary-tint);
+  border: 1px solid var(--color-primary-soft);
+  border-radius: var(--r-md);
+}
+/* A package reference's card: one chip per content line. */
+.ri-lines { display: flex; flex-wrap: wrap; gap: 6px; }
+

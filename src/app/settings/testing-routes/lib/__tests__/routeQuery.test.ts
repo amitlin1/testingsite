@@ -2,10 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { RouteQuery, StorageLike } from "../routeQuery";
 import {
-  DEFAULT_ROUTE_QUERY, LAST_ROUTE_STORAGE_KEY, backToMap, encodeTarget, isEditorOpen, normalizeRouteQuery, parseRouteQuery,
-  parseTargetParam, readLastRoute, routeQueryHref, routeRefOf, sameRouteQuery, sameTarget, serializeRouteQuery, withEditor,
-  withField, withItem, withLastRoute, withLibrary, withRoute, withView, writeLastRoute,
+  LAST_ROUTE_STORAGE_KEY, backToMap, encodeTarget, isEditorOpen, normalizeRouteQuery, parseRouteQuery,
+  parseTargetParam, readLastRoute, routeQueryHref, routeRefOf, sameRouteQuery, serializeRouteQuery, withEditor,
+  withItem, withLastRoute, withLibrary, withRoute, withView, writeLastRoute,
 } from "../routeQuery";
+
+/** The state of a URL without a query. */
+const DEFAULT_ROUTE_QUERY: RouteQuery = {
+  type: null, route: null, view: "map", step: null, target: null, field: null, item: null, lib: null, id: null,
+};
 
 const editor = "type=50&route=1&view=map&step=s_moelec00&target=item%3A4&field=f_abcd1234";
 
@@ -24,9 +29,6 @@ test("every target form", () => {
   for (const bad of [null, "", "items", "item:", "item:0", "item:-1", "item:1.5", "item:99999999999", "type:3", "BOX"]) {
     assert.equal(parseTargetParam(bad), null, String(bad));
   }
-  assert.equal(sameTarget({ item_type_id: 3 }, { item_type_id: 3 }), true);
-  assert.equal(sameTarget("box", { item_type_id: 3 }), false);
-  assert.equal(sameTarget(null, null), true);
 });
 
 test("the library URL; parsing accepts URLSearchParams too", () => {
@@ -71,7 +73,7 @@ test("serialising is canonical: always the view, never a member the state cannot
   assert.deepEqual(normalizeRouteQuery(normalizeRouteQuery(odd)), normalizeRouteQuery(odd));
 });
 
-test("transitions: back to the map, another route, another view, the editor, a field, the library", () => {
+test("transitions: back to the map, another route, another view, the editor, the library", () => {
   const q = parseRouteQuery(editor);
   assert.equal(serializeRouteQuery(backToMap(q)), "type=50&route=1&view=map");
   assert.equal(serializeRouteQuery(withRoute(q, { type: 60, route: 2 })), "type=60&route=2&view=map", "uids belong to a route: the editor closes");
@@ -85,8 +87,7 @@ test("transitions: back to the map, another route, another view, the editor, a f
   assert.equal(serializeRouteQuery(withRoute(lib, { type: 60, route: 1 })), "type=60&route=1&view=library&lib=lists&id=4");
   const kit = withEditor(backToMap(q), "s_kitopen1", "box");
   assert.equal(serializeRouteQuery(kit), "type=50&route=1&view=map&step=s_kitopen1&target=box");
-  assert.equal(serializeRouteQuery(withField(kit, "f_00000001")), "type=50&route=1&view=map&step=s_kitopen1&target=box&field=f_00000001");
-  assert.equal(withField(backToMap(q), "f_00000001").field, null, "no field without the editor");
+  assert.equal(serializeRouteQuery(withEditor(backToMap(q), "s_kitopen1", "box", "f_00000001")), "type=50&route=1&view=map&step=s_kitopen1&target=box&field=f_00000001");
   assert.equal(serializeRouteQuery(withEditor(lib, "s_kitopen1", "each_item")), "type=50&route=1&view=map&step=s_kitopen1&target=each_item");
 });
 

@@ -6,19 +6,7 @@ import { LEGEND_TEXT, MAP_HINT_TEXT, mapFooterText } from "../../lib/labels";
 
 /**
  * The map card's footer (route-fields spec §5.4.5; artboard 1, and artboard 11 for a route that
- * holds no fields of its own): pearl, 12px 18px —
- *   the summary (13/600)  "37 שדות · 5 תאים ללא שדות · שגיאה אחת" / "8 שדות משותפים · 13 תאים ללא שדות";
- *   the legend (12px muted, 14×10 swatches, radius 3);
- *   the hint, at the inline end: artboard 1's keys, or artboard 11's "לחיצה על תא פותחת את עורך השדות".
- *
- * | legend (artboard 1)                       | legend (artboard 11)                       |
- * |-------------------------------------------|--------------------------------------------|
- * | מוגדר                                      | מוגדר                                       |
- * | ללא שדות — … (dashed)                      | ללא שדות — … (divider-soft + hairline)      |
- * | לא במסלול                                  | לא במסלול                                   |
- * | שגיאה                                      | משותף עם מארז אחר (Link2)                   |
- * | שינוי שלא פורסם (dot)                      | עמדה ברמת מארז · כרטיס אחד                  |
- * | עמדה ברמת מארז · כרטיס אחד                 |                                            |
+ * holds no fields of its own): the summary, the legend and the hint — each artboard's own.
  */
 
 export type FieldsMapFooterProps = {

@@ -1,12 +1,12 @@
 "use client";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useCallback, useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Snackbar, Alert, ConfirmDialog, Button, Chip, TextField } from "@/components/ui";
+import { Alert, ConfirmDialog, Button, Chip, TextField, SearchableCombobox, FieldLabel, useToast } from "@/components/ui";
 import { Search, Plus, X, Pencil, Trash2, Send, History, FileText, Barcode, Boxes } from "lucide-react";
 import DataTable, { StatusPill, RowActions, IconAction, ProgressCell, type Column } from "@/components/DataTable";
-import SearchableCombobox from "../common/SearchableCombobox";
-import FieldLabel from "../common/FieldLabel";
-import { Shipment } from "@/types";
+import { Shipment, type DuplicateShipment } from "@/app/lib/shipments/contract";
+import { sameShipmentNumber } from "@/app/lib/itemQrParser";
 import { formatDate } from "@/app/lib/datetime";
 import ShipmentInsertPopup from "./ShipmentInsertPopup";
 import ShipmentUpdatePopup from "./ShipmentUpdatePopup";
@@ -15,14 +15,17 @@ import ShipmentHistoryPopup from "./ShipmentHistoryPopup";
 import { useReactToPrint } from "react-to-print";
 import { ShipmentPDFDocument, type ShipmentPdfData } from "./ShipmentPDFDocument";
 import ShipmentBarcodesDialog from "./ShipmentBarcodesDialog";
-import { apiFetch } from "@/lib/api/client";
+import { NO_CONNECTION_TEXT, failureText } from "@/app/components/failureText";
+import { getArray, sendJson } from "@/lib/api/client";
+import { usePrintWhenReady } from "@/lib/hooks/usePrintWhenReady";
+import { LOOKUP_KEY, useCustomers } from "@/app/components/lookups";
+import { packagesShipmentHref } from "@/app/lib/links";
 
 const EM_DASH = "—";
 
 /* --- KPI filters ---------------------------------------------------------
- * Testing "started" for a shipment = at least one sampled item is past the
- * untouched state (in work / finished / research, or passed a station —
- * current_route_step is 1-based, so > 1 means a station was completed).
+ * Testing "started" for a shipment = at least one of its boxes left the
+ * untouched state (started_sampled_amount, counted by GET /api/shipments).
  * The unsent bucket ("במערכת") splits into waitingStart + inProcess.
  */
 type KpiKey = "total" | "pending" | "sent" | "inProcess" | "waitingStart" | "readyToSend";
@@ -56,45 +59,32 @@ const KPI_LABELS: Record<KpiKey, string> = {
 /* The order of the filter row: the lifecycle, start to end. */
 const KPI_ORDER: KpiKey[] = ["total", "pending", "waitingStart", "inProcess", "readyToSend", "sent"];
 
-/* A date filter is a `YYYY-MM-DD` input value; its chip reads like every other
-   date on the screen. */
-const chipDate = (value: string) => formatDate(value);
-
-/* `rows` null = keep what is on screen; `failed` = say so instead of drawing
-   "no shipments". */
-type ShipmentsRead = { rows: Shipment[] | null; failed: boolean };
-
-async function readShipments(): Promise<ShipmentsRead> {
-    try {
-        const res = await apiFetch("/api/shipments");
-        const data = await res.json();
-        // A 4xx/5xx answers with an error object, not a list.
-        const list = Array.isArray(data);
-        return { rows: list ? data : [], failed: !res.ok || !list };
-    } catch (error) {
-        console.error("Failed to load shipments", error);
-        return { rows: null, failed: true };
-    }
-}
+const NO_ROWS: Shipment[] = [];
 
 export default function ShipmentTable() {
     const router = useRouter();
-    const [rows, setRows] = useState<Shipment[]>([]);
-    const [customers, setCustomers] = useState<{ id: number; customer_code: string }[]>([]);
-    const [loading, setLoading] = useState(true);
+    // The shipments lookup's own list (one cache with the packages board and /items), read fresh
+    // whenever this screen mounts and after every save here.
+    const shipmentsQ = useQuery({
+        queryKey: LOOKUP_KEY.shipments,
+        queryFn: () => getArray<Shipment>("/api/shipments"),
+        staleTime: 0, retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false,
+    });
+    const queryClient = useQueryClient();
+    const rows = shipmentsQ.data ?? NO_ROWS;
+    const loading = shipmentsQ.isFetching;
     // A failed load is not an empty list: it gets its own message and a retry.
-    const [loadError, setLoadError] = useState(false);
+    const loadError = shipmentsQ.isError;
+    const loadShipments = () => void queryClient.invalidateQueries({ queryKey: LOOKUP_KEY.shipments });
+    const customers = useCustomers().data;
+    const toast = useToast();
 
-    // Filtering
     const [search, setSearch] = useState("");
     const [customerFilter, setCustomerFilter] = useState<string | null>(null);
-    const [shipmentCodeFilter, setShipmentCodeFilter] = useState("");
-    const [makatFilter, setMakatFilter] = useState("");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [kpiFilter, setKpiFilter] = useState<KpiKey | null>(null);
 
-    // Popups
     const [insertOpen, setInsertOpen] = useState(false);
     const [updateOpen, setUpdateOpen] = useState(false);
     const [sendOpen, setSendOpen] = useState(false);
@@ -104,60 +94,28 @@ export default function ShipmentTable() {
     const [deleting, setDeleting] = useState(false);
     const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
 
-    // PDF printing
     const pdfRef = React.useRef<HTMLDivElement>(null);
     const [pdfData, setPdfData] = useState<ShipmentPdfData | null>(null);
-
     const handlePrint = useReactToPrint({ contentRef: pdfRef });
+    const printPdf = usePrintWhenReady(handlePrint);
 
     const handlePDFClick = (shipment: Shipment) => {
         setPdfData({ shipment, type: "received" });
-        setTimeout(() => handlePrint(), 100);
+        printPdf();
     };
 
-    // Snackbar
-    const [snackbarOpen, setSnackbarOpen] = useState(false);
-    const [snackbarMessage, setSnackbarMessage] = useState("");
-    const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">("success");
+    const customerOptions = useMemo(() => (customers ?? []).map((c) => c.customer_code).sort(), [customers]);
 
-    const applyShipments = (read: ShipmentsRead) => {
-        if (read.failed) setLoadError(true);
-        if (read.rows) setRows(read.rows);
-        setLoading(false);
-    };
-
-    const loadShipments = async () => {
-        setLoading(true);
-        setLoadError(false);
-        applyShipments(await readShipments());
-    };
-
-    useEffect(() => {
-        // The first load: `loading` starts true, so only the reply sets state.
-        readShipments().then(applyShipments);
-        // Load customers for filter
-        (async () => {
-            try {
-                const res = await apiFetch("/api/customers");
-                const data = await res.json();
-                setCustomers(Array.isArray(data) ? data : []);
-            } catch (error) {
-                console.error("Failed to load customers", error);
-            }
-        })();
-    }, []);
-
-    // Customer options for filter from database
-    const customerOptions = useMemo(() => {
-        return customers.map((c) => c.customer_code).sort();
-    }, [customers]);
+    // The insert form's scan asks whether its certificate is already one of these.
+    const findExisting = useCallback((shipmentNumber: string, customerCode: string): DuplicateShipment | null => {
+        const s = rows.find((r) => sameShipmentNumber(r.shipment_code, shipmentNumber) && r.customer_code?.trim() === customerCode.trim());
+        return s ? { id: s.id, shipment_code: s.shipment_code, customer_code: s.customer_code, shipment_date: s.shipment_date, received_at: s.received_at ?? null, amount: s.amount } : null;
+    }, [rows]);
 
     // Rows after the toolbar filters (search/customer/dates) — KPIs are computed
     // from these, so the counters follow the selected filters.
     const baseFilteredRows = useMemo(() => {
-        if (!Array.isArray(rows)) return [];
         return rows.filter((row) => {
-            // Search filter (general search)
             if (search.trim()) {
                 const q = search.toLowerCase();
                 const matchesSearch =
@@ -167,17 +125,8 @@ export default function ShipmentTable() {
                     row.source_desc?.toLowerCase().includes(q);
                 if (!matchesSearch) return false;
             }
-            // Customer filter
             if (customerFilter) {
                 if (row.customer_code !== customerFilter) return false;
-            }
-            // Shipment code filter
-            if (shipmentCodeFilter.trim()) {
-                if (!row.shipment_code.toLowerCase().includes(shipmentCodeFilter.toLowerCase())) return false;
-            }
-            // Makat filter
-            if (makatFilter.trim()) {
-                if (!row.makat?.toString().includes(makatFilter)) return false;
             }
             // Date Range filter — on the receipt date the table shows.
             if (startDate) {
@@ -188,7 +137,7 @@ export default function ShipmentTable() {
             }
             return true;
         });
-    }, [rows, search, customerFilter, shipmentCodeFilter, makatFilter, startDate, endDate]);
+    }, [rows, search, customerFilter, startDate, endDate]);
 
     // Clicking a shipment-count KPI narrows the table on top of the toolbar filters.
     const filteredRows = useMemo(
@@ -234,35 +183,14 @@ export default function ShipmentTable() {
     const clearFilters = () => {
         setSearch("");
         setCustomerFilter(null);
-        setShipmentCodeFilter("");
-        setMakatFilter("");
         setStartDate("");
         setEndDate("");
         setKpiFilter(null);
     };
 
-    const handleInsertResult = (success: boolean) => {
-        if (success) {
-            setSnackbarMessage("המשלוח נוצר בהצלחה");
-            setSnackbarSeverity("success");
-            loadShipments();
-        } else {
-            setSnackbarMessage("שגיאה ביצירת המשלוח");
-            setSnackbarSeverity("error");
-        }
-        setSnackbarOpen(true);
-    };
-
-    const handleUpdateResult = (success: boolean) => {
-        if (success) {
-            setSnackbarMessage("המשלוח עודכן בהצלחה");
-            setSnackbarSeverity("success");
-            loadShipments();
-        } else {
-            setSnackbarMessage("שגיאה בעדכון המשלוח");
-            setSnackbarSeverity("error");
-        }
-        setSnackbarOpen(true);
+    const saved = (message: string) => {
+        toast.show(message, "success");
+        loadShipments();
     };
 
     // The server refuses a shipment that was sent or already has boxes
@@ -276,23 +204,14 @@ export default function ShipmentTable() {
         if (!deleteTarget) return;
         setDeleting(true);
         try {
-            const res = await apiFetch(`/api/shipments/${deleteTarget.id}`, { method: "DELETE" });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok) {
-                setSnackbarMessage(`משלוח ${deleteTarget.shipment_code} נמחק`);
-                setSnackbarSeverity("success");
-                setDeleteTarget(null);
-                loadShipments();
-            } else {
-                setSnackbarMessage(data?.error || "שגיאה במחיקת המשלוח");
-                setSnackbarSeverity("error");
-            }
-        } catch {
-            setSnackbarMessage("שגיאה בתקשורת");
-            setSnackbarSeverity("error");
+            await sendJson(`/api/shipments/${deleteTarget.id}`, "DELETE");
+            toast.show(`משלוח ${deleteTarget.shipment_code} נמחק`, "success");
+            setDeleteTarget(null);
+            loadShipments();
+        } catch (error) {
+            toast.show(failureText(error, "שגיאה במחיקת המשלוח", NO_CONNECTION_TEXT), "error");
         } finally {
             setDeleting(false);
-            setSnackbarOpen(true);
         }
     };
 
@@ -312,7 +231,7 @@ export default function ShipmentTable() {
             cell: (r) => (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--color-ink-muted-70)" }}>
                     {r.customer_code}
-                    {r.is_sent && <StatusPill label="נשלח" active />}
+                    {r.is_sent && <StatusPill label="נשלח" tone="active" />}
                 </span>
             ),
         },
@@ -349,7 +268,7 @@ export default function ShipmentTable() {
                     {/* Shortcut to the packages screen narrowed to this shipment. A sent
                         shipment's boxes are not on that screen otherwise; through this
                         link they show for their history. */}
-                    <IconAction title={r.is_sent ? "מארזי המשלוח (יצא — לצפייה בהיסטוריה)" : "מארזי המשלוח"} onClick={() => router.push(`/packages?shipment=${r.id}`)}><Boxes size={16} strokeWidth={1.75} /></IconAction>
+                    <IconAction title={r.is_sent ? "מארזי המשלוח (יצא — לצפייה בהיסטוריה)" : "מארזי המשלוח"} onClick={() => router.push(packagesShipmentHref(r.id))}><Boxes size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title={r.is_sent ? "המשלוח נשלח — לא ניתן לערוך" : "עריכת משלוח"} disabled={!!r.is_sent} onClick={() => handleRowClick(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title={deleteBlockedReason(r) ?? "מחיקת משלוח"} danger disabled={deleteBlockedReason(r) != null} onClick={() => setDeleteTarget(r)}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title={r.is_sent ? "המשלוח כבר נשלח" : "החזר משלוח"} disabled={!!r.is_sent} onClick={() => { setSelectedShipment(r); setSendOpen(true); }}><Send size={16} strokeWidth={1.75} /></IconAction>
@@ -377,7 +296,6 @@ export default function ShipmentTable() {
 
     return (
         <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
-            {/* header: title + count pill + subtitle + primary action */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-ml)", flexWrap: "wrap" }}>
                 <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
@@ -398,7 +316,7 @@ export default function ShipmentTable() {
             {/* Status filters: six counts that narrow the table (toggles), then
                 the two figures that only summarise. Counts follow the toolbar
                 filters below. */}
-            <div className="shp-kpis">
+            <div className="shp-kpi-bar">
                 <div className="shp-kpis" role="group" aria-label="סינון לפי מצב המשלוח">
                     {KPI_ORDER.map((key) => (
                         <button
@@ -419,10 +337,8 @@ export default function ShipmentTable() {
                 </div>
             </div>
 
-            {/* filters + active chips */}
             <div>
                 <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "flex-end", flexWrap: "wrap" }}>
-                    {/* search */}
                     <div style={{ flex: 1, minWidth: 220, maxWidth: 340 }}>
                         <FieldLabel htmlFor="shipments-search">חיפוש</FieldLabel>
                         <TextField
@@ -448,7 +364,6 @@ export default function ShipmentTable() {
                         />
                     </div>
 
-                    {/* date range */}
                     <div style={{ minWidth: 150 }}>
                         <FieldLabel htmlFor="shipments-from">מתאריך</FieldLabel>
                         <TextField
@@ -485,8 +400,8 @@ export default function ShipmentTable() {
                     <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap", alignItems: "center", marginTop: "var(--space-sm)" }}>
                         {search.trim() && <Chip size="small" color="primary" label={`חיפוש: ${search}`} onDelete={() => setSearch("")} />}
                         {customerFilter && <Chip size="small" color="primary" label={`לקוח: ${customerFilter}`} onDelete={() => setCustomerFilter(null)} />}
-                        {startDate && <Chip size="small" color="primary" label={`מתאריך: ${chipDate(startDate)}`} onDelete={() => setStartDate("")} />}
-                        {endDate && <Chip size="small" color="primary" label={`עד תאריך: ${chipDate(endDate)}`} onDelete={() => setEndDate("")} />}
+                        {startDate && <Chip size="small" color="primary" label={`מתאריך: ${formatDate(startDate)}`} onDelete={() => setStartDate("")} />}
+                        {endDate && <Chip size="small" color="primary" label={`עד תאריך: ${formatDate(endDate)}`} onDelete={() => setEndDate("")} />}
                         {kpiFilter && <Chip size="small" color="primary" label={KPI_LABELS[kpiFilter]} onDelete={() => setKpiFilter(null)} />}
                     </div>
                 )}
@@ -519,31 +434,21 @@ export default function ShipmentTable() {
             <ShipmentInsertPopup
                 open={insertOpen}
                 onClose={() => setInsertOpen(false)}
-                onCreate={handleInsertResult}
-                existingShipments={rows}
+                onCreated={() => saved("המשלוח נוצר בהצלחה")}
+                findExisting={findExisting}
             />
 
             <ShipmentUpdatePopup
                 open={updateOpen}
                 onClose={() => setUpdateOpen(false)}
-                onUpdate={handleUpdateResult}
+                onUpdated={() => saved("המשלוח עודכן בהצלחה")}
                 shipment={selectedShipment}
             />
 
             <ShipmentSendPopup
                 open={sendOpen}
                 onClose={() => setSendOpen(false)}
-                onSend={(success) => {
-                    if (success) {
-                        setSnackbarMessage("המשלוח נשלח בהצלחה");
-                        setSnackbarSeverity("success");
-                        loadShipments();
-                    } else {
-                        setSnackbarMessage("שגיאה בשליחת המשלוח");
-                        setSnackbarSeverity("error");
-                    }
-                    setSnackbarOpen(true);
-                }}
+                onSent={() => saved("המשלוח נשלח בהצלחה")}
                 shipment={selectedShipment}
             />
 
@@ -554,7 +459,6 @@ export default function ShipmentTable() {
             />
 
             <ConfirmDialog
-                draggable={false}
                 open={deleteTarget != null}
                 title="מחיקת משלוח"
                 message={deleteTarget ? `האם למחוק את משלוח ${deleteTarget.shipment_code}? פעולה זו אינה ניתנת לביטול.` : ""}
@@ -571,18 +475,7 @@ export default function ShipmentTable() {
                 shipment={selectedShipment}
             />
 
-            <Snackbar
-                open={snackbarOpen}
-                autoHideDuration={4000}
-                onClose={() => setSnackbarOpen(false)}
-                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-            >
-                <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: "100%" }}>
-                    {snackbarMessage}
-                </Alert>
-            </Snackbar>
-
-            {/* Hidden PDF Component for Printing */}
+            {/* What the printer gets; on screen it stays hidden. */}
             <div style={{ display: "none" }}>
                 {pdfData && (
                     <ShipmentPDFDocument

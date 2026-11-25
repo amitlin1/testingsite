@@ -2,11 +2,15 @@
 import React from "react";
 import NextLink from "next/link";
 import { ChevronLeft } from "lucide-react";
-import type { PackageView } from "@/app/lib/packages/read";
+import type { PackageView } from "@/app/lib/packages/contract";
+import { itemHistoryHref, packageHref } from "@/app/lib/links";
 import { Tag } from "@/components/ui";
-import PackageIdText, { MiniItems, StatusPill } from "./PackageIdText";
-import { BLUE, BLUE_SOFT, HAIR, HAIR_2, INK, ITEM_STATES, ITEM_STATE_INK, MUTED, PKG_STATUS, seq2 } from "./packageUi";
-import "@/app/packages/packages.css";
+import IdText from "@/app/components/IdText";
+import { DotPill, MiniItems } from "@/components/ui/ArtboardControls";
+import { ITEM_STATES, ITEM_STATE_INK, PKG_STATUS } from "./packageUi";
+import { BLUE, BLUE_SOFT, HAIR, HAIR_2, INK, MUTED } from "@/components/ui/colors";
+import { seq2 } from "@/app/lib/packages/ids";
+import "@/components/ui/controls.css";
 
 /**
  * "המארז שלי" — design/Items.dc.html (detail): the box an item belongs to,
@@ -29,10 +33,10 @@ export default function MyPackageCard({ pkg, currentItemId, title }: {
       {title && <h2 style={{ margin: "0 0 var(--space-sm)", fontSize: "var(--text-lead)", fontWeight: 600, lineHeight: "var(--lh-snug)", color: INK }}>{title}</h2>}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <Tag tone="primary">מארז</Tag>
-        <PackageIdText id={pkg.item_id} size={15} headColor={INK} weight={600} />
+        <IdText id={pkg.item_id} size={15} headColor={INK} weight={600} />
         <span style={{ fontSize: 13.5, fontWeight: 600 }}>{pkg.item_type_desc}</span>
-        <StatusPill label={status.label} dot={status.dot} />
-        <NextLink href={`/packages/${pkg.item_id}`} className="pkg-link" style={{ marginInlineStart: "auto", fontSize: 13, gap: 2 }}>
+        <DotPill label={status.label} dot={status.dot} />
+        <NextLink href={packageHref(pkg.item_id)} className="pkg-link" style={{ marginInlineStart: "auto", fontSize: 13, gap: 2 }}>
           עמוד המארז<ChevronLeft size={15} strokeWidth={2} aria-hidden />
         </NextLink>
       </div>
@@ -44,7 +48,7 @@ export default function MyPackageCard({ pkg, currentItemId, title }: {
         {pkg.items.map((it) => {
           const mine = String(it.item_id) === me;
           return (
-            <NextLink key={it.item_id} href={`/items/${it.item_id}/history`} className="pkg-row" aria-current={mine ? "true" : undefined}
+            <NextLink key={it.item_id} href={itemHistoryHref(it.item_id)} className="pkg-row" aria-current={mine ? "true" : undefined}
               style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: `1px solid ${HAIR_2}` }}>
               <span style={{ width: 26, height: 26, borderRadius: 7, background: mine ? BLUE_SOFT : "var(--color-canvas-parchment)", color: mine ? BLUE : MUTED, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
               <div style={{ minWidth: 0, flex: 1 }}>

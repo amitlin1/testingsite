@@ -1,14 +1,14 @@
 "use client";
 import * as React from "react";
 import { Button, TextField } from "@/components/ui";
-import { apiFetch } from "@/lib/api/client";
+import { sendJson } from "@/lib/api/client";
 import {
   ERR_HOLIDAY_RANGE,
   type DepartmentHoliday,
   type HolidayType,
 } from "@/lib/workHours/types";
+import { HALF_DAY_END } from "@/lib/workHours/time";
 import { DialogShell, Chip, TimeField } from "./fields";
-
 
 export default function HolidayDialog({
   open,
@@ -32,7 +32,7 @@ export default function HolidayDialog({
   const [endDate, setEndDate] = React.useState("");
   const [typeId, setTypeId] = React.useState<number | null>(null);
   const [isHalf, setIsHalf] = React.useState(false);
-  const [halfEnd, setHalfEnd] = React.useState("12:00");
+  const [halfEnd, setHalfEnd] = React.useState(HALF_DAY_END);
   const [saving, setSaving] = React.useState(false);
   const [addingType, setAddingType] = React.useState(false);
   const [newType, setNewType] = React.useState("");
@@ -51,7 +51,7 @@ export default function HolidayDialog({
       setEndDate(editing?.endDate ?? "");
       setTypeId(editing?.typeId ?? holidayTypes[0]?.id ?? null);
       setIsHalf(editing?.isHalfDay ?? false);
-      setHalfEnd(editing?.halfDayEndTime ?? "12:00");
+      setHalfEnd(editing?.halfDayEndTime ?? HALF_DAY_END);
       setAddingType(false);
       setNewType("");
     }
@@ -64,13 +64,7 @@ export default function HolidayDialog({
     const n = newType.trim();
     if (!n) return;
     try {
-      const res = await apiFetch(`/api/settings/work-hours/holiday-types`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: n }),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "יצירת הסוג נכשלה");
-      const t = (await res.json()) as HolidayType;
+      const t = await sendJson<HolidayType>(`/api/settings/work-hours/holiday-types`, "POST", { name: n }, "יצירת הסוג נכשלה");
       onTypeAdded(t);
       setTypeId(t.id);
       setAddingType(false);
@@ -94,12 +88,7 @@ export default function HolidayDialog({
       const url = editing
         ? `/api/settings/work-hours/holidays/${editing.id}`
         : `/api/settings/work-hours/holidays`;
-      const res = await apiFetch(url, {
-        method: editing ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "שמירת החופשה נכשלה");
+      await sendJson(url, editing ? "PUT" : "POST", payload, "שמירת החופשה נכשלה");
       onSaved(editing ? "החופשה עודכנה בהצלחה" : "החופשה נוספה בהצלחה");
     } catch (e) {
       onError((e as Error).message);
@@ -107,7 +96,6 @@ export default function HolidayDialog({
       setSaving(false);
     }
   }
-
 
   return (
     <DialogShell

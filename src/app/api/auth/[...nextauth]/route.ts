@@ -1,6 +1,6 @@
 // Auth.js v5 route handlers — mounts sign-in / callback / session under
 // ${basePath}/api/auth/*. The handlers come from the NextAuth() config in the
-// repo-root auth.ts. PORTABLE — copy verbatim.
+// repo-root auth.ts.
 //
 // NEXT 16 basePath FIX (the "UnknownAction: Cannot parse action at
 // /api/auth/callback/keycloak" bug + repeated `env-url-basepath-mismatch`
@@ -20,9 +20,8 @@
 
 import { NextRequest } from "next/server";
 import { handlers } from "@/../auth";
-import { normalizeBasePath } from "@/lib/base-path";
-
-const BASE = normalizeBasePath(process.env.NEXT_BASE_PATH);
+import { DEV_AUTH_BYPASS, devSession } from "@/lib/auth/current-session";
+import { SERVER_BASE_PATH as BASE } from "@/lib/base-path";
 
 /** Re-prepend the basePath Next 16 stripped, so Auth.js can parse the action. */
 function withBase(req: NextRequest): NextRequest {
@@ -36,5 +35,6 @@ function withBase(req: NextRequest): NextRequest {
   return new NextRequest(url.toString(), req);
 }
 
-export const GET = (req: NextRequest) => handlers.GET(withBase(req));
+export const GET = (req: NextRequest) =>
+  DEV_AUTH_BYPASS && req.nextUrl.pathname.endsWith("/session") ? Response.json(devSession()) : handlers.GET(withBase(req));
 export const POST = (req: NextRequest) => handlers.POST(withBase(req));

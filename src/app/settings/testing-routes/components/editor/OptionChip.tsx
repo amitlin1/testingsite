@@ -9,13 +9,9 @@ import { ToneMenu } from "./ToneMenu";
 import type { ToneMenuCloseReason } from "./ToneMenu";
 
 /**
- * One option of a choice row (artboard 2, spec §5.5.2): a 32px parchment chip with the tone's dot and
- * the label; × "הסרת האפשרות {label}" shows on hover / focus. A press renames it in place — an input
- * "שם האפשרות" with the focus edge and halo — and opens ToneMenu above it. Tab in the input goes to
- * the menu's radios. Enter, Escape or × end the rename and give the chip its focus back.
- *
- * Every change goes up as is; the row applies artboard 2's rule (any change to an option unlinks the
- * field from its shared list).
+ * One option of a choice row (artboard 2, spec §5.5.2). A press renames it in place and opens ToneMenu
+ * above it; Enter, Escape or × end the rename and give the chip its focus back. Every change goes up
+ * as is; the row applies artboard 2's rule (any change to an option unlinks the field from its list).
  */
 
 export type OptionChipProps = {
@@ -30,8 +26,42 @@ export type OptionChipProps = {
   onRemove: () => void;
 };
 
-/** Artboard 2 `inW`: the rename input grows with the label. */
-const inputWidth = (label: string) => Math.max(36, Math.round(label.length * 7.4) + 6);
+/** Artboard 2 `inW`: a chip's rename input grows with the label. */
+export const chipInputWidth = (label: string) => Math.max(36, Math.round(label.length * 7.4) + 6);
+
+export type ChipViewProps = {
+  buttonRef: React.Ref<HTMLButtonElement>;
+  label: string;
+  /** The chip button's aria-label (a press renames). */
+  editLabel: string;
+  removeLabel: string;
+  /** Before the label (an option's tone dot). */
+  lead?: React.ReactNode;
+  onEdit: () => void;
+  onRemove: () => void;
+};
+
+/** A chip not in rename: the label (marked when empty) and its ×. */
+export function ChipView({ buttonRef, label, editLabel, removeLabel, lead, onEdit, onRemove }: ChipViewProps) {
+  return (
+    <span className="sfe-chip">
+      <button
+        ref={buttonRef}
+        type="button"
+        className="sfe-chip__btn"
+        aria-label={editLabel}
+        data-empty={label.trim() === "" || undefined}
+        onClick={onEdit}
+      >
+        {lead}
+        <span className="sfe-chip__label">{label}</span>
+      </button>
+      <button type="button" className="sfe-chip__x" aria-label={removeLabel} onClick={onRemove}>
+        <X size={12} strokeWidth={1.75} aria-hidden />
+      </button>
+    </span>
+  );
+}
 
 export function OptionChip({ option, editing, onToggleEdit, onClose, onRename, onTone, onRemove }: OptionChipProps) {
   const chipRef = React.useRef<HTMLButtonElement>(null);
@@ -57,24 +87,16 @@ export function OptionChip({ option, editing, onToggleEdit, onClose, onRename, o
   };
 
   if (!editing) {
-    const empty = option.label.trim() === "";
     return (
-      <span className="sfe-chip">
-        <button
-          ref={chipRef}
-          type="button"
-          className="sfe-chip__btn"
-          aria-label={optionEditLabel(option.label, option.tone)}
-          data-empty={empty || undefined}
-          onClick={onToggleEdit}
-        >
-          <ToneDot tone={option.tone} />
-          <span className="sfe-chip__label">{option.label}</span>
-        </button>
-        <button type="button" className="sfe-chip__x" aria-label={optionRemoveLabel(option.label)} onClick={onRemove}>
-          <X size={12} strokeWidth={1.75} aria-hidden />
-        </button>
-      </span>
+      <ChipView
+        buttonRef={chipRef}
+        label={option.label}
+        editLabel={optionEditLabel(option.label, option.tone)}
+        removeLabel={optionRemoveLabel(option.label)}
+        lead={<ToneDot tone={option.tone} />}
+        onEdit={onToggleEdit}
+        onRemove={onRemove}
+      />
     );
   }
 
@@ -88,7 +110,7 @@ export function OptionChip({ option, editing, onToggleEdit, onClose, onRename, o
           aria-label={EDITOR_TEXT.optionNameLabel}
           value={option.label}
           maxLength={LIMITS.optionLabel}
-          style={{ width: inputWidth(option.label) }}
+          style={{ width: chipInputWidth(option.label) }}
           onChange={(e) => onRename(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -118,5 +140,3 @@ export function OptionChip({ option, editing, onToggleEdit, onClose, onRename, o
     </span>
   );
 }
-
-export default OptionChip;

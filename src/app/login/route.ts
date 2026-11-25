@@ -1,4 +1,4 @@
-// Server-initiated Keycloak login. PORTABLE — copy verbatim.
+// Server-initiated Keycloak login.
 //
 // WHY: in Auth.js v5, GET /api/auth/signin/:provider is NOT supported (throws
 // UnknownAction). A browser redirect from middleware is always a GET, so it
@@ -14,10 +14,8 @@ export const runtime = "nodejs";
 
 import { signIn } from "@/../auth";
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeBasePath } from "@/lib/base-path";
-import { authDebug } from "@/lib/debug";
-
-const NEXT_BASE = normalizeBasePath(process.env.NEXT_BASE_PATH);
+import { safeCallbackUrl } from "@/lib/base-path";
+import { authDebug } from "@/lib/auth/debug";
 
 function isNextRedirect(e: unknown): boolean {
   return (
@@ -31,16 +29,7 @@ function isNextRedirect(e: unknown): boolean {
 
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("callbackUrl");
-  // Accept only a same-app relative path that is NOT an auth endpoint and NOT
-  // /login itself (rejecting /login is critical: a stale-session loop can nest a
-  // callbackUrl pointing back at /login and re-loop). Fall back to the home/root.
-  const safe =
-    !!raw &&
-    raw.startsWith("/") &&
-    !raw.startsWith(`${NEXT_BASE}/api/auth`) &&
-    !raw.startsWith(`${NEXT_BASE}/login`) &&
-    !raw.startsWith("/login");
-  const callbackUrl = safe ? raw : `${NEXT_BASE}/`;
+  const callbackUrl = safeCallbackUrl(raw);
 
   authDebug("login", "initiating keycloak signIn", {
     rawCallback: raw,

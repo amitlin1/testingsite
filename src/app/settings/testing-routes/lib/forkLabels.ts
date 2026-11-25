@@ -45,18 +45,17 @@ export const FORK_UNDRAWN_TEXT = {
 } as const;
 
 export type ForkMessageInput = {
-  /** The item type whose route is forked ("מסך"). */
+  /** The item type whose route is forked. */
   item: string;
-  /** The kit on screen ("מארז עמדת עבודה"). */
+  /** The kit on screen. */
   kit: string;
-  /** The other kits that keep the route ("מארז ציוד היקפי"). */
+  /** The other kits that keep the route. */
   otherKits: readonly string[];
   /** The route they keep. */
   routeNumber: number;
 };
 
-/** The confirm dialog's message (undrawn): "ייווצר מסלול חדש של {item} עם אותן עמדות ואותם
- *  שדות, ו{kit} יעבור אליו. {kits} ימשיך/ימשיכו במסלול {r}. פריטים שכבר בדרך …". */
+/** The confirm dialog's message (undrawn): the new route, the kits that stay, then the tail. */
 export function forkConfirmMessage({ item, kit, otherKits, routeNumber }: ForkMessageInput): string {
   const P = FORK_UNDRAWN_TEXT;
   const head = P.newRoutePrefix + item + P.newRouteMiddle + kit + P.newRouteSuffix;

@@ -2,12 +2,13 @@
 import * as React from "react";
 import { CircleAlert, Send } from "lucide-react";
 import { Button, ConfirmDialog, StatusPill } from "@/components/ui";
+import { useNow } from "@/lib/hooks/useNow";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import SettingsToolbar from "../../components/SettingsToolbar";
-import { contextRouteIds, contextRoutes, entryHasDraft } from "../lib/draftModel";
+import { holdsContext } from "../lib/draftModel";
 import type { DraftModel, DraftSummary } from "../lib/draftModel";
 import { useDraftSnapshot, useDraftStore } from "../lib/draftStore";
-import type { DraftStore } from "../lib/draftStore";
+import { contextRoutes, ownRouteId, ownOrNewest } from "../lib/fieldsContext";
 import type { FieldsMapModel } from "../lib/mapModel";
 import {
   UNDRAWN_TEXT, HEADER_TEXT, draftPillText, issuesToFixText, publishedPillText, routesCountText, savedAgoText,
@@ -15,26 +16,21 @@ import {
 
 /**
  * The page header of /settings/testing-routes (route-fields spec §5.1, §5.2; artboards 1, 2, 8, 11):
- * SettingsToolbar with "מסלולי בדיקה", the count "{n} מסלולים", the subtitle, and the actions —
- *
- * | state                     | pill (dot)                    | note                          | 1                | 2                      |
- * |---------------------------|-------------------------------|-------------------------------|------------------|------------------------|
- * | draft, no blocking errors | "טיוטה · N שינויים" (late)    | the session's save            | "ביטול הטיוטה"   | "פרסום לעמדות" (Send)  |
- * | draft with errors         | same                          | same                          | same             | "בעיה אחת לתיקון" pill |
- * | no fields (artboard 11)   | "ללא שדות" (muted-40)         | "אין שינויים לפרסום" (its id) | —                | publish, disabled      |
- * | published, no draft       | "מפורסם · גרסה N" (approved)  | —                             | —                | publish, disabled      |
+ * the title, the count, the subtitle, and the actions of the header's mode (headerMode): a draft
+ * (discard, then publish — or the issues button while a draft has blocking errors), no fields
+ * (artboard 11), or published without a draft (spec §5.2 table).
  *
  * Until the context of the route on screen is in — loading, a load failure, or the store not yet
  * holding that context — the header shows neither "ללא שדות" nor an enabled publish (artboard 11):
  * only the disabled publish button.
  *
- * "נשמר אוטומטית …" is the time of the last autosave made in THIS session (lead decision): a draft
- * another admin saved earlier shows no save time. The draft store's write states add the undrawn
- * "save failed" (+ retry) and "conflict" (+ reload) notes.
+ * "נשמר אוטומטית …" is the time of the last autosave made in THIS session (DraftSnapshot
+ * sessionSavedAt). The draft store's write states add the undrawn "save failed" (+ retry) and
+ * "conflict" (+ reload) notes.
  */
 
 export type RouteFieldsHeaderProps = {
-  /** All routes (GET /api/settings/testing-routes); null while unknown — no count pill. */
+  /** The kits' routes (the ones the pickers offer); null while unknown — no count pill. */
   routeCount: number | null;
   /** A route is chosen (the URL names one). */
   routeChosen: boolean;
@@ -42,8 +38,8 @@ export type RouteFieldsHeaderProps = {
   context: FieldsContextJson | null;
   /** The map built from it (useFieldsMap); null with it. */
   map: FieldsMapModel | null;
-  /** Opens the publish dialog (session 2c). Without it the publish button stays disabled. */
-  onPublish?: () => void;
+  /** Opens the publish dialog. */
+  onPublish: () => void;
   /** "בעיה אחת לתיקון": brings the map (and its error bar) into view. */
   onShowIssues: () => void;
 };
@@ -55,78 +51,28 @@ type HeaderMode =
   | { kind: "noFields" }
   | { kind: "published"; version: number };
 
-const sameIds = (a: readonly number[], b: readonly number[]): boolean =>
-  a.length === b.length && a.every((id, i) => id === b[i]);
-
-/** Which row of the table above the header shows. */
+/** Which of the header's states shows. */
 function headerMode(props: Pick<RouteFieldsHeaderProps, "routeChosen" | "context" | "map">, model: DraftModel, summary: DraftSummary): HeaderMode {
   const { routeChosen, context, map } = props;
   if (!routeChosen) return { kind: "none" };
-  // The store merges a new context in an effect: until it holds this one, its summary is another
-  // route's.
-  if (!context || !map || !sameIds(model.order, contextRouteIds(context))) return { kind: "pending" };
+  // Until the store holds this context, its summary is another route's.
+  if (!context || !map || !holdsContext(model, context)) return { kind: "pending" };
   if (summary.hasDraft) return { kind: "draft" };
-  const own = context.kit ?? context.item;
-  const ownVersion = own?.published_version ?? 0;
+  const ownVersion = context.kit?.published_version ?? 0;
   if (map.emptyState != null) return ownVersion > 0 ? { kind: "published", version: ownVersion } : { kind: "noFields" };
   if (map.onboarding) return { kind: "noFields" };
-  // Fields this route holds are published. "גרסה N" is the version of the route the screen is open
-  // on (spec §10.2-4); a kit route never published shows the newest of its item routes.
-  const version = ownVersion > 0 ? ownVersion : Math.max(0, ...contextRoutes(context).map((r) => r.published_version));
+  // Fields this route holds are published: "גרסה N" (fieldsContext.ownOrNewest).
+  const published = contextRoutes(context).filter((r) => r.published_version > 0);
+  const version = ownOrNewest(published, ownRouteId(context), (r) => r.route.test_route_id, (r) => r.published_version)?.published_version ?? 0;
   return version > 0 ? { kind: "published", version } : { kind: "noFields" };
 }
 
 // ---- the session's autosaves -----------------------------------------------------------------------
-type SessionSave = { savedAt: number | null; now: number };
-
-/** A PUT of this session landed: the entry was writing a config and now holds it, error-free. */
-function savedNow(before: DraftModel, after: DraftModel): boolean {
-  return after.order.some((id) => {
-    const was = before.routes[id];
-    const is = after.routes[id];
-    return !!was && !!is && was.saving && was.inFlight != null && !is.saving && is.error == null && is.conflict == null && is.serverDraft != null;
-  });
-}
-
-/** The time (this browser's clock) of the last autosave this session made for the context on
- *  screen, and a clock that ticks while there is one. Cleared when the screen moves to another
- *  context or no route of it holds a draft any more (discarded). */
-function useSessionSave(store: DraftStore): SessionSave {
-  const [state, setState] = React.useState<SessionSave>({ savedAt: null, now: 0 });
-  React.useEffect(() => {
-    let prev = store.getSnapshot().model;
-    return store.subscribe(() => {
-      const next = store.getSnapshot().model;
-      if (next === prev) return;
-      const before = prev;
-      prev = next;
-      if (savedNow(before, next)) {
-        const t = Date.now();
-        setState({ savedAt: t, now: t });
-        return;
-      }
-      const otherContext = !sameIds(before.order, next.order);
-      const noDraft = !next.order.some((id) => {
-        const e = next.routes[id];
-        return e != null && entryHasDraft(e);
-      });
-      if (otherContext || noDraft) setState((s) => (s.savedAt == null ? s : { savedAt: null, now: s.now }));
-    });
-  }, [store]);
-  const saved = state.savedAt != null;
-  React.useEffect(() => {
-    if (!saved) return;
-    const tick = setInterval(() => setState((s) => ({ ...s, now: Date.now() })), 30_000);
-    return () => clearInterval(tick);
-  }, [saved]);
-  return state;
-}
-
 // ---- the header ------------------------------------------------------------------------------------
 export default function RouteFieldsHeader({ routeCount, routeChosen, context, map, onPublish, onShowIssues }: RouteFieldsHeaderProps) {
   const store = useDraftStore();
-  const { model, summary } = useDraftSnapshot();
-  const session = useSessionSave(store);
+  const { model, summary, sessionSavedAt } = useDraftSnapshot();
+  const now = useNow(30_000);
   const mode = headerMode({ routeChosen, context, map }, model, summary);
   const hintId = React.useId();
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -175,7 +121,7 @@ export default function RouteFieldsHeader({ routeCount, routeChosen, context, ma
       );
     }
     let text: string | null = null;
-    if (session.savedAt != null) text = savedAgoText(session.savedAt, Math.max(session.now, session.savedAt));
+    if (sessionSavedAt != null) text = savedAgoText(sessionSavedAt, Math.max(now, sessionSavedAt));
     else if (summary.unsaved) text = UNDRAWN_TEXT.saving;
     return text == null ? null : <span className="rf-header-note" role="status">{text}</span>;
   };
@@ -183,7 +129,7 @@ export default function RouteFieldsHeader({ routeCount, routeChosen, context, ma
   const publishButton = (disabled: boolean, describedBy?: string) => (
     <Button
       onClick={onPublish}
-      disabled={disabled || !onPublish}
+      disabled={disabled}
       aria-describedby={describedBy}
       startIcon={<Send className="rf-send-icon" size={18} strokeWidth={1.75} aria-hidden />}
     >
@@ -264,7 +210,6 @@ export default function RouteFieldsHeader({ routeCount, routeChosen, context, ma
         cancelText={UNDRAWN_TEXT.discardCancel}
         destructive
         busy={discarding}
-        draggable={false}
         onConfirm={() => void discard()}
         onCancel={() => setConfirmOpen(false)}
       />

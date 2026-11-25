@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { withAuth } from "@/lib/auth/withAuth";
-import { getItemReport, getItemReportHtml } from "@/app/lib/item-report/generate";
-import { parseItemId, pdfResponse, type RouteCtx } from "@/app/lib/item-report/http";
+import { getItemReport, getItemReportHtml } from "@/app/lib/item-report/lifecycle";
+import { pdfResponse, withItemId } from "@/app/lib/item-report/http";
+import { errorResponse } from "@/lib/http/errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,10 +13,7 @@ export const dynamic = "force-dynamic";
  * ?html=1 — the live HTML instead (no Chromium), for the signing dialog's preview.
  * 204 when the item's route has no report template.
  */
-export const GET = withAuth(async (req, _ctx, routeCtx) => {
-  const { itemId: raw } = await (routeCtx as RouteCtx<"itemId">).params;
-  const itemId = parseItemId(raw);
-  if (itemId == null) return NextResponse.json({ error: "Bad item id" }, { status: 400 });
+export const GET = withItemId(async (req, { itemId }) => {
   try {
     if (new URL(req.url).searchParams.get("html") === "1") {
       const html = await getItemReportHtml(itemId);
@@ -28,7 +25,6 @@ export const GET = withAuth(async (req, _ctx, routeCtx) => {
     if (doc.kind === "no_template") return new NextResponse(null, { status: 204 });
     return pdfResponse(doc.bytes, doc.filename, { "X-Report-Final": doc.final ? "1" : "0", "X-Report-Version": String(doc.version) });
   } catch (e) {
-    console.error(`[item-report] GET ${raw} failed`, e);
-    return NextResponse.json({ error: "Failed to produce the report" }, { status: 500 });
+    return errorResponse(e, "Failed to produce the report");
   }
 });

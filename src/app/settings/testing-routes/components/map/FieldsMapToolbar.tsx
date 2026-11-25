@@ -5,9 +5,8 @@ import type { MapFilter } from "../../lib/mapModel";
 import { MAP_TEXT, filterChipText } from "../../lib/labels";
 
 /**
- * The toolbar above the fields map (route-fields spec §5.4.4; artboard 1): on its inline start
- * <div role="group" aria-label="סינון תאים"> with four chips — "הכל · 20", "ללא שדות · 5",
- * "שגיאות · 1", "לא פורסמו · 1" — one pressed at a time.
+ * The toolbar above the fields map (route-fields spec §5.4.4; artboard 1): the filter chips, one
+ * pressed at a time.
  *
  * Its inline end ("תצוגה מקדימה כעובד", "העתק ממסלול אחר…") is not built here: the preview opens the
  * station's own popup (spec §5.4.4, a later session) and the copy dialog is not drawn (לא אומת).

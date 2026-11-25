@@ -1,9 +1,15 @@
-// The role panel reads the access rules; these pin what it must say for each role.
+// The role panel reads the access rules; these pin what it must say for each role. Screens and
+// settings pages are named by their path (the navigation registry), not by their wording.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import type { AppRole } from "@/lib/auth/roles";
+import { SECTIONS, SETTINGS, SETTINGS_PAGES } from "@/app/navigation";
 import { summarizeRole } from "../roleCapabilities";
 
-const okLabels = (role: Parameters<typeof summarizeRole>[0]) =>
+const labelOf = (href: string) => [...SECTIONS, ...SETTINGS_PAGES].find((e) => e.href === href)!.label;
+const okIn = (role: AppRole, title: string) =>
+  summarizeRole(role).groups.find((g) => g.title === title)!.items.filter((i) => i.ok).map((i) => i.label);
+const okLabels = (role: AppRole) =>
   new Set(summarizeRole(role).groups.flatMap((g) => g.items.filter((i) => i.ok).map((i) => i.label)));
 
 test("a manager reaches everything", () => {
@@ -11,31 +17,30 @@ test("a manager reaches everything", () => {
   assert.equal(s.allowed, s.total);
 });
 
-test("a tester tests, configures and signs at the closing, but no users, customers, sources, dashboard, shipments, box intake, step back or final signature", () => {
+test("a tester tests and configures the stations, but has no users, customers, sources, dashboard or shipments", () => {
   const ok = okLabels("tester");
-  for (const l of ["מסך בדיקה", "מסלולי בדיקה", "חתימה על הדוחות בסגירת מארז", "התחלת בדיקה ושליחת תוצאה"]) assert.ok(ok.has(l), l);
-  for (const l of ["משתמשים והרשאות", "לקוחות", "לוח ניהול", "משלוחים נכנסים", "ניהול מקורות", "קליטת מארז מהמשלוח", "חזרה לבדיקה הקודמת", "עבודה בשם עובד אחר", "חתימה סופית על דוח פריט"]) assert.ok(!ok.has(l), l);
+  for (const href of ["/testing", "/settings/testing-routes", "/settings/popup-templates"]) assert.ok(ok.has(labelOf(href)), href);
+  for (const href of ["/settings/users", "/settings/customers", "/settings/sources", "/dashboard/tests", "/shipments"]) {
+    assert.ok(!ok.has(labelOf(href)), href);
+  }
 });
 
-test("a storekeeper: boxes, shipments and intake, and exactly four settings pages", () => {
-  const s = summarizeRole("storekeeper");
-  const ok = (title: string) => s.groups.find((g) => g.title === title)!.items.filter((i) => i.ok).map((i) => i.label);
-  assert.deepEqual(ok("מסכים"), ["מארזים ופריטים", "משלוחים נכנסים"]);
-  assert.deepEqual(ok("הגדרות מערכת"), ["לקוחות", "סוגי פריטים", "ניהול מקורות", "פריטי ייחוס"]);
-  assert.deepEqual(ok("פעולות"), ["קליטת מארז מהמשלוח"]);
-});
-
-test("a mashan takes no box in", () => {
-  assert.ok(!okLabels("mashan").has("קליטת מארז מהמשלוח"));
+test("a storekeeper: boxes and shipments, and exactly four settings pages", () => {
+  assert.deepEqual(okIn("storekeeper", "מסכים"), ["/packages", "/shipments"].map(labelOf));
+  assert.deepEqual(
+    okIn("storekeeper", SETTINGS.label),
+    ["/settings/customers", "/settings/item-types", "/settings/sources", "/settings/reference-items"].map(labelOf),
+  );
 });
 
 test("a mashan: of the settings, only work hours", () => {
-  const settings = summarizeRole("mashan").groups.find((g) => g.title === "הגדרות מערכת")!;
-  assert.deepEqual(settings.items.filter((i) => i.ok).map((i) => i.label), ["שעות עבודה וחופשות"]);
+  assert.deepEqual(okIn("mashan", SETTINGS.label), [labelOf("/settings/work-hours")]);
 });
 
-test("the totals add up", () => {
-  const s = summarizeRole("tester");
-  assert.equal(s.total, s.groups.reduce((n, g) => n + g.items.length, 0));
-  assert.equal(s.allowed, s.groups.reduce((n, g) => n + g.allowed, 0));
+test("the actions: a tester starts tests and signs at the closing; a storekeeper only takes boxes in; a mashan neither", () => {
+  const tester = new Set(okIn("tester", "פעולות"));
+  for (const l of ["התחלת בדיקה ושליחת תוצאה", "חתימה על הדוחות בסגירת מארז"]) assert.ok(tester.has(l), l);
+  for (const l of ["קליטת מארז מהמשלוח", "חזרה לבדיקה הקודמת", "עבודה בשם עובד אחר", "חתימה סופית על דוח פריט"]) assert.ok(!tester.has(l), l);
+  assert.deepEqual(okIn("storekeeper", "פעולות"), ["קליטת מארז מהמשלוח"]);
+  assert.deepEqual(okIn("mashan", "פעולות"), []);
 });

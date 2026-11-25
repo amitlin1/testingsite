@@ -16,13 +16,11 @@
 // tables before every test (testing_routes with CASCADE, so route_field_versions too).
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import path from "node:path";
-import type { AppRole } from "@/lib/auth/roles";
-import * as H from "../../metrics/__tests__/write-path-helpers";
-import type { AdminFieldsError } from "../admin";
-import { FIELDS_EDIT_ROLES } from "../roles";
+import { ACCESS, type AppRole } from "@/lib/auth/roles";
+import * as H from "@/test-support/db-harness";
+import { giveUids, insertRoute, rejectsHttp } from "./helpers";
 import type { Field, RouteFieldsConfig, StepConfig } from "../schema";
+import { stubSession } from "@/lib/auth/testing";
 
 /** A JSON answer as the route sends it, read by its keys. */
 type Json = Record<string, unknown>;
@@ -88,19 +86,6 @@ const signedIn = (...roles: AppRole[]) => ({
   roles,
 });
 
-/** The root auth.ts, replaced in require.cache by a module whose auth() answers `session` (as
- *  fields.integration.test.ts does). Must run before anything loads auth.ts. */
-function stubAuth(): void {
-  const req = createRequire(path.resolve(process.cwd(), "package.json"));
-  const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as typeof import("node:module");
-  const stub = new CjsModule(authPath);
-  stub.filename = authPath;
-  stub.loaded = true;
-  stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
-  req.cache[authPath] = stub;
-}
-
 describe(
   "station fields — fork: a kit's template line gets a route of its own",
   { skip: H.TEST_DATABASE_URL ? false : "TEST_DATABASE_URL is not set — fork integration suite skipped" },
@@ -108,20 +93,20 @@ describe(
     let A: typeof import("../admin");
     let C: typeof import("../context");
     let F: typeof import("../fork");
-    let prisma: (typeof import("../../prisma"))["prisma"];
+    let prisma: (typeof import("@/lib/db"))["prisma"];
     let postFork: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
     let serial = 0;
 
     before(async () => {
       // Before anything can load auth.ts.
-      stubAuth();
+      stubSession(() => session);
       // MUST come next: it points DATABASE_URL at the scratch database before anything imports
       // the Prisma client, and takes the advisory lock.
       await H.setup();
       A = await import("../admin");
       C = await import("../context");
       F = await import("../fork");
-      prisma = (await import("../../prisma")).prisma;
+      prisma = (await import("@/lib/db")).prisma;
       postFork = (await import("../../../api/settings/testing-routes/[id]/fork/route")).POST as unknown as typeof postFork;
     });
     after(async () => {
@@ -137,8 +122,8 @@ describe(
       R.kit = await giveUids(KIT, [UID.kOpen, UID.kClose]);
       R.inBox = await giveUids(H.ITEM_TYPE_IN_BOX, IN_BOX_UIDS);
       R.alt = await giveUids(H.ITEM_TYPE_IN_BOX_ALT, [UID.aOpen, UID.aFunc, UID.aClose]);
-      R.otherKit = await insertRoute(OTHER_KIT, 1, [H.TYPE_INTAKE, H.TYPE_CLOSE], [UID.oOpen, UID.oClose]);
-      R.inBox2 = await insertRoute(H.ITEM_TYPE_IN_BOX, 2, ITEM_STEPS, [UID.cOpen, UID.cFunc, UID.cClose]);
+      R.otherKit = await insertRoute(OTHER_KIT, [H.TYPE_INTAKE, H.TYPE_CLOSE], [UID.oOpen, UID.oClose], 1);
+      R.inBox2 = await insertRoute(H.ITEM_TYPE_IN_BOX, ITEM_STEPS, [UID.cOpen, UID.cFunc, UID.cClose], 2);
       await insertLine(KIT, H.ITEM_TYPE_IN_BOX, 2, 0);
       await insertLine(KIT, H.ITEM_TYPE_IN_BOX_ALT, 1, 1);
       await insertLine(OTHER_KIT, H.ITEM_TYPE_IN_BOX, 1, 0);
@@ -147,24 +132,6 @@ describe(
     // -------------------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------------------
-
-    async function giveUids(itemTypeId: number, uids: string[]): Promise<number> {
-      const row = await H.one<{ test_route_id: number }>(
-        `UPDATE testing_routes SET step_uids = $2::text[]
-          WHERE item_type_id = $1 AND route_number = 1 RETURNING test_route_id`,
-        [itemTypeId, uids],
-      );
-      return row.test_route_id;
-    }
-
-    async function insertRoute(itemTypeId: number, routeNumber: number, steps: number[], uids: string[]): Promise<number> {
-      const row = await H.one<{ test_route_id: number }>(
-        `INSERT INTO testing_routes (item_type_id, test_station_type_id, route_steps, route_number, step_uids)
-         VALUES ($1, $2, $3::int[], $4, $5::text[]) RETURNING test_route_id`,
-        [itemTypeId, steps[0], steps, routeNumber, uids],
-      );
-      return row.test_route_id;
-    }
 
     async function insertLine(kit: number, itemTypeId: number, quantity: number, sortOrder: number, routeNumber = 1): Promise<void> {
       await H.q(
@@ -229,18 +196,6 @@ describe(
 
     function fork(routeId: number, packageTypeId: unknown) {
       return F.forkRouteForKit(prisma, routeId, { package_type_id: packageTypeId }, ACTOR);
-    }
-
-    async function rejectsAdmin(p: Promise<unknown>, status: number, code: string): Promise<AdminFieldsError> {
-      try {
-        await p;
-      } catch (e) {
-        assert.ok(e instanceof A.AdminFieldsError, `expected AdminFieldsError, got ${String(e)}`);
-        assert.equal(e.status, status, `${e.code}: ${e.message}`);
-        assert.equal(e.code, code);
-        return e;
-      }
-      assert.fail(`expected ${status} ${code}, got success`);
     }
 
     /** One kit of `kitType` holding `itemTypes`, taken in as the intake does (createPackage). */
@@ -413,13 +368,13 @@ describe(
       await saveDraft(R.inBox, IN_BOX_DRAFT);
       const before = await footprint();
 
-      const misfit = await rejectsAdmin(fork(R.inBox, MISFIT_KIT), 409, "ITEM_ROUTE_SHAPE");
+      const misfit = await rejectsHttp(fork(R.inBox, MISFIT_KIT), 409, "ITEM_ROUTE_SHAPE");
       assert.deepEqual(misfit.extra, { reason: "IN_BOX: מסלול הפריט חייב להסתיים באותה עמדת סגירה כמו מסלול המארז", package_route_number: 1 });
-      const routeless = await rejectsAdmin(fork(R.inBox, ROUTELESS_KIT), 409, "PACKAGE_ROUTE_SHAPE");
+      const routeless = await rejectsHttp(fork(R.inBox, ROUTELESS_KIT), 409, "PACKAGE_ROUTE_SHAPE");
       assert.deepEqual(routeless.extra, { reason: "לסוג המארז עדיין אין מסלול" });
       // A kit route that is itself malformed (no package-level opening) is no route to check against.
-      await insertRoute(ROUTELESS_KIT, 1, [H.TYPE_FUNC], ["s_rlss0001"]);
-      const malformed = await rejectsAdmin(fork(R.inBox, ROUTELESS_KIT), 409, "PACKAGE_ROUTE_SHAPE");
+      await insertRoute(ROUTELESS_KIT, [H.TYPE_FUNC], ["s_rlss0001"], 1);
+      const malformed = await rejectsHttp(fork(R.inBox, ROUTELESS_KIT), 409, "PACKAGE_ROUTE_SHAPE");
       assert.deepEqual(malformed.extra, { reason: "השלב הראשון של מסלול המארז חייב להיות עמדה ברמת מארז (פתיחת מארז)" });
       await H.q("DELETE FROM testing_routes WHERE item_type_id = $1", [ROUTELESS_KIT]);
 
@@ -433,26 +388,26 @@ describe(
       const MAX = BIG - 1;
       const before = await footprint();
 
-      for (const id of [0, -1, BIG, Number.NaN]) await rejectsAdmin(fork(id, KIT), 400, "INVALID_ID");
-      for (const bad of [undefined, null, "5", 0, 1.5, BIG]) await rejectsAdmin(fork(R.inBox, bad), 400, "INVALID_BODY");
-      await rejectsAdmin(F.forkRouteForKit(prisma, R.inBox, [] as never, ACTOR), 400, "INVALID_BODY");
+      for (const id of [0, -1, BIG, Number.NaN]) await rejectsHttp(fork(id, KIT), 400, "INVALID_ID");
+      for (const bad of [undefined, null, "5", 0, 1.5, BIG]) await rejectsHttp(fork(R.inBox, bad), 400, "INVALID_BODY");
+      await rejectsHttp(F.forkRouteForKit(prisma, R.inBox, [] as never, ACTOR), 400, "INVALID_BODY");
 
-      const noRoute = await rejectsAdmin(fork(MAX, KIT), 404, "ROUTE_NOT_FOUND");
+      const noRoute = await rejectsHttp(fork(MAX, KIT), 404, "ROUTE_NOT_FOUND");
       assert.deepEqual(noRoute.extra, { route_id: MAX });
-      const noKit = await rejectsAdmin(fork(R.inBox, 999), 404, "ITEM_TYPE_NOT_FOUND");
+      const noKit = await rejectsHttp(fork(R.inBox, 999), 404, "ITEM_TYPE_NOT_FOUND");
       assert.deepEqual(noKit.extra, { item_type_id: 999 });
-      const notKit = await rejectsAdmin(fork(R.inBox, H.ITEM_TYPE_IN_BOX_ALT), 400, "NOT_A_PACKAGE_TYPE");
+      const notKit = await rejectsHttp(fork(R.inBox, H.ITEM_TYPE_IN_BOX_ALT), 400, "NOT_A_PACKAGE_TYPE");
       assert.deepEqual(notKit.extra, { item_type_id: H.ITEM_TYPE_IN_BOX_ALT });
-      const noLine = await rejectsAdmin(fork(R.alt, OTHER_KIT), 400, "KIT_LINE_NOT_FOUND");
+      const noLine = await rejectsHttp(fork(R.alt, OTHER_KIT), 400, "KIT_LINE_NOT_FOUND");
       assert.deepEqual(noLine.extra, { package_type_id: OTHER_KIT, item_type_id: H.ITEM_TYPE_IN_BOX_ALT });
       // KIT's IN_BOX line runs route 1, not route 2.
-      const otherRoute = await rejectsAdmin(fork(R.inBox2, KIT), 409, "LINE_NOT_ON_ROUTE");
+      const otherRoute = await rejectsHttp(fork(R.inBox2, KIT), 409, "LINE_NOT_ON_ROUTE");
       assert.deepEqual(otherRoute.extra, { package_type_id: KIT, item_type_id: H.ITEM_TYPE_IN_BOX, route_number: 1 });
       assert.deepEqual(await footprint(), before, "nothing written");
 
       // The same request twice (a double click, or a second tab): the first fork moved the line.
       const first = await fork(R.inBox, KIT);
-      const again = await rejectsAdmin(fork(R.inBox, KIT), 409, "LINE_NOT_ON_ROUTE");
+      const again = await rejectsHttp(fork(R.inBox, KIT), 409, "LINE_NOT_ON_ROUTE");
       assert.deepEqual(again.extra, { package_type_id: KIT, item_type_id: H.ITEM_TYPE_IN_BOX, route_number: first.route_number });
       assert.deepEqual(
         (await H.q<{ n: number }>("SELECT route_number AS n FROM testing_routes WHERE item_type_id = $1 ORDER BY 1", [H.ITEM_TYPE_IN_BOX])).map((r) => r.n),
@@ -465,7 +420,7 @@ describe(
     // HTTP
     // -------------------------------------------------------------------------------------
 
-    it("http: POST …/[id]/fork needs a session (401) and FIELDS_EDIT_ROLES (403) and writes nothing when refused; a tester's fork answers 201 {test_route_id, route_number} and records the session as the draft's author; refusals carry status, code and extra", async () => {
+    it("http: POST …/[id]/fork needs a session (401) and ACCESS.fieldsEdit (403) and writes nothing when refused; a tester's fork answers 201 {test_route_id, route_number} and records the session as the draft's author; refusals carry status, code and extra", async () => {
       await saveDraft(R.inBox, IN_BOX_DRAFT);
       const id = String(R.inBox);
       const before = await footprint();
@@ -473,7 +428,7 @@ describe(
       session = null;
       assert.deepEqual(await httpFork(id, { body: { package_type_id: KIT } }), { status: 401, body: { error: "Unauthorized" } });
       session = signedIn("storekeeper", "mashan");
-      assert.deepEqual(await httpFork(id, { body: { package_type_id: KIT } }), { status: 403, body: { error: "Forbidden", required: FIELDS_EDIT_ROLES } });
+      assert.deepEqual(await httpFork(id, { body: { package_type_id: KIT } }), { status: 403, body: { error: "Forbidden", required: ACCESS.fieldsEdit } });
       assert.deepEqual(await footprint(), before, "nothing written");
 
       session = signedIn("tester");

@@ -13,16 +13,20 @@
 // The @font-face rules are injected separately (fonts.ts: inlined by html.ts
 // for print, loaded from /fonts by the editor). --pdf-font is set on .pdf-page
 // from the document's font setting.
+import { PAGE } from "./document";
+import { REPORT_FONTS } from "./fonts";
+
+const PAD = `${PAGE.marginMm.top}mm ${PAGE.marginMm.side}mm`;
 
 export const PDF_CSS = `
-:root { --pdf-ink:#000; --pdf-line:#000; --pdf-soft:#333; --pdf-head:#e6e6e6; --pdf-navy:#000; --pdf-border:#000; --pdf-font:'David Libre', 'David', 'Times New Roman', serif; }
+:root { --pdf-ink:#000; --pdf-line:#000; --pdf-soft:#333; --pdf-head:#e6e6e6; --pdf-navy:#000; --pdf-border:#000; --pdf-font:${REPORT_FONTS.david.stack}; }
 
 * { box-sizing: border-box; }
 
 .pdf-page {
-  width: 210mm;
-  min-height: 297mm;
-  padding: 14mm 16mm;
+  width: ${PAGE.widthMm}mm;
+  min-height: ${PAGE.heightMm}mm;
+  padding: ${PAD};
   margin: 0 auto;
   background: #fff;
   color: var(--pdf-ink);
@@ -78,7 +82,7 @@ export const PDF_CSS = `
      form with footer text or page numbers will still show this overlap;
      that needs a separate fix (e.g. a CSS-counter page-number scheme that
      avoids displayHeaderFooter) before it can be resolved. */
-  .pdf-page:has(.pdf-frame) { padding: 14mm 16mm; }
+  .pdf-page:has(.pdf-frame) { padding: ${PAD}; }
 }
 
 /* ---- header / footer (document-level, from the page settings) ---- */

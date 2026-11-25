@@ -1,8 +1,8 @@
 "use client";
 import React from "react";
 import { ArrowLeft, Flag } from "lucide-react";
-import type { NextStationResult } from "@/types";
-import { HAIR, HAIR_2, INK, MUTED } from "@/app/components/packages/packageUi";
+import type { NextStationResult } from "@/app/lib/testing/contract";
+import { HAIR, HAIR_2, INK, MUTED } from "@/components/ui/colors";
 
 /**
  * "העמדה הבאה" on a package wizard's done step. The page's next-station dialog
@@ -26,14 +26,14 @@ export function nextStopOf(result: NextStationResult | null | undefined | void):
   return name ? { kind: "station", name } : { kind: "unknown" };
 }
 
-export const NEXT_STATION_TEXT = {
+const NEXT_STATION_TEXT = {
   title: "העמדה הבאה",
   end: "סוף המסלול",
   unknown: "לא ידוע",
   allEnd: "אין עמדה הבאה — המארז והפריטים שבו סיימו את המסלול.",
 } as const;
 
-export function nextStopText(stop: NextStop): string {
+function nextStopText(stop: NextStop): string {
   if (stop.kind === "station") return stop.name;
   return stop.kind === "end" ? NEXT_STATION_TEXT.end : NEXT_STATION_TEXT.unknown;
 }

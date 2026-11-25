@@ -1,5 +1,6 @@
 "use client";
 import { useSession } from "next-auth/react";
+import { identityOf } from "@/lib/auth/identity";
 
 /**
  * The logged-in user's worker id, derived from their Keycloak `employeeNumber`
@@ -8,12 +9,9 @@ import { useSession } from "next-auth/react";
  *
  * Returns null when the user has no (valid) employeeNumber — callers must stay
  * tolerant and fall back to a manual picker so a user without the attribute set
- * can still work. See the [[worker-auto-select-from-token]] task.
+ * can still work.
  */
 export function useTokenWorkerId(): number | null {
   const { data: session } = useSession();
-  const raw = session?.user?.employeeNumber;
-  if (!raw) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return identityOf(session).workerId;
 }

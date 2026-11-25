@@ -1,9 +1,11 @@
 "use client";
 import * as React from "react";
-import { apiFetch } from "@/lib/api/client";
 import type { ForkResultJson } from "@/app/lib/station-fields/admin-types";
+import { request } from "./api";
+import type { Fetcher } from "./api";
 import { useDraftStore } from "./draftStore";
-import type { Fetcher, FlushResult } from "./draftStore";
+import type { FlushResult } from "./draftStore";
+import { API, BadBody, errorCode, parseForkResult } from "./wire";
 
 /**
  * "צור מסלול נפרד למארז הזה" on the client (route-fields spec §3.2.1; artboard 2's shared notice):
@@ -30,32 +32,23 @@ export type ForkError =
 
 export type ForkOutcome = { ok: true; data: ForkResultJson } | { ok: false; error: ForkError };
 
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
-const INT4_MAX = 2147483647;
-const isId = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 1 && (v as number) <= INT4_MAX;
-
-export const forkUrl = (routeId: number) => `/api/settings/testing-routes/${routeId}/fork`;
-
-/** The success body, or null when it is not one. */
-export function parseForkResult(body: unknown): ForkResultJson | null {
-  if (!isObj(body) || !isId(body.test_route_id) || !isId(body.route_number)) return null;
-  return { test_route_id: body.test_route_id, route_number: body.route_number };
-}
-
 const SHAPE_CODES = new Set(["ITEM_ROUTE_SHAPE", "PACKAGE_ROUTE_SHAPE"]);
 const STALE_CODES = new Set(["LINE_NOT_ON_ROUTE", "KIT_LINE_NOT_FOUND", "ROUTE_NOT_FOUND", "ITEM_TYPE_NOT_FOUND"]);
 
-/** What the fork's answer means (pure). `status` null = no answer (network). */
-export function forkOutcome(status: number | null, body: unknown): ForkOutcome {
+/** What the fork's answer means. `status` null = no answer (network). */
+function forkOutcome(status: number | null, body: unknown): ForkOutcome {
   if (status === 200 || status === 201) {
-    const data = parseForkResult(body);
-    return data ? { ok: true, data } : { ok: false, error: { kind: "failed" } };
+    try {
+      return { ok: true, data: parseForkResult(body) };
+    } catch (e) {
+      if (e instanceof BadBody) return { ok: false, error: { kind: "failed" } };
+      throw e;
+    }
   }
-  const code = isObj(body) && typeof body.code === "string" ? body.code : null;
+  const code = errorCode(body);
   if (status === 409 && code !== null && SHAPE_CODES.has(code)) {
-    const reason = isObj(body) && typeof body.reason === "string" && body.reason.trim() ? body.reason : null;
-    return { ok: false, error: { kind: "shape", reason } };
+    const reason = (body as { reason?: unknown }).reason;
+    return { ok: false, error: { kind: "shape", reason: typeof reason === "string" && reason.trim() ? reason : null } };
   }
   if (status !== null && status < 500 && code !== null && STALE_CODES.has(code)) return { ok: false, error: { kind: "stale" } };
   return { ok: false, error: { kind: "failed" } };
@@ -82,25 +75,8 @@ export async function forkRoute(deps: ForkDeps, routeId: number, packageTypeId: 
     return { ok: false, error: { kind: "unsaved" } };
   }
   if (sourceUnsaved(flushed, routeId)) return { ok: false, error: { kind: "unsaved" } };
-  const fetcher = deps.fetch ?? apiFetch;
-  let res: Response;
-  try {
-    res = await fetcher(forkUrl(routeId), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ package_type_id: packageTypeId }),
-      cache: "no-store",
-    });
-  } catch {
-    return forkOutcome(null, null);
-  }
-  let body: unknown = null;
-  try {
-    body = await res.json();
-  } catch {
-    body = null;
-  }
-  return forkOutcome(res.status, body);
+  const answer = await request(API.fork(routeId), { method: "POST", body: { package_type_id: packageTypeId }, fetcher: deps.fetch });
+  return forkOutcome(answer.status, answer.body);
 }
 
 export type ForkRunner = {

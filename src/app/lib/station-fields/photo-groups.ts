@@ -1,4 +1,5 @@
-import type { TransactionClient } from "@/app/lib/prisma";
+import type { Prisma, photo_types } from "@prisma/client";
+import type { TransactionClient } from "@/lib/db";
 import { fieldPhotoCode } from "./schema";
 import type { FieldId, RouteFieldsConfig, StepUid } from "./schema";
 
@@ -51,6 +52,29 @@ export function fieldPhotoGroupDesc(stationName: string, fieldLabel: string): st
   return `${stationName.trim()} · ${fieldLabel.trim() || "צילום"}`.slice(0, 255);
 }
 
+/**
+ * A photo group (photo_types, by its code) as its owner — a route's photo field or a popup
+ * template's photo component — names it now: the row updated when it exists, else created last in
+ * sort order. `refuse` may turn an existing row down (a group another owner holds). Inside the
+ * caller's transaction.
+ */
+export async function savePhotoGroup(
+  tx: TransactionClient,
+  code: string,
+  data: Omit<Prisma.photo_typesUncheckedCreateInput, "code" | "sort_order">,
+  refuse?: (existing: photo_types) => Error | null,
+): Promise<void> {
+  const existing = await tx.photo_types.findUnique({ where: { code } });
+  if (existing) {
+    const refusal = refuse?.(existing);
+    if (refusal) throw refusal;
+    await tx.photo_types.update({ where: { photo_type_id: existing.photo_type_id }, data });
+    return;
+  }
+  const last = (await tx.photo_types.aggregate({ _max: { sort_order: true } }))._max.sort_order ?? 0;
+  await tx.photo_types.create({ data: { ...data, code, sort_order: last + 1 } });
+}
+
 /** Creates or renames the groups of a route's photo fields, inside the publish transaction. */
 export async function syncFieldPhotoGroups(tx: TransactionClient, routeId: number, cfg: RouteFieldsConfig): Promise<void> {
   const groups = fieldPhotoGroupsOf(cfg, routeId);
@@ -61,16 +85,11 @@ export async function syncFieldPhotoGroups(tx: TransactionClient, routeId: numbe
     select: { test_station_type_id: true, test_type_desc: true },
   });
   const typeName = new Map(types.map((t) => [t.test_station_type_id, t.test_type_desc.trim()]));
-  let nextSort = ((await tx.photo_types.aggregate({ _max: { sort_order: true } }))._max.sort_order ?? 0) + 1;
-
   for (const g of groups) {
-    const photo_type_desc = fieldPhotoGroupDesc(typeName.get(g.station_type_id) || g.station_label, g.label);
-    const owner = { test_route_id: routeId, step_uid: g.step_uid, field_id: g.field_id };
-    const existing = await tx.photo_types.findUnique({ where: { code: g.code }, select: { photo_type_id: true } });
-    if (existing) {
-      await tx.photo_types.update({ where: { photo_type_id: existing.photo_type_id }, data: { ...owner, photo_type_desc, is_active: true } });
-    } else {
-      await tx.photo_types.create({ data: { code: g.code, ...owner, photo_type_desc, sort_order: nextSort++, is_active: true } });
-    }
+    await savePhotoGroup(tx, g.code, {
+      test_route_id: routeId, step_uid: g.step_uid, field_id: g.field_id,
+      photo_type_desc: fieldPhotoGroupDesc(typeName.get(g.station_type_id) || g.station_label, g.label),
+      is_active: true,
+    });
   }
 }

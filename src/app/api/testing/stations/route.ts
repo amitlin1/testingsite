@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import type { TestStationType } from "@/app/lib/testing/contract";
 
 export const runtime = "nodejs";
 
+/** GET /api/testing/stations — every station type, with what decides its popup. */
 export async function GET() {
   try {
     const rows = await prisma.test_stations_type.findMany({
@@ -16,13 +18,10 @@ export async function GET() {
     });
 
     return NextResponse.json(
-      rows.map((r) => ({
+      rows.map((r): TestStationType => ({
         id: r.test_station_type_id,
         name: r.test_type_desc.trim(),
-        // Package-level station types (opening / closing) queue PACKAGES, not
-        // items (docs/packages/PLAN.md §4).
         packageLevel: r.package_level,
-        // Its popup template, if any: the popup is built from it (docs/popup-templates/PLAN.md §3.6).
         popupTemplate: r.popup_template ? { base: r.popup_template.base, version: r.popup_template.version } : null,
       }))
     );

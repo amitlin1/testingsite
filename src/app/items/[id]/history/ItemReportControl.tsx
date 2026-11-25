@@ -3,10 +3,12 @@ import * as React from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { FileText, PenLine } from "lucide-react";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@/components/ui";
-import ShipmentSignatureField from "@/app/components/shipments/ShipmentSignatureField";
-import { apiFetch } from "@/lib/api/client";
+import SignaturePad from "@/components/SignaturePad";
+import { ApiError, apiFetch, getJson, sendJson } from "@/lib/api/client";
+import { failureText } from "@/app/components/failureText";
 import { withBasePath } from "@/lib/base-path";
-import { formatMoment } from "../../format";
+import { closingMissingOnItemPage, type ReportState, type ReportStatusResponse } from "@/app/lib/item-report/contract";
+import { formatMoment } from "@/app/lib/datetime";
 
 /**
  * The item's PDF report on its history page (docs/ITEM_REPORTS.md):
@@ -22,35 +24,16 @@ import { formatMoment } from "../../format";
  * Nothing renders when the item's route has no report template.
  */
 
-type ReportStatus = {
-  state: "no_template" | "in_progress" | "awaiting_signature" | "final";
-  finished: boolean;
-  needsSignature: boolean;
-  signedBy: string | null;
-  signedAt: string | null;
-  needsClosingSignature: boolean;
-  closingSignedBy: string | null;
-  closingSignedAt: string | null;
-  version: number;
-  canSign: boolean;
-  canSignClosing: boolean;
-};
-
 type SignKind = "final" | "closing";
 
-/** The report waits for its final signature and its closing one was never given: it can still be. */
-function closingMissing(s: ReportStatus): boolean {
-  return s.state === "awaiting_signature" && s.needsClosingSignature && !s.closingSignedBy;
-}
-
-const STATE_TEXT: Record<Exclude<ReportStatus["state"], "no_template">, string> = {
+const STATE_TEXT: Record<Exclude<ReportState, "no_template">, string> = {
   in_progress: "טיוטה — הפריט עדיין במסלול",
   awaiting_signature: "ממתין לחתימה הסופית",
   final: "דוח סופי, נעול",
 };
 
 /** "נחתם בסגירה ע״י … · נחתם סופית ע״י …" — the signatures the report carries. */
-function signedLine(s: ReportStatus): string {
+function signedLine(s: ReportStatusResponse): string {
   const parts: string[] = [];
   if (s.closingSignedBy) parts.push(`נחתם בסגירה ע״י ${s.closingSignedBy}${s.closingSignedAt ? ` ב-${formatMoment(s.closingSignedAt)}` : ""}`);
   if (s.signedBy) parts.push(`${s.needsClosingSignature ? "נחתם סופית" : "נחתם"} ע״י ${s.signedBy}${s.signedAt ? ` ב-${formatMoment(s.signedAt)}` : ""}`);
@@ -58,15 +41,12 @@ function signedLine(s: ReportStatus): string {
 }
 
 export default function ItemReportControl({ itemId }: { itemId: string }) {
-  const [status, setStatus] = React.useState<ReportStatus | null>(null);
+  const [status, setStatus] = React.useState<ReportStatusResponse | null>(null);
   const [signOpen, setSignOpen] = React.useState<SignKind | null>(null);
 
   // A failed read just leaves the button out.
   const fetchStatus = React.useCallback(
-    () =>
-      apiFetch(`/api/item-reports/${itemId}/status`)
-        .then((res) => (res.ok ? (res.json() as Promise<ReportStatus>) : null))
-        .catch(() => null),
+    () => getJson<ReportStatusResponse>(`/api/item-reports/${itemId}/status`).catch(() => null),
     [itemId],
   );
   const load = React.useCallback(async () => {
@@ -87,7 +67,7 @@ export default function ItemReportControl({ itemId }: { itemId: string }) {
 
   const pdfHref = withBasePath(`/api/item-reports/${itemId}`);
   const signed = signedLine(status);
-  const missing = closingMissing(status);
+  const missing = closingMissingOnItemPage(status);
   // A column as narrow as its buttons, so the header keeps it beside the title: the state, who
   // signed (wrapping under it), then the buttons.
   return (
@@ -149,6 +129,17 @@ const DIALOG_TEXT: Record<SignKind, { title: string; body: string; hint: string;
   },
 };
 
+function refusalText(e: ApiError, kind: SignKind): string {
+  switch (e.body.code) {
+    case "ALREADY_SIGNED": return kind === "final" ? "הדוח כבר נחתם." : "הדוח כבר נחתם בסגירה.";
+    case "ALREADY_FINAL": return "הדוח כבר סופי ונעול.";
+    case "NOT_FINISHED": return "הפריט עוד לא סיים את המסלול.";
+    case "NO_SIGNATURE_BLOCK": return kind === "final" ? "בתבנית של הדוח אין חתימה סופית." : "בתבנית של הדוח אין חתימה בסגירה.";
+  }
+  if (e.status === 403) return kind === "final" ? "רק מנהל חותם חתימה סופית." : "רק בודק או מנהל חותמים בסגירה.";
+  return DIALOG_TEXT[kind].failed;
+}
+
 function SignReportDialog({ itemId, kind, closingMissing: missing, canSignClosing, onClose, onSigned }: {
   itemId: string;
   kind: SignKind;
@@ -183,30 +174,12 @@ function SignReportDialog({ itemId, kind, closingMissing: missing, canSignClosin
     setBusy(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/item-reports/${itemId}/${kind === "final" ? "sign" : "sign-closing"}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signature: canvas.getCanvas().toDataURL("image/png") }),
+      await sendJson(`/api/item-reports/${itemId}/${kind === "final" ? "sign" : "sign-closing"}`, "POST", {
+        signature: canvas.getCanvas().toDataURL("image/png"),
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { code?: string } | null;
-        throw new Error(
-          body?.code === "ALREADY_SIGNED"
-            ? kind === "final" ? "הדוח כבר נחתם." : "הדוח כבר נחתם בסגירה."
-            : body?.code === "ALREADY_FINAL"
-              ? "הדוח כבר סופי ונעול."
-              : body?.code === "NOT_FINISHED"
-                ? "הפריט עוד לא סיים את המסלול."
-                : body?.code === "NO_SIGNATURE_BLOCK"
-                  ? kind === "final" ? "בתבנית של הדוח אין חתימה סופית." : "בתבנית של הדוח אין חתימה בסגירה."
-                  : res.status === 403
-                    ? kind === "final" ? "רק מנהל חותם חתימה סופית." : "רק בודק או מנהל חותמים בסגירה."
-                    : T.failed,
-        );
-      }
       onSigned();
     } catch (e) {
-      setError(e instanceof Error ? e.message : T.failed);
+      setError(e instanceof ApiError ? refusalText(e, kind) : failureText(e, T.failed));
     } finally {
       setBusy(false);
     }
@@ -232,7 +205,7 @@ function SignReportDialog({ itemId, kind, closingMissing: missing, canSignClosin
             <div style={{ padding: "var(--space-md)", color: "var(--color-ink-muted-48)", fontSize: "var(--text-small)" }}>טוען את הדוח…</div>
           )}
         </div>
-        <ShipmentSignatureField canvasRef={canvasRef} signed={signed} onSignedChange={setSigned} hint={T.hint} />
+        <SignaturePad canvasRef={canvasRef} signed={signed} onSignedChange={setSigned} hint={T.hint} />
         {error ? <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert> : null}
       </DialogContent>
       <DialogActions>

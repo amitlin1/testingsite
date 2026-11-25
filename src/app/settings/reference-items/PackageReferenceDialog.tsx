@@ -2,15 +2,18 @@
 
 import * as React from "react";
 import { Plus, Trash2, CircleAlert, Check, Package } from "lucide-react";
+import { MUTED } from "@/components/ui/colors";
 import {
   Alert, Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle, Tag, TextField, type TagTone,
 } from "@/components/ui";
-import { apiFetch } from "@/lib/api/client";
+import { sendJson } from "@/lib/api/client";
 import ReferenceItemFields from "./ReferenceItemFields";
 import {
   checkDraft, draftOf, draftPayload, isComplete, memberStations, revokeDraftUrls, stationsFor,
-  type FieldErrors, type FieldKey, type ItemDraft, type ItemType, type ReferenceItem, type ReferenceStations, type TemplateLine,
+  type FieldErrors, type FieldKey, type ItemDraft, type ItemType, type TemplateLine,
 } from "./referenceForm";
+import type { ReferenceStations } from "@/app/lib/reference-items/stations";
+import type { ReferenceItemJson } from "@/app/lib/reference-items/wire";
 
 /**
  * The package reference dialog (spec: ייחוס מארז) — a reference item of a
@@ -36,14 +39,12 @@ const STATUS: Record<Status, { label: string; tone: TagTone }> = {
   error: { label: "שגיאה", tone: "danger" },
 };
 
-const MUTED = "var(--color-ink-muted-48)";
-
 export default function PackageReferenceDialog({ packageType, editing, lines, stations, onClose, onSaved }: {
   packageType: ItemType;
   /** The stations that take reference images (GET /api/settings/reference-items/stations). */
   stations: ReferenceStations | null;
   /** The package reference being edited; null for a new one. */
-  editing: ReferenceItem | null;
+  editing: ReferenceItemJson | null;
   /** The package type's contents. */
   lines: TemplateLine[];
   onClose: () => void;
@@ -89,9 +90,12 @@ export default function PackageReferenceDialog({ packageType, editing, lines, st
       return { ...all, [keyOf(s)]: next };
     });
 
-  const close = () => {
+  const revokeAll = () => {
     revokeDraftUrls(box);
     Object.values(members).forEach(revokeDraftUrls);
+  };
+  const close = () => {
+    revokeAll();
     onClose();
   };
 
@@ -130,17 +134,13 @@ export default function PackageReferenceDialog({ packageType, editing, lines, st
         if (d) memberBodies.push({ item_type_id: r.typeId, reference_item_id: d.id, ...(await draftPayload(d)) });
       }
       const body = { item_type_id: packageType.item_type_id, ...(await draftPayload(box)), members: memberBodies };
-      const res = await apiFetch(editing ? `/api/settings/reference-items/${editing.reference_item_id}` : "/api/settings/reference-items", {
-        method: editing ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "שגיאה בשמירה");
-      }
-      revokeDraftUrls(box);
-      Object.values(members).forEach(revokeDraftUrls);
+      await sendJson(
+        editing ? `/api/settings/reference-items/${editing.reference_item_id}` : "/api/settings/reference-items",
+        editing ? "PUT" : "POST",
+        body,
+        "שגיאה בשמירה",
+      );
+      revokeAll();
       onSaved();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : "שגיאה בשמירה");
@@ -149,19 +149,13 @@ export default function PackageReferenceDialog({ packageType, editing, lines, st
     }
   };
 
-  // Asked through the app's ConfirmDialog (below), not window.confirm.
   const remove = async () => {
     if (!editing) return;
     setConfirmDelete(false);
     setSaving(true);
     try {
-      const res = await apiFetch(`/api/settings/reference-items/${editing.reference_item_id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "שגיאה במחיקה");
-      }
-      revokeDraftUrls(box);
-      Object.values(members).forEach(revokeDraftUrls);
+      await sendJson(`/api/settings/reference-items/${editing.reference_item_id}`, "DELETE", undefined, "שגיאה במחיקה");
+      revokeAll();
       onSaved();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : "שגיאה במחיקה");
@@ -170,7 +164,7 @@ export default function PackageReferenceDialog({ packageType, editing, lines, st
     }
   };
 
-  const typeDesc = packageType.item_type_desc.trim();
+  const typeDesc = packageType.item_type_desc;
   const selRow = sel === "box" ? null : rows.find((r) => r.typeId === sel) ?? null;
   const selDraft = sel === "box" ? box : members[sel] ?? null;
   const setSelDraft = (next: ItemDraft) => (sel === "box" ? setBox(next) : setMembers((all) => ({ ...all, [sel]: next })));
@@ -333,7 +327,6 @@ export default function PackageReferenceDialog({ packageType, editing, lines, st
       </Dialog>
 
       <ConfirmDialog
-        draggable={false}
         open={confirmDelete}
         title="מחיקת ייחוס מארז"
         message={`למחוק את ייחוס המארז "${box.name.trim() || box.sku.trim() || "ללא שם"}", יחד עם פריטי הייחוס שבתוכו? פעולה זו אינה ניתנת לביטול.`}

@@ -2,9 +2,7 @@
 
 // ניהול משתמשים והרשאות — manager-only (guarded by layout.tsx + middleware + the
 // manager-gated /api/users route handlers). All Keycloak work happens server-side;
-// this page only talks to /api/users via apiFetch. Every element maps to a real
-// Shifthouse primitive (SettingsToolbar · DataTable + RowActions/IconAction · Tag
-// · StatusPill · Dialog / ConfirmDialog · ToggleButtonGroup · Snackbar/Alert).
+// this page only talks to /api/users.
 
 import * as React from "react";
 import {
@@ -24,34 +22,21 @@ import {
   DialogActions,
   ConfirmDialog,
   Alert,
-  Snackbar,
   Avatar,
 } from "@/components/ui";
 import DataTable, { RowActions, IconAction, type Column } from "@/components/DataTable";
-import { Pencil, KeyRound, Ban, Power, Trash2, Unlock, Info, HelpCircle } from "lucide-react";
+import { Pencil, KeyRound, Ban, Power, Trash2, Unlock, Info, HelpCircle, type LucideIcon } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
 import RoleInfoDrawer from "./RoleInfoDrawer";
-import { apiFetch } from "@/lib/api/client";
+import { ROLE_DOT } from "./roleCapabilities";
+import { ApiError, getJson, sendJson } from "@/lib/api/client";
+import { useListQuery } from "@/lib/hooks/useListQuery";
 import { useSession } from "next-auth/react";
+import { APP_ROLES, ROLE_LABEL, type AppRole } from "@/lib/auth/roles";
+import { isSameAccount, type AdminUser, type UserStatus } from "@/lib/users/rules";
+import { useSettingsToast } from "../components/useSettingsToast";
+import "./users.css";
 
-// ---- types (shape returned by GET /api/users) ----
-type Role = "manager" | "tester" | "storekeeper" | "mashan";
-type UserStatus = "active" | "disabled" | "locked" | "pending";
-interface AdminUser {
-  id: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  fullName: string;
-  employeeNumber: string | null;
-  enabled: boolean;
-  createdTimestamp: number | null;
-  role: Role | null;
-  status: UserStatus;
-}
-
-// ---- display maps ----
-const ROLE_LABEL: Record<Role, string> = { manager: "מנהל", tester: "בודק", storekeeper: "מחסנאי", mashan: "משאן" };
 const STATUS_META: Record<UserStatus, { label: string; dot: string }> = {
   active: { label: "פעיל", dot: "var(--color-status-approved)" },
   disabled: { label: "מושבת", dot: "var(--color-ink-muted-48)" },
@@ -59,17 +44,46 @@ const STATUS_META: Record<UserStatus, { label: string; dot: string }> = {
   pending: { label: "ממתין לשינוי סיסמה", dot: "var(--color-status-late)" },
 };
 
-// A role is a category, not a state: one neutral tag and one dot colour per
-// role, the same in the KPI card and in the table. Never the status colours
-// (green / amber read as "ok" / "waiting" next to the status column).
-const ROLE_DOT: Record<Role, string> = {
-  manager: "var(--color-ink)",
-  tester: "var(--color-primary)",
-  storekeeper: "var(--color-ink-muted-48)",
-  mashan: "color-mix(in srgb, var(--color-primary) 45%, var(--color-canvas))",
+/** The one status action of a row: a disabled user is enabled, a locked one unlocked (re-enabling
+ *  clears the brute-force lock server side), anyone else disabled. */
+type StatusAction = {
+  enable: boolean;
+  label: string;
+  icon: LucideIcon;
+  title: string;
+  message: (name: string | undefined) => string;
+  done: string;
+};
+const DISABLE: StatusAction = {
+  enable: false,
+  label: "השבת",
+  icon: Ban,
+  title: "השבתת משתמש",
+  message: (name) => `להשבית את "${name}"? המשתמש לא יוכל להתחבר עד להפעלה מחדש.`,
+  done: "המשתמש הושבת",
+};
+const STATUS_ACTION: Record<UserStatus, StatusAction> = {
+  disabled: {
+    enable: true,
+    label: "הפעל",
+    icon: Power,
+    title: "הפעלת משתמש",
+    message: (name) => `להפעיל מחדש את "${name}"? המשתמש יוכל להתחבר.`,
+    done: "המשתמש הופעל",
+  },
+  locked: {
+    enable: true,
+    label: "שחרר נעילה",
+    icon: Unlock,
+    title: "שחרור נעילה",
+    message: (name) => `לשחרר את הנעילה של "${name}"? המשתמש יוכל להתחבר שוב.`,
+    done: "הנעילה שוחררה",
+  },
+  active: DISABLE,
+  pending: DISABLE,
 };
 
-function RoleTag({ role, onInfo }: { role: Role; onInfo?: () => void }) {
+function RoleTag({ role, onInfo }: { role: AppRole; onInfo?: () => void }) {
   const tag = (
     <Tag tone="neutral" size="md" icon={<span className="role-dot" style={{ background: ROLE_DOT[role] }} aria-hidden />}>
       {ROLE_LABEL[role]}
@@ -96,12 +110,7 @@ function initials(u: AdminUser): string {
 }
 
 function formatDate(ts: number | null): string {
-  if (!ts) return "—";
-  try {
-    return new Date(ts).toLocaleDateString("he-IL");
-  } catch {
-    return "—";
-  }
+  return ts ? new Date(ts).toLocaleDateString("he-IL") : "—";
 }
 
 // Temp password: 10 chars, guaranteed upper + lower + digit (no ambiguous chars).
@@ -131,7 +140,7 @@ type FormState = {
   firstName: string;
   lastName: string;
   employeeNumber: string;
-  role: Role;
+  role: AppRole;
   temporaryPassword: string;
   mustChange: boolean;
 };
@@ -145,16 +154,10 @@ const emptyForm: FormState = {
   mustChange: true,
 };
 
-/** The users, or null when they could not be read. */
-async function readUsers(): Promise<AdminUser[] | null> {
-  try {
-    const res = await apiFetch("/api/users");
-    if (!res.ok) throw new Error();
-    const data = (await res.json()) as { users: AdminUser[] };
-    return data.users ?? [];
-  } catch {
-    return null;
-  }
+const FAILED = "הפעולה נכשלה. נסה שוב.";
+
+async function readUsers(): Promise<AdminUser[]> {
+  return (await getJson<{ users?: AdminUser[] }>("/api/users")).users ?? [];
 }
 
 export default function UsersPage() {
@@ -162,23 +165,17 @@ export default function UsersPage() {
   // reflect that in the UI so the action is disabled rather than failing.
   const { data: session } = useSession();
   const currentUsername = session?.user?.preferredUsername;
-  const isSelf = (u: AdminUser) => !!currentUsername && u.username === currentUsername;
+  const isSelf = (u: AdminUser) => isSameAccount(u.username, currentUsername);
 
-  const [users, setUsers] = React.useState<AdminUser[]>([]);
-  const [phase, setPhase] = React.useState<"loading" | "ready" | "error">("loading");
+  const { rows: users, loading, failed, reload: load } = useListQuery<AdminUser>(["users"], readUsers);
+  const phase: "loading" | "ready" | "error" = failed ? "error" : loading ? "loading" : "ready";
   const [search, setSearch] = React.useState("");
-  const [roleFilter, setRoleFilter] = React.useState<"all" | Role>("all");
+  const [roleFilter, setRoleFilter] = React.useState<"all" | AppRole>("all");
   // The role panel ("מה כל תפקיד יכול לעשות"); null = closed.
-  const [infoRole, setInfoRole] = React.useState<Role | null>(null);
+  const [infoRole, setInfoRole] = React.useState<AppRole | null>(null);
 
-  const [toast, setToast] = React.useState<{ open: boolean; msg: string; sev: "success" | "error" }>({
-    open: false,
-    msg: "",
-    sev: "success",
-  });
-  const notify = (msg: string, sev: "success" | "error" = "success") => setToast({ open: true, msg, sev });
+  const notify = useSettingsToast({ duration: 5000 });
 
-  // dialog state
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<AdminUser | null>(null);
   const [form, setForm] = React.useState<FormState>(emptyForm);
@@ -195,26 +192,6 @@ export default function UsersPage() {
   // double-click firing duplicate requests).
   const [busy, setBusy] = React.useState(false);
 
-  const applyUsers = React.useCallback((list: AdminUser[] | null) => {
-    if (list) {
-      setUsers(list);
-      setPhase("ready");
-    } else {
-      setPhase("error");
-    }
-  }, []);
-
-  const load = React.useCallback(async () => {
-    setPhase("loading");
-    applyUsers(await readUsers());
-  }, [applyUsers]);
-
-  // The first load: `phase` starts as "loading", so only the reply sets state.
-  React.useEffect(() => {
-    readUsers().then(applyUsers);
-  }, [applyUsers]);
-
-  // ---- filtering ----
   const filtered = users.filter((u) => {
     if (roleFilter !== "all" && u.role !== roleFilter) return false;
     if (!search.trim()) return true;
@@ -226,16 +203,9 @@ export default function UsersPage() {
     );
   });
 
-  // ---- KPI counts (over ALL users) ----
-  const counts = {
-    all: users.length,
-    manager: users.filter((u) => u.role === "manager").length,
-    tester: users.filter((u) => u.role === "tester").length,
-    storekeeper: users.filter((u) => u.role === "storekeeper").length,
-    mashan: users.filter((u) => u.role === "mashan").length,
-  };
+  const peopleByRole = Object.fromEntries(APP_ROLES.map((r) => [r, [] as string[]])) as Record<AppRole, string[]>;
+  for (const u of users) if (u.role) peopleByRole[u.role].push(u.fullName || u.username);
 
-  // ---- actions ----
   const openCreate = () => {
     setEditing(null);
     setForm({ ...emptyForm, temporaryPassword: generatePassword() });
@@ -265,39 +235,29 @@ export default function UsersPage() {
     if (errors.username || errors.temporaryPassword) return;
     setSaving(true);
     try {
-      const res = editing
-        ? await apiFetch(`/api/users/${editing.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            firstName: form.firstName,
-            lastName: form.lastName,
-            employeeNumber: form.employeeNumber,
-            role: form.role,
-          }),
-        })
-        : await apiFetch("/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: form.username,
-            firstName: form.firstName,
-            lastName: form.lastName,
-            employeeNumber: form.employeeNumber,
-            role: form.role,
-            temporaryPassword: form.temporaryPassword,
-            mustChangePassword: form.mustChange,
-          }),
-        });
-      if (!res.ok) {
-        const e = await res.json().catch(() => null);
-        throw new Error(e?.error);
+      if (editing) {
+        await sendJson(`/api/users/${editing.id}`, "PUT", {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          employeeNumber: form.employeeNumber,
+          role: form.role,
+        }, FAILED);
+      } else {
+        await sendJson("/api/users", "POST", {
+          username: form.username,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          employeeNumber: form.employeeNumber,
+          role: form.role,
+          temporaryPassword: form.temporaryPassword,
+          mustChangePassword: form.mustChange,
+        }, FAILED);
       }
       notify(editing ? "השינויים נשמרו" : "המשתמש נוצר");
       setFormOpen(false);
       await load();
     } catch (e) {
-      notify((e as Error).message || "הפעולה נכשלה. נסה שוב.", "error");
+      notify(e instanceof ApiError ? e.message : FAILED, "error");
       // Surface any partial state (e.g. a create that failed after the user row
       // was written) by reloading the list.
       await load();
@@ -311,20 +271,12 @@ export default function UsersPage() {
     if (!resetPwd) { setResetError("יש להזין סיסמה זמנית"); return; }
     setBusy(true);
     try {
-      const res = await apiFetch(`/api/users/${resetTarget.id}/reset-password`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: resetPwd }),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => null);
-        throw new Error(e?.error);
-      }
+      await sendJson(`/api/users/${resetTarget.id}/reset-password`, "PUT", { password: resetPwd }, FAILED);
       notify("סיסמה זמנית הוגדרה");
       setResetTarget(null);
       await load();
     } catch (e) {
-      notify((e as Error).message || "הפעולה נכשלה. נסה שוב.", "error");
+      notify(e instanceof ApiError ? e.message : FAILED, "error");
     } finally {
       setBusy(false);
     }
@@ -332,26 +284,15 @@ export default function UsersPage() {
 
   const submitToggle = async () => {
     if (!toggleTarget) return;
-    const wasLocked = toggleTarget.status === "locked";
-    // Disabled → enable; locked → re-enable (clears the brute-force lock server
-    // side); otherwise → disable.
-    const enable = toggleTarget.status === "disabled" || wasLocked;
+    const action = STATUS_ACTION[toggleTarget.status];
     setBusy(true);
     try {
-      const res = await apiFetch(`/api/users/${toggleTarget.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: enable }),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => null);
-        throw new Error(e?.error);
-      }
-      notify(wasLocked ? "הנעילה שוחררה" : enable ? "המשתמש הופעל" : "המשתמש הושבת");
+      await sendJson(`/api/users/${toggleTarget.id}`, "PUT", { enabled: action.enable }, FAILED);
+      notify(action.done);
       setToggleTarget(null);
       await load();
     } catch (e) {
-      notify((e as Error).message || "הפעולה נכשלה. נסה שוב.", "error");
+      notify(e instanceof ApiError ? e.message : FAILED, "error");
     } finally {
       setBusy(false);
     }
@@ -361,22 +302,17 @@ export default function UsersPage() {
     if (!deleteTarget) return;
     setBusy(true);
     try {
-      const res = await apiFetch(`/api/users/${deleteTarget.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const e = await res.json().catch(() => null);
-        throw new Error(e?.error);
-      }
+      await sendJson(`/api/users/${deleteTarget.id}`, "DELETE", undefined, FAILED);
       notify("המשתמש נמחק");
       setDeleteTarget(null);
       await load();
     } catch (e) {
-      notify((e as Error).message || "הפעולה נכשלה. נסה שוב.", "error");
+      notify(e instanceof ApiError ? e.message : FAILED, "error");
     } finally {
       setBusy(false);
     }
   };
 
-  // ---- columns ----
   const columns: Column<AdminUser>[] = [
     {
       key: "fullName",
@@ -416,7 +352,9 @@ export default function UsersPage() {
       header: "פעולות",
       align: "center",
       width: 170,
-      cell: (u) => (
+      cell: (u) => {
+        const action = STATUS_ACTION[u.status];
+        return (
         <RowActions>
           <IconAction title={`ערוך את ${u.fullName || u.username}`} onClick={() => openEdit(u)}>
             <Pencil size={16} strokeWidth={1.75} />
@@ -425,25 +363,11 @@ export default function UsersPage() {
             <KeyRound size={16} strokeWidth={1.75} />
           </IconAction>
           <IconAction
-            title={
-              isSelf(u)
-                ? "לא ניתן לפעול על החשבון שלך"
-                : u.status === "disabled"
-                  ? "הפעל"
-                  : u.status === "locked"
-                    ? "שחרר נעילה"
-                    : "השבת"
-            }
+            title={isSelf(u) ? "לא ניתן לפעול על החשבון שלך" : action.label}
             disabled={isSelf(u)}
             onClick={() => setToggleTarget(u)}
           >
-            {u.status === "disabled" ? (
-              <Power size={16} strokeWidth={1.75} />
-            ) : u.status === "locked" ? (
-              <Unlock size={16} strokeWidth={1.75} />
-            ) : (
-              <Ban size={16} strokeWidth={1.75} />
-            )}
+            <action.icon size={16} strokeWidth={1.75} />
           </IconAction>
           <IconAction
             title={isSelf(u) ? "לא ניתן לפעול על החשבון שלך" : "מחק"}
@@ -454,26 +378,23 @@ export default function UsersPage() {
             <Trash2 size={16} strokeWidth={1.75} />
           </IconAction>
         </RowActions>
-      ),
+        );
+      },
     },
   ];
 
-  // Static counts: the role filter is the toggle group above (one control for
-  // one job), so the cards only report.
-  const kpiCards: { key: "all" | Role; label: string; dot: string | null; count: number }[] = [
-    { key: "all", label: "סה״כ משתמשים", dot: null, count: counts.all },
-    { key: "manager", label: "מנהל", dot: ROLE_DOT.manager, count: counts.manager },
-    { key: "tester", label: "בודק", dot: ROLE_DOT.tester, count: counts.tester },
-    { key: "storekeeper", label: "מחסנאי", dot: ROLE_DOT.storekeeper, count: counts.storekeeper },
-    { key: "mashan", label: "משאן", dot: ROLE_DOT.mashan, count: counts.mashan },
+  // Static counts over ALL users: the role filter is the toggle group above
+  // (one control for one job), so the cards only report.
+  const kpiCards: { key: "all" | AppRole; label: string; dot: string | null; count: number }[] = [
+    { key: "all", label: "סה״כ משתמשים", dot: null, count: users.length },
+    ...APP_ROLES.map((r) => ({ key: r, label: ROLE_LABEL[r], dot: ROLE_DOT[r], count: peopleByRole[r].length })),
   ];
   const ready = phase === "ready";
-  const peopleByRole: Record<Role, string[]> = { manager: [], tester: [], storekeeper: [], mashan: [] };
-  for (const u of users) if (u.role) peopleByRole[u.role].push(u.fullName || u.username);
+  const toggleAction = STATUS_ACTION[toggleTarget?.status ?? "active"];
 
   // A table page: it fills the settings frame and scrolls its table inside.
   return (
-    <div dir="rtl" className="settings-fill">
+    <div className="settings-fill">
       <SettingsToolbar
         title="ניהול משתמשים"
         subtitle="ניהול חשבונות, תפקידים והרשאות. מנוהל מול Keycloak."
@@ -489,16 +410,14 @@ export default function UsersPage() {
         <ToggleButtonGroup
           value={roleFilter}
           exclusive
-          color="primary"
           role="group"
           aria-label="סינון לפי תפקיד"
-          onChange={(_e, v) => v && setRoleFilter(v as "all" | Role)}
+          onChange={(_e, v) => v && setRoleFilter(v as "all" | AppRole)}
         >
           <ToggleButton value="all">הכל</ToggleButton>
-          <ToggleButton value="manager">מנהל</ToggleButton>
-          <ToggleButton value="tester">בודק</ToggleButton>
-          <ToggleButton value="storekeeper">מחסנאי</ToggleButton>
-          <ToggleButton value="mashan">משאן</ToggleButton>
+          {APP_ROLES.map((r) => (
+            <ToggleButton key={r} value={r}>{ROLE_LABEL[r]}</ToggleButton>
+          ))}
         </ToggleButtonGroup>
         <Button
           variant="text"
@@ -523,12 +442,11 @@ export default function UsersPage() {
         ))}
       </div>
 
-      {/* Table / error */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {phase === "error" ? (
           <div className="settings-card settings-error">
             <Alert severity="error">טעינת המשתמשים נכשלה — לא ניתן להתחבר לשרת ההרשאות.</Alert>
-            <Button variant="outlined" color="inherit" onClick={load}>
+            <Button variant="outlined" color="inherit" onClick={() => load()}>
               נסה שוב
             </Button>
           </div>
@@ -560,10 +478,9 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* ---- Create / Edit dialog ---- */}
       <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editing ? "עריכת משתמש" : "משתמש חדש"}</DialogTitle>
-        <DialogContent dir="rtl">
+        <DialogContent>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
             <TextField
               label="שם משתמש"
@@ -593,18 +510,16 @@ export default function UsersPage() {
               <ToggleButtonGroup
                 value={form.role}
                 exclusive
-                color="primary"
                 role="group"
                 aria-labelledby="user-role-label"
-                disabled={!!editing && editing.username === currentUsername}
-                onChange={(_e, v) => v && setForm({ ...form, role: v as Role })}
+                disabled={!!editing && isSelf(editing)}
+                onChange={(_e, v) => v && setForm({ ...form, role: v as AppRole })}
               >
-                <ToggleButton value="manager">מנהל</ToggleButton>
-                <ToggleButton value="tester">בודק</ToggleButton>
-                <ToggleButton value="storekeeper">מחסנאי</ToggleButton>
-                <ToggleButton value="mashan">משאן</ToggleButton>
+                {APP_ROLES.map((r) => (
+                  <ToggleButton key={r} value={r}>{ROLE_LABEL[r]}</ToggleButton>
+                ))}
               </ToggleButtonGroup>
-              {!!editing && editing.username === currentUsername && (
+              {!!editing && isSelf(editing) && (
                 <div className="sh-field-helper">לא ניתן לשנות את התפקיד של החשבון שאיתו אתה מחובר.</div>
               )}
             </div>
@@ -652,10 +567,9 @@ export default function UsersPage() {
         </DialogActions>
       </Dialog>
 
-      {/* ---- Reset password dialog ---- */}
       <Dialog open={!!resetTarget} onClose={() => setResetTarget(null)} maxWidth="sm" fullWidth>
         <DialogTitle>איפוס סיסמה</DialogTitle>
-        <DialogContent dir="rtl">
+        <DialogContent>
           <DialogContentText>
             הגדרת סיסמה זמנית ל<strong>{resetTarget?.fullName}</strong>.
           </DialogContentText>
@@ -691,38 +605,17 @@ export default function UsersPage() {
         </DialogActions>
       </Dialog>
 
-      {/* ---- Toggle active dialog ---- */}
       <ConfirmDialog
         open={!!toggleTarget}
-        title={
-          toggleTarget?.status === "disabled"
-            ? "הפעלת משתמש"
-            : toggleTarget?.status === "locked"
-              ? "שחרור נעילה"
-              : "השבתת משתמש"
-        }
-        message={
-          toggleTarget?.status === "disabled"
-            ? `להפעיל מחדש את "${toggleTarget?.fullName}"? המשתמש יוכל להתחבר.`
-            : toggleTarget?.status === "locked"
-              ? `לשחרר את הנעילה של "${toggleTarget?.fullName}"? המשתמש יוכל להתחבר שוב.`
-              : `להשבית את "${toggleTarget?.fullName}"? המשתמש לא יוכל להתחבר עד להפעלה מחדש.`
-        }
-        confirmText={
-          toggleTarget?.status === "disabled"
-            ? "הפעל"
-            : toggleTarget?.status === "locked"
-              ? "שחרר נעילה"
-              : "השבת"
-        }
+        title={toggleAction.title}
+        message={toggleAction.message(toggleTarget?.fullName)}
+        confirmText={toggleAction.label}
         busy={busy}
         onConfirm={submitToggle}
         onCancel={() => setToggleTarget(null)}
       />
 
-      {/* ---- Delete dialog ---- */}
       <ConfirmDialog
-        draggable={false}
         open={!!deleteTarget}
         title="מחיקת משתמש"
         message={deleteTarget ? `למחוק את המשתמש "${deleteTarget.fullName || deleteTarget.username}"? פעולה זו אינה ניתנת לביטול.` : ""}
@@ -737,21 +630,8 @@ export default function UsersPage() {
         role={infoRole}
         onRoleChange={setInfoRole}
         onClose={() => setInfoRole(null)}
-        labels={ROLE_LABEL}
-        dots={ROLE_DOT}
         people={peopleByRole}
       />
-
-      <Snackbar
-        open={toast.open}
-        autoHideDuration={5000}
-        onClose={() => setToast({ ...toast, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-      >
-        <Alert severity={toast.sev} onClose={() => setToast({ ...toast, open: false })}>
-          {toast.msg}
-        </Alert>
-      </Snackbar>
     </div>
   );
 }

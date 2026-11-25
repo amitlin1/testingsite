@@ -1,0 +1,27 @@
+/* הגדרות → מארזים: the artboard's states inline styles cannot express. */
+
+/* ------------------------------------------- packages (Package Types) --- */
+/* Package Types Settings.dc.html: parchment action squares that turn blue
+   (edit) or red (delete) on hover, quiet order chevrons, 38px row fields
+   with the system focus ring, compact pills. */
+.sh-iconbtn.stp-act { background: var(--color-canvas-parchment); color: var(--color-ink); }
+.sh-iconbtn.stp-act--muted { color: var(--color-ink-muted-48); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.stp-act:hover:not(:disabled) { background: var(--color-primary-soft); color: var(--color-primary); }
+  .sh-iconbtn.stp-act--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 8%, transparent); color: var(--color-destructive); }
+}
+.sh-iconbtn.stp-chev { color: var(--color-ink-muted-48); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.stp-chev:hover:not(:disabled) { background: var(--color-canvas-parchment); color: var(--color-ink); }
+}
+.sh-iconbtn.stp-chev:disabled { color: var(--color-border-strong); }
+
+/* The artboard's compact pills (14px, 10px 22px) on the shared Button. */
+.sh-btn.stp-pill { font-size: var(--text-body-sm); padding: 10px 22px; }
+.sh-btn--outlined.stp-pill { padding: 9px 18px; }
+
+/* The "new package type" dialog: the package artboards' shadowed sheet with
+   an unbanded footer. */
+.stp-dialog { box-shadow: var(--shadow-modal); }
+.stp-dialog .sh-dialog-actions { background: transparent; border-top: 0; padding: var(--space-ml) var(--space-lg) var(--space-lg); }
+

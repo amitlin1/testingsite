@@ -6,7 +6,9 @@ import { withLibrary } from "../../lib/routeQuery";
 import { copyName, copySetFields, setDraftDirty } from "../../lib/libraryModel";
 import type { SetDraft, SetOrigin } from "../../lib/libraryModel";
 import { LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT } from "../../lib/libraryLabels";
-import { createFieldSet, createOptionList, useFieldSets, useOptionLists, useRouteIndex } from "../../lib/useLibrary";
+import { createFieldSet, createOptionList } from "../../lib/libraryWrites";
+import type { LibraryResult } from "../../lib/libraryWrites";
+import { useFieldSets, useOptionLists, useRoutes } from "../../lib/resources";
 import { OptionListPopover } from "../editor/OptionListPopover";
 import { FieldSetList } from "./FieldSetList";
 import { FieldSetEditor } from "./FieldSetEditor";
@@ -15,18 +17,14 @@ import "./library.css";
 
 /**
  * "ערכות ורשימות" — `view=library` (artboard 8, spec §5.9): the field sets and the shared option lists,
- * global to every route (the page draws no context card here). Two panes on the .stations-grid pattern
- * (330px + flexible, 20 apart; one column under 900px):
- *   FieldSetList       the segmented sets | lists, "+ ערכה חדשה" / "+ רשימה חדשה", search, rows, footer
- *   FieldSetEditor     the open set (lib=sets)
- *   OptionListDetail   the open list (lib=lists)
- * The tab and the open item are the URL's (`lib`, `id` — routeQuery.withLibrary); without an id the
- * first one opens. Unsaved edits of each set are kept here, so the list shows their dot while another
- * set is open (they are not kept when the screen leaves the library).
+ * global to every route. The list pane, and the open set (lib=sets) or list (lib=lists): the tab and
+ * the open item are the URL's (routeQuery.withLibrary); without an id the first one opens. Unsaved
+ * edits of each set are kept here, so the list shows their dot while another set is open (they are not
+ * kept when the screen leaves the library).
  *
- * "+ ערכה חדשה" creates "ערכה חדשה" at once (POST, artboard 8 `addSet`) and opens it — its meta reads
- * "נוצרה עכשיו · {user}"; "שכפל" creates "{name} · עותק" from the working copy ("שוכפלה מ: {name}").
- * "+ רשימה חדשה" and "עריכת האפשרויות" open artboard 4 (OptionListPopover, library mode).
+ * "+ ערכה חדשה" creates the set at once (POST, artboard 8 `addSet`) and opens it; "שכפל" creates a copy
+ * from the working copy. "+ רשימה חדשה" and "עריכת האפשרויות" open artboard 4 (OptionListPopover,
+ * library mode).
  *
  * Needs the page's DraftStoreProvider above it: a saved list and "עדכן את כולם" reach the linked
  * fields of the routes the screen holds.
@@ -35,19 +33,18 @@ import "./library.css";
 export type FieldLibraryProps = {
   query: RouteQuery;
   onNavigate: (q: RouteQuery) => void;
-  /** The set editor's "החל על תאים…" (artboard 8 → 9): the page takes the set to the map. Without it
-   *  the button is not drawn. */
-  onApplyToCells?: (setId: number) => void;
+  /** The set editor's "החל על תאים…" (artboard 8 → 9): the page takes the set to the map. */
+  onApplyToCells: (setId: number) => void;
 };
 
 /** The artboard-4 popover: a new list (against "+ רשימה חדשה") or the open list's options. Kept after
  *  it closes, so the focus goes back to the button that opened it. */
 type ListPopover = { listId: number | null; open: boolean };
 
-export function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibraryProps) {
+export default function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibraryProps) {
   const sets = useFieldSets();
   const lists = useOptionLists();
-  const routes = useRouteIndex();
+  const routes = useRoutes();
   const { reload: reloadSets } = sets;
   const { reload: reloadLists } = lists;
   const { reload: reloadRoutes } = routes;
@@ -84,52 +81,48 @@ export function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibrary
   const openSetId = (id: number | null) => onNavigate(withLibrary(query, "sets", id));
   const openListId = (id: number | null) => onNavigate(withLibrary(query, "lists", id));
 
-  const newSet = async () => {
-    if (creating) return;
-    setCreating("set");
+  /** A new set or list: written, then the tab's search cleared, the list read again and the new one
+   *  opened; a failure is shown under the list's header. */
+  const create = async (kind: NonNullable<typeof creating>, into: LibraryTab, write: () => Promise<LibraryResult<{ id: number }>>, origin?: SetOrigin) => {
+    setCreating(kind);
     setCreateError(null);
-    const r = await createFieldSet({ name: LIBRARY_TEXT.newSetName, fields: [] });
+    const r = await write();
     setCreating(null);
     if (!r.ok) {
       setCreateError(LIBRARY_UNDRAWN_TEXT.createFailed);
       return;
     }
-    setOrigins((o) => ({ ...o, [r.data.id]: { kind: "created" } }));
-    setSearch((s) => ({ ...s, sets: "" }));
-    await reloadSets();
-    openSetId(r.data.id);
+    const id = r.data.id;
+    if (origin) setOrigins((o) => ({ ...o, [id]: origin }));
+    setSearch((s) => ({ ...s, [into]: "" }));
+    if (into === "sets") {
+      await reloadSets();
+      openSetId(id);
+    } else {
+      await reloadLists();
+      openListId(id);
+    }
+  };
+
+  const newSet = async () => {
+    if (creating) return;
+    await create("set", "sets", () => createFieldSet({ name: LIBRARY_TEXT.newSetName, fields: [] }), { kind: "created" });
   };
 
   const duplicateSet = async () => {
     if (!openSet || creating) return;
     const from = drafts[openSet.id] ?? { name: openSet.name, fields: openSet.fields };
-    setCreating("dup-set");
-    setCreateError(null);
-    const r = await createFieldSet({ name: copyName(from.name), fields: copySetFields(from.fields, () => newFieldId()) });
-    setCreating(null);
-    if (!r.ok) {
-      setCreateError(LIBRARY_UNDRAWN_TEXT.createFailed);
-      return;
-    }
-    setOrigins((o) => ({ ...o, [r.data.id]: { kind: "duplicated", from: from.name } }));
-    setSearch((s) => ({ ...s, sets: "" }));
-    await reloadSets();
-    openSetId(r.data.id);
+    await create(
+      "dup-set",
+      "sets",
+      () => createFieldSet({ name: copyName(from.name), fields: copySetFields(from.fields, () => newFieldId()) }),
+      { kind: "duplicated", from: from.name },
+    );
   };
 
   const duplicateList = async () => {
     if (!openList || creating) return;
-    setCreating("dup-list");
-    setCreateError(null);
-    const r = await createOptionList({ name: copyName(openList.name), options: openList.options.map((o) => ({ ...o })) });
-    setCreating(null);
-    if (!r.ok) {
-      setCreateError(LIBRARY_UNDRAWN_TEXT.createFailed);
-      return;
-    }
-    setSearch((s) => ({ ...s, lists: "" }));
-    await reloadLists();
-    openListId(r.data.id);
+    await create("dup-list", "lists", () => createOptionList({ name: copyName(openList.name), options: openList.options.map((o) => ({ ...o })) }));
   };
 
   return (
@@ -175,7 +168,7 @@ export function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibrary
           onDuplicate={duplicateSet}
           duplicating={creating === "dup-set"}
           reloadSets={reloadSets}
-          onApplyToCells={onApplyToCells ? () => onApplyToCells(openSet.id) : undefined}
+          onApplyToCells={() => onApplyToCells(openSet.id)}
         />
       )}
 
@@ -210,5 +203,3 @@ export function FieldLibrary({ query, onNavigate, onApplyToCells }: FieldLibrary
     </div>
   );
 }
-
-export default FieldLibrary;

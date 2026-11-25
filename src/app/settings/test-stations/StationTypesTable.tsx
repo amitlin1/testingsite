@@ -1,34 +1,30 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import {
   Button, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, SearchInput, Snackbar, Alert, Checkbox, FormControlLabel,
+  TextField, SearchInput, Alert, Checkbox, FormControlLabel,
   ConfirmDialog, Skeleton, Tag,
 } from "@/components/ui";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, LayoutTemplate } from "lucide-react";
-import { apiFetch } from "@/lib/api/client";
-import { errorMessage } from "@/lib/errors";
-
-interface StationType {
-  test_station_type_id: number;
-  test_type_desc: string;
-  /** Queue lists parent items only — accessories are tested alongside the parent. */
-  package_level?: boolean;
-  /** Minutes in test/research with no result before the item is auto-released. 0 = never. */
-  stale_after_minutes?: number;
-  station_count?: number;
-}
+import { ApiError, sendJson } from "@/lib/api/client";
+import { readStaleAfterMinutes, type StationTypeRow } from "@/app/lib/lookups/contract";
+import { DEFAULT_STALE_AFTER_MINUTES } from "@/lib/item-status";
+import { useInvalidateLookup } from "@/app/components/lookups";
+import { popupTemplatesHref } from "@/app/lib/links";
+import { useSettingsToast } from "../components/useSettingsToast";
+import { STATION_TYPES_URL, useStationTypeRows } from "./stationTypeRows";
 
 /** The add / edit form: a station type as typed — the number fields hold the input's text. */
-type StationTypeForm = Partial<Omit<StationType, "test_station_type_id" | "stale_after_minutes">> & {
+type StationTypeForm = Partial<Omit<StationTypeRow, "test_station_type_id" | "stale_after_minutes">> & {
   test_station_type_id?: number | string;
   stale_after_minutes?: number | string;
 };
 
 interface StationTypesTableProps {
   selectedId: number | null;
-  onSelect: (id: number, name: string) => void;
+  /** null: the selection is cleared (the selected type was deleted). */
+  onSelect: (id: number | null) => void;
 }
 
 type FormErrors = Partial<Record<"id" | "desc" | "stale", string>>;
@@ -36,72 +32,22 @@ type FormErrors = Partial<Record<"id" | "desc" | "stale", string>>;
 const STALE_HELP =
   "כמה דקות פריט יכול לשבת בבדיקה או במחקר בעמדה מסוג זה ללא תוצאה, לפני שהמערכת מחזירה אותו לתור ומשחררת את העמדה. יש להתאים את הערך לזמן שבדיקה מסוג זה באמת אורכת. 0 = הסוג הזה לא משוחרר אוטומטית לעולם.";
 
-/** The station types, or null when they could not be read. */
-async function readStationTypes(): Promise<StationType[] | null> {
-  try {
-    const res = await apiFetch("/api/settings/test-stations-type");
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return null;
-  }
-}
-
 export default function StationTypesTable({ selectedId, onSelect }: StationTypesTableProps) {
-  const [rows, setRows] = useState<StationType[]>([]);
-  const [loading, setLoading] = useState(true);
-  // A failed load is not "no types": it gets its own band and a retry.
-  const [loadError, setLoadError] = useState(false);
+  const { rows, loading, failed: loadError, reload, update } = useStationTypeRows();
   const [searchTerm, setSearchTerm] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingRow, setEditingRow] = useState<StationType | null>(null);
+  const [editingRow, setEditingRow] = useState<StationTypeRow | null>(null);
   const [formData, setFormData] = useState<StationTypeForm>({});
   // Validation is shown on the field it is about, not in a toast.
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [saveLoading, setSaveLoading] = useState(false);
 
-  const [rowToDelete, setRowToDelete] = useState<StationType | null>(null);
+  const [rowToDelete, setRowToDelete] = useState<StationTypeRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false, message: "", severity: "success",
-  });
-
-  const apiUrl = "/api/settings/test-stations-type";
-
-  /** The column's own DEFAULT — a new type is fail-safe unless it says otherwise. */
-  const DEFAULT_STALE_AFTER_MINUTES = 30;
-
-  const applyRows = useCallback((list: StationType[] | null) => {
-    if (list) setRows(list);
-    else setLoadError(true);
-    setLoading(false);
-  }, []);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setLoadError(false);
-    applyRows(await readStationTypes());
-  }, [applyRows]);
-
-  // The first load: `loading` starts true, so only the reply sets state.
-  useEffect(() => { readStationTypes().then(applyRows); }, [applyRows]);
-
-  // A selection can arrive from outside the table — the command palette
-  // deep-links ?type=<id>, which the page turns into `selectedId` before the
-  // rows exist. Once they load, resolve that id to its name and report it back
-  // so the detail pane gets a real header instead of an empty one. The ref
-  // guards against re-reporting (and thus re-rendering) on every fetch.
-  const reportedRef = React.useRef<number | null>(null);
-  useEffect(() => {
-    if (!selectedId || reportedRef.current === selectedId) return;
-    const match = rows.find((r) => r.test_station_type_id === selectedId);
-    if (!match) return;
-    reportedRef.current = selectedId;
-    onSelect(match.test_station_type_id, match.test_type_desc);
-  }, [rows, selectedId, onSelect]);
+  const notify = useSettingsToast({ dismissible: false });
+  const invalidateLookup = useInvalidateLookup();
 
   const openAdd = () => {
     setEditingRow(null);
@@ -109,7 +55,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     setFormErrors({});
     setOpenDialog(true);
   };
-  const openEdit = (r: StationType) => { setEditingRow(r); setFormData({ ...r }); setFormErrors({}); setOpenDialog(true); };
+  const openEdit = (r: StationTypeRow) => { setEditingRow(r); setFormData({ ...r }); setFormErrors({}); setOpenDialog(true); };
   const setField = <K extends keyof StationTypeForm>(key: K, value: StationTypeForm[K], err?: keyof FormErrors) => {
     setFormData((f) => ({ ...f, [key]: value }));
     if (err && formErrors[err]) setFormErrors((e) => ({ ...e, [err]: undefined }));
@@ -118,11 +64,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   const handleSave = async () => {
     const errors: FormErrors = {};
     if (!formData.test_type_desc?.trim()) errors.desc = "יש להזין תיאור לסוג העמדה";
-    const staleStr = `${formData.stale_after_minutes ?? ""}`.trim();
-    const staleNum = Number(staleStr);
-    if (!staleStr || !Number.isInteger(staleNum) || staleNum < 0) {
-      errors.stale = "יש להזין מספר שלם של דקות, 0 או יותר";
-    }
+    if (readStaleAfterMinutes(formData.stale_after_minutes) == null) errors.stale = "יש להזין מספר שלם של דקות, 0 או יותר";
     if (editingRow) {
       const idStr = `${formData.test_station_type_id ?? ""}`.trim();
       const idNum = parseInt(idStr, 10);
@@ -133,23 +75,19 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     setSaveLoading(true);
     try {
       const method = editingRow ? "PUT" : "POST";
-      const url = editingRow ? `${apiUrl}/${editingRow.test_station_type_id}` : apiUrl;
-      const res = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => null);
-        throw new Error(errBody?.error || "שמירת סוג העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
-      }
-      const savedRow = await res.json();
+      const url = editingRow ? `${STATION_TYPES_URL}/${editingRow.test_station_type_id}` : STATION_TYPES_URL;
+      const savedRow = await sendJson<StationTypeRow>(url, method, formData, "שמירת סוג העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
       if (editingRow && savedRow) {
-        setRows(rows.map((r) => (r.test_station_type_id === editingRow.test_station_type_id ? savedRow : r)));
-        if (selectedId === editingRow.test_station_type_id) onSelect(savedRow.test_station_type_id, savedRow.test_type_desc);
+        update((list) => list.map((r) => (r.test_station_type_id === editingRow.test_station_type_id ? savedRow : r)));
+        if (selectedId === editingRow.test_station_type_id) onSelect(savedRow.test_station_type_id);
       } else {
-        setRows([...rows, savedRow]);
+        update((list) => [...list, savedRow]);
       }
+      invalidateLookup("stationTypes");
       setOpenDialog(false);
-      setSnackbar({ open: true, message: "סוג העמדה נשמר", severity: "success" });
+      notify("סוג העמדה נשמר", "success");
     } catch (err) {
-      setSnackbar({ open: true, message: errorMessage(err) || "שמירת סוג העמדה נכשלה. נסה שוב.", severity: "error" });
+      notify(err instanceof ApiError ? err.message : "שמירת סוג העמדה נכשלה. נסה שוב.", "error");
     } finally {
       setSaveLoading(false);
     }
@@ -159,16 +97,20 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
     if (!rowToDelete) return;
     setDeleting(true);
     try {
-      const res = await apiFetch(`${apiUrl}/${rowToDelete.test_station_type_id}`, { method: "DELETE" });
-      if (!res.ok) {
-        if (res.status === 409) throw new Error("לא ניתן למחוק כי קיימות עמדות משויכות. מחק או העבר אותן קודם.");
-        throw new Error("מחיקת סוג העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
-      }
-      setRows(rows.filter((r) => r.test_station_type_id !== rowToDelete.test_station_type_id));
-      if (selectedId === rowToDelete.test_station_type_id) onSelect(0, "");
-      setSnackbar({ open: true, message: "סוג העמדה נמחק", severity: "success" });
+      await sendJson(`${STATION_TYPES_URL}/${rowToDelete.test_station_type_id}`, "DELETE");
+      update((list) => list.filter((r) => r.test_station_type_id !== rowToDelete.test_station_type_id));
+      if (selectedId === rowToDelete.test_station_type_id) onSelect(null);
+      invalidateLookup("stationTypes");
+      notify("סוג העמדה נמחק", "success");
     } catch (err) {
-      setSnackbar({ open: true, message: errorMessage(err) || "מחיקת סוג העמדה נכשלה. נסה שוב.", severity: "error" });
+      // A 409 is the server's refusal: the type still has stations.
+      const message =
+        err instanceof ApiError
+          ? err.status === 409
+            ? err.message
+            : "מחיקת סוג העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב."
+          : "מחיקת סוג העמדה נכשלה. נסה שוב.";
+      notify(message, "error");
     } finally {
       setDeleting(false);
       setRowToDelete(null);
@@ -178,7 +120,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
   const filteredRows = rows.filter((r) => r.test_type_desc.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <div dir="rtl">
+    <div>
       <div className="settings-card">
         {/* card header — the compact add pill of Settings.dc.html */}
         <div className="settings-card__head">
@@ -202,7 +144,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         {loadError ? (
           <div className="settings-error">
             <Alert severity="error">טעינת סוגי העמדות נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
-            <Button variant="outlined" color="inherit" size="small" onClick={fetchData}>נסה שוב</Button>
+            <Button variant="outlined" color="inherit" size="small" onClick={() => reload()}>נסה שוב</Button>
           </div>
         ) : loading ? (
           <div aria-busy="true" aria-label="טוען סוגי עמדות">
@@ -229,23 +171,23 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         ) : (
           filteredRows.map((r) => {
             const selected = selectedId === r.test_station_type_id;
-            const select = () => onSelect(r.test_station_type_id, r.test_type_desc);
+            const select = () => onSelect(r.test_station_type_id);
             return (
               // The row's own button is the keyboard stop (aria-pressed = the
               // selected type); a click anywhere on the row still selects.
               <div
                 key={r.test_station_type_id}
-                className="stz-row"
+                className="set-row"
                 data-selected={selected || undefined}
                 onClick={select}
               >
                 <button
                   type="button"
-                  className="stz-row__select"
+                  className="set-row__select"
                   aria-pressed={selected}
                   onClick={(e) => { e.stopPropagation(); select(); }}
                 >
-                  <span className="stz-row__name">{r.test_type_desc}</span>
+                  <span className="set-row__name">{r.test_type_desc}</span>
                   {r.package_level && (
                     <Tag tone="primary" title="עמדה ברמת מארז: בתור מופיעים מארזים בלבד, והפריטים שבתוכם נבדקים יחד איתם">
                       עמדה ברמת מארז
@@ -273,7 +215,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                     size="small"
                     className="set-act"
                     component={Link}
-                    href={`/settings/popup-templates?type=${r.test_station_type_id}`}
+                    href={popupTemplatesHref(r.test_station_type_id)}
                     title={`תבנית החלון של ${r.test_type_desc}`}
                     onClick={(e: React.MouseEvent) => e.stopPropagation()}
                   >
@@ -357,7 +299,6 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
       </Dialog>
 
       <ConfirmDialog
-        draggable={false}
         open={rowToDelete != null}
         title="מחיקת סוג עמדה"
         message={rowToDelete ? `למחוק את סוג העמדה "${rowToDelete.test_type_desc}"? פעולה זו אינה ניתנת לביטול.` : ""}
@@ -367,10 +308,6 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
         onConfirm={handleDeleteConfirm}
         onCancel={() => setRowToDelete(null)}
       />
-
-      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
-      </Snackbar>
     </div>
   );
 }

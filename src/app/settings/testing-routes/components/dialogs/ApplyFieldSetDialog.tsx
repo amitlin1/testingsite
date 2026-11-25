@@ -10,21 +10,22 @@ import type { Field, Tone, VersionRef } from "@/app/lib/station-fields/schema";
 import { currentConfigs } from "../../lib/draftModel";
 import { useDraftSnapshot, useDraftStore } from "../../lib/draftStore";
 import type { FieldsMapModel, MapCell } from "../../lib/mapModel";
-import type { PasteCounts } from "../../lib/bulkModel";
+import type { PasteCounts } from "../../lib/cellFill";
 import {
-  APPLY_SET_MODES, applyFieldSet, applyPreview, cellStations, duplicateLines, initialSetId, showsPackageNote, targetChips,
-  visibleSets,
+  APPLY_SET_MODES, applyFieldSet, applyPreview, applyTargetChips, cellStations, duplicateLines, initialSetId, showsPackageNote,
 } from "../../lib/applySetModel";
 import type { ApplySetMode } from "../../lib/applySetModel";
-import { setCounts } from "../../lib/libraryModel";
+import { filterByName, setCounts } from "../../lib/libraryModel";
 import { setRowLine, versionText } from "../../lib/libraryLabels";
 import { rowNameText } from "../../lib/labels";
 import {
   APPLY_SET_UNDRAWN_TEXT, APPLY_SET_TEXT, applyButtonText, applySubText, applyTitleText, fieldMetaText, previewCountText,
   previewTitleText,
 } from "../../lib/applySetLabels";
-import { useFieldSets, useOptionLists } from "../../lib/useLibrary";
-import "@/app/packages/packages.css";
+import { useFieldSets, useOptionLists } from "../../lib/resources";
+import { radioArrowStep, ringStep } from "../shared/radioGroup";
+import { useSessionPerOpen } from "../shared/useSessionPerOpen";
+import "@/components/ui/controls.css";
 import "./apply-set-dialog.css";
 
 /**
@@ -33,22 +34,7 @@ import "./apply-set-dialog.css";
  * cell) and the onboarding card ("החל ערכת שדות…"); the library's "החל על תאים…" preselects its set
  * for the next opening (page.tsx).
  *
- * Dialog maxWidth "sm", aria-modal, aria-describedby the sub-line. Top to bottom:
- *   head      the title (20/600), the sub-line "{route} · עמדת {station}" (13 muted), × "סגירה";
- *   ערכת שדות the 44px pill search (type="search", "חיפוש ערכה…") and the radiogroup "בחירת ערכה" of
- *             56px .pkg-choice cards — name, "{N} שדות · בשימוש ב-{n} תאים", Tag "גרסה {v}" from
- *             version 2 on; "אין ערכות תואמות. …" when the search leaves none;
- *   preview   pearl, radius 11: "מה יתווסף לכל תא · {set}" / "מה יהיה בכל תא · {set}" and "{n} שדות ·
- *             קריאה בלבד"; a white card per field — name, Tag "חובה", Tag "יידלג" (skipped in every
- *             cell), the meta "רשימה: {list} · הערות: {mode}", the options with their tone dots;
- *   יעד       a chip per cell "{station} · {seq} {item}[ ×{qty}]", and the package-level note;
- *   אופן ההחלה the radiogroup (auto-fit minmax 220): "הוסף לשדות הקיימים" (default) / "החלף את השדות
- *             בתא" + the warning bar (role="alert");
- *   the checkbox "השאר מקושר לערכה — עדכונים יוצעו לאישור" (on) with its two help lines, and in add
- *             mode the duplicate lines "שדה '{f}' כבר קיים ב'{place}' — יידלג כדי למנוע כפילות";
- *   footer    ghost "ספריית הערכות" (→ the library on the chosen set), "ביטול", primary "החל על {n}
- *             תאים".
- * The radiogroups move and choose with the arrows (roving tabindex), as the publish dialog's.
+ * The radiogroups move and choose with the arrows (roving tabindex).
  *
  * "החל" is applySetModel.applyFieldSet on the draft store — ONE store.edit per route touched, each
  * route then autosaves — and the dialog closes; the map shows the cells as "שינוי שלא פורסם". The set
@@ -69,31 +55,18 @@ export type ApplyFieldSetDialogProps = {
   /** The set to start on (the library's "החל על תאים…"); else the first set. */
   preferredSetId?: number | null;
   onClose: () => void;
+  /** Where the focus goes once the dialog has closed (Dialog returnFocus). */
+  returnFocus?: () => HTMLElement | null;
   /** After the edits; the dialog has closed. */
-  onApplied?: (counts: PasteCounts, setId: number) => void;
+  onApplied: (counts: PasteCounts, setId: number) => void;
   /** "ספריית הערכות": the library's sets, on the chosen set. The dialog has closed. */
   onOpenLibrary: (setId: number | null) => void;
 };
 
 export default function ApplyFieldSetDialog(props: ApplyFieldSetDialogProps) {
-  const { open } = props;
   // A new session per opening: the previous one's choices never leak into the next.
-  const [session, setSession] = React.useState(0);
-  const [wasOpen, setWasOpen] = React.useState(false);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setSession((s) => s + 1);
-  }
+  const session = useSessionPerOpen(props.open);
   return session > 0 ? <ApplySession key={session} {...props} /> : null;
-}
-
-/** Arrow keys inside a radiogroup: the next / previous radio is chosen and focused (down and left
- *  forward, up and right back — the publish dialog's mapping, right-to-left). */
-function radioStep(e: React.KeyboardEvent): -1 | 0 | 1 {
-  if (e.altKey || e.ctrlKey || e.metaKey) return 0;
-  if (e.key === "ArrowDown" || e.key === "ArrowLeft") return 1;
-  if (e.key === "ArrowUp" || e.key === "ArrowRight") return -1;
-  return 0;
 }
 
 const MODE_TEXT: Record<ApplySetMode, { label: string; sub: string }> = {
@@ -101,7 +74,7 @@ const MODE_TEXT: Record<ApplySetMode, { label: string; sub: string }> = {
   replace: { label: APPLY_SET_TEXT.modeReplace, sub: APPLY_SET_TEXT.modeReplaceSub },
 };
 
-function ApplySession({ open, cells, context, model, preferredSetId, onClose, onApplied, onOpenLibrary }: ApplyFieldSetDialogProps) {
+function ApplySession({ open, cells, context, model, preferredSetId, onClose, returnFocus, onApplied, onOpenLibrary }: ApplyFieldSetDialogProps) {
   const store = useDraftStore();
   const { model: drafts } = useDraftSnapshot();
   const sets = useFieldSets();
@@ -119,12 +92,12 @@ function ApplySession({ open, cells, context, model, preferredSetId, onClose, on
   const [query, setQuery] = React.useState("");
   const [mode, setMode] = React.useState<ApplySetMode>("add");
   const [linked, setLinked] = React.useState(true);
-  const visible = visibleSets(all, query);
+  const visible = filterByName(all, query);
 
   const configs = React.useMemo(() => currentConfigs(drafts), [drafts]);
   const preview = React.useMemo(() => (set ? applyPreview(configs, cells, set.fields, mode) : null), [configs, cells, set, mode]);
   const dupLines = React.useMemo(() => (preview ? duplicateLines(model, preview) : []), [model, preview]);
-  const chips = React.useMemo(() => targetChips(model, cells), [model, cells]);
+  const chips = React.useMemo(() => applyTargetChips(model, cells), [model, cells]);
   const sub = applySubText(context.subject.desc.trim(), context.subject.route_number, cellStations(model, cells));
   const packageNote = showsPackageNote(cells);
 
@@ -152,7 +125,7 @@ function ApplySession({ open, cells, context, model, preferredSetId, onClose, on
     if (!set || cells.length === 0) return;
     const counts = applyFieldSet((routeId, mutate) => store.edit(routeId, mutate), { set, cells, mode, linked });
     onClose();
-    onApplied?.(counts, set.id);
+    onApplied(counts, set.id);
   };
 
   const openLibrary = () => {
@@ -163,18 +136,18 @@ function ApplySession({ open, cells, context, model, preferredSetId, onClose, on
   // ---- the set cards: one tab stop, the arrows move and choose -------------------------------------
   const tabSetId = visible.some((s) => s.id === setId) ? setId : visible[0]?.id ?? null;
   const onCardKey = (e: React.KeyboardEvent, i: number) => {
-    const step = radioStep(e);
+    const step = radioArrowStep(e);
     if (!step || visible.length === 0) return;
     e.preventDefault();
-    const next = visible[(i + step + visible.length) % visible.length];
+    const next = ringStep(visible, i, step);
     setChosen(next.id);
     cardRefs.current.get(next.id)?.focus();
   };
   const onModeKey = (e: React.KeyboardEvent, i: number) => {
-    const step = radioStep(e);
+    const step = radioArrowStep(e);
     if (!step) return;
     e.preventDefault();
-    const next = APPLY_SET_MODES[(i + step + APPLY_SET_MODES.length) % APPLY_SET_MODES.length];
+    const next = ringStep(APPLY_SET_MODES, i, step);
     setMode(next);
     modeRefs.current.get(next)?.focus();
   };
@@ -219,7 +192,7 @@ function ApplySession({ open, cells, context, model, preferredSetId, onClose, on
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ className: "rf-afs" }}>
+    <Dialog open={open} onClose={onClose} returnFocus={returnFocus} maxWidth="sm" fullWidth PaperProps={{ className: "rf-afs" }}>
       <div className="rf-afs__head">
         <div className="rf-afs__head-main">
           <DialogTitle className="rf-afs__title">{applyTitleText(cells.length)}</DialogTitle>

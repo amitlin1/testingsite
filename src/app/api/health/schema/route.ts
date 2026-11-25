@@ -1,17 +1,15 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { errorMessage } from "@/lib/errors";
+import { prisma } from "@/lib/db";
+import { errorResponse } from "@/lib/http/errors";
 
-export const runtime = "nodejs";
+const NO_STORE = { "Cache-Control": "no-store" };
 // Never cached — a cached version would defeat the app-before-DB guard.
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/health/schema — the metrics-schema version the database carries.
  *
- * Deliberately PUBLIC (the /api/health prefix in PUBLIC_ROUTES covers it):
- * `4-verify.ps1` calls it server-to-server with no session, immediately after
- * `3-start`, before the deploy is declared healthy (plan §8 stage 2 / §10.2).
+ * Deliberately PUBLIC (the /api/health prefix in PUBLIC_ROUTES covers it): it
+ * is read server-to-server with no session (plan §8 stage 2 / §10.2).
  * The write path refuses to serve when this version is below the image's
  * minimum, so this endpoint is how an operator sees "app image newer than DB"
  * before any worker does.
@@ -26,17 +24,12 @@ export async function GET() {
       SELECT version FROM metrics_schema_version WHERE id = 1`;
     const version = rows[0]?.version;
     if (version === undefined) {
-      return NextResponse.json(
-        { error: "metrics_schema_version has no row" },
-        { status: 500, headers: { "Cache-Control": "no-store" } }
-      );
+      return Response.json({ error: "metrics_schema_version has no row" }, { status: 500, headers: NO_STORE });
     }
-    return NextResponse.json({ version }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ version }, { headers: NO_STORE });
   } catch (error) {
-    console.error("Error reading metrics schema version:", error);
-    return NextResponse.json(
-      { error: "Failed to read metrics schema version", message: errorMessage(error) || "Unknown error" },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    );
+    const res = errorResponse(error, "Failed to read metrics schema version");
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   }
 }

@@ -1,15 +1,14 @@
 "use client";
 import * as React from "react";
-import { apiFetch } from "@/lib/api/client";
-import type { DraftSavedJson, FieldsContextJson } from "@/app/lib/station-fields/admin-types";
-import { ShapeError, parseRouteFieldsConfig } from "@/app/lib/station-fields/validate";
-import type { Issue } from "@/app/lib/station-fields/validate";
-import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
-import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, stepsOutOfContextKey, summarize } from "./draftModel";
+import { STEP_UNKNOWN, type FieldsContextJson } from "@/app/lib/station-fields/admin-types";
+import { request } from "./api";
+import type { Fetcher } from "./api";
+import {
+  EMPTY_DRAFT_MODEL, draftReducer, entryHasDraft, saveFailed, stepsOutOfContextKey, summarize,
+} from "./draftModel";
 import type { ConfigMutator, DraftAction, DraftConflict, DraftModel, DraftSummary, RouteDraft, SaveError, SaveOp } from "./draftModel";
-import { buildFieldsMap } from "./mapModel";
-import type { FieldsMapModel } from "./mapModel";
-import { parseRouteFieldsJson } from "./useFieldsContext";
+import { API, BadBody, errorCode, parseDraftConflict, parseDraftDeleted, parseDraftSaved, parseRouteFields } from "./wire";
+import type { DraftSavedJson } from "@/app/lib/station-fields/admin-types";
 
 /**
  * The admin screen's draft store (route-fields spec §3.2, §3.4.1, §5.2, D6): draftModel's state
@@ -29,8 +28,8 @@ import { parseRouteFieldsJson } from "./useFieldsContext";
  *     edit; any other refusal (400, 404) waits for retry() / the next edit;
  *   - 409 STEP_UNKNOWN (the route's steps changed under the draft) → the error state, and the route
  *     is read back (reloadRoute, lead decision D7): the config can only be saved against the steps
- *     the route has now. Its entry then holds other steps than the context on screen
- *     (getStepsOutOfContextKey), and the page asks for the context again so the map follows.
+ *     the route has now. Its entry then holds other steps than the context on screen, and the
+ *     store tells the page (onContextStale) to ask for the context again so the map follows.
  * A failed DELETE ("ביטול הטיוטה") is retried by retry() as a DELETE. Edits made while a discard
  * runs are saved once it is over.
  * Multi-route edits (bulk actions, apply set, paste) call edit() once per route; each route
@@ -40,8 +39,6 @@ import { parseRouteFieldsJson } from "./useFieldsContext";
  * an item route shared by two kits keeps its working copy (and its pending save) when the admin
  * switches between them.
  */
-
-export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
 
 export type TimerApi = {
   setTimeout: (fn: () => void, ms: number) => unknown;
@@ -55,11 +52,19 @@ export type DraftStoreOptions = {
   debounceMs?: number;
   /** Automatic retries of a PUT that failed on the network or with a 5xx. */
   retryDelaysMs?: readonly number[];
-  /** Default the global timers (tests pass their own clock). */
+  /** Default the global timers and Date.now (tests pass their own clock). */
   timers?: TimerApi;
+  now?: () => number;
 };
 
-export type DraftSnapshot = { model: DraftModel; summary: DraftSummary };
+export type DraftSnapshot = {
+  model: DraftModel;
+  summary: DraftSummary;
+  /** This browser's time of the last autosave THIS session made for the context on screen (lead
+   *  decision: a draft another admin saved earlier shows no save time); null once the screen moves
+   *  to another context or no route of it holds a draft any more. */
+  sessionSavedAt: number | null;
+};
 
 /** flushAll / discardAll: ok, or the routes that could not be written. */
 export type FlushResult = { ok: true } | { ok: false; failed: number[]; conflicts: number[] };
@@ -67,14 +72,7 @@ export type FlushResult = { ok: true } | { ok: false; failed: number[]; conflict
 const DEFAULT_DEBOUNCE_MS = 800;
 const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2000, 5000, 15000];
 
-const draftUrl = (routeId: number) => `/api/settings/testing-routes/${routeId}/fields/draft`;
-const fieldsUrl = (routeId: number) => `/api/settings/testing-routes/${routeId}/fields`;
-
 // ---- answers --------------------------------------------------------------------------------------
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
-const isRev = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
-
 /** What a write's answer means for the route (pure; the store dispatches it). */
 export type WriteOutcome =
   | { type: "saved"; result: DraftSavedJson }
@@ -82,57 +80,54 @@ export type WriteOutcome =
   | { type: "conflict"; conflict: DraftConflict }
   | { type: "failed"; error: SaveError };
 
-/** A 409 DRAFT_CONFLICT body: { draft, draft_rev, draft_updated_at, draft_updated_by } (admin.ts). */
-function conflictOf(body: unknown): DraftConflict | null {
-  if (!isObj(body) || body.code !== "DRAFT_CONFLICT" || !isRev(body.draft_rev)) return null;
-  let draft: RouteFieldsConfig | null = null;
-  if (body.draft != null) {
-    try {
-      draft = parseRouteFieldsConfig(body.draft);
-    } catch (e) {
-      if (e instanceof ShapeError) return null;
-      throw e;
-    }
+function orNull<T>(parse: () => T): T | null {
+  try {
+    return parse();
+  } catch (e) {
+    if (e instanceof BadBody) return null;
+    throw e;
   }
-  const str = (v: unknown) => (typeof v === "string" ? v : null);
-  return { draft, rev: body.draft_rev, updatedAt: str(body.draft_updated_at), updatedBy: str(body.draft_updated_by) };
 }
 
-/** The answer of PUT (op "put") or DELETE (op "delete") …/fields/draft. */
-export function writeOutcome(op: SaveOp, status: number, body: unknown): WriteOutcome {
+/** The answer of PUT (op "put") or DELETE (op "delete") …/fields/draft; status null = no answer. */
+export function writeOutcome(op: SaveOp, status: number | null, body: unknown): WriteOutcome {
+  if (status == null) return { type: "failed", error: { kind: "network", op } };
   if (status === 200) {
-    if (op === "put" && isObj(body) && isRev(body.draft_rev) && typeof body.draft_updated_at === "string" && Array.isArray(body.issues)) {
-      return { type: "saved", result: { draft_rev: body.draft_rev, draft_updated_at: body.draft_updated_at, issues: body.issues as Issue[] } };
+    if (op === "put") {
+      const result = orNull(() => parseDraftSaved(body));
+      if (result) return { type: "saved", result };
+    } else {
+      const rev = orNull(() => parseDraftDeleted(body));
+      if (rev != null) return { type: "discarded", rev };
     }
-    if (op === "delete" && isObj(body) && isRev(body.draft_rev)) return { type: "discarded", rev: body.draft_rev };
     return { type: "failed", error: { kind: "server", op, status } };
   }
   if (status === 409) {
-    const conflict = conflictOf(body);
-    if (conflict) return { type: "conflict", conflict };
+    const c = orNull(() => parseDraftConflict(body));
+    if (c) return { type: "conflict", conflict: { draft: c.draft, rev: c.draft_rev, updatedAt: c.draft_updated_at, updatedBy: c.draft_updated_by } };
   }
   if (status >= 500) return { type: "failed", error: { kind: "server", op, status } };
-  const code = isObj(body) && typeof body.code === "string" ? body.code : null;
-  return { type: "failed", error: { kind: "rejected", op, status, code } };
+  return { type: "failed", error: { kind: "rejected", op, status, code: errorCode(body) } };
 }
 
-async function readBody(res: Response): Promise<unknown> {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
+/** A PUT of this session landed: the entry was writing a config and now holds it, error-free. */
+function savedNow(was: RouteDraft | undefined, is: RouteDraft | undefined): boolean {
+  return !!was && !!is && was.saving && was.inFlight != null && !is.saving && is.error == null && is.conflict == null && is.serverDraft != null;
 }
+
+const sameOrder = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((id, i) => id === b[i]);
 
 // ---- the store ------------------------------------------------------------------------------------
 export class DraftStore {
   private model: DraftModel = EMPTY_DRAFT_MODEL;
-  private snapshot: DraftSnapshot = { model: EMPTY_DRAFT_MODEL, summary: summarize(EMPTY_DRAFT_MODEL) };
+  private snapshot: DraftSnapshot = { model: EMPTY_DRAFT_MODEL, summary: summarize(EMPTY_DRAFT_MODEL), sessionSavedAt: null };
   private readonly listeners = new Set<() => void>();
-  private readonly fetcher: Fetcher;
+  private readonly staleListeners = new Set<() => void>();
+  private readonly fetcher: Fetcher | undefined;
   private readonly debounceMs: number;
   private readonly retryDelays: readonly number[];
   private readonly timers: TimerApi;
+  private readonly now: () => number;
   /** Debounce timers, by route. */
   private readonly saveTimers = new Map<number, unknown>();
   /** Automatic-retry timers and the attempts made, by route. */
@@ -147,15 +142,18 @@ export class DraftStore {
   /** Routes being read back by reloadRoute: they do not autosave meanwhile. */
   private readonly reloading = new Set<number>();
   private lastContext: FieldsContextJson | null = null;
+  /** draftModel.stepsOutOfContextKey the stale listeners were last told about ("" = none). */
+  private staleKey = "";
 
   constructor(options: DraftStoreOptions = {}) {
-    this.fetcher = options.fetch ?? apiFetch;
+    this.fetcher = options.fetch;
     this.debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
     this.retryDelays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
     this.timers = options.timers ?? {
       setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
       clearTimeout: (h) => globalThis.clearTimeout(h as ReturnType<typeof globalThis.setTimeout>),
     };
+    this.now = options.now ?? Date.now;
   }
 
   // -- useSyncExternalStore ------------------------------------------------------------------------
@@ -169,20 +167,40 @@ export class DraftStore {
 
   readonly getSnapshot = (): DraftSnapshot => this.snapshot;
 
-  /** draftModel.stepsOutOfContextKey against the context last loaded ("" before any): not "" once
-   *  a route was read back with other steps than that context has — the page then asks for the
-   *  context again, so the map's columns follow the route's steps. A string, so
-   *  useSyncExternalStore compares it by value. */
-  readonly getStepsOutOfContextKey = (): string =>
-    this.lastContext ? stepsOutOfContextKey(this.model, this.lastContext) : "";
+  /** Called once per change of steps: a route read back with other steps than the context on
+   *  screen has (409 STEP_UNKNOWN) — the map's columns are the context's, so the page asks for it
+   *  again. */
+  onContextStale(listener: () => void): () => void {
+    this.staleListeners.add(listener);
+    return () => {
+      this.staleListeners.delete(listener);
+    };
+  }
+
+  /** The routes the store holds a working copy of (the context's, and any still saving). */
+  heldRouteIds(): Set<number> {
+    return new Set(Object.keys(this.model.routes).map(Number));
+  }
 
   private dispatch(action: DraftAction): void {
-    const next = draftReducer(this.model, action);
-    if (next === this.model) return;
+    const prev = this.model;
+    const next = draftReducer(prev, action);
+    if (next === prev) return;
     this.model = next;
-    this.snapshot = { model: next, summary: summarize(next) };
+    let sessionSavedAt = this.snapshot.sessionSavedAt;
+    if (next.order.some((id) => savedNow(prev.routes[id], next.routes[id]))) sessionSavedAt = this.now();
+    else if (!sameOrder(prev.order, next.order) || !next.order.some((id) => next.routes[id] != null && entryHasDraft(next.routes[id]))) sessionSavedAt = null;
+    this.snapshot = { model: next, summary: summarize(next), sessionSavedAt };
     for (const l of [...this.listeners]) l();
+    if (action.type === "load" || action.type === "routeLoaded") this.checkStale();
     this.wake();
+  }
+
+  private checkStale(): void {
+    const key = this.lastContext ? stepsOutOfContextKey(this.model, this.lastContext) : "";
+    if (key === this.staleKey) return;
+    this.staleKey = key;
+    if (key !== "") for (const l of [...this.staleListeners]) l();
   }
 
   private entry(routeId: number): RouteDraft | undefined {
@@ -222,11 +240,14 @@ export class DraftStore {
   }
 
   /** Edit one route's working copy. `mutate` gets a deep copy of `current` and changes it in place
-   *  or returns the next config; the route autosaves ~800 ms after its last edit. */
+   *  or returns the next config; the route autosaves ~800 ms after its last edit. An edit that
+   *  changes nothing does nothing. */
   edit(routeId: number, mutate: ConfigMutator): void {
-    if (!this.entry(routeId)) return;
+    const before = this.entry(routeId);
+    if (!before) return;
     this.dispatch({ type: "edit", routeId, mutate });
     const e = this.entry(routeId);
+    if (e === before) return;
     if (e && e.dirty && !e.conflict) this.schedule(routeId);
     else this.cancelTimer(routeId);   // back to what the server holds: nothing to save
   }
@@ -234,7 +255,7 @@ export class DraftStore {
   /** Write the routes in error (all, or one) again now: a failed PUT saves the working copy, a
    *  failed DELETE deletes the draft again. */
   retry(routeId?: number): void {
-    const ids = routeId == null ? Object.keys(this.model.routes).map(Number) : [routeId];
+    const ids = routeId == null ? [...this.heldRouteIds()] : [routeId];
     for (const id of ids) {
       const e = this.entry(id);
       if (!e || !e.error) continue;
@@ -258,12 +279,13 @@ export class DraftStore {
       this.cancelTimer(routeId);
       this.cancelRetry(routeId);
       await this.until(() => !this.entry(routeId)?.saving);
+      const answer = await request(API.routeFields(routeId), { fetcher: this.fetcher });
       let parsed = null;
       try {
-        const res = await this.fetcher(fieldsUrl(routeId), { cache: "no-store" });
-        if (res.status === 200) parsed = parseRouteFieldsJson(await readBody(res));
-      } catch {
-        parsed = null;
+        if (answer.status !== 200) throw new BadBody("HTTP " + answer.status);
+        parsed = parseRouteFields(answer.body);
+      } catch (e) {
+        console.error("Reading route " + routeId + " back failed", e);
       }
       if (!parsed || parsed.route.test_route_id !== routeId) return false;
       this.retryAttempts.delete(routeId);
@@ -294,7 +316,7 @@ export class DraftStore {
   async flushAll(): Promise<FlushResult> {
     this.flushing += 1;
     try {
-      for (const id of Object.keys(this.model.routes).map(Number)) {
+      for (const id of this.heldRouteIds()) {
         this.cancelTimer(id);
         this.cancelRetry(id);
         this.startSave(id);
@@ -312,7 +334,7 @@ export class DraftStore {
   async discardAll(): Promise<FlushResult> {
     this.discarding = true;
     try {
-      for (const id of Object.keys(this.model.routes).map(Number)) {
+      for (const id of this.heldRouteIds()) {
         this.cancelTimer(id);
         this.cancelRetry(id);
       }
@@ -350,7 +372,7 @@ export class DraftStore {
   private result(): FlushResult {
     const all = Object.values(this.model.routes);
     const conflicts = all.filter((e) => e.conflict != null).map((e) => e.routeId);
-    const failed = all.filter((e) => e.conflict == null && e.error != null && (e.dirty || e.error.op === "delete")).map((e) => e.routeId);
+    const failed = all.filter((e) => e.conflict == null && saveFailed(e)).map((e) => e.routeId);
     return failed.length === 0 && conflicts.length === 0 ? { ok: true } : { ok: false, failed, conflicts };
   }
 
@@ -396,18 +418,8 @@ export class DraftStore {
     const e = this.entry(routeId);
     if (!e || !e.saving) return;
     const body = op === "put" ? { config: e.inFlight, base_rev: baseRev } : { base_rev: baseRev };
-    let outcome: WriteOutcome;
-    try {
-      const res = await this.fetcher(draftUrl(routeId), {
-        method: op === "put" ? "PUT" : "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        cache: "no-store",
-      });
-      outcome = writeOutcome(op, res.status, await readBody(res));
-    } catch {
-      outcome = { type: "failed", error: { kind: "network", op } };
-    }
+    const answer = await request(API.routeDraft(routeId), { method: op === "put" ? "PUT" : "DELETE", body, fetcher: this.fetcher });
+    const outcome = writeOutcome(op, answer.status, answer.body);
     switch (outcome.type) {
       case "saved":
         this.dispatch({ type: "saveDone", routeId, result: outcome.result });
@@ -438,7 +450,7 @@ export class DraftStore {
     if (e.dirty && !e.error && !e.conflict && !this.saveTimers.has(routeId)) this.startSave(routeId);
     // D7: the draft names a step the route no longer has — read the route back (its steps, its
     // draft). Edits since the last save cannot be saved against those steps and are dropped.
-    if (e.error?.kind === "rejected" && e.error.op === "put" && e.error.code === "STEP_UNKNOWN") void this.reloadRoute(routeId);
+    if (e.error?.kind === "rejected" && e.error.op === "put" && e.error.code === STEP_UNKNOWN) void this.reloadRoute(routeId);
     if (!this.model.order.includes(routeId)) this.dispatch({ type: "evict", routeId });
   }
 
@@ -494,32 +506,8 @@ export function useDraftSnapshot(): DraftSnapshot {
   return React.useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
-/** The header's and the publish dialog's numbers (changeCount, blockingErrorCount, hasDraft…). */
-export function useDraftSummary(): DraftSummary {
-  return useDraftSnapshot().summary;
-}
-
-/** DraftStore.getStepsOutOfContextKey: "" while the context on screen has every route's steps. */
-export function useStepsOutOfContextKey(): string {
+/** DraftStore.onContextStale for as long as the component is mounted. */
+export function useOnContextStale(onStale: (() => void) | null): void {
   const store = useDraftStore();
-  return React.useSyncExternalStore(store.subscribe, store.getStepsOutOfContextKey, store.getStepsOutOfContextKey);
-}
-
-/** One route's entry — the same object until that route changes. */
-export function useRouteDraft(routeId: number | null): RouteDraft | null {
-  const store = useDraftStore();
-  const get = React.useCallback(
-    () => (routeId == null ? null : store.getSnapshot().model.routes[routeId] ?? null),
-    [store, routeId],
-  );
-  return React.useSyncExternalStore(store.subscribe, get, get);
-}
-
-/** The fields map of `context` with every route's working copy and issues (mapModel). */
-export function useFieldsMap(context: FieldsContextJson | null, setVersions?: Readonly<Record<number, number>>): FieldsMapModel | null {
-  const { model, summary } = useDraftSnapshot();
-  return React.useMemo(
-    () => (context ? buildFieldsMap({ context, configs: currentConfigs(model), issues: summary.issuesByRoute, setVersions }) : null),
-    [context, model, summary, setVersions],
-  );
+  React.useEffect(() => (onStale ? store.onContextStale(onStale) : undefined), [store, onStale]);
 }

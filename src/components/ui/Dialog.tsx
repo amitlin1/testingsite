@@ -16,6 +16,12 @@ const DraggableDialog = React.createContext(false);
  *  that render them stay mounted and keep what they hold. */
 export const DialogParked = React.createContext(false);
 
+/** Where the focus goes once a Dialog inside closes: the element this answers, when it is still on
+ *  the page (null leaves the focus where it is). Radix hands the focus back to a Dialog's Trigger, and
+ *  these dialogs have none, so without it the focus drops to the page. Reaches dialogs that other
+ *  components render (ConfirmDialog); a Dialog's own `returnFocus` wins. */
+export const DialogReturnFocus = React.createContext<(() => HTMLElement | null | undefined) | null>(null);
+
 const MAXW: Record<string, number> = { xs: 444, sm: 600, md: 900, lg: 1200, xl: 1536 };
 
 export interface DialogProps {
@@ -25,16 +31,15 @@ export interface DialogProps {
   fullWidth?: boolean;
   fullScreen?: boolean;
   disableEscapeKeyDown?: boolean;
-  scroll?: "paper" | "body";
   children?: React.ReactNode;
   dir?: string;
   sx?: SxInput;
   PaperProps?: { sx?: SxInput; style?: React.CSSProperties; className?: string };
-  slotProps?: { paper?: { sx?: SxInput; style?: React.CSSProperties; className?: string } };
-  "aria-labelledby"?: string;
   /** Moved by its DialogTitle (or any `data-drag-handle` inside). Default on;
    *  delete confirmations turn it off. */
   draggable?: boolean;
+  /** See DialogReturnFocus. */
+  returnFocus?: () => HTMLElement | null | undefined;
 }
 
 export function Dialog({
@@ -47,11 +52,12 @@ export function Dialog({
   children,
   dir = "rtl",
   sx,
-  PaperProps,
-  slotProps,
+  PaperProps: paper = {},
   draggable = true,
+  returnFocus: ownReturnFocus,
 }: DialogProps) {
-  const paper = { ...slotProps?.paper, ...PaperProps };
+  const inheritedReturnFocus = React.useContext(DialogReturnFocus);
+  const returnFocus = ownReturnFocus ?? inheritedReturnFocus;
   const parked = React.useContext(DialogParked);
   const shown = open && !parked;
   const { ref: dragRef, onPointerDown: onDragStart, offset: dragOffset, moved: dragMoved } = useDraggable(shown, draggable && !fullScreen);
@@ -98,6 +104,11 @@ export function Dialog({
             reasonRef.current = "escapeKeyDown";
           }}
           onPointerDownOutside={() => { reasonRef.current = "backdropClick"; }}
+          onCloseAutoFocus={returnFocus ? (e) => {
+            e.preventDefault();
+            const el = returnFocus();
+            if (el?.isConnected) el.focus({ preventScroll: true });
+          } : undefined}
           aria-describedby={undefined}
         >
           <DraggableDialog.Provider value={draggable && !fullScreen}>{children}</DraggableDialog.Provider>
@@ -176,6 +187,3 @@ export const DialogActions = forwardRef<HTMLDivElement, DialogActionsProps>(func
     </div>
   );
 });
-
-/** Radix close, if a dialog wants the built-in close affordance. */
-export const DialogClose = RDialog.Close;

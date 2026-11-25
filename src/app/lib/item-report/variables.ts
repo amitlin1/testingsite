@@ -20,53 +20,108 @@
  * it; no prisma / next / React.
  */
 import type { Field, FieldValue, RouteFieldsConfig, StepConfig } from "@/app/lib/station-fields/schema";
-import { targetKey } from "@/app/lib/station-fields/schema";
+import { stepUidAt, targetKey } from "@/app/lib/station-fields/schema";
+import { isTemplateComponentId } from "@/app/lib/popup-templates/schema";
+import { PHOTO_BLOCK_KEYS, REF_SOURCES, readSchemaRef, type RefSource } from "@/app/lib/test-results/details";
+import { isRecord, oneOf, type JsonObject } from "@/lib/json-guards";
+import { formatDocDate } from "@/app/lib/datetime";
+import { REPORT_TONE_WORD } from "./types";
+import { PASS_FAIL_WORD } from "@/app/lib/station-fields/labels";
 import type { ReportFieldResult, ReportStepRef, ReportStepResult, ReportTone, ReportVar } from "./types";
 
-// ---------------------------------------------------------------- catalog
+/** An item's own details, as the report source reads them. */
+export type ItemFacts = {
+  item_id: bigint;
+  serial_no: string | null;
+  makat: string;
+  model: string;
+  manufacturer_name: string;
+  manufacturer_no: string;
+  package_id: bigint | null;
+  package_seq: number | null;
+  item_type_id: number;
+  item_type: string | null;
+  customer: string | null;
+  shipment_code: string | null;
+  package_type: string | null;
+  route_number: number;
+  created_at: Date;
+  finished_at: Date | null;
+  status: string | null;
+};
 
-export const ITEM_GROUP = "פרטי הפריט";
-export const REPORT_GROUP = "המסמך";
+/** A signature given on the report: who, when, and (a closing one) their role. */
+export type GivenSignature = { name: string; at: Date; role?: string };
 
-export const ITEM_VARS: { key: string; label: string }[] = [
-  { key: "item_id", label: "מספר פריט (ברקוד)" },
-  { key: "serial_no", label: "מספר סידורי" },
-  { key: "makat", label: 'מק"ט' },
-  { key: "model", label: "דגם" },
-  { key: "manufacturer_name", label: "יצרן" },
-  { key: "manufacturer_no", label: 'מק"ט יצרן' },
-  { key: "item_type", label: "סוג פריט" },
-  { key: "customer", label: "לקוח" },
-  { key: "shipment_code", label: "מספר משלוח" },
-  { key: "package_id", label: "מארז" },
-  { key: "package_type", label: "סוג המארז" },
-  { key: "package_seq", label: "מיקום במארז" },
-  { key: "route_number", label: "מספר מסלול" },
-  { key: "status", label: "סטטוס" },
-  { key: "created_at", label: "תאריך קליטה" },
-  { key: "finished_at", label: "תאריך סיום המסלול" },
-  { key: "verdict", label: "תוצאה כוללת" },
+/** What the report.* variables print. */
+export interface ReportFacts {
+  generatedAt: Date;
+  signature: GivenSignature | null;
+  closingSignature: GivenSignature | null;
+}
+
+/** What the item.* variables are computed from: the item, and its steps for the overall verdict. */
+export interface ItemValueContext {
+  item: ItemFacts;
+  results: readonly ReportStepResult[];
+  /** The route has finished (the overall verdict waits for it). */
+  finished: boolean;
+}
+
+/** A variable: its key under its prefix, the label the editor shows, and its value. */
+type VarDef<C> = { key: string; label: string; value: (ctx: C) => string };
+
+const ITEM_GROUP = "פרטי הפריט";
+const REPORT_GROUP = "המסמך";
+
+const trimOrEmpty = (v: unknown): string => (v == null ? "" : String(v).trim());
+
+const ITEM_VARS: readonly VarDef<ItemValueContext>[] = [
+  { key: "item_id", label: "מספר פריט (ברקוד)", value: ({ item }) => String(item.item_id) },
+  { key: "serial_no", label: "מספר סידורי", value: ({ item }) => trimOrEmpty(item.serial_no) },
+  { key: "makat", label: 'מק"ט', value: ({ item }) => trimOrEmpty(item.makat) },
+  { key: "model", label: "דגם", value: ({ item }) => trimOrEmpty(item.model) },
+  { key: "manufacturer_name", label: "יצרן", value: ({ item }) => trimOrEmpty(item.manufacturer_name) },
+  { key: "manufacturer_no", label: 'מק"ט יצרן', value: ({ item }) => trimOrEmpty(item.manufacturer_no) },
+  { key: "item_type", label: "סוג פריט", value: ({ item }) => trimOrEmpty(item.item_type) },
+  { key: "customer", label: "לקוח", value: ({ item }) => trimOrEmpty(item.customer) },
+  { key: "shipment_code", label: "מספר משלוח", value: ({ item }) => trimOrEmpty(item.shipment_code) },
+  { key: "package_id", label: "מארז", value: ({ item }) => (item.package_id != null ? String(item.package_id) : "") },
+  { key: "package_type", label: "סוג המארז", value: ({ item }) => trimOrEmpty(item.package_type) },
+  { key: "package_seq", label: "מיקום במארז", value: ({ item }) => (item.package_seq != null ? String(item.package_seq).padStart(2, "0") : "") },
+  { key: "route_number", label: "מספר מסלול", value: ({ item }) => String(item.route_number) },
+  { key: "status", label: "סטטוס", value: ({ item }) => trimOrEmpty(item.status) },
+  { key: "created_at", label: "תאריך קליטה", value: ({ item }) => formatDocDate(item.created_at) },
+  { key: "finished_at", label: "תאריך סיום המסלול", value: ({ item }) => (item.finished_at ? formatDocDate(item.finished_at) : "") },
+  {
+    key: "verdict",
+    label: "תוצאה כוללת",
+    value: ({ results, finished }) => {
+      const overall = overallVerdict(results, finished);
+      return overall ? PASS_FAIL_WORD[overall] : "";
+    },
+  },
 ];
 
-export const REPORT_VARS: { key: string; label: string }[] = [
-  { key: "generated_at", label: "תאריך הפקת הדוח" },
-  { key: "signer", label: "מאשר הדוח (חתימה סופית)" },
-  { key: "signed_at", label: "תאריך החתימה הסופית" },
-  { key: "closing_signer", label: "החותם בסגירת המארז" },
-  { key: "closing_signer_role", label: "תפקיד החותם בסגירה" },
-  { key: "closing_signed_at", label: "תאריך החתימה בסגירה" },
+const REPORT_VARS: readonly VarDef<ReportFacts>[] = [
+  { key: "generated_at", label: "תאריך הפקת הדוח", value: (r) => formatDocDate(r.generatedAt) },
+  { key: "signer", label: "מאשר הדוח (חתימה סופית)", value: (r) => r.signature?.name ?? "" },
+  { key: "signed_at", label: "תאריך החתימה הסופית", value: (r) => (r.signature ? formatDocDate(r.signature.at) : "") },
+  { key: "closing_signer", label: "החותם בסגירת המארז", value: (r) => r.closingSignature?.name ?? "" },
+  { key: "closing_signer_role", label: "תפקיד החותם בסגירה", value: (r) => r.closingSignature?.role ?? "" },
+  { key: "closing_signed_at", label: "תאריך החתימה בסגירה", value: (r) => (r.closingSignature ? formatDocDate(r.closingSignature.at) : "") },
 ];
 
-export const STEP_ATTRS: { key: string; label: string }[] = [
-  { key: "station_type", label: "שם השלב" },
-  { key: "station", label: "עמדה" },
-  { key: "worker", label: "עובד" },
-  { key: "worker_number", label: "מספר עובד" },
-  { key: "date", label: "תאריך" },
-  { key: "time", label: "שעה" },
-  { key: "verdict", label: "תוצאה" },
-  { key: "result", label: "ערך תוצאה" },
-  { key: "comments", label: "הערות" },
+const STEP_ATTRS: readonly VarDef<ReportStepResult>[] = [
+  { key: "station_type", label: "שם השלב", value: (r) => r.stationType },
+  { key: "station", label: "עמדה", value: (r) => r.station },
+  { key: "worker", label: "עובד", value: (r) => r.worker },
+  { key: "worker_number", label: "מספר עובד", value: (r) => r.workerNumber },
+  { key: "date", label: "תאריך", value: (r) => r.date },
+  { key: "time", label: "שעה", value: (r) => r.time },
+  { key: "verdict", label: "תוצאה", value: (r) => (r.verdict ? PASS_FAIL_WORD[r.verdict] : "") },
+  { key: "result", label: "ערך תוצאה", value: (r) => (r.result == null ? "" : String(r.result)) },
+  { key: "comments", label: "הערות", value: (r) => r.comments },
 ];
 
 /** One route the catalog draws from: the item's own route, or a kit route
@@ -89,7 +144,7 @@ export interface CatalogStationTypes {
 
 /** The fields an item answers at a step: its own group on an item route; the
  *  each_item + its type group on a kit's package-level step. */
-export function itemFieldsOf(step: StepConfig, kind: "item" | "kit", itemTypeId: number): Field[] {
+function itemFieldsOf(step: StepConfig, kind: "item" | "kit", itemTypeId: number): Field[] {
   const keys = kind === "item" ? ["item"] : ["each_item", targetKey({ item_type_id: itemTypeId })];
   const out: Field[] = [];
   for (const k of keys) {
@@ -118,16 +173,15 @@ export function buildCatalog(
       if (r.kind === "kit" && !st?.package_level) return;
       const cfg = r.config?.steps && Object.prototype.hasOwnProperty.call(r.config.steps, uid) ? r.config.steps[uid] : undefined;
       const stationLabel = st?.label ?? cfg?.station_label ?? `עמדה ${typeId}`;
-      const label = `${i + 1} · ${stationLabel}`;
+      const stepLabel = r.kind === "kit" ? `${r.label} · ${stationLabel}` : `${i + 1} · ${stationLabel}`;
       const group = r.label;
       const fields = cfg ? itemFieldsOf(cfg, r.kind, r.item_type_id) : [];
       steps.push({
         uid,
-        label: r.kind === "kit" ? `${r.label} · ${stationLabel}` : label,
+        label: stepLabel,
         group,
         fields: fields.map((f) => ({ id: f.id, label: f.label || "שדה", type: f.type })),
       });
-      const stepLabel = r.kind === "kit" ? `${r.label} · ${stationLabel}` : label;
       for (const a of STEP_ATTRS) {
         vars.push({ name: `step.${uid}.${a.key}`, label: `${stepLabel} · ${a.label}`, group });
       }
@@ -145,10 +199,6 @@ export function buildCatalog(
   return { vars, steps };
 }
 
-// ---------------------------------------------------------------- formatting
-
-const TONE_STATUS: Record<ReportTone, string> = { pass: "תקין", warn: "אזהרה", fail: "לא תקין", neutral: "" };
-
 function fmtNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000);
 }
@@ -164,7 +214,7 @@ export function formatFieldValue(v: FieldValue): { value: string; tone: ReportTo
       return { value: v.opts.map((o) => o.label).join(", "), tone };
     }
     case "pass_fail":
-      return { value: v.ok === "pass" ? "תקין" : v.ok === "fail" ? "לא תקין" : "", tone: v.ok ?? null };
+      return { value: v.ok ? PASS_FAIL_WORD[v.ok] : "", tone: v.ok ?? null };
     case "number": {
       if (v.value == null) return { value: "", tone: null };
       const value = v.unit ? `${fmtNumber(v.value)} ${v.unit}` : fmtNumber(v.value);
@@ -185,12 +235,6 @@ export function formatFieldValue(v: FieldValue): { value: string; tone: ReportTo
       return { value: "", tone: null };
   }
 }
-
-export function toneStatus(tone: ReportTone | null): string {
-  return tone ? TONE_STATUS[tone] : "";
-}
-
-// ---------------------------------------------------------------- results
 
 /** One test_results row, with what the server joined to it. */
 export interface ResultRow {
@@ -213,39 +257,35 @@ export interface ResultRow {
   created_at: string;
 }
 
-export interface ResultsRoute {
+interface ResultsRoute {
   route_number: number;
   route_steps: number[];
   step_uids: string[];
 }
 
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
-
 /** The step uid a row answered: the station-fields schema ref, else the
  *  item's route at the row's position. */
 export function rowStepUid(row: ResultRow, route: ResultsRoute): string | null {
-  const d = isObj(row.details) ? row.details : null;
-  const schema = d && isObj(d.schema) ? d.schema : null;
-  if (schema && typeof schema.step_uid === "string" && schema.step_uid) return schema.step_uid;
+  const ref = readSchemaRef(row.details);
+  if (ref.step_uid) return ref.step_uid;
   if (row.route_number !== route.route_number) return null;
-  if (route.step_uids.length !== route.route_steps.length) return null;
-  return route.step_uids[row.route_step - 1] ?? null;
+  return stepUidAt(route, row.route_step);
 }
 
-function legacyPhotos(d: Obj): string[] {
+/** The photo keys of the code popups' photo blocks (SavedPhotoBlock). */
+function blockPhotos(d: JsonObject): string[] {
   const out: string[] = [];
-  for (const k of ["photo", "product", "pkg"]) {
+  for (const k of PHOTO_BLOCK_KEYS) {
     const block = d[k];
-    if (isObj(block) && Array.isArray(block.photos)) {
+    if (isRecord(block) && Array.isArray(block.photos)) {
       for (const p of block.photos) if (typeof p === "string") out.push(p);
     }
   }
   return out;
 }
 
-/** Details.refSource of a package item's opening (testing/tests-popups/packageReference.ts). */
-const REF_SOURCE_LABEL: Record<string, string> = {
+/** Details.refSource of a package item's opening. */
+const REF_SOURCE_LABEL: Record<RefSource, string> = {
   package: "מייחוס המארז",
   scan: "לפי הסריקה",
   package_fallback: "מייחוס המארז · המק״ט לא תאם",
@@ -254,36 +294,36 @@ const REF_SOURCE_LABEL: Record<string, string> = {
 
 /** One saved FieldValue as a report row. */
 function fieldValueRow(id: string, raw: unknown): ReportFieldResult | null {
-  if (!isObj(raw) || typeof raw.t !== "string") return null;
+  if (!isRecord(raw) || typeof raw.t !== "string") return null;
   const v = raw as unknown as FieldValue;
   const f = formatFieldValue(v);
   return { id, label: v.label || "שדה", value: f.value, tone: f.tone, ...(v.note ? { note: v.note } : {}), ...(f.photos ? { photos: f.photos } : {}) };
 }
 
-/** The fields of a row: a popup template's components (docs/popup-templates/PLAN.md §3.5) and the
- *  station-fields block when present, else what the legacy popups saved (weight / photos / the
- *  documented `fields` array). */
-function rowFields(d: Obj | null): ReportFieldResult[] {
+/** The fields of a row: a popup template's components (docs/popup-templates/PLAN.md §3.5), the
+ *  station-fields block or the documented `fields` array, and the keys the code popups save
+ *  (refSource, weight, the photo blocks). */
+function rowFields(d: JsonObject | null): ReportFieldResult[] {
   if (!d) return [];
   const out: ReportFieldResult[] = [];
-  // [{ id, ...FieldValue }] in popup order (tests-popups/templateModel.ts SavedComponent).
+  // SavedComponent[], in popup order.
   if (Array.isArray(d.components)) {
     for (const raw of d.components) {
-      if (isObj(raw) && typeof raw.id === "string") {
+      if (isRecord(raw) && typeof raw.id === "string") {
         const row = fieldValueRow(raw.id, raw);
         if (row) out.push(row);
       }
     }
   }
-  if (isObj(d.fields)) {
+  if (isRecord(d.fields)) {
     for (const [id, raw] of Object.entries(d.fields)) {
       const row = fieldValueRow(id, raw);
       if (row) out.push(row);
     }
   } else if (Array.isArray(d.fields)) {
-    // docs/REPORT_TEMPLATE.md: [{ label, type, value, unit?, min?, max?, expected?, passed? }]
+    // The legacy array (docs/REPORT_TEMPLATE.md): [{ label, value, unit?, passed? }, …]
     d.fields.forEach((raw, i) => {
-      if (!isObj(raw)) return;
+      if (!isRecord(raw)) return;
       const label = typeof raw.label === "string" ? raw.label : `שדה ${i + 1}`;
       const val = raw.value;
       const unit = typeof raw.unit === "string" ? ` ${raw.unit}` : "";
@@ -294,7 +334,7 @@ function rowFields(d: Obj | null): ReportFieldResult[] {
   }
   // An item opened against its package reference: where its reference came
   // from, and the SKU that was expected when the scan differed from it.
-  if (typeof d.refSource === "string" && d.refSource in REF_SOURCE_LABEL) {
+  if (oneOf(REF_SOURCES, d.refSource)) {
     const differs = typeof d.expectedSku === "string" && d.expectedSku !== "" && d.expectedSku !== d.sku;
     out.push({
       id: "legacy_reference",
@@ -303,12 +343,13 @@ function rowFields(d: Obj | null): ReportFieldResult[] {
       tone: d.refSource === "package" ? "pass" : differs ? "warn" : null,
     });
   }
-  if (isObj(d.weight)) {
+  if (isRecord(d.weight)) {
+    // SavedWeight
     const w = d.weight;
     const parts = [w.measured != null ? `נמדד ${String(w.measured)}` : "", w.reference != null ? `ייחוס ${String(w.reference)}` : ""].filter(Boolean);
     out.push({ id: "legacy_weight", label: "משקל", value: parts.join(" · "), tone: typeof w.pass === "boolean" ? (w.pass ? "pass" : "fail") : null });
   }
-  const photos = legacyPhotos(d);
+  const photos = blockPhotos(d);
   if (photos.length > 0 && !out.some((f) => f.photos)) {
     out.push({ id: "legacy_photos", label: "תמונות", value: `${photos.length} תמונות`, tone: null, photos });
   }
@@ -318,9 +359,9 @@ function rowFields(d: Obj | null): ReportFieldResult[] {
 function orderFields(fields: ReportFieldResult[], order: readonly string[] | undefined): ReportFieldResult[] {
   if (!order) return fields;
   const pos = new Map(order.map((id, i) => [id, i]));
-  // A template's components ("k_…") lead, in the popup's order (the sort is stable); the route's
-  // fields follow in their config's order; anything else trails.
-  const at = (f: ReportFieldResult) => pos.get(f.id) ?? (f.id.startsWith("k_") ? -1 : Number.MAX_SAFE_INTEGER);
+  // A template's components lead, in the popup's order (the sort is stable); the route's fields
+  // follow in their config's order; anything else trails.
+  const at = (f: ReportFieldResult) => pos.get(f.id) ?? (isTemplateComponentId(f.id) ? -1 : Number.MAX_SAFE_INTEGER);
   return [...fields].sort((a, b) => at(a) - at(b));
 }
 
@@ -336,39 +377,42 @@ export function fieldOrderOf(configs: readonly RouteFieldsConfig[]): Map<string,
   return out;
 }
 
-function rowVerdict(row: ResultRow, d: Obj | null): "pass" | "fail" | null {
-  const verdict = d && isObj(d.verdict) ? d.verdict : null;
+function rowVerdict(row: ResultRow, d: JsonObject | null): "pass" | "fail" | null {
+  const verdict = d && isRecord(d.verdict) ? d.verdict : null;
   if (verdict?.ok === "pass" || verdict?.ok === "fail") return verdict.ok;
   if (typeof row.passed === "boolean") return row.passed ? "pass" : "fail";
   if (verdict?.suggested === "pass" || verdict?.suggested === "fail") return verdict.suggested;
   return null;
 }
 
-export interface DateParts { date: string; time: string }
+type DateParts = { date: string; time: string };
 
 /**
  * Every station step the item passed, in route order. A step run more than
  * once (released, re-queued, research loop) prints its LATEST row. Research
  * benches are not route steps and are left out; rows of a route the item is
  * no longer on (a retype) do not resolve to a uid of the current route and
- * drop out.
+ * drop out — except an item's rows at its kit's package-level steps (schema
+ * target "kit_item"), whose uids are the kit route's.
  */
 export function buildStepResults(
   rows: readonly ResultRow[],
   route: ResultsRoute,
   fmt: (iso: string) => DateParts,
-  knownUids?: ReadonlySet<string>,
   /** step uid → field ids in the config's order. details.fields is jsonb, which
    *  does not keep key order, so the saved order is not the configured one. */
   fieldOrder?: ReadonlyMap<string, readonly string[]>,
 ): ReportStepResult[] {
   const latest = new Map<string, ResultRow>();
-  const ownUids = new Set(route.step_uids);
+  const knownUids = new Set(route.step_uids);
+  for (const row of rows) {
+    const ref = readSchemaRef(row.details);
+    if (ref.target === "kit_item" && ref.step_uid) knownUids.add(ref.step_uid);
+  }
   for (const row of rows) {
     if (row.station_is_research) continue;
     const uid = rowStepUid(row, route);
-    if (!uid) continue;
-    if (!ownUids.has(uid) && !(knownUids?.has(uid))) continue;
+    if (!uid || !knownUids.has(uid)) continue;
     const prev = latest.get(uid);
     if (!prev || row.created_at > prev.created_at || (row.created_at === prev.created_at && row.test_result_id > prev.test_result_id)) {
       latest.set(uid, row);
@@ -376,8 +420,8 @@ export function buildStepResults(
   }
   const out: ReportStepResult[] = [];
   for (const [uid, row] of latest) {
-    const d = isObj(row.details) ? row.details : null;
-    const verdictNote = d && isObj(d.verdict) && typeof d.verdict.note === "string" ? d.verdict.note : "";
+    const d = isRecord(row.details) ? row.details : null;
+    const verdictNote = d && isRecord(d.verdict) && typeof d.verdict.note === "string" ? d.verdict.note : "";
     const { date, time } = fmt(row.created_at);
     out.push({
       uid,
@@ -407,36 +451,18 @@ export function overallVerdict(results: readonly ReportStepResult[], finished = 
   return null;
 }
 
-export const VERDICT_WORD = { pass: "תקין", fail: "לא תקין" } as const;
-
-/** The variable values of one item: item.* from `item`, step.* / field.* from
- *  its results, report.* from `report`. */
-export function buildValues(
-  item: Record<string, string>,
-  results: readonly ReportStepResult[],
-  report: Record<string, string> = {},
-  opts: { finished?: boolean } = {},
-): Record<string, string> {
+/** The variable values of one item: item.* from the item (and its steps' overall verdict),
+ *  report.* from the document, step.* / field.* from its results. */
+export function buildValues(itemCtx: ItemValueContext, report: ReportFacts): Record<string, string> {
   const values: Record<string, string> = {};
-  for (const [k, v] of Object.entries(item)) values[`item.${k}`] = v;
-  const overall = overallVerdict(results, opts.finished ?? true);
-  if (values["item.verdict"] == null) values["item.verdict"] = overall ? VERDICT_WORD[overall] : "";
-  for (const [k, v] of Object.entries(report)) values[`report.${k}`] = v;
-  for (const r of results) {
-    const p = `step.${r.uid}.`;
-    values[p + "station_type"] = r.stationType;
-    values[p + "station"] = r.station;
-    values[p + "worker"] = r.worker;
-    values[p + "worker_number"] = r.workerNumber;
-    values[p + "date"] = r.date;
-    values[p + "time"] = r.time;
-    values[p + "verdict"] = r.verdict ? VERDICT_WORD[r.verdict] : "";
-    values[p + "result"] = r.result == null ? "" : String(r.result);
-    values[p + "comments"] = r.comments;
+  for (const v of ITEM_VARS) values[`item.${v.key}`] = v.value(itemCtx);
+  for (const v of REPORT_VARS) values[`report.${v.key}`] = v.value(report);
+  for (const r of itemCtx.results) {
+    for (const a of STEP_ATTRS) values[`step.${r.uid}.${a.key}`] = a.value(r);
     for (const f of r.fields) {
       const fp = `field.${r.uid}.${f.id}`;
       values[fp] = f.value;
-      values[fp + ".status"] = toneStatus(f.tone);
+      values[fp + ".status"] = f.tone ? REPORT_TONE_WORD[f.tone] : "";
       values[fp + ".note"] = f.note ?? "";
     }
   }

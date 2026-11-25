@@ -124,7 +124,8 @@ export type GridNavigation = {
   focusKey: (key: string) => void;
 };
 
-const navKeyOf = (target: EventTarget | null): string | null => {
+/** The navigation key of the element an event came from (its `data-nav-key`, or an ancestor's). */
+export const navKeyOf = (target: EventTarget | null): string | null => {
   const el = target instanceof Element ? target.closest<HTMLElement>("[data-nav-key]") : null;
   return el?.dataset.navKey ?? null;
 };

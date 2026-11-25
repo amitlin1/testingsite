@@ -1,11 +1,14 @@
 "use client";
 import React from "react";
-import Barcode from "react-barcode";
 import { useReactToPrint } from "react-to-print";
-import { Check, Minus, Plus } from "lucide-react";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
-import { PackageDialog, PackageDialogHeader } from "./PackageDialog";
-import { INK, INK_2, MUTED, AMBER_INK, AMBER_BG, AMBER_BORDER, barcodeOf, fmtId, seq2, pressKeys } from "./packageUi";
+import { SearchableCombobox } from "@/components/ui";
+import { ArtboardDialog, ArtboardDialogHeader } from "@/components/ui/ArtboardDialog";
+import { INK, INK_2, MUTED, AMBER_INK, AMBER_BG, AMBER_BORDER } from "@/components/ui/colors";
+import { CopiesStepper, Tick, pressKeys } from "@/components/ui/ArtboardControls";
+import { usePrintWhenReady } from "@/lib/hooks/usePrintWhenReady";
+import type { PackageView } from "@/app/lib/packages/contract";
+import { formatIdText, seq2 } from "@/app/lib/packages/ids";
+import { LabelSheet, packageLabels, type LabelItem } from "@/app/components/labels/Labels";
 
 const PRINTERS = [{ label: "מדפסת המערכת" }];
 const LABEL_SIZES = [{ label: "57 × 32 מ״מ" }];
@@ -15,109 +18,21 @@ const LABEL_SIZES = [{ label: "57 × 32 מ״מ" }];
  * and one label per item, each selectable; presets; copies. Printer and
  * label size are shown for the operator but the browser's own print dialog
  * picks the printer (DESIGN_REVIEW.md). Everything but the labels carries
- * `.no-print`.
- *
- * The label sheet itself (`LabelSheet`, `packageLabels`) is exported so the
- * bulk reprint for converted boxes (PackageRelabelDialog) prints the very
- * same labels.
+ * `.no-print`; the labels themselves are components/labels.
  */
-export type LabelItem = {
-  item_id: string | number;
-  package_seq: number | null;
-  item_type_desc: string;
-  serial_no?: string | null;
-};
 
-export type LabelSpec = { key: string; value: string };
-
-export type LabelSource = {
-  packageId: string | number;
-  items: LabelItem[];
-};
-
-/** The box label, then one label per item, in package_seq order. `pick` keeps
- *  a subset (the dialog's checkboxes); omitted, everything prints. */
-export function packageLabels(src: LabelSource, pick?: { box: boolean; items: boolean[] }): LabelSpec[] {
-  const out: LabelSpec[] = [];
-  if (pick?.box ?? true) {
-    out.push({ key: `box-${src.packageId}`, value: barcodeOf(src.packageId) });
-  }
-  src.items.forEach((it, i) => {
-    if (!(pick?.items[i] ?? true)) return;
-    out.push({ key: String(it.item_id), value: barcodeOf(it.item_id) });
-  });
-  return out;
-}
-
-/** The labels themselves — what the printer gets. Shown on screen only as the
- *  preview. A label carries the code only: the barcode and its digits, no text. */
-export const LabelSheet = React.forwardRef<HTMLDivElement, { labels: LabelSpec[]; copies: number; preview: boolean }>(
-  function LabelSheet({ labels, copies, preview }, ref) {
-    return (
-      <div ref={ref} style={{ marginTop: preview ? 20 : 0, display: preview ? "block" : "none" }} className="package-labels-print">
-        <style>{`
-          @media print {
-            .no-print { display: none !important; }
-            .package-labels-print { display: block !important; }
-            .package-label { page-break-after: always; break-after: page; }
-          }
-          .package-label { width: 57mm; height: 32mm; box-sizing: border-box; padding: 2mm 3mm; border: 1px dashed var(--color-border-strong); border-radius: 4px; display: flex; align-items: center; justify-content: center; direction: ltr; background: var(--color-canvas); }
-        `}</style>
-        <div className="no-print" style={{ fontSize: 11, fontWeight: 600, color: MUTED, marginBottom: 10 }}>תצוגה מקדימה</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {Array.from({ length: copies }, (_, c) =>
-            labels.map((l) => (
-              <div key={`${l.key}-${c}`} className="package-label">
-                {/* Alone on the label, the barcode takes its height (the width is
-                    the code's own, and already spans the label). */}
-                <Barcode value={l.value} width={1.2} height={70} fontSize={12} margin={0} />
-              </div>
-            )),
-          )}
-        </div>
-      </div>
-    );
-  },
-);
-
-/** Copies stepper (1–9), shared with the bulk reprint. In the field row it
- *  takes the field frame (44px, --r-field, the field edge). */
-export function CopiesStepper({ copies, onChange, labelId }: { copies: number; onChange: (n: number) => void; labelId?: string }) {
-  return (
-    <div role="group" aria-labelledby={labelId} style={{ boxSizing: "border-box", height: 44, border: "1px solid var(--color-field-border)", borderRadius: "var(--r-field)", background: "var(--color-canvas)", display: "flex", alignItems: "center", justifyContent: "space-between", paddingInline: "13px 6px" }}>
-      <span aria-live="polite" style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{copies}</span>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <button type="button" aria-label="פחות עותקים" onClick={() => onChange(Math.max(1, copies - 1))} className="pkg-iconbtn pkg-iconbtn--ink"><Minus size={15} strokeWidth={2} aria-hidden /></button>
-        <button type="button" aria-label="יותר עותקים" onClick={() => onChange(Math.min(9, copies + 1))} className="pkg-iconbtn pkg-iconbtn--ink"><Plus size={15} strokeWidth={2} aria-hidden /></button>
-      </div>
-    </div>
-  );
-}
-
-/** The tick of a checkbox-like card; the card itself carries role="checkbox". */
-export function Tick({ on }: { on: boolean }) {
-  return (
-    <span aria-hidden className={on ? "pkg-tick pkg-tick--on" : "pkg-tick"} style={{ width: 21, height: 21, borderRadius: 6, borderColor: on ? undefined : "var(--color-field-border)" }}>
-      {on && <Check size={13} strokeWidth={2.5} />}
-    </span>
-  );
-}
-
-export type PackageLabelsDialogProps = {
+type PackageLabelsDialogProps = {
   open: boolean;
   onClose: () => void;
-  packageId: string | number;
-  packageType: string;
-  /** "רפאל · משלוח SH-2041" */
-  customerLine: string;
-  items: LabelItem[];
+  pkg: Pick<PackageView, "item_id" | "item_type_desc" | "customer_name" | "customer_code" | "shipment_code" | "items">;
+  /** The items to label, when not the box's as loaded (the opening station's own list). */
+  items?: LabelItem[];
   onPrinted?: () => void;
   /** Whether the box label starts ticked. The opening station starts with it
    *  off: the box wears its label since the shipment. Default on. */
   boxFirst?: boolean;
 };
 
-/** Fake barcode bars for the on-screen cards (the real barcode prints). */
 function Bars({ n, seed, height }: { n: number; seed: number; height: number }) {
   return (
     <div aria-hidden style={{ display: "flex", alignItems: "flex-end", gap: 1, height }}>
@@ -128,7 +43,11 @@ function Bars({ n, seed, height }: { n: number; seed: number; height: number }) 
   );
 }
 
-export default function PackageLabelsDialog({ open, onClose, packageId, packageType, customerLine, items, onPrinted, boxFirst = true }: PackageLabelsDialogProps) {
+export default function PackageLabelsDialog({ open, onClose, pkg, items: itemsOverride, onPrinted, boxFirst = true }: PackageLabelsDialogProps) {
+  const items: LabelItem[] = itemsOverride ?? pkg.items;
+  const packageId = pkg.item_id;
+  const packageType = pkg.item_type_desc;
+  const customerLine = `${pkg.customer_name ?? pkg.customer_code ?? ""} · משלוח ${pkg.shipment_code ?? ""}`;
   const [boxOn, setBoxOn] = React.useState(boxFirst);
   const [itemsOn, setItemsOn] = React.useState<boolean[]>(() => items.map(() => true));
   const [copies, setCopies] = React.useState(1);
@@ -139,7 +58,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
   const copiesLabelId = React.useId();
 
   // Reset when the dialog opens or the item set changes — keyed on the count,
-  // not the array identity, because callers build `items` inline each render.
+  // not the array identity: a refetch hands over a new array of the same items.
   // Done during render, so the stale selection is never painted.
   const [resetFor, setResetFor] = React.useState({ open, count: items.length });
   if (resetFor.open !== open || resetFor.count !== items.length) {
@@ -148,6 +67,7 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
   }
 
   const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: `Package-${packageId}-labels`, onAfterPrint: onPrinted });
+  const printShown = usePrintWhenReady(handlePrint);
 
   if (!open) return null;
 
@@ -155,23 +75,22 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
   const total = (boxOn ? 1 : 0) + itemsOnCount;
   const sheets = total * copies;
   const allItems = itemsOnCount === items.length;
-  const { head, suffix } = fmtId(packageId);
-  const code = `${head} ${suffix}`.trim();
+  const code = formatIdText(packageId);
   const presets = [
     { key: "all", label: "הכול", active: boxOn && allItems },
     { key: "box", label: "קופסה בלבד", active: boxOn && itemsOnCount === 0 },
     { key: "items", label: "פריטים בלבד", active: !boxOn && allItems },
   ];
   const pick = (key: string) => { setBoxOn(key !== "items"); setItemsOn(items.map(() => key !== "box")); };
-  const itemCode = (it: LabelItem) => { const f = fmtId(it.item_id); return `${f.head} ${f.suffix}`.trim(); };
+  const itemCode = (it: LabelItem) => formatIdText(it.item_id);
   const totalSeq = seq2(items.length);
   const toggleItem = (i: number) => setItemsOn((v) => v.map((x, j) => (j === i ? !x : x)));
 
   const selectedLabels = packageLabels({ packageId, items },{ box: boxOn, items: itemsOn });
 
   return (
-    <PackageDialog open onClose={onClose} width="min(880px, 96vw)">
-      <PackageDialogHeader
+    <ArtboardDialog open onClose={onClose} width="min(880px, 96vw)">
+      <ArtboardDialogHeader
         title="הדפסת מדבקות"
         onClose={onClose}
         subtitle={
@@ -264,12 +183,12 @@ export default function PackageLabelsDialog({ open, onClose, packageId, packageT
         <div className="pkg-dlg-foot-actions">
           <button type="button" onClick={onClose} className="pkg-pill pkg-pill--ghost" style={{ padding: "11px 20px" }}>ביטול</button>
           <button type="button" onClick={() => setPreview((p) => !p)} aria-pressed={preview} className="pkg-pill pkg-pill--ghost" style={{ padding: "11px 20px" }}>{preview ? "הסתר תצוגה מקדימה" : "תצוגה מקדימה"}</button>
-          <button type="button" disabled={total === 0} onClick={() => { setPreview(true); setTimeout(() => handlePrint(), 50); }}
+          <button type="button" disabled={total === 0} onClick={() => { setPreview(true); printShown(); }}
             className="pkg-pill pkg-pill--primary" style={{ padding: "11px 24px", fontSize: 15 }}>
             {total === 0 ? "הדפס" : `הדפס ${sheets} מדבקות`}
           </button>
         </div>
       </div>
-    </PackageDialog>
+    </ArtboardDialog>
   );
 }

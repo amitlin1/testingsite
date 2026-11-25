@@ -1,39 +1,61 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  toMinutes,
-  fromMinutes,
-  netMinutes,
+  exceedsHalfDayCap,
   formatNet,
   isEndBeforeStart,
   isValidTime,
-  isValidDate,
-  weekdayOf,
-  toDateString,
-  eachDate,
-  isDateInRange,
-  addDays,
-  daysBetween,
-  monthStartISO,
-  monthEndISO,
+  netMinutes,
+  toMinutes,
+  workingWindows,
 } from "../time";
 
-test("toMinutes / fromMinutes", () => {
+test("toMinutes", () => {
   assert.equal(toMinutes("07:00"), 420);
   assert.equal(toMinutes("15:35"), 935);
   assert.equal(toMinutes(null), 0);
   assert.equal(toMinutes("bad"), 0);
-  assert.equal(fromMinutes(455), "07:35");
-  assert.equal(fromMinutes(0), "00:00");
+});
+
+test("workingWindows: a break inside the day splits it in two", () => {
+  assert.deepEqual(workingWindows("07:00", "15:35", "12:00", "13:00"), [
+    ["07:00", "12:00"],
+    ["13:00", "15:35"],
+  ]);
+  assert.deepEqual(workingWindows("07:00", "12:00", null, null), [["07:00", "12:00"]]);
+});
+
+test("workingWindows: no window without hours or when the day ends before it starts", () => {
+  assert.deepEqual(workingWindows(null, "15:35", null, null), []);
+  assert.deepEqual(workingWindows("15:00", "07:00", null, null), []);
+  assert.deepEqual(workingWindows("07:00", "07:00", null, null), []);
+});
+
+test("workingWindows: a break touching an edge leaves no zero-length window", () => {
+  assert.deepEqual(workingWindows("07:00", "15:35", "07:00", "08:00"), [["08:00", "15:35"]]);
+  assert.deepEqual(workingWindows("07:00", "15:35", "15:00", "15:35"), [["07:00", "15:00"]]);
+});
+
+test("workingWindows: a break that is not a real interval inside the day is ignored", () => {
+  const whole = [["07:00", "15:35"]];
+  assert.deepEqual(workingWindows("07:00", "15:35", "13:00", "12:00"), whole); // reversed
+  assert.deepEqual(workingWindows("07:00", "15:35", "12:00", null), whole); // one-sided
+  assert.deepEqual(workingWindows("07:00", "15:35", "06:00", "07:30"), whole); // starts before the day
+  assert.deepEqual(workingWindows("07:00", "15:35", "15:00", "16:00"), whole); // ends after the day
 });
 
 test("netMinutes: default day is 7h35m, half day is 5h", () => {
   assert.equal(netMinutes("07:00", "15:35", "12:00", "13:00"), 455);
   assert.equal(netMinutes("07:00", "12:00", null, null), 300);
   assert.equal(netMinutes(null, "15:35", null, null), 0);
-  assert.equal(netMinutes("15:00", "07:00", null, null), 0); // never negative
-  // A malformed break is ignored rather than making the day longer/negative.
+  assert.equal(netMinutes("15:00", "07:00", null, null), 0);
   assert.equal(netMinutes("07:00", "15:35", "13:00", "12:00"), 515);
+});
+
+test("netMinutes counts what the ledger counts: a break outside the hours is not subtracted", () => {
+  // The settings figure used to subtract it (120) while work_span ignored it (180).
+  assert.equal(netMinutes("07:00", "10:00", "12:00", "13:00"), 180);
+  assert.equal(netMinutes("07:00", "12:30", "12:00", "13:00"), 330);
 });
 
 test("formatNet", () => {
@@ -43,10 +65,16 @@ test("formatNet", () => {
   assert.equal(formatNet(-10), "0h 00m");
 });
 
-test("isEndBeforeStart", () => {
+test("isEndBeforeStart: end must be strictly after start", () => {
   assert.equal(isEndBeforeStart("07:00", "06:30"), true);
-  assert.equal(isEndBeforeStart("07:00", "07:00"), true); // not strictly after
+  assert.equal(isEndBeforeStart("07:00", "07:00"), true);
   assert.equal(isEndBeforeStart("07:00", "07:01"), false);
+});
+
+test("exceedsHalfDayCap: a half day may end at 12:00, not after", () => {
+  assert.equal(exceedsHalfDayCap("12:00"), false);
+  assert.equal(exceedsHalfDayCap("11:30"), false);
+  assert.equal(exceedsHalfDayCap("12:01"), true);
 });
 
 test("isValidTime", () => {
@@ -56,52 +84,4 @@ test("isValidTime", () => {
   assert.equal(isValidTime("7:00"), true);
   assert.equal(isValidTime("07:60"), false);
   assert.equal(isValidTime(null), false);
-});
-
-test("isValidDate rejects impossible dates", () => {
-  assert.equal(isValidDate("2026-09-17"), true);
-  assert.equal(isValidDate("2026-02-31"), false);
-  assert.equal(isValidDate("2026-13-01"), false);
-  assert.equal(isValidDate("2026-9-1"), false); // must be zero-padded
-  assert.equal(isValidDate("not-a-date"), false);
-});
-
-test("weekdayOf uses local components (0=Sun … 6=Sat)", () => {
-  assert.equal(weekdayOf("2026-09-12"), 6); // Rosh Hashana 2026 — Saturday
-  assert.equal(weekdayOf("2026-04-22"), 3); // Yom HaAtzmaut 2026 — Wednesday
-  assert.equal(weekdayOf("2026-09-25"), 5); // Erev Sukkot 2026 — Friday
-});
-
-test("toDateString / eachDate / isDateInRange", () => {
-  assert.equal(toDateString(new Date(2026, 8, 5)), "2026-09-05");
-  assert.deepEqual(eachDate("2026-09-30", "2026-10-02"), ["2026-09-30", "2026-10-01", "2026-10-02"]);
-  assert.equal(eachDate("2026-01-01", "2026-12-31").length, 365);
-  assert.equal(isDateInRange("2026-09-27", "2026-09-27", "2026-09-28"), true);
-  assert.equal(isDateInRange("2026-09-26", "2026-09-27", "2026-09-28"), false);
-});
-
-test("addDays crosses month/year boundaries without a UTC shift", () => {
-  assert.equal(addDays("2026-08-03", 1), "2026-08-04");
-  assert.equal(addDays("2026-08-31", 1), "2026-09-01");
-  assert.equal(addDays("2026-12-31", 1), "2027-01-01");
-  assert.equal(addDays("2026-03-01", -1), "2026-02-28");
-  assert.equal(addDays("2028-03-01", -1), "2028-02-29"); // leap year
-});
-
-test("daysBetween", () => {
-  assert.equal(daysBetween("2026-08-03", "2026-08-03"), 0);
-  assert.equal(daysBetween("2026-08-03", "2026-08-04"), 1);
-  assert.equal(daysBetween("2026-01-01", "2026-12-31"), 364);
-  assert.equal(daysBetween("2026-08-04", "2026-08-03"), -1);
-});
-
-test("monthStartISO / monthEndISO give a REAL last day", () => {
-  assert.equal(monthStartISO(2026, 8), "2026-09-01");
-  // The bug this replaced: a hard-coded "-31" in 30-day months and February.
-  assert.equal(monthEndISO(2026, 8), "2026-09-30");
-  assert.equal(monthEndISO(2026, 1), "2026-02-28");
-  assert.equal(monthEndISO(2028, 1), "2028-02-29"); // leap year
-  assert.equal(monthEndISO(2026, 11), "2026-12-31");
-  // Every month of a year must round-trip through isValidDate.
-  for (let m = 0; m < 12; m++) assert.equal(isValidDate(monthEndISO(2026, m)), true);
 });

@@ -1,96 +1,81 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { parseBarcode } from "@/app/lib/barcode-parser";
-import { getWorkersDirectory } from "@/lib/keycloak-admin";
+import { prisma } from "@/lib/db";
+import { HttpError, errorResponse } from "@/lib/http/errors";
+import { loadWorkerNames } from "@/app/lib/items/worker-names";
+import { ledgerWrite } from "@/app/lib/metrics/ledger/schema-gate";
+import { packageIdParam } from "@/app/lib/packages/http";
+import { idOfLabel } from "@/app/lib/packages/ids";
 import { loadPackageContext } from "@/app/lib/packages/context";
+import { deleteItem } from "@/app/lib/packages/item-writes";
+import { fitChar50 } from "@/app/lib/packages/lifecycle";
 import { loadPackage, loadPackageTimeline } from "@/app/lib/packages/read";
-import { resyncItemDims } from "@/app/lib/metrics/item-lifecycle";
-import { DELETE as deleteRoutedRow } from "@/app/api/items/[id]/route";
 
 export const runtime = "nodejs";
+
+type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * GET /api/packages/[id] — the package page: the box, its items, the
  * package-level timeline (with worker names resolved from the directory).
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_req: Request, { params }: Ctx) {
   try {
-    const { id } = await params;
-    let packageId: bigint;
-    try {
-      packageId = BigInt(parseBarcode(id).itemId);
-    } catch {
-      return NextResponse.json({ error: "מזהה מארז לא תקין" }, { status: 400 });
-    }
+    const packageId = packageIdParam((await params).id);
     const view = await loadPackage(packageId);
     if (!view) return NextResponse.json({ error: "המארז לא נמצא" }, { status: 404 });
 
-    const [timeline, workers] = await Promise.all([
-      loadPackageTimeline(view),
-      getWorkersDirectory().catch(() => [] as { worker_id: number; worker_name: string }[]),
-    ]);
-    const nameOf = new Map(workers.map((w) => [w.worker_id, w.worker_name]));
+    const [timeline, nameOf] = await Promise.all([loadPackageTimeline(view), loadWorkerNames("Package timeline")]);
     return NextResponse.json({
       package: view,
       timeline: timeline.map((t) => ({ ...t, worker_name: t.worker_id != null ? (nameOf.get(t.worker_id) ?? null) : null })),
     });
   } catch (error) {
-    console.error("Error loading package:", error);
-    return NextResponse.json({ error: "טעינת המארז נכשלה" }, { status: 500 });
+    return errorResponse(error, "טעינת המארז נכשלה");
   }
 }
 
 /**
  * PATCH /api/packages/[id] — the open fields of a box: makat, model,
- * manufacturer, manufacturer no. Its type, customer and shipment are locked
- * (docs/packages/PLAN.md §4; design "עריכת מארז"): a type sent here that
- * differs answers 409.
+ * manufacturer, manufacturer no. Only the box row: its items keep theirs
+ * (unlike the intake and the certificate-row binding, which copy them). Its
+ * type, customer and shipment are locked (docs/packages/PLAN.md §4; design
+ * "עריכת מארז"): a type sent here that differs answers 409. None of these
+ * fields is frozen into the metrics ledger, so nothing there changes.
  */
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(req: Request, { params }: Ctx) {
   try {
-    const { id } = await params;
-    let packageId: bigint;
-    try {
-      packageId = BigInt(parseBarcode(id).itemId);
-    } catch {
-      return NextResponse.json({ error: "מזהה מארז לא תקין" }, { status: 400 });
-    }
-    const ctx = await loadPackageContext(prisma, packageId);
-    if (!ctx) return NextResponse.json({ error: "המארז לא נמצא" }, { status: 404 });
-    if (!ctx.isPackage) return NextResponse.json({ error: "המזהה אינו של מארז" }, { status: 400 });
-
+    const packageId = packageIdParam((await params).id);
     const body = await req.json();
+    const ctx = await loadPackageContext(prisma, packageId);
+    if (!ctx) throw new HttpError(404, "המארז לא נמצא");
+    if (!ctx.isPackage) throw new HttpError(400, "המזהה אינו של מארז");
     if (body.itemType != null && Number(body.itemType) !== ctx.itemTypeId) {
-      return NextResponse.json(
-        { error: "סוג המארז אינו ניתן לשינוי — יש למחוק את המארז ולקלוט אותו מחדש", code: "PACKAGE_TYPE_LOCKED" },
-        { status: 409 },
-      );
+      throw new HttpError(409, "סוג המארז אינו ניתן לשינוי — יש למחוק את המארז ולקלוט אותו מחדש", { code: "PACKAGE_TYPE_LOCKED" });
     }
     if (body.customer != null || body.shipment != null) {
-      return NextResponse.json({ error: "לקוח ומשלוח של מארז אינם ניתנים לשינוי", code: "PACKAGE_FIELDS_LOCKED" }, { status: 409 });
+      throw new HttpError(409, "לקוח ומשלוח של מארז אינם ניתנים לשינוי", { code: "PACKAGE_FIELDS_LOCKED" });
     }
 
     const data: { makat?: string; model?: string; manufacturer_name?: string; manufacturer_no?: string } = {};
     if (body.makat !== undefined) data.makat = String(body.makat ?? "").trim();
-    if (body.model !== undefined) data.model = String(body.model ?? "").trim().slice(0, 50);
-    if (body.manufacturer !== undefined) data.manufacturer_name = String(body.manufacturer ?? "").trim().slice(0, 50);
+    if (body.model !== undefined) data.model = fitChar50(String(body.model ?? ""));
+    if (body.manufacturer !== undefined) data.manufacturer_name = fitChar50(String(body.manufacturer ?? ""));
     if (body.manufacturerNo !== undefined) data.manufacturer_no = String(body.manufacturerNo ?? "").trim();
+    if (Object.keys(data).length > 0) await prisma.items.update({ where: { item_id: packageId }, data });
 
-    await prisma.$transaction(async (tx) => {
-      if (Object.keys(data).length > 0) {
-        await tx.items.update({ where: { item_id: packageId }, data });
-      }
-      await resyncItemDims(tx, packageId);
-    });
-
-    const view = await loadPackage(packageId);
-    return NextResponse.json({ ok: true, package: view });
+    return NextResponse.json({ ok: true, package: await loadPackage(packageId) });
   } catch (error) {
-    console.error("Error updating package:", error);
-    return NextResponse.json({ error: "עדכון המארז נכשל" }, { status: 500 });
+    return errorResponse(error, "עדכון המארז נכשל");
   }
 }
 
-/** DELETE /api/packages/[id] — the same cascade as DELETE /api/items/[id]
- *  (a box is an items row): 409 with the items unless `cascade: true`. */
-export const DELETE = deleteRoutedRow;
+/** DELETE /api/packages/[id] — a box is an items row: the same delete as
+ *  DELETE /api/items/[id] — 409 with its items unless `cascade: true`. */
+export function DELETE(req: Request, { params }: Ctx) {
+  return ledgerWrite("מחיקת הפריט נכשלה", async () => {
+    const packageId = idOfLabel((await params).id);
+    if (packageId == null) return NextResponse.json({ error: "מזהה פריט לא תקין" }, { status: 400 });
+    const body = await req.json().catch(() => null);
+    return NextResponse.json({ ok: true, ...(await deleteItem(packageId, { cascade: !!body?.cascade })) });
+  });
+}

@@ -1,0 +1,4 @@
+{
+  "//": "NOT a package — a module-type marker, like src/lib/workHours/package.json. The work-hours modules load as ESM under `npm test` (node --import tsx) because @hebcal/core is ESM-only, and an ESM module cannot name-import a CommonJS .ts file there (tsx exposes only its default). Marking civil.ts as ESM lets both sides import it: ESM importers directly, CommonJS ones through require(esm). Deliberately has no \"name\". App code imports it via @/lib/time/civil.",
+  "type": "module"
+}

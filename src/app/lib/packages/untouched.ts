@@ -1,12 +1,14 @@
-import { TransactionClient } from "@/app/lib/prisma";
+import { TransactionClient } from "@/lib/db";
+import { isFreshRoute, isOpeningRoute } from "./rules";
 
 /**
  * Has anyone worked on these rows (a box and its items) since intake? A box
  * fresh from intake waits at step 1, queued (status 2), not started, with no
  * station history, results, research or attachments.
  *
- * The intake's "בטל מארז אחרון" deletes a box only while this answers null.
- * Past that point deleting belongs to the package page, with its own warning.
+ * The intake's "בטל" (boxes.ts undoIntake) takes a box back only while this
+ * answers null. Past that point deleting belongs to the package page, with its
+ * own warning.
  * The answer is the reason, in Hebrew, for the refusal text.
  *
  * `atOpening`: the box is open at its opening station, which starts its items
@@ -22,10 +24,8 @@ export async function workDoneOn(tx: TransactionClient, ids: bigint[], opts: { a
     where: { item_id: { in: ids } },
     select: { current_route_step: true, current_status: true, processing_start_time: true, is_finished: true },
   });
-  const moved = opts.atOpening
-    ? (r: (typeof routes)[number]) => r.current_route_step !== 1 || r.is_finished || (r.current_status !== 1 && r.current_status !== 2)
-    : (r: (typeof routes)[number]) => r.current_route_step !== 1 || r.current_status !== 2 || r.processing_start_time != null || r.is_finished;
-  if (routes.some(moved)) {
+  const untouched = opts.atOpening ? isOpeningRoute : isFreshRoute;
+  if (routes.some((r) => !untouched(r))) {
     return `כבר התחילו לעבוד על ה${noun}`;
   }
   if (await tx.item_route_history.count({ where: { item_id: { in: ids } } })) return `ל${noun} כבר יש היסטוריית עמדות`;

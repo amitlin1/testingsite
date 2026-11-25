@@ -2,30 +2,18 @@
 // Q2ב, §5.0 the cross-cutting rules, §2.8 the two clocks, §3.1 unmapped, §8
 // stage 6).
 //
-// WHY IT EXISTS. Stage 6 moved six history screens off the snapshot tables and
-// onto the ledger, and shipped with zero tests: src/app/lib/metrics/entity-history.ts
-// was 147 uncovered lines, the four `[id]/history` routes were absent from the
-// parity matrix (which only knows path-less endpoints), and the weekly fold that
-// decides what the dialogs actually DRAW lived four times over inside four .tsx
-// files where nothing could reach it. That is precisely the gap that let stage 5
-// ship four structurally-null fields: the harness passed them because nothing
-// asserted them.
-//
 // WHAT IT COVERS, in the order the data flows:
 //
-//   1. THE FOLD (pure, runs with no database). mean vs sum vs last vs the
-//      null-preserving weighted average, and the one that matters: a week
-//      containing a gap stays NULL rather than collapsing to 0 (§5.0(7)).
-//   2. entityHistory() over a deterministic ledger: the state mapping, the
+//   1. entityHistory() over a deterministic ledger: the state mapping, the
 //      §3.1 `unmapped` slice surviving as a visible series, the `_new_<key>`
 //      fallback for a state_key metric_state grows and the map does not know,
 //      `_new_activeTotal` as the sum of its own row, and the cumulative line
 //      checked against a DIRECT count over route_run — not against a second
 //      copy of the JavaScript.
-//   3. NO GAP FILL. The fixture has a genuinely empty day between two busy
+//   2. NO GAP FILL. The fixture has a genuinely empty day between two busy
 //      ones. The counts come back as measured zeros and the durations as
 //      nulls; neither repeats the day before (§5.0(7)).
-//   4. THE FOUR ROUTES, end to end, by invoking the exported handlers — the
+//   3. THE FOUR ROUTES, end to end, by invoking the exported handlers — the
 //      13-month cap and its headers, both clocks on every duration, an entity
 //      with no data answering the same envelope zero-filled with HTTP 200, and
 //      the stage-5 assertion: no `_new_` field null across every row.
@@ -48,33 +36,22 @@
 //
 // The DB half runs ONLY when TEST_DATABASE_URL points at a throwaway database
 // carrying migration 20260825000000_metrics_ledger_additive. Without it those
-// describe blocks skip and plain `npm test` stays green; the fold block above
-// touches nothing and always runs.
+// describe blocks skip and plain `npm test` stays green — and says so in its
+// skip reason. The weekly fold the dialogs draw is unit-tested next to it
+// (src/app/dashboard/tests/_lib/__tests__/history-fold.test.ts).
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import path from "node:path";
+import { stubSession } from "@/lib/auth/testing";
 import { Pool, types } from "pg";
 
-import {
-  UI_MONTH_CAP,
-  addDays,
-  addMonths,
-  daysBetween,
-  resolvePeriod,
-  todayBusinessDay,
-} from "../period";
-import { entityHistory, type EntityHistoryPoint } from "../entity-history";
-import type { MetricsClient } from "../queries";
-import {
-  aggregateEntityHistoryWeekly,
-  aggregateStationHistoryWeekly,
-  lastOf,
-  meanOf,
-  sumOf,
-  weekStartOf,
-  weightedMeanOf,
-} from "../history-fold";
+import { UI_MONTH_CAP, entityHistoryPoints, stationHistoryPoints } from "@/app/lib/dashboard/contract";
+import type { EntityHistoryWire, StationHistoryWire } from "@/app/lib/dashboard/contract";
+import { foldWeekly } from "@/app/dashboard/tests/_lib/history-fold";
+import { addDays, addMonths, businessDay, dayCountInclusive } from "@/lib/time/civil";
+import { resolvePeriod } from "../read/period";
+import { entityHistory, type EntityHistoryRow } from "../read/entity-history";
+import type { MetricsClient } from "../read/sql";
+import { LEDGER_TRUNCATE_LOCK } from "@/test-support/ledger-lock";
 
 types.setTypeParser(20, (v) => Number(v));
 types.setTypeParser(1700, (v) => Number(v));
@@ -88,160 +65,8 @@ function skipReason(): string | false {
 }
 
 // ===========================================================================
-// 1. THE WEEKLY FOLD — pure, and the only part of stage 6 the user SEES
+// The ledger, entityHistory(), and the four routes
 // ===========================================================================
-
-describe("stage 6 — the weekly fold the dialogs draw (§5.3, §5.0(7), §2.8)", () => {
-  /** A Sunday..Saturday week, plus the first day of the next one. */
-  const W1 = ["2026-08-16", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-22"];
-  const W2 = "2026-08-23";
-
-  it("weeks start on Sunday and are civil-date arithmetic, not a Date in the process timezone", () => {
-    // 2026-08-16 IS a Sunday, so it is its own week start; every day of that
-    // week folds onto it, and the next Sunday opens a new bucket.
-    for (const d of W1) assert.equal(weekStartOf(d), "2026-08-16", d);
-    assert.equal(weekStartOf(W2), "2026-08-23");
-    // A full ISO instant reduces to its civil day first.
-    assert.equal(weekStartOf("2026-08-19T21:00:00.000Z"), "2026-08-16");
-    // Across a month and a year boundary, and across both Israeli DST switches
-    // — the arithmetic never adds 24-hour steps, so none of them can shift it.
-    assert.equal(weekStartOf("2026-03-01"), "2026-03-01");
-    assert.equal(weekStartOf("2026-03-28"), "2026-03-22"); // DST started 03-27
-    assert.equal(weekStartOf("2026-10-26"), "2026-10-25"); // DST ended 10-25
-    assert.equal(weekStartOf("2027-01-01"), "2026-12-27");
-  });
-
-  it("mean, sum and last are three different answers, and each column gets its own", () => {
-    // A standing population of 2 that never moved, one closure a day, and a
-    // cumulative total that walks 10 -> 17.
-    const daily = W1.map((date, i) => ({
-      date,
-      itemsInQueue: 2,
-      itemsInTest: i, // 0..6, mean 3
-      itemsWaitingForResearch: 0,
-      itemsInResearch: 0,
-      _new_unmapped: 1,
-      finishedItems: 10 + i + 1, // 11..17, cumulative
-      _new_finishedToday: 1,
-    }));
-
-    const [w] = aggregateEntityHistoryWeekly(daily, "finishedItems");
-    assert.equal(w.date, "2026-08-16");
-    // MEAN — a point-in-time count. Two items that stood still all week are
-    // two items, never fourteen.
-    assert.equal(w.itemsInQueue, 2);
-    assert.equal(w.itemsInTest, 3);
-    assert.equal(w._new_unmapped, 1);
-    // LAST — a cumulative series is summarised by where it ENDED. Its mean
-    // (14) is the middle of the week wearing the label of the end of it, and
-    // its sum (98) is meaningless.
-    assert.equal(w.finishedItems, 17);
-    assert.notEqual(w.finishedItems, meanOf(daily, "finishedItems"));
-    assert.notEqual(w.finishedItems, sumOf(daily, "finishedItems"));
-    // SUM — the additive twin of the cumulative line.
-    assert.equal(w._new_finishedToday, 7);
-    // And the two agree: the week's closures are the rise of the total.
-    assert.equal(Number(w.finishedItems) - 10, w._new_finishedToday);
-  });
-
-  it("the item-type / shipment dialogs fold the SAME series under their own wire name", () => {
-    const daily = W1.map((date) => ({ date, itemsFinished: 4, _new_finishedToday: 0 }));
-    const [w] = aggregateEntityHistoryWeekly(daily, "itemsFinished");
-    assert.equal(w.itemsFinished, 4);
-    assert.equal("finishedItems" in w, false);
-  });
-
-  it("two weeks stay two rows, in ascending order, whatever order they arrive in", () => {
-    const daily = [...W1, W2].reverse().map((date) => ({ date, itemsInQueue: 1, finishedItems: 1 }));
-    const weeks = aggregateEntityHistoryWeekly(daily, "finishedItems");
-    assert.deepEqual(weeks.map((w) => w.date), ["2026-08-16", "2026-08-23"]);
-  });
-
-  // -------------------------------------------------------------------------
-  // The station fold: the null-preserving weighted average (§2.8, §5.0(7))
-  // -------------------------------------------------------------------------
-
-  it("durations are weighted by their sample count — a 30-closure day outweighs a 1-closure day", () => {
-    const daily = [
-      { date: "2026-08-16", _new_waitSamples: 1, _new_waitWallMin: 100, _new_waitWorkMin: 50, _new_handleSamples: 0, _new_handleWallMin: null, _new_handleWorkMin: null, totalProcessed: 1 },
-      { date: "2026-08-17", _new_waitSamples: 3, _new_waitWallMin: 20, _new_waitWorkMin: 10, _new_handleSamples: 0, _new_handleWallMin: null, _new_handleWorkMin: null, totalProcessed: 2 },
-    ];
-    const [w] = aggregateStationHistoryWeekly(daily);
-    // (100*1 + 20*3) / 4 = 40, NOT the unweighted 60.
-    assert.equal(w._new_waitWallMin, 40);
-    assert.equal(w._new_waitWorkMin, 20);
-    assert.notEqual(w._new_waitWallMin, (100 + 20) / 2);
-    // The samples themselves are summed, so the weight of the week is visible.
-    assert.equal(w._new_waitSamples, 4);
-    // ...and the flow count is summed, never averaged: a week is how many
-    // closures happened in it.
-    assert.equal(w.totalProcessed, 3);
-    // §2.8 survives the fold: the work clock never overtakes the wall clock.
-    assert.ok(Number(w._new_waitWorkMin) <= Number(w._new_waitWallMin));
-  });
-
-  it("A WEEK CONTAINING A GAP STAYS NULL — the days with no measurement are not zeros", () => {
-    // Three days closed nothing at all. If they were read as 0 the week's wait
-    // would be 25 minutes and the chart would draw a line that says the lab got
-    // four times faster. They are not measurements, so they carry no weight.
-    const daily = [
-      { date: "2026-08-16", _new_waitSamples: 2, _new_waitWallMin: 100, _new_waitWorkMin: 60 },
-      { date: "2026-08-17", _new_waitSamples: 0, _new_waitWallMin: null, _new_waitWorkMin: null },
-      { date: "2026-08-18", _new_waitSamples: 0, _new_waitWallMin: null, _new_waitWorkMin: null },
-      { date: "2026-08-19", _new_waitSamples: 0, _new_waitWallMin: null, _new_waitWorkMin: null },
-    ];
-    const [w] = aggregateStationHistoryWeekly(daily);
-    assert.equal(w._new_waitWallMin, 100);
-    assert.equal(w._new_waitWorkMin, 60);
-    assert.notEqual(w._new_waitWallMin, 25);
-
-    // ...and a week in which NOTHING closed is null on all four columns. Not 0:
-    // "no wait was measured" and "the wait was zero minutes" are different
-    // facts, and only the first one may be drawn as a gap.
-    const [empty] = aggregateStationHistoryWeekly(
-      daily.slice(1).map((d) => ({ ...d, _new_handleSamples: 0, _new_handleWallMin: null, _new_handleWorkMin: null })),
-    );
-    assert.equal(empty._new_waitWallMin, null);
-    assert.equal(empty._new_waitWorkMin, null);
-    assert.equal(empty._new_handleWallMin, null);
-    assert.equal(empty._new_handleWorkMin, null);
-    // The counts in the same row are still real zeros — the null is about the
-    // DURATIONS only.
-    assert.equal(empty.totalProcessed, 0);
-    assert.equal(empty._new_waitSamples, 0);
-  });
-
-  it("weightedMeanOf ignores a value whose sample count is 0 or missing, and never divides by zero", () => {
-    // A value with no weight is a value with no denominator; counting it would
-    // be inventing a sample.
-    assert.equal(
-      weightedMeanOf([{ date: "d", v: 99, n: 0 }, { date: "d", v: 10, n: 2 }], "v", "n"),
-      10,
-    );
-    assert.equal(weightedMeanOf([{ date: "d", v: 99 }], "v", "n"), null);
-    assert.equal(weightedMeanOf([], "v", "n"), null);
-    // A genuine zero-minute average IS a measurement and survives.
-    assert.equal(weightedMeanOf([{ date: "d", v: 0, n: 3 }], "v", "n"), 0);
-  });
-
-  it("an empty input folds to an empty series, and a single day folds to its own week", () => {
-    assert.deepEqual(aggregateEntityHistoryWeekly([], "finishedItems"), []);
-    assert.deepEqual(aggregateStationHistoryWeekly([]), []);
-    const [one] = aggregateEntityHistoryWeekly([{ date: "2026-08-19", itemsInQueue: 5, finishedItems: 7 }], "finishedItems");
-    assert.equal(one.date, "2026-08-16");
-    assert.equal(one.itemsInQueue, 5);
-    assert.equal(one.finishedItems, 7);
-    assert.equal(lastOf([], "finishedItems"), 0);
-    assert.equal(meanOf([], "itemsInQueue"), 0);
-  });
-});
-
-// ===========================================================================
-// 2..4 — the ledger, entityHistory(), and the four routes
-// ===========================================================================
-
-/** The lock every suite that truncates the ledger takes. */
-const LEDGER_TRUNCATE_LOCK = 526050825;
 
 const CUSTOMER = 8801;
 const CUSTOMER_EMPTY = 8802;
@@ -289,7 +114,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>
   >;
 
-  const T = () => todayBusinessDay();
+  const T = () => businessDay();
   const D = (n: number) => addDays(T(), -n);
 
   /** The window every assertion below uses unless it is about the cap. */
@@ -402,26 +227,14 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   // -------------------------------------------------------------------------
 
   before(async () => {
-    // MUST precede the dynamic imports: src/app/lib/prisma.ts builds its Pool
+    // MUST precede the dynamic imports: src/lib/db.ts builds its Pool
     // from process.env.DATABASE_URL at module-evaluation time.
     process.env.DATABASE_URL = TEST_DATABASE_URL;
 
-    const req = createRequire(path.resolve(process.cwd(), "package.json"));
-    const authPath = req.resolve("./auth.ts");
-    const CjsModule = req("node:module") as typeof import("node:module");
-    const stub = new CjsModule(authPath);
-    stub.filename = authPath;
-    stub.loaded = true;
-    stub.exports = {
-      auth: async () => ({
-        user: { name: "entity-history suite", email: "entityhistory@example.local" },
-        roles: ["manager"],
-      }),
-      handlers: {},
-      signIn: () => {},
-      signOut: () => {},
-    };
-    req.cache[authPath] = stub;
+    stubSession(() => ({
+      user: { name: "entity-history suite", email: "entityhistory@example.local" },
+      roles: ["manager"],
+    }));
 
     pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 6 });
     await assertLedgerSchemaPresent();
@@ -452,7 +265,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
       "item-types": itemTypes.GET as never,
       stations: stations.GET as never,
     };
-    prisma = (await import("../../prisma")).prisma as never;
+    prisma = (await import("@/lib/db")).prisma as never;
   });
 
   after(async () => {
@@ -655,10 +468,13 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   // helpers
   // -------------------------------------------------------------------------
 
-  const at = (points: EntityHistoryPoint[], day: string): EntityHistoryPoint => {
+  /** A row read by any key — a state the vocabulary does not know arrives as `_new_<key>`. */
+  type Point = EntityHistoryRow & Record<string, unknown>;
+
+  const at = (points: EntityHistoryRow[], day: string): Point => {
     const p = points.find((x) => x.date === day);
     assert.ok(p, `no point for ${day} — the series has a HOLE, which §5.0(7) forbids`);
-    return p!;
+    return p as Point;
   };
 
   /** The active slices of one point, by wire name. */
@@ -671,7 +487,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     `_new_${NEW_STATE}`,
   ] as const;
 
-  const slices = (p: EntityHistoryPoint) =>
+  const slices = (p: Point) =>
     Object.fromEntries(ACTIVE_FIELDS.map((f) => [f, p[f]]));
 
   const zeroSlices = Object.fromEntries(ACTIVE_FIELDS.map((f) => [f, 0]));
@@ -721,7 +537,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   });
 
   it("Q2א maps EVERY metric_state key to its own output field, and drops none of them", async () => {
-    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" }, "finishedItems");
+    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" });
 
     // Every non-terminal state the vocabulary knows has a field on every point.
     // Derived from the DATABASE, not from a list retyped here: a state added to
@@ -739,7 +555,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     for (const { state_key } of states) {
       const field = WIRE_NAME[state_key] ?? `_new_${state_key}`;
       for (const p of points) {
-        assert.equal(typeof p[field], "number", `${p.date}.${field} (state ${state_key}) is not a number`);
+        assert.equal(typeof (p as Point)[field], "number", `${p.date}.${field} (state ${state_key}) is not a number`);
       }
     }
     assert.equal(states.length, 7); // the six shipped (incl. waiting_for_package_items) + the one this suite added
@@ -761,7 +577,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   });
 
   it("§3.1 — an item parked in `unmapped` is a VISIBLE series, not a dropped row", async () => {
-    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" }, "finishedItems");
+    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" });
     // Present on every single day, so the line exists before it is interesting
     // and the day it stops being zero is visible.
     assert.equal(points.every((p) => typeof p._new_unmapped === "number"), true);
@@ -774,7 +590,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   });
 
   it("an unknown state_key surfaces as _new_<key> instead of being added into a neighbour", async () => {
-    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" }, "finishedItems");
+    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" });
     const field = `_new_${NEW_STATE}`;
     assert.equal(at(points, D(8))[field], 0);
     assert.equal(at(points, D(7))[field], 1);
@@ -788,21 +604,21 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   });
 
   it("_new_activeTotal is the sum of the ACTIVE states of its OWN row, on every row", async () => {
-    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" }, "finishedItems");
+    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" });
     for (const p of points) {
-      const expected = ACTIVE_FIELDS.reduce((acc, f) => acc + Number(p[f]), 0);
+      const expected = ACTIVE_FIELDS.reduce((acc, f) => acc + Number((p as Point)[f]), 0);
       assert.equal(p._new_activeTotal, expected, `${p.date}: activeTotal`);
     }
     // Not a rolling total and not the whole window: D3 onwards holds six items,
     // D9 holds none, and the cumulative finished line is NOT part of it.
     assert.equal(at(points, D(3))._new_activeTotal, 6);
     assert.equal(at(points, D(9))._new_activeTotal, 0);
-    assert.equal(at(points, T()).finishedItems, 2);
+    assert.equal(at(points, T()).finished, 2);
     assert.equal(at(points, T())._new_activeTotal, 6);
   });
 
   it("§5.3ב — the cumulative line equals a DIRECT count over route_run closures, day by day", async () => {
-    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" }, "finishedItems");
+    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" });
 
     // The oracle is a count(*) over the anchor §5.3ב names, computed in SQL and
     // independently of the query under test: closures that are trusted, closed,
@@ -820,18 +636,18 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     assert.equal(oracle.length, points.length);
     for (const row of oracle) {
       assert.equal(
-        at(points, row.business_day).finishedItems,
+        at(points, row.business_day).finished,
         row.n,
         `${row.business_day}: cumulative closures`,
       );
     }
     // And the shape of that oracle, so a run in which it accidentally returns
     // all zeros cannot pass: the curve really does step twice.
-    assert.equal(at(points, D(11)).finishedItems, 0);
-    assert.equal(at(points, D(10)).finishedItems, 1);
-    assert.equal(at(points, D(9)).finishedItems, 1);
-    assert.equal(at(points, D(8)).finishedItems, 2);
-    assert.equal(at(points, T()).finishedItems, 2);
+    assert.equal(at(points, D(11)).finished, 0);
+    assert.equal(at(points, D(10)).finished, 1);
+    assert.equal(at(points, D(9)).finished, 1);
+    assert.equal(at(points, D(8)).finished, 2);
+    assert.equal(at(points, T()).finished, 2);
 
     // The additive twin is per-day and lands on the day the closure happened.
     assert.equal(at(points, D(10))._new_finishedToday, 1);
@@ -841,7 +657,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   });
 
   it("NO GAP FILL — the empty day is a measured zero, not the day before repeated", async () => {
-    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" }, "finishedItems");
+    const { points } = await entityHistory(prisma, period(), { customerId: CUSTOMER, scope: "all" });
     // D10 had an item in test; D9 has nothing at noon; D8 has an item in test
     // again. A carry-forward would put 1 in the middle, and dropping the empty
     // day would leave a hole the chart would draw a straight line across.
@@ -850,26 +666,26 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     assert.equal(at(points, D(8)).itemsInTest, 1);
     // The cumulative line is NOT a gap-fill: it legitimately holds its value
     // across the empty day, because a running total of closures is what it is.
-    assert.equal(at(points, D(9)).finishedItems, 1);
+    assert.equal(at(points, D(9)).finished, 1);
     assert.equal(at(points, D(9))._new_finishedToday, 0);
   });
 
   it("an entity with NO data returns a full-length zero series — not [], not an error", async () => {
     const p = period();
-    const days = daysBetween(p.from, p.to);
+    const days = dayCountInclusive(p.from, p.to);
     for (const filters of [
       { customerId: CUSTOMER_EMPTY, scope: "all" as const },
       { shipmentId: SHIPMENT_EMPTY, scope: "all" as const },
       { itemTypeId: IT_EMPTY, scope: "all" as const },
     ]) {
-      const { points } = await entityHistory(prisma, p, filters, "itemsFinished");
+      const { points } = await entityHistory(prisma, p, filters);
       assert.equal(points.length, days, `${JSON.stringify(filters)}: length`);
       assert.equal(points[0].date, p.from);
       assert.equal(points[points.length - 1].date, p.to);
       for (const point of points) {
         assert.deepEqual(slices(point), zeroSlices, `${point.date}: an empty entity has zeros`);
         assert.equal(point._new_activeTotal, 0);
-        assert.equal(point.itemsFinished, 0);
+        assert.equal(point.finished, 0);
         assert.equal(point._new_finishedToday, 0);
       }
     }
@@ -878,9 +694,9 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
   it("the grid is every civil day of the window, in order, with isToday on today alone", async () => {
     const p = period();
     const { points, ignoredFilters } = await entityHistory(
-      prisma, p, { customerId: CUSTOMER, scope: "all" }, "finishedItems",
+      prisma, p, { customerId: CUSTOMER, scope: "all" },
     );
-    assert.equal(points.length, daysBetween(p.from, p.to));
+    assert.equal(points.length, dayCountInclusive(p.from, p.to));
     for (let i = 0; i < points.length; i++) {
       assert.equal(points[i].date, addDays(p.from, i), `point ${i}`);
     }
@@ -894,7 +710,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
 
   it("§5.0(1) — a filter Q2ב cannot express is NAMED, and the point-in-time half still honours it", async () => {
     const { points, ignoredFilters } = await entityHistory(
-      prisma, period(), { customerId: CUSTOMER, stationId: ST_A, scope: "all" }, "finishedItems",
+      prisma, period(), { customerId: CUSTOMER, stationId: ST_A, scope: "all" },
     );
     // route_run has no station dimension: the cumulative line cannot be
     // narrowed to a station, and that is reported instead of being pretended.
@@ -938,7 +754,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
 
   it("every [id]/history route answers 200 with a full daily series on the default window", async () => {
     const capFloor = addDays(addMonths(T(), -UI_MONTH_CAP), 1);
-    const days = daysBetween(capFloor, T());
+    const days = dayCountInclusive(capFloor, T());
     for (const c of ROUTE_CASES) {
       const { status, body, headers } = await call(c.name, c.live);
       assert.equal(status, 200, `${c.name}: ${JSON.stringify(body).slice(0, 200)}`);
@@ -1002,7 +818,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
         addDays(addMonths(T(), -36), 1),
         `${c.name}: the request survives beside the answer`,
       );
-      assert.equal(far.body.length, daysBetween(capFloor, T()));
+      assert.equal(far.body.length, dayCountInclusive(capFloor, T()));
       assert.equal(far.body[0].date, capFloor);
 
       // An explicit window that reaches into the future is clamped and says so.
@@ -1016,7 +832,7 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
       const plain = await call(c.name, c.live, `startDate=${from()}&endDate=${to()}`);
       assert.equal(plain.headers.get("x-metrics-period-capped"), null);
       assert.equal(plain.headers.get("x-metrics-period-clamped-end"), null);
-      assert.equal(plain.body.length, daysBetween(from(), to()));
+      assert.equal(plain.body.length, dayCountInclusive(from(), to()));
     }
   });
 
@@ -1176,32 +992,25 @@ describe("stage 6 — entity history against a deterministic ledger", { skip: sk
     assert.equal(badDates.body.error, "Invalid date format");
   });
 
-  it("the weekly fold over a REAL response keeps the gap and takes the cumulative at its end", async () => {
-    // The last link in the chain: what the dialog actually draws once the
-    // series is longer than 30 points. Nothing else in this file runs the fold
-    // over data the database produced.
-    const { body: entity } = await call("customers", CUSTOMER, `startDate=${from()}&endDate=${to()}`);
-    const weeks = aggregateEntityHistoryWeekly(entity, "finishedItems");
-    assert.ok(weeks.length >= 2, "a 12-day window spans at least two civil weeks");
-    // The cumulative line is monotone across the folded weeks and ends where
-    // the daily series ended.
-    const finals = weeks.map((w) => Number(w.finishedItems));
+  it("the weekly fold the dialogs draw, over a REAL 13-month response, keeps the cumulative and every closure", async () => {
+    // The dialogs fold above 30 points; the default preset serves ~395 days.
+    const { body: entity } = await call("customers", CUSTOMER, "period=alldays");
+    const weeks = foldWeekly(entityHistoryPoints(entity as unknown as EntityHistoryWire[]), false);
+    assert.ok(weeks.length < entity.length, "the 13-month series is folded");
+    // The cumulative line is monotone across the weeks and ends where the daily series ended.
+    const finals = weeks.map((w) => Number(w.line));
     assert.deepEqual(finals, [...finals].sort((a, b) => a - b));
     assert.equal(finals[finals.length - 1], 2);
-    assert.equal(weeks.reduce((a, w) => a + Number(w._new_finishedToday), 0), 2);
 
-    const { body: station } = await call("stations", ST_A, `startDate=${from()}&endDate=${to()}`);
-    const stationWeeks = aggregateStationHistoryWeekly(station);
-    // Every closure survives the fold as a count: four active-work intervals
-    // closed at ST_A in this window (8301, 8302, 8305, 8306). 8304's test is
-    // still running and has therefore processed nothing yet.
-    assert.equal(stationWeeks.reduce((a, w) => a + Number(w.totalProcessed), 0), 4);
-    // ...and a week in which the station closed nothing keeps its null.
+    const { body: station } = await call("stations", ST_A, "period=alldays");
+    const stationWeeks = foldWeekly(stationHistoryPoints(station as unknown as StationHistoryWire[]), true);
+    // Every closure survives as a count: four active-work intervals closed at
+    // ST_A in the window (8301, 8302, 8305, 8306); 8304's test is still running.
+    assert.equal(stationWeeks.reduce((a, w) => a + Number(w.line), 0), 4);
+    // A week in which the station closed nothing keeps its null on both clocks.
+    assert.ok(stationWeeks.some((w) => w.wait.wall === null && w.wait.work === null));
     for (const w of stationWeeks) {
-      const measured = Number(w._new_waitSamples) > 0;
-      assert.equal(w._new_waitWallMin === null, !measured, `${w.date}: wait wall`);
-      assert.equal(w._new_waitWorkMin === null, !measured, `${w.date}: wait work`);
-      if (measured) assert.ok(Number(w._new_waitWorkMin) <= Number(w._new_waitWallMin) + 1e-6);
+      if (w.wait.wall !== null && w.wait.work !== null) assert.ok(w.wait.work <= w.wait.wall + 1e-6, w.date);
     }
   });
 });

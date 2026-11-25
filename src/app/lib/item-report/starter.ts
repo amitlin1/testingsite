@@ -14,7 +14,7 @@
  *                            adds the closing signature to it
  */
 import type { Data } from "@measured/puck";
-import { DEFAULT_ROOT_PROPS } from "./puck-config";
+import { DEFAULT_ROOT_PROPS } from "./document";
 import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 
 type Block = { type: string; props: Record<string, unknown> };

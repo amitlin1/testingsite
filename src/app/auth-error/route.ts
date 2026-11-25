@@ -11,30 +11,19 @@
 // infinite loop — a second failure shows a friendly manual-recovery page.
 
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeBasePath } from "@/lib/base-path";
+import { SERVER_BASE_PATH as BASE, loginUrl as loginPath } from "@/lib/base-path";
+import { AUTHJS_CHECK_COOKIES } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
-const BASE = normalizeBasePath(process.env.NEXT_BASE_PATH);
-
-// The transient OAuth "check" cookies Auth.js sets at login-start.
-const CHECK_COOKIES = [
-  "authjs.pkce.code_verifier",
-  "authjs.state",
-  "authjs.nonce",
-  "__Secure-authjs.pkce.code_verifier",
-  "__Secure-authjs.state",
-  "__Secure-authjs.nonce",
-];
-
 function clearCheckCookies(res: NextResponse) {
-  for (const c of CHECK_COOKIES) res.cookies.set(c, "", { maxAge: 0, path: "/" });
+  for (const c of AUTHJS_CHECK_COOKIES) res.cookies.set(c, "", { maxAge: 0, path: "/" });
 }
 
 export function GET(req: NextRequest) {
   const error = req.nextUrl.searchParams.get("error");
   const retried = req.cookies.get("auth-retry")?.value === "1";
-  const loginUrl = new URL(`${BASE}/login?callbackUrl=${encodeURIComponent(`${BASE}/`)}`, req.url);
+  const loginUrl = new URL(loginPath(`${BASE}/`), req.url);
 
   // First "Configuration" failure → clear the stale check cookies + retry login.
   if (error === "Configuration" && !retried) {

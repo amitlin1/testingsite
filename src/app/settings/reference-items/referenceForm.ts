@@ -1,18 +1,17 @@
 import { uploadReferenceImages } from "@/lib/api/direct-upload";
-import type { ReferenceStation, ReferenceStations } from "@/lib/reference-stations";
-
-export type { ReferenceStation, ReferenceStations };
+import type { ReferenceStation, ReferenceStations } from "@/app/lib/reference-items/stations";
+import { parseReferenceWeight } from "@/app/lib/reference-items/wire";
+import type { ReferenceItemJson } from "@/app/lib/reference-items/wire";
+import type { ItemTypeLite } from "@/app/lib/lookups/contract";
+import type { TemplateLineView } from "@/app/lib/packages/template-wire";
 
 /**
  * The reference-item form of the package reference dialog (the box and each
  * content line fill the same form).
  */
 
-export interface ItemType {
-  item_type_id: number;
-  item_type_desc: string;
-  is_package: boolean;
-}
+/** An item type as GET /api/settings/item-types lists it (the members the form reads). */
+export type ItemType = ItemTypeLite;
 
 /** The stations one item type's images go to (GET /api/settings/reference-items/stations): those of
  *  its routes that show reference images, in route order, and every station's name. */
@@ -36,39 +35,9 @@ export function memberStations(all: ReferenceStations | null, packageTypeId: num
   return { route: [...box.route, ...own.route.filter((s) => !box.route.some((b) => b.id === s.id))], nameOf: own.nameOf };
 }
 
-export interface RefImage {
-  id: number;
-  file_name: string;
-  sort_order: number;
-  /** The station type the image is for; null = not assigned to a station (an older upload). */
-  station_type_id: number | null;
-  url: string;
-  is_primary: boolean;
-}
-
-export interface ReferenceItem {
-  reference_item_id: number;
-  reference_weight: string | null;
-  item_type_id: number;
-  item_type_desc: string | null;
-  manufacturer_sku: string;
-  manufacturer: string;
-  name: string | null;
-  notes: string | null;
-  primary_image_id: number | null;
-  images: RefImage[];
-  cover_url: string | null;
-  image_count: number;
-  /** A package reference's members, one per content line (empty otherwise). */
-  members: ReferenceItem[];
-}
-
-/** A line of a package type's contents (/api/settings/item-types/[id]/contents). */
-export interface TemplateLine {
-  item_type_id: number;
-  item_type_desc: string;
-  quantity: number;
-}
+/** A line of a package type's contents (/api/settings/item-types/[id]/contents): the members the
+ *  form reads. */
+export type TemplateLine = Pick<TemplateLineView, "item_type_id" | "item_type_desc" | "quantity">;
 
 // A form image is either one already stored on the server, or a freshly
 // selected File that hasn't been uploaded yet. `key` is stable within the form.
@@ -99,7 +68,7 @@ export type ItemDraft = {
 let keySeq = 0;
 const nextKey = () => `img_${Date.now()}_${keySeq++}`;
 
-export function draftOf(item: ReferenceItem | null): ItemDraft {
+export function draftOf(item: ReferenceItemJson | null): ItemDraft {
   const images: FormImage[] = (item?.images ?? []).map((img) => ({
     key: `e_${img.id}`,
     kind: "existing",
@@ -122,15 +91,12 @@ export function draftOf(item: ReferenceItem | null): ItemDraft {
   };
 }
 
-/** Grams: a plain positive number — the stations compare it with Number(). */
-export const isGrams = (s: string) => /^\d+(\.\d+)?$/.test(s.trim()) && Number(s) > 0;
-
 /** Every missing or wrong field of a draft, each on its own field. */
 export function checkDraft(d: ItemDraft): FieldErrors {
   const e: FieldErrors = {};
   if (!d.sku.trim()) e.sku = "יש להזין מק״ט יצרן";
   if (!d.weight.trim()) e.weight = "יש להזין משקל";
-  else if (!isGrams(d.weight)) e.weight = "המשקל הוא מספר בגרמים, למשל 500";
+  else if (!parseReferenceWeight(d.weight).ok) e.weight = "המשקל הוא מספר בגרמים, למשל 500";
   if (!d.manu.trim()) e.manu = "יש להזין יצרן";
   if (!d.name.trim()) e.name = "יש להזין שם";
   return e;

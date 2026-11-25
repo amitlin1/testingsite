@@ -2350,7 +2350,7 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, public AS $$
   UNION ALL SELECT 'ledger_bytes', pg_total_relation_size('item_state_interval')::bigint, NULL;
 $$;
 -- 5. Schema version ----------------------------------------------------------
--- The app's refuse-to-serve gate (src/app/lib/metrics/schema-gate.ts) compares
+-- The app's refuse-to-serve gate (src/app/lib/metrics/ledger/schema-gate.ts) compares
 -- its required minimum against this. Bumping it here is what makes an old image
 -- pointed at a post-drop database fail loudly at the first write instead of
 -- calling a function that no longer exists.
@@ -2925,7 +2925,7 @@ BEGIN
 END $$;
 
 -- §6 גרסת סכמה ----------------------------------------------------------------
--- The app's write gate (src/app/lib/metrics/schema-gate.ts) requires 3 from
+-- The app's write gate (src/app/lib/metrics/ledger/schema-gate.ts) requires 3 from
 -- this image on: an older image would write parent_item_id / is_accessory
 -- into columns that no longer exist.
 UPDATE metrics_schema_version SET version = 3, applied_at = now() WHERE id = 1;
@@ -3038,7 +3038,7 @@ CREATE TABLE IF NOT EXISTS "field_sets" (
 ALTER TABLE "item_routes" ADD COLUMN IF NOT EXISTS "fields_version" INTEGER;
 
 -- §5 גרסת סכמה ----------------------------------------------------------------
--- The app's write gate (src/app/lib/metrics/schema-gate.ts) requires 4 from
+-- The app's write gate (src/app/lib/metrics/ledger/schema-gate.ts) requires 4 from
 -- this image on: result submits, intake, retype and package reset read or
 -- write item_routes.fields_version, so an older database would fail every one
 -- of them with a missing column. GREATEST: a re-run never lowers a later version.

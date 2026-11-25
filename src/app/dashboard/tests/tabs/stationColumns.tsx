@@ -9,10 +9,10 @@
 //                   station_type_id, so the number repeats on every row of a
 //                   type. It is NEVER summed — the table renders no total for
 //                   it and the card carries the sentence that says why.
-//   במחקר           `_new_itemsInResearch`. Research is no longer folded into
+//   במחקר           `itemsInResearch`, its own column, not folded into
 //                   queue/test; the research POOL is station-less and is read
 //                   once, for the row tooltip and the dark strip.
-//   גיל התור כרגע   the age of the items waiting RIGHT NOW — a state metric,
+//   הוותיק בתור     the age of the items waiting RIGHT NOW — a state metric,
 //                   not the average of completed waits and not the age of the
 //                   running tests. The cell shows the OLDEST of them, because a
 //                   mean is diluted by whoever just joined the queue and hides
@@ -22,27 +22,44 @@
 
 import * as React from "react";
 
-import type { Column } from "@/app/components/dashboard/DenseTable";
-import { LoadBar } from "@/app/components/dashboard/LoadBar";
-import TrendCell from "@/app/components/dashboard/TrendCell";
-import TwinDuration from "@/app/components/dashboard/TwinDuration";
-import type { StationWire } from "@/app/lib/dashboard/api-types";
+import type { Column } from "../_components/DenseTable";
+import { FillBar, LoadBar } from "../_components/LoadBar";
+import TrendCell from "../_components/TrendCell";
+import TwinDuration from "../_components/TwinDuration";
+import type { StationView } from "@/app/lib/dashboard/contract";
+import type { HistoryTarget } from "../_components/HistoryOverlay";
 import {
   EM_DASH,
   formatCount,
   formatHours,
   formatQueueAge,
-  isNil,
   queueAgeTone,
-} from "@/app/lib/dashboard/format";
+  workTwin,
+} from "../_lib/format";
 
 export const SHARED_QUEUE_NOTE =
   "התור שייך לסוג העמדה ולא לעמדה — הוא חוזר בכל שורות אותו סוג ואין לסכם את העמודה. בריכת המחקר נספרת בנפרד.";
 
+/** A station row opens the station's history dialog. */
+export function stationHistoryTarget(row: StationView): HistoryTarget {
+  return {
+    kind: "station",
+    id: row.stationId,
+    title: row.stationName,
+    meta: row.stationTypeName ? `סוג ${row.stationTypeName}` : undefined,
+    live: { oldestQueueAgeMinutes: row.oldestQueueAgeWallMinutes },
+  };
+}
+
+/** The station board's empty state, with its way out. */
+export function stationsEmpty(clearFilters: () => void) {
+  return { text: "אין עמדות שמתאימות למסננים האלה.", action: { label: "נקה את המסננים", onClick: clearFilters } };
+}
+
 export interface StationColumnOptions {
-  rows: StationWire[];
+  rows: StationView[];
   /** The same window, one period earlier — the only source of a trend here. */
-  previous?: StationWire[] | null;
+  previous?: StationView[] | null;
   previousPending?: boolean;
   /** The overview shows the compact set; the stations tab shows all of it. */
   full: boolean;
@@ -53,19 +70,19 @@ export function stationColumns({
   previous,
   previousPending = false,
   full,
-}: StationColumnOptions): Array<Column<StationWire>> {
+}: StationColumnOptions): Array<Column<StationView>> {
   // One ceiling for the whole table so the bars are comparable row to row.
   const ceiling = Math.max(
     1,
-    ...rows.map((r) => r.itemsInQueue + r.itemsInTest + r._new_itemsInResearch),
+    ...rows.map((r) => r.itemsInQueue + r.itemsInTest + r.itemsInResearch),
   );
   // Utilisation cannot be computed (see the header note below), so the bar is
   // scaled against the busiest station's work hours and the CELL prints the
   // real figure rather than a share of an unknown whole.
-  const maxWorkHours = Math.max(0.0001, ...rows.map((r) => r._new_busyWorkHours ?? 0));
+  const maxWorkHours = Math.max(0.0001, ...rows.map((r) => r.busyWorkHours ?? 0));
   const prevById = new Map((previous ?? []).map((r) => [r.stationId, r]));
 
-  const columns: Array<Column<StationWire>> = [
+  const columns: Array<Column<StationView>> = [
     {
       key: "name",
       header: "עמדה",
@@ -101,7 +118,7 @@ export function stationColumns({
       render: (r) => (
         <span
           style={{ color: "var(--color-ink-muted-48)" }}
-          title={`בריכת המחקר: ${formatCount(r._new_researchPoolQueue)} · התור משותף לכל עמדות הסוג`}
+          title={`בריכת המחקר: ${formatCount(r.researchPoolQueue)} · התור משותף לכל עמדות הסוג`}
         >
           {formatCount(r.itemsInQueue)}
         </span>
@@ -122,8 +139,8 @@ export function stationColumns({
       header: "במחקר",
       numeric: true,
       secondary: true,
-      sortValue: (r) => r._new_itemsInResearch,
-      render: (r) => formatCount(r._new_itemsInResearch),
+      sortValue: (r) => r.itemsInResearch,
+      render: (r) => formatCount(r.itemsInResearch),
     });
   }
 
@@ -132,21 +149,17 @@ export function stationColumns({
       key: "queueAge",
       header: "הוותיק בתור",
       numeric: true,
-      sortValue: (r) => r._new_oldestQueueAgeWallMinutes,
+      sortValue: (r) => r.oldestQueueAgeWallMinutes,
       // The work twin is printed under the wall figure (§16.1); p95 and the
       // mean stay one focus away.
       render: (r) => (
         <TwinDuration
-          value={formatQueueAge(r._new_oldestQueueAgeWallMinutes)}
-          tone={queueAgeTone(r._new_oldestQueueAgeWallMinutes)}
+          value={formatQueueAge(r.oldestQueueAgeWallMinutes)}
+          tone={queueAgeTone(r.oldestQueueAgeWallMinutes)}
           bold
-          twin={
-            isNil(r._new_oldestQueueAgeWallMinutes)
-              ? null
-              : `נטו ${formatQueueAge(r._new_oldestQueueAgeWorkMinutes)}`
-          }
+          twin={workTwin(r.oldestQueueAgeWallMinutes, r.oldestQueueAgeWorkMinutes, formatQueueAge)}
           more={[
-            `p95 ${formatQueueAge(r._new_p95QueueAgeWallMinutes)}`,
+            `p95 ${formatQueueAge(r.p95QueueAgeWallMinutes)}`,
             `ממוצע ${formatQueueAge(r.averageCurrentQueueTimeMinutes)}`,
           ].join(" · ")}
         />
@@ -169,31 +182,19 @@ export function stationColumns({
       // does report is the numerator, so the numerator is what the column says.
       header: "שעות עבודה",
       width: "14%",
-      sortValue: (r) => r._new_busyWorkHours,
+      sortValue: (r) => r.busyWorkHours,
       // The bar is scaled to the busiest station in the same window, so the
       // column still reads as a ranking at a glance; the figure beside it is
       // the absolute number, not a share of anything.
       render: (r) => (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div
-            style={{
-              flex: 1,
-              height: 5,
-              background: "var(--color-canvas-parchment)",
-              borderRadius: 3,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "row",
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.min(100, ((r._new_busyWorkHours ?? 0) / maxWorkHours) * 100)}%`,
-                background: "var(--dash-ramp-1)",
-              }}
-            />
-          </div>
-          <WorkHoursCell hours={r._new_busyWorkHours} />
+          <FillBar
+            pct={Math.min(100, ((r.busyWorkHours ?? 0) / maxWorkHours) * 100)}
+            color="var(--dash-ramp-1)"
+            height={5}
+            style={{ flex: 1 }}
+          />
+          <WorkHoursCell hours={r.busyWorkHours} />
         </div>
       ),
     });
@@ -216,7 +217,7 @@ export function stationColumns({
 }
 
 /** The work-hours cell prints the real figure beside its relative bar. */
-export function WorkHoursCell({ hours }: { hours: number | null }) {
+function WorkHoursCell({ hours }: { hours: number | null }) {
   return (
     <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", fontVariantNumeric: "tabular-nums" }}>
       {formatHours(hours)}

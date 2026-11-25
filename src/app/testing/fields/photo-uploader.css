@@ -1,0 +1,17 @@
+/* PhotoUploader.tsx: the upload button at touch height, and the filmstrip tiles (buttons: Tab +
+   Enter pick the frame shown large). */
+.sh-btn.tst-photo-btn { min-height: 56px; }
+.tst-film {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  flex: 1 1 150px;
+  min-width: 130px;
+  max-width: 280px;
+  aspect-ratio: 4 / 3;
+  border-radius: 13px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--color-canvas-parchment);
+}
+.tst-film:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }

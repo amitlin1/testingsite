@@ -1,24 +1,28 @@
 "use client";
+import { ACTION_FAILED_TEXT, failureText } from "@/app/components/failureText";
 import React from "react";
 import NextLink from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, FlaskConical, History, Lock, Pencil, Plus, Printer, QrCode, X } from "lucide-react";
-import type { PackageView } from "@/app/lib/packages/read";
-import PackageIdText, { MiniItems, StatusPill } from "@/app/components/packages/PackageIdText";
-import { AMBER, BLUE, GREEN, ITEM_STATES, PKG_STATUS, RED, fmtDate, seq2 } from "@/app/components/packages/packageUi";
-import { HttpError, sendJson, useInvalidatePackages, type ItemTypeLite } from "./queries";
+import { isAtOpening, type PackageView } from "@/app/lib/packages/contract";
+import { itemHistoryHref, packageHref, testingQueueHref } from "@/app/lib/links";
+import IdText from "@/app/components/IdText";
+import { DotPill, MiniItems } from "@/components/ui/ArtboardControls";
+import { ITEM_STATES, PKG_STATUS, fmtDate } from "@/app/components/packages/packageUi";
+import { AMBER, BLUE, GREEN, RED } from "@/components/ui/colors";
+import { seq2 } from "@/app/lib/packages/ids";
+import { ApiError } from "@/lib/api/client";
+import { deleteItem, saveItem } from "@/app/lib/items/edit";
+import { addBoxItem, canAddBoxItem, memberTypesOf, patchBox, useInvalidatePackages } from "../data";
+import type { ItemTypeLite } from "@/app/lib/lookups/contract";
 
 type Item = PackageView["items"][number];
 
 const OFF = "var(--color-hairline)";
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
-/** The board's grouping of a box status: the stage tabs. */
 export type Stage = "test" | "pending" | "done";
 export const stageOf = (p: PackageView): Stage => (p.status === "pending" ? "pending" : p.status === "done" ? "done" : "test");
-
-/** The box is still at its opening station: items may be added. */
-const isOpening = (p: PackageView) => (p.current_route_step ?? 1) <= 1 && !p.is_finished && (p.status === "queue" || p.status === "test");
 
 /** A box / item the testing screen has in a queue right now. */
 const pkgAtStation = (p: PackageView) => p.status === "queue" || p.status === "test" || p.status === "readyClose";
@@ -91,14 +95,11 @@ function Segments({ colors, labels }: { colors: string[]; labels?: string }) {
 
 function TestingLink({ id, label }: { id: string; label: string }) {
   return (
-    <NextLink href={`/testing?item=${id}`} className="pkg-iconbtn" title={label} aria-label={label}>
+    <NextLink href={testingQueueHref({ item: id })} className="pkg-iconbtn" title={label} aria-label={label}>
       <FlaskConical {...ICON} />
     </NextLink>
   );
 }
-
-// ---------------------------------------------------------------------------
-// One item, shown or edited in place.
 
 function ItemEditLine({ pkg, it, itemTypes, onDone, inPkgEdit }: {
   pkg: PackageView;
@@ -116,13 +117,13 @@ function ItemEditLine({ pkg, it, itemTypes, onDone, inPkgEdit }: {
     manufacturer: it.manufacturer_name ?? "",
   });
   const [needReset, setNeedReset] = React.useState(false);
-  const types = itemTypes.filter((t) => !t.is_package);
+  const types = memberTypesOf(itemTypes);
   const dirty = f.itemType !== String(it.item_type_id) || f.serial !== (it.serial_no ?? "") || f.makat !== (it.makat ?? "") ||
     f.model !== (it.model ?? "") || f.manufacturer !== (it.manufacturer_name ?? "");
 
   const save = useMutation({
     mutationFn: (confirmPackageReset: boolean) =>
-      sendJson(`/api/items/${it.item_id}`, "PUT", {
+      saveItem(it.item_id, {
         customer: pkg.customer_id,
         itemType: Number(f.itemType),
         serialNumber: f.serial.trim(),
@@ -133,16 +134,16 @@ function ItemEditLine({ pkg, it, itemTypes, onDone, inPkgEdit }: {
         confirmPackageReset,
       }),
     onSuccess: () => { setNeedReset(false); invalidate(); onDone(); },
-    onError: (e) => { if (e instanceof HttpError && e.body.code === "PACKAGE_RESET_REQUIRED") setNeedReset(true); },
+    onError: (e) => { if (e instanceof ApiError && e.body.code === "PACKAGE_RESET_REQUIRED") setNeedReset(true); },
   });
 
   const [confirmRemove, setConfirmRemove] = React.useState(false);
   const remove = useMutation({
-    mutationFn: () => sendJson(`/api/items/${it.item_id}`, "DELETE"),
+    mutationFn: () => deleteItem(it.item_id),
     onSuccess: () => invalidate(),
   });
 
-  const err = save.error?.message ?? remove.error?.message;
+  const err = save.error ? failureText(save.error, "עדכון הפריט נכשל") : remove.error ? failureText(remove.error, "מחיקת הפריט נכשלה") : undefined;
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && dirty && !save.isPending) save.mutate(false);
     if (e.key === "Escape" && !inPkgEdit) onDone();
@@ -165,7 +166,7 @@ function ItemEditLine({ pkg, it, itemTypes, onDone, inPkgEdit }: {
           <input className="pb-in" aria-label="יצרן" value={f.manufacturer} placeholder="יצרן" onChange={(e) => setF({ ...f, manufacturer: e.target.value })} />
           <div className="pb-cell-sub"><span className="pb-step-n">{step.n}</span> · {step.where}</div>
         </div>
-        <div><StatusPill label={st.label} dot={st.color} /></div>
+        <div><DotPill label={st.label} dot={st.color} /></div>
         <div className="pb-actions" style={{ gap: 6 }}>
           {inPkgEdit && !dirty ? (
             confirmRemove ? (
@@ -210,7 +211,7 @@ function ItemLine({ pkg, it, hit, canEdit, onEdit, onBarcode }: {
         <span className="pb-seq" style={{ background: chipBg(it.state) }}>{seq2(it.package_seq)}</span>
         <div style={{ minWidth: 0 }}>
           <div className="pb-cell-main">{it.item_type_desc}</div>
-          <div className="pb-cell-sub"><PackageIdText id={it.item_id} size={12} /></div>
+          <div className="pb-cell-sub"><IdText id={it.item_id} size={12} /></div>
         </div>
         <span className="pb-ltr" style={{ fontSize: 14, fontWeight: 600 }}>{it.serial_no ?? "—"}</span>
         <span className="pb-ltr" style={{ fontSize: 14 }}>{it.makat || "—"}</span>
@@ -219,26 +220,23 @@ function ItemLine({ pkg, it, hit, canEdit, onEdit, onBarcode }: {
           <Segments colors={itemSegments(it)} labels={`${step.n} · ${step.where}`} />
           <div className="pb-step"><span className="pb-step-n">{step.n}</span> · {step.where}</div>
         </div>
-        <div><StatusPill label={st.label} dot={st.color} /></div>
+        <div><DotPill label={st.label} dot={st.color} /></div>
         <div className="pb-actions">
           {canEdit && <button type="button" className="pkg-iconbtn" title="עריכת פריט" aria-label={`עריכת פריט ${seq2(it.package_seq)}`} onClick={onEdit}><Pencil {...ICON} /></button>}
           {!pkg.shipment_is_sent && itemAtStation(it) && <TestingLink id={it.item_id} label="למסך הבדיקות, מסונן לפריט" />}
           <button type="button" className="pkg-iconbtn" title="ברקוד הפריט" aria-label={`ברקוד פריט ${seq2(it.package_seq)}`} onClick={onBarcode}><QrCode {...ICON} /></button>
-          <NextLink href={`/items/${it.item_id}/history`} className="pkg-iconbtn" title="היסטוריית הפריט" aria-label={`היסטוריית פריט ${seq2(it.package_seq)}`}><History {...ICON} /></NextLink>
+          <NextLink href={itemHistoryHref(it.item_id)} className="pkg-iconbtn" title="היסטוריית הפריט" aria-label={`היסטוריית פריט ${seq2(it.package_seq)}`}><History {...ICON} /></NextLink>
         </div>
       </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// The box row.
-
 function PackageEditBand({ pkg, onClose, onDelete }: { pkg: PackageView; onClose: () => void; onDelete: () => void }) {
   const invalidate = useInvalidatePackages();
   const [f, setF] = React.useState({ makat: pkg.makat ?? "", model: pkg.model ?? "", manufacturer: pkg.manufacturer_name ?? "" });
   const save = useMutation({
-    mutationFn: () => sendJson(`/api/packages/${pkg.item_id}`, "PATCH", f),
+    mutationFn: () => patchBox(pkg.item_id, f),
     onSuccess: () => { invalidate(); onClose(); },
   });
   return (
@@ -249,7 +247,7 @@ function PackageEditBand({ pkg, onClose, onDelete }: { pkg: PackageView; onClose
         <label className="pb-lbl" style={{ width: 160 }}>יצרן<input className="pb-in" value={f.manufacturer} placeholder="אופציונלי" onChange={(e) => setF({ ...f, manufacturer: e.target.value })} /></label>
         <span className="pb-lock"><Lock size={14} strokeWidth={1.75} aria-hidden />סוג, לקוח ומשלוח נקבעו בקליטה</span>
       </div>
-      {save.error && <div className="pb-err" role="alert">{save.error.message}</div>}
+      {save.error && <div className="pb-err" role="alert">{failureText(save.error, ACTION_FAILED_TEXT)}</div>}
       <div className="pb-foot">
         <button type="button" className="pkg-pill pkg-pill--ghost pkg-pill--sm pkg-pill--danger-text" onClick={onDelete}>מחיקת מארז</button>
         <span style={{ flex: 1 }} />
@@ -265,19 +263,19 @@ function AddItemLine({ pkg, itemTypes }: { pkg: PackageView; itemTypes: ItemType
   const blank = { itemType: "", serial: "", makat: pkg.makat ?? "", model: pkg.model ?? "", manufacturer: pkg.manufacturer_name ?? "" };
   const [f, setF] = React.useState(blank);
   const add = useMutation({
-    mutationFn: () => sendJson(`/api/packages/${pkg.item_id}/items`, "POST", {
+    mutationFn: () => addBoxItem(pkg.item_id, {
       itemType: Number(f.itemType), serialNumber: f.serial.trim(), makat: f.makat, model: f.model, manufacturer: f.manufacturer,
     }),
     onSuccess: () => { setF(blank); invalidate(); },
   });
-  const ok = !!f.itemType && !!f.serial.trim();
+  const ok = canAddBoxItem(f.itemType, f.serial);
   return (
     <div className="pb-irow" style={{ background: "var(--color-surface-pearl)" }}>
       <div className="pb-igrid" onKeyDown={(e) => { if (e.key === "Enter" && ok && !add.isPending) add.mutate(); }}>
         <span className="pb-seq" aria-hidden style={{ background: "transparent", border: "1px dashed var(--color-field-border)", color: "var(--color-ink-muted-48)" }}><Plus size={14} strokeWidth={2} /></span>
         <select className="pb-in" aria-label="סוג הפריט להוספה" value={f.itemType} onChange={(e) => setF({ ...f, itemType: e.target.value })}>
           <option value="">סוג פריט…</option>
-          {itemTypes.filter((t) => !t.is_package).map((t) => <option key={t.item_type_id} value={String(t.item_type_id)}>{t.item_type_desc.trim()}</option>)}
+          {memberTypesOf(itemTypes).map((t) => <option key={t.item_type_id} value={String(t.item_type_id)}>{t.item_type_desc.trim()}</option>)}
         </select>
         <input className="pb-in pb-ltr" dir="ltr" aria-label="מספר סריאלי לפריט החדש" placeholder="מספר סריאלי" value={f.serial} onChange={(e) => setF({ ...f, serial: e.target.value })} />
         <input className="pb-in pb-ltr" dir="ltr" aria-label="מק״ט לפריט החדש" placeholder="מק״ט" value={f.makat} onChange={(e) => setF({ ...f, makat: e.target.value })} />
@@ -288,12 +286,12 @@ function AddItemLine({ pkg, itemTypes }: { pkg: PackageView; itemTypes: ItemType
           <button type="button" className="pkg-pill pkg-pill--ghost pkg-pill--sm" disabled={!ok || add.isPending} onClick={() => add.mutate()}>{add.isPending ? "מוסיף…" : "הוסף פריט"}</button>
         </div>
       </div>
-      {add.error && <div className="pb-err" role="alert" style={{ marginTop: 6 }}>{add.error.message}</div>}
+      {add.error && <div className="pb-err" role="alert" style={{ marginTop: 6 }}>{failureText(add.error, ACTION_FAILED_TEXT)}</div>}
     </div>
   );
 }
 
-export type PackageRowProps = {
+type PackageRowProps = {
   pkg: PackageView;
   expanded: boolean;
   onToggle: () => void;
@@ -335,7 +333,7 @@ export default function PackageRow({ pkg, expanded, onToggle, hit, hitItems, ite
           <ChevronDown size={18} strokeWidth={1.75} aria-hidden className={`pb-chev${open ? "" : " pb-chev--closed"}`} />
         </button>
         <div style={{ minWidth: 0 }}>
-          <PackageIdText id={pkg.item_id} size={13.5} headColor="var(--color-ink)" weight={600} />
+          <IdText id={pkg.item_id} size={13.5} headColor="var(--color-ink)" weight={600} />
           <div className="pb-cell-sub">{pkg.status === "pending" ? "טרם נקלט" : `נקלט ${fmtDate(pkg.created_at)}`}</div>
         </div>
         <div style={{ minWidth: 0 }}>
@@ -352,7 +350,7 @@ export default function PackageRow({ pkg, expanded, onToggle, hit, hitItems, ite
           <div className="pb-cell-sub" style={{ color: note.warn ? "var(--color-warning-ink)" : undefined }}>{note.text}</div>
         </div>
         <div>
-          <StatusPill label={readOnly ? "יצא במשלוח" : st.label} dot={readOnly ? "var(--color-ink-muted-48)" : st.dot} />
+          <DotPill label={readOnly ? "יצא במשלוח" : st.label} dot={readOnly ? "var(--color-ink-muted-48)" : st.dot} />
         </div>
         <div className="pb-actions">
           {pkg.status === "pending" && !readOnly && onIntake && (
@@ -365,7 +363,7 @@ export default function PackageRow({ pkg, expanded, onToggle, hit, hitItems, ite
           )}
           {!readOnly && pkgAtStation(pkg) && <TestingLink id={pkg.item_id} label="למסך הבדיקות, מסונן למארז" />}
           <button type="button" className="pkg-iconbtn" title="מדבקות" aria-label="הדפסת מדבקות" onClick={onLabels}><Printer {...ICON} /></button>
-          <NextLink href={`/packages/${pkg.item_id}`} className="pkg-iconbtn" title="היסטוריית המארז" aria-label="היסטוריית המארז"><History {...ICON} /></NextLink>
+          <NextLink href={packageHref(pkg.item_id)} className="pkg-iconbtn" title="היסטוריית המארז" aria-label="היסטוריית המארז"><History {...ICON} /></NextLink>
         </div>
       </div>
 
@@ -386,7 +384,7 @@ export default function PackageRow({ pkg, expanded, onToggle, hit, hitItems, ite
                   onEdit={() => setEdit({ kind: "item", id: it.item_id })} onBarcode={() => onBarcode(it)} />
               ),
             )}
-            {pkgEdit && isOpening(pkg) && <AddItemLine pkg={pkg} itemTypes={itemTypes} />}
+            {pkgEdit && isAtOpening(pkg) && <AddItemLine pkg={pkg} itemTypes={itemTypes} />}
           </div>
         </div>
       )}

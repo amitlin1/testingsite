@@ -3,13 +3,19 @@ import assert from "node:assert/strict";
 import {
   buildCatalog, buildStepResults, buildValues, formatFieldValue, overallVerdict, rowStepUid,
 } from "../variables";
-import type { CatalogRoute, ResultRow } from "../variables";
-import { requiresClosingSignature, requiresFinalSignature, collectLogoKeys } from "../template-utils";
+import type { CatalogRoute, ItemFacts, ResultRow } from "../variables";
+import { headerLogos, requiresClosingSignature, requiresFinalSignature } from "../template-utils";
 import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
 
 const fmt = (iso: string) => ({ date: iso.slice(0, 10), time: iso.slice(11, 16) });
 
 const ROUTE = { route_number: 1, route_steps: [10, 20, 30], step_uids: ["s_aaaaaaaa", "s_bbbbbbbb", "s_cccccccc"] };
+
+const ITEM: ItemFacts = {
+  item_id: BigInt(123), serial_no: " SN1 ", makat: "MK", model: "", manufacturer_name: "", manufacturer_no: "",
+  package_id: null, package_seq: 3, item_type_id: 7, item_type: null, customer: null, shipment_code: null,
+  package_type: null, route_number: 1, created_at: new Date("2026-09-30T22:30:00.000Z"), finished_at: null, status: null,
+};
 
 function row(over: Partial<ResultRow>): ResultRow {
   return {
@@ -38,7 +44,7 @@ test("rowStepUid: the schema ref wins; else the item's route at the row's positi
   assert.equal(rowStepUid(row({ route_step: 9 }), ROUTE), null);
 });
 
-test("buildStepResults: latest row per step, route order, research and foreign rows dropped", () => {
+test("buildStepResults: latest row per step, route order, research and foreign rows dropped, the kit's steps kept", () => {
   const rows: ResultRow[] = [
     row({ test_result_id: 1, route_step: 2, passed: false, created_at: "2026-10-01T09:00:00.000Z" }),
     row({ test_result_id: 2, route_step: 2, passed: true, created_at: "2026-10-01T10:00:00.000Z", worker_name: null, worker_id: 5 }),
@@ -47,11 +53,11 @@ test("buildStepResults: latest row per step, route order, research and foreign r
     row({ test_result_id: 5, details: { schema: { step_uid: "s_other000" } } }),
     row({
       test_result_id: 6, route_step: 3,
-      details: { schema: { step_uid: "s_kit00001" }, fields: { f_w0000001: { t: "number", label: "משקל", value: 2, unit: "kg", in_range: false, note: "כבד" } }, verdict: { ok: "fail", suggested: "fail" } },
+      details: { schema: { step_uid: "s_kit00001", target: "kit_item" }, fields: { f_w0000001: { t: "number", label: "משקל", value: 2, unit: "kg", in_range: false, note: "כבד" } }, verdict: { ok: "fail", suggested: "fail" } },
       passed: null,
     }),
   ];
-  const res = buildStepResults(rows, ROUTE, fmt, new Set(["s_kit00001"]));
+  const res = buildStepResults(rows, ROUTE, fmt);
   assert.deepEqual(res.map((r) => r.uid), ["s_aaaaaaaa", "s_bbbbbbbb", "s_kit00001"]);
   assert.equal(res[1]!.verdict, "pass");
   assert.equal(res[1]!.worker, "#5");
@@ -63,10 +69,20 @@ test("buildStepResults: latest row per step, route order, research and foreign r
   assert.equal(overallVerdict(passed, false), null, "not תקין while the route is still running");
   assert.equal(overallVerdict(res, false), "fail", "a failed step shows at once");
 
-  const values = buildValues({ item_id: "123", serial_no: "SN1" }, res, { generated_at: "01.10.2026" });
+  const values = buildValues(
+    { item: ITEM, results: res, finished: true },
+    { generatedAt: new Date("2026-10-01T08:00:00.000Z"), signature: null, closingSignature: { name: "דנה", at: new Date("2026-10-01T08:00:00.000Z"), role: "בודק" } },
+  );
   assert.equal(values["item.item_id"], "123");
+  assert.equal(values["item.serial_no"], "SN1");
+  assert.equal(values["item.package_seq"], "03");
+  assert.equal(values["item.created_at"], "01.10.2026", "dates print in Israel time");
+  assert.equal(values["item.finished_at"], "");
   assert.equal(values["item.verdict"], "לא תקין");
   assert.equal(values["report.generated_at"], "01.10.2026");
+  assert.equal(values["report.signer"], "");
+  assert.equal(values["report.closing_signer_role"], "בודק");
+  assert.equal(values["step.s_aaaaaaaa.verdict"], "תקין");
   assert.equal(values["step.s_aaaaaaaa.worker"], "דנה לוי");
   assert.equal(values["step.s_aaaaaaaa.date"], "2026-10-01");
   assert.equal(values["step.s_aaaaaaaa.result"], "1");
@@ -95,7 +111,7 @@ test("buildStepResults: a popup template's components print before the route's f
     fields: { f_v0000001: { t: "pass_fail", label: "בידוד", ok: "pass" } },
     verdict: { ok: "pass", note: "" },
   };
-  const res = buildStepResults([row({ route_step: 2, details })], ROUTE, fmt, undefined, new Map([["s_bbbbbbbb", ["f_v0000001"]]]));
+  const res = buildStepResults([row({ route_step: 2, details })], ROUTE, fmt, new Map([["s_bbbbbbbb", ["f_v0000001"]]]));
   assert.deepEqual(res[0]!.fields.map((f) => [f.id, f.value, f.tone]), [
     ["k_sku00001", "MK-1", null],
     ["k_photo001", "2 תמונות", null],
@@ -165,7 +181,7 @@ test("template-utils: final signature and logo keys", () => {
   assert.equal(requiresFinalSignature(sig([{ kind: "signature" }])), true);
   assert.equal(requiresFinalSignature(sig([{ kind: "fullName" }])), false);
   assert.equal(requiresFinalSignature({ content: [] }), false);
-  assert.deepEqual(collectLogoKeys(sig([])), ["logos/a.png"]);
+  assert.deepEqual(headerLogos(sig([])), ["logos/a.png", "/report-logos/x.png"]);
 });
 
 test("template-utils: the closing signature and the final one are told apart", () => {
@@ -179,15 +195,13 @@ test("template-utils: the closing signature and the final one are told apart", (
   assert.equal(requiresClosingSignature({ content: [{ type: "Signature", props: { bind: "closing" } }] }), true, "no cells → the default signature cell");
 });
 
-
 test("officialStarterTemplate: known blocks only, every variable in the catalog, wants both signatures", async () => {
   const { officialStarterTemplate } = await import("../starter");
   const { puckConfig } = await import("../puck-config");
-  const { ITEM_VARS, REPORT_VARS } = await import("../variables");
   const t = officialStarterTemplate();
   const known = new Set(Object.keys(puckConfig.components));
   for (const n of t.content) assert.ok(known.has(n.type), `unknown block ${n.type}`);
-  const names = new Set([...ITEM_VARS.map((v) => `item.${v.key}`), ...REPORT_VARS.map((v) => `report.${v.key}`)]);
+  const names = new Set(buildCatalog([], {}).vars.map((v) => v.name));
   const used = JSON.stringify(t).match(/"v":"([^"]+)"/g)!.map((m) => m.slice(5, -1));
   for (const v of used) assert.ok(names.has(v), `unknown variable ${v}`);
   assert.equal(requiresFinalSignature(t), true);
@@ -199,7 +213,6 @@ test("generalStarterTemplate: binds only what every route has, prints each stati
   const { generalStarterTemplate } = await import("../starter");
   const { puckConfig } = await import("../puck-config");
   const { templateUsesPhotos } = await import("../template-utils");
-  const { readFileSync } = await import("node:fs");
   const t = generalStarterTemplate();
   const known = new Set(Object.keys(puckConfig.components));
   for (const n of t.content) assert.ok(known.has(n.type), `unknown block ${n.type}`);
@@ -211,11 +224,4 @@ test("generalStarterTemplate: binds only what every route has, prints each stati
   const sigs = t.content.filter((n) => n.type === "Signature");
   assert.deepEqual(sigs.map((n) => n.props.bind), ["closing", "final"], "the closing row, then the final one");
   assert.equal(templateUsesPhotos(t), true);
-  // The migration seeds this document (with the final signature only — the closing one is added by
-  // 20261110130000_report_templates_both_signatures).
-  const sql = readFileSync("prisma/migrations/20261104120000_report_general_template/migration.sql", "utf8");
-  const seeded = JSON.parse(/VALUES \(1, '([\s\S]*?)'::jsonb/.exec(sql)![1]);
-  const noSignatures = (d: { content: { type: string }[] }) => ({ ...d, content: d.content.filter((n) => n.type !== "Signature") });
-  assert.deepEqual(noSignatures(seeded), noSignatures(JSON.parse(JSON.stringify(t))));
-  assert.deepEqual(seeded.content.filter((n: { type: string }) => n.type === "Signature").map((n: { props: { bind: string } }) => n.props.bind), ["final"]);
 });

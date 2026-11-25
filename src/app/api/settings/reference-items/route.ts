@@ -1,26 +1,26 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
-import { readJson } from '@/lib/directUpload/server';
-import { serializeReferenceItem, referenceItemWithMembersInclude } from '@/lib/reference-items';
-import { ReferenceSaveError, saveReferenceItem } from '@/lib/reference-items-save';
+import { prisma } from "@/lib/db";
+import { errorResponse } from "@/lib/http/errors";
+import { parseDbId, readJsonObject } from '@/lib/http/request';
+import { serializeReferenceItem, referenceItemWithMembersInclude } from '@/app/lib/reference-items/server';
+import { saveReferenceItem } from '@/app/lib/reference-items/save';
 
 export const runtime = 'nodejs';
 
 // GET /api/settings/reference-items?itemTypeId=123
-// Returns the reference items (optionally filtered by item type), each with its
-// images + resolved cover URL, and a package reference's members with theirs.
-// Members are never listed on their own. Returns [] on error so the page never
-// crashes.
+// The reference items (optionally of one item type), each with its images and
+// cover URL, and a package reference's members with theirs. Members are never
+// listed on their own. A failed read answers [] — a reported bug (the page's
+// error band never shows); kept until the owner decides.
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const itemTypeIdRaw = searchParams.get('itemTypeId');
-    const itemTypeId = itemTypeIdRaw ? Number(itemTypeIdRaw) : undefined;
+    const itemTypeId = parseDbId(searchParams.get('itemTypeId'));
 
     const rows = await prisma.reference_items.findMany({
       where: {
         parent_reference_id: null,
-        ...(itemTypeId && Number.isFinite(itemTypeId) ? { item_type_id: itemTypeId } : {}),
+        ...(itemTypeId != null ? { item_type_id: itemTypeId } : {}),
       },
       include: referenceItemWithMembersInclude,
       orderBy: { reference_item_id: 'desc' },
@@ -34,13 +34,10 @@ export async function GET(request: Request) {
 }
 
 // POST /api/settings/reference-items  (JSON) — the body is described in
-// lib/reference-items-save.ts.
+// app/lib/reference-items/save.ts.
 export async function POST(request: Request) {
   try {
-    const body = await readJson<Record<string, unknown>>(request);
-    if (!body) {
-      return NextResponse.json({ error: 'גוף הבקשה אינו JSON תקין' }, { status: 400 });
-    }
+    const body = await readJsonObject(request, 'גוף הבקשה אינו JSON תקין');
 
     const id = await saveReferenceItem(null, body);
     const full = await prisma.reference_items.findUnique({
@@ -50,11 +47,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serializeReferenceItem(full!), { status: 201 });
   } catch (error) {
-    if (error instanceof ReferenceSaveError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    console.error('Error creating reference item:', error);
-    const message = error instanceof Error ? error.message : 'שגיאה ביצירת פריט ייחוס';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorResponse(error, 'שגיאה ביצירת פריט ייחוס');
   }
 }

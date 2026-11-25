@@ -1,13 +1,20 @@
 "use client";
+import { DEFAULT_ROUTE_NUMBER } from "@/app/lib/packages/template-wire";
+import { NO_CONNECTION_TEXT, failureText } from "@/app/components/failureText";
 import React from "react";
 import { Info, Trash2, Plus } from "lucide-react";
-import type { PackageView } from "@/app/lib/packages/read";
-import { apiFetch } from "@/lib/api/client";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
-import PackageIdText from "./PackageIdText";
+import { isAtOpening, type PackageView } from "@/app/lib/packages/contract";
+import { useItemTypes } from "@/app/components/lookups";
+import type { ItemTypeLite } from "@/app/lib/lookups/contract";
+import { addBoxItem, canAddBoxItem, memberTypesOf, patchBox } from "./data";
+import { ApiError } from "@/lib/api/client";
+import { deleteItem } from "@/app/lib/items/edit";
+import { SearchableCombobox } from "@/components/ui";
+import IdText from "@/app/components/IdText";
 import LastItemDialog from "./LastItemDialog";
-import { PackageDialog, PackageDialogHeader } from "./PackageDialog";
-import { HAIR, HAIR_2, INK_2, MUTED, RED, seq2 } from "./packageUi";
+import { ArtboardDialog, ArtboardDialogHeader } from "@/components/ui/ArtboardDialog";
+import { HAIR, HAIR_2, INK_2, MUTED, RED } from "@/components/ui/colors";
+import { seq2 } from "@/app/lib/packages/ids";
 
 /**
  * עריכת מארז — design/Package Dialogs.dc.html ("edit"). Type, route,
@@ -15,8 +22,6 @@ import { HAIR, HAIR_2, INK_2, MUTED, RED, seq2 } from "./packageUi";
  * are open. Items can be removed (never the last one) and, while the box is
  * still at its opening step, added.
  */
-type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
-
 /** An added item starts with the box's details (its shipment certificate's);
  *  only its type and serial are required. */
 const blankAdd = (pkg: PackageView | null) => ({
@@ -61,13 +66,14 @@ export default function PackageEditDialog({
   const [error, setError] = React.useState<string | null>(null);
   const [lastItem, setLastItem] = React.useState<PackageView["items"][number] | null>(null);
   const [removing, setRemoving] = React.useState<string | null>(null);
-  const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
   const [addOpen, setAddOpen] = React.useState(false);
   const [add, setAdd] = React.useState(() => blankAdd(pkg));
   const [adding, setAdding] = React.useState(false);
+  // A failed load leaves the add-item type list empty, with no message (P49).
+  const itemTypes = useItemTypes();
 
   // Opening, or the box reloaded from the server, seeds the form from it. Done
-  // during render; the effect below only fetches the item types.
+  // during render.
   const [seeded, setSeeded] = React.useState<{ open: boolean; pkg: PackageView | null }>({ open: false, pkg: null });
   if (seeded.open !== open || seeded.pkg !== pkg) {
     setSeeded({ open, pkg });
@@ -77,29 +83,19 @@ export default function PackageEditDialog({
     }
   }
 
-  React.useEffect(() => {
-    if (!open || !pkg) return;
-    apiFetch("/api/itemTypes").then((r) => (r.ok ? r.json() : [])).then((d) => setItemTypes(Array.isArray(d) ? d : [])).catch(() => setItemTypes([]));
-  }, [open, pkg]);
-
   if (!open || !pkg) return null;
 
-  const opening = (pkg.current_route_step ?? 1) <= 1 && !pkg.is_finished && (pkg.status === "queue" || pkg.status === "test");
-  const memberTypes = itemTypes.filter((t) => !t.is_package);
+  const opening = isAtOpening(pkg);
+  const memberTypes = memberTypesOf(itemTypes.data ?? []);
 
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      const res = await apiFetch(`/api/packages/${pkg.item_id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ makat, model, manufacturer }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(data?.error || "שמירת המארז נכשלה"); return; }
+      await patchBox(pkg.item_id, { makat, model, manufacturer });
       onChanged();
       onClose();
-    } catch {
-      setError("שגיאה בתקשורת");
+    } catch (e) {
+      setError(failureText(e, "שמירת המארז נכשלה", NO_CONNECTION_TEXT));
     } finally {
       setSaving(false);
     }
@@ -109,34 +105,28 @@ export default function PackageEditDialog({
     if (pkg.items.length === 1) { setLastItem(it); return; }
     setRemoving(it.item_id); setError(null);
     try {
-      const res = await apiFetch(`/api/items/${it.item_id}`, { method: "DELETE" });
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 409 && data?.code === "LAST_PACKAGE_ITEM") { setLastItem(it); return; }
-      if (!res.ok) { setError(data?.error || "הסרת הפריט נכשלה"); return; }
+      await deleteItem(it.item_id);
       onChanged();
-    } catch {
-      setError("שגיאה בתקשורת");
+    } catch (e) {
+      // The server refuses to empty a box: its last item goes only with the box.
+      if (e instanceof ApiError && e.status === 409 && e.body.code === "LAST_PACKAGE_ITEM") setLastItem(it);
+      else setError(failureText(e, "הסרת הפריט נכשלה", NO_CONNECTION_TEXT));
     } finally {
       setRemoving(null);
     }
   };
 
   const addItem = async () => {
-    if (!add.itemType || !add.serialNumber.trim()) {
+    if (!canAddBoxItem(add.itemType, add.serialNumber)) {
       setError("להוספת פריט יש למלא סוג וסריאלי"); return;
     }
     setAdding(true); setError(null);
     try {
-      const res = await apiFetch(`/api/packages/${pkg.item_id}/items`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemType: Number(add.itemType), serialNumber: add.serialNumber, makat: add.makat, model: add.model, manufacturer: add.manufacturer }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(data?.error || "הוספת הפריט נכשלה"); return; }
+      await addBoxItem(pkg.item_id, { itemType: Number(add.itemType), serialNumber: add.serialNumber, makat: add.makat, model: add.model, manufacturer: add.manufacturer });
       setAdd(blankAdd(pkg)); setAddOpen(false);
       onChanged();
-    } catch {
-      setError("שגיאה בתקשורת");
+    } catch (e) {
+      setError(failureText(e, "הוספת הפריט נכשלה", NO_CONNECTION_TEXT));
     } finally {
       setAdding(false);
     }
@@ -144,13 +134,13 @@ export default function PackageEditDialog({
 
   return (
     <>
-      <PackageDialog open onClose={onClose} busy={saving} width="min(680px, 94vw)">
-        <PackageDialogHeader title="עריכת מארז" onClose={onClose} subtitle={<div style={{ marginTop: 5 }}><PackageIdText id={pkg.item_id} size={14} /></div>} />
+      <ArtboardDialog open onClose={onClose} busy={saving} width="min(680px, 94vw)">
+        <ArtboardDialogHeader title="עריכת מארז" onClose={onClose} subtitle={<div style={{ marginTop: 5 }}><IdText id={pkg.item_id} size={14} /></div>} />
 
         <div className="pkg-dlg-body" style={{ paddingBlock: 22 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 }}>
             <Field label="סוג מארז" value={pkg.item_type_desc} locked hint="נקבע בקליטה" weight={600} />
-            <Field label="מסלול המארז" value={`מסלול ${pkg.route_number ?? 1}`} locked hint="נקבע בקליטה" weight={600} />
+            <Field label="מסלול המארז" value={`מסלול ${pkg.route_number ?? DEFAULT_ROUTE_NUMBER}`} locked hint="נקבע בקליטה" weight={600} />
             <Field label="לקוח" value={pkg.customer_name ?? pkg.customer_code ?? ""} locked hint="נקבע במשלוח" weight={600} />
             <Field label="משלוח" value={pkg.shipment_code ?? String(pkg.shipment_id)} locked weight={600} />
             <Field label="מק״ט" value={makat} onChange={setMakat} code />
@@ -195,7 +185,7 @@ export default function PackageEditDialog({
               addOpen ? (
                 <div style={{ marginTop: 12, border: `1px solid ${HAIR}`, borderRadius: 12, padding: 14, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
                   {/* The inputs take the field height (44) so they line up with the type field. */}
-                  <SearchableCombobox<ItemTypeOption>
+                  <SearchableCombobox<ItemTypeLite>
                     dense
                     options={memberTypes}
                     value={memberTypes.find((t) => String(t.item_type_id) === add.itemType) ?? null}
@@ -233,7 +223,7 @@ export default function PackageEditDialog({
             <button type="button" onClick={save} disabled={saving} aria-busy={saving || undefined} className="pkg-pill pkg-pill--primary" style={{ padding: "11px 24px", fontSize: 15 }}>שמור שינויים</button>
           </div>
         </div>
-      </PackageDialog>
+      </ArtboardDialog>
 
       <LastItemDialog open={lastItem != null} item={lastItem} onClose={() => setLastItem(null)} onDeletePackage={() => { setLastItem(null); onDeleteRequest(); }} />
     </>

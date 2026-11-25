@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { adminFieldsErrorResponse, parsePathId } from "@/app/lib/station-fields/admin";
+import { prisma } from "@/lib/db";
+import { errorResponse } from "@/lib/http/errors";
+import { parseDbId } from "@/lib/http/request";
 import { fieldSetUsage } from "@/app/lib/station-fields/library";
 
 export const runtime = "nodejs";
@@ -13,8 +14,8 @@ export const runtime = "nodejs";
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return NextResponse.json(await fieldSetUsage(prisma, parsePathId(id)));
+    return NextResponse.json(await fieldSetUsage(prisma, parseDbId(id)));
   } catch (error) {
-    return adminFieldsErrorResponse(error, "Failed to load the field set's usage");
+    return errorResponse(error, "Failed to load the field set's usage");
   }
 }

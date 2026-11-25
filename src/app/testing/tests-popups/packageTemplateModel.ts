@@ -1,8 +1,8 @@
 import { componentsOf } from "@/app/lib/popup-templates/schema";
 import type { PopupTemplateConfig, TemplateStep, WeightComponent } from "@/app/lib/popup-templates/schema";
 import type { Drafts } from "@/app/lib/station-fields/evaluate";
-import type { RefSource } from "./packageReference";
-import type { RefImg } from "./stationKit";
+import type { RefImg } from "@/app/testing/fields/PhotoUploader";
+import type { RefSource, SavedWeight } from "@/app/lib/test-results/details";
 import { emptyRunState, savedComponents, storedPhotoKeys, weightOutcome, type TemplateRunState } from "./templateModel";
 
 /**
@@ -28,7 +28,7 @@ export function bandOf(step: TemplateStep, fill: (text: string) => string): stri
 }
 
 /** "סריקה, צילום ושקילה" — titles as a Hebrew list. */
-export function hebrewList(titles: readonly string[]): string {
+function hebrewList(titles: readonly string[]): string {
   const t = titles.map((x) => x.trim()).filter(Boolean);
   return t.length <= 1 ? t.join("") : `${t.slice(0, -1).join(", ")} ו${t[t.length - 1]}`;
 }
@@ -58,10 +58,6 @@ export type OpeningItemWork = {
 export const freshItemWork = (scan = ""): OpeningItemWork => ({
   run: emptyRunState(scan), sku: null, refImages: [], refSource: null, expectedSku: null, done: false, fields: {},
 });
-
-/** Today's `weight` key: the flow's first weight component against the item's reference, or null
- *  while either side is missing. */
-export type SavedWeight = { reference: number; measured: number; diffPct: number; pass: boolean } | null;
 
 const flowComponents = (flow: readonly TemplateStep[]) => flow.flatMap((p) => p.components);
 
@@ -99,16 +95,19 @@ export function buildOpeningItemDetails(
   };
 }
 
+/** What the box's opening result records about its contents and labels. */
+export type OpeningBoxFacts = {
+  packageReference: { referenceItemId: number | null; members: number } | null;
+  itemCount: number; registeredCount: number; templateCount: number; labelsPrinted: boolean; packageItemIds: string[];
+};
+
 /** The box's result details at the opening (today's keys, PackageOpenWizard). `box.hasRU` is the
  *  box label's lookup. */
 export function buildOpeningBoxDetails(
   cfg: PopupTemplateConfig,
   ctx: { version: number; station: string },
   box: TemplateRunState,
-  facts: {
-    packageReference: { referenceItemId: number | null; members: number } | null;
-    itemCount: number; registeredCount: number; templateCount: number; labelsPrinted: boolean; packageItemIds: string[];
-  },
+  facts: OpeningBoxFacts,
 ): Record<string, unknown> {
   const comps = componentsOf(cfg);
   return {
@@ -131,7 +130,7 @@ export function closingStepKind(step: TemplateStep): "arrival" | "components" {
 }
 
 /** Today's `checks`: every checklist row over the template's steps, ticked or not. */
-export function closingChecks(cfg: PopupTemplateConfig, box: TemplateRunState): { label: string; ok: boolean }[] {
+function closingChecks(cfg: PopupTemplateConfig, box: TemplateRunState): { label: string; ok: boolean }[] {
   return componentsOf(cfg).flatMap((c) => (c.kind === "checklist"
     ? c.items.map((row) => ({ label: row.label, ok: (box.checks[c.id] ?? []).includes(row.id) }))
     : []));

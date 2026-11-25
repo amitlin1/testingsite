@@ -18,6 +18,7 @@ export default function CustomersPage() {
       title="ניהול לקוחות"
       subtitle="הלקוחות שעבורם נבדקים פריטים במערכת."
       countLabel="לקוחות"
+      lookup="customers"
     />
   );
 }

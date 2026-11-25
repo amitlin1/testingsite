@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PACKAGES_HREF, packagesSearchHref } from "@/app/lib/links";
 
 /**
  * The home page is מארזים ופריטים. An old link with a search (`/?q=…`) keeps
@@ -7,5 +8,5 @@ import { redirect } from "next/navigation";
  */
 export default async function Home({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const q = (await searchParams).q;
-  redirect(typeof q === "string" && q.trim() ? `/packages?q=${encodeURIComponent(q)}` : "/packages");
+  redirect(typeof q === "string" && q.trim() ? packagesSearchHref(q) : PACKAGES_HREF);
 }

@@ -1,11 +1,13 @@
-// Pure validation shared by the API handlers and the dialogs, so client and
-// server enforce identical rules and the same Hebrew messages.
+// Validation of every work-hours write, run by the API handlers. The dialogs do
+// not call it: they share only its two clock predicates (isEndBeforeStart and
+// exceedsHalfDayCap in ./time) and its messages (types.ts). Every other rule —
+// the break inside the working hours among them — is checked on the server only.
 
+import { FRIDAY, SATURDAY, isCivilDate, type Weekday } from "@/lib/time/civil";
 import type {
   DepartmentHolidayInput,
   IsraeliHolidayInfo,
   OverrideKind,
-  Weekday,
   WeekdayDefault,
   WorkdayOverrideInput,
 } from "./types";
@@ -16,21 +18,15 @@ import {
   ERR_HALF_DAY_MAX,
   ERR_HOLIDAY_RANGE,
   ERR_LOCKED_DAY,
+  OVERRIDE_LABELS,
 } from "./types";
-import { HALF_DAY_END, isEndBeforeStart, isValidDate, isValidTime, toMinutes } from "./time";
+import { exceedsHalfDayCap, isEndBeforeStart, isValidTime, toMinutes } from "./time";
 
 export type ValidationResult = { ok: true } | { ok: false; error: string };
 
 const OK: ValidationResult = { ok: true };
-const OVERRIDE_KINDS: OverrideKind[] = [
-  "vacation",
-  "short_hours",
-  "short_day",
-  "friday_work",
-  "eve_work",
-];
+const OVERRIDE_KINDS = Object.keys(OVERRIDE_LABELS) as OverrideKind[];
 
-/** end must be strictly after start, and both well-formed. */
 function validWorkingHours(start: string | null, end: string | null): ValidationResult {
   if (!isValidTime(start) || !isValidTime(end)) {
     return { ok: false, error: "יש להזין שעת התחלה ושעת סיום תקינות" };
@@ -59,9 +55,8 @@ function validBreak(
   return OK;
 }
 
-/** Half-day work (שישי / ערב חג) may not run past 12:00. */
 function withinHalfDayCap(end: string): ValidationResult {
-  return toMinutes(end) <= toMinutes(HALF_DAY_END) ? OK : { ok: false, error: ERR_HALF_DAY_MAX };
+  return exceedsHalfDayCap(end) ? { ok: false, error: ERR_HALF_DAY_MAX } : OK;
 }
 
 /**
@@ -73,11 +68,11 @@ export function validateOverride(
   input: WorkdayOverrideInput,
   ctx: { weekday: Weekday; israeli: IsraeliHolidayInfo | null },
 ): ValidationResult {
-  if (!isValidDate(input.date)) return { ok: false, error: "תאריך לא תקין" };
+  if (!isCivilDate(input.date)) return { ok: false, error: "תאריך לא תקין" };
   if (!OVERRIDE_KINDS.includes(input.kind)) return { ok: false, error: "סוג חריגה לא תקין" };
 
   // A locked national day (full חג) or שבת can never carry a work/leave override.
-  if (ctx.israeli?.category === "full_off" || ctx.weekday === 6) {
+  if (ctx.israeli?.category === "full_off" || ctx.weekday === SATURDAY) {
     return { ok: false, error: ERR_LOCKED_DAY };
   }
 
@@ -93,7 +88,7 @@ export function validateOverride(
     }
 
     case "friday_work": {
-      if (ctx.weekday !== 5) return { ok: false, error: ERR_FRIDAY_ONLY };
+      if (ctx.weekday !== FRIDAY) return { ok: false, error: ERR_FRIDAY_ONLY };
       const h = validWorkingHours(input.start, input.end);
       if (!h.ok) return h;
       const cap = withinHalfDayCap(input.end!);
@@ -112,27 +107,25 @@ export function validateOverride(
   }
 }
 
-/** Validate a weekly-template row edit. */
 export function validateWeekdayDefault(input: WeekdayDefault): ValidationResult {
   if (![0, 1, 2, 3, 4, 5, 6].includes(input.weekday)) {
     return { ok: false, error: "יום בשבוע לא תקין" };
   }
-  if (input.weekday === 6) return { ok: false, error: "לא ניתן להפעיל עבודה בשבת" };
+  if (input.weekday === SATURDAY) return { ok: false, error: "לא ניתן להפעיל עבודה בשבת" };
   if (!input.isWorking) return OK;
   const h = validWorkingHours(input.start, input.end);
   if (!h.ok) return h;
   // שישי, if opened in the template, is still a half day capped at 12:00.
-  if (input.weekday === 5) {
+  if (input.weekday === FRIDAY) {
     const cap = withinHalfDayCap(input.end!);
     if (!cap.ok) return cap;
   }
   return validBreak(input.start!, input.end!, input.breakStart, input.breakEnd);
 }
 
-/** Validate a department internal-holiday create/edit. */
 export function validateHoliday(input: DepartmentHolidayInput): ValidationResult {
   if (!input.name || !input.name.trim()) return { ok: false, error: "יש להזין שם לחופשה" };
-  if (!isValidDate(input.startDate) || !isValidDate(input.endDate)) {
+  if (!isCivilDate(input.startDate) || !isCivilDate(input.endDate)) {
     return { ok: false, error: "תאריכים לא תקינים" };
   }
   if (input.endDate < input.startDate) return { ok: false, error: ERR_HOLIDAY_RANGE };

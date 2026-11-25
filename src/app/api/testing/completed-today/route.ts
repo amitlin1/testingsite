@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import { parseDbId } from "@/lib/http/request";
+import type { CompletedTodayAnswer } from "@/app/lib/testing/contract";
 
 export const runtime = "nodejs";
 
@@ -18,8 +20,8 @@ export async function GET(req: Request) {
     if (!stationId) {
       return NextResponse.json({ error: "stationId is required" }, { status: 400 });
     }
-    const stationIdNum = Number(stationId);
-    if (isNaN(stationIdNum)) {
+    const stationIdNum = parseDbId(stationId);
+    if (stationIdNum == null) {
       return NextResponse.json({ error: "Invalid stationId" }, { status: 400 });
     }
 
@@ -37,7 +39,7 @@ export async function GET(req: Request) {
     `;
 
     const count = rows[0]?.count != null ? Number(rows[0].count) : 0;
-    return NextResponse.json({ count });
+    return NextResponse.json({ count } satisfies CompletedTodayAnswer);
   } catch (error) {
     console.error("Error loading completed-today count:", error);
     return NextResponse.json({ count: 0 });

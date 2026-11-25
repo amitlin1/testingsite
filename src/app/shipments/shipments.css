@@ -1,14 +1,16 @@
 /* =========================================================================
    Shipments — the states inline styles cannot express (hover, pressed,
    focus) and the popup form grid that has to collapse on a narrow screen.
-   Tokens only. Imported once, from ShipmentTable.
+   Tokens only. Imported once, by the shipments page.
    ========================================================================= */
 
 /* ---- status filters ------------------------------------------------------
    The six counts that filter the table are toggles, not tiles: a compact row
    of pills whose pressed state is the selection (aria-pressed). The table
    stays the primary element of the page; the two figures that do not filter
-   sit beside the row as plain text. */
+   sit beside the row as plain text. The bar holds the toggles' group and
+   the figures, and wraps the same way. */
+.shp-kpi-bar,
 .shp-kpis {
   display: flex;
   align-items: center;

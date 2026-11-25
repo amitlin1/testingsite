@@ -1,0 +1,717 @@
+// Scratch-database harness for the integration suites that drive the real route
+// handlers and the package/item writes (first written for the write-path suite,
+// docs/dashboard-migration-plan-v2.md §9.2ג; now shared by the metrics, packages,
+// shipments, items, item-report, station-fields and testing suites).
+//
+// WHY a second connection: the suite drives the REAL route handlers, which go
+// through the app's Prisma singleton. Assertions must observe what those
+// handlers committed WITHOUT joining their transactions, so every read/seed
+// here runs on an independent `pg` Pool. Both point at TEST_DATABASE_URL — a
+// throwaway database. Nothing here may ever run against the dev/prod
+// DATABASE_URL, which is why setup() overwrites process.env.DATABASE_URL from
+// TEST_DATABASE_URL *before* the route modules (and therefore the Prisma
+// client) are first imported.
+import { Pool, types } from "pg";
+import { ItemStatus } from "@/lib/item-status";
+import { eventKeyOf } from "@/app/lib/metrics/ledger/record";
+import type { ResultAnswer, ReleaseTestAnswer, StartTestAnswer } from "@/app/lib/testing/contract";
+import { LEDGER_TRUNCATE_LOCK } from "./ledger-lock";
+
+// pg hands bigint (OID 20) and numeric (1700) back as strings by default.
+// Every ledger id and duration in this suite fits comfortably in a JS number,
+// and string-vs-number mismatches in assert.equal are pure noise.
+types.setTypeParser(20, (v) => Number(v));
+types.setTypeParser(1700, (v) => Number(v));
+
+export const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
+
+/** node:test `skip` option: false when the suite can run, else the reason. */
+export function skipReason(): string | false {
+  return TEST_DATABASE_URL
+    ? false
+    : "TEST_DATABASE_URL is not set — stage-3 write-path integration suite skipped";
+}
+
+// ---------------------------------------------------------------------------
+// Fixture vocabulary. Small, fixed ids so failures read like the spec's tables.
+// ---------------------------------------------------------------------------
+
+export const CUSTOMER_ID = 7;
+export const SHIPMENT_ID = 1;
+
+/** Station types. TYPE_ORPHAN exists but owns no station — call site #11(b).
+ *  TYPE_INTAKE and TYPE_CLOSE are package-level (opening / closing). */
+export const TYPE_INTAKE = 10;
+export const TYPE_FUNC = 20;
+export const TYPE_RESEARCH = 30;
+export const TYPE_CLOSE = 40;
+export const TYPE_ORPHAN = 99;
+
+export const STATION_INTAKE = 101; // TYPE_INTAKE
+export const STATION_FUNC_A = 102; // TYPE_FUNC
+export const STATION_FUNC_B = 103; // TYPE_FUNC — second of its type, for #12
+export const STATION_RESEARCH = 901; // TYPE_RESEARCH, is_research = true
+export const STATION_CLOSE = 104; // TYPE_CLOSE
+
+/** Item types, each with exactly one testing_routes row (route_number 1). */
+export const ITEM_TYPE_ONE_STEP = 1; // route_steps = {10}
+export const ITEM_TYPE_TWO_STEP = 2; // route_steps = {10, 20}
+export const ITEM_TYPE_ORPHAN_STEP = 3; // route_steps = {10, 99}
+/** A PACKAGE type (is_package): route_steps = {10} — opening and closing are
+ *  both TYPE_INTAKE here, so ITEM_TYPE_ONE_STEP items fit inside it. */
+export const ITEM_TYPE_PACKAGE = 4;
+/** A PACKAGE type with a real closing step: route_steps = {10, 40}. */
+export const ITEM_TYPE_PACKAGE_CLOSE = 5;
+/** An item that fits ITEM_TYPE_PACKAGE_CLOSE: route_steps = {10, 20, 40}. */
+export const ITEM_TYPE_IN_BOX = 6;
+/** Same route shape as IN_BOX under another id — a retype that still fits. */
+export const ITEM_TYPE_IN_BOX_ALT = 7;
+
+export const WORKER_ID = 42;
+export const WORKER_NAME = "בודק אינטגרציה";
+
+/** item_routes.current_status by its metric_state.state_key (§3.1). */
+export const STATUS = {
+  testing: ItemStatus.InTest,
+  queued: ItemStatus.Queued,
+  done: ItemStatus.Done,
+  queued_research: ItemStatus.AwaitResearch,
+  in_research: ItemStatus.InResearch,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Connection + handler wiring
+// ---------------------------------------------------------------------------
+
+let pool: Pool | null = null;
+
+/** Holds LEDGER_TRUNCATE_LOCK from setup() to teardown(). */
+let lockClient: import("pg").PoolClient | null = null;
+
+type RouteHandler = (req: Request) => Promise<Response>;
+type ItemRouteHandler = (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
+
+type Handlers = {
+  results: RouteHandler;
+  startTest: RouteHandler;
+  releaseTest: RouteHandler;
+  releaseStale: RouteHandler;
+  updateItem: ItemRouteHandler;
+  deleteItem: ItemRouteHandler;
+  createPackage: typeof import("@/app/lib/packages/create-package").createPackage;
+  addPackageItem: typeof import("@/app/lib/packages/create-package").addPackageItem;
+  /** The app's own Prisma client (src/lib/db.ts), pointed at TEST_DATABASE_URL by setup(). */
+  prisma: typeof import("@/lib/db").prisma;
+};
+
+let handlers: Handlers | null = null;
+
+/** The write-path routes and the package writes, imported for real. */
+export function h(): Handlers {
+  if (!handlers) throw new Error("setup() has not run");
+  return handlers;
+}
+
+export async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
+  if (!pool) throw new Error("setup() has not run");
+  const res = await pool.query(sql, params);
+  return res.rows as T[];
+}
+
+/**
+ * Runs one statement inside an EXPLICIT transaction on a single connection.
+ * Needed for isi_rebuild_run, whose `SET CONSTRAINTS ... DEFERRED` only means
+ * anything inside a transaction block — and for anything that must not be
+ * spread across two pooled connections.
+ */
+export async function inTransaction<T = Record<string, unknown>>(
+  sql: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  if (!pool) throw new Error("setup() has not run");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const res = await client.query(sql, params);
+    await client.query("COMMIT");
+    return res.rows as T[];
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function one<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T> {
+  const rows = await q<T>(sql, params);
+  if (rows.length !== 1) throw new Error(`expected exactly 1 row, got ${rows.length}: ${sql}`);
+  return rows[0];
+}
+
+export async function setup(): Promise<void> {
+  // MUST precede the dynamic imports below: src/lib/db.ts builds its
+  // Pool from process.env.DATABASE_URL at module-evaluation time, and the route
+  // modules import it transitively.
+  process.env.DATABASE_URL = TEST_DATABASE_URL;
+  // The reaper is the one handler behind cronSecretGuard; an unset CRON_SECRET
+  // means "off" (503), so the suite supplies one and sends the header.
+  process.env.CRON_SECRET = process.env.CRON_SECRET || "integration-suite-secret";
+
+  pool = new Pool({ connectionString: TEST_DATABASE_URL });
+
+  lockClient = await pool.connect();
+  await lockClient.query("SELECT pg_advisory_lock($1)", [LEDGER_TRUNCATE_LOCK]);
+
+  await assertLedgerSchemaPresent();
+
+  const results = await import("@/app/api/testing/results/route");
+  const startTestMod = await import("@/app/api/testing/start-test/route");
+  const releaseTestMod = await import("@/app/api/testing/release-test/route");
+  const releaseStaleMod = await import("@/app/api/cron/release-stale-tests/route");
+  const createPackageMod = await import("@/app/lib/packages/create-package");
+  const itemMod = await import("@/app/api/items/[id]/route");
+  const prismaMod = await import("@/lib/db");
+
+  handlers = {
+    results: results.POST as RouteHandler,
+    startTest: startTestMod.POST as RouteHandler,
+    releaseTest: releaseTestMod.POST as RouteHandler,
+    releaseStale: releaseStaleMod.POST as RouteHandler,
+    updateItem: itemMod.PUT as ItemRouteHandler,
+    deleteItem: itemMod.DELETE as ItemRouteHandler,
+    createPackage: createPackageMod.createPackage,
+    addPackageItem: createPackageMod.addPackageItem,
+    prisma: prismaMod.prisma,
+  };
+
+  await seedWorkCalendar();
+}
+
+export async function teardown(): Promise<void> {
+  if (handlers) await handlers.prisma.$disconnect();
+  if (lockClient) {
+    await lockClient.query("SELECT pg_advisory_unlock($1)", [LEDGER_TRUNCATE_LOCK]);
+    lockClient.release();
+    lockClient = null;
+  }
+  if (pool) await pool.end();
+  pool = null;
+  handlers = null;
+}
+
+async function assertLedgerSchemaPresent(): Promise<void> {
+  let row: { version: number | null; has_record: boolean } | undefined;
+  try {
+    [row] = await q<{ version: number | null; has_record: boolean }>(`
+      SELECT (SELECT version FROM metrics_schema_version WHERE id = 1) AS version,
+             to_regprocedure('metrics_record(text,bigint,text,int,int,int,int,text,text,uuid,text,smallint,jsonb)')
+               IS NOT NULL AS has_record
+    `);
+  } catch (err) {
+    throw new Error(
+      "TEST_DATABASE_URL does not carry the metrics ledger schema — apply " +
+        `prisma/migrations/20260825000000_metrics_ledger_additive first (${(err as Error).message})`,
+    );
+  }
+  if (!row?.has_record || row.version == null) {
+    throw new Error("TEST_DATABASE_URL is missing metrics_record() / metrics_schema_version");
+  }
+}
+
+/**
+ * One always-open work span across the whole fixture horizon.
+ *
+ * The write path only cares THAT the fold can resolve a calendar version (it
+ * stamps calendar_version and work_seconds when it closes an interval); the
+ * real Sunday–Thursday 07:00–15:35 arithmetic is §9.2ב's subject and is tested
+ * against the deterministic fixture, not here. With a single open span
+ * work_seconds == wall_seconds, which is exactly the property these tests
+ * assert: a closed non-terminal interval carries BOTH clocks, never NULL.
+ */
+async function seedWorkCalendar(): Promise<void> {
+  const [existing] = await q<{ calendar_version: number }>(
+    "SELECT calendar_version FROM work_calendar_version WHERE is_current",
+  );
+  if (existing) return;
+  const [ver] = await q<{ calendar_version: number }>(`
+    INSERT INTO work_calendar_version (horizon_from, horizon_to, source_digest, is_current)
+    VALUES (DATE '2020-01-01', DATE '2035-01-01', 'integration-suite-always-open', true)
+    RETURNING calendar_version
+  `);
+  await q(
+    `INSERT INTO work_span (calendar_version, work_date, span, span_seconds, cum_seconds_before)
+     VALUES ($1, DATE '2020-01-01',
+             tstzrange(TIMESTAMPTZ '2020-01-01 00:00 Asia/Jerusalem',
+                       TIMESTAMPTZ '2035-01-01 00:00 Asia/Jerusalem', '[)'),
+             EXTRACT(EPOCH FROM (TIMESTAMPTZ '2035-01-01 00:00 Asia/Jerusalem'
+                               - TIMESTAMPTZ '2020-01-01 00:00 Asia/Jerusalem'))::int,
+             0)`,
+    [ver.calendar_version],
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-test reset + fixtures
+// ---------------------------------------------------------------------------
+
+const TRUNCATE_TABLES = [
+  "item_state_interval",
+  "item_state_event",
+  "route_run",
+  "test_results",
+  "item_route_history",
+  "research_history",
+  "item_routes",
+  "items",
+  "package_contents",
+  "testing_routes",
+  "test_stations",
+  "test_stations_type",
+  "item_types",
+  "shipments",
+  "customers",
+  "daily_counters",
+].join(", ");
+
+/** Wipes every operational + ledger table and re-seeds the static fixtures. */
+export async function resetDb(): Promise<void> {
+  // item_state_event is append-only: trg_ise_immutable RAISEs on TRUNCATE as
+  // well as UPDATE/DELETE. Lifting it for the wipe is the ONLY place the suite
+  // touches that trigger — every test then runs against the real append-only
+  // table.
+  await q("ALTER TABLE item_state_event DISABLE TRIGGER trg_ise_immutable");
+  try {
+    await q(`TRUNCATE ${TRUNCATE_TABLES} RESTART IDENTITY CASCADE`);
+  } finally {
+    await q("ALTER TABLE item_state_event ENABLE TRIGGER trg_ise_immutable");
+  }
+
+  await q("INSERT INTO customers (id, name, customer_code) VALUES ($1, 'INTEGRATION', '901')", [
+    CUSTOMER_ID,
+  ]);
+  await q(
+    `INSERT INTO shipments (id, shipment_code, customer_id, shipment_date, makat, amount, is_sent)
+     VALUES ($1, 'SHIP-1', $2, NOW(), 'MK-1', 10, false)`,
+    [SHIPMENT_ID, CUSTOMER_ID],
+  );
+
+  await q(
+    `INSERT INTO item_types (item_type_id, item_type_desc, is_package) VALUES
+       ($1, 'ONE_STEP', false), ($2, 'TWO_STEP', false), ($3, 'ORPHAN_STEP', false),
+       ($4, 'PACKAGE', true), ($5, 'PACKAGE_CLOSE', true), ($6, 'IN_BOX', false), ($7, 'IN_BOX_ALT', false)`,
+    [ITEM_TYPE_ONE_STEP, ITEM_TYPE_TWO_STEP, ITEM_TYPE_ORPHAN_STEP, ITEM_TYPE_PACKAGE, ITEM_TYPE_PACKAGE_CLOSE, ITEM_TYPE_IN_BOX, ITEM_TYPE_IN_BOX_ALT],
+  );
+  await q(
+    `INSERT INTO test_stations_type (test_station_type_id, test_type_desc, package_level) VALUES
+       ($1, 'INTAKE', true), ($2, 'FUNC', false), ($3, 'RESEARCH', false), ($4, 'ORPHAN', false), ($5, 'CLOSE', true)`,
+    [TYPE_INTAKE, TYPE_FUNC, TYPE_RESEARCH, TYPE_ORPHAN, TYPE_CLOSE],
+  );
+  // status 2 = free. TYPE_ORPHAN deliberately gets no station (#11(b)).
+  await q(
+    `INSERT INTO test_stations (test_station_id, test_station_type_id, test_station_desc, status, is_research) VALUES
+       ($1, $6, 'INTAKE-1',   2, false),
+       ($2, $7, 'FUNC-A',     2, false),
+       ($3, $7, 'FUNC-B',     2, false),
+       ($4, $8, 'RESEARCH-1', 2, true),
+       ($5, $9, 'CLOSE-1',    2, false)`,
+    [
+      STATION_INTAKE,
+      STATION_FUNC_A,
+      STATION_FUNC_B,
+      STATION_RESEARCH,
+      STATION_CLOSE,
+      TYPE_INTAKE,
+      TYPE_FUNC,
+      TYPE_RESEARCH,
+      TYPE_CLOSE,
+    ],
+  );
+  await q(
+    `INSERT INTO testing_routes (item_type_id, test_station_type_id, route_steps, route_number) VALUES
+       ($1, $4, ARRAY[$4::int],                   1),
+       ($2, $4, ARRAY[$4::int, $5::int],          1),
+       ($3, $4, ARRAY[$4::int, $6::int],          1),
+       ($7, $4, ARRAY[$4::int],                   1),
+       ($8, $4, ARRAY[$4::int, $10::int],         1),
+       ($9, $4, ARRAY[$4::int, $5::int, $10::int], 1),
+       ($11, $4, ARRAY[$4::int, $5::int, $10::int], 1)`,
+    [
+      ITEM_TYPE_ONE_STEP,
+      ITEM_TYPE_TWO_STEP,
+      ITEM_TYPE_ORPHAN_STEP,
+      TYPE_INTAKE,
+      TYPE_FUNC,
+      TYPE_ORPHAN,
+      ITEM_TYPE_PACKAGE,
+      ITEM_TYPE_PACKAGE_CLOSE,
+      ITEM_TYPE_IN_BOX,
+      TYPE_CLOSE,
+      ITEM_TYPE_IN_BOX_ALT,
+    ],
+  );
+}
+
+export type SeedItemOptions = {
+  itemId: number;
+  itemTypeId?: number;
+  routeNumber?: number;
+  stationId?: number | null;
+  packageId?: number | null;
+  /** Position inside packageId; items_package_seq_shape requires one whenever
+   *  packageId is set. Defaults to 1. */
+  packageSeq?: number;
+};
+
+/**
+ * Seeds one queued item the way the intake leaves it (packages/lifecycle.ts
+ * enterRoute) at the station the test names, with no field-config version (the
+ * fixed popups): the `items` row, the `item_routes` row (queued, step 1) and
+ * the `item_created` ledger event, all in one transaction, so every test
+ * starts with status and ledger agreeing (openDriftRows).
+ */
+export async function seedItem(o: SeedItemOptions): Promise<number> {
+  const {
+    itemId,
+    itemTypeId = ITEM_TYPE_ONE_STEP,
+    routeNumber = 1,
+    stationId = STATION_INTAKE,
+    packageId = null,
+    packageSeq = 1,
+  } = o;
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model,
+                          manufacturer_name, manufacturer_no, shipment_id, package_id, package_seq)
+       VALUES ($1, $2, $3, $4, 'MK-1', 'MODEL', 'MFR', 'MFR-NO', $5, $6, $7)`,
+      [itemId, CUSTOMER_ID, itemTypeId, `SN-${itemId}`, SHIPMENT_ID, packageId, packageId == null ? null : packageSeq],
+    );
+    await client.query(
+      `INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step,
+                                test_station_id, created_at, is_finished, queue_start_time, route_number)
+       VALUES ($1, $2, 2, 1, $3, NOW(), false, NOW(), $4)`,
+      [itemId, itemTypeId, stationId, routeNumber],
+    );
+    // Call site #1's exact emission (§4.5): item_created → queued, seq 0, the
+    // queued interval carrying the station TYPE it waits for.
+    await client.query(
+      `SELECT metrics_record($1, $2::bigint, 'queued', 1, NULL,
+                             (SELECT route_steps[1] FROM testing_routes
+                               WHERE item_type_id = $3 AND route_number = $4),
+                             NULL, NULL, 'item_created')`,
+      [eventKeyOf({ reason: "item_created", itemId: BigInt(itemId), key: { item: true } }), itemId, itemTypeId, routeNumber],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return itemId;
+}
+
+/**
+ * Seeds an item that predates the ledger: operational rows only, no route_run
+ * and no events — the "deployment window" item of §4.2.
+ */
+export async function seedLegacyItem(o: SeedItemOptions): Promise<number> {
+  const {
+    itemId,
+    itemTypeId = ITEM_TYPE_ONE_STEP,
+    routeNumber = 1,
+    stationId = STATION_INTAKE,
+  } = o;
+  await q(
+    `INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model,
+                        manufacturer_name, manufacturer_no, shipment_id, package_id)
+     VALUES ($1, $2, $3, $4, 'MK-1', 'MODEL', 'MFR', 'MFR-NO', $5, NULL)`,
+    [itemId, CUSTOMER_ID, itemTypeId, `SN-${itemId}`, SHIPMENT_ID],
+  );
+  await q(
+    `INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step,
+                              test_station_id, created_at, is_finished, queue_start_time, route_number)
+     VALUES ($1, $2, 2, 1, $3, NOW(), false, NOW(), $4)`,
+    [itemId, itemTypeId, stationId, routeNumber],
+  );
+  return itemId;
+}
+
+/** Backdates processing_start_time so the reaper's cutoff matches the row. */
+export async function ageProcessingStart(itemId: number, minutes: number): Promise<void> {
+  await q(
+    `UPDATE item_routes SET processing_start_time = NOW() - ($2 || ' minutes')::interval
+      WHERE item_id = $1`,
+    [itemId, String(minutes)],
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Handler invocation
+// ---------------------------------------------------------------------------
+
+export function jsonRequest(
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Request {
+  return new Request(`http://localhost${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * What the write-path routes answer, as far as the suites read it — each field only on the answers
+ * that carry it (a refusal carries error / code, a success its own fields).
+ */
+export type ApiRefusal = { error?: string; code?: string; missing?: unknown };
+/** POST /api/testing/results */
+export type ResultsBody = ApiRefusal & Partial<ResultAnswer>;
+/** POST /api/testing/start-test */
+export type StartTestBody = ApiRefusal & Partial<StartTestAnswer>;
+/** POST /api/testing/release-test */
+export type ReleaseTestBody = ApiRefusal & Partial<ReleaseTestAnswer>;
+/** PUT /api/items/[id] */
+export type UpdateItemBody = ApiRefusal & { ok?: boolean; item_id?: string; retyped?: boolean; packageReset?: string[] | null };
+/** DELETE /api/items/[id] */
+export type DeleteItemBody = ApiRefusal & { ok?: boolean; deletedConnectedCount?: number };
+/** POST /api/cron/release-stale-tests */
+export type ReaperBody = ApiRefusal & { success?: boolean; releasedCount: number; itemIds: string[]; stationsFreed: number };
+
+/** A route's answer: its status and its JSON (null when the body is not JSON). */
+export type HandlerResult<B = ApiRefusal> = { status: number; body: B };
+
+/** The route's JSON as the type its route answers with (this suite reads what that route sends). */
+async function jsonOf<B>(res: Response): Promise<B> {
+  try {
+    return (await res.json()) as B;
+  } catch {
+    // Not JSON: the suites read fields of a body, and find none on this one.
+    return {} as B;
+  }
+}
+
+async function call<B>(
+  handler: RouteHandler,
+  path: string,
+  body: unknown,
+  headers?: Record<string, string>,
+): Promise<HandlerResult<B>> {
+  const res = await handler(jsonRequest(path, body, headers));
+  return { status: res.status, body: await jsonOf<B>(res) };
+}
+
+export function startTest(body: Record<string, unknown>): Promise<HandlerResult<StartTestBody>> {
+  return call<StartTestBody>(h().startTest, "/api/testing/start-test", body);
+}
+
+export function releaseTest(body: Record<string, unknown>): Promise<HandlerResult<ReleaseTestBody>> {
+  return call<ReleaseTestBody>(h().releaseTest, "/api/testing/release-test", body);
+}
+
+/** PUT /api/items/[id] — the edit / retype path (docs/packages/PLAN.md §4). */
+export async function updateItem(itemId: number, body: Record<string, unknown>): Promise<HandlerResult<UpdateItemBody>> {
+  const req = new Request(`http://localhost/api/items/${itemId}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const res = await h().updateItem(req, { params: Promise.resolve({ id: String(itemId) }) });
+  return { status: res.status, body: await jsonOf<UpdateItemBody>(res) };
+}
+
+/** DELETE /api/items/[id]. */
+export async function deleteItem(itemId: number, body: Record<string, unknown> = {}): Promise<HandlerResult<DeleteItemBody>> {
+  const req = new Request(`http://localhost/api/items/${itemId}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const res = await h().deleteItem(req, { params: Promise.resolve({ id: String(itemId) }) });
+  return { status: res.status, body: await jsonOf<DeleteItemBody>(res) };
+}
+
+/** POST /api/testing/results with the worker snapshot every real client sends. */
+export function submitResult(body: Record<string, unknown>): Promise<HandlerResult<ResultsBody>> {
+  return call<ResultsBody>(h().results, "/api/testing/results", {
+    WorkerID: WORKER_ID,
+    WorkerName: WORKER_NAME,
+    Result: 1,
+    ...body,
+  });
+}
+
+export function runReaper(): Promise<HandlerResult<ReaperBody>> {
+  return call<ReaperBody>(h().releaseStale, "/api/cron/release-stale-tests", {}, {
+    "x-cron-secret": process.env.CRON_SECRET as string,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Ledger readers
+// ---------------------------------------------------------------------------
+
+export type EventRow = {
+  event_id: number;
+  event_key: string;
+  route_run_id: number;
+  occurred_at: Date;
+  seq: number;
+  kind: string;
+  to_state: string | null;
+  step_no: number;
+  station_id: number | null;
+  station_type_id: number | null;
+  worker_id: number | null;
+  worker_name: string | null;
+  reason: string;
+  submit_id: string | null;
+  is_trusted: boolean;
+  payload: Record<string, unknown>;
+};
+
+/** Every event of an item in the canonical (occurred_at, seq, event_id) order. */
+export function events(itemId: number): Promise<EventRow[]> {
+  return q<EventRow>(
+    "SELECT * FROM item_state_event WHERE item_id = $1 ORDER BY occurred_at, seq, event_id",
+    [itemId],
+  );
+}
+
+export type IntervalRow = {
+  interval_id: number;
+  route_run_id: number;
+  state_key: string;
+  is_terminal: boolean;
+  step_no: number;
+  attempt_no: number;
+  station_id: number | null;
+  station_type_id: number | null;
+  entry_reason: string;
+  exit_reason: string | null;
+  entry_event_id: number;
+  exit_event_id: number | null;
+  is_open: boolean;
+  opened_at: Date;
+  closed_at: Date | null;
+  wall_seconds: number | null;
+  work_seconds: number | null;
+  calendar_version: number | null;
+  unit_id: number;
+  is_package_item: boolean;
+  entered_by_worker_id: number | null;
+  exited_by_worker_id: number | null;
+};
+
+/** The item's ledger, oldest first — the fold's output, in order. */
+export function intervals(itemId: number): Promise<IntervalRow[]> {
+  return q<IntervalRow>(
+    `SELECT interval_id, route_run_id, state_key, is_terminal, step_no, attempt_no,
+            station_id, station_type_id, entry_reason, exit_reason,
+            entry_event_id, exit_event_id, upper_inf(valid_range) AS is_open,
+            lower(valid_range) AS opened_at, closed_at, wall_seconds, work_seconds,
+            calendar_version, unit_id, is_package_item,
+            entered_by_worker_id, exited_by_worker_id
+       FROM item_state_interval WHERE item_id = $1
+      ORDER BY lower(valid_range), interval_id`,
+    [itemId],
+  );
+}
+
+export type RunRow = {
+  route_run_id: number;
+  run_no: number;
+  route_number: number;
+  item_type_id: number;
+  planned_steps: number[];
+  opened_at: Date;
+  closed_at: Date | null;
+  close_reason: string | null;
+  unit_id: number;
+  /** bigint arrives as a string over pg — compare with Number(). */
+  package_id: string | number | null;
+  is_package_item: boolean;
+  customer_id: number;
+  shipment_id: number;
+  is_trusted: boolean;
+};
+
+export function runs(itemId: number): Promise<RunRow[]> {
+  return q<RunRow>("SELECT * FROM route_run WHERE item_id = $1 ORDER BY run_no", [itemId]);
+}
+
+export function routeRow(itemId: number): Promise<{
+  current_status: number;
+  current_route_step: number;
+  test_station_id: number | null;
+  finished_at: Date | null;
+  is_finished: boolean;
+}> {
+  return one(
+    `SELECT current_status, current_route_step, test_station_id, finished_at, is_finished
+       FROM item_routes WHERE item_id = $1`,
+    [itemId],
+  );
+}
+
+export function testResults(
+  itemId: number,
+): Promise<{ test_result_id: number; state_event_id: number | null; route_step: number }[]> {
+  return q(
+    `SELECT test_result_id, state_event_id, route_step FROM test_results
+      WHERE item_id = $1 ORDER BY test_result_id`,
+    [itemId],
+  );
+}
+
+export function stationStatus(stationId: number): Promise<number> {
+  return one<{ status: number }>(
+    "SELECT status FROM test_stations WHERE test_station_id = $1",
+    [stationId],
+  ).then((r) => r.status);
+}
+
+/** The open (upper_inf) interval of an item — the ledger's "current state". */
+export async function openInterval(itemId: number): Promise<IntervalRow | null> {
+  const rows = await intervals(itemId);
+  return rows.find((i) => i.is_open) ?? null;
+}
+
+/**
+ * The invariant the drift scaffold used to police, computed directly.
+ *
+ * metrics_drift and its trigger were dropped by migration B: a CONSTRAINT
+ * TRIGGER on every item_routes write is real cost on the hot path of every test
+ * submission, and its job — proving each writer also emits its ledger event —
+ * was finished once the dual-run week was green.
+ *
+ * The tests keep the guarantee, and get a STRONGER one. The trigger only ever
+ * saw rows some transaction happened to touch; this compares EVERY item_routes
+ * row against its open interval, so a row the test never wrote is checked too.
+ * Same comparison the trigger made: state_of(current_status) vs the open
+ * interval's state_key.
+ */
+export function openDriftRows(): Promise<
+  { item_id: number; legacy_status: number | null; ledger_state: string | null }[]
+> {
+  return q(
+    `SELECT ir.item_id,
+            ir.current_status AS legacy_status,
+            i.state_key       AS ledger_state
+       FROM item_routes ir
+       LEFT JOIN item_state_interval i
+              ON i.item_id = ir.item_id AND upper_inf(i.valid_range)
+      -- Scoped to items the ledger has actually STARTED tracking. An item with
+      -- no interval at all was never claimed by the ledger, so a disagreement
+      -- is not drift: it is the deployment-window case (§4.2) that auto-open
+      -- exists for, and the deliberate legacy/orphan fixtures some tests seed.
+      -- runs_with_zero_intervals in metrics_selfcheck covers that class.
+      WHERE EXISTS (SELECT 1 FROM item_state_interval x WHERE x.item_id = ir.item_id)
+        AND i.state_key IS DISTINCT FROM state_of(ir.current_status)
+      ORDER BY ir.item_id`,
+  );
+}

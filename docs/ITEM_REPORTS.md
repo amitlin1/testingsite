@@ -14,15 +14,17 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 | Edit the general template / a route's template | הגדרות מערכת → מסלולי בדיקה → לשונית **דוח PDF** (the general template's row leads it) |
 | Download an item's report / give its final signature / a missing closing signature | היסטוריית פריט (`/items/<id>/history`) — the buttons under the status (`ItemReportControl.tsx`) |
 | Sign a kit's reports at its closing (the closing signature) | the closing template's "חתימה על הדוחות" step (`report_sign`) — see below |
-| Template components (shared by editor + server) | `src/app/lib/item-report/puck-config.tsx` |
+| Template components (shared by editor + server) | `src/app/lib/item-report/puck-config.tsx` (the print renders); the page, the document settings and what prints on every page: `document.ts` |
 | Variables: catalog + values | `src/app/lib/item-report/variables.ts` (pure, unit-tested) |
 | Route catalog (server) | `src/app/lib/item-report/catalog.ts` |
-| Render + freeze + sign | `src/app/lib/item-report/generate.ts` |
+| What a report is built from (DB) | `src/app/lib/item-report/source.ts` |
+| Build the HTML / PDF | `src/app/lib/item-report/build.ts` |
+| State, freeze, sign | `src/app/lib/item-report/lifecycle.ts`; the status the clients read: `contract.ts` |
 | Chromium | `src/app/lib/item-report/render.ts`, `html.ts` (fonts inlined — air-gap safe) |
 | Photos in the PDF | `src/app/lib/item-report/photos.ts` — each photo over 300 KB goes into the report as a JPEG of at most 1600 px on its longer side (`PDF_PHOTO_MAX_PX`, made small by Chromium; EXIF orientation kept), kept in memory between renders by etag. The photo in MinIO is never changed |
 | Fonts | `src/app/lib/item-report/fonts.ts`, `public/fonts/` |
 | Starter / general template | `src/app/lib/item-report/starter.ts` (`officialStarterTemplate`, `generalStarterTemplate`) |
-| Editor UI | `src/app/settings/testing-routes/components/report/` |
+| Editor UI | `src/app/components/item-report/` (mounted by the routes screen's `RouteReportTab`) |
 | APIs | `src/app/api/item-reports/` |
 | DB | `report_templates`, `item_reports` (migration `20261020120000_item_reports`); `report_general_template` (`20261104120000_report_general_template`); `item_reports.closing_*` (`20261110120000_report_closing_signature`); both signatures in every template (`20261110130000_report_templates_both_signatures`); the closing signer's role (`20261119120000_report_closing_signer_role`) |
 | Production SQL | `scripts/prod-item-reports/1-item-reports.sql`, `scripts/prod-report-general-template/1-report-general-template.sql`, `scripts/prod-report-closing-signature/1-report-closing-signature.sql` + `2-report-templates-both-signatures.sql`, `scripts/prod-report-closing-role/1-report-closing-role.sql` |
@@ -102,7 +104,7 @@ Ticketflow's blocks (טקסט, כותרת — numbered by default, ערך ממש
 
   The closing row's role is a **"תפקיד החותם"** cell (`kind: "role"`): the signer's role when they
   signed — "בודק" for a tester, "מנהל" for a manager (also one who is a tester too;
-  `signerRoleLabel` in `roles.ts`), kept in `item_reports.closing_signed_by_role` and in
+  `signerRoleLabel` in `http.ts`), kept in `item_reports.closing_signed_by_role` and in
   `report.closing_signer_role`. It is empty until someone signs; a closing signature given before
   roles were kept prints the cell's own text ("בודק"). The final row's role stays a "טקסט חופשי"
   cell ("מאשר סופי"). Migration `20261119120000_report_closing_signer_role` turned every closing
@@ -150,7 +152,7 @@ the signature comes **before** anything is saved (`TemplatePackageClosing.tsx`, 
   **one signature for all of them**.
 - "סגור מארז" waits for it. Each of those items' closing result carries it (`POST
   /api/testing/results` `ReportSignature`, a PNG data URL); the server checks it — shape, and
-  `REPORT_CLOSING_SIGN_ROLES` of the signed-in user — before saving anything (400 / 403), and once
+  `ACCESS.reportClosingSign` of the signed-in user — before saving anything (400 / 403), and once
   the result has finished the route records it in the same request (`signReportWithResult` →
   `signClosingSignature`; the answer's `reportSign`: `signed` / `nothing_to_sign` / `failed`). A
   refresh before "סגור מארז" saves nothing; after it, the box is closed with its reports signed.
@@ -158,7 +160,7 @@ the signature comes **before** anything is saved (`TemplatePackageClosing.tsx`, 
   item page ("ממתין לחתימה הסופית"), and the done step says how many.
 - The signer is the signed-in user. A signing that fails after the save (`failed`) leaves that
   report's closing spot blank; the done step names it.
-- A user who may not sign (not `REPORT_CLOSING_SIGN_ROLES`) cannot close a box whose reports ask for
+- A user who may not sign (not `ACCESS.reportClosingSign`) cannot close a box whose reports ask for
   the closing signature: "סגור מארז" stays blocked ("רק בודק או מנהל יכולים לחתום על הדוחות ולסגור
   את המארז").
 - Nothing to sign (no report with a closing signature block) → the step says so and the box closes.
@@ -171,7 +173,7 @@ box closed before the template had the block, or the closing had no "חתימה 
 "חסרה חתימה בסגירה" and a **"חתימה בסגירה"** button on the item page
 (`POST /api/item-reports/<id>/sign-closing`, the same `signClosingSignature`):
 
-- `REPORT_CLOSING_SIGN_ROLES` (`canSignClosing` in `/status`), once per finish; it does not lock.
+- `ACCESS.reportClosingSign` (`canSignClosing` in `/status`), once per finish; it does not lock.
 - It prints the signer and the day it is given, not the closing's date.
 - Only before the lock: the final signature freezes the report, and after that the closing spot stays
   blank (409 `ALREADY_FINAL`). So the final signature's dialog warns while the closing one is
@@ -181,12 +183,12 @@ box closed before the template had the block, or the closing had no "חתימה 
 ## The final signature
 
 On the item page, "חתימה סופית על הדוח" (`POST /api/item-reports/<id>/sign`, `signItemReport`):
-only `REPORT_FINAL_SIGN_ROLES`, once per finish — the one who signed at the closing may give it
+only `ACCESS.reportFinalSign`, once per finish — the one who signed at the closing may give it
 too. It freezes the report with both signatures on it.
 
 ## Storage
 
-Bucket `MINIO_BUCKET`, registered in `file_objects`:
+Bucket `MINIO_BUCKET`, registered in `file_objects` (the keys: `ReportKeys` in `src/lib/storage/keys.ts`):
 
 | Object | Key | entity_type |
 |---|---|---|
@@ -196,10 +198,10 @@ Bucket `MINIO_BUCKET`, registered in `file_objects`:
 
 ## Roles
 
-- Edit templates: `manager`, `tester` (as the station fields) — `REPORT_TEMPLATE_ROLES`.
-- Sign at the kit's closing: `manager`, `tester` — `REPORT_CLOSING_SIGN_ROLES`.
-- The final signature: `manager` — `REPORT_FINAL_SIGN_ROLES` (whoever signed at the closing too).
-  (Both are one line in `src/app/lib/item-report/roles.ts`.)
+- Edit templates: `manager`, `tester` (as the station fields) — `ACCESS.reportTemplate`.
+- Sign at the kit's closing: `manager`, `tester` — `ACCESS.reportClosingSign`.
+- The final signature: `manager` — `ACCESS.reportFinalSign` (whoever signed at the closing too).
+  (All in `src/lib/auth/roles.ts`.)
 - Download: any signed-in user.
 
 ## Tests

@@ -2,55 +2,16 @@
 import React from "react";
 import { Check, CircleAlert } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
-import { stationImagesOf, type RefImg } from "./stationKit";
-import { gramsOf, type RefMember } from "./packageReference";
-import {
-  AMBER_BG, AMBER_BORDER, AMBER_INK, GREEN, GREEN_BG, HAIR, MUTED,
-} from "@/app/components/packages/packageUi";
+import { NO_REF, lookupReference, type RefLookup } from "./reference";
+import { AMBER_BG, AMBER_BORDER, AMBER_INK, GREEN, GREEN_BG, HAIR, MUTED } from "@/components/ui/colors";
+import "@/app/testing/station-popups.css";
 
 /**
  * Scanning a label against the reference items (/settings/reference-items),
  * shared by the package opening and closing wizards: the box label among the
- * package type's reference items, an item's label among its own type's.
- * A box label that finds a package reference also brings its members — the
- * reference item expected for each content line (packageReference.ts).
+ * package type's reference items, an item's label among its own type's
+ * (reference.ts lookupReference).
  */
-
-export type RefLookup = {
-  hasRU: boolean;
-  referenceItemId: number | null;
-  name: string | null;
-  refWeight: number | null;
-  /** The reference images of the station the popup is at (the station type is the reference set). */
-  images: RefImg[];
-  /** A package reference's members, one per content line (empty otherwise). */
-  members: RefMember[];
-};
-export const NO_REF: RefLookup = { hasRU: false, referenceItemId: null, name: null, refWeight: null, images: [], members: [] };
-
-type LookupMember = { item_type_id?: unknown; referenceItem?: { manufacturer_sku?: unknown; name?: unknown } | null; referenceWeight?: unknown; imagesByStation?: unknown };
-
-async function lookupReference(sku: string, itemTypeId: number, stationTypeId: number): Promise<RefLookup> {
-  const qs = new URLSearchParams({ sku, itemTypeId: String(itemTypeId) });
-  const res = await apiFetch(`/api/testing/reference-lookup?${qs.toString()}`);
-  const d = await res.json().catch(() => ({}));
-  if (!res.ok || !d.hasRU) return NO_REF;
-  const members: LookupMember[] = Array.isArray(d.packageMembers) ? d.packageMembers : [];
-  return {
-    hasRU: true,
-    referenceItemId: typeof d.referenceItem?.reference_item_id === "number" ? d.referenceItem.reference_item_id : null,
-    name: d.referenceItem?.name ?? null,
-    refWeight: gramsOf(d.referenceWeight),
-    images: stationImagesOf(d.imagesByStation, stationTypeId),
-    members: members.map((m) => ({
-      itemTypeId: Number(m.item_type_id),
-      sku: String(m.referenceItem?.manufacturer_sku ?? ""),
-      name: typeof m.referenceItem?.name === "string" ? m.referenceItem.name : null,
-      refWeight: gramsOf(m.referenceWeight),
-      images: stationImagesOf(m.imagesByStation, stationTypeId),
-    })),
-  };
-}
 
 /** Looks a scanned SKU up among one item type's reference items while the
  *  worker types, settling 250 ms after the last keystroke. `ref` is the answer
@@ -58,18 +19,19 @@ async function lookupReference(sku: string, itemTypeId: number, stationTypeId: n
  *  (the station the popup is at); `checking` is true until it arrives, so a
  *  step never moves on with the answer for an older scan. */
 export function useReferenceLookup(sku: string, itemTypeId: number | null | undefined, enabled: boolean, stationTypeId: number) {
-  const key = enabled && sku.trim() !== "" && itemTypeId != null ? `${stationTypeId}|${itemTypeId}|${sku.trim()}` : "";
+  const text = sku.trim();
+  const key = enabled && text !== "" && itemTypeId != null ? `${stationTypeId}|${itemTypeId}|${text}` : "";
   const [res, setRes] = React.useState<{ key: string; ref: RefLookup } | null>(null);
   React.useEffect(() => {
-    if (!key) return;
-    const [station, typeId] = key.split("|", 2).map(Number);
-    const text = key.slice(key.indexOf("|", key.indexOf("|") + 1) + 1);
+    if (!key || itemTypeId == null) return;
     let live = true;
     const t = setTimeout(() => {
-      lookupReference(text, typeId, station).catch(() => NO_REF).then((ref) => { if (live) setRes({ key, ref }); });
+      lookupReference(text, itemTypeId, stationTypeId)
+        .catch((e) => { console.error("reference lookup failed", e); return NO_REF; })
+        .then((ref) => { if (live) setRes({ key, ref }); });
     }, 250);
     return () => { live = false; clearTimeout(t); };
-  }, [key]);
+  }, [key, text, itemTypeId, stationTypeId]);
   const ref = key !== "" && res?.key === key ? res.ref : null;
   return { checking: key !== "" && ref == null, ref };
 }
@@ -87,7 +49,7 @@ export function useReferenceSkus(itemTypeId: number | null | undefined, enabled:
     let live = true;
     apiFetch(`/api/testing/reference-skus?itemTypeId=${key}`)
       .then((r) => (r.ok ? r.json() : []))
-      .catch(() => [])
+      .catch((e) => { console.error("reference SKUs failed to load", e); return []; })
       .then((d: unknown) => {
         const skus = Array.isArray(d) ? d.flatMap((s) => (s && typeof s.sku === "string" ? [{ sku: s.sku, name: typeof s.name === "string" ? s.name : null }] : [])) : [];
         if (live) setRes({ key, skus });
@@ -211,7 +173,7 @@ export function ScanField({ label, placeholder, value, onChange, lookup, found, 
   return (
     <div style={{ maxWidth: 420, marginTop: 20 }}>
       <label htmlFor={fieldId} style={{ display: "block", fontSize: "var(--text-small)", color: MUTED, marginBottom: 7 }}>{label}</label>
-      {/* A code: LTR, kept at the reading edge (testing.css .tst-ref-scan). The
+      {/* A code: LTR, kept at the reading edge (station-popups.css .tst-ref-scan). The
           edge follows focus (.sh-input ring), not whether the field has text. */}
       <input ref={inputRef} id={fieldId} className="sh-input tst-ref-scan" dir="ltr" value={value} onChange={(e) => { pendingRef.current = false; onChange(e.target.value); }} autoFocus placeholder={placeholder}
         onKeyDown={(e) => { if (e.key === "Enter") { if (lookup.checking) pendingRef.current = true; else onSubmit(); } }} />

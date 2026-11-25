@@ -1,119 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { deleteSignature, saveSignature } from "../../../lib/file-utils";
+import { prisma } from "@/lib/db";
+import { parseDbId } from "@/lib/http/request";
 import { withAuth, type WithAuthCtx } from "@/lib/auth/withAuth";
-import { resolveShipmentWorker } from "@/lib/auth/shipment-worker";
+import { ACCESS } from "@/lib/auth/roles";
+import { errorResponse } from "@/lib/http/errors";
+import { loadSentTotals } from "@/app/lib/shipments/read";
+import { recordShipmentSend, shipmentWorker } from "@/app/lib/shipments/save";
+import { deleteSignature, saveSignature } from "@/app/lib/shipments/signatures";
 
-// GET: Fetch sent history aggregated by item type and makat for a specific shipment
+/** GET ?shipment_id — how many boxes of each type and makat the shipment already sent. */
 export async function GET(request: NextRequest) {
-    const { searchParams } = new URL(request.url);
-    const shipment_id = searchParams.get("shipment_id");
-
-    if (!shipment_id) {
-        return NextResponse.json({ error: "Missing shipment_id" }, { status: 400 });
-    }
-
-    try {
-        const rows = await prisma.$queryRaw<{ item_type_id: number | null; makat: string | null; total_sent: number }[]>`
-            SELECT
-                item_type_id,
-                makat,
-                SUM(amount)::int as total_sent
-            FROM shipment_history
-            WHERE shipment_id = ${parseInt(shipment_id, 10)}
-            GROUP BY item_type_id, makat
-        `;
-
-        return NextResponse.json(rows);
-    } catch (error) {
-        console.error("Error fetching shipment history:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
-    }
+  const raw = new URL(request.url).searchParams.get("shipment_id");
+  if (!raw) return NextResponse.json({ error: "Missing shipment_id" }, { status: 400 });
+  const shipmentId = parseDbId(raw);
+  if (shipmentId == null) return NextResponse.json({ error: "מזהה משלוח לא תקין" }, { status: 400 });
+  try {
+    return NextResponse.json(await loadSentTotals(shipmentId));
+  } catch (error) {
+    console.error("Error fetching shipment history:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }
 
-// POST: Add new shipment history entries (Send Shipment)
+/** POST — a send of the shipment's boxes (lib/shipments/save.ts recordShipmentSend). */
 export const POST = withAuth(async (request: NextRequest, { session }: WithAuthCtx) => {
-    try {
-        const body = await request.json();
-        const { shipment_id, sent_date, sent_shipment_code, items, signature_base64 } = body;
+  try {
+    const body = await request.json();
+    const { sent_date, sent_shipment_code, items, signature_base64 } = body;
+    const shipmentId = parseDbId(body.shipment_id);
 
-        // "עובד מוציא": the logged-in worker, unless a manager picked someone else.
-        const sender = resolveShipmentWorker(session, { id: body.sending_worker_id, name: body.sending_worker_name });
-        if ("error" in sender) return NextResponse.json({ error: sender.error }, { status: 400 });
-        const sending_worker_id = sender.worker.id;
-        const sending_worker_name = sender.worker.name;
+    // "עובד מוציא": the logged-in worker, unless a manager picked someone else.
+    const sender = shipmentWorker(session, { id: body.sending_worker_id, name: body.sending_worker_name });
 
-        // Basic validation
-        if (!shipment_id || !sent_date || !sent_shipment_code || !items || !Array.isArray(items) || items.length === 0) {
-            return NextResponse.json(
-                { error: "חסרים פרטי השליחה: קוד משלוח יוצא, תאריך וכמויות" },
-                { status: 400 }
-            );
-        }
-        const shipment = await prisma.shipments.findUnique({ where: { id: Number(shipment_id) }, select: { is_sent: true } });
-        if (!shipment) return NextResponse.json({ error: "המשלוח לא נמצא" }, { status: 404 });
-        if (shipment.is_sent) return NextResponse.json({ error: "המשלוח כבר נשלח" }, { status: 409 });
-        if (!signature_base64) {
-            return NextResponse.json(
-                { error: "חסרה חתימה" },
-                { status: 400 } // Bad Request - הלקוח לא עמד בתנאים
-            );
-        }
-
-        // The signature is stored before the transaction (not inside it, where
-        // its upload held the transaction open), and removed again if the send
-        // does not commit.
-        const signaturePath = await saveSignature(signature_base64, 'send', shipment_id);
-
-        await prisma.$transaction(async (tx) => {
-
-            for (const item of items) {
-                if (!item.item_type_id || !item.amount) continue;
-
-                await tx.$executeRaw`
-                    INSERT INTO shipment_history
-                     (shipment_id, sending_worker_id, sending_worker_name, sent_date, sent_shipment_code, item_type_id, makat, amount, signature_path)
-                     VALUES (${shipment_id}, ${sending_worker_id || null}, ${sending_worker_name || null}, ${new Date(sent_date)}::timestamp, ${sent_shipment_code}, ${item.item_type_id}, ${item.makat || null}, ${item.amount}, ${signaturePath})
-                `;
-            }
-
-            // Check if shipment is finished
-            const totalReceivedRows = await tx.$queryRaw<{ total: number }[]>`
-                SELECT COALESCE(SUM(quantity), 0)::int as total FROM shipment_items WHERE shipment_id = ${shipment_id}
-            `;
-            const totalReceived = totalReceivedRows[0]?.total || 0;
-
-            const totalSentRows = await tx.$queryRaw<{ total: number }[]>`
-                SELECT COALESCE(SUM(amount), 0)::int as total FROM shipment_history WHERE shipment_id = ${shipment_id}
-            `;
-            const totalSent = totalSentRows[0]?.total || 0;
-
-            if (totalReceived > 0 && totalSent >= totalReceived) {
-                await tx.$executeRaw`
-                    UPDATE shipments SET is_sent = true, finished_at = ${new Date(sent_date)}::timestamp WHERE id = ${shipment_id}
-                `;
-                // A closed shipment takes no more intakes: its boxes still
-                // waiting for one go (they hold nothing and no ledger rows).
-                await tx.$executeRaw`
-                    DELETE FROM items i
-                    USING item_types t
-                    WHERE t.item_type_id = i.item_type_id AND t.is_package
-                      AND i.shipment_id = ${shipment_id} AND i.package_id IS NULL
-                      AND NOT EXISTS (SELECT 1 FROM item_routes ir WHERE ir.item_id = i.item_id)
-                      AND NOT EXISTS (SELECT 1 FROM items m WHERE m.package_id = i.item_id)
-                `;
-            }
-        }).catch(async (error) => {
-            if (signaturePath) await deleteSignature(shipment_id, signaturePath);
-            throw error;
-        });
-
-        return NextResponse.json({ success: true }, { status: 201 });
-    } catch (error) {
-        console.error("Error creating shipment history:", error);
-        return NextResponse.json(
-            { error: "השליחה לא נשמרה — שגיאה בשרת" },
-            { status: 500 }
-        );
+    if (shipmentId == null || !sent_date || !sent_shipment_code || !items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: "חסרים פרטי השליחה: קוד משלוח יוצא, תאריך וכמויות" }, { status: 400 });
     }
-}, { role: ["manager", "storekeeper"] });
+    const shipment = await prisma.shipments.findUnique({ where: { id: shipmentId }, select: { is_sent: true } });
+    if (!shipment) return NextResponse.json({ error: "המשלוח לא נמצא" }, { status: 404 });
+    if (shipment.is_sent) return NextResponse.json({ error: "המשלוח כבר נשלח" }, { status: 409 });
+    if (!signature_base64) return NextResponse.json({ error: "חסרה חתימה" }, { status: 400 });
+
+    // The signature is stored before the transaction (not inside it, where
+    // its upload held the transaction open), and removed again if the send
+    // does not commit.
+    const signaturePath = await saveSignature(signature_base64, "send", shipmentId);
+    await prisma.$transaction((tx) => recordShipmentSend(tx, {
+      shipmentId,
+      sentDate: new Date(sent_date),
+      sentShipmentCode: sent_shipment_code,
+      sender,
+      items,
+      signaturePath,
+    })).catch(async (error) => {
+      if (signaturePath) await deleteSignature(shipmentId, signaturePath);
+      throw error;
+    });
+
+    return NextResponse.json({ success: true }, { status: 201 });
+  } catch (error) {
+    return errorResponse(error, "השליחה לא נשמרה — שגיאה בשרת");
+  }
+}, { role: ACCESS.shipments });

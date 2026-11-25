@@ -1,91 +1,54 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import type { Prisma } from "@prisma/client";
-import { fixSequence } from "@/app/lib/fix-sequence";
-import { getStationLiveCounters } from "@/lib/station-counters";
-import { errorCode, errorMessage } from "@/lib/errors";
+import { prisma } from "@/lib/db";
+import { HttpError, errorResponse } from "@/lib/http/errors";
+import { readJsonObject } from "@/lib/http/request";
+import { getStationLiveCounters } from "@/app/lib/metrics/read/station-counters";
+import { insertLookupRow, listJson, listStations } from "@/app/lib/lookups";
+import { stationName } from "./name";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const typeId = searchParams.get("typeId");
-
-    const where: Prisma.test_stationsWhereInput = typeId ? { test_station_type_id: parseInt(typeId, 10) } : {};
-
-    const rows = await prisma.test_stations.findMany({
-      where,
-      include: { test_stations_type: true },
-      orderBy: { test_station_desc: "asc" },
-    });
-
-    // Attach live queue/test counts from the metrics ledger (Q3) so the Settings
-    // page shows the SAME numbers as the dashboard's station board. The wire
-    // field names are unchanged, but items_in_queue is now the station TYPE's
-    // queue and repeats across the stations of a type — see station-counters.ts.
-    const liveCounters = await getStationLiveCounters();
-    const countersMap = new Map(
-      liveCounters.map((c) => [c.stationId, c])
-    );
-
-    const result = rows.map((r) => {
-      const live = countersMap.get(r.test_station_id);
-      return {
-        test_station_id: r.test_station_id,
-        test_station_type_id: r.test_station_type_id,
-        test_station_desc: r.test_station_desc.trim(),
-        status: r.status,
-        is_research: r.is_research,
-        test_type_desc: r.test_stations_type.test_type_desc.trim(),
-        items_in_queue: live?.sharedTypeQueue ?? 0,
-        items_in_test: live?.itemsInActiveWork ?? 0,
-      };
-    });
-
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("Error fetching test stations:", error);
-    // Return empty array instead of error to prevent frontend crashes
-    return NextResponse.json([]);
-  }
+  const typeId = new URL(req.url).searchParams.get("typeId");
+  return listJson(async () => {
+    const rows = await listStations(typeId ? parseInt(typeId, 10) : undefined);
+    // Live queue/test counts from the metrics ledger (Q3), so the Settings page shows the SAME
+    // numbers as the dashboard's station board. items_in_queue is the station TYPE's queue and
+    // repeats across the stations of a type — see station-counters.ts.
+    const live = new Map((await getStationLiveCounters()).map((c) => [c.stationId, c]));
+    return rows.map((r) => ({
+      test_station_id: r.test_station_id,
+      test_station_type_id: r.test_station_type_id,
+      test_station_desc: r.test_station_desc,
+      status: r.status,
+      is_research: r.is_research,
+      test_type_desc: r.test_type_desc,
+      items_in_queue: live.get(r.test_station_id)?.sharedTypeQueue ?? 0,
+      items_in_test: live.get(r.test_station_id)?.itemsInActiveWork ?? 0,
+    }));
+  }, "Error fetching test stations:", { emptyOnError: true });
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { test_station_type_id, test_station_desc, status, is_research } = body;
-
-  if (!test_station_type_id || !test_station_desc) {
-    return NextResponse.json(
-      { error: "Type and Description are required" },
-      { status: 400 }
-    );
-  }
-
-  const trimmedDesc = test_station_desc.trim();
-  const finalStatus = status || 0;
-  const finalIsResearch = is_research || false;
-
-  const existing = await prisma.test_stations.findFirst({
-    where: { test_station_desc: { equals: trimmedDesc, mode: "insensitive" } },
-  });
-  if (existing) {
-    return NextResponse.json({ error: "עמדה בשם זה כבר קיימת במערכת" }, { status: 400 });
-  }
-
-  // Fix sequence before insert
-  await fixSequence(prisma, "test_stations", "test_station_id", "test_stations_test_station_id_seq");
-
   try {
-    const created = await prisma.test_stations.create({
-      data: {
-        test_station_type_id,
-        test_station_desc: trimmedDesc,
-        status: finalStatus,
-        is_research: finalIsResearch,
+    const { test_station_type_id, test_station_desc, status, is_research } = await readJsonObject(req);
+    if (!test_station_type_id || !test_station_desc) throw new HttpError(400, "Type and Description are required");
+    const desc = (test_station_desc as string).trim();
+    const data = {
+      test_station_type_id: test_station_type_id as number,
+      test_station_desc: desc,
+      status: (status as number) || 0,
+      is_research: (is_research as boolean) || false,
+    };
+    const created = await insertLookupRow(() => prisma.test_stations.create({ data }), {
+      duplicate: stationName(desc),
+      sequence: {
+        table: "test_stations",
+        idColumn: "test_station_id",
+        name: "test_stations_test_station_id_seq",
+        retryFailed: "שגיאה ביצירת עמדה. נא לנסות שוב.",
       },
     });
-
     return NextResponse.json({
       test_station_id: created.test_station_id,
       test_station_type_id: created.test_station_type_id,
@@ -94,47 +57,6 @@ export async function POST(req: Request) {
       is_research: created.is_research,
     });
   } catch (error) {
-    const msg = errorMessage(error);
-    const isDup = errorCode(error) === "P2002" || /unique constraint/i.test(msg);
-
-    if (isDup && msg.includes("test_station_desc")) {
-      return NextResponse.json({ error: "עמדה בשם זה כבר קיימת במערכת" }, { status: 400 });
-    }
-
-    console.error("Error creating test station:", error);
-
-    // PK/sequence desync duplicate → fix sequence and retry.
-    if (isDup) {
-      try {
-        console.log("Duplicate key detected, fixing sequence and retrying...");
-        await fixSequence(prisma, "test_stations", "test_station_id", "test_stations_test_station_id_seq");
-        const retryCreated = await prisma.test_stations.create({
-          data: {
-            test_station_type_id,
-            test_station_desc: trimmedDesc,
-            status: finalStatus,
-            is_research: finalIsResearch,
-          },
-        });
-        return NextResponse.json({
-          test_station_id: retryCreated.test_station_id,
-          test_station_type_id: retryCreated.test_station_type_id,
-          test_station_desc: retryCreated.test_station_desc.trim(),
-          status: retryCreated.status,
-          is_research: retryCreated.is_research,
-        });
-      } catch (retryError) {
-        console.error("Retry after sequence fix failed:", retryError);
-        return NextResponse.json(
-          { error: "שגיאה ביצירת עמדה. נא לנסות שוב." },
-          { status: 409 }
-        );
-      }
-    }
-
-    return NextResponse.json(
-      { error: errorMessage(error) || "Failed to create test station" },
-      { status: 500 }
-    );
+    return errorResponse(error, "Failed to create test station");
   }
 }

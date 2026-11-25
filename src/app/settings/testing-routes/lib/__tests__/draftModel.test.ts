@@ -4,11 +4,10 @@ import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
 import type { DraftAction, DraftModel } from "../draftModel";
 import {
-  EMPTY_DRAFT_MODEL, contextRouteIds, copyConfig, currentConfigs, draftReducer, emptyConfig, entryHasDraft, jsonEqual, mergeRoute,
-  routeChanges, routeIssues, setGroupFields, stepsOutOfContextKey, summarize,
+  EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, entryHasDraft, holdsContext, mergeRoute, stepsOutOfContextKey, summarize,
 } from "../draftModel";
 import { diffConfigs } from "@/app/lib/station-fields/diff";
-import { groupFieldsOf } from "../mapModel";
+import { emptyConfig, groupFieldsOf, setGroupFields } from "../cellGroups";
 import { ELEC, MON, OPEN, PC, artboard1, artboard11, choice, config, fields, step } from "./fixtures";
 
 const run = (state: DraftModel, ...actions: DraftAction[]): DraftModel => actions.reduce(draftReducer, state);
@@ -27,7 +26,8 @@ test("load: one entry per route of the context, in map order; current = draft ??
   const ctx = artboard1();
   const m = load(ctx);
   assert.deepEqual(m.order, [100, 101, 102, 103, 104]);
-  assert.deepEqual(contextRouteIds(ctx), [100, 101, 102, 103, 104]);
+  assert.equal(holdsContext(m, ctx), true);
+  assert.equal(holdsContext(m, artboard11()), false, "another kit's context is not the one held");
   assert.deepEqual(m.packageLevel, [11, 15]);
   const pc = m.routes[101];
   assert.deepEqual(pc.current, ctx.lines[0].route!.draft);
@@ -54,12 +54,12 @@ test("edit: mutate gets a deep copy; dirty against what the server holds; undoin
   assert.notEqual(m1.routes[102], undefined);
   assert.equal(m1.routes[102], m0.routes[102], "other entries keep their identity");
   // Back to the server's draft → nothing to save.
-  const m2 = draftReducer(m1, { type: "edit", routeId: 101, mutate: () => copyConfig(m0.routes[101].current) });
+  const m2 = draftReducer(m1, { type: "edit", routeId: 101, mutate: () => structuredClone(m0.routes[101].current) });
   assert.equal(m2.routes[101].dirty, false);
   // A route without a draft: an edit undone is the published config again → no draft.
   const m3 = run(m0,
     { type: "edit", routeId: 102, mutate: (cfg) => { delete cfg.steps.s_moelec00; } },
-    { type: "edit", routeId: 102, mutate: () => copyConfig(m0.routes[102].published!) });
+    { type: "edit", routeId: 102, mutate: () => structuredClone(m0.routes[102].published!) });
   assert.equal(m3.routes[102].dirty, false);
   assert.equal(entryHasDraft(m3.routes[102]), false);
   // A route the model does not hold: nothing happens.
@@ -181,7 +181,7 @@ test("mergeRoute: a reload adopts the server for clean entries, keeps local work
   assert.equal(moved.conflict?.draft, null);
   assert.equal(moved.current, dirty.current);
   // ... unless the server already holds exactly the working copy.
-  const same = mergeRoute(dirty, { ...r, draft_rev: 5, draft: copyConfig(dirty.current) });
+  const same = mergeRoute(dirty, { ...r, draft_rev: 5, draft: structuredClone(dirty.current) });
   assert.equal(same.conflict, null);
   assert.equal(same.dirty, false);
   assert.equal(same.rev, 5);
@@ -222,8 +222,7 @@ test("summarize: changes, issues, errors that block publish, drafts and the last
   const s = summarize(load(ctx));
   // Route 101's draft adds one field; the other routes have no draft.
   assert.equal(s.changeCount, 1);
-  assert.deepEqual(routeChanges(load(ctx), 101).map((c) => c.kind), ["field_added"]);
-  assert.equal(s.changesByRoute[101].length, 1);
+  assert.deepEqual(s.changesByRoute[101].map((c) => c.kind), ["field_added"]);
   assert.equal(s.hasDraft, true);
   assert.deepEqual(s.draftRouteIds, [101]);
   assert.equal(s.isNoopDraft, false);
@@ -231,7 +230,6 @@ test("summarize: changes, issues, errors that block publish, drafts and the last
   assert.equal(s.errorCount, 1);
   assert.equal(s.blockingErrorCount, 0);
   assert.equal(s.issuesByRoute[102].find((i) => i.level === "error")?.code, "OPTION_LABEL_EMPTY");
-  assert.deepEqual(routeIssues(load(ctx), 102), s.issuesByRoute[102]);
   assert.equal(s.lastSavedAt, "2026-10-14T08:00:00.000Z");
   assert.equal(s.saving, false);
   assert.equal(s.unsaved, false);
@@ -247,7 +245,7 @@ test("summarize: changes, issues, errors that block publish, drafts and the last
 test("summarize: a draft equal to the published version is a no-op draft", () => {
   const ctx = artboard1();
   const pc = ctx.lines[0].route!;
-  pc.draft = copyConfig(pc.published!);
+  pc.draft = structuredClone(pc.published!);
   const s = summarize(load(ctx));
   assert.equal(s.hasDraft, true);
   assert.equal(s.changeCount, 0);
@@ -281,7 +279,7 @@ test("setGroupFields: creates the step from the column, replaces a group in plac
   assert.deepEqual(Object.keys(cfg.steps), ["s_new00000"]);
   assert.deepEqual(cfg.steps.s_new00000, { uid: "s_new00000", station_type_id: ELEC, station_label: "חשמל", scope: "item", groups: [{ target: "item", fields: f }] });
   // Emptying the cell keeps the step (groups []), so the diff reports removed fields, not a step removal.
-  const cleared = setGroupFields(copyConfig(cfg), { step_uid: "s_new00000", target: "item" }, meta, []);
+  const cleared = setGroupFields(structuredClone(cfg), { step_uid: "s_new00000", target: "item" }, meta, []);
   assert.deepEqual(cleared.steps.s_new00000.groups, []);
   // Clearing a step the config never had adds nothing.
   assert.deepEqual(setGroupFields(emptyConfig(), { step_uid: "s_new00000", target: "item" }, meta, []), emptyConfig());
@@ -289,11 +287,11 @@ test("setGroupFields: creates the step from the column, replaces a group in plac
   const kitMeta = { station_type_id: OPEN, station_label: "פתיחת מארז", scope: "package" as const };
   const kit = artboard1().kit!.published!;
   const g = fields(1, ["pass", "fail"]);
-  const next = setGroupFields(copyConfig(kit), { step_uid: "s_kitopen1", target: { item_type_id: MON } }, kitMeta, g);
+  const next = setGroupFields(structuredClone(kit), { step_uid: "s_kitopen1", target: { item_type_id: MON } }, kitMeta, g);
   const order = next.steps.s_kitopen1.groups.map((x) => (typeof x.target === "string" ? x.target : x.target.item_type_id));
   assert.deepEqual(order, ["box", "each_item", PC, MON, 5], "the group keeps its place");
   assert.equal(groupFieldsOf(next, "s_kitopen1", { item_type_id: MON }), g);
-  const added = setGroupFields(copyConfig(kit), { step_uid: "s_kitopen1", target: { item_type_id: 6 } }, kitMeta, g);
+  const added = setGroupFields(structuredClone(kit), { step_uid: "s_kitopen1", target: { item_type_id: 6 } }, kitMeta, g);
   assert.deepEqual(added.steps.s_kitopen1.groups.at(-1), { target: { item_type_id: 6 }, fields: g });
   // A step with a layout survives losing its last group.
   const withLayout = setGroupFields(emptyConfig(), { step_uid: "s_new00000", target: "item" }, meta, f);
@@ -305,16 +303,30 @@ test("clearing a published cell diffs as removed fields (keeps the publish dialo
   const meta = { station_type_id: ELEC, station_label: "חשמל", scope: "item" as const };
   const f = fields(2, ["pass", "fail"]);
   const published = setGroupFields(emptyConfig(), { step_uid: "s_new00000", target: "item" }, meta, f);
-  const cleared = setGroupFields(copyConfig(published), { step_uid: "s_new00000", target: "item" }, meta, []);
+  const cleared = setGroupFields(structuredClone(published), { step_uid: "s_new00000", target: "item" }, meta, []);
   const kinds = diffConfigs(published, cleared, 1).map((c) => c.kind);
   assert.deepEqual(kinds, ["field_removed", "field_removed"]);
 });
 
-test("jsonEqual ignores key order and undefined members", () => {
-  assert.equal(jsonEqual({ a: 1, b: [1, { c: 2 }] }, { b: [1, { c: 2 }], a: 1 }), true);
-  assert.equal(jsonEqual({ a: 1, b: undefined }, { a: 1 }), true);
-  assert.equal(jsonEqual([1, 2], [2, 1]), false);
-  assert.equal(jsonEqual({ a: null }, {}), false);
+test("edit: a change that leaves the same JSON is no edit at all — key order and undefined members ignored", () => {
+  const m0 = load(artboard1());
+  const reordered = draftReducer(m0, {
+    type: "edit",
+    routeId: 102,
+    mutate: (cfg) => {
+      const { schema, steps } = cfg;
+      return { steps, schema };
+    },
+  });
+  assert.equal(reordered, m0);
+  const withUndefined = draftReducer(m0, {
+    type: "edit",
+    routeId: 102,
+    mutate: (cfg) => {
+      (cfg.steps.s_moelec00 as unknown as Record<string, unknown>).layout = undefined;
+    },
+  });
+  assert.equal(withUndefined, m0);
 });
 
 test("currentConfigs: the working copy of every entry", () => {

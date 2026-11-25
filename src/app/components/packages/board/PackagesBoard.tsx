@@ -1,26 +1,27 @@
 "use client";
+import { ACTION_FAILED_TEXT, failureText } from "@/app/components/failureText";
 import React from "react";
 import NextLink from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { Plus, ScanLine, X } from "lucide-react";
-import type { PackageView } from "@/app/lib/packages/read";
-import { Alert, Skeleton, Snackbar } from "@/components/ui";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
+import { itemMatches, packageOwnMatches, type PackageView } from "@/app/lib/packages/contract";
+import { scannedLabelId, seq2 } from "@/app/lib/packages/ids";
+import { PACKAGES_PARAMS, packageHref } from "@/app/lib/links";
+import { Alert, Skeleton, Snackbar, SearchableCombobox } from "@/components/ui";
 import PackageScanIntakeDialog from "@/app/components/packages/PackageScanIntakeDialog";
 import { useCanIntake } from "@/app/components/packages/useCanIntake";
 import PackageDeleteDialog from "@/app/components/packages/PackageDeleteDialog";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import BarcodeDialog from "@/app/components/BarcodeDialog";
 import { fmtDate } from "@/app/components/packages/packageUi";
-import { useGlobalScanner } from "@/app/testing/useGlobalScanner";
+import { useGlobalScanner } from "@/lib/hooks/useGlobalScanner";
 import { useUrlState, useUrlTextField } from "@/lib/hooks/useUrlState";
 import PackageRow, { stageOf, type Stage } from "./PackageRow";
-import {
-  sendJson, useCustomers, useInvalidatePackages, useItemTypes, usePackageTypes, usePackages, useSentLookup, useShipments,
-  type Option,
-} from "./queries";
-import "@/app/packages/packages.css";
+import { sendJson } from "@/lib/api/client";
+import { useInvalidatePackages, usePackages, useSentLookup } from "../data";
+import { customerOptions, useCustomers, useItemTypes, usePackageTypes, useShipments, type Option } from "@/app/components/lookups";
+import "@/components/ui/controls.css";
 import "./board.css";
 
 /**
@@ -31,7 +32,7 @@ import "./board.css";
  *
  * Every filter lives in the URL (useUrlState), so the shipments screen can
  * link here narrowed to one shipment and a refresh keeps the view. The data
- * comes through React Query (./queries.ts) and refreshes on focus, on a 30s
+ * comes through React Query (../data.ts) and refreshes on focus, on a 30s
  * poll and after every change made here.
  */
 
@@ -43,13 +44,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "הכל" },
 ];
 
-const URL_DEFAULTS = { tab: "test", q: "", customer: "", shipment: "", type: "", step: "" };
-
-/** A scanned label ("<id>" or "<id>-<source>") → the id; anything else → null. */
-function scannedId(raw: string): string | null {
-  const m = raw.trim().match(/^(\d{6,})(?:-\d+)?$/);
-  return m ? m[1] : null;
-}
+const URL_DEFAULTS = { tab: "test", [PACKAGES_PARAMS.q]: "", customer: "", [PACKAGES_PARAMS.shipment]: "", type: "", step: "" };
 
 function FilterSelect({ value, onChange, options, allLabel, width = 190 }: { value: string; onChange: (v: string) => void; options: Option[]; allLabel: string; width?: number }) {
   return (
@@ -66,7 +61,6 @@ function FilterSelect({ value, onChange, options, allLabel, width = 190 }: { val
   );
 }
 
-/** Where a box or one of its items is being worked: the station-type filter. */
 function stepsOf(p: PackageView): string[] {
   const out: string[] = [];
   if (p.status !== "pending" && p.status !== "done" && p.current_step_desc) out.push(p.current_step_desc);
@@ -84,7 +78,7 @@ export default function PackagesBoard() {
   const [qInput, setQInput] = useUrlTextField(url.q, writeQ);
 
   const packages = usePackages(url.shipment);
-  const customers = useCustomers();
+  const customers = useCustomers(customerOptions);
   const shipments = useShipments();
   const packageTypes = usePackageTypes();
   const itemTypes = useItemTypes();
@@ -125,7 +119,7 @@ export default function PackagesBoard() {
       const tab = url.tab as TabKey;
       return { list: sentView ? base : base.filter((p) => tab === "all" || stageOf(p) === tab), hitPkgs, hitItems, exact: false };
     }
-    const id = scannedId(ql);
+    const id = scannedLabelId(ql);
     if (id) {
       for (const p of base) {
         if (p.item_id === id) hitPkgs.add(p.item_id);
@@ -133,11 +127,10 @@ export default function PackagesBoard() {
       }
       if (hitPkgs.size > 0) return { list: base.filter((p) => hitPkgs.has(p.item_id)), hitPkgs, hitItems, exact: true };
     }
-    const has = (s: string | null | undefined) => (s ?? "").toLowerCase().includes(ql);
     const out = base.filter((p) => {
-      const items = p.items.filter((it) => it.item_id.includes(ql) || has(it.serial_no) || has(it.makat));
+      const items = p.items.filter((it) => itemMatches(it, ql));
       items.forEach((it) => hitItems.add(it.item_id));
-      const own = p.item_id.includes(ql) || has(p.makat) || has(p.item_type_desc) || has(p.customer_name) || has(p.shipment_code);
+      const own = packageOwnMatches(p, ql);
       if (items.length > 0) hitPkgs.add(p.item_id);
       return own || items.length > 0;
     });
@@ -150,19 +143,17 @@ export default function PackagesBoard() {
     return c;
   }, [base]);
 
-  // Nothing active matched a code: maybe the box already left with its shipment.
   const debouncedQ = url.q.trim();
-  const sentLookup = useSentLookup(searching && list.length === 0 && !packages.isLoading && debouncedQ.length >= 4 ? (scannedId(debouncedQ) ?? debouncedQ) : null);
+  const sentLookup = useSentLookup(searching && list.length === 0 && !packages.isLoading && debouncedQ.length >= 4 ? (scannedLabelId(debouncedQ) ?? debouncedQ) : null);
 
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
   const toggle = (id: string) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
-  // Dialogs and the one toast.
   const canIntake = useCanIntake();
-  const [intakeOpen, setIntakeOpen] = React.useState(sp.get("new") === "1");
+  const [intakeOpen, setIntakeOpen] = React.useState(sp.get(PACKAGES_PARAMS.intake) === "1");
   const [labelsFor, setLabelsFor] = React.useState<PackageView | null>(null);
   const [deleteFor, setDeleteFor] = React.useState<PackageView | null>(null);
-  const [barcodeFor, setBarcodeFor] = React.useState<{ id: number; serial?: string } | null>(null);
+  const [barcodeFor, setBarcodeFor] = React.useState<{ id: string } | null>(null);
   const [toast, setToast] = React.useState<{ text: string; error?: boolean; undoId?: string } | null>(null);
 
   const intake = useMutation({
@@ -172,12 +163,12 @@ export default function PackagesBoard() {
       const p = data.package;
       setToast({ text: p ? `${p.item_type_desc} נקלט · ${p.items.length} פריטים · ממתין בעמדת הפתיחה` : "המארז נקלט", undoId: id });
     },
-    onError: (e) => setToast({ text: e.message, error: true }),
+    onError: (e) => setToast({ text: failureText(e, ACTION_FAILED_TEXT), error: true }),
   });
   const undoIntake = useMutation({
     mutationFn: (id: string) => sendJson(`/api/packages/${id}/intake`, "DELETE"),
     onSuccess: () => { invalidate(); setToast({ text: "הקליטה בוטלה" }); },
-    onError: (e) => setToast({ text: e.message, error: true }),
+    onError: (e) => setToast({ text: failureText(e, ACTION_FAILED_TEXT), error: true }),
   });
 
   // A hardware scan with nothing focused lands in the scan field.
@@ -260,7 +251,7 @@ export default function PackagesBoard() {
           <div className="pb-band pb-band--hit" role="status">
             <span className="pb-dot" style={{ background: "var(--color-primary)" }} aria-hidden />
             {single
-              ? <>נמצא: מארז {single.item_id} · {single.item_type_desc}{singleItem ? ` · פריט ${String(singleItem.package_seq ?? "").padStart(2, "0")} מסומן בתוכו` : ""}{single.status === "pending" ? " · אפשר לקלוט אותו ישירות מהשורה" : ""}</>
+              ? <>נמצא: מארז {single.item_id} · {single.item_type_desc}{singleItem ? ` · פריט ${seq2(singleItem.package_seq)} מסומן בתוכו` : ""}{single.status === "pending" ? " · אפשר לקלוט אותו ישירות מהשורה" : ""}</>
               : <>{list.length} מארזים תואמים</>}
           </div>
         ) : sentLookup.data && sentLookup.data.length > 0 ? (
@@ -270,7 +261,7 @@ export default function PackagesBoard() {
               מארז {sentLookup.data[0].item_id} יצא ללקוח עם משלוח {sentLookup.data[0].shipment_code ?? "—"}
               {sentLookup.data[0].shipment_sent_at ? ` ב-${fmtDate(sentLookup.data[0].shipment_sent_at)}` : ""} ולכן לא מוצג כאן. ההיסטוריה שלו נשמרת.
             </span>
-            <NextLink href={`/packages/${sentLookup.data[0].item_id}`} className="pkg-link" style={{ fontWeight: 600 }}>היסטוריית המארז</NextLink>
+            <NextLink href={packageHref(sentLookup.data[0].item_id)} className="pkg-link" style={{ fontWeight: 600 }}>היסטוריית המארז</NextLink>
           </div>
         ) : (
           <div className="pb-band pb-band--miss" role="status">
@@ -307,7 +298,7 @@ export default function PackagesBoard() {
               intakeBusy={intake.isPending && intake.variables === p.item_id}
               onLabels={() => setLabelsFor(p)}
               onDelete={() => setDeleteFor(p)}
-              onBarcode={(it) => setBarcodeFor({ id: Number(it.item_id), serial:it.serial_no ?? undefined })}
+              onBarcode={(it) => setBarcodeFor({ id: it.item_id })}
             />
           ))}
 
@@ -345,10 +336,7 @@ export default function PackagesBoard() {
         <PackageLabelsDialog
           open
           onClose={() => setLabelsFor(null)}
-          packageId={labelsFor.item_id}
-          packageType={labelsFor.item_type_desc}
-          customerLine={`${labelsFor.customer_name ?? labelsFor.customer_code ?? ""} · משלוח ${labelsFor.shipment_code ?? ""}`}
-          items={labelsFor.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
+          pkg={labelsFor}
         />
       )}
       {barcodeFor && (

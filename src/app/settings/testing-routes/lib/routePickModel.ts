@@ -1,22 +1,21 @@
+import { DEFAULT_ROUTE_NUMBER } from "@/app/lib/packages/template-wire";
+import type { RouteRowJson } from "./wire";
+
 /**
  * The context card's two pickers (2026-10-26, Amit): a route is chosen by its PACKAGE type first,
  * then by one of that type's route numbers. Item types are never offered — an item's route is
  * reached from its kit, in "שלבי המסלול". Pure, so the page and the tests share it.
  */
 
-/** A row of GET /api/settings/testing-routes (the members this screen reads). */
-export type RouteRow = {
-  item_type_id: number;
-  route_number: number;
-  route_steps: number[];
-};
+/** The members of a route row the pickers read. */
+export type RouteRow = Pick<RouteRowJson, "item_type_id" | "route_number" | "route_steps">;
 
 /** An item type as the page loads it (GET /api/settings/item-types). */
 export type ItemTypeRow = {
   id: number;
   label: string;
   isPackage: boolean;
-  /** item_types.default_route_number — package types only; null = 1. */
+  /** item_types.default_route_number — package types only; null = DEFAULT_ROUTE_NUMBER. */
   defaultRoute: number | null;
 };
 
@@ -33,7 +32,7 @@ export type RouteNumberOption = {
   route: number;
   /** Steps of the route; 0 for a number that has no route yet. */
   stations: number;
-  /** The package type's default_route_number (null = 1). */
+  /** The package type's default route. */
   isDefault: boolean;
   /** No route has this number yet: saving its steps creates it. */
   isNew: boolean;
@@ -59,11 +58,11 @@ export function routeNumberOptions(
   defaultRoute: number | null,
   current: number | null,
 ): RouteNumberOption[] {
-  const def = defaultRoute ?? 1;
+  const def = defaultRoute ?? DEFAULT_ROUTE_NUMBER;
   const existing = routes
     .filter((r) => r.item_type_id === typeId)
     .sort((a, b) => a.route_number - b.route_number)
-    .map((r) => ({ route: r.route_number, stations: (r.route_steps ?? []).length, isDefault: r.route_number === def, isNew: false }));
+    .map((r) => ({ route: r.route_number, stations: r.route_steps.length, isDefault: r.route_number === def, isNew: false }));
   const taken = new Set(existing.map((o) => o.route));
   let fresh: number;
   if (current != null && !taken.has(current)) fresh = current;
@@ -76,7 +75,7 @@ export function routeNumberOptions(
 /** The route a package type opens on when it is picked: its default when that route exists, else
  *  its lowest route, else the default number (a new route). */
 export function routeForKitType(typeId: number, routes: readonly RouteRow[], defaultRoute: number | null): number {
-  const def = defaultRoute ?? 1;
+  const def = defaultRoute ?? DEFAULT_ROUTE_NUMBER;
   const numbers = routes.filter((r) => r.item_type_id === typeId).map((r) => r.route_number);
   if (numbers.includes(def)) return def;
   return numbers.length > 0 ? Math.min(...numbers) : def;

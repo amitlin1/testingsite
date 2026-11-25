@@ -40,3 +40,17 @@ test("GET /api/settings/testing-routes/fields-context: an unreachable database i
   const { GET } = await import("../../../api/settings/testing-routes/fields-context/route");
   await failedRead(await GET(new Request("http://localhost/api/settings/testing-routes/fields-context?packageTypeId=1&routeNumber=1")));
 });
+
+for (const [url, load] of [
+  ["/api/settings/popup-templates", () => import("../../../api/settings/popup-templates/route")],
+  ["/api/settings/option-lists", () => import("../../../api/settings/option-lists/route")],
+  ["/api/settings/field-sets", () => import("../../../api/settings/field-sets/route")],
+  ["/api/settings/reference-items/stations", () => import("../../../api/settings/reference-items/stations/route")],
+  ["/api/sources", () => import("../../../api/sources/route")],
+] as const) {
+  test(`GET ${url}: an unreachable database is a real 500 { error }, never []`, async (t) => {
+    t.mock.method(console, "error", () => {});
+    const { GET } = await load();
+    await failedRead(await GET());
+  });
+}

@@ -1,8 +1,9 @@
 /* =========================================================================
-   /settings/* (and the /files header) — the states inline styles cannot
-   express: hover, focus, press, media queries. Tokens only.
-   Imported by settings/layout.tsx, and by SettingsToolbar so /files, which
-   uses the same page header, gets it too.
+   /settings/* — the states inline styles cannot express: hover, focus, press,
+   media queries. Tokens only. Imported by settings/layout.tsx. What one
+   screen alone uses is in that screen's own stylesheet (reference-items.css,
+   users.css, work-hours.css, packages-settings.css); the page header is
+   components/settings-header.css.
    ========================================================================= */
 
 /* ---------------------------------------------------------- page shell --- */
@@ -37,50 +38,6 @@
   .settings-content { padding: var(--space-md); }
   .settings-page { width: 100%; }
 }
-
-/* --------------------------------------------------------- page header --- */
-/* Settings.dc.html: 30/700 title, 15px muted subtitle, the action at the end. */
-.settings-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-ml);
-  flex-wrap: wrap;
-}
-.settings-header__title {
-  margin: 0;
-  font-size: var(--text-page);
-  font-weight: var(--fw-bold);
-  letter-spacing: var(--ls-display);
-  line-height: var(--lh-display);
-  color: var(--color-ink);
-}
-.settings-header__subtitle {
-  margin: var(--space-xs) 0 0;
-  max-width: 720px;
-  font-size: var(--text-body);
-  line-height: 1.5;
-  color: var(--color-ink-muted-48);
-}
-.settings-header__actions { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
-.settings-count {
-  font-size: var(--text-small);
-  color: var(--color-ink-muted-48);
-  background: var(--color-canvas-parchment);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-pill);
-  padding: 4px 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.settings-filters {
-  display: flex;
-  gap: var(--space-sm);
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-top: var(--space-lg);
-}
-.settings-filters__search { flex: 1; min-width: 240px; max-width: 340px; }
 
 /* ------------------------------------------------------- shared pieces --- */
 .settings-card {
@@ -129,7 +86,7 @@
   .sh-iconbtn.set-act--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 8%, transparent); color: var(--color-destructive); }
 }
 
-/* ------------------------------------------------ test stations (SP-1) --- */
+/* ------------------------------------------ master–detail rows (SP-1) --- */
 /* Master–detail: types · stations side by side, one column on narrow screens. */
 .stations-grid {
   display: grid;
@@ -142,11 +99,11 @@
   .stations-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* A station-type row selects it (the only way to manage its stations). Its
+/* A row that selects its item (a station type; a field set in the testing-routes library). Its
    name area is a real button (aria-pressed = the selected type), so the row
    is reachable by Tab and Enter / Space; a click anywhere on the row still
    selects. Selected = tint and weight, no side stripe. */
-.stz-row {
+.set-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -158,10 +115,10 @@
   transition: background-color var(--dur-fast) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .stz-row:hover { background: var(--color-canvas-parchment); }
+  .set-row:hover { background: var(--color-canvas-parchment); }
 }
-.stz-row[data-selected] { background: var(--color-primary-tint); }
-.stz-row__select {
+.set-row[data-selected] { background: var(--color-primary-tint); }
+.set-row__select {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -178,8 +135,8 @@
   border-radius: var(--r-xs);
   cursor: pointer;
 }
-.stz-row__select:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 3px; }
-.stz-row__name {
+.set-row__select:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 3px; }
+.set-row__name {
   min-width: 0;
   font-size: var(--text-body-sm);
   color: var(--color-ink);
@@ -187,9 +144,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.stz-row[data-selected] .stz-row__name { font-weight: var(--fw-semibold); }
+.set-row[data-selected] .set-row__name { font-weight: var(--fw-semibold); }
 
-/* -------------------------------------------------------- testing routes --- */
+/* ------------------------------ route steps (testing routes, popup templates) --- */
 .route-step {
   display: flex;
   align-items: center;
@@ -243,23 +200,10 @@
 }
 .route-add:disabled { color: var(--color-ink-muted-40); cursor: not-allowed; }
 
-/* ------------------------------------------- packages (Package Types) --- */
-/* Package Types Settings.dc.html: parchment action squares that turn blue
-   (edit) or red (delete) on hover, quiet order chevrons, 38px row fields
-   with the system focus ring, compact pills. */
-.sh-iconbtn.stp-act { background: var(--color-canvas-parchment); color: var(--color-ink); }
-.sh-iconbtn.stp-act--muted { color: var(--color-ink-muted-48); }
-@media (hover: hover) and (pointer: fine) {
-  .sh-iconbtn.stp-act:hover:not(:disabled) { background: var(--color-primary-soft); color: var(--color-primary); }
-  .sh-iconbtn.stp-act--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--color-destructive) 8%, transparent); color: var(--color-destructive); }
-}
-.sh-iconbtn.stp-chev { color: var(--color-ink-muted-48); }
-@media (hover: hover) and (pointer: fine) {
-  .sh-iconbtn.stp-chev:hover:not(:disabled) { background: var(--color-canvas-parchment); color: var(--color-ink); }
-}
-.sh-iconbtn.stp-chev:disabled { color: var(--color-border-strong); }
-
-.stp-input {
+/* ------------------------------------------------------- settings field --- */
+/* The 38px row field with the system focus ring (Package Types Settings.dc.html): the packages
+   screen's contents rows, the testing-routes field editor. */
+.set-input {
   box-sizing: border-box;
   width: 100%;
   height: 38px;
@@ -273,473 +217,42 @@
   outline: none;
   transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
-.stp-input::placeholder { color: var(--color-ink-muted-40); }
-.stp-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
-.stp-input--num { text-align: center; font-variant-numeric: tabular-nums; }
-.stp-input--code { font-variant-numeric: tabular-nums; }
-.stp-input--route { font-weight: var(--fw-semibold); }
+.set-input::placeholder { color: var(--color-ink-muted-40); }
+.set-input:focus { border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
+.set-input--num { text-align: center; font-variant-numeric: tabular-nums; }
+.set-input--route { font-weight: var(--fw-semibold); }
 /* A route number other than the default reads blue (the artboard's set state). */
-.stp-input--route-set { border-color: var(--color-primary-focus); color: var(--color-primary); }
-.stp-input--error, .stp-input--error:focus { border-color: var(--color-destructive); }
-.stp-input--error:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
-.stp-input--lg { height: 40px; width: 110px; font-size: var(--text-body); }
+.set-input--route-set { border-color: var(--color-primary-focus); color: var(--color-primary); }
+.set-input--error, .set-input--error:focus { border-color: var(--color-destructive); }
+.set-input--error:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 15%, transparent); }
+.set-input--lg { height: 40px; width: 110px; font-size: var(--text-body); }
 
-/* The artboard's compact pills (14px, 10px 22px) on the shared Button. */
-.sh-btn.stp-pill { font-size: var(--text-body-sm); padding: 10px 22px; }
-.sh-btn--outlined.stp-pill { padding: 9px 18px; }
-
-/* The "new package type" dialog: the package artboards' shadowed sheet with
-   an unbanded footer. */
-.stp-dialog { box-shadow: var(--shadow-modal); }
-.stp-dialog .sh-dialog-actions { background: transparent; border-top: 0; padding: var(--space-ml) var(--space-lg) var(--space-lg); }
-
-/* ------------------------------------------------------ reference items --- */
-.ri-step-card { padding: var(--space-lg); margin-top: var(--space-lg); overflow: visible; }
-.ri-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
-  gap: var(--space-ml);
-  margin-top: var(--space-lg);
-}
-/* A card opens the item for editing: a real button, with hover and focus. */
-.ri-card {
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-align: start;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-card);
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .ri-card:hover { border-color: var(--color-border-strong); }
-}
-.ri-card:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
-/* SP-1: the dialog's two-column form stacks on narrow screens. */
-.ri-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
-@media (max-width: 600px) {
-  .ri-form-grid { grid-template-columns: minmax(0, 1fr); }
-}
-/* Reference images by station (docs/popup-templates/PLAN.md §5ג): one section per station of the
-   item's route, in route order, each with its images and its own drop target. */
-.ri-stations-hint { margin: 2px 0 10px; font-size: var(--text-small); color: var(--color-ink-muted-48); }
-.ri-stations-empty {
-  margin: 0 0 10px;
-  padding: 12px 14px;
-  font-size: var(--text-small);
-  color: var(--color-ink);
-  background: var(--color-surface-pearl);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-md);
-}
-.ri-stations { display: flex; flex-direction: column; gap: 10px; }
-.ri-station {
-  padding: 12px 14px 14px;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-md);
-  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
-}
-.ri-station--over { border-color: var(--color-primary); background: var(--color-primary-tint); }
-.ri-station--unassigned { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
-.ri-station__head { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; min-height: 32px; }
-.ri-station__index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  font-size: var(--text-fine);
-  font-weight: var(--fw-bold);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
-  border-radius: var(--r-pill);
-}
-.ri-station__name { font-size: var(--text-body-sm); font-weight: var(--fw-semibold); color: var(--color-ink); }
-.ri-station__count { flex: 1; font-size: var(--text-fine); color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; }
-.ri-station__note { margin: 6px 0 0; font-size: var(--text-small); color: var(--color-ink-muted-70); }
-.ri-station__drop {
-  margin-top: 10px;
-  padding: 14px;
-  text-align: center;
-  font-size: var(--text-small);
-  color: var(--color-ink-muted-70);
-  cursor: pointer;
-  background: var(--color-surface-pearl);
-  border: 1.5px dashed var(--color-border-strong);
-  border-radius: var(--r-sm);
-  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .ri-station__drop:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
-}
-.ri-station__drop:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
-.ri-station__drop-link { color: var(--color-primary); font-weight: var(--fw-semibold); }
-.ri-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--space-sm); margin-top: 10px; }
-.ri-thumb { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.ri-thumb__frame {
+/* ------------------------------------------- Settings sub-navigation ---- */
+.sh-subnav-tab {
   position: relative;
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
-  background: var(--color-canvas-parchment);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-sm);
-}
-.ri-thumb__frame[data-primary] { border: 2px solid var(--color-primary); }
-.ri-thumb__frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.ri-thumb__actions { position: absolute; top: 4px; inset-inline-start: 4px; display: flex; gap: 4px; }
-.ri-thumb__cover {
-  position: absolute;
-  bottom: 0;
-  inset-inline: 0;
-  padding: 2px 0;
-  text-align: center;
-  font-size: var(--text-micro);
-  font-weight: var(--fw-semibold);
-  color: var(--color-on-primary);
-  background: var(--color-primary);
-}
-.ri-assign {
-  width: 100%;
-  min-height: 30px;
-  padding: 0 6px;
-  font: inherit;
-  font-size: var(--text-fine);
-  color: var(--color-ink);
-  background: var(--color-canvas);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--r-xs);
-}
-.ri-assign:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
-/* The package reference dialog: the box and its content lines in a rail
-   beside the form. The rail stacks above the form on narrow screens. */
-.ri-pkg { display: flex; flex-wrap: wrap; min-height: 560px; }
-.ri-pkg-nav {
-  flex: 1 1 280px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px 12px;
-  background: var(--color-surface-pearl);
-  border-inline-end: 1px solid var(--color-hairline);
-}
-.ri-pkg-pane { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-ml); padding: 20px 24px 24px; }
-.ri-pkg-group { padding: 6px 12px 4px; font-size: var(--text-fine); font-weight: var(--fw-bold); color: var(--color-ink-muted-48); }
-.ri-pkg-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 60px;
-  padding: 10px 12px;
-  font: inherit;
-  color: inherit;
-  text-align: start;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
-  cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .ri-pkg-row:hover { background: var(--color-canvas-parchment); }
-}
-.ri-pkg-row[aria-current="true"] { background: var(--color-canvas); border-color: var(--color-primary); }
-.ri-pkg-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
-.ri-pkg-badge {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  font-size: var(--text-small);
-  font-weight: var(--fw-bold);
-  color: var(--color-ink-muted-70);
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-sm);
-}
-.ri-pkg-sub { display: block; font-size: var(--text-fine); color: var(--color-ink-muted-48); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ri-pkg-progress { height: 6px; margin-top: 8px; overflow: hidden; background: var(--color-hairline); border-radius: var(--r-pill); }
-.ri-pkg-progress > span { display: block; height: 100%; border-radius: var(--r-pill); }
-.ri-pkg-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 36px 24px;
-  text-align: center;
-  border: 1.5px dashed var(--color-border-strong);
-  border-radius: var(--r-lg);
-}
-.ri-pkg-note {
-  padding: 12px 14px;
-  font-size: var(--text-small);
-  background: var(--color-primary-tint);
-  border: 1px solid var(--color-primary-soft);
-  border-radius: var(--r-md);
-}
-/* A package reference's card: one chip per content line. */
-.ri-lines { display: flex; flex-wrap: wrap; gap: 6px; }
-
-/* ------------------------------------------------------------- users --- */
-.users-kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--space-sm);
-  flex-shrink: 0;
-}
-.users-kpi {
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-card);
-  padding: 14px var(--space-md);
-}
-.users-kpi__value {
-  margin-top: var(--space-xxs);
-  font-size: var(--text-kpi);
-  font-weight: var(--fw-bold);
-  line-height: 1.15;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-ink);
-}
-.role-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-
-/* The role tag in the table opens the role panel (RoleInfoDrawer). */
-.role-tag-btn {
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  border-radius: var(--r-pill);
-  font: inherit;
-}
-.role-tag-btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
-.role-tag-btn__info { color: var(--color-primary); flex-shrink: 0; }
-
-/* ------------------------------------------------- role panel (drawer) --- */
-.role-drawer { position: fixed; inset: 0; z-index: 1300; }
-.role-drawer__scrim { position: absolute; inset: 0; background: var(--color-scrim); animation: role-drawer-fade 160ms var(--ease-out); }
-.role-drawer__panel {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 440px;
-  max-width: 100%;
-  background: var(--color-canvas);
-  box-shadow: var(--shadow-modal);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  animation: role-drawer-in 200ms var(--ease-out);
-}
-.role-drawer__head {
-  padding: var(--space-lg) var(--space-lg) var(--space-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  border-bottom: 1px solid var(--color-hairline);
-}
-.role-drawer__bar { display: flex; justify-content: space-between; align-items: center; }
-.role-drawer__eyebrow { font-size: var(--text-small); color: var(--color-ink-muted-48); }
-.role-drawer__close {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 0;
-  background: var(--color-canvas-parchment);
-  color: var(--color-ink-muted-70);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.role-drawer__close:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
-.role-drawer__tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  background: var(--color-canvas-parchment);
-  border-radius: var(--r-md);
-  padding: 4px;
-}
-.role-drawer__tab {
-  border: 0;
-  border-radius: var(--r-sm);
-  min-height: 40px;
-  background: transparent;
-  font: inherit;
-  font-size: var(--text-body-sm);
-  color: var(--color-ink-muted-70);
-  cursor: pointer;
-}
-.role-drawer__tab[aria-selected="true"] {
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  font-weight: var(--fw-bold);
-  box-shadow: 0 1px 3px var(--color-hairline-rgba);
-}
-.role-drawer__tab:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
-.role-drawer__title { margin: 0; font-size: var(--text-title); font-weight: var(--fw-bold); display: flex; align-items: center; gap: var(--space-xs); color: var(--color-ink); }
-.role-drawer__dot { width: 12px; height: 12px; }
-.role-drawer__desc { margin: 6px 0 0; font-size: var(--text-body-sm); line-height: 1.5; color: var(--color-ink-muted-48); }
-.role-drawer__reach { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-small); color: var(--color-ink-muted-70); }
-.role-drawer__meter { display: block; height: 6px; background: var(--color-canvas-parchment); border-radius: var(--r-full); overflow: hidden; }
-.role-drawer__meter > span { display: block; height: 100%; background: var(--color-primary); border-radius: var(--r-full); }
-.role-drawer__body { padding: var(--space-md) var(--space-lg) var(--space-lg); display: flex; flex-direction: column; gap: var(--space-lg); }
-.role-drawer__group { display: flex; flex-direction: column; gap: var(--space-xs); }
-.role-drawer__group-title { margin: 0; display: flex; justify-content: space-between; font-size: var(--text-body-sm); font-weight: var(--fw-bold); color: var(--color-ink); }
-.role-drawer__count { font-weight: var(--fw-regular); font-size: var(--text-small); color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; }
-.role-drawer__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.role-drawer__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-  font-size: var(--text-body-sm);
-  color: var(--color-ink-muted-48);
-}
-.role-drawer__item--ok { background: var(--color-success-bg); color: var(--color-ink); }
-.role-drawer__icon-ok { color: var(--color-success-ink); flex-shrink: 0; }
-.role-drawer__no { margin-inline-start: auto; font-size: var(--text-fine); }
-.role-drawer__people { border-top: 1px solid var(--color-hairline); padding-top: var(--space-md); }
-.role-drawer__chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
-.role-drawer__chip { background: var(--color-canvas-parchment); border-radius: var(--r-pill); padding: 4px 12px; font-size: var(--text-small); color: var(--color-ink); }
-@keyframes role-drawer-in { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes role-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .role-drawer__panel, .role-drawer__scrim { animation: none; }
-}
-
-/* ---------------------------------------------------------- work hours --- */
-/* Base looks live in the classes (not inline), so :hover can win. */
-.wh-card { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--r-card); }
-.wh-cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; margin-top: 18px; align-items: start; }
-@media (max-width: 900px) {
-  .wh-cols { grid-template-columns: minmax(0, 1fr); }
-}
-.wh-tile {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 6px;
-  min-height: 108px;
-  padding: 14px var(--space-sm);
-  text-align: center;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
+  flex-shrink: 0;
+  padding-inline: 12px;
   border-radius: var(--r-sm);
-  transition: border-color var(--dur-fast) var(--ease-out), transform var(--t-press) var(--ease-press);
-}
-.wh-tile--off { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
-.wh-tile--fixed { background: var(--color-canvas-parchment); cursor: default; }
-@media (hover: hover) and (pointer: fine) {
-  .wh-tile:not(.wh-tile--fixed):hover { border-color: var(--color-primary-border); }
-}
-.wh-tile:not(.wh-tile--fixed):active { transform: scale(.97); }
-.sh-iconbtn.wh-nav { background: var(--color-canvas-parchment); }
-@media (hover: hover) and (pointer: fine) {
-  .sh-iconbtn.wh-nav:hover:not(:disabled) { background: var(--color-primary-soft); color: var(--color-primary); }
-}
-.wh-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-height: 76px;
-  padding: 7px var(--space-xs);
-  overflow: hidden;
-  text-align: start;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-sm);
-  transition: border-color var(--dur-fast) var(--ease-out);
-}
-.wh-cell--off { background: var(--color-canvas-parchment); }
-.wh-cell--closed { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
-@media (hover: hover) and (pointer: fine) {
-  .wh-cell:hover { border-color: var(--color-primary-border); }
-}
-/* SP-12: one hairline between records (the old inline border shorthand
-   painted a 3px ink line). */
-.wh-rec {
-  display: flex;
-  gap: var(--space-sm);
-  width: 100%;
-  padding: 10px var(--space-xs);
-  text-align: start;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  background: none;
-  border: 0;
-  border-top: 1px solid var(--color-divider-soft);
-  transition: background-color var(--dur-fast) var(--ease-out);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-70);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 @media (hover: hover) and (pointer: fine) {
-  .wh-rec:hover { background: var(--color-surface-pearl); }
+  .sh-subnav-tab:hover { background: color-mix(in srgb, var(--color-ink) 4%, transparent); color: var(--color-ink); }
 }
-.wh-rec:focus-visible, .wh-cell:focus-visible, .wh-tile:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
-.wh-type {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xxs);
-  min-height: 32px;
-  padding-inline: 11px 4px;
-  font-size: var(--text-small);
-  color: var(--color-ink);
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--r-xs);
+.sh-subnav-tab[aria-current="page"] { color: var(--color-primary); font-weight: var(--fw-semibold); }
+.sh-subnav-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-primary);
 }
-.wh-type--plain { padding-inline-end: 11px; }
-/* "+ סוג חדש" — the dashed add affordance, for both the page and the dialog. */
-.wh-add-type {
-  min-height: 32px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: var(--fw-semibold);
-  color: var(--color-primary);
-  background: var(--color-canvas);
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--r-pill);
-  cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .wh-add-type:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
-}
-/* Choice chips in the work-hours dialogs (aria-pressed). */
-.wh-chip {
-  min-height: 34px;
-  padding: 0 15px;
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: var(--fw-semibold);
-  color: var(--color-ink);
-  background: var(--color-canvas);
-  border: 1px solid var(--color-field-border);
-  border-radius: var(--r-pill);
-  cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .wh-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--color-primary); color: var(--color-primary); }
-}
-.wh-chip[aria-pressed="true"] { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
-.wh-chip:disabled { opacity: .5; cursor: default; }
+.sh-subnav-tab:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }

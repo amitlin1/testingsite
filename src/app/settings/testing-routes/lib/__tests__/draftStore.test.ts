@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
-import { DraftStore, DraftStoreProvider, useDraftSummary, useFieldsMap, useRouteDraft, writeOutcome } from "../draftStore";
+import { DraftStore, DraftStoreProvider, useDraftSnapshot, writeOutcome } from "../draftStore";
 import type { TimerApi } from "../draftStore";
+import { useFieldsMap } from "../useFieldsMap";
 import { artboard1, choice, wire } from "./fixtures";
 
 // ---- a manual clock and a fetch whose answers the test gives --------------------------------------
@@ -23,7 +24,7 @@ class Clock implements TimerApi {
   get pending(): number {
     return this.queue.length;
   }
-  /** Move time on, firing every timer that falls due (in order), letting promises settle between. */
+  /** Move time on, firing every timer that falls due (in order), draining the promise callbacks between. */
   async advance(ms: number): Promise<void> {
     const end = this.now + ms;
     for (;;) {
@@ -33,7 +34,7 @@ class Clock implements TimerApi {
       this.queue.shift();
       this.now = next.at;
       next.fn();
-      await settle();
+      await drain();
     }
     this.now = end;
   }
@@ -41,6 +42,8 @@ class Clock implements TimerApi {
 
 type Call = { url: string; method: string; body: Record<string, unknown> | null; reply: (status: number, body: unknown) => Promise<void>; fail: () => Promise<void> };
 
+/** A fetch whose answers the test gives. Its answers are plain objects, not a Response with a body
+ *  stream, so everything a reply sets off is promise callbacks only — no I/O. */
 function fakeFetch() {
   const calls: Call[] = [];
   const fetch = (url: string, init: RequestInit): Promise<Response> =>
@@ -50,27 +53,28 @@ function fakeFetch() {
         method: init.method ?? "GET",
         body: typeof init.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null,
         reply: async (status, body) => {
-          resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
-          await settle();
+          resolve({ status, json: async () => body } as unknown as Response);
+          await drain();
         },
         fail: async () => {
           reject(new TypeError("Failed to fetch"));
-          await settle();
+          await drain();
         },
       });
     });
   return { calls, fetch };
 }
 
-/** Let pending promise callbacks run (a few rounds: fetch → json() → dispatch → next write). */
-async function settle(): Promise<void> {
-  for (let i = 0; i < 5; i++) await new Promise<void>((r) => setImmediate(r));
+/** Runs every promise callback already queued and every one they queue in turn: a macrotask runs
+ *  only once the microtask queue is empty, and the fake fetch does no I/O. */
+function drain(): Promise<void> {
+  return new Promise<void>((r) => setImmediate(r));
 }
 
 function setup(opts: { retryDelaysMs?: number[] } = {}) {
   const clock = new Clock();
   const net = fakeFetch();
-  const store = new DraftStore({ fetch: net.fetch, timers: clock, retryDelaysMs: opts.retryDelaysMs ?? [2000, 5000, 15000] });
+  const store = new DraftStore({ fetch: net.fetch, timers: clock, now: () => 1_000_000 + clock.now, retryDelaysMs: opts.retryDelaysMs ?? [2000, 5000, 15000] });
   const ctx = wire(artboard1());
   store.load(ctx);
   return { clock, net, store, ctx };
@@ -170,7 +174,7 @@ test("409 DRAFT_CONFLICT: conflict state, no more PUTs; reloadRoute takes the se
   assert.equal(net.calls.length, 1, "nothing is written over someone else's draft");
 
   const reloading = store.reloadRoute(101);
-  await settle();
+  await drain();
   const get = net.calls[1];
   assert.equal(get.method, "GET");
   assert.equal(get.url, "/api/settings/testing-routes/101/fields");
@@ -203,7 +207,7 @@ test("a reload that fails leaves the route as it was, and its edits save again",
   const { clock, net, store } = setup();
   store.edit(101, addField("א"));
   const reloading = store.reloadRoute(101);
-  await settle();
+  await drain();
   await net.calls[0].reply(500, { error: "x" });
   assert.equal(await reloading, false);
   assert.equal(store.getSnapshot().model.routes[101].dirty, true);
@@ -294,31 +298,34 @@ test("409 STEP_UNKNOWN (D7): the error state, then the route is read back and no
   assert.equal(net.calls.length, 2, "no PUT after the reload");
 });
 
-test("a route read back with other steps puts the context out of date until a context with them is loaded", async () => {
+test("a route read back with other steps tells the page once that the context is out of date", async () => {
   const { clock, net, store, ctx } = setup();
-  assert.equal(store.getStepsOutOfContextKey(), "");
+  let stale = 0;
+  store.onContextStale(() => { stale += 1; });
   store.edit(101, addField("א"));
   await clock.advance(800);
   await net.calls[0].reply(409, { code: "STEP_UNKNOWN", error: "x", route_id: 101, uids: ["s_x"] });
-  assert.equal(store.getStepsOutOfContextKey(), "", "nothing read back yet");
+  assert.equal(stale, 0, "nothing read back yet");
   const server = ctx.lines[0].route!;
   const steps = { ...server.route, route_steps: server.route.route_steps.filter((_, i) => i !== 2), step_uids: server.route.step_uids.filter((_, i) => i !== 2) };
   await net.calls[1].reply(200, { ...server, route: steps, draft_rev: 6 });
-  assert.equal(store.getStepsOutOfContextKey(), "101:" + steps.step_uids.join(","));
+  assert.equal(stale, 1);
 
-  // The page asks for the context again: it now has the route's steps.
+  // The page asks for the context again: it now has the route's steps — no new call.
   const next = { ...ctx, lines: ctx.lines.map((l, i) => (i === 0 ? { ...l, route: { ...server, route: steps, draft_rev: 6 } } : l)) };
   store.load(next);
-  assert.equal(store.getStepsOutOfContextKey(), "");
+  assert.equal(stale, 1);
 });
 
 test("a steps save: the reloaded context brings the new steps, and the entries follow — nothing out of date", () => {
   const { store, ctx } = setup();
+  let stale = 0;
+  store.onContextStale(() => { stale += 1; });
   const server = ctx.lines[0].route!;
   const steps = { ...server.route, route_steps: server.route.route_steps.slice(0, 2), step_uids: server.route.step_uids.slice(0, 2) };
   store.load({ ...ctx, lines: ctx.lines.map((l, i) => (i === 0 ? { ...l, route: { ...server, route: steps } } : l)) });
   assert.deepEqual(store.getSnapshot().model.routes[101].route.step_uids, steps.step_uids);
-  assert.equal(store.getStepsOutOfContextKey(), "");
+  assert.equal(stale, 0);
 });
 
 test("409 STEP_UNKNOWN whose read-back fails keeps the error, and does not PUT the refused config again", async () => {
@@ -345,7 +352,7 @@ test("flushAll saves pending edits now and resolves when every route is saved", 
   const flushing = store.flushAll().then((r) => {
     done = r;
   });
-  await settle();
+  await drain();
   assert.equal(net.calls.length, 2, "no debounce");
   await net.calls[0].reply(200, ok(5));
   assert.equal(done, null, "still waiting for route 102");
@@ -358,7 +365,7 @@ test("flushAll waits for an edit made while it waits, and reports a route it cou
   const { net, store } = setup();
   store.edit(101, addField("א"));
   const flushing = store.flushAll();
-  await settle();
+  await drain();
   store.edit(101, addField("ב"));
   await net.calls[0].reply(200, ok(5));
   assert.equal(net.calls.length, 2, "the edit made during the flush is saved at once");
@@ -377,7 +384,7 @@ test("discardAll: DELETE for every route with a server draft, a local reset for 
     delete cfg.steps.s_moelec00;
   });
   const discarding = store.discardAll();
-  await settle();
+  await drain();
   await clock.advance(5000);
   assert.deepEqual(net.calls.map((c) => [c.method, c.url, c.body]), [
     ["DELETE", "/api/settings/testing-routes/101/fields/draft", { base_rev: 4 }],
@@ -399,7 +406,7 @@ test("discardAll waits for a PUT in flight, then deletes the draft it created", 
   });
   await clock.advance(800);
   const discarding = store.discardAll();
-  await settle();
+  await drain();
   const deletesBefore = net.calls.filter((c) => c.method === "DELETE").length;
   assert.equal(deletesBefore, 0, "no DELETE while the PUT is in flight");
   await net.calls[0].reply(200, ok(1));
@@ -413,7 +420,7 @@ test("discardAll waits for a PUT in flight, then deletes the draft it created", 
 test("an edit made while discardAll runs is saved once the discard is over", async () => {
   const { clock, net, store } = setup();
   const discarding = store.discardAll();
-  await settle();
+  await drain();
   assert.deepEqual(net.calls.map((c) => c.method), ["DELETE"], "route 101's draft; route 102 has none (reset locally)");
   store.edit(102, (cfg) => {
     delete cfg.steps.s_moelec00;
@@ -433,7 +440,7 @@ test("an edit made while discardAll runs is saved once the discard is over", asy
 test("flushAll called while discardAll runs resolves once the discard is over", async () => {
   const { net, store } = setup();
   const discarding = store.discardAll();
-  await settle();
+  await drain();
   store.edit(102, (cfg) => {
     delete cfg.steps.s_moelec00;
   });
@@ -441,11 +448,11 @@ test("flushAll called while discardAll runs resolves once the discard is over", 
   const flushing = store.flushAll().then((r) => {
     flushed = r;
   });
-  await settle();
+  await drain();
   assert.equal(flushed, null);
   await net.calls[0].reply(200, { draft_rev: 5 });
   await discarding;
-  await settle();
+  await drain();
   const put = net.calls.find((c) => c.method === "PUT");
   assert.ok(put, "the edit is flushed at once");
   await put.reply(200, ok(1));
@@ -456,7 +463,7 @@ test("flushAll called while discardAll runs resolves once the discard is over", 
 test("retry() after a failed DELETE deletes again (it does not save the draft back)", async () => {
   const { clock, net, store, ctx } = setup();
   const discarding = store.discardAll();
-  await settle();
+  await drain();
   await net.calls[0].fail();
   const r = await discarding;
   assert.deepEqual(r, { ok: false, failed: [101], conflicts: [] });
@@ -476,7 +483,7 @@ test("flushPending starts every waiting save at once (leaving the page)", async 
   const { clock, net, store } = setup();
   store.edit(101, addField("א"));
   store.flushPending();
-  await settle();
+  await drain();
   assert.equal(net.calls.length, 1);
   assert.equal(clock.pending, 0);
   store.flushPending();
@@ -497,17 +504,35 @@ test("load() merges: the same answer twice is one load; a shared route keeps its
   assert.equal(net.calls.length, 0);
 });
 
-test("subscribe: listeners hear every change and can leave", () => {
-  const { store } = setup();
+test("subscribe: listeners hear every change and can leave; an edit that changes nothing is no change", () => {
+  const { clock, store } = setup();
   let n = 0;
   const off = store.subscribe(() => {
     n += 1;
   });
   store.edit(101, addField("א"));
   assert.equal(n, 1);
+  const timers = clock.pending;
+  store.edit(101, () => {});
+  assert.equal(n, 1, "nothing to hear");
+  assert.equal(clock.pending, timers, "and the save is not put off");
   off();
   store.edit(101, addField("ב"));
   assert.equal(n, 1);
+  assert.deepEqual([...store.heldRouteIds()].sort((a, b) => a - b), [100, 101, 102, 103, 104]);
+});
+
+test("sessionSavedAt: this session's last autosave of the context on screen; gone with the context", async () => {
+  const { clock, net, store, ctx } = setup();
+  assert.equal(store.getSnapshot().sessionSavedAt, null, "a draft saved before this session shows no time");
+  store.edit(101, addField("א"));
+  await clock.advance(800);
+  assert.equal(store.getSnapshot().sessionSavedAt, null, "not while the PUT is in flight");
+  await net.calls[0].reply(200, ok(5));
+  assert.equal(store.getSnapshot().sessionSavedAt, 1_000_800);
+  // Another kit on screen: its routes were not saved in this session.
+  store.load({ ...wire(ctx), kit: null, lines: ctx.lines.slice(1) });
+  assert.equal(store.getSnapshot().sessionSavedAt, null);
 });
 
 // ---- answers ----------------------------------------------------------------------------------------
@@ -521,6 +546,7 @@ test("writeOutcome reads the draft endpoints' answers", () => {
     { type: "failed", error: { kind: "rejected", op: "put", status: 409, code: "DRAFT_CONFLICT" } }, "a conflict body that does not parse");
   assert.deepEqual(writeOutcome("put", 400, { code: "SHAPE_INVALID" }), { type: "failed", error: { kind: "rejected", op: "put", status: 400, code: "SHAPE_INVALID" } });
   assert.deepEqual(writeOutcome("delete", 502, null), { type: "failed", error: { kind: "server", op: "delete", status: 502 } });
+  assert.deepEqual(writeOutcome("put", null, null), { type: "failed", error: { kind: "network", op: "put" } });
 });
 
 // ---- React -----------------------------------------------------------------------------------------
@@ -528,9 +554,10 @@ test("the provider loads its context on the first render; the hooks read the sto
   const ctx = wire(artboard1());
   const seen: { changes: number; pcRev: number | null; columns: number }[] = [];
   function Probe() {
+    const { summary, model } = useDraftSnapshot();
     seen.push({
-      changes: useDraftSummary().changeCount,
-      pcRev: useRouteDraft(101)?.rev ?? null,
+      changes: summary.changeCount,
+      pcRev: model.routes[101]?.rev ?? null,
       columns: useFieldsMap(ctx)?.columns.length ?? 0,
     });
     return null;
@@ -541,7 +568,7 @@ test("the provider loads its context on the first render; the hooks read the sto
 
 test("useDraftStore outside the provider is a programming error", () => {
   function Probe() {
-    useRouteDraft(1);
+    useDraftSnapshot();
     return null;
   }
   assert.throws(() => renderToStaticMarkup(createElement(Probe)), /DraftStoreProvider/);

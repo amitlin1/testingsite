@@ -2,7 +2,7 @@
 
 // RP-Initiated logout — clears the local Auth.js session AND terminates the
 // Keycloak session, so re-entering the app doesn't auto-sign-in with the still-
-// valid SSO cookie. PORTABLE.
+// valid SSO cookie.
 //
 // The Keycloak issuer is NOT read here. It used to come from
 // NEXT_PUBLIC_AUTH_KEYCLOAK_ISSUER, but `next build` inlines NEXT_PUBLIC_* into

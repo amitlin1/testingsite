@@ -60,7 +60,7 @@
 ### 2.6 הגדרות חיות במקום אחד
 
 - קודי סטטוס: `metric_state` (טבלה) במקום ~40 קטעי SQL עם 1..5 hardcoded.
-- פילטרים: builder אחד ב־`src/app/lib/metrics/filters.ts` — לא מוקלד מחדש לכל query.
+- פילטרים: builder אחד ב־`src/app/lib/metrics/read/filters.ts` — לא מוקלד מחדש לכל query.
 - לוח שנה: סולם `work_span` מגורסה, לא `calculateWorkDuration` ב־TypeScript שסותר את ה־seed.
 - scopes של ההרשאות: enum אחד ב־`src/app/lib/metrics/scope.ts` (אין טבלת `metric_scope_type` — אף שאילתה לא הצטרפה אליה).
 
@@ -907,7 +907,7 @@ REVOKE EXECUTE ON FUNCTION metrics_record(text,bigint,text,int,int,int,int,text,
 
 ### 4.3 חוזה ה־TypeScript ומדיניות האמון
 
-`src/app/lib/metrics/record.ts`:
+`src/app/lib/metrics/ledger/record.ts`:
 
 ```ts
 export type MetricsTransition = {
@@ -1053,7 +1053,7 @@ Statement אחד, בתוך `runJob` (§10.1). פיזור `test_stations.status =
 (שלב 0 — **בביצוע עכשיו** בריפו על ידי ה־session הראשי; ההיקף כבגרסה 1.)
 
 1. `AND current_status = <expected>` בשלושת מסלולי המחקר ב־`results/route.ts`. בלי זה exactly-once הוא משאלה.
-2. חילוץ `getStationLiveCounters` אל `src/lib/station-counters.ts` **לפני** שנוגעים ב־`metrics-service.ts` — הצרכן (`api/settings/test-stations/route.ts:26`) בולע שגיאות, ולכן שבירה שם שקטה. החילוץ הוא שהופך את שכתוב ה־Q3 של שלב 5 לשינוי של קובץ אחד.
+2. חילוץ `getStationLiveCounters` אל `src/app/lib/metrics/read/station-counters.ts` **לפני** שנוגעים ב־`metrics-service.ts` — הצרכן (`api/settings/test-stations/route.ts:26`) בולע שגיאות, ולכן שבירה שם שקטה. החילוץ הוא שהופך את שכתוב ה־Q3 של שלב 5 לשינוי של קובץ אחד.
 3. `research_history.item_id` → `bigint` (מיגרציה `20260824000000_fix_int4_overflow`).
 4. קבצי `.bat` ב־`prod-deploy/app-server/scheduler/`, מכוונים ל־`http://localhost/api/cron/...` **דרך nginx**, ו־`8-register-tasks.ps1` עם `MultipleInstances=IgnoreNew` תחת חשבון שרואה את `CRON_SECRET`.
 5. `2-check-env.ps1` דוחה את ברירת המחדל המשוגרת של `CRON_SECRET`.
@@ -1082,7 +1082,7 @@ Statement אחד, בתוך `runJob` (§10.1). פיזור `test_stations.status =
 9. **כל שאילתת `@>`/`&&` נושאת `NOT i.is_terminal`** (יישור אינדקס־פרדיקט, §3.6). "הושלמו" נספרים מסגירות `route_run` בלבד (§5.3ב).
 10. **סימטריית שני השעונים:** כל עמודת משך מופיעה כזוג `_wall_` / `_work_` — ב־Q3, Q4, Q5, Q8 — בלי יוצא מהכלל.
 
-### 5.1 בלוק הפילטרים — נכתב פעם אחת, `src/app/lib/metrics/filters.ts`
+### 5.1 בלוק הפילטרים — נכתב פעם אחת, `src/app/lib/metrics/read/filters.ts`
 
 כל שאילתה — Q1, Q2, Q4, Q5, Q6, Q7, Q8 — משתמשת **באותו טקסט**. "הגדרה אחת לכל מטריקה" נשברת אם סט הפילטרים מוקלד מחדש לכל query.
 
@@ -1215,7 +1215,7 @@ GROUP BY st.test_station_id, st.test_station_desc, sty.test_type_desc, st.test_s
 > עובר דרך `isi_run` (‏lookup פר־`route_run`, לא סריקת הסט הפתוח) והוא **צריך** את שורות ה־`done`
 > לספירת ההשלמה — `NOT is_terminal` שם היה מאפס את `items_finished`.
 
-> `standing_queue_age_*` נמדד על אוכלוסיית **הממתינים לפי סוג התחנה** — לא על הבדיקות הרצות (הבאג של ה־spec המקורי: תחנה עם 22 ממתינים בממוצע 47 דקות ושתי בדיקות בנות 6–9 דקות הציגה 7.5). `active_test_age` היא מטריקה **חדשה**, ועכשיו — בהתאם לכלל הסימטריה — בשני שעונים. סריקות ה"חיים" של Q3 רצות דרך `isi_range_live` על ~מאות שורות לא־סופיות (הסט ה"פתוח" המלא, כולל `done`, הוא ~330k בשנה 3 — ולכן ה־probe הוא `@> now() AND NOT is_terminal`, לא `upper_inf`); שתי המוסכמות "בהמתנה" (`{2}` מול `{2,4}`) הן הטלות של דגלי `metric_state` וניתנות סוף־סוף ליישוב. **`src/lib/station-counters.ts` נכתב מחדש על Q3 בשלב 5** — עבודה מפורשת עם בדיקת parity, לא הנחה (בגרסה 1 שלב 8 טען "שכבר הוסב" אבל אף שלב לא ביצע).
+> `standing_queue_age_*` נמדד על אוכלוסיית **הממתינים לפי סוג התחנה** — לא על הבדיקות הרצות (הבאג של ה־spec המקורי: תחנה עם 22 ממתינים בממוצע 47 דקות ושתי בדיקות בנות 6–9 דקות הציגה 7.5). `active_test_age` היא מטריקה **חדשה**, ועכשיו — בהתאם לכלל הסימטריה — בשני שעונים. סריקות ה"חיים" של Q3 רצות דרך `isi_range_live` על ~מאות שורות לא־סופיות (הסט ה"פתוח" המלא, כולל `done`, הוא ~330k בשנה 3 — ולכן ה־probe הוא `@> now() AND NOT is_terminal`, לא `upper_inf`); שתי המוסכמות "בהמתנה" (`{2}` מול `{2,4}`) הן הטלות של דגלי `metric_state` וניתנות סוף־סוף ליישוב. **`src/app/lib/metrics/read/station-counters.ts` נכתב מחדש על Q3 בשלב 5** — עבודה מפורשת עם בדיקת parity, לא הנחה (בגרסה 1 שלב 8 טען "שכבר הוסב" אבל אף שלב לא ביצע).
 
 ### 5.5 Q4 — FLOW ו־DURATION, מקובץ לפי כל ממד
 
@@ -1715,10 +1715,10 @@ UPDATE item_state_interval i
 
 ### שלב 1 — הריסת קוד מת, קבוצה A (אפס הפניות) · **בוצע ואומת 2026-08-24**
 
-**17 קבצים, 2,245 שורות. אף רכיב, אף `.bat`, אף `.ps1` ואף doc לא מפנה אליהן** — הרשימה המלאה בנספח ב. בנוסף: הסרת `TimeSeriesPoint`, `DailyTrendPoint`, `DateRange` מ־`src/types/dashboard.ts`, והסרת `getLiveSystemStats` מ־`metrics-service.ts` (**`refreshMaterializedViews` נשאר עד שלב 7** — `create-daily-snapshots`, שחי עד אז, קורא לו; רשימת גרסה 1 פספסה את זה) (2 מתוך 15 המתודות; 1 חולצה בשלב 0; 12 הנותרות נמחקות עם הקובץ בשלב 7).
+**17 קבצים, 2,245 שורות. אף רכיב, אף `.bat`, אף `.ps1` ואף doc לא מפנה אליהן** — הרשימה המלאה בנספח ב. בנוסף: הסרת `TimeSeriesPoint`, `DailyTrendPoint`, `DateRange` מ־`src/app/lib/dashboard/contract.ts`, והסרת `getLiveSystemStats` מ־`metrics-service.ts` (**`refreshMaterializedViews` נשאר עד שלב 7** — `create-daily-snapshots`, שחי עד אז, קורא לו; רשימת גרסה 1 פספסה את זה) (2 מתוך 15 המתודות; 1 חולצה בשלב 0; 12 הנותרות נמחקות עם הקובץ בשלב 7).
 
 > **אזהרה תפעולית:** ייתכן שערך Task Scheduler במכונת הפרודקשן מצביע על `create-hourly-snapshots` או `refresh-views`. **לאשר מול המפעיל לפני המחיקה.**
-> **התנגשות שמות:** `src/app/components/StationHistoryDialog.tsx` (מיובא מ־`testing/page.tsx`) הוא קובץ אחר ו**נשאר**; הנמחק (שלב 6) הוא `src/app/components/dashboard/StationHistoryDialog.tsx`.
+> **התנגשות שמות:** `src/app/testing/StationHistoryDialog.tsx` (מיובא מ־`testing/page.tsx`) הוא קובץ אחר ו**נשאר**; הנמחק (שלב 6) הוא `src/app/components/dashboard/StationHistoryDialog.tsx`.
 
 **אימות:** build + `tsc --noEmit` נקיים; כל 9 דפי `src/app/dashboard/tests/**` נטענים.
 **ניתן לשילוח עצמאי: כן.**
@@ -1787,8 +1787,8 @@ UPDATE item_state_interval i
 >    per-accessory, כך ש־retry מדלג על מה שכבר נשמר במקום לקדם אותו צעד נוסף.
 
 נוצר:
-- `src/app/lib/metrics/record.ts` — `recordTransition`, `MetricsReason`
-- `src/app/lib/metrics/action-id.ts` — `action_uuid` / `submit_id` בצד הלקוח
+- `src/app/lib/metrics/ledger/record.ts` — `recordTransition`, `MetricsReason`
+- `src/lib/action-id.ts` — `action_uuid` / `submit_id` בצד הלקוח
 - **שער הגרסה בתוך מסלול הכתיבה**: `results/route.ts` (וכל כותב) מסרב לפעול אם `metrics_schema_version < המינימום של ה־image` — כשל אתחול רועש במקום השבתת רצפה; assertion תואם ב־`4-verify.ps1` (רץ מיד אחרי `3-start`, לפני שמכריזים על ה־deploy כתקין)
 
 שונה (15 נקודות הקריאה של §4.5):
@@ -1895,10 +1895,10 @@ ALTER TABLE item_routes ENABLE TRIGGER trg_metrics_drift;
 ### שלב 5 — מסלול הקריאה על ה־ledger + השגחה
 
 נוצר:
-- `src/app/lib/metrics/filters.ts` — בלוק הפילטרים היחיד (§5.1)
+- `src/app/lib/metrics/read/filters.ts` — בלוק הפילטרים היחיד (§5.1)
 - `src/app/lib/metrics/scope.ts` — scope builder + enum ה־scopes
 - `src/app/lib/metrics/queries/` — `pointInTime.ts` (Q1), `pitSeries.ts` (Q2א+Q2ב), `stationBoard.ts` (Q3), `flow.ts` (Q4), `kpiWindow.ts` (Q5), `slowSteps.ts` (Q6), `entityProgress.ts` (Q7), `quality.ts` (Q8) — **אין `source.ts` ואין כלל ניתוב: מקור אחד**
-- `src/app/lib/metrics/jobRun.ts` — `recordJobRun`, מעטפת `runJob` (§10.1)
+- `src/app/lib/jobs/jobRun.ts` — `recordJobRun`, מעטפת `runJob` (§10.1)
 - `src/app/api/cron/metrics-selfcheck/route.ts` — selfcheck + ריפוי אופק הלוח (§7.4)
 - `src/app/api/health/jobs/route.ts` — **self-gated**: `withAuth(handler, { role: "manager" })` בתוך ה־handler. ה־middleware לא יגן עליו — `/api/health` נמצא ב־`PUBLIC_ROUTES` וה־prefix גובר על כל ROLE_PROTECTED (נבדק ב־`routes.ts`); `/api/health/schema` לעומתו **נשאר public בכוונה** (ל־`4-verify.ps1` אין session). בדיקות: `GET /api/health/jobs` בלי session ⇒ 401/403; `GET /api/health/schema` בלי session ⇒ 200
 - `src/app/components/dashboard/JobHealthTile.tsx`
@@ -1918,7 +1918,7 @@ ALTER TABLE item_routes ENABLE TRIGGER trg_metrics_drift;
 | `tests/average-times` | Q4 |
 
 שונה גם:
-- **`src/lib/station-counters.ts` — נכתב מחדש על Q3**, מאחורי אותו ממשק TypeScript שמסך ההגדרות צורך, עם בדיקת parity מול `station_live_counters` בשבוע ה־dual-run. (בגרסה 1 העבודה הזאת לא הוקצתה לאף שלב, ושלב 8 "אימת" שהיא כבר קרתה — מסך ההגדרות היה מציג אפסים שקטים אחרי מיגרציה B.)
+- **`src/app/lib/metrics/read/station-counters.ts` — נכתב מחדש על Q3**, מאחורי אותו ממשק TypeScript שמסך ההגדרות צורך, עם בדיקת parity מול `station_live_counters` בשבוע ה־dual-run. (בגרסה 1 העבודה הזאת לא הוקצתה לאף שלב, ושלב 8 "אימת" שהיא כבר קרתה — מסך ההגדרות היה מציג אפסים שקטים אחרי מיגרציה B.)
 - `CompletedShipmentsToggle.tsx` — פרמטר `scope` יחיד; `showSent` נמחק
 - `dashboard-query-params.ts` — הסרת `showSent`, `itemId`; `dashboard-filters.ts` — הסרת `statusRef`
 - `status-names.ts` — נמחק (תוויות מ־`metric_state.label_he`); `date-periods.ts` — נמחק; `calculateWorkDuration` — נמחק, שתי נקודות הקריאה מופנות ל־`work_seconds_between`
@@ -2180,7 +2180,7 @@ UPDATE metrics_schema_version SET version = 2, applied_at = now();
 | **Q3 (לוח התחנות) נשא את אותו כשל JIT שתוקן ב־Q7.** שלוש תת־שאילתות מתואמות עם אותו `WHERE` בדיוק, שנבדלות רק ב־aggregate | עלות מוערכת **358,562** מול `jit_above_cost = 100,000`; ‏`JIT: Functions 65`, ‏54–139ms מתוך statement של 73–167ms. Q3 רצה בכל בקשת `by-station` וגם במסך ההגדרות | ‏CTE אחד מקובץ לפי `station_type_id` + CTE אחד למאגר המחקר: עלות **1,696**, **אין בלוק JIT**, ‏**9.8–16.5ms**. שקילות: 10 שורות, 120 תאים, **0 הפרשים** (שני הטקסטים באותה טרנזקציה, כדי ש־`now()` יהיה זהה) |
 | **Q8 (איכות) נשאה אותו כשל, חמור יותר.** ארבע תת־שאילתות מתואמות על אותה קבוצת `route_run_id = ANY(array_agg(DISTINCT …))`, שנבדלות רק ב־`state_key` ובשעון | עלות **699,200** — מעל `jit_above_cost` **וגם** מעל `jit_optimize_above_cost = 500,000`, ולכן הידור עם inlining ו־optimization: ‏**1,007–1,203ms של LLVM** בתוך statement של 1,048–1,244ms, שהתוצר שלו 844 שורות | אותה קבוצה, כתובה כ־join במקום כמערך: `base` → `DISTINCT (יום, סוג, run)` → join ל־intervals של המחקר → aggregate אחד לקבוצה. עלות **8,549**, **אין בלוק JIT**, ‏**24–46ms** (פי ~35). שקילות: **44 מקרים** (4 חלונות × 11 פילטרים), 6,945 שורות, **83,340 תאים, 0 הפרשים** |
 | **`?? 0` שרד בשלושה מסכים.** `itemsInRoutesPercentage` הוחזר כ־0 כאשר Q7 עונה NULL — מכנה 0, כלומר ישות שלא הצהירה על פריטים | חי בדאטהסט: **2 מתוך 6 לקוחות ו־3 מתוך 11 סוגי פריט** בלי פריט אחד. הלקוח "מנדי" קיבל `successPercentage: null` לצד `itemsInRoutesPercentage: 0` — אותה שורה, שתי תשובות סותרות לאותה שאלה | השדה הורחב ל־`number \| null` בשלושת ה־routes |
-| **החוזה על החוט לא עודכן כשהורחבו האחוזים.** `successPercentage` / `completionPercentage` כבר החזירו NULL, אבל `src/types/dashboard.ts` עדיין הצהיר `number` — ולכן הטבלאות רינדרו את **המחרוזת `"null%"`** על המסך | ‏`{row.completionPercentage}%` בתוך template literal; ‏`<ProgressCell pct={null}>` נותן `width: "null%"`, כלומר פס ריק בלי הודעה | שלושת השדות הורחבו ב־`types/dashboard.ts`, ‏`ProgressCell` מקבל `number \| null`, ושלוש הטבלאות מציגות `-` — אותה מוסכמה שכבר נהוגה שם ל־duration חסר |
+| **החוזה על החוט לא עודכן כשהורחבו האחוזים.** `successPercentage` / `completionPercentage` כבר החזירו NULL, אבל `src/app/lib/dashboard/contract.ts` עדיין הצהיר `number` — ולכן הטבלאות רינדרו את **המחרוזת `"null%"`** על המסך | ‏`{row.completionPercentage}%` בתוך template literal; ‏`<ProgressCell pct={null}>` נותן `width: "null%"`, כלומר פס ריק בלי הודעה | שלושת השדות הורחבו ב־`types/dashboard.ts`, ‏`ProgressCell` מקבל `number \| null`, ושלוש הטבלאות מציגות `-` — אותה מוסכמה שכבר נהוגה שם ל־duration חסר |
 | **חבילת ה־observability הייתה מהבהבת — 2 כשלים ב־8 הרצות מלאות.** `node --test` מריץ קבצים במקביל; כותרת החבילה חשבה על אי־truncate של ה־**ledger** ופספסה את הטבלה המשותפת השנייה: שתי חבילות ה־ledger בונות מחדש גם את `work_calendar_version`, ובזמן הבנייה אין שורת `is_current` | ‏`/api/cron/metrics-selfcheck` קורא `calendar_horizon_days` ראשון ומתייחס ל־NULL כ"רפא עכשיו", ה־self-heal של §7.4 נדלק, וה־dynamic import של `@hebcal/core` (ESM בלבד) מת תחת ה־runner ב־CJS עם `ERR_PACKAGE_PATH_NOT_EXPORTED` — HTTP 500 במקום 200. אותה שגיאה בשני הכשלים | הבדיקה תופסת עכשיו את **אותו** advisory lock (‏526050825) ששתי החבילות האחרות מחזיקות, למשך הבדיקה הזאת בלבד: **6/6 הרצות ירוקות, 0 שגיאות hebcal**. **הפער נשאר:** ענף ה־self-heal עצמו עדיין לא ניתן להרצה מתוך ה־runner, ולכן אינו מכוסה |
 | **רתמת ה־parity הייתה RED על החשבונאות של עצמה.** `expandStatusHistory` כתבה `finishedCumulative` / `_new_finishedToday` / `_new_activeTotal` לשורת־היום של **שני** הצדדים; ‏`compareRow` מזהה "שדה חדש בלבד" לפי **נוכחות המפתח**, ולכן שלושה שדות שלישן מעולם לא היו נספרו כ־`DIFFERS` | ‏3 הפרשים בלתי מוסברים, כולם בצורה `old=- new=<ערך>` | המפתחות נכתבים רק כשהצד באמת נושא אותם |
 
@@ -2219,7 +2219,7 @@ UPDATE metrics_schema_version SET version = 2, applied_at = now();
 
 **נמחקים:** `create-daily-snapshots`, `create-monthly-snapshots`, `create-hourly-snapshots`, `refresh-views` + 2 קבצי ה־`.bat` שלהם. **לא קיימים בגרסה 2:** `rollup-drain` (אין cache), `prune-history` (אין טבלת היסטוריה). קבצי `.bat` חדשים: `run_release_stale_tests.bat` (שלב 0), `run_rebuild_work_calendar.bat` (שלב 2), `run_metrics_selfcheck.bat` (שלב 5) — שלושה בסך הכול, רשומים ב־`8-register-tasks.ps1` עם `MultipleInstances=IgnoreNew`.
 
-**כל job באותה מעטפת** (`src/app/lib/metrics/jobRun.ts`):
+**כל job באותה מעטפת** (`src/app/lib/jobs/jobRun.ts`):
 
 ```ts
 export async function runJob(name: string, fn: (tx) => Promise<JobResult>) {

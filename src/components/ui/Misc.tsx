@@ -1,48 +1,7 @@
 "use client";
 import React, { forwardRef } from "react";
-import { createPortal } from "react-dom";
-import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
 import Image from "next/image";
-
-/* ---------------------------------------------------------------- Fab ---- */
-export interface FabProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "color"> {
-  color?: "default" | "primary" | "secondary" | "error" | "inherit";
-  size?: "small" | "medium" | "large";
-  variant?: "circular" | "extended";
-  href?: string;
-  component?: React.ElementType;
-  sx?: SxInput;
-}
-export const Fab = forwardRef<HTMLButtonElement, FabProps>(function Fab(
-  { color = "primary", size = "large", variant = "circular", href, component, sx, style, className, children, type, ...rest },
-  ref,
-) {
-  const dim = size === "small" ? 40 : size === "medium" ? 48 : 56;
-  const bg = color === "primary" ? "var(--color-primary)" : color === "error" ? "var(--color-destructive)" : color === "inherit" ? "var(--color-ink)" : "var(--color-canvas)";
-  const fg = color === "default" ? "var(--color-ink)" : "var(--color-on-primary)";
-  const Component = (component || (href ? "a" : "button")) as React.ElementType;
-  return (
-    <Component
-      ref={ref}
-      href={href}
-      type={Component === "button" ? type || "button" : undefined}
-      className={cn("sh-press", className)}
-      style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-        width: variant === "extended" ? undefined : dim, height: dim,
-        padding: variant === "extended" ? "0 20px" : 0,
-        borderRadius: variant === "extended" ? "var(--r-pill)" : "50%",
-        background: bg, color: fg, border: color === "default" ? "1px solid var(--color-hairline)" : "none",
-        cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 15,
-        ...sxToStyle(sx), ...style,
-      }}
-      {...rest}
-    >
-      {children}
-    </Component>
-  );
-});
 
 /* ------------------------------------------------------------- Avatar ---- */
 export interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -72,127 +31,6 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(function Avatar(
     </div>
   );
 });
-
-/* -------------------------------------------------------------- Link ----- */
-export interface LinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
-  underline?: "none" | "hover" | "always";
-  color?: string;
-  component?: React.ElementType;
-  sx?: SxInput;
-}
-export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
-  { underline = "hover", color = "var(--color-primary)", component: Component = "a", sx, style, className, children, ...rest },
-  ref,
-) {
-  return (
-    <Component
-      ref={ref}
-      className={cn("sh-link", underline === "always" && "sh-link--always", underline === "none" && "sh-link--none", className)}
-      style={{ color, textDecoration: underline === "always" ? "underline" : "none", cursor: "pointer", ...sxToStyle(sx), ...style }}
-      {...rest}
-    >
-      {children}
-    </Component>
-  );
-});
-
-/* --------------------------------------------------- CardActionArea ----- */
-export interface CardActionAreaProps extends React.HTMLAttributes<HTMLDivElement> {
-  disabled?: boolean;
-  component?: React.ElementType;
-  href?: string;
-  sx?: SxInput;
-}
-export const CardActionArea = forwardRef<HTMLDivElement, CardActionAreaProps>(function CardActionArea(
-  { disabled, component, href, sx, style, className, children, ...rest },
-  ref,
-) {
-  const Component = (component || (href ? "a" : "div")) as React.ElementType;
-  return (
-    <Component
-      ref={ref}
-      href={href}
-      className={cn("sh-card-action", className)}
-      aria-disabled={disabled || undefined}
-      style={{ display: "block", width: "100%", cursor: disabled ? "not-allowed" : "pointer", textAlign: "inherit", ...sxToStyle(sx), ...style }}
-      {...rest}
-    >
-      {children}
-    </Component>
-  );
-});
-
-/* --------------------------------------------------- Grow / Fade -------- */
-export interface TransitionProps {
-  in?: boolean;
-  timeout?: number | { enter?: number; exit?: number };
-  unmountOnExit?: boolean;
-  appear?: boolean;
-  mountOnEnter?: boolean;
-  children: React.ReactElement;
-  style?: React.CSSProperties;
-}
-function makeTransition(kind: "fade" | "grow") {
-  return forwardRef<HTMLElement, TransitionProps>(function Transition({ in: inProp = true, unmountOnExit, children, style }, ref) {
-    if (unmountOnExit && !inProp) return null;
-    const t: React.CSSProperties = {
-      // Nothing appears from nothing: grow starts at .95 (not .85), ease-out.
-      transition: "opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out)",
-      opacity: inProp ? 1 : 0,
-      transform: kind === "grow" ? (inProp ? "scale(1)" : "scale(0.95)") : undefined,
-      transformOrigin: "center",
-    };
-    return React.cloneElement(children, {
-      ref,
-      style: { ...t, ...(children.props as { style?: React.CSSProperties }).style, ...style },
-    } as Record<string, unknown>);
-  });
-}
-export const Fade = makeTransition("fade");
-export const Grow = makeTransition("grow");
-
-/* ------------------------------------------------------------ Popover ---- */
-export interface PopoverProps {
-  open: boolean;
-  anchorEl?: HTMLElement | null;
-  onClose?: (event: unknown, reason?: string) => void;
-  anchorOrigin?: { vertical: "top" | "center" | "bottom"; horizontal: "left" | "center" | "right" };
-  transformOrigin?: { vertical: "top" | "center" | "bottom"; horizontal: "left" | "center" | "right" };
-  children?: React.ReactNode;
-  id?: string;
-  disableRestoreFocus?: boolean;
-  keepMounted?: boolean;
-  sx?: SxInput;
-  PaperProps?: { sx?: SxInput; style?: React.CSSProperties };
-}
-export function Popover({ open, anchorEl, onClose, anchorOrigin, children, sx, PaperProps }: PopoverProps) {
-  if (!open || !anchorEl || typeof document === "undefined") return null;
-
-  // anchorEl is already in the DOM (it is the element the caller clicked), so it
-  // can be measured here rather than in a layout effect: one render pass instead
-  // of two, and no state. This also removes the old effect's `anchorOrigin`
-  // dependency — every caller passes it as an inline object literal, so the
-  // effect re-ran and re-set state on every single parent render.
-  const r = anchorEl.getBoundingClientRect();
-  const vertical = anchorOrigin?.vertical ?? "bottom";
-  const top = vertical === "top" ? r.top : vertical === "center" ? r.top + r.height / 2 : r.bottom + 4;
-
-  return createPortal(
-    <>
-      <div onClick={(e) => { e.stopPropagation(); onClose?.(e, "backdropClick"); }} style={{ position: "fixed", inset: 0, zIndex: 1400 }} />
-      <div
-        style={{
-          position: "fixed", top, insetInlineStart: r.left, zIndex: 1401,
-          background: "var(--color-canvas)", border: "1px solid var(--color-hairline)", borderRadius: "var(--r-md)", overflow: "hidden",
-          ...sxToStyle(sx), ...sxToStyle(PaperProps?.sx), ...PaperProps?.style,
-        }}
-      >
-        {children}
-      </div>
-    </>,
-    document.body,
-  );
-}
 
 /* ------------------------------------------------------------ Stepper ---- */
 export interface StepperProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -272,5 +110,3 @@ export const StepLabel = forwardRef<HTMLDivElement, StepLabelProps>(function Ste
     </div>
   );
 });
-
-export const StepConnector = () => null;

@@ -1,20 +1,9 @@
 "use client";
 import * as React from "react";
+import { HALF_DAY_END } from "@/lib/workHours/time";
 import type { ResolvedDay } from "@/lib/workHours/types";
 
-/* ---------- Shifthouse tokens (single action blue, no shadows) ---------- */
-export const INK = "var(--color-ink)";
-export const BODY = "var(--color-ink-muted-70)";
-export const MUTED = "var(--color-ink-muted-48)";
-export const FAINT = "var(--color-ink-muted-48)";  // was #9a9aa0 (2.8:1) on real data
-export const HAIRLINE = "var(--color-hairline)";
-export const SOFT = "var(--color-canvas-parchment)";
-export const DIVIDER = "var(--color-divider-soft)";
-export const BLUE = "var(--color-primary)";
-export const TINT = "var(--color-primary-soft)";
-export const DANGER = "var(--color-destructive)";
-
-// The card surface is settings.css `.wh-card` (r-card, hairline edge).
+// The card surface is work-hours.css `.wh-card` (r-card, hairline edge).
 
 export const WEEKDAY_HEADERS = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
 export const EM_DASH = "—";
@@ -31,7 +20,7 @@ export function Bdi({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** "07:00" + "15:35" → "07:00–15:35" (already LTR-isolated by <Bdi>). */
+/** "07:00" + "15:35" → "07:00–15:35"; render it inside <Bdi>. */
 export function timeRange(start: string | null, end: string | null): string {
   if (!start || !end) return "";
   return `${start}–${end}`;
@@ -43,7 +32,6 @@ export function dayDotMonth(dateISO: string): string {
   return `${d}.${m}`;
 }
 
-/** day-of-month number for a calendar cell. */
 export function dayNum(dateISO: string): number {
   return Number(dateISO.split("-")[2]);
 }
@@ -55,17 +43,13 @@ export function monthTitle(year: number, month0: number): string {
   );
 }
 
-/** Break clause for a working day's detail line. */
 function breakClause(d: ResolvedDay): string {
   return d.breakStart && d.breakEnd
     ? `הפסקה ${d.breakStart}–${d.breakEnd}`
     : "ללא הפסקה";
 }
 
-/**
- * The muted second line under a record in the "החודש" list and inside cells.
- * Ranges are returned bare; callers wrap them with <Bdi> where rendered.
- */
+/** The muted second line under a record in the "החודש" list. */
 export function recordDetail(d: ResolvedDay): string {
   if (d.isWorking && d.start && d.end) {
     return `${d.start}–${d.end} · ${breakClause(d)}`;
@@ -76,9 +60,7 @@ export function recordDetail(d: ResolvedDay): string {
     case "vacation":
       return "יום מלא";
     case "eve":
-      return "ללא עבודה · ניתן לפתוח עד 12:00";
-    case "shabbat":
-      return "לא עובדים";
+      return `ללא עבודה · ניתן לפתוח עד ${HALF_DAY_END}`;
     default:
       return "לא עובדים";
   }

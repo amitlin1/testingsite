@@ -7,7 +7,7 @@ import { DraftStoreProvider } from "../draftStore";
 import type { FlushResult } from "../draftStore";
 import { FORK_UNDRAWN_TEXT, FORK_TEXT, forkConfirmMessage, forkErrorText } from "../forkLabels";
 import { sharedNoticeText } from "../labels";
-import { forkOutcome, forkRoute, forkUrl, parseForkResult } from "../useFork";
+import { forkRoute } from "../useFork";
 
 // "צור מסלול נפרד למארז הזה" (artboard 2, spec §3.2.1) on the client: the answer's meaning, the
 // flush before the request, the dialog's (undrawn) words, and the link in the notice.
@@ -25,22 +25,25 @@ function fakeFetch(status: number | null, body: unknown) {
   return { fetch, calls };
 }
 
-test("the answer: 201 / 200 with the new route; a shape refusal with its reason; a screen behind the server is stale; the rest failed", () => {
+/** forkRoute after a clean flush, answered `status` / `body`. */
+const answer = (status: number | null, body: unknown) => forkRoute({ flushAll: async () => OK, fetch: fakeFetch(status, body).fetch }, 17, 5);
+
+test("the answer: 201 / 200 with the new route; a shape refusal with its reason; a screen behind the server is stale; the rest failed", async () => {
   const route = { test_route_id: 41, route_number: 3 };
-  assert.deepEqual(forkOutcome(201, route), { ok: true, data: route });
-  assert.deepEqual(forkOutcome(200, { ...route, extra: 1 }), { ok: true, data: route });
-  assert.deepEqual(forkOutcome(201, { test_route_id: 41 }), { ok: false, error: { kind: "failed" } }, "a body that is not a route");
-  assert.equal(parseForkResult({ test_route_id: 0, route_number: 3 }), null);
-  assert.equal(parseForkResult([route]), null);
+  assert.deepEqual(await answer(201, route), { ok: true, data: route });
+  assert.deepEqual(await answer(200, { ...route, extra: 1 }), { ok: true, data: route });
+  for (const body of [{ test_route_id: 41 }, { test_route_id: 0, route_number: 3 }, [route]]) {
+    assert.deepEqual(await answer(201, body), { ok: false, error: { kind: "failed" } }, "a body that is not a route: " + JSON.stringify(body));
+  }
 
   const reason = "מסך: מסלול הפריט חייב להסתיים באותה עמדת סגירה כמו מסלול המארז";
-  assert.deepEqual(forkOutcome(409, { error: "x", code: "ITEM_ROUTE_SHAPE", reason, package_route_number: 1 }), { ok: false, error: { kind: "shape", reason } });
-  assert.deepEqual(forkOutcome(409, { error: "x", code: "PACKAGE_ROUTE_SHAPE", reason: " " }), { ok: false, error: { kind: "shape", reason: null } });
+  assert.deepEqual(await answer(409, { error: "x", code: "ITEM_ROUTE_SHAPE", reason, package_route_number: 1 }), { ok: false, error: { kind: "shape", reason } });
+  assert.deepEqual(await answer(409, { error: "x", code: "PACKAGE_ROUTE_SHAPE", reason: " " }), { ok: false, error: { kind: "shape", reason: null } });
   for (const [status, code] of [[409, "LINE_NOT_ON_ROUTE"], [400, "KIT_LINE_NOT_FOUND"], [404, "ROUTE_NOT_FOUND"], [404, "ITEM_TYPE_NOT_FOUND"]] as const) {
-    assert.deepEqual(forkOutcome(status, { error: "x", code }), { ok: false, error: { kind: "stale" } }, code);
+    assert.deepEqual(await answer(status, { error: "x", code }), { ok: false, error: { kind: "stale" } }, code);
   }
   for (const [status, body] of [[409, { code: "ROUTE_NUMBER_TAKEN" }], [400, { code: "INVALID_BODY" }], [403, { error: "Forbidden" }], [500, { code: "CONFIG_INVALID" }], [502, null], [null, null]] as const) {
-    assert.deepEqual(forkOutcome(status, body), { ok: false, error: { kind: "failed" } }, String(status));
+    assert.deepEqual(await answer(status, body), { ok: false, error: { kind: "failed" } }, String(status));
   }
 });
 
@@ -64,7 +67,6 @@ test("forkRoute writes every pending autosave first, then POSTs { package_type_i
   assert.deepEqual(out, { ok: true, data: { test_route_id: 41, route_number: 3 } });
   assert.deepEqual(order, ["flush", "post"]);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, forkUrl(17));
   assert.equal(calls[0].url, "/api/settings/testing-routes/17/fork");
   assert.equal(calls[0].init.method, "POST");
   assert.deepEqual(JSON.parse(String(calls[0].init.body)), { package_type_id: 5 });
@@ -108,7 +110,6 @@ test("the dialog's words (undrawn): the message names the item, the kit and the 
   assert.equal(forkErrorText({ kind: "shape", reason: null }), FORK_UNDRAWN_TEXT.failed);
   assert.equal(forkErrorText({ kind: "stale" }), FORK_UNDRAWN_TEXT.stale);
   assert.equal(forkErrorText({ kind: "failed" }), FORK_UNDRAWN_TEXT.failed);
-  assert.equal(FORK_TEXT.link, "צור מסלול נפרד למארז הזה", "artboard 2");
 });
 
 test("the notice ends with the link only when the host passes `fork` (a kit context); the text is artboard 2's either way", () => {
@@ -124,8 +125,8 @@ test("the notice ends with the link only when the host passes `fork` (a kit cont
   assert.ok(!plain.includes(FORK_TEXT.link));
   assert.ok(!plain.includes("<button"));
 
-  const withFork = render({ routeId: 17, packageTypeId: 5, kitName: "מארז עמדת עבודה", onForked: () => {} });
+  const withFork = render({ routeId: 17, packageTypeId: 5, kitName: "מארז עמדת עבודה", onReload: () => {} });
   assert.ok(withFork.includes(text + " <button"), "the link follows the text, after a space");
-  assert.match(withFork, /<button type="button" class="sfe-notice__link" aria-haspopup="dialog">צור מסלול נפרד למארז הזה<\/button>/);
+  assert.match(withFork, /<button type="button"[^>]* aria-haspopup="dialog">צור מסלול נפרד למארז הזה<\/button>/, "a button that opens a dialog");
   assert.ok(!withFork.includes(FORK_UNDRAWN_TEXT.title), "the dialog is closed until the link is pressed");
 });

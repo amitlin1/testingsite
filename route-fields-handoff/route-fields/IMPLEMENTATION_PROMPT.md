@@ -65,7 +65,7 @@
   - **קוראים מחוץ ל-`src`:** `scripts/seed-packages-demo.mjs:202-232` (GET + POST), `scripts/seed-dev-dataset.js:541-564` (GET + PUT + POST), `scripts/e2e-packages/lib.mjs:125` (GET). שני סקריפטי הזרע שולחים עוגיית Auth.js עם `roles: ["manager", "mashan", "tester"]` (`seed-packages-demo.mjs:132`, `seed-dev-dataset.js:324`), כך ששער תפקידים `manager`/`tester` לא ישבור אותם. **אף אחד מהם לא שולח `step_uids`** (§3.5).
 - **כל קליטה עוברת בנקודה אחת:** `POST /api/items` מחזיר 410 (`src/app/api/items/route.ts:75-80`). קליטה = `createPackage` / `addPackageItem` (`src/app/api/packages/route.ts:117`, `src/app/api/packages/[id]/items/route.ts:52`), ושתיהן כותבות את `items` ואת `item_routes` דרך `insertRoutedRow` (`src/app/lib/packages/create-package.ts:134-186`; INSERT ל-`items` ב-`:159`, ל-`item_routes` ב-`:170-174`).
 - **שינוי מסלול של פריט קיים** קורה בשלושה מקומות בלבד: שינוי סוג עם איפוס מארז (`src/app/api/items/[id]/route.ts:328-333` → `resetPackageToOpening`, `src/app/lib/packages/reset.ts:30`, ה-UPDATE ב-`:52-60`), ושינוי סוג בלי איפוס (`items/[id]/route.ts:338-350`, עם `route_number: routeNum`, שלב 1).
-- **כתיבת תוצאה:** `POST /api/testing/results` (`src/app/api/testing/results/route.ts`, 966 שורות) נועל את שורת `item_routes` (`:161-166`, `SELECT route_number, current_status … FOR UPDATE`), בודק replay לפי `SubmitID` (`:190-199`), טוען הקשר מארז (`:208`), מברר את סוג העמדה (`:220-223`) וכותב את `details` כ-`JSON.stringify(Details)::jsonb` (`:562-571`, השורה ב-`:569`). `Details` מוקלד `unknown` (`:41`, וגם `src/types/index.ts:143`). ה-`catch` הכללי ממפה שגיאות ב-`:934-965`.
+- **כתיבת תוצאה:** `POST /api/testing/results` (`src/app/api/testing/results/route.ts`, 966 שורות) נועל את שורת `item_routes` (`:161-166`, `SELECT route_number, current_status … FOR UPDATE`), בודק replay לפי `SubmitID` (`:190-199`), טוען הקשר מארז (`:208`), מברר את סוג העמדה (`:220-223`) וכותב את `details` כ-`JSON.stringify(Details)::jsonb` (`:562-571`, השורה ב-`:569`). `Details` מוקלד `unknown` (`:41`, וגם `src/app/lib/testing/contract.ts:143`). ה-`catch` הכללי ממפה שגיאות ב-`:934-965`.
 - **מה החלונות כותבים היום ל-`details`:**
 
   | חלון | `details` | מקור |
@@ -76,7 +76,7 @@
   | פתיחת מארז — הקופסה | `{sku, hasRU, pkg:{…}, itemCount, registeredCount, templateCount, labelsPrinted, packageItemIds, opening:true}` | `PackageOpenWizard.tsx:267-272` |
   | סגירת מארז — כל פריט שהגיע | `{closing:true, packed:true, package_id}` | `PackageCloseWizard.tsx:97` |
   | סגירת מארז — הקופסה | `{sku, hasRU, closing:true, checks, note, packed, decisions}` | `PackageCloseWizard.tsx:108-112` |
-  | חלון ברירת מחדל (`PopUpTestDialog`) | **אין `Details` בכלל** | `src/app/components/PopUpTestDialog.tsx:71-82` |
+  | חלון ברירת מחדל (`PopUpTestDialog`) | **אין `Details` בכלל** | `src/app/testing/tests-popups/PopUpTestDialog.tsx:71-82` |
 
 - **בפתיחה ובסגירה כל פריט נשלח בנפרד** ל-`/api/testing/results` עם אותו `SubmitID`, ורק אחריהם הקופסה (`PackageOpenWizard.tsx:241-275`, `PackageCloseWizard.tsx:88-113`). בסגירה, פריט שלא הגיע לעמדה **לא** מקבל שורת תוצאה (`PackageCloseWizard.tsx:92`), וההחלטה עליו נשמרת על הקופסה ב-`decisions`.
 - **בחירת החלון:** `REGISTRY` ב-`src/app/testing/tests-popups/mainPopUp.ts:26-31` ממפה מזהים קבועים (2 פירוק, 3 שיקוף, 4 מראה שחורה, 5 הרכבה). כל סוג אחר מקבל `PopUpTestDialog` (`:36-37`). יש TODO (`:11-12`): "switch to a stable key… so an id edit in Settings can't unmap a wizard". אשפי המארז נבחרים לפי `package_level` (`page.tsx:1444-1447`).
@@ -85,7 +85,7 @@
 
 ### 0.3 שפה חזותית
 
-- **טוקנים בלבד** מ-`src/styles/tokens.css`. גופן Rubik (מקומי, `src/app/layout.tsx:10`). רכיבי `sh-*` / `@/components/ui`. אייקונים: `lucide-react` ישירות עם `strokeWidth={1.75}`, כמו ב-`src/app/settings/testing-routes/page.tsx:4,254`, `src/app/testing/tests-popups/PackageOpenWizard.tsx:3` ופרימיטיבי ה-ui (`Chips.tsx:84`, `Dialog.tsx:118`, `Select.tsx:121`). (מסך הבדיקות `src/app/testing/page.tsx:33-40` מייבא אייקונים דרך המתאם בשמות MUI `@/components/ui/icons` — בקוד חדש להשתמש ב-lucide ישירות.) RTL: `padding-inline-*`, `inset-inline-*`; `dir="ltr"` + `unicode-bidi: isolate` על מזהים, מק״ט, מספרים ויחידות. `font-variant-numeric: tabular-nums` על כל מספר.
+- **טוקנים בלבד** מ-`src/styles/tokens.css`. גופן Rubik (מקומי, `src/app/layout.tsx:10`). רכיבי `sh-*` / `@/components/ui`. אייקונים: `lucide-react` ישירות עם `strokeWidth={1.75}`, כמו ב-`src/app/settings/testing-routes/page.tsx:4,254`, `src/app/testing/tests-popups/opening/PackageOpenWizard.tsx:3` ופרימיטיבי ה-ui (`Chips.tsx:84`, `Dialog.tsx:118`, `Select.tsx:121`). (מסך הבדיקות `src/app/testing/page.tsx:33-40` מייבא אייקונים דרך המתאם בשמות MUI `@/components/ui/icons` — בקוד חדש להשתמש ב-lucide ישירות.) RTL: `padding-inline-*`, `inset-inline-*`; `dir="ltr"` + `unicode-bidi: isolate` על מזהים, מק״ט, מספרים ויחידות. `font-variant-numeric: tabular-nums` על כל מספר.
 - **ארבעת צבעי הטון** הם החריג היחיד, והם כבר טוקנים של נקודות סטטוס (`tokens.css:21,44,58,60`):
 
   ```css
@@ -877,7 +877,7 @@ export type StationFieldsResponse =
    - **פריט בשלב ברמת פריט:** `mode: "item"` עם הקבוצה `target: "item"`.
    - **שורת מארז** (`loadPackageContext(...).isPackage`, `context.ts:17-35`) **בשלב ברמת מארז:** `mode: "package"`. `items` = כל `items` עם `package_id = itemId`, לפי `package_seq`, ולכל פריט `groups = [each_item, {item_type_id}]` (ריקות מושמטות).
    - כל צירוף אחר (פריט בתוך מארז בשלב ברמת מארז) לא מגיע לכאן, כי החלון נפתח על הקופסה (`page.tsx:1446`). מחזירים `legacy`.
-   - **עמדות מחקר:** לפני שלב 3 — אם `ir.current_status IN (4, 5)` (`status-names.ts:5-12`) או שהעמדה הפותחת `test_stations.is_research` (`schema.prisma:339`): `legacy`. עמדות מחקר פותחות את `PopUpTestDialog` (`isResearchStatus`, `src/app/components/PopUpTestDialog.tsx:97`), ו-`current_route_step` מצביע עדיין על השלב שממנו הפריט נשלח — בלי הבדיקה הזו העובד במחקר היה רואה את שדות השלב ההוא, והשרת (§3.4 שלב 1) היה דורש `Details.schema` גם ב-`returnToRoute`/`finishRoute`. השרת מדלג על הפתרון באותם מקרים.
+   - **עמדות מחקר:** לפני שלב 3 — אם `ir.current_status IN (4, 5)` (`status-names.ts:5-12`) או שהעמדה הפותחת `test_stations.is_research` (`schema.prisma:339`): `legacy`. עמדות מחקר פותחות את `PopUpTestDialog` (`isResearchStatus`, `src/app/testing/tests-popups/PopUpTestDialog.tsx:97`), ו-`current_route_step` מצביע עדיין על השלב שממנו הפריט נשלח — בלי הבדיקה הזו העובד במחקר היה רואה את שדות השלב ההוא, והשרת (§3.4 שלב 1) היה דורש `Details.schema` גם ב-`returnToRoute`/`finishRoute`. השרת מדלג על הפתרון באותם מקרים.
 
 החלון שומר את `schema` שקיבל ושולח אותו חזרה ב-`Details.schema`. השרת **לא סומך** עליו: הוא מאמת אותו מול השורה הנעולה (§3.4).
 
@@ -1017,7 +1017,7 @@ SELECT count(*) FROM test_results
          OR ir.current_route_step = $min_changed_pos );
    ```
 
-   - סטטוס 2 = "ממתין" ו-6 = "ממתין לפריטי המארז" (`src/app/lib/status-names.ts:5-12`). בשניהם החלון עוד לא נפתח, ולכן בטוח לעבור לגרסה החדשה.
+   - סטטוס 2 = "ממתין" ו-6 = "ממתין לפריטי המארז" (`src/lib/item-status.ts:5-12`). בשניהם החלון עוד לא נפתח, ולכן בטוח לעבור לגרסה החדשה.
    - בסטטוס 1 ("בבדיקה") ובסטטוסים 4/5 (מחקר) הפריט נשאר על הגרסה שלו — **גם כשהוא בשלב מוקדם יותר**. לכן מסנן הסטטוס חל על שני הענפים: בלעדיו, פריט בסטטוס 1 בשלב מוקדם (חלון פתוח אצל עובד) היה מקבל את הגרסה החדשה, והשליחה שלו (`schema.v` הישן) הייתה נדחית ב-409 `FIELDS_SCHEMA_MISMATCH` (שלב 2 ב-§3.4) באמצע בדיקה.
    - **הפריט מקבל את כל הגרסה החדשה, לא רק את השלב שהשתנה.** לכן התנאי לפי השלב **הראשון** שהשתנה, ושלבים שהפריט כבר עבר לא מושפעים.
    - הנוסח מהארטבורד: "יעברו לגרסה 5 בעמדה הבאה שלהם; תוצאות שכבר נשמרו לא ישתנו".
@@ -1122,7 +1122,7 @@ for (const d of drafts) { const next = renameStationTypeInConfig(d.fields_draft,
 | `src/app/testing/fields/fields.css` | חדש | מחלקות `tst-fx-*`, רק טוקנים מ-`tokens.css` |
 | `src/app/testing/tests-popups/stationKit.tsx` | קיים | `PassFail` מקבל `size`/`invalid`; `VerdictCard` מקבל `suggestion` ו-`noteMax` |
 | `src/components/ui/Autocomplete.tsx` | קיים | prop אופציונלי `listFooter`, §4.6 |
-| `VerdictStation.tsx`, `PhotoStation.tsx`, `PackageOpenWizard.tsx`, `PackageCloseWizard.tsx`, `src/app/components/PopUpTestDialog.tsx` | קיים | ההזרקה, §4.11 |
+| `VerdictStation.tsx`, `PhotoStation.tsx`, `PackageOpenWizard.tsx`, `PackageCloseWizard.tsx`, `src/app/testing/tests-popups/PopUpTestDialog.tsx` | קיים | ההזרקה, §4.11 |
 | `src/app/testing/page.tsx` | קיים | `handleSubmitTestResult` מעביר את `code` של השגיאה, §4.12 |
 | `tests-popups/mainPopUp.ts`, `PackageWizardShell.tsx`, `Xray.tsx`, `BlackMirror.tsx`, `Disassembly.tsx`, `Assembly.tsx`, `PackageDecisionDialog.tsx` | קיים | **ללא שינוי** |
 
@@ -1286,7 +1286,7 @@ interface FieldRowProps {
 
 ### 4.6 `ChoiceAutocomplete` — בקרת `choice_row`
 
-נבנה על `SearchableCombobox` (`src/app/components/common/SearchableCombobox.tsx:82-261`) במצב `dense`. הוא כבר נותן: טריגר 44px (`.sh-combo--dense`, `ui.css:318`); רשימה בפורטל מעל חלונות ב-`z-index 1450` (`ui/Autocomplete.tsx:374-404`); חיצים, Enter ו-Esc, ו-Esc סוגר רק את הרשימה (`ui/Autocomplete.tsx:346-361`); `renderOptionContent` (`SearchableCombobox.tsx:56`), `startIcon` (`:60`), `inputSx` (`:67`), `noOptionsText` (`:103`).
+נבנה על `SearchableCombobox` (`src/components/ui/SearchableCombobox.tsx:82-261`) במצב `dense`. הוא כבר נותן: טריגר 44px (`.sh-combo--dense`, `ui.css:318`); רשימה בפורטל מעל חלונות ב-`z-index 1450` (`ui/Autocomplete.tsx:374-404`); חיצים, Enter ו-Esc, ו-Esc סוגר רק את הרשימה (`ui/Autocomplete.tsx:346-361`); `renderOptionContent` (`SearchableCombobox.tsx:56`), `startIcon` (`:60`), `inputSx` (`:67`), `noOptionsText` (`:103`).
 
 ```ts
 interface ChoiceAutocompleteProps {
@@ -1483,7 +1483,7 @@ const fieldsGate = sf.status === "loading" || sf.status === "error" || (hasField
 
 #### 4.11.6 `PopUpTestDialog` (חשמל, מכניקה, ויזואלית וכל עמדה בלי אשף) — ארטבורד 14
 
-| מה | איפה (`src/app/components/PopUpTestDialog.tsx`, 207 שורות) |
+| מה | איפה (`src/app/testing/tests-popups/PopUpTestDialog.tsx`, 207 שורות) |
 |---|---|
 | **הבלוק** | בתוך `<Stack spacing={3}>` (`:104`): **אחרי** ה-`Box` של "עובד מבצע *" (`:127-138`) **ולפני** `<ItemFilesPanel …/>` (`:141`). כותרת: "בדיקות העמדה", עם `ClipboardCheck` |
 | **"מוצע"** | בתוך הבלוק, בתחתיתו: "מוצע לסמן כלא תקין — …" (14). אין כאן "בדיקה תקינה?"; ההכרעה נשארת "תוצאת בדיקה" המספרית (`:116-124`) |
@@ -2230,7 +2230,7 @@ interface NotesFieldProps {
     - **מאיפה הערכים:** שמות השדות והאפשרויות מועתקים **מהסקריפטים של ארטבורדים 12–18 בלבד** (למשל `LegacyXray.dc.html:349-352`, `LegacyFallback.dc.html:354-358`, `LegacyPackageCloseItems.dc.html:494-497`).
     - **סדר הרצה:** אחרי `seed-packages-demo.mjs`. מארזים שנקלטו **אחרי** הזרע מקבלים גרסה 1; מה שנקלט לפניו נשאר בחלון הקבוע (זו גם בדיקה של ההקפאה).
 
-**קבצים בשלב 1:** `prisma/schema.prisma` + מיגרציה; `src/app/lib/station-fields/*`; `src/app/lib/packages/create-package.ts`, `reset.ts`; `src/app/api/items/[id]/route.ts`; `src/app/api/settings/testing-routes/route.ts`, `[id]/route.ts`, `[id]/fields/**`, `fields/**`; `src/app/api/testing-routes/route.ts`; `src/app/api/testing/station-fields/route.ts` (חדש); `src/app/api/testing/results/route.ts`; `src/app/testing/tests-popups/{VerdictStation,PhotoStation,PackageOpenWizard,PackageCloseWizard,stationKit}.tsx`; `src/app/testing/fields/*` (חדש); `src/app/testing/testing.css`; `src/components/ui/Autocomplete.tsx`; `src/app/components/PopUpTestDialog.tsx`; `src/app/testing/page.tsx`; `scripts/seed-station-fields-demo.mjs` (חדש). **`src/lib/routes.ts` לא משתנה** (`/api/testing` כבר מוגן).
+**קבצים בשלב 1:** `prisma/schema.prisma` + מיגרציה; `src/app/lib/station-fields/*`; `src/app/lib/packages/create-package.ts`, `reset.ts`; `src/app/api/items/[id]/route.ts`; `src/app/api/settings/testing-routes/route.ts`, `[id]/route.ts`, `[id]/fields/**`, `fields/**`; `src/app/api/testing-routes/route.ts`; `src/app/api/testing/station-fields/route.ts` (חדש); `src/app/api/testing/results/route.ts`; `src/app/testing/tests-popups/{VerdictStation,PhotoStation,PackageOpenWizard,PackageCloseWizard,stationKit}.tsx`; `src/app/testing/fields/*` (חדש); `src/app/testing/testing.css`; `src/components/ui/Autocomplete.tsx`; `src/app/testing/tests-popups/PopUpTestDialog.tsx`; `src/app/testing/page.tsx`; `scripts/seed-station-fields-demo.mjs` (חדש). **`src/lib/routes.ts` לא משתנה** (`/api/testing` כבר מוגן).
 
 **גמור כש:**
 - [ ] כל בדיקות הקבלה ב-§8.1–§8.7 עוברות.
@@ -2281,7 +2281,7 @@ interface NotesFieldProps {
   | `src/app/lib/packages/read.ts:209-213` | `closing_details` ו-`details->>'sku'` | ה-SKU של הסריקה האחרונה ממשיך להופיע |
   | `src/app/components/reports/testDetails.ts:76-95` (`normalizeTestDetails`) | מערך, `fields` כמערך, או אובייקט שטוח של פרימיטיבים | **אובייקט `fields` לפי מזהה לא נקרא** בענף הזה; הענף השטוח מסנן אובייקטים, כך שאין שבירה אבל גם אין הצגה. בדיקת יחידה: אין חריגה (§10.2) |
   | `src/app/components/reports/TestResultsReportDocument.tsx:64` | `normalizeTestDetails(s.details)` | לא מיובא באף מקום ב-`src` — אין לו מסך היום |
-  | `src/app/lib/metrics/queries.ts` (סביב `:1644-1656`) | `tr.passed` בלבד | `passed` נשאר ההכרעה של העובד |
+  | `src/app/lib/metrics/read/queries.ts` (סביב `:1644-1656`) | `tr.passed` בלבד | `passed` נשאר ההכרעה של העובד |
 
 - [ ] **`Result`, `Passed` ו-`Comments` מההכרעה של העובד** גם כש"מוצע" שונה; ההבדל ב-`verdict.overridden`.
 - [ ] **שינוי מזהה של סוג עמדה** לא מנתק הגדרה (uid → מיקום → `route_steps`).
@@ -2379,7 +2379,7 @@ interface NotesFieldProps {
 
 ### 8.11 RTL ונגישות
 
-- [ ] כל מזהה מארז/פריט בחלונות ובמפה מקובץ ב-4 (`1005 1509 2600 01`), סיומת מודגשת וכחולה, עם `PackageIdText` (ייצוא ברירת מחדל, `src/app/components/packages/PackageIdText.tsx:10`) / `fmtId` (`src/app/components/packages/packageUi.ts:71`) הקיימים, עטוף ב-`direction:ltr; unicode-bidi:isolate`.
+- [ ] כל מזהה מארז/פריט בחלונות ובמפה מקובץ ב-4 (`1005 1509 2600 01`), סיומת מודגשת וכחולה, עם `PackageIdText` (ייצוא ברירת מחדל, `src/app/components/IdText.tsx:10`) / `fmtId` (`src/app/components/packages/packageUi.ts:71`) הקיימים, עטוף ב-`direction:ltr; unicode-bidi:isolate`.
 - [ ] מק״ט, S/N, מספרים ויחידות ("0.08 Ω") ב-LTR ומבודדים, `tabular-nums`. "1–4" לא מתהפך.
 - [ ] חצים מתהפכים ("חזרה למפה", "העמדה הבאה"). הרשימה מיושרת לימין השדה ולא יוצאת מהחלון (portal).
 - [ ] autocomplete: `role="combobox"` + `aria-expanded`/`aria-controls`/`aria-activedescendant`; אפשרויות `role="option"` עם מילת הטון ב-`aria-label`; רמזי מקשים `aria-hidden`.
@@ -2437,7 +2437,7 @@ npm run build
 - **`seed-dev-dataset.js`** מיועד לדשבורד המטריקות ועדיין משתמש במפתח `parents_only` (`:187`) **(לא אומת שהוא עובד אחרי מודל המארזים; לא נדרש כאן)**.
 - **אילו חלונות נפתחים בזרע:** מזהי סוגי העמדה מוקצים אוטומטית. "חשמל", "מכניקה" ו"בדיקה ויזואלית" יפתחו `PopUpTestDialog` (14) **רק אם** לא קיבלו את המזהים 2–5 (`mainPopUp.ts:19-22`, `:26-31`). **ב-DB ריק זה כמעט בטוח קורה:** הזרע יוצר 6 סוגים לפי הסדר (`seed-packages-demo.mjs:66-71`, autoincrement) — פתיחת מארז=1, חשמל=2, מכניקה=3, בדיקה ויזואלית=4, מעבדת מחקר=5, סגירת מארז=6 — ולכן חשמל נפתח כ-Disassembly (פירוק), מכניקה כ-Xray ובדיקה ויזואלית כ-BlackMirror. תרחיש ו ב-§9.2 (ארטבורד 14 בחשמל) דורש שחשמל יקבל מזהה מחוץ ל-2–5: ליצור קודם 4 סוגי עמדה אחרים (למשל "פירוק", "שיקוף", "מראה שחורה", "הרכבה") כדי לתפוס את 2–5, או לשנות את המזהה של חשמל דרך "מזהה (ID)" אחרי תיקון שלב 0. בדיקה: `SELECT test_station_type_id, test_type_desc FROM test_stations_type ORDER BY 1;`. כדי לבדוק 12–13: ליצור ב-`/settings/test-stations` סוגים "שיקוף" ו"פירוק", לשנות להם מזהה ל-3 ו-2 (שדה "מזהה (ID)", `StationTypesTable.tsx:283`) — **לפני** שמכניסים אותם למסלול, או אחרי תיקון שלב 0 — להוסיף למסלול של "מחשב" ולפרסם שדות. (המזהים 2–5 פנויים רק אם יצרתם אותם לפני הזרע — ראו למעלה.)
 - **כניסה:** הדפדפן עובר ב-Keycloak (`docker-compose.keycloak.yml`); הזרעים עוקפים עם עוגייה offline. לדפדפן צריך משתמש עם manager + tester: `node scripts/e2e-packages/kc-test-user.mjs create` (`scripts/e2e-packages/README.md`) **(לא אומת מחוץ ל-Windows)**.
-- **`DATABASE_URL`** מופיע ב-`env.local.example:29` רק כשורה מוערת (`# DATABASE_URL=postgresql://…`); `src/app/lib/prisma.ts:10` קורא `process.env.DATABASE_URL` ישירות ולא מרכיב אותו מ-`DB_*`. לכן יש להגדיר `DATABASE_URL` במפורש.
+- **`DATABASE_URL`** מופיע ב-`env.local.example:29` רק כשורה מוערת (`# DATABASE_URL=postgresql://…`); `src/lib/db.ts:10` קורא `process.env.DATABASE_URL` ישירות ולא מרכיב אותו מ-`DB_*`. לכן יש להגדיר `DATABASE_URL` במפורש.
 
 ### 9.2 תסריט QA
 

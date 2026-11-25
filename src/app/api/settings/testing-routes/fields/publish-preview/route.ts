@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
 import { withAuth } from "@/lib/auth/withAuth";
-import { adminFieldsErrorResponse, previewPublish, readJsonObject } from "@/app/lib/station-fields/admin";
-import { FIELDS_EDIT_ROLES } from "@/app/lib/station-fields/roles";
+import { previewPublish } from "@/app/lib/station-fields/admin";
+import { errorResponse } from "@/lib/http/errors";
+import { readJsonObject } from "@/lib/http/request";
+import { ACCESS } from "@/lib/auth/roles";
 
 export const runtime = "nodejs";
 
@@ -16,6 +18,6 @@ export const POST = withAuth(async (req) => {
     const body = await readJsonObject(req);
     return NextResponse.json(await previewPublish(prisma, body));
   } catch (error) {
-    return adminFieldsErrorResponse(error, "Failed to preview the publish");
+    return errorResponse(error, "Failed to preview the publish");
   }
-}, { role: FIELDS_EDIT_ROLES });
+}, { role: ACCESS.fieldsEdit });

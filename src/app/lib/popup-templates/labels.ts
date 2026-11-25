@@ -1,3 +1,4 @@
+import { TEMPLATE_LIMITS } from "./schema";
 import type { ComponentKind } from "./schema";
 
 /**
@@ -30,6 +31,7 @@ export const TEMPLATE_DEFAULTS = {
   skuStepDesc: "סרוק את מק״ט היצרן של המוצר לזיהוי פריט הייחוס.",
   verdictQuestion: "בדיקה תקינה?",
   finishLabel: "סיום בדיקת {עמדה}",
+  checkStepTitle: "בדיקת {עמדה}",
   photoTitle: "תיעוד בתמונות",
   noReference: "לא נמצא פריט ייחוס — נא להודיע לגורם אחראי",
   // The package wizards' own words (PackageOpenWizard / PackageCloseWizard), so a template made
@@ -43,12 +45,14 @@ export const TEMPLATE_DEFAULTS = {
   boxPhotoMessage: "נא לצלם את הקופסה בדיוק לפי תמונות הייחוס.",
   itemPhotoMessage: "נא לצלם את הפריט בדיוק לפי תמונות הייחוס.",
   weighMessage: "נא לשקול את הפריט ולהזין את המשקל שנמדד.",
+  /** The weighing's allowed deviation, ± percent (the opening wizard's 5%). */
+  weightTolerancePct: 5,
 } as const;
 
 /** Content rules (lintPopupTemplate). Every one blocks a save. */
 export const TEMPLATE_LINT_TEXT = {
   stepsEmpty: "לחלון צריך להיות לפחות שלב אחד",
-  stepsTooMany: "בחלון יכולים להיות עד 6 שלבים",
+  stepsTooMany: `בחלון יכולים להיות עד ${TEMPLATE_LIMITS.maxSteps} שלבים`,
   stepEmpty: "בשלב אין אף רכיב",
   stepTitleEmpty: "לשלב חסרה כותרת",
   finishLabelEmpty: "חסרה תווית לכפתור הסיום",
@@ -62,7 +66,7 @@ export const TEMPLATE_LINT_TEXT = {
   needsReference: "רכיב שמשתמש בפריט הייחוס צריך סריקת מק״ט עם חיפוש ייחוס לפניו",
   messageEmpty: "הודעת המערכת ריקה",
   photoTitleEmpty: "לרכיב הצילום חסרה כותרת",
-  photoTooMany: "בחלון יכולים להיות עד 8 רכיבי צילום",
+  photoTooMany: `בחלון יכולים להיות עד ${TEMPLATE_LIMITS.maxPhotos} רכיבי צילום`,
   photoCodeDuplicate: "שני רכיבי צילום משתמשים באותה קבוצת תמונות",
   tolerance: "הסטייה המותרת צריכה להיות בין 0 ל-100 אחוז",
   // the package base (PLAN.md §5)

@@ -30,11 +30,16 @@ export type ParsedItemData = {
     raw: string;
 };
 
+/** What an equipment barcode starts with. */
+export const ITEM_QR_PREFIX = "2^";
+
+/** Text that starts like an equipment barcode (a scan still arriving, or garbled). */
+export const looksLikeItemQr = (text: string): boolean => text.trim().startsWith(ITEM_QR_PREFIX);
+
 /** Every row of an equipment barcode, or null when the text is not one. */
 export function parseItemQr(qrString: string): ParsedItemData[] | null {
-    if (!qrString) return null;
-    const [idPart, ...rowParts] = qrString.trim().split('^');
-    if (idPart !== '2' || rowParts.length === 0) return null;
+    if (!qrString || !qrString.trim().startsWith(ITEM_QR_PREFIX)) return null;
+    const rowParts = qrString.trim().slice(ITEM_QR_PREFIX.length).split('^');
 
     const rows: ParsedItemData[] = [];
     for (const rowPart of rowParts) {

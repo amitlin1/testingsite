@@ -1,0 +1,126 @@
+/* שעות עבודה וחופשות: tiles, cells and records — their hover / press / focus. */
+
+/* ---------------------------------------------------------- work hours --- */
+/* Base looks live in the classes (not inline), so :hover can win. */
+.wh-card { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--r-card); }
+.wh-cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; margin-top: 18px; align-items: start; }
+@media (max-width: 900px) {
+  .wh-cols { grid-template-columns: minmax(0, 1fr); }
+}
+.wh-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 108px;
+  padding: 14px var(--space-sm);
+  text-align: center;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease-out), transform var(--t-press) var(--ease-press);
+}
+.wh-tile--off { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
+.wh-tile--fixed { background: var(--color-canvas-parchment); cursor: default; }
+@media (hover: hover) and (pointer: fine) {
+  .wh-tile:not(.wh-tile--fixed):hover { border-color: var(--color-primary-border); }
+}
+.wh-tile:not(.wh-tile--fixed):active { transform: scale(.97); }
+.sh-iconbtn.wh-nav { background: var(--color-canvas-parchment); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-iconbtn.wh-nav:hover:not(:disabled) { background: var(--color-primary-soft); color: var(--color-primary); }
+}
+.wh-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 76px;
+  padding: 7px var(--space-xs);
+  overflow: hidden;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.wh-cell--off { background: var(--color-canvas-parchment); }
+.wh-cell--closed { background: var(--color-surface-pearl); border-style: dashed; border-color: var(--color-border-strong); }
+@media (hover: hover) and (pointer: fine) {
+  .wh-cell:hover { border-color: var(--color-primary-border); }
+}
+/* SP-12: one hairline between records (the old inline border shorthand
+   painted a 3px ink line). */
+.wh-rec {
+  display: flex;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 10px var(--space-xs);
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--color-divider-soft);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wh-rec:hover { background: var(--color-surface-pearl); }
+}
+.wh-rec:focus-visible, .wh-cell:focus-visible, .wh-tile:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+.wh-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xxs);
+  min-height: 32px;
+  padding-inline: 11px 4px;
+  font-size: var(--text-small);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-xs);
+}
+.wh-type--plain { padding-inline-end: 11px; }
+/* "+ סוג חדש" — the dashed add affordance, for both the page and the dialog. */
+.wh-add-type {
+  min-height: 32px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  background: var(--color-canvas);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wh-add-type:hover { border-color: var(--color-primary); background: var(--color-primary-tint); }
+}
+/* Choice chips in the work-hours dialogs (aria-pressed). */
+.wh-chip {
+  min-height: 34px;
+  padding: 0 15px;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wh-chip:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--color-primary); color: var(--color-primary); }
+}
+.wh-chip[aria-pressed="true"] { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+.wh-chip:disabled { opacity: .5; cursor: default; }
+

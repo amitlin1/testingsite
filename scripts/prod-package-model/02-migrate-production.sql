@@ -343,7 +343,7 @@ BEGIN
 END $$;
 
 -- §6 גרסת סכמה ----------------------------------------------------------------
--- The app's write gate (src/app/lib/metrics/schema-gate.ts) requires 3 from
+-- The app's write gate (src/app/lib/metrics/ledger/schema-gate.ts) requires 3 from
 -- this image on: an older image would write parent_item_id / is_accessory
 -- into columns that no longer exist.
 UPDATE metrics_schema_version SET version = 3, applied_at = now() WHERE id = 1;

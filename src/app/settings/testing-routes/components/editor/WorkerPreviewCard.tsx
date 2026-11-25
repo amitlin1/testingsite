@@ -3,50 +3,42 @@ import * as React from "react";
 import Link from "next/link";
 import { AlertTriangle, CircleCheck, ClipboardCheck, Info, LayoutTemplate } from "lucide-react";
 import { Button, Tag } from "@/components/ui";
+import { popupTemplatesHref } from "@/app/lib/links";
 import { GATE_FINISH_ON_REQUIRED } from "@/app/lib/station-fields/evaluate";
 import { SUGGEST_PREFIX_DIALOG, statusA } from "@/app/lib/station-fields/labels";
-import type { Field, FieldId } from "@/app/lib/station-fields/schema";
+import type { Field } from "@/app/lib/station-fields/schema";
 import { FieldRow } from "@/app/testing/fields/FieldRow";
+import { focusRowAfter } from "@/app/testing/fields/FieldsBlock";
 import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
 import {
   BLOCK_TEXT, BLOCK_TITLE, blockItems, blockStatus, draftsFieldsState, fieldCountText, fieldRowIds, rowState, statusRuns,
   type FieldRowVariant,
 } from "@/app/testing/fields/fieldsBlockModel";
-import { inputFieldCount, type Drafts, type FieldDraft } from "@/app/testing/fields/useFieldsState";
+import { inputFieldCount } from "@/app/testing/fields/drafts";
+import type { Drafts } from "@/app/lib/station-fields/evaluate";
+import { own } from "@/lib/json-guards";
 import {
-  EDITOR_UNDRAWN_TEXT, PREVIEW_UNDRAWN_TEXT, PREVIEW_SAMPLE, PREVIEW_TEXT, previewStepText, previewSubText, stationFinishText,
+  EDITOR_UNDRAWN_TEXT, PREVIEW_UNDRAWN_TEXT, PREVIEW_SAMPLE, PREVIEW_TEXT, previewStepText, previewSubText,
 } from "../../lib/labels";
-import type { PackageWizard } from "../../lib/editorModel";
-// PassFail's looks live in the testing page's stylesheet (stationKit: "Stateful styling … lives in
-// ../testing.css"), which only that page imports. Every rule in it is a tst-* class.
-import "@/app/testing/testing.css";
+import { stationFinishLabel } from "@/app/testing/tests-popups/stationTexts";
+import type { PackageRole } from "@/app/lib/popup-templates/schema";
+import type { PopupKind } from "../../lib/editorModel";
 import "./preview.css";
 
 /**
  * "תצוגת העובד · חי" — the live worker preview beside the station field editor (route-fields spec
- * §5.5.3, §5.8; artboard 2's right column).
+ * §5.5.3, §5.8; artboard 2's right column). It follows the popup the station really opens (spec
+ * §10.3, `popupKind`):
+ * - "verdict" / "photo": artboard 2's frame, with the scan step and the finish as those wizards word it.
+ * - "dialog": artboard 14's block and its suggestion line; no step, no system note.
+ * - "package": artboard 2's frame without the scan step's parts; the finish is undrawn. The rows take
+ *   the opening wizard's variant, or at the kit's closing step the closing wizard's compact pick-only
+ *   one (artboards 17/18).
+ * - "template": the station popups' rows, and a note that the popup is the template's.
  *
- * It follows the popup the station really opens (spec §10.3; mainPopUp.ts getStartTestDialog),
- * which the editor passes as `popupKind`:
- * - "verdict" / "photo" (VerdictStation / PhotoStation): artboard 2's frame — "בדיקות העמדה",
- *   "{station} · {item} · {N} שדות", "שלב {i} מתוך {n}", the system note "נא לבדוק עפ״י תכנית
- *   {sku}", the rows, and the finish "סיום בדיקת {station type}" as those wizards word it.
- * - "dialog" (PopUpTestDialog): artboard 14's block — its header (title, count, "מהגדרות המסלול",
- *   status ג), the rows, and its suggestion line closing them; the finish is "שמור וסיים". No step,
- *   no system note, no "בדיקה תקינה?".
- * - "package" (the package wizards): artboard 2's frame without the scan step's parts (the step and
- *   the system note); the finish is undrawn. The rows take the opening wizard's variant, or —
- *   `packageWizard` "close", the kit's closing step — the closing wizard's compact pick-only one
- *   (artboards 17/18).
- *
- * The card is as tall as the settings frame shows at most (preview.css) and scrolls inside, so its
- * mini footer stays reachable beside a long editor.
- *
- * The rows are the worker's own components — FieldRow (ChoiceAutocomplete, NumberField, PassFail,
- * NotesField …) with the popup's variant, so their states (a fail value, "הערה · חובה", "יש לפרט את
- * החריגה", the range line, a folded note, the counter) are the popups' own; preview.css only sets
- * them in the preview's denser metrics. Unlike FieldsBlock, the frame is artboard 2's, so the card
- * lays the rows out itself (blockItems / rowState, as FieldsBlock does).
+ * The rows are the worker's own components (FieldRow with the popup's variant), so their states are
+ * the popups' own. Unlike FieldsBlock, the frame is artboard 2's, so the card lays the rows out itself
+ * (blockItems / rowState, as FieldsBlock does).
  *
  * Values are local and never saved — no photo is uploaded either (a shot reads failed). They
  * follow `fields` by FieldId: an edit keeps every value, a removed field loses its own.
@@ -58,9 +50,6 @@ import "./preview.css";
  * a preview mode, which is later work.
  */
 
-/** The popup the station opens (the editor's popupKindOf). */
-export type PreviewPopupKind = "verdict" | "photo" | "dialog" | "package" | "template";
-
 export type WorkerPreviewCardProps = {
   /** The station's name ({station} of "{station} · {item} · {N} שדות"). */
   stationLabel: string;
@@ -71,23 +60,23 @@ export type WorkerPreviewCardProps = {
   stepCount: number;
   /** The cell's fields as the editor holds them now (the working copy). */
   fields: readonly Field[];
-  popupKind: PreviewPopupKind;
+  popupKind: PopupKind;
   /** test_stations_type.test_type_desc — "סיום בדיקת {name}" in VerdictStation / PhotoStation. */
   stationTypeName: string;
-  /** popupKind "package": which wizard the step opens (the editor's packageWizardAt — the kit
-   *  route's last step closes the kit). Without it, the opening wizard's rows. */
-  packageWizard?: PackageWizard;
+  /** popupKind "package": the wizard the step opens (editorModel.kitStepRole). Without it, the
+   *  opening wizard's rows. */
+  packageRole?: PackageRole;
   /** popupKind "template": the station type, for the link to its template. */
   stationTypeId?: number;
   /** popupKind "package": the role of the station type's package template, if it has one — the
    *  note says the popup is the template's, or, when the step's wizard is the other role, that the
    *  wizard opens here (popup-templates PLAN.md §5, step 2.6). */
-  packageTemplateRole?: "opening" | "closing" | null;
+  packageTemplateRole?: PackageRole | null;
 };
 
 /** The variant whose behaviour the rows take (fieldsBlockModel VARIANT_SPEC): artboard 12, 13, 14,
  *  and the opening wizard's for a package-level station (artboard 15/16). */
-const ROW_VARIANT: Record<PreviewPopupKind, FieldRowVariant> = {
+const ROW_VARIANT: Record<PopupKind, FieldRowVariant> = {
   verdict: "station",
   photo: "photo",
   dialog: "dialog",
@@ -101,13 +90,8 @@ const ROW_VARIANT: Record<PreviewPopupKind, FieldRowVariant> = {
  *  itself. */
 const CLOSING_ROW_VARIANT: FieldRowVariant = "pack";
 
-function rowVariantOf(kind: PreviewPopupKind, wizard: PackageWizard | undefined): FieldRowVariant {
-  return kind === "package" && wizard === "close" ? CLOSING_ROW_VARIANT : ROW_VARIANT[kind];
-}
-
-/** drafts[id], own keys only. */
-function draftOf(drafts: Readonly<Drafts>, id: FieldId): FieldDraft | undefined {
-  return Object.prototype.hasOwnProperty.call(drafts, id) ? drafts[id] : undefined;
+function rowVariantOf(kind: PopupKind, role: PackageRole | undefined): FieldRowVariant {
+  return kind === "package" && role === "closing" ? CLOSING_ROW_VARIANT : ROW_VARIANT[kind];
 }
 
 /** The drafts of the fields still in `fields`. */
@@ -136,28 +120,10 @@ function usePreviewDrafts(fields: readonly Field[]) {
   return { drafts, update };
 }
 
-const FOCUSABLE_CONTROL = "[data-fx-control] :is(input:not([type='file']), textarea, button):not(:disabled):not([tabindex='-1'])";
-
-/** After a keyboard pick that leaves the note optional: the first control of the rows after `id`
- *  (spec §4.6), as FieldsBlock moves it. */
-function focusRowAfter(rows: HTMLElement | null, id: FieldId) {
-  if (!rows) return;
-  const all = Array.from(rows.querySelectorAll<HTMLElement>("[data-fx-row]"));
-  const at = all.findIndex((r) => r.dataset.fxRow === id);
-  if (at < 0) return;
-  for (const row of all.slice(at + 1)) {
-    const control = row.querySelector<HTMLElement>(FOCUSABLE_CONTROL);
-    if (control) {
-      control.focus();
-      return;
-    }
-  }
-}
-
 export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
-  const { stationLabel, rowLabel, stepIndex, stepCount, fields, popupKind, stationTypeName, packageWizard, stationTypeId, packageTemplateRole } = p;
-  const packageTemplateFits = packageTemplateRole != null && (packageTemplateRole === "closing") === (packageWizard === "close");
-  const variant = rowVariantOf(popupKind, packageWizard);
+  const { stationLabel, rowLabel, stepIndex, stepCount, fields, popupKind, stationTypeName, packageRole, stationTypeId, packageTemplateRole } = p;
+  const packageTemplateFits = packageTemplateRole != null && packageTemplateRole === (packageRole ?? "opening");
+  const variant = rowVariantOf(popupKind, packageRole);
   const prefix = React.useId();
   const frameTitleId = `${prefix}-pv-frame`;
   const rowsRef = React.useRef<HTMLDivElement>(null);
@@ -181,7 +147,7 @@ export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
   const blocked = missing > 0 || fx.blocking(GATE_FINISH_ON_REQUIRED);
   const finishLabel = popupKind === "dialog"
     ? PREVIEW_TEXT.finishDialog
-    : popupKind === "package" ? PREVIEW_UNDRAWN_TEXT.finishPackage : stationFinishText(stationTypeName);
+    : popupKind === "package" ? PREVIEW_UNDRAWN_TEXT.finishPackage : stationFinishLabel(stationTypeName);
   const named = inputFieldCount(fields) - unnamed.size;
   const scanStep = popupKind === "verdict" || popupKind === "photo";
 
@@ -192,7 +158,7 @@ export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
     return (
       <div key={id} className="rf-pv-line" data-unnamed={unnamed.has(id) || undefined}>
         <FieldRow
-          def={it.def} draft={draftOf(fx.drafts, id)} onChange={(patch) => fx.set(id, patch)}
+          def={it.def} draft={own(fx.drafts, id)} onChange={(patch) => fx.set(id, patch)}
           {...rowState(it.def, fx.ev, false)} variant={variant} ids={fieldRowIds(prefix, id)}
           onFocusNext={() => focusRowAfter(rowsRef.current, id)} />
       </div>
@@ -237,7 +203,7 @@ export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
             <span>
               {popupKind === "template" ? EDITOR_UNDRAWN_TEXT.templateNote
                 : packageTemplateFits ? EDITOR_UNDRAWN_TEXT.packageTemplateNote : EDITOR_UNDRAWN_TEXT.packageTemplateMismatch}{" "}
-              {stationTypeId != null && <Link href={`/settings/popup-templates?type=${stationTypeId}`} className="sh-link">{EDITOR_UNDRAWN_TEXT.templateLink}</Link>}
+              {stationTypeId != null && <Link href={popupTemplatesHref(stationTypeId)} className="sh-link">{EDITOR_UNDRAWN_TEXT.templateLink}</Link>}
             </span>
           </div>
         )}
@@ -288,5 +254,3 @@ export function WorkerPreviewCard(p: WorkerPreviewCardProps) {
     </aside>
   );
 }
-
-export default WorkerPreviewCard;

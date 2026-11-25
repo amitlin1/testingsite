@@ -25,38 +25,25 @@ import { OpenInNew as OpenInNewIcon } from "@/components/ui/icons";
 import { SwapHoriz as SwapHorizIcon } from "@/components/ui/icons";
 import { EditNote as EditNoteIcon } from "@/components/ui/icons";
 import { FileIcon } from "@/app/components/files/FileIcon";
-import { formatFileSize } from "@/lib/minioFileUtils";
-import { formatMoment } from "@/app/items/format";
+import { fileDownloadUrl, formatFileSize, isImage, isOfficeEditable, isTextEditable } from "@/lib/file-types";
+import { formatMoment } from "@/app/lib/datetime";
 import WorkerPicker from "./WorkerPicker";
-import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
-import { useSession } from "next-auth/react";
-import { isAdmin } from "@/lib/auth/roles";
+import { useWorkerLock } from "@/app/components/useWorkerLock";
 import TextEditorModal from "./TextEditorModal";
 import OnlyOfficeEditorModal from "./OnlyOfficeEditorModal";
-import { apiFetch } from "@/lib/api/client";
-import { uploadItemFiles, replaceItemFile } from "@/lib/api/direct-upload";
-import "@/components/items.css";
+import { sendJson } from "@/lib/api/client";
+import { failureText } from "@/app/components/failureText";
+import { listItemFiles, uploadItemFiles, replaceItemFile } from "@/lib/api/direct-upload";
+import type { ItemFile } from "@/lib/storage/contract";
+import "./ItemFilesPanel.css";
 import Image from "next/image";
-
-type ItemFile = {
-  objectKey: string;
-  fileName: string;
-  contentType: string | null;
-  size: number;
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string | null;
-  updatedBy: string | null;
-  stationTypeId: number | null;
-  isGlobal: boolean;
-};
 
 type ItemFilesPanelProps = {
   itemId: number | string;
   /**
-   * Worker id stamped onto created_by/updated_by. When provided (testing page
-   * use), no internal picker is shown. When omitted (ניהול פריטים use), the
-   * panel renders its own WorkerPicker and requires it before uploads/edits.
+   * Worker id stamped onto created_by/updated_by. A number (testing page use)
+   * hides the internal picker. Omitted or null (ניהול פריטים use), the panel
+   * renders its own WorkerPicker and requires it before uploads/edits.
    */
   workerId?: number | null;
   /** Optional cap on number of files shown before scroll. */
@@ -71,60 +58,14 @@ type ItemFilesPanelProps = {
   stationTypeId?: number | null;
 };
 
-const TEXT_EXTENSIONS = new Set([
-  "txt", "md", "markdown", "csv", "tsv",
-  "json", "log", "xml", "yml", "yaml",
-  "html", "htm", "css", "js", "ts", "tsx", "jsx",
-  "ini", "conf", "cfg", "env", "sql", "sh",
-]);
-
-const ONLYOFFICE_EXTENSIONS = new Set([
-  "docx", "doc", "odt", "rtf",
-  "xlsx", "xls", "ods",
-  "pptx", "ppt", "odp",
-]);
-
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"]);
-
-function extOf(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
-}
-
-function isTextLike(name: string) {
-  return TEXT_EXTENSIONS.has(extOf(name));
-}
-function isOfficeDoc(name: string) {
-  return ONLYOFFICE_EXTENSIONS.has(extOf(name));
-}
-function isImage(name: string) {
-  return IMAGE_EXTENSIONS.has(extOf(name));
-}
-
-function downloadUrl(objectKey: string): string {
-  return (
-    "/api/files/download/" +
-    objectKey
-      .split("/")
-      .map((s) => encodeURIComponent(s))
-      .join("/")
-  );
-}
-
 type FilesRead = { files: ItemFile[]; error: null } | { files: null; error: string };
 
-/** The item's files at `url`, or the error to show instead. */
-async function readFiles(url: string): Promise<FilesRead> {
+/** The item's files, or the error to show instead. */
+async function readFiles(itemId: number | string, stationTypeId: number | null): Promise<FilesRead> {
   try {
-    const r = await apiFetch(url);
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
-      return { files: null, error: j.error || "שגיאה בטעינת קבצים" };
-    }
-    const j = (await r.json()) as { files: ItemFile[] };
-    return { files: j.files ?? [], error: null };
+    return { files: await listItemFiles(itemId, { stationTypeId }), error: null };
   } catch (e) {
-    return { files: null, error: (e as Error).message };
+    return { files: null, error: failureText(e, "שגיאה בטעינת קבצים") };
   }
 }
 
@@ -148,28 +89,24 @@ export default function ItemFilesPanel({
   const replaceInputRef = React.useRef<HTMLInputElement | null>(null);
   const replaceTargetRef = React.useRef<ItemFile | null>(null);
 
-  // Standalone worker (used when no workerId was passed in from a parent).
-  const tokenWorkerId = useTokenWorkerId();
-  const { data: session } = useSession();
-  const isManager = isAdmin(session?.roles ?? []);
+  const lock = useWorkerLock();
+  const tokenWorkerId = lock.tokenWorkerId;
   const [internalWorkerId, setInternalWorkerId] = React.useState<number | null>(null);
   const standalone = workerIdProp === undefined || workerIdProp === null;
-  // Standalone mode: the logged-in worker (from their token), locked — only a
-  // manager starts from themselves and may pick someone else. Same rule as the
-  // shipment worker fields (useShipmentWorker).
-  const workerLocked = standalone && tokenWorkerId != null && !isManager;
+  // Standalone mode: the logged-in worker (from their token), locked — only someone who may act
+  // for others starts from themselves and may pick someone else (the testing screen's rule).
+  const workerLocked = standalone && lock.locked;
   const effectiveWorkerId =
     workerIdProp !== undefined && workerIdProp !== null
       ? workerIdProp
       : workerLocked ? tokenWorkerId : (internalWorkerId ?? tokenWorkerId);
 
-  // Editor modal state
   const [textEditorFile, setTextEditorFile] = React.useState<ItemFile | null>(null);
   const [officeEditorFile, setOfficeEditorFile] = React.useState<ItemFile | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<ItemFile | null>(null);
 
   const listUrl = `/api/items/${encodeURIComponent(String(itemId))}/files`;
-  const filesUrl = stationTypeId != null ? `${listUrl}?stationTypeId=${stationTypeId}` : listUrl;
+  const filesKey = `${itemId}|${stationTypeId ?? ""}`;
 
   const applyFiles = React.useCallback((read: FilesRead) => {
     if (read.files) setFiles(read.files);
@@ -180,20 +117,20 @@ export default function ItemFilesPanel({
   const refresh = React.useCallback(async () => {
     setLoading(true);
     setError(null);
-    applyFiles(await readFiles(filesUrl));
-  }, [filesUrl, applyFiles]);
+    applyFiles(await readFiles(itemId, stationTypeId));
+  }, [itemId, stationTypeId, applyFiles]);
 
   // A new list (on mount, or another item / station) starts loading during
   // render; the effect only reads, and applies the result in its callback.
-  const [loadingUrl, setLoadingUrl] = React.useState(filesUrl);
-  if (loadingUrl !== filesUrl) {
-    setLoadingUrl(filesUrl);
+  const [loadingKey, setLoadingKey] = React.useState(filesKey);
+  if (loadingKey !== filesKey) {
+    setLoadingKey(filesKey);
     setLoading(true);
     setError(null);
   }
   React.useEffect(() => {
-    readFiles(filesUrl).then(applyFiles);
-  }, [filesUrl, applyFiles]);
+    readFiles(itemId, stationTypeId).then(applyFiles);
+  }, [itemId, stationTypeId, applyFiles]);
 
   const ensureWorker = (): boolean => {
     if (effectiveWorkerId == null) {
@@ -246,17 +183,10 @@ export default function ItemFilesPanel({
     setPendingDelete(null);
     setError(null);
     try {
-      const r = await apiFetch(
-        `${listUrl}?key=${encodeURIComponent(file.objectKey)}`,
-        { method: "DELETE" },
-      );
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || "שגיאה במחיקה");
-      }
+      await sendJson(`${listUrl}?key=${encodeURIComponent(file.objectKey)}`, "DELETE");
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(failureText(e, "שגיאה במחיקה"));
     }
   };
 
@@ -281,7 +211,7 @@ export default function ItemFilesPanel({
       );
       await refresh();
     } catch (e) {
-      setError((e as Error).message || "שגיאה בהחלפת קובץ");
+      setError(failureText(e, "שגיאה בהחלפת קובץ"));
     } finally {
       setUploading(false);
       setUploadProgress(null);
@@ -289,12 +219,12 @@ export default function ItemFilesPanel({
   };
 
   const handleOpen = (file: ItemFile) => {
-    if (isTextLike(file.fileName)) {
+    if (isTextEditable(file.fileName)) {
       setTextEditorFile(file);
-    } else if (isOfficeDoc(file.fileName)) {
+    } else if (isOfficeEditable(file.fileName)) {
       setOfficeEditorFile(file);
     } else {
-      window.open(downloadUrl(file.objectKey), "_blank", "noopener,noreferrer");
+      window.open(fileDownloadUrl(file.objectKey), "_blank", "noopener,noreferrer");
     }
   };
 
@@ -364,7 +294,6 @@ export default function ItemFilesPanel({
             label="עובד מבצע"
             required
             size="small"
-            hideHeader={false}
             disabled={workerLocked}
             placeholder={workerLocked ? "מזוהה מההתחברות" : undefined}
           />
@@ -437,7 +366,6 @@ export default function ItemFilesPanel({
                   py: 1,
                 }}
               >
-                {/* Thumbnail for images; FileIcon for everything else */}
                 <Box
                   sx={{
                     width: 44,
@@ -453,7 +381,7 @@ export default function ItemFilesPanel({
                 >
                   {isImage(file.fileName) ? (
                     <Image
-                      src={downloadUrl(file.objectKey)}
+                      src={fileDownloadUrl(file.objectKey)}
                       alt={file.fileName}
                       width={0}
                       height={0}
@@ -481,10 +409,10 @@ export default function ItemFilesPanel({
                 </Box>
 
                 <Stack direction="row" spacing={0.5}>
-                  {(isTextLike(file.fileName) || isOfficeDoc(file.fileName)) && (
+                  {(isTextEditable(file.fileName) || isOfficeEditable(file.fileName)) && (
                     <Tooltip title="ערוך">
                       <IconButton size="small" color="primary" aria-label={"ערוך את " + file.fileName} onClick={() => handleOpen(file)}>
-                        {isTextLike(file.fileName) ? (
+                        {isTextEditable(file.fileName) ? (
                           <EditNoteIcon fontSize="small" />
                         ) : (
                           <OpenInNewIcon fontSize="small" />
@@ -496,7 +424,7 @@ export default function ItemFilesPanel({
                     <IconButton
                       size="small"
                       component="a"
-                      href={downloadUrl(file.objectKey)}
+                      href={fileDownloadUrl(file.objectKey)}
                       download={file.fileName}
                       aria-label={"הורד את " + file.fileName}
                     >
@@ -542,7 +470,6 @@ export default function ItemFilesPanel({
         <OnlyOfficeEditorModal
           open
           onClose={() => setOfficeEditorFile(null)}
-          itemId={itemId}
           objectKey={officeEditorFile.objectKey}
           fileName={officeEditorFile.fileName}
           workerId={effectiveWorkerId}
@@ -550,7 +477,6 @@ export default function ItemFilesPanel({
         />
       )}
       <ConfirmDialog
-        draggable={false}
         open={pendingDelete != null}
         title="מחיקת קובץ"
         message={pendingDelete ? `הקובץ "${pendingDelete.fileName}" יימחק לצמיתות. להמשיך?` : undefined}

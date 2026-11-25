@@ -1,8 +1,8 @@
 "use client";
 import * as React from "react";
+import { HAIR, INK, MUTED } from "@/components/ui/colors";
 import { Dialog, DialogTitle, DialogContent, DialogActions, TextField } from "@/components/ui";
 import { formatNet } from "@/lib/workHours/time";
-import { FAINT, HAIRLINE, INK, MUTED } from "./ui";
 
 /** The work-hours dialog frame: the shared DialogTitle (one size, the one
  *  named × at the inline end) with a muted subtitle, the body, and the
@@ -41,7 +41,7 @@ export function DialogShell({
 }
 
 /** A pill choice-chip (day-type / scope / working yes-no). States in
- *  settings.css (.wh-chip): hover, pressed, focus, disabled. */
+ *  work-hours.css (.wh-chip): hover, pressed, focus, disabled. */
 export function Chip({
   active,
   onClick,
@@ -101,10 +101,10 @@ export function NetRow({ minutes }: { minutes: number }) {
     <div
       style={{
         display: "flex", alignItems: "baseline", justifyContent: "space-between",
-        borderTop: `1px solid ${HAIRLINE}`, marginTop: 14, paddingTop: 14,
+        borderTop: `1px solid ${HAIR}`, marginTop: 14, paddingTop: 14,
       }}
     >
-      <span style={{ fontSize: "var(--text-small)", color: FAINT }}>נטו ליום</span>
+      <span style={{ fontSize: "var(--text-small)", color: MUTED }}>נטו ליום</span>
       <bdi dir="ltr" style={{ fontSize: "var(--text-heading)", fontWeight: 700, color: INK, fontVariantNumeric: "tabular-nums" }}>
         {formatNet(minutes)}
       </bdi>

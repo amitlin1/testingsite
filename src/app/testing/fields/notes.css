@@ -39,7 +39,7 @@
   font-weight: var(--fw-semibold);
   color: var(--color-destructive);
   white-space: nowrap;
-  background: var(--tst-note-legend-bg, linear-gradient(to bottom, var(--tst-note-row-bg) 50%, var(--color-canvas) 50%));
+  background: linear-gradient(to bottom, var(--tst-note-row-bg) 50%, var(--color-canvas) 50%);
 }
 
 .tst-note-box { position: relative; }

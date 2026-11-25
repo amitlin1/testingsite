@@ -1,38 +1,25 @@
 "use client";
 import * as React from "react";
-import { Box } from "@/components/ui";
+import { Box, SearchableCombobox } from "@/components/ui";
 import { Person as PersonIcon } from "@/components/ui/icons";
-import SearchableCombobox from "./common/SearchableCombobox";
-import { apiFetch } from "@/lib/api/client";
+import { useWorkersDirectory } from "@/app/components/lookups";
+import type { DirectoryWorker } from "@/lib/users/rules";
 import "@/components/items.css";
 
-export type Worker = {
-  worker_id: number;
-  worker_name: string;
-  /** Keycloak realm roles (from /api/workers-directory). */
-  roles?: string[];
-};
-
 type WorkerPickerProps = {
-  /** Selected worker id (controlled). */
+  /** Selected worker id (controlled); onChange gets null on clear. */
   value: number | null;
-  /** Change handler — receives the new id (or null on clear). */
   onChange: (workerId: number | null) => void;
-  /** Optional label shown above the picker (e.g. "עובד פעיל"). */
+  /** Shown above the picker (e.g. "עובד פעיל"). */
   label?: string;
-  /** Pre-fetched worker list. If omitted the component fetches /api/workers-directory itself. */
-  workers?: Worker[];
-  /** Show a small required asterisk and red color on the label. */
+  /** A red asterisk on the label. */
   required?: boolean;
-  /** Override the placeholder text. */
   placeholder?: string;
   /** Hide the icon + label header (use inside dense panels). */
   hideHeader?: boolean;
-  /** Disable interaction. */
   disabled?: boolean;
-  /** Make the input full-width. Defaults to true. */
+  /** Defaults to true. */
   fullWidth?: boolean;
-  /** Smaller variant for headers/toolbars. */
   size?: "small" | "medium";
   /** List only workers holding at least one of these roles (e.g. the roles a
    *  screen is open to). The selected value still resolves from everyone. */
@@ -43,16 +30,14 @@ type WorkerPickerProps = {
 };
 
 /**
- * Shared worker autocomplete, backed by Keycloak (/api/workers-directory —
- * no local `workers` table anymore). Two consumers today:
- *   - testing page header (persists workerId to localStorage)
- *   - ItemFilesPanel standalone mode (used inside ItemDialog where no parent workerId exists)
+ * Shared worker autocomplete over the Keycloak-backed workers directory
+ * (/api/workers-directory — no local `workers` table any more). Used by the
+ * testing dock and by ItemFilesPanel's standalone mode.
  */
 export default function WorkerPicker({
   value,
   onChange,
   label = "עובד",
-  workers: workersProp,
   required = false,
   placeholder = "בחר עובד...",
   hideHeader = false,
@@ -63,44 +48,15 @@ export default function WorkerPicker({
   onOpen,
   onClose,
 }: WorkerPickerProps) {
-  // The directory, fetched only when no list was passed in.
-  const [fetchedWorkers, setFetchedWorkers] = React.useState<Worker[]>([]);
-  const workers = workersProp ?? fetchedWorkers;
-  const [loading, setLoading] = React.useState(!workersProp);
+  const directory = useWorkersDirectory();
+  const workers: DirectoryWorker[] = directory.data ?? [];
   // The header (or, when hidden, a visually-hidden label) names the input.
   const inputId = React.useId();
-
-  // Losing the passed-in list starts a fetch: raise the spinner during render.
-  const fetching = !workersProp;
-  const [seenFetching, setSeenFetching] = React.useState(fetching);
-  if (seenFetching !== fetching) {
-    setSeenFetching(fetching);
-    if (fetching) setLoading(true);
-  }
-
-  React.useEffect(() => {
-    if (workersProp) return;
-    let cancelled = false;
-    apiFetch("/api/workers-directory")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        if (!cancelled) setFetchedWorkers(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
-        if (!cancelled) setFetchedWorkers([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workersProp]);
 
   return (
     <Box>
       {hideHeader ? (
-        <label htmlFor={inputId} className="items-vh">{label}</label>
+        <label htmlFor={inputId} className="sh-visually-hidden">{label}</label>
       ) : (
         <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
           {/* Decorative glyph: muted — blue stays the colour of what you can press. */}
@@ -116,16 +72,16 @@ export default function WorkerPicker({
           </label>
         </Box>
       )}
-      <SearchableCombobox<Worker>
+      <SearchableCombobox<DirectoryWorker>
         id={inputId}
         size={size}
         disabled={disabled}
-        options={roles ? workers.filter((w) => w.roles?.some((r) => roles.includes(r))) : workers}
+        options={roles ? workers.filter((w) => w.roles.some((r) => roles.includes(r))) : workers}
         getOptionLabel={(option) => option.worker_name}
         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
         value={workers.find((w) => w.worker_id === value) || null}
         onChange={(newValue) => onChange(newValue?.worker_id ?? null)}
-        loading={loading}
+        loading={directory.isPending}
         fullWidth={fullWidth}
         placeholder={placeholder}
         onOpen={onOpen}

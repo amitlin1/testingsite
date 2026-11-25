@@ -3,6 +3,7 @@ import React, { forwardRef } from "react";
 import { X } from "lucide-react";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
+import { TONE } from "./tones";
 
 /* --------------------------------------------------------------- Chip ---- */
 type ChipColor = "default" | "primary" | "secondary" | "error" | "success" | "warning" | "info";
@@ -20,23 +21,15 @@ export interface ChipProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "c
   sx?: SxInput;
 }
 
-const CHIP_COLORS: Record<ChipColor, { bg: string; fg: string; border?: string }> = {
-  default: { bg: "var(--color-canvas-parchment)", fg: "var(--color-ink)" },
-  primary: { bg: "var(--color-primary-soft)", fg: "var(--color-primary)" },
-  secondary: { bg: "var(--color-canvas-parchment)", fg: "var(--color-ink-muted-80)" },
-  error: { bg: "var(--color-danger-bg)", fg: "var(--color-destructive)" },
-  // Text in a status colour uses its *-ink token (AA); the plain status
-  // colours are for dots and fills.
-  success: { bg: "var(--color-success-bg)", fg: "var(--color-success-ink)" },
-  warning: { bg: "var(--color-warning-bg)", fg: "var(--color-warning-ink)" },
-  info: { bg: "var(--color-primary-soft)", fg: "var(--color-primary)" },
-};
+/** A tone's soft surface and its ink (tones.ts); `default` is ink on parchment. */
+const chipColors = (color: ChipColor): { bg: string; fg: string } =>
+  color === "default" ? { bg: "var(--color-canvas-parchment)", fg: "var(--color-ink)" } : { bg: TONE[color].bg, fg: TONE[color].ink };
 
 export const Chip = forwardRef<HTMLDivElement, ChipProps>(function Chip(
   { label, color = "default", variant = "filled", size, icon, onDelete, onClick, disabled, clickable, sx, style, className, children, ...rest },
   ref,
 ) {
-  const c = CHIP_COLORS[color];
+  const c = chipColors(color);
   const outlined = variant === "outlined";
   const base: React.CSSProperties = {
     display: "inline-flex",
@@ -88,84 +81,14 @@ export const Chip = forwardRef<HTMLDivElement, ChipProps>(function Chip(
   );
 });
 
-/* -------------------------------------------------------------- Badge ---- */
-export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  badgeContent?: React.ReactNode;
-  color?: "default" | "primary" | "error" | "success" | "warning" | "secondary";
-  max?: number;
-  showZero?: boolean;
-  invisible?: boolean;
-  overlap?: "rectangular" | "circular";
-  anchorOrigin?: { vertical: "top" | "bottom"; horizontal: "left" | "right" };
-  sx?: SxInput;
-}
-
-const BADGE_BG: Record<string, string> = {
-  default: "var(--color-ink-muted-48)",
-  primary: "var(--color-primary)",
-  error: "var(--color-destructive)",
-  // White count text: the *-ink fills keep it at AA.
-  success: "var(--color-success-ink)",
-  warning: "var(--color-warning-ink)",
-  secondary: "var(--color-ink-muted-80)",
-};
-
-export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
-  { badgeContent, color = "default", max = 99, showZero, invisible, anchorOrigin, sx, style, children, ...rest },
-  ref,
-) {
-  const num = typeof badgeContent === "number" ? badgeContent : undefined;
-  const hidden = invisible || (num === 0 && !showZero) || badgeContent == null || badgeContent === "";
-  const display = num !== undefined && num > max ? `${max}+` : badgeContent;
-  const vert = anchorOrigin?.vertical ?? "top";
-  const horiz = anchorOrigin?.horizontal ?? "right";
-  return (
-    <span ref={ref} style={{ position: "relative", display: "inline-flex", ...sxToStyle(sx), ...style }} {...rest}>
-      {children}
-      {!hidden && (
-        <span
-          style={{
-            position: "absolute",
-            [vert]: -6,
-            [horiz === "right" ? "insetInlineEnd" : "insetInlineStart"]: -6,
-            minWidth: 18,
-            height: 18,
-            padding: "0 5px",
-            borderRadius: 9,
-            background: BADGE_BG[color],
-            color: "var(--color-on-primary)",
-            fontSize: 11,
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            lineHeight: 1,
-          }}
-        >
-          {display}
-        </span>
-      )}
-    </span>
-  );
-});
-
 /* ---------------------------------------------------------- StatusPill --- */
-type StatusKind = "on" | "late" | "absent" | "approved";
-const STATUS_DOT: Record<StatusKind, string> = {
-  on: "var(--color-status-on)",
-  late: "var(--color-status-late)",
-  absent: "var(--color-status-absent)",
-  approved: "var(--color-status-approved)",
-};
-
 export interface StatusPillProps extends React.HTMLAttributes<HTMLSpanElement> {
   label: React.ReactNode;
-  status?: StatusKind;
-  dotColor?: string;
+  dotColor: string;
   sx?: SxInput;
 }
 
-export function StatusPill({ label, status = "on", dotColor, sx, style, className, ...rest }: StatusPillProps) {
+export function StatusPill({ label, dotColor, sx, style, className, ...rest }: StatusPillProps) {
   return (
     <span
       className={cn(className)}
@@ -187,7 +110,7 @@ export function StatusPill({ label, status = "on", dotColor, sx, style, classNam
       }}
       {...rest}
     >
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor ?? STATUS_DOT[status] }} />
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor }} />
       {label}
     </span>
   );

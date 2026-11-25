@@ -239,15 +239,6 @@
 }
 .rf-nfs__actions { grid-column: 1 / -1; display: flex; }
 
-/* The live preview's line under a number (artboard 3 `rangeMsg`). */
-.rf-num-preview {
-  font-size: var(--text-fine);
-  color: var(--color-ink-muted-48);
-  font-variant-numeric: tabular-nums;
-}
-.rf-num-preview[data-tone="success"] { color: var(--color-success-ink); }
-.rf-num-preview[data-tone="danger"] { color: var(--color-destructive); }
-
 /* ------------------------------------------------- options popover --- */
 /* Artboard 4: the editor behind it under the one scrim of the app (40%). */
 .rf-olp-scrim {

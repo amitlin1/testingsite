@@ -1,3 +1,4 @@
+import type { PasteCounts } from "./cellFill";
 import { UNDRAWN_TEXT, EDITOR_UNDRAWN_TEXT } from "./labels";
 
 /**
@@ -63,21 +64,8 @@ export function copiedText(cells: number): string {
   return cells === 1 ? BULK_UNDRAWN_TEXT.copiedOne : BULK_UNDRAWN_TEXT.copiedMany(cells);
 }
 
-export type PasteCountsLike = {
-  /** Cells that took at least one field. */
-  cells: number;
-  /** Input fields added (section headers do not count). */
-  added: number;
-  /** Fields left out: the cell already has their name. */
-  skipped: number;
-  /** Fields left out: the cell's list is full. */
-  overflow: number;
-  /** Cells of a copied shape that landed on "—" or outside the map. */
-  outside: number;
-};
-
-/** After a paste (undrawn): "נוספו 6 שדות ב-3 תאים · שדה אחד דולג כדי למנוע כפילות". */
-export function pastedText(c: PasteCountsLike): string {
+/** After a paste (undrawn). */
+export function pastedText(c: PasteCounts): string {
   const C = BULK_UNDRAWN_TEXT;
   let head: string = c.added === 0 ? C.addedNone : c.added === 1 ? C.addedOne : C.addedMany(c.added);
   if (c.added > 0 && c.cells > 1) head += " " + C.inCells(c.cells);

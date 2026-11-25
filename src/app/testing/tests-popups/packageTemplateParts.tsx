@@ -1,87 +1,51 @@
 "use client";
 import React from "react";
 import { Check, CircleAlert } from "lucide-react";
-import { uploadItemFiles } from "@/lib/api/direct-upload";
-import type { ChecklistComponent, PhotoComponent, TemplateStep, WeightComponent } from "@/app/lib/popup-templates/schema";
-import type { DraftShot, Drafts } from "@/app/lib/station-fields/evaluate";
+import type { ChecklistComponent, PhotoComponent, TemplateStep } from "@/app/lib/popup-templates/schema";
+import type { DraftShot } from "@/app/lib/station-fields/evaluate";
 import { SUGGEST_PREFIX } from "@/app/lib/station-fields/labels";
 import type { Field } from "@/app/lib/station-fields/schema";
 import { NotesField } from "@/app/testing/fields/NotesField";
+import { PassFail } from "@/app/testing/fields/PassFail";
+import { PhotoUploader, type RefImg } from "@/app/testing/fields/PhotoUploader";
 import { SuggestionLine } from "@/app/testing/fields/SuggestionLine";
 import { VARIANT_SPEC, noteEditorTitle, type DraftsFieldsState } from "@/app/testing/fields/fieldsBlockModel";
-import { PhotoUploader, PassFail, useShotDiscard, type RefImg, type Shot } from "./stationKit";
+import { PACKAGE_POPUP_TEXT } from "./boxWizard";
+import { useShotUpload } from "./shots";
 import { weightOutcome, type TemplateRunState } from "./templateModel";
 import { SkuSuggestions, type RefSku } from "./referenceScan";
-import {
-  AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, INK, INK_2, MUTED, RED, RED_BG,
-} from "@/app/components/packages/packageUi";
+import { AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREEN_BG, INK, INK_2, MUTED, RED, RED_BG } from "@/components/ui/colors";
+import "@/app/testing/station-popups.css";
 
 /**
- * The parts the package base's popups share (TemplatePackageOpening, TemplatePackageClosing —
- * docs/popup-templates/PLAN.md §5): an admin's step drawn in the package wizards' markup, and
- * the shots its photo components take.
+ * The package wizards' markup parts: an admin's step of a template (TemplatePackageOpening,
+ * TemplatePackageClosing — docs/popup-templates/PLAN.md §5) and the shots its photo components
+ * take, and the blocks the code's wizards draw the same way (the error band, the verdict, the
+ * weighing, the checks).
  */
-
-export const PACKAGE_POPUP_TEXT = {
-  notes: "הערות",
-  optional: "אופציונלי",
-  doneStep: "סיום",
-  boxScanLabel: "מק״ט המארז",
-  boxScanPlaceholder: "סרוק את מק״ט היצרן",
-  boxScanSubtitle: "סרוק את מדבקת המארז כדי לפתוח את המארז בעמדה.",
-  boxScanBand: "סריקת המארז פותחת את הבדיקה ורושמת את זמן ההתחלה.",
-  boxNoReference: "לא נמצא פריט ייחוס למק״ט המארז שנסרק — צלם לפי שיקול דעת והמשך.",
-  photoFailed: "יש צילום שההעלאה שלו נכשלה — הסר אותו וצלם שוב לפני הסיום.",
-  photoUploading: "יש צילום שעדיין עולה — המתן לסיום ההעלאה.",
-  removeFailedShot: "הסר את הצילום שנכשל",
-} as const;
-
-/** A step blocked only while something answers (a lookup, the fields): the next button waits, and
- *  no error is shown. */
-export const CHECKING = "checking";
 
 export type RunPatch = (fn: (s: TemplateRunState) => TemplateRunState) => void;
 
-/** The shots taken in the photo fields among `defs` (station fields). */
-export const fieldShots = (defs: readonly Field[], drafts: Readonly<Drafts>): DraftShot[] =>
-  defs.flatMap((d) => (d.type === "photo" ? drafts[d.id]?.photos ?? [] : []));
-
 /** The step's own shots (its photo components). */
-export const stepShots = (st: TemplateStep, run: TemplateRunState): Shot[] =>
+export const stepShots = (st: TemplateStep, run: TemplateRunState): DraftShot[] =>
   st.components.flatMap((c) => (c.kind === "photo" ? run.photos[c.id] ?? [] : []));
 
 /** A photo component's shots: added and removed on screen, stored on the box or an item. */
 export type PhotoHandlers = { pick: (c: PhotoComponent, file: File) => void; remove: (c: PhotoComponent, idx: number) => void };
 
-/**
- * Uploads (browser → MinIO, tagged by the photo component's group, or a field's photo type) and the
- * photo components' handlers for a run state. A shot removed on screen is taken back from storage
- * too (useShotDiscard).
- */
-export function useTemplatePhotos(workerId: string | number | null | undefined, stationTypeId: number) {
-  const uploadTo = React.useCallback(async (targetId: string | number, file: File, photoType: string): Promise<string | null> => {
-    try {
-      const [result] = await uploadItemFiles(targetId, [file], { workerId: workerId ?? undefined, stationTypeId, photoType });
-      return result?.objectKey ?? null;
-    } catch { return null; }
-  }, [workerId, stationTypeId]);
-  const { discard, landed } = useShotDiscard(workerId);
+/** Uploads (tagged by the photo component's group, or a field's photo type) and the photo
+ *  components' handlers for a run state (shots.ts useShotUpload). */
+export function useTemplatePhotos(workerId: number | null, stationTypeId: number) {
+  const shots = useShotUpload(workerId, stationTypeId);
   const photosFor = (targetId: string | number, run: TemplateRunState, patch: RunPatch): PhotoHandlers => ({
-    pick: (c, file) => {
-      const previewUrl = URL.createObjectURL(file);
-      const setShots = (fn: (shots: Shot[]) => Shot[]) => patch((s) => ({ ...s, photos: { ...s.photos, [c.id]: fn(s.photos[c.id] ?? []) } }));
-      setShots((shots) => [...shots, { previewUrl, uploading: true }]);
-      uploadTo(targetId, file, c.photo_code).then((key) => {
-        if (landed(targetId, previewUrl, key)) return;
-        setShots((shots) => shots.map((x) => (x.previewUrl === previewUrl ? { ...x, objectKey: key ?? undefined, uploading: false, failed: key == null } : x)));
-      });
-    },
+    pick: (c, file) => shots.pick(targetId, file, c.photo_code,
+      (fn) => patch((s) => ({ ...s, photos: { ...s.photos, [c.id]: fn(s.photos[c.id] ?? []) } }))),
     remove: (c, idx) => {
-      discard(targetId, (run.photos[c.id] ?? [])[idx]);
+      shots.remove(targetId, (run.photos[c.id] ?? [])[idx]);
       patch((s) => ({ ...s, photos: { ...s.photos, [c.id]: (s.photos[c.id] ?? []).filter((_, j) => j !== idx) } }));
     },
   });
-  return { uploadTo, photosFor };
+  return { uploadTo: shots.upload, photosFor };
 }
 
 /** The route fields' suggestion, while there are fields. */
@@ -146,9 +110,14 @@ export function StepComponents({ step, t }: { step: TemplateStep; t: Target }) {
                   id={`${uid}-${c.id}`} onVerdict={(patch) => t.patch((s) => ({ ...s, verdict: { ...s.verdict, ...patch } }))} />
               </React.Fragment>
             );
-          case "weight":
-            return <WeighBlock key={c.id} c={c} refWeight={t.run.refWeight} value={t.run.weights[c.id] ?? ""} id={`${uid}-${c.id}`}
+          case "weight": {
+            const value = t.run.weights[c.id] ?? "";
+            const w = weightOutcome(c, t.run.refWeight, value);
+            const diff = w.measured != null && t.run.refWeight != null ? w.measured - t.run.refWeight : null;
+            return <WeighBlock key={c.id} refWeight={t.run.refWeight} value={value} id={`${uid}-${c.id}`} tolerancePct={c.tolerance_pct}
+              result={w.diffPct != null && w.pass != null && diff != null ? { diff, diffPct: w.diffPct, pass: w.pass } : null}
               onChange={(v) => t.patch((s) => ({ ...s, weights: { ...s.weights, [c.id]: v } }))} />;
+          }
           case "checklist":
             return (
               <div key={c.id}>
@@ -231,14 +200,19 @@ export function PlainScan({ label, placeholder, value, onChange, onSubmit, sugge
   );
 }
 
+/** A weighing against the reference: the deviation and whether it is within the tolerance. Each
+ *  wizard compares by its own rule (B9: the code's opening counts a 0 reference, a template does
+ *  not). */
+export type WeighResult = { diff: number; diffPct: number; pass: boolean };
+
 /** "שקילה מול ייחוס" in the opening wizard's markup: the reference weight, the measured one, the deviation. */
-export function WeighBlock({ c, refWeight, value, id, onChange }: {
-  c: WeightComponent; refWeight: number | null; value: string; id: string; onChange: (v: string) => void;
+export function WeighBlock({ refWeight, value, id, onChange, result, tolerancePct, style }: {
+  refWeight: number | null; value: string; id: string; onChange: (v: string) => void;
+  /** null while there is nothing to compare. */
+  result: WeighResult | null; tolerancePct: number; style?: React.CSSProperties;
 }) {
-  const w = weightOutcome(c, refWeight, value);
-  const diff = w.measured != null && refWeight != null ? w.measured - refWeight : null;
   return (
-    <div>
+    <div style={style}>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", maxWidth: 620 }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>משקל פריט ייחוס</div>
@@ -251,13 +225,13 @@ export function WeighBlock({ c, refWeight, value, id, onChange }: {
             className="pkg-field pkg-field--lg pkg-field--code" />
         </div>
       </div>
-      {w.diffPct != null && w.pass != null && diff != null && (
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 11, background: w.pass ? GREEN_BG : RED_BG, border: `1px solid ${w.pass ? "color-mix(in srgb, var(--color-status-approved) 22%, transparent)" : "color-mix(in srgb, var(--color-destructive) 25%, transparent)"}`, borderRadius: 11, padding: "13px 15px", marginTop: 16, maxWidth: 620 }}>
+      {result && (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 11, background: result.pass ? GREEN_BG : RED_BG, border: `1px solid ${result.pass ? "color-mix(in srgb, var(--color-status-approved) 22%, transparent)" : "color-mix(in srgb, var(--color-destructive) 25%, transparent)"}`, borderRadius: 11, padding: "13px 15px", marginTop: 16, maxWidth: 620 }}>
           {/* ✓ only when it passes; out of tolerance gets the alert mark. */}
-          <span style={{ color: w.pass ? GREEN : RED, marginTop: 1, display: "inline-flex" }}>{w.pass ? <Check size={18} strokeWidth={2} aria-hidden /> : <CircleAlert size={18} strokeWidth={2} aria-hidden />}</span>
+          <span style={{ color: result.pass ? GREEN : RED, marginTop: 1, display: "inline-flex" }}>{result.pass ? <Check size={18} strokeWidth={2} aria-hidden /> : <CircleAlert size={18} strokeWidth={2} aria-hidden />}</span>
           <div>
-            <div style={{ fontSize: 14.5, fontWeight: 600, color: w.pass ? GREEN : RED }}>{w.pass ? "משקל תקין" : "משקל לא תקין"}</div>
-            <div style={{ fontSize: 13, color: INK_2, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>סטייה {diff >= 0 ? "+" : "−"}{Math.abs(diff).toFixed(0)} גר׳ ({w.diffPct.toFixed(1)}% · סטייה תקנית ±{c.tolerance_pct}%)</div>
+            <div style={{ fontSize: 14.5, fontWeight: 600, color: result.pass ? GREEN : RED }}>{result.pass ? "משקל תקין" : "משקל לא תקין"}</div>
+            <div style={{ fontSize: 13, color: INK_2, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>סטייה {result.diff >= 0 ? "+" : "−"}{Math.abs(result.diff).toFixed(0)} גר׳ ({result.diffPct.toFixed(1)}% · סטייה תקנית ±{tolerancePct}%)</div>
           </div>
         </div>
       )}
@@ -268,31 +242,40 @@ export function WeighBlock({ c, refWeight, value, id, onChange }: {
 
 /** "רשימת סימון" in the closing wizard's markup: every row a tick. `showTitle` false: the title
  *  names the group for screen readers only. */
-export function ChecklistBlock({ c, title, showTitle = true, ticked, onToggle }: {
+function ChecklistBlock({ c, title, showTitle = true, ticked, onToggle }: {
   c: ChecklistComponent; title: string; showTitle?: boolean; ticked: string[]; onToggle: (rowId: string) => void;
 }) {
   return (
     <div style={{ maxWidth: 620 }}>
       {showTitle && <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 7 }}>{title}</div>}
-      <div role="group" aria-label={title} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-        {c.items.map((row) => {
-          const on = ticked.includes(row.id);
-          return (
-            <button key={row.id} type="button" role="checkbox" aria-checked={on} onClick={() => onToggle(row.id)}
-              className="pkg-choice pkg-press" style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52, borderRadius: 12, padding: "13px 15px" }}>
-              <span aria-hidden className={on ? "pkg-tick pkg-tick--on" : "pkg-tick"} style={{ width: 22, height: 22, borderRadius: 7, borderColor: on ? undefined : "var(--color-field-border)" }}>{on && <Check size={13} strokeWidth={2.5} />}</span>
-              <span style={{ fontSize: 14.5, fontWeight: 600, color: on ? BLUE : INK }}>{row.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      <CheckRows label={title} rows={c.items} isOn={(id) => ticked.includes(id)} onToggle={onToggle} />
+    </div>
+  );
+}
+
+/** The ticks of a checklist, a group named `label`. */
+export function CheckRows({ label, rows, isOn, onToggle }: {
+  label: string; rows: readonly { id: string; label: string }[]; isOn: (id: string) => boolean; onToggle: (id: string) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+      {rows.map((row) => {
+        const on = isOn(row.id);
+        return (
+          <button key={row.id} type="button" role="checkbox" aria-checked={on} onClick={() => onToggle(row.id)}
+            className="pkg-choice pkg-press" style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52, borderRadius: 12, padding: "13px 15px" }}>
+            <span aria-hidden className={on ? "pkg-tick pkg-tick--on" : "pkg-tick"} style={{ width: 22, height: 22, borderRadius: 7, borderColor: on ? undefined : "var(--color-field-border)" }}>{on && <Check size={13} strokeWidth={2.5} />}</span>
+            <span style={{ fontSize: 14.5, fontWeight: 600, color: on ? BLUE : INK }}>{row.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 /** "הערות": a free-text note under its label — a NotesField while the step's popup has fields
  *  (artboard 18 `pk`: the packing note), a plain textarea otherwise. */
-export function NotesBlock({ label, id, value, onChange, withFields, look }: {
+function NotesBlock({ label, id, value, onChange, withFields, look }: {
   label: string; id: string; value: string; onChange: (v: string) => void; withFields: boolean; look: Target["look"];
 }) {
   return (

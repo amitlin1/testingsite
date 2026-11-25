@@ -1,14 +1,18 @@
 "use client";
 import * as React from "react";
 import { Suspense } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { LayoutTemplate } from "lucide-react";
 import { Alert, Button, ConfirmDialog, Skeleton, Tag } from "@/components/ui";
-import { apiFetch } from "@/lib/api/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { getArray } from "@/lib/api/client";
+import { useReplaceQuery } from "@/lib/hooks/useUrlState";
 import { CODE_POPUPS } from "@/app/lib/popup-templates/codePopups";
 import { packageRolesByType } from "@/app/lib/popup-templates/placement";
 import type { RouteSteps } from "@/app/lib/popup-templates/placement";
-import type { PackageRole } from "@/app/lib/popup-templates/schema";
+import type { PackageRole, TemplateSummaryJson as Summary } from "@/app/lib/popup-templates/schema";
+import type { ItemTypeLite, StationTypeRow } from "@/app/lib/lookups/contract";
+import { RESOURCE_KEY } from "../testing-routes/lib/resources";
 import SettingsToolbar from "../components/SettingsToolbar";
 import TemplateEditor from "./components/TemplateEditor";
 import type { EditorType } from "./components/TemplateEditor";
@@ -21,31 +25,32 @@ import "./popup-templates.css";
  * (the stations screen's "תבנית חלון") opens it. Leaving a draft with unsaved changes asks first.
  */
 
-type Summary = { station_type_id: number; base: string; version: number; role: PackageRole | null };
 type PhotoType = { photo_type_id: number; code: string };
 
 type Lists = { types: EditorType[]; photoTypes: PhotoType[]; summaries: Map<number, Summary>; packageRoles: Map<number, Set<PackageRole>> };
 
 /** The station types, the photo groups, the template summaries and the package-level types' places
  *  on the package routes; null when any failed. */
+const SUMMARIES_URL = "/api/settings/popup-templates";
+
 async function readLists(): Promise<Lists | null> {
   try {
-    const [typesRes, photosRes, sumRes, routesRes, itemTypesRes] = await Promise.all([
-      apiFetch("/api/settings/test-stations-type"), apiFetch("/api/settings/photo-types?all=1"), apiFetch("/api/settings/popup-templates"),
-      apiFetch("/api/settings/testing-routes"), apiFetch("/api/itemTypes"),
+    const [rows, photoTypes, summaries, routes, itemTypes] = await Promise.all([
+      getArray<StationTypeRow>("/api/settings/test-stations-type"),
+      getArray<PhotoType>("/api/settings/photo-types?all=1"),
+      getArray<Summary>(SUMMARIES_URL),
+      getArray<RouteSteps>("/api/settings/testing-routes"),
+      getArray<ItemTypeLite>("/api/itemTypes"),
     ]);
-    if (!typesRes.ok || !photosRes.ok || !sumRes.ok || !routesRes.ok || !itemTypesRes.ok) return null;
-    const rows = (await typesRes.json()) as { test_station_type_id: number; test_type_desc: string; package_level: boolean }[];
-    const summaries = (await sumRes.json()) as Summary[];
-    const routes = (await routesRes.json()) as RouteSteps[];
-    const packageItemTypes = new Set(((await itemTypesRes.json()) as { item_type_id: number; is_package: boolean }[]).filter((t) => t.is_package).map((t) => t.item_type_id));
+    const packageItemTypes = new Set(itemTypes.filter((t) => t.is_package).map((t) => t.item_type_id));
     return {
-      types: rows.map((r) => ({ id: r.test_station_type_id, name: r.test_type_desc.trim(), packageLevel: r.package_level })),
-      photoTypes: (await photosRes.json()) as PhotoType[],
+      types: rows.map((r) => ({ id: r.test_station_type_id, name: r.test_type_desc, packageLevel: r.package_level })),
+      photoTypes,
       summaries: new Map(summaries.map((r) => [r.station_type_id, r])),
       packageRoles: packageRolesByType(routes, (id) => packageItemTypes.has(id)),
     };
-  } catch {
+  } catch (e) {
+    console.error("Popup template lists failed", e);
     return null;
   }
 }
@@ -59,8 +64,7 @@ export default function PopupTemplatesPage() {
 }
 
 function PopupTemplatesView() {
-  const router = useRouter();
-  const pathname = usePathname();
+  const replaceQuery = useReplaceQuery();
   const params = useSearchParams();
   const selectedId = Number(params.get("type")) || null;
 
@@ -70,10 +74,9 @@ function PopupTemplatesView() {
   const [packageRoles, setPackageRoles] = React.useState<Map<number, Set<PackageRole>>>(new Map());
   const [failed, setFailed] = React.useState(false);
 
+  const queryClient = useQueryClient();
   const loadSummaries = React.useCallback(async () => {
-    const res = await apiFetch("/api/settings/popup-templates");
-    if (!res.ok) throw new Error(String(res.status));
-    const rows = (await res.json()) as Summary[];
+    const rows = await getArray<Summary>(SUMMARIES_URL);
     setSummaries(new Map(rows.map((r) => [r.station_type_id, r])));
   }, []);
 
@@ -96,7 +99,7 @@ function PopupTemplatesView() {
   // ---- selection, with a guard for unsaved changes ----
   const [dirty, setDirty] = React.useState(false);
   const [pending, setPending] = React.useState<number | null>(null);
-  const go = (id: number) => router.replace(`${pathname}?type=${id}`, { scroll: false });
+  const go = (id: number) => replaceQuery(`type=${id}`);
   const pick = (id: number) => {
     if (id === selectedId) return;
     if (dirty) setPending(id);
@@ -106,7 +109,12 @@ function PopupTemplatesView() {
 
   const selected = types?.find((t) => t.id === selectedId) ?? null;
   const photoCodeOf = React.useCallback((id: number) => photoTypes.find((p) => p.photo_type_id === id)?.code ?? null, [photoTypes]);
-  const reloadSummaries = React.useCallback(() => { void loadSummaries().catch(() => undefined); }, [loadSummaries]);
+  // A save or a delete: the list's tags here, and the testing-routes screen's copy of which types
+  // have a template.
+  const reloadSummaries = React.useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: RESOURCE_KEY.popupTemplates });
+    loadSummaries().catch((e) => console.error("Popup template summaries failed", e));
+  }, [loadSummaries, queryClient]);
 
   return (
     <div dir="rtl">

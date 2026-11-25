@@ -1,14 +1,8 @@
-import { getCurrentUtcIso } from "@/app/lib/datetime";
-import { findStationForRouteStep } from "@/app/lib/station-assignment";
-import { recordTransition } from "@/app/lib/metrics/record";
-import { TransactionClient } from "@/app/lib/prisma";
+import { TransactionClient } from "@/lib/db";
 import { PackageError } from "./errors";
 import {
-  CUSTOMER_CODE_RULE,
-  MAX_DAILY_PACKAGES,
   MAX_PACKAGE_SEQ,
   baseOfId,
-  idCustomerCode,
   isNewFormatId,
   itemIdFromBase,
   localDateParts,
@@ -16,13 +10,20 @@ import {
   packageIdFromBase,
 } from "./ids";
 import {
-  checkItemRouteAgainstPackage,
-  checkPackageRoute,
-  firstStep,
-  loadPackageLevelTypeIds,
-  loadRouteShape,
-  RouteShape,
-} from "./route-rules";
+  type ItemRowArgs,
+  assertPackageRoute,
+  enterRoute,
+  fitChar50,
+  idCodeOrRefuse,
+  insertItemRow,
+  loadTemplate,
+  reserveDailyPackageCounters,
+  resolveItemRoute,
+} from "./lifecycle";
+import { firstStep } from "./route-rules";
+import { isOpeningRoute } from "./rules";
+import { assertSerialsFree } from "./serials";
+import { boxRouteNumber } from "./template-wire";
 
 /**
  * The package write path — docs/packages/PLAN.md §2, §4, §6.
@@ -36,10 +37,15 @@ import {
  * intake wizard's "the template said 3, there are 4" path). Takes the next
  * position from the package row; positions are never reused.
  *
- * Both take the caller's tx and never open one: the caller owns the
- * transaction so a failure anywhere rolls back everything (§4.8 of the
- * metrics plan applies to item_created exactly as to every other event).
+ * Neither checks serials against other items (lib/packages/serials.ts): the
+ * seed and the write-path suites mint boxes with fixed serials through them.
+ * The requests do — POST /api/packages through intakePackage, POST
+ * /api/packages/[id]/items through addItemToPackage.
  */
+
+/** An item type that is a package type cannot go inside a box. */
+export const nestedPackageRefusal = (typeDesc: string) =>
+  new PackageError("NESTED_PACKAGE", `${typeDesc} הוא סוג מארז ולא יכול להיות פריט בתוך מארז`);
 
 export type PackageItemInput = {
   itemType: number;
@@ -48,7 +54,7 @@ export type PackageItemInput = {
   model: string;
   manufacturer: string;
   manufacturerNo?: string | null;
-  /** Route of the item type. Omitted → the template line's default → 1. */
+  /** Route of the item type. Omitted → the template line's (template-wire.ts itemRouteNumber). */
   routeNumber?: number | null;
 };
 
@@ -56,6 +62,7 @@ export type PackageInput = {
   customer: number;
   shipment: number;
   packageType: number;
+  /** Omitted → the package type's default route (template-wire.ts boxRouteNumber). */
   routeNumber?: number | null;
   /** Defaults to the shipment's makat. */
   makat?: string | null;
@@ -70,168 +77,12 @@ export type CreatedPackage = {
   itemIds: number[];
 };
 
-/** A template line: the type, how many, and their route. The item's details
- *  are never the template's (lib/packages/boxes.ts intakeBox). */
-export type TemplateLine = {
-  item_type_id: number;
-  quantity: number;
-  route_number: number;
-  sort_order: number;
-};
-
-export const CHAR50 = (s: string | null | undefined) => (s ?? "").trim().slice(0, 50);
-
-/** The customer's code as a new id carries it, or the refusal that says to fix
- *  it in the customers' settings. Checked before a counter value is reserved. */
-export function idCodeOrRefuse(customerCode: string | null | undefined): string {
-  const code = idCustomerCode(customerCode);
-  if (code == null) {
-    const shown = (customerCode ?? "").trim();
-    throw new PackageError(
-      "CUSTOMER_CODE_FORMAT",
-      `${shown ? `קוד הלקוח "${shown}" לא מתאים למזהה המארז` : "ללקוח אין קוד"} — ${CUSTOMER_CODE_RULE}. יש לתקן אותו בהגדרות ← לקוחות.`,
-      409,
-    );
-  }
-  return code;
-}
-
-export async function nextDailyPackageCounter(tx: TransactionClient, dateKey: string): Promise<number> {
-  return reserveDailyPackageCounters(tx, dateKey, 1);
-}
-
-/**
- * Reserves `count` consecutive values of the day's package counter in one
- * statement and answers the first; the values are first .. first+count-1.
- * The row lock this upsert takes is held to commit, so two savers running at
- * once queue behind each other and can never mint the same prefix.
- */
-export async function reserveDailyPackageCounters(tx: TransactionClient, dateKey: string, count: number): Promise<number> {
-  const rows = await tx.$queryRaw<{ counter: number }[]>`
-    INSERT INTO daily_counters (date_key, counter)
-    VALUES (${dateKey}::date, ${count})
-    ON CONFLICT (date_key)
-    DO UPDATE SET counter = daily_counters.counter + ${count}
-    RETURNING counter
-  `;
-  const last = Number(rows[0]?.counter);
-  if (!Number.isFinite(last)) throw new Error("daily_counters returned no counter");
-  if (last > MAX_DAILY_PACKAGES) {
-    const left = Math.max(0, MAX_DAILY_PACKAGES - (last - count));
-    throw new PackageError(
-      "DAILY_LIMIT",
-      count === 1
-        ? `נקלטו כבר ${MAX_DAILY_PACKAGES} מארזים היום — המונה היומי במזהה מלא`
-        : `המונה היומי במזהה מאפשר עוד ${left} מארזים היום, והמשלוח צריך ${count}`,
-      409,
-    );
-  }
-  return last - count + 1;
-}
-
-export async function loadTemplate(tx: TransactionClient, packageTypeId: number): Promise<TemplateLine[]> {
-  const rows = await tx.package_contents.findMany({
-    where: { package_type_id: packageTypeId },
-    orderBy: [{ sort_order: "asc" }, { id: "asc" }],
-    select: { item_type_id: true, quantity: true, route_number: true, sort_order: true },
-  });
-  return rows;
-}
-
-/** Resolves and validates one item's route against the package route.
- *  Returns the route number actually used. */
-export async function resolveItemRoute(
-  tx: TransactionClient,
-  item: PackageItemInput,
-  template: TemplateLine[],
-  pkgShape: RouteShape,
-  packageLevel: Set<number>,
-  itemTypeDesc: string,
-): Promise<number> {
-  const line = template.find((l) => l.item_type_id === item.itemType);
-  const routeNumber = item.routeNumber ?? line?.route_number ?? 1;
-  const shape = await loadRouteShape(tx, item.itemType, routeNumber);
-  const problem = checkItemRouteAgainstPackage(shape, pkgShape, packageLevel, routeNumber);
-  if (problem) {
-    throw new PackageError("ITEM_ROUTE_SHAPE", `${itemTypeDesc}: ${problem}`, 409);
-  }
-  return routeNumber;
-}
-
-export type ItemRowArgs = {
-  itemId: bigint;
-  customer: number;
-  shipment: number;
-  itemType: number;
-  serialNumber: string | null;
-  makat: string;
-  model: string;
-  manufacturer: string;
-  manufacturerNo: string;
-  packageId: bigint | null;
-  packageSeq: number | null;
-  templateSnapshot: TemplateLine[] | null;
-};
-
-/** The items row alone. Without routeRow it is a box waiting for intake
- *  (boxes.ts) — no route, nothing in the ledger. */
-export async function insertItemRow(tx: TransactionClient, args: ItemRowArgs): Promise<void> {
-  const {
-    itemId, customer, shipment, itemType, serialNumber, makat, model, manufacturer, manufacturerNo,
-    packageId, packageSeq, templateSnapshot,
-  } = args;
-  await tx.$executeRaw`
-    INSERT INTO items (item_id, customer_id, item_type_id, serial_no, makat, model, manufacturer_name,
-                       manufacturer_no, shipment_id, package_id, package_seq, template_snapshot)
-    VALUES (${itemId}, ${customer}, ${itemType}, ${serialNumber}, ${makat}, ${model}, ${manufacturer},
-            ${manufacturerNo}, ${shipment}, ${packageId}, ${packageSeq}::smallint,
-            ${templateSnapshot == null ? null : JSON.stringify(templateSnapshot)}::jsonb)
-  `;
-}
-
 async function insertRoutedRow(
   tx: TransactionClient,
   args: ItemRowArgs & { routeNumber: number; firstStepTypeId: number | null },
 ): Promise<void> {
   await insertItemRow(tx, args);
-  await routeRow(tx, args);
-}
-
-/** An existing items row enters step 1 of its route: the route row, and the
- *  ledger's item_created in the same transaction. */
-export async function routeRow(
-  tx: TransactionClient,
-  args: { itemId: bigint; itemType: number; routeNumber: number; firstStepTypeId: number | null },
-): Promise<void> {
-  const { itemId, itemType, routeNumber, firstStepTypeId } = args;
-
-  // Step 1 is the opening station type for both the package and its items;
-  // items are hidden there (package-level) until the wizard submits for them.
-  const stationId = await findStationForRouteStep(tx, itemType, routeNumber, 1);
-  const now = new Date(getCurrentUtcIso());
-  // fields_version freezes the station-field config this row's route has
-  // published at intake (route-fields spec §1.5): the row's popups are built
-  // from that version, not the route's latest. 0 (never published) → NULL =
-  // the fixed popups. The box freezes the kit route's version, each item its
-  // own route's — createPackage and addPackageItem both come through here.
-  await tx.$executeRaw`
-    INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step, test_station_id,
-                             created_at, is_finished, queue_start_time, route_number, fields_version)
-    VALUES (${itemId}, ${itemType}, 2, 1, ${stationId}, ${now}::timestamp, FALSE, ${now}::timestamp, ${routeNumber},
-            (SELECT NULLIF(fields_version, 0) FROM testing_routes
-              WHERE item_type_id = ${itemType} AND route_number = ${routeNumber}))
-  `;
-
-  // Ledger call site #1: item_created → queued, same tx as the item_routes
-  // INSERT. metrics_open_run freezes unit_id = COALESCE(package_id, item_id).
-  await recordTransition(tx, {
-    eventKey: `item_created:${itemId}`,
-    itemId,
-    toState: "queued",
-    stepNo: 1,
-    stationTypeId: firstStepTypeId,
-    reason: "item_created",
-  });
+  await enterRoute(tx, args);
 }
 
 export async function createPackage(tx: TransactionClient, input: PackageInput): Promise<CreatedPackage> {
@@ -259,7 +110,7 @@ export async function createPackage(tx: TransactionClient, input: PackageInput):
 
   const packageTypeRow = await tx.item_types.findUnique({
     where: { item_type_id: packageType },
-    select: { is_package: true, item_type_desc: true },
+    select: { is_package: true, item_type_desc: true, default_route_number: true },
   });
   if (!packageTypeRow) throw new PackageError("PACKAGE_TYPE_NOT_FOUND", "סוג המארז לא נמצא", 404);
   if (!packageTypeRow.is_package) {
@@ -275,18 +126,15 @@ export async function createPackage(tx: TransactionClient, input: PackageInput):
     const row = itemTypeById.get(it.itemType);
     if (!row) throw new PackageError("ITEM_TYPE_NOT_FOUND", `סוג פריט ${it.itemType} לא נמצא`, 404);
     if (row.is_package) {
-      throw new PackageError("NESTED_PACKAGE", `${row.item_type_desc.trim()} הוא סוג מארז ולא יכול להיות פריט בתוך מארז`);
+      throw nestedPackageRefusal(row.item_type_desc.trim());
     }
     if (!it.serialNumber || !String(it.serialNumber).trim()) {
       throw new PackageError("ITEM_SERIAL_REQUIRED", `${row.item_type_desc.trim()}: חסר מספר סריאלי`);
     }
   }
 
-  const packageLevel = await loadPackageLevelTypeIds(tx);
-  const packageRouteNumber = input.routeNumber ?? 1;
-  const pkgShape = await loadRouteShape(tx, packageType, packageRouteNumber);
-  const pkgProblem = checkPackageRoute(pkgShape, packageLevel, packageRouteNumber);
-  if (pkgProblem || !pkgShape) throw new PackageError("PACKAGE_ROUTE_SHAPE", pkgProblem ?? "מסלול המארז לא תקין", 409);
+  const packageRouteNumber = boxRouteNumber(input.routeNumber, packageTypeRow.default_route_number);
+  const pkgRoute = await assertPackageRoute(tx, packageType, packageRouteNumber);
 
   const template = await loadTemplate(tx, packageType);
 
@@ -295,11 +143,11 @@ export async function createPackage(tx: TransactionClient, input: PackageInput):
   const itemRoutes: number[] = [];
   for (const it of items) {
     const desc = itemTypeById.get(it.itemType)!.item_type_desc.trim();
-    itemRoutes.push(await resolveItemRoute(tx, it, template, pkgShape, packageLevel, desc));
+    itemRoutes.push(await resolveItemRoute(tx, it, template, pkgRoute, desc));
   }
 
   const { datePart, dateKey } = localDateParts();
-  const counter = await nextDailyPackageCounter(tx, dateKey);
+  const counter = await reserveDailyPackageCounters(tx, dateKey, 1);
   const base = packageIdBase(customerCode, datePart, counter);
   const packageId = packageIdFromBase(base);
 
@@ -310,14 +158,14 @@ export async function createPackage(tx: TransactionClient, input: PackageInput):
     itemType: packageType,
     serialNumber: null,
     makat: (input.makat ?? shipmentRow.makat ?? "").trim(),
-    model: CHAR50(input.model),
-    manufacturer: CHAR50(input.manufacturer),
+    model: fitChar50(input.model),
+    manufacturer: fitChar50(input.manufacturer),
     manufacturerNo: (input.manufacturerNo ?? "").trim(),
     packageId: null,
     packageSeq: null,
     templateSnapshot: template,
     routeNumber: packageRouteNumber,
-    firstStepTypeId: firstStep(pkgShape),
+    firstStepTypeId: firstStep(pkgRoute.shape),
   });
 
   const itemIds: number[] = [];
@@ -325,7 +173,6 @@ export async function createPackage(tx: TransactionClient, input: PackageInput):
     const it = items[i];
     const seq = i + 1;
     const itemId = itemIdFromBase(base, seq);
-    const itemShapeFirst = firstStep(pkgShape); // identical by the rule checked above
     await insertRoutedRow(tx, {
       itemId,
       customer,
@@ -333,14 +180,15 @@ export async function createPackage(tx: TransactionClient, input: PackageInput):
       itemType: it.itemType,
       serialNumber: String(it.serialNumber).trim(),
       makat: String(it.makat ?? "").trim(),
-      model: CHAR50(it.model),
-      manufacturer: CHAR50(it.manufacturer),
+      model: fitChar50(it.model),
+      manufacturer: fitChar50(it.manufacturer),
       manufacturerNo: (it.manufacturerNo ?? "").trim(),
       packageId,
       packageSeq: seq,
       templateSnapshot: null,
       routeNumber: itemRoutes[i],
-      firstStepTypeId: itemShapeFirst,
+      // The item's route starts where the box's does (checked above).
+      firstStepTypeId: firstStep(pkgRoute.shape),
     });
     itemIds.push(Number(itemId));
   }
@@ -393,9 +241,7 @@ export async function addPackageItem(
   if (pkg.route_number == null || pkg.current_route_step == null) {
     throw new PackageError("PACKAGE_NOT_ROUTED", "למארז אין מסלול פעיל", 409);
   }
-  const opening =
-    pkg.current_route_step === 1 && !pkg.is_finished && (pkg.current_status === 1 || pkg.current_status === 2);
-  if (!opening) {
+  if (!isOpeningRoute(pkg)) {
     throw new PackageError("PACKAGE_NOT_OPENING", "ניתן להוסיף פריטים למארז רק בזמן פתיחת המארז", 409);
   }
   const seq = Number(pkg.package_next_seq);
@@ -409,19 +255,15 @@ export async function addPackageItem(
   });
   if (!typeRow) throw new PackageError("ITEM_TYPE_NOT_FOUND", "סוג הפריט לא נמצא", 404);
   if (typeRow.is_package) {
-    throw new PackageError("NESTED_PACKAGE", `${typeRow.item_type_desc.trim()} הוא סוג מארז ולא יכול להיות פריט בתוך מארז`);
+    throw nestedPackageRefusal(typeRow.item_type_desc.trim());
   }
   if (!item.serialNumber || !String(item.serialNumber).trim()) {
     throw new PackageError("ITEM_SERIAL_REQUIRED", "חסר מספר סריאלי");
   }
 
-  const packageLevel = await loadPackageLevelTypeIds(tx);
-  const pkgShape = await loadRouteShape(tx, pkg.item_type_id, pkg.route_number);
-  const pkgProblem = checkPackageRoute(pkgShape, packageLevel, pkg.route_number);
-  if (pkgProblem || !pkgShape) throw new PackageError("PACKAGE_ROUTE_SHAPE", pkgProblem ?? "מסלול המארז לא תקין", 409);
-
+  const pkgRoute = await assertPackageRoute(tx, pkg.item_type_id, pkg.route_number);
   const template = await loadTemplate(tx, pkg.item_type_id);
-  const routeNumber = await resolveItemRoute(tx, item, template, pkgShape, packageLevel, typeRow.item_type_desc.trim());
+  const routeNumber = await resolveItemRoute(tx, item, template, pkgRoute, typeRow.item_type_desc.trim());
 
   const itemId = itemIdFromBase(baseOfId(pkg.item_id), seq);
   await insertRoutedRow(tx, {
@@ -431,14 +273,14 @@ export async function addPackageItem(
     itemType: item.itemType,
     serialNumber: String(item.serialNumber).trim(),
     makat: String(item.makat ?? "").trim(),
-    model: CHAR50(item.model),
-    manufacturer: CHAR50(item.manufacturer),
+    model: fitChar50(item.model),
+    manufacturer: fitChar50(item.manufacturer),
     manufacturerNo: (item.manufacturerNo ?? "").trim(),
     packageId: pkg.item_id,
     packageSeq: seq,
     templateSnapshot: null,
     routeNumber,
-    firstStepTypeId: firstStep(pkgShape),
+    firstStepTypeId: firstStep(pkgRoute.shape),
   });
 
   await tx.$executeRaw`
@@ -446,4 +288,19 @@ export async function addPackageItem(
   `;
 
   return { itemId: Number(itemId), packageSeq: seq };
+}
+
+/** POST /api/packages: a serial twice in the box, or already on an item of
+ *  the same type in this shipment, is refused (itemIndex names it). */
+export async function intakePackage(tx: TransactionClient, input: PackageInput): Promise<CreatedPackage> {
+  await assertSerialsFree(tx, input.shipment, input.items);
+  return createPackage(tx, input);
+}
+
+/** POST /api/packages/[id]/items: the same serial rule as the intake. A
+ *  missing package falls through to addPackageItem, which explains it. */
+export async function addItemToPackage(tx: TransactionClient, packageId: bigint, item: PackageItemInput): Promise<AddedPackageItem> {
+  const pkg = await tx.items.findUnique({ where: { item_id: packageId }, select: { shipment_id: true } });
+  if (pkg) await assertSerialsFree(tx, pkg.shipment_id, [item]);
+  return addPackageItem(tx, packageId, item);
 }

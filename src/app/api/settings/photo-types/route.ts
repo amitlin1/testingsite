@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import { errorResponse } from "@/lib/http/errors";
 
 export const runtime = "nodejs";
 
@@ -36,9 +37,7 @@ export async function GET(request: Request) {
       station_type_desc: test_stations_type?.test_type_desc.trim() ?? null,
     })));
   } catch (error) {
-    console.error("Error fetching photo types:", error);
-    // A real error, never an empty list (route-fields spec §11-12): every caller
-    // already treats a non-ok answer as a failed load.
-    return NextResponse.json({ error: "Failed to fetch photo types" }, { status: 500 });
+    // A real error, never an empty list (route-fields spec §11-12).
+    return errorResponse(error, "Failed to fetch photo types");
   }
 }

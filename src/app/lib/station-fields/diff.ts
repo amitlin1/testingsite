@@ -1,3 +1,4 @@
+import { jsonEqual } from "@/lib/json-guards";
 import { NOTE_MAX_DEFAULT, stepConfigOf, targetKey } from "./schema";
 import type {
   ChoiceOption, Field, FieldGroup, FieldId, FieldType, GroupTarget, NoteMax, NotesMode,
@@ -154,8 +155,13 @@ function fieldChanges(prev: Field, next: Field, moved: boolean): ChangeDetail[] 
 function optionsOf(f: Field): readonly ChoiceOption[] | null {
   return f.type === "choice_row" || f.type === "multi_choice" ? f.options : null;
 }
-function listRefOf(f: Field): VersionRef | undefined {
+/** The option list a choice field is linked to. */
+export function listRefOf(f: Field): VersionRef | undefined {
   return f.type === "choice_row" || f.type === "multi_choice" ? f.list_ref : undefined;
+}
+/** The field set a field was copied from (a section header never carries one). */
+export function fromSetOf(f: Field): VersionRef | undefined {
+  return f.type === "section" ? undefined : f.from_set;
 }
 function refEqual(a: VersionRef | undefined, b: VersionRef | undefined): boolean {
   if (a == null || b == null) return a == null && b == null;
@@ -208,17 +214,4 @@ function longestIncreasingRun(seq: readonly number[]): Set<number> {
   return keep;
 }
 
-/** Structural equality of JSON values, key order ignored. */
-function jsonEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-    return a.every((x, i) => jsonEqual(x, b[i]));
-  }
-  const ao = a as Record<string, unknown>;
-  const bo = b as Record<string, unknown>;
-  const keys = Object.keys(ao);
-  if (keys.length !== Object.keys(bo).length) return false;
-  return keys.every((k) => Object.prototype.hasOwnProperty.call(bo, k) && jsonEqual(ao[k], bo[k]));
-}
+

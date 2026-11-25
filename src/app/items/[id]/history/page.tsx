@@ -1,19 +1,24 @@
 "use client";
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { BarChart3, Check, ChevronRight, Clock, FileText, FlaskConical, RefreshCw } from "lucide-react";
 import { Alert, Button, Skeleton, Tag } from "@/components/ui";
-import { formatDuration } from "@/app/lib/datetime";
-import { STATUS_NAMES } from "@/app/lib/status-names";
-import { toneOfStatus, type StatusTone } from "@/app/lib/status-tones";
-import { formatFileSize } from "@/lib/minioFileUtils";
-import { apiFetch } from "@/lib/api/client";
+import { formatDay, formatDuration, formatMoment } from "@/app/lib/datetime";
+import { STATUS_NAMES, toneOfStatus, type StatusTone } from "@/lib/item-status";
+import { fileDownloadUrl, formatFileSize } from "@/lib/file-types";
+import { getArray, getJson } from "@/lib/api/client";
+import { PACKAGES_HREF, itemHistoryHref } from "@/app/lib/links";
+import { listItemFiles } from "@/lib/api/direct-upload";
+import type { ItemFile } from "@/lib/storage/contract";
+import type { DirectoryWorker } from "@/lib/users/rules";
 import { StatusPill } from "@/components/DataTable";
 import { SummaryStrip, SummaryTile, SummaryStripSkeleton } from "@/components/SummaryStrip";
 import MyPackageCard from "@/app/components/packages/MyPackageCard";
-import type { PackageView } from "@/app/lib/packages/read";
-import { formatDay, formatMoment } from "../../format";
+import type { PackageView } from "@/app/lib/packages/contract";
+import type { ItemConnected, ItemDetail, ItemDetailResponse, ItemHistoryRow } from "@/app/lib/items/contract";
+import { READ_PER_VISIT } from "@/app/components/screenQuery";
 import ItemReportControl from "./ItemReportControl";
 import "@/components/items.css";
 
@@ -25,7 +30,7 @@ import "@/components/items.css";
  *
  * Read-only. Every value on screen is derived from live tables via the existing
  * endpoints (items / item_routes / item_route_history / test_stations /
- * file_objects) — deliberately no *_snapshots tables, which are being retired.
+ * file_objects).
  *
  * One surface per section: the timeline entries, the item facts and the file
  * and connected-item lists are rows divided by hairlines inside their card,
@@ -34,72 +39,48 @@ import "@/components/items.css";
 
 type RouteStation = { id: number; desc: string };
 
-type ItemData = {
-  item_id: number;
-  makat: number | null;
-  serial_no: string | null;
-  item_type_desc: string | null;
-  current_status: number | null;
-  item_status_id: number | null;
-  item_status_desc: string | null;
-  current_route_step: number | null;
-  route_steps: number[] | null;
-  route_stations: RouteStation[] | null;
-  test_station_id: number | null;
-  test_station_desc: string | null;
-  created_at: string | null;
-  finished_at: string | null;
-  is_finished: boolean | null;
-  package_id: number | null;
-  connected_items?: ConnectedItem[];
-};
-
-type ConnectedItem = {
-  item_id: number;
-  serial_no: string | null;
-  item_type_desc: string | null;
-  current_status: number | null;
-  item_status_desc: string | null;
-  relation_type?: string;
-};
-
-type HistoryRow = {
-  log_id: number;
-  item_id: number;
-  current_route_step: number;
-  test_station_id: number | null;
-  test_station_desc: string | null;
-  test_station_type_id: number | null;
-  test_station_type_desc: string | null;
-  queue_start_time: string | null;
-  processing_start_time: string | null;
-  processing_end_time: string | null;
-  /** Net work time of the step, from the DB's one work calendar. NULL while the
-   *  step is open — "not finished" is not "took no time". */
-  net_work_seconds: number | null;
-  worker_id: number | null;
-  worker_name: string | null;
-};
-
-type ItemFile = {
-  objectKey: string;
-  fileName: string;
-  contentType: string | null;
-  size: number;
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string | null;
-  updatedBy: string | null;
-  stationTypeId: number | null;
-  isGlobal: boolean;
-  photoType: string | null;
-};
-
-type Worker = { worker_id: number; worker_name: string | null };
 type StationType = { test_station_type_id: number; test_type_desc: string };
 type PhotoType = { code: string; photo_type_desc: string };
 
-/* ---------- tokens (design-system palette, single action blue) ---------- */
+type HistoryPage = {
+  /** null: the item is not there. */
+  item: ItemDetail | null;
+  history: ItemHistoryRow[];
+  pkg: PackageView | null;
+  files: ItemFile[];
+  workers: DirectoryWorker[];
+  stationTypes: StationType[];
+  photoTypes: PhotoType[];
+  nowRef: string;
+};
+
+const NO_HISTORY: ItemHistoryRow[] = [];
+const NO_FILES: ItemFile[] = [];
+const NO_WORKERS: DirectoryWorker[] = [];
+const NO_STATION_TYPES: StationType[] = [];
+const NO_PHOTO_TYPES: PhotoType[] = [];
+
+async function loadHistoryPage(itemId: string): Promise<HistoryPage> {
+  // Supporting lookups are best-effort: a failure there degrades a label,
+  // it must not blank the screen.
+  const [itemJson, files, workers, stationTypes, photoTypes] = await Promise.all([
+    getJson<ItemDetailResponse>(`/api/items/${encodeURIComponent(itemId)}`),
+    listItemFiles(itemId).catch(() => NO_FILES),
+    getArray<DirectoryWorker>("/api/workers-directory").catch(() => NO_WORKERS),
+    getArray<StationType>("/api/settings/test-stations-type").catch(() => NO_STATION_TYPES),
+    // Inactive groups too: a photo taken under a group (or a template's photo component)
+    // that was retired since still shows its name.
+    getArray<PhotoType>("/api/settings/photo-types?all=1").catch(() => NO_PHOTO_TYPES),
+  ]);
+  return {
+    item: itemJson.item ?? null,
+    history: itemJson.history ?? NO_HISTORY,
+    pkg: itemJson.package ?? null,
+    files, workers, stationTypes, photoTypes,
+    nowRef: new Date().toISOString(),
+  };
+}
+
 const INK = "var(--color-ink)";
 const BODY = "var(--color-ink-muted-70)";
 const MUTED = "var(--color-ink-muted-48)";
@@ -115,12 +96,9 @@ const card: React.CSSProperties = {
   borderRadius: "var(--r-card)",
 };
 
-/** A card's inline padding — rows that are links bleed by the same amount. */
 const CARD_PAD_INLINE = "var(--space-lg)";
 
 const EM_DASH = "—";
-
-/* ---------- formatting (dates: the item screens' shared presets) ---------- */
 
 const fmtDur = (ms: number | null) =>
   ms == null ? EM_DASH : formatDuration(ms, "short");
@@ -141,7 +119,6 @@ function fmtElapsedLong(ms: number | null): string {
   return `${mins} דק׳`;
 }
 
-/** Wall-clock difference in ms; null when either end is missing/invalid. */
 function diff(from: string | null | undefined, to: string | null | undefined): number | null {
   if (!from || !to) return null;
   const a = new Date(from).getTime();
@@ -152,9 +129,6 @@ function diff(from: string | null | undefined, to: string | null | undefined): n
 
 const trim = (v: string | null | undefined) => (v ? v.trim() : "");
 
-/* ---------- small building blocks ---------- */
-
-/** One section role on this page: 17/600 title, 13 muted subtitle. */
 function SectionCard({
   title,
   subtitle,
@@ -177,7 +151,6 @@ function SectionCard({
   );
 }
 
-/** A row inside a card: divided from the one above by a hairline. */
 const rowBase: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -186,105 +159,39 @@ const rowBase: React.CSSProperties = {
   borderTop: `1px solid ${SOFT}`,
 };
 
-/** A row that is a link: bleeds to the card edge so its hover is the row. */
 const linkRow: React.CSSProperties = {
   ...rowBase,
   marginInline: `calc(-1 * ${CARD_PAD_INLINE})`,
   paddingInline: CARD_PAD_INLINE,
 };
 
-/* ---------- page ---------- */
-
 export default function ItemHistoryPage() {
   const params = useParams<{ id: string }>();
   const itemId = params?.id ?? "";
 
-  const [item, setItem] = React.useState<ItemData | null>(null);
-  const [history, setHistory] = React.useState<HistoryRow[]>([]);
+  // Read on every visit and on "נסה שוב". The page draws once everything is in, so a label never
+  // changes under the reader.
+  const pageQ = useQuery({
+    queryKey: ["item", itemId, "history-page"],
+    enabled: itemId !== "",
+    queryFn: () => loadHistoryPage(itemId),
+    ...READ_PER_VISIT,
+  });
+  const data = pageQ.data;
+  const loading = pageQ.isPending || pageQ.isFetching;
+  const item = data?.item ?? null;
+  const history = data?.history ?? NO_HISTORY;
   // The item's box (docs/packages/PLAN.md); null for a legacy loose item.
-  const [pkg, setPkg] = React.useState<PackageView | null>(null);
-  const [files, setFiles] = React.useState<ItemFile[]>([]);
-  const [workers, setWorkers] = React.useState<Worker[]>([]);
-  const [stationTypes, setStationTypes] = React.useState<StationType[]>([]);
-  const [photoTypes, setPhotoTypes] = React.useState<PhotoType[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  // "Not found" is an answer, not a failure — it gets no retry.
-  const [notFound, setNotFound] = React.useState(false);
-  // Bumped by "נסה שוב" to re-run the same load.
-  const [reloadKey, setReloadKey] = React.useState(0);
+  const pkg = data?.pkg ?? null;
+  const files = data?.files ?? NO_FILES;
+  const workers = data?.workers ?? NO_WORKERS;
+  const stationTypes = data?.stationTypes ?? NO_STATION_TYPES;
+  const photoTypes = data?.photoTypes ?? NO_PHOTO_TYPES;
   // "Now" reference for the still-running total, captured once data lands so the
   // number is stable while reading the page (and never differs across renders).
-  const [nowRef, setNowRef] = React.useState<string | null>(null);
+  const nowRef = data?.nowRef ?? null;
 
   const [fileTab, setFileTab] = React.useState<string>("all");
-
-  React.useEffect(() => {
-    if (!itemId) return;
-    let cancelled = false;
-
-    (async () => {
-      setLoading(true);
-      setError(null);
-      setNotFound(false);
-      try {
-        const [itemRes, filesRes, workersRes, typesRes, photoRes] = await Promise.all([
-          apiFetch(`/api/items/${encodeURIComponent(itemId)}`),
-          apiFetch(`/api/items/${encodeURIComponent(itemId)}/files`),
-          apiFetch("/api/workers-directory"),
-          apiFetch("/api/settings/test-stations-type"),
-          // Inactive groups too: a photo taken under a group (or a template's photo component)
-          // that was retired since still shows its name.
-          apiFetch("/api/settings/photo-types?all=1"),
-        ]);
-
-        if (!itemRes.ok) throw new Error("שגיאה בטעינת הפריט");
-        const itemJson = await itemRes.json();
-        if (cancelled) return;
-
-        if (!itemJson?.item) {
-          setNotFound(true);
-          setItem(null);
-          setHistory([]);
-          return;
-        }
-
-        setItem(itemJson.item as ItemData);
-        setHistory(Array.isArray(itemJson.history) ? itemJson.history : []);
-        setPkg((itemJson.package as PackageView | null) ?? null);
-        setNowRef(new Date().toISOString());
-
-        // Supporting lookups are best-effort: a failure here degrades a label,
-        // it must not blank the screen.
-        if (filesRes.ok) {
-          const j = await filesRes.json();
-          if (!cancelled) setFiles(Array.isArray(j.files) ? j.files : []);
-        }
-        if (workersRes.ok) {
-          const j = await workersRes.json();
-          if (!cancelled) setWorkers(Array.isArray(j) ? j : []);
-        }
-        if (typesRes.ok) {
-          const j = await typesRes.json();
-          if (!cancelled) setStationTypes(Array.isArray(j) ? j : []);
-        }
-        if (photoRes.ok) {
-          const j = await photoRes.json();
-          if (!cancelled) setPhotoTypes(Array.isArray(j) ? j : []);
-        }
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message || "שגיאה בטעינת הנתונים");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [itemId, reloadKey]);
-
-  /* ----- derived ----- */
 
   const routeStations: RouteStation[] = React.useMemo(
     () => (item?.route_stations ?? []).map((s) => ({ id: s.id, desc: trim(s.desc) })),
@@ -362,9 +269,8 @@ export default function ItemHistoryPage() {
     trim(item?.item_status_desc) ||
     (statusId != null ? STATUS_NAMES[statusId] ?? `סטטוס ${statusId}` : EM_DASH);
 
-  /** Station name for a history row: the actual station, else its type. */
   const stationNameOf = React.useCallback(
-    (h: HistoryRow) =>
+    (h: ItemHistoryRow) =>
       trim(h.test_station_desc) ||
       trim(h.test_station_type_desc) ||
       routeStations[h.current_route_step - 1]?.desc ||
@@ -412,7 +318,6 @@ export default function ItemHistoryPage() {
     [connectedAll, item],
   );
 
-  /* ----- files, grouped by the station they were saved at ----- */
   const taggedFiles = React.useMemo(
     () =>
       files.map((f) => {
@@ -464,8 +369,6 @@ export default function ItemHistoryPage() {
   // Adjusted during render, so the empty tab is never painted.
   if (fileTab !== "all" && !fileTabs.some((t) => t.key === fileTab)) setFileTab("all");
 
-  /* ----- render ----- */
-
   const shell: React.CSSProperties = {
     maxWidth: 1240,
     margin: "0 auto",
@@ -482,14 +385,14 @@ export default function ItemHistoryPage() {
     );
   }
 
-  if (error) {
+  if (pageQ.isError) {
     return (
       <div style={shell}>
         <BackLink />
         <Alert
           severity="error"
           action={
-            <Button size="small" variant="outlined" color="inherit" onClick={() => setReloadKey((k) => k + 1)} startIcon={<RefreshCw size={16} strokeWidth={1.75} aria-hidden />}>
+            <Button size="small" variant="outlined" color="inherit" onClick={() => void pageQ.refetch()} startIcon={<RefreshCw size={16} strokeWidth={1.75} aria-hidden />}>
               נסה שוב
             </Button>
           }
@@ -502,7 +405,8 @@ export default function ItemHistoryPage() {
     );
   }
 
-  if (notFound || !item) {
+  // "Not found" is an answer, not a failure — it gets no retry.
+  if (!item) {
     return (
       <div style={shell}>
         <BackLink />
@@ -517,7 +421,6 @@ export default function ItemHistoryPage() {
     <div style={shell}>
       <BackLink />
 
-      {/* header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-ml)", flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
           <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "var(--text-page)", fontWeight: 700, letterSpacing: "var(--ls-display)", lineHeight: 1.1 }}>
@@ -528,7 +431,7 @@ export default function ItemHistoryPage() {
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--space-xs)", flexShrink: 0 }}>
-          {/* The one status palette (status-tones), as in the items table. */}
+          {/* The one status palette (item-status), as in the items table. */}
           <StatusPill label={statusLabel} tone={toneOfStatus(statusId)} />
           <span style={{ fontSize: "var(--text-small)", color: MUTED, fontVariantNumeric: "tabular-nums" }}>
             {totalSteps > 0 ? `שלב ${currentStep} מתוך ${totalSteps}` : "ללא מסלול בדיקה"}
@@ -538,14 +441,12 @@ export default function ItemHistoryPage() {
         </div>
       </div>
 
-      {/* summary strip — the shared KPI tiles */}
       <SummaryStrip style={{ marginTop: "var(--space-lg)" }}>
         {summary.map((s) => (
           <SummaryTile key={s.label} icon={s.icon} tone="neutral" value={s.value} label={s.label} />
         ))}
       </SummaryStrip>
 
-      {/* route stepper */}
       {totalSteps > 0 && (
         <div style={{ marginTop: "var(--space-md)" }}>
           <SectionCard title="מסלול בדיקה">
@@ -591,9 +492,7 @@ export default function ItemHistoryPage() {
         </div>
       )}
 
-      {/* two columns */}
       <div className="items-history-cols" style={{ marginTop: "var(--space-ml)" }}>
-        {/* station history timeline — one surface, entries divided by hairlines */}
         <SectionCard
           title="היסטוריית תחנות"
           subtitle="לפי סדר כרונולוגי. משך העיבוד נטו של כל תחנה מוצג כפס להשוואה מהירה בין התחנות."
@@ -649,7 +548,6 @@ export default function ItemHistoryPage() {
                         <StatusPill label={inProgress ? "בעיבוד" : done ? "הושלם" : "בתור"} tone={tone} />
                       </div>
 
-                      {/* who ran it — the accountability signal */}
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)", marginTop: "var(--space-sm)" }}>
                         <span
                           aria-hidden
@@ -699,13 +597,12 @@ export default function ItemHistoryPage() {
           )}
         </SectionCard>
 
-        {/* aside */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-ml)", minWidth: 0 }}>
           <SectionCard title="פרטי הפריט">
             <dl style={{ margin: 0 }}>
               {[
                 { k: "מספר סריאלי", v: trim(item.serial_no) || EM_DASH },
-                { k: "מק״ט", v: item.makat != null ? String(item.makat) : EM_DASH },
+                { k: "מק״ט", v: item.makat ?? EM_DASH },
                 { k: "סוג פריט", v: trim(item.item_type_desc) || EM_DASH },
                 { k: "סטטוס", v: statusLabel },
                 { k: "עמדה נוכחית", v: trim(item.test_station_desc) || EM_DASH },
@@ -780,7 +677,7 @@ export default function ItemHistoryPage() {
                       return (
                         <a
                           key={f.objectKey}
-                          href={downloadUrl(f.objectKey)}
+                          href={fileDownloadUrl(f.objectKey)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="items-row-link"
@@ -819,12 +716,10 @@ export default function ItemHistoryPage() {
   );
 }
 
-/* ---------- pieces ---------- */
-
 function BackLink() {
   return (
     <Link
-      href="/packages"
+      href={PACKAGES_HREF}
       style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 32, fontSize: "var(--text-body-sm)", fontWeight: 600, color: BLUE, textDecoration: "none", marginBottom: "var(--space-sm)" }}
     >
       <ChevronRight size={16} strokeWidth={1.75} aria-hidden />
@@ -844,13 +739,13 @@ function Timing({ label, value, color = INK }: { label: string; value: string; c
   );
 }
 
-function ConnectedRow({ c, relationLabel }: { c: ConnectedItem; relationLabel: string }) {
+function ConnectedRow({ c, relationLabel }: { c: ItemConnected; relationLabel: string }) {
   const status =
     trim(c.item_status_desc) ||
     (c.current_status != null ? STATUS_NAMES[c.current_status] ?? "" : "") ||
     EM_DASH;
   return (
-    <Link href={`/items/${c.item_id}/history`} className="items-row-link" style={linkRow}>
+    <Link href={itemHistoryHref(c.item_id)} className="items-row-link" style={linkRow}>
       <Tag tone="neutral" style={{ flexShrink: 0 }}>{relationLabel}</Tag>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>#{c.item_id}</div>
@@ -866,7 +761,6 @@ function ConnectedRow({ c, relationLabel }: { c: ConnectedItem; relationLabel: s
   );
 }
 
-/** The page's shape while it loads: header, KPI strip, timeline and aside. */
 function HistorySkeleton() {
   return (
     <div aria-busy="true" aria-label="טוען את היסטוריית הפריט">
@@ -895,13 +789,5 @@ function HistorySkeleton() {
         </div>
       </div>
     </div>
-  );
-}
-
-/** Same download route ItemFilesPanel uses — one URL builder, one behaviour. */
-function downloadUrl(objectKey: string): string {
-  return (
-    "/api/files/download/" +
-    objectKey.split("/").map((s) => encodeURIComponent(s)).join("/")
   );
 }

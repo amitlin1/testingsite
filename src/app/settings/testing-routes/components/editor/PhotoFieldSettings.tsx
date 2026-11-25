@@ -5,12 +5,11 @@ import { FIELD_SETTINGS_UNDRAWN_TEXT } from "../../lib/labels";
 import { parsePhotoMin } from "../../lib/editorModel";
 
 /**
- * The settings of a photo row (spec §5.5.2; no artboard draws them), in the options column: "מינ׳",
- * a 38px whole number 0..20 (how many shots the worker must take). Every word is undrawn (labels.ts
- * FIELD_SETTINGS_UNDRAWN_TEXT).
+ * The settings of a photo row (spec §5.5.2; no artboard draws them): how many shots the worker must
+ * take (editorModel.parsePhotoMin). Every word is undrawn.
  *
- * There is no photo group to pick: the field owns its group (schema.ts fieldPhotoCode), which
- * publishing names "{station type} · {field label}".
+ * There is no photo group to pick: the field owns its group (photo-groups.ts), which publishing names
+ * after the station type and the field.
  */
 
 export type PhotoFieldSettingsProps = {
@@ -32,7 +31,7 @@ export function PhotoFieldSettings({ field, minId, onChange }: PhotoFieldSetting
         dir="ltr"
         inputMode="numeric"
         autoComplete="off"
-        className="stp-input stp-input--num sfe-photo__min"
+        className="set-input set-input--num sfe-photo__min"
         title={FIELD_SETTINGS_UNDRAWN_TEXT.photoMinTitle}
         value={minText ?? String(field.min)}
         onChange={(e) => {
@@ -45,5 +44,3 @@ export function PhotoFieldSettings({ field, minId, onChange }: PhotoFieldSetting
     </div>
   );
 }
-
-export default PhotoFieldSettings;

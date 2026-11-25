@@ -2,15 +2,16 @@
 import * as React from "react";
 import { Trash2, X } from "lucide-react";
 import { AnchoredPopover } from "@/components/ui";
-import { TONES, TONE_WORD } from "@/app/lib/station-fields/schema";
+import { TONES } from "@/app/lib/station-fields/schema";
+import { TONE_WORD } from "@/app/lib/station-fields/labels";
 import type { Tone } from "@/app/lib/station-fields/schema";
 import { ToneDot } from "@/app/testing/fields/ToneDot";
 import { EDITOR_TEXT } from "../../lib/labels";
+import { radioArrowStep, ringStep } from "../shared/radioGroup";
 
 /**
- * "סוג האפשרות" — the menu over an option chip being renamed (artboard 2, spec §5.5.2): role="dialog"
- * "עריכת אפשרות", 200px, radius 12; the title and × "סגירה"; a radiogroup תקין / אזהרה / כשל / ניטרלי
- * (32px rows, the tone's dot, the chosen one on tint / 600); a divider; "מחק אפשרות" in red.
+ * "סוג האפשרות" — the menu over an option chip being renamed (artboard 2, spec §5.5.2): the tones as
+ * a radiogroup, and "מחק אפשרות".
  *
  * Focus stays in the chip's rename input when it opens (the input is the anchor, so pressing or
  * focusing it never closes the menu); Tab there moves it into the radios (`groupRef` — the menu is
@@ -39,11 +40,10 @@ export function ToneMenu({ open, onClose, anchorRef, tone, onTone, onDelete, gro
   const reason = React.useRef<ToneMenuCloseReason>("outside");
 
   const onRadioKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const delta = e.key === "ArrowDown" || e.key === "ArrowLeft" ? 1 : e.key === "ArrowUp" || e.key === "ArrowRight" ? -1 : 0;
-    if (delta === 0) return;
+    const step = radioArrowStep(e);
+    if (step === 0) return;
     e.preventDefault();
-    const at = TONES.indexOf(tone);
-    const next = TONES[(at + delta + TONES.length) % TONES.length];
+    const next = ringStep(TONES, TONES.indexOf(tone), step);
     onTone(next);
     groupRef.current?.querySelector<HTMLElement>(`[data-tone="${next}"]`)?.focus();
   };
@@ -110,5 +110,3 @@ export function ToneMenu({ open, onClose, anchorRef, tone, onTone, onDelete, gro
     </AnchoredPopover>
   );
 }
-
-export default ToneMenu;

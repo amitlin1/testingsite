@@ -1,9 +1,11 @@
-import { FIELD_TYPES, ID_PATTERNS, NOTES_MODES, NOTE_MAX_CHOICES, TONES, targetKey } from "./schema";
+import { FIELD_TYPES, ID_PATTERNS, NOTES_MODES, NOTE_MAX_CHOICES, OPTION_COUNT, TONES, stepIndexOf, targetKey } from "./schema";
 import type {
   ChecklistItem, ChecklistItemId, ChoiceOption, Field, FieldGroup, FieldId, FieldType, GroupTarget, OptionId,
   RouteFieldsConfig, StepConfig, StepUid, VersionRef,
 } from "./schema";
-import { UNDRAWN_TEXT, LINT_TEXT, optionsOkText } from "./labels";
+import { FIELDS_UNDRAWN_TEXT, LINT_TEXT, optionsOkText } from "./labels";
+import { HttpError } from "@/lib/http/errors";
+import { isInt, isNum, isPlainObj, isStr, jsonSize, oneOf, own, type JsonObject as Obj } from "@/lib/json-guards";
 
 /**
  * Validation without zod (route-fields spec §2.3), shared by the editor and the API.
@@ -41,7 +43,7 @@ export type Issue = {
   field_id?: FieldId;
   option_id?: OptionId;
   item_id?: ChecklistItemId;
-  message: string;               // Hebrew — labels.ts (artboard text, or UNDRAWN_TEXT)
+  message: string;               // Hebrew — labels.ts (artboard text, or FIELDS_UNDRAWN_TEXT)
 };
 
 /** Hard limits of the shape check. The editor stays inside them; anything beyond is a ShapeError. */
@@ -57,53 +59,46 @@ export const LIMITS = {
   unit: 12,
   stationLabel: 50,              // test_stations_type.test_type_desc is CHAR(50)
   photoType: 50,                 // photo_types.code is VARCHAR(50)
+  libraryName: 100,              // option_lists.name / field_sets.name are VARCHAR(100)
   photoMin: 20,
   layoutDepth: 32,
 } as const;
 
-/** Structural parse failure — mapped to HTTP 400 by every endpoint that accepts a config. */
+/** Structural parse failure of a config — a route-fields config (SHAPE_INVALID) or a popup
+ *  template (TEMPLATE_SHAPE_INVALID); a request body's is a 400 (shapeOr400). */
 export class ShapeError extends Error {
-  readonly code = "SHAPE_INVALID";
+  readonly code: string;
   readonly path: string;
-  constructor(path: string, msg: string) {
+  constructor(path: string, msg: string, code = "SHAPE_INVALID") {
     super(`${path}: ${msg}`);
     this.name = "ShapeError";
+    this.code = code;
     this.path = path;
   }
 }
 
-// ---- helpers ------------------------------------------------------------------
-type Obj = Record<string, unknown>;
+/** A structural parse of a request body: its ShapeError is a 400 { error, code, path }. */
+export function shapeOr400<T>(parse: () => T): T {
+  try {
+    return parse();
+  } catch (e) {
+    if (e instanceof ShapeError) throw new HttpError(400, e.message, { code: e.code, extra: { path: e.path } });
+    throw e;
+  }
+}
 
-/** A JSON object: not null, not an array, no exotic prototype. */
-function isPlainObj(v: unknown): v is Obj {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
-  const proto: unknown = Object.getPrototypeOf(v);
-  return proto === Object.prototype || proto === null;
-}
-/** Own property only — never a value inherited from a (possibly polluted) prototype. */
-function own(o: Obj, k: string): unknown {
-  return Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined;
-}
+// ---- helpers ------------------------------------------------------------------
 /** An optional key: absent and null both mean "not set". */
 function optional(o: Obj, k: string): unknown {
   const v = own(o, k);
   return v === null ? undefined : v;
 }
-const isStr = (v: unknown, max: number): v is string => typeof v === "string" && v.length <= max;
-const isInt = (v: unknown): v is number => Number.isSafeInteger(v);
 const isPosInt = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 1;
-const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const oneOf = <T extends string | number>(list: readonly T[], v: unknown): v is T => (list as readonly unknown[]).includes(v);
 const describe = (v: unknown): string => (typeof v === "string" ? JSON.stringify(v.slice(0, 32)) : typeof v);
 
 function assertJsonSize(raw: unknown, p: string): void {
-  let size: number;
-  try {
-    size = JSON.stringify(raw)?.length ?? 0;
-  } catch {
-    throw new ShapeError(p, "not JSON");
-  }
+  const size = jsonSize(raw);
+  if (size === null) throw new ShapeError(p, "not JSON");
   if (size > LIMITS.configJson) throw new ShapeError(p, "config too large");
 }
 
@@ -160,11 +155,6 @@ export function parseFieldList(raw: unknown, path = "$"): Field[] {
   const out: Field[] = [];
   for (let i = 0; i < raw.length; i++) out.push(parseField(raw[i], `${path}[${i}]`, seen));
   return out;
-}
-
-/** option_lists.options — the same checks as a field's options (0..12, unique o_ ids). */
-export function parseOptionList(raw: unknown, path = "$"): ChoiceOption[] {
-  return parseOptions(raw, path);
 }
 
 function parseStep(uid: string, s: unknown, p: string): StepConfig {
@@ -228,7 +218,8 @@ function parseRef(v: unknown, p: string): VersionRef {
   return { id, ver };
 }
 
-function parseOptions(opts: unknown, p: string): ChoiceOption[] {
+/** A field's options, and option_lists.options: 0..12, unique o_ ids. */
+export function parseOptionList(opts: unknown, p = "$"): ChoiceOption[] {
   // 0..12: a draft may be mid-edit; <2 is a lint WARNING (artboard 4), 0 is a publish error.
   if (!Array.isArray(opts) || opts.length > LIMITS.options) throw new ShapeError(p, "0..12 options");
   const ids = new Set<string>();
@@ -299,7 +290,7 @@ function parseField(f: unknown, p: string, seen: Set<string>): Field {
   switch (type) {
     case "choice_row":
     case "multi_choice": {
-      const options = parseOptions(own(f, "options"), `${p}.options`);
+      const options = parseOptionList(own(f, "options"), `${p}.options`);
       const listRefRaw = optional(f, "list_ref");
       const listRef = listRefRaw === undefined ? {} : { list_ref: parseRef(listRefRaw, `${p}.list_ref`) };
       return type === "choice_row"
@@ -397,7 +388,7 @@ export function lintFields(
     if (!name) {
       out.push({ level: "error", code: "FIELD_LABEL_EMPTY", ...loc, message: LINT_TEXT.fieldLabelEmpty });
     } else {
-      if (names.has(name)) out.push({ level: "warning", code: "DUPLICATE_LABEL_IN_CELL", ...loc, message: UNDRAWN_TEXT.duplicateLabel });
+      if (names.has(name)) out.push({ level: "warning", code: "DUPLICATE_LABEL_IN_CELL", ...loc, message: FIELDS_UNDRAWN_TEXT.duplicateLabel });
       names.add(name);
     }
     if (f.type === "choice_row" || f.type === "multi_choice") {
@@ -409,9 +400,9 @@ export function lintFields(
       // The count checks in exactly the order of artboard 4's validation line.
       const n = f.options.length;
       const fails = f.options.filter((o) => o.tone === "fail").length;
-      if (n === 0) out.push({ level: "error", code: "OPTIONS_EMPTY", ...loc, message: UNDRAWN_TEXT.optionsEmpty });
-      else if (n > 6) out.push({ level: "warning", code: "OPTIONS_TOO_MANY", ...loc, message: LINT_TEXT.optionsTooMany });
-      else if (n < 2) out.push({ level: "warning", code: "OPTIONS_TOO_FEW", ...loc, message: LINT_TEXT.optionsTooFew });
+      if (n === 0) out.push({ level: "error", code: "OPTIONS_EMPTY", ...loc, message: FIELDS_UNDRAWN_TEXT.optionsEmpty });
+      else if (n > OPTION_COUNT.max) out.push({ level: "warning", code: "OPTIONS_TOO_MANY", ...loc, message: LINT_TEXT.optionsTooMany });
+      else if (n < OPTION_COUNT.min) out.push({ level: "warning", code: "OPTIONS_TOO_FEW", ...loc, message: LINT_TEXT.optionsTooFew });
       else if (fails === 0) out.push({ level: "warning", code: "OPTIONS_NO_FAIL", ...loc, message: LINT_TEXT.optionsNoFail });
     }
     // A checklist with nothing to tick, or with an unnamed box, cannot be filled in as meant; the
@@ -419,15 +410,15 @@ export function lintFields(
     if (f.type === "checklist") {
       for (const it of f.items) {
         if (!it.label.trim()) {
-          out.push({ level: "error", code: "CHECKLIST_ITEM_LABEL_EMPTY", ...loc, item_id: it.id, message: UNDRAWN_TEXT.checklistItemLabelEmpty });
+          out.push({ level: "error", code: "CHECKLIST_ITEM_LABEL_EMPTY", ...loc, item_id: it.id, message: FIELDS_UNDRAWN_TEXT.checklistItemLabelEmpty });
         }
       }
-      if (f.items.length === 0) out.push({ level: "error", code: "CHECKLIST_EMPTY", ...loc, message: UNDRAWN_TEXT.checklistEmpty });
+      if (f.items.length === 0) out.push({ level: "error", code: "CHECKLIST_EMPTY", ...loc, message: FIELDS_UNDRAWN_TEXT.checklistEmpty });
     }
     if (f.type === "number") {
       const inverted = f.min != null && f.max != null && f.min > f.max;
       const negativeTolerance = f.tol_pct != null && f.tol_pct < 0;
-      if (inverted || negativeTolerance) out.push({ level: "error", code: "NUMBER_RANGE", ...loc, message: UNDRAWN_TEXT.numberRange });
+      if (inverted || negativeTolerance) out.push({ level: "error", code: "NUMBER_RANGE", ...loc, message: FIELDS_UNDRAWN_TEXT.numberRange });
     }
   }
   return out;
@@ -439,8 +430,8 @@ export function optionListLine(options: readonly ChoiceOption[]): { level: "ok" 
   const n = options.length;
   const fails = options.filter((o) => o.tone === "fail").length;
   if (options.some((o) => !o.label.trim())) return { level: "error", text: LINT_TEXT.optionLabelEmpty };
-  if (n > 6) return { level: "warning", text: LINT_TEXT.optionsTooMany };
-  if (n < 2) return { level: "warning", text: LINT_TEXT.optionsTooFew };
+  if (n > OPTION_COUNT.max) return { level: "warning", text: LINT_TEXT.optionsTooMany };
+  if (n < OPTION_COUNT.min) return { level: "warning", text: LINT_TEXT.optionsTooFew };
   if (fails === 0) return { level: "warning", text: LINT_TEXT.optionsNoFail };
   return { level: "ok", text: optionsOkText(n, fails) };
 }
@@ -459,18 +450,17 @@ export function checkConfigAgainstRoute(
   stepUids: readonly string[],
   packageLevelTypeIds: ReadonlySet<number>,
 ): { unknownUids: StepUid[]; issues: Issue[] } {
-  const aligned = routeSteps.length === stepUids.length;
   const unknownUids: StepUid[] = [];
   const issues: Issue[] = [];
   for (const [uid, step] of Object.entries(cfg.steps)) {
-    const i = aligned ? stepUids.indexOf(uid) : -1;
+    const i = stepIndexOf({ route_steps: routeSteps, step_uids: stepUids }, uid);
     if (i < 0) {
       unknownUids.push(uid);
       continue;
     }
     const scope = packageLevelTypeIds.has(routeSteps[i]) ? "package" : "item";
     if (step.scope !== scope) {
-      issues.push({ level: "error", code: "STEP_SCOPE_MISMATCH", step_uid: uid, message: UNDRAWN_TEXT.stepScopeMismatch });
+      issues.push({ level: "error", code: "STEP_SCOPE_MISMATCH", step_uid: uid, message: FIELDS_UNDRAWN_TEXT.stepScopeMismatch });
     }
   }
   return { unknownUids, issues };
@@ -479,5 +469,5 @@ export function checkConfigAgainstRoute(
 /** checkConfigAgainstRoute's unknownUids as publish-blocking errors: the issues publish and its
  *  preview answer 422 with (spec §3.4.3 step 3), and the ones the editor lists next to them. */
 export function unknownStepIssues(unknownUids: readonly StepUid[]): Issue[] {
-  return unknownUids.map((uid) => ({ level: "error", code: "STEP_UNKNOWN", step_uid: uid, message: UNDRAWN_TEXT.stepUnknown }));
+  return unknownUids.map((uid) => ({ level: "error", code: "STEP_UNKNOWN", step_uid: uid, message: FIELDS_UNDRAWN_TEXT.stepUnknown }));
 }

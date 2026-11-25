@@ -1,101 +1,25 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { fixSequence } from "@/app/lib/fix-sequence";
-import { Prisma } from "@prisma/client";
-import { CUSTOMER_CODE_RULE, idCustomerCode } from "@/app/lib/packages/ids";
-import { errorMessage } from "@/lib/errors";
+import { prisma } from "@/lib/db";
+import { errorResponse } from "@/lib/http/errors";
+import { readJsonObject } from "@/lib/http/request";
+import { insertLookupRow, listCustomers, listJson } from "@/app/lib/lookups";
+import { customerJson, customerName, readCustomer } from "./customer";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  try {
-    const rows = await prisma.customers.findMany({
-      orderBy: { id: "asc" },
-    });
-
-    const result = rows.map((r) => ({
-      id: r.id,
-      name: r.name.trim(),
-      customer_code: r.customer_code.trim(),
-    }));
-
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("Error fetching customers:", error);
-    // Return empty array instead of error to prevent frontend crashes
-    return NextResponse.json([]);
-  }
+  return listJson(async () => (await listCustomers("id")).map(customerJson), "Error fetching customers:", { emptyOnError: true });
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { name, customer_code } = body;
-
-  if (!name || typeof name !== "string" || !name.trim()) {
-    return NextResponse.json(
-      { error: "שם לקוח הוא שדה חובה" },
-      { status: 400 }
-    );
-  }
-
-  if (!customer_code || typeof customer_code !== "string" || !customer_code.trim()) {
-    return NextResponse.json(
-      { error: "קוד לקוח הוא שדה חובה" },
-      { status: 400 }
-    );
-  }
-
-  const trimmedName = name.trim();
-  const trimmedCode = customer_code.trim();
-  // The code goes into every box id minted for the customer (lib/packages/ids.ts).
-  if (idCustomerCode(trimmedCode) == null) {
-    return NextResponse.json({ error: CUSTOMER_CODE_RULE }, { status: 400 });
-  }
-
-  // Fix sequence before insert
-  await fixSequence(prisma, "customers", "id", "customers_id_seq");
-
   try {
-    const created = await prisma.customers.create({
-      data: { name: trimmedName, customer_code: trimmedCode },
+    const data = readCustomer(await readJsonObject(req));
+    const created = await insertLookupRow(() => prisma.customers.create({ data }), {
+      duplicate: customerName(data.name),
+      sequence: { table: "customers", idColumn: "id", name: "customers_id_seq", retryFailed: "שגיאה ביצירת לקוח. נא לנסות שוב." },
     });
-
-    return NextResponse.json({
-      id: created.id,
-      name: created.name.trim(),
-      customer_code: created.customer_code.trim(),
-    });
+    return NextResponse.json(customerJson(created));
   } catch (error) {
-    console.error("Error creating customer:", error);
-
-    // If duplicate key, fix sequence and retry
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      try {
-        console.log("Duplicate key detected, fixing sequence and retrying...");
-        await fixSequence(prisma, "customers", "id", "customers_id_seq");
-        const retryCreated = await prisma.customers.create({
-          data: { name: trimmedName, customer_code: trimmedCode },
-        });
-        return NextResponse.json({
-          id: retryCreated.id,
-          name: retryCreated.name.trim(),
-          customer_code: retryCreated.customer_code.trim(),
-        });
-      } catch (retryError) {
-        console.error("Retry after sequence fix failed:", retryError);
-        return NextResponse.json(
-          { error: "שגיאה ביצירת לקוח. נא לנסות שוב." },
-          { status: 409 }
-        );
-      }
-    }
-
-    return NextResponse.json(
-      { error: errorMessage(error) || "שגיאה ביצירת לקוח" },
-      { status: 500 }
-    );
+    return errorResponse(error, "שגיאה ביצירת לקוח");
   }
 }

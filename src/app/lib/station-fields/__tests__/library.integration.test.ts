@@ -21,38 +21,17 @@
 // survive resetDb, so this suite empties them before every test and once more at the end.
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import path from "node:path";
-import type { AppRole } from "@/lib/auth/roles";
-import * as H from "../../metrics/__tests__/write-path-helpers";
-import type { AdminFieldsError } from "../admin";
-import type { FieldSetJson, LibraryUseJson, OptionListJson } from "../admin-types";
-import type { FieldSetView, LibraryUse, OptionListView } from "../library";
-import { FIELDS_EDIT_ROLES } from "../roles";
+import { ACCESS, type AppRole } from "@/lib/auth/roles";
+import * as H from "@/test-support/db-harness";
+import { giveUids, insertRoute, rejectsHttp } from "./helpers";
+import type { LibraryUseJson, OptionListJson } from "../admin-types";
 import { ID_PATTERNS } from "../schema";
 import type { ChoiceOption, Field, FieldGroup, RouteFieldsConfig, StepConfig, Tone } from "../schema";
 import { omit } from "@/lib/omit";
+import { stubSession } from "@/lib/auth/testing";
 
 /** A JSON answer as the route sends it, read by its keys. */
 type Json = Record<string, unknown>;
-
-// ---------------------------------------------------------------------------
-// The wire contract, checked by the compiler
-// ---------------------------------------------------------------------------
-
-/** What JSON.stringify makes of a server value: a Date travels as its ISO string. */
-type Wire<T> = T extends Date
-  ? string
-  : T extends (infer U)[]
-    ? Wire<U>[]
-    : T extends object
-      ? { [K in keyof T]: Wire<T[K]> }
-      : T;
-/** true only when X and Y are the same type. */
-type Equal<X, Y> = (<G>() => G extends X ? 1 : 2) extends (<G>() => G extends Y ? 1 : 2) ? true : false;
-const LIST_MATCHES_WIRE: Equal<Wire<OptionListView>, OptionListJson> = true;
-const SET_MATCHES_WIRE: Equal<Wire<FieldSetView>, FieldSetJson> = true;
-const USE_MATCHES_WIRE: Equal<Wire<LibraryUse>, LibraryUseJson> = true;
 
 // ---------------------------------------------------------------------------
 // Fixture. On top of the write-path world (station types 10 INTAKE and 40 CLOSE package-level,
@@ -147,26 +126,13 @@ const signedIn = (...roles: AppRole[]) => ({
   roles,
 });
 
-/** Replaces the root auth.ts in require.cache with a module whose auth() answers `session` (as
- *  fields.integration.test.ts does). Must run before anything loads auth.ts. */
-function stubAuth(): void {
-  const req = createRequire(path.resolve(process.cwd(), "package.json"));
-  const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as typeof import("node:module");
-  const stub = new CjsModule(authPath);
-  stub.filename = authPath;
-  stub.loaded = true;
-  stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
-  req.cache[authPath] = stub;
-}
-
 describe(
   "station fields — option lists and field sets: CRUD, usage over drafts and published versions, propagate to drafts, delete",
   { skip: H.TEST_DATABASE_URL ? false : "TEST_DATABASE_URL is not set — library integration suite skipped" },
   () => {
     let A: typeof import("../admin");
     let Lib: typeof import("../library");
-    let prisma: (typeof import("../../prisma"))["prisma"];
+    let prisma: (typeof import("@/lib/db"))["prisma"];
     let http: {
       lists: typeof import("../../../api/settings/option-lists/route");
       list: typeof import("../../../api/settings/option-lists/[id]/route");
@@ -182,13 +148,13 @@ describe(
 
     before(async () => {
       // Before anything can load auth.ts.
-      stubAuth();
+      stubSession(() => session);
       // MUST come next: it points DATABASE_URL at the scratch database before anything imports
       // the Prisma client, and takes the advisory lock.
       await H.setup();
       A = await import("../admin");
       Lib = await import("../library");
-      prisma = (await import("../../prisma")).prisma;
+      prisma = (await import("@/lib/db")).prisma;
       http = {
         lists: await import("../../../api/settings/option-lists/route"),
         list: await import("../../../api/settings/option-lists/[id]/route"),
@@ -223,23 +189,6 @@ describe(
     // Helpers
     // -------------------------------------------------------------------------------------
 
-    async function insertRoute(itemTypeId: number, steps: number[], uids: string[]): Promise<number> {
-      const row = await H.one<{ test_route_id: number }>(
-        `INSERT INTO testing_routes (item_type_id, test_station_type_id, route_steps, route_number, step_uids)
-         VALUES ($1, $2, $3::int[], 1, $4::text[]) RETURNING test_route_id`,
-        [itemTypeId, steps[0], steps, uids],
-      );
-      return row.test_route_id;
-    }
-
-    async function giveUids(itemTypeId: number, uids: string[]): Promise<number> {
-      const row = await H.one<{ test_route_id: number }>(
-        `UPDATE testing_routes SET step_uids = $2::text[] WHERE item_type_id = $1 AND route_number = 1 RETURNING test_route_id`,
-        [itemTypeId, uids],
-      );
-      return row.test_route_id;
-    }
-
     type RouteState = { fields_draft: RouteFieldsConfig | null; draft_rev: number; fields_version: number; draft_updated_by: string | null };
 
     async function routeState(routeId: number): Promise<RouteState> {
@@ -271,18 +220,6 @@ describe(
     async function publish(routeId: number, cfg: RouteFieldsConfig): Promise<void> {
       const rev = await saveDraft(routeId, cfg);
       await A.publishFields(prisma, { route_ids: [routeId], base_revs: { [routeId]: rev }, apply_mode: "new_only" }, ACTOR);
-    }
-
-    async function rejectsAdmin(p: Promise<unknown>, status: number, code: string): Promise<AdminFieldsError> {
-      try {
-        await p;
-      } catch (e) {
-        assert.ok(e instanceof A.AdminFieldsError, `expected AdminFieldsError, got ${String(e)}`);
-        assert.equal(e.status, status, `${e.code}: ${e.message}`);
-        assert.equal(e.code, code);
-        return e;
-      }
-      assert.fail(`expected ${status} ${code}, got success`);
     }
 
     /** One handler call as Next makes it: a JSON body (or `raw` text), the dynamic route's params. */
@@ -347,7 +284,7 @@ describe(
 
     it("option lists: POST stores the trimmed name at version 1, GET lists it with its usage, PUT saves version + 1, and a stale base_version is a 409 VERSION_CONFLICT carrying the current row", async () => {
       const created = await Lib.createOptionList(prisma, { name: "  מצב נורית  ", options: LED_OPTIONS }, ACTOR);
-      assert.ok(created.updated_at instanceof Date);
+      assert.equal(typeof created.updated_at, "string");
       assert.deepEqual(omit(created, ["updated_at"]), {
         id: created.id, name: "מצב נורית", options: LED_OPTIONS, version: 1, updated_by: ACTOR.username, usage: { fields: 0, routes: 0 },
       });
@@ -360,9 +297,9 @@ describe(
       );
       const [now] = await Lib.listOptionLists(prisma);
       assert.deepEqual([now.name, now.options, now.version, now.updated_by], ["מצב נורית חדש", LED_OPTIONS_V2, 2, "other"]);
-      assert.ok(now.updated_at.getTime() >= created.updated_at.getTime());
+      assert.ok(Date.parse(now.updated_at) >= Date.parse(created.updated_at));
 
-      const stale = await rejectsAdmin(
+      const stale = await rejectsHttp(
         Lib.updateOptionList(prisma, created.id, { name: "x", options: LED_OPTIONS, base_version: 1 }, ACTOR),
         409,
         "VERSION_CONFLICT",
@@ -373,7 +310,7 @@ describe(
 
     it("field sets: POST stores version 1 without any from_set (a template links to nothing), GET lists it, PUT saves version + 1, and a stale base_version is a 409 VERSION_CONFLICT carrying the current row", async () => {
       const created = await Lib.createFieldSet(prisma, { name: " ערכה חדשה ", fields: [fromSet(S_EXT, 99, 3), S_GND, S_SECTION] }, ACTOR);
-      assert.ok(created.created_at instanceof Date && created.updated_at instanceof Date);
+      assert.ok(typeof created.created_at === "string" && typeof created.updated_at === "string");
       assert.deepEqual([created.name, created.fields, created.version, created.updated_by, created.usage], [
         "ערכה חדשה", [S_EXT, S_GND, S_SECTION], 1, ACTOR.username, { cells: 0, outdated: 0 },
       ]);
@@ -386,7 +323,7 @@ describe(
       assert.deepEqual([now.fields, now.version], [S_FIELDS_V2, 2]);
       assert.deepEqual(now.created_at, created.created_at, "created_at stays");
 
-      const stale = await rejectsAdmin(Lib.updateFieldSet(prisma, created.id, { name: "x", fields: [], base_version: 1 }, ACTOR), 409, "VERSION_CONFLICT");
+      const stale = await rejectsHttp(Lib.updateFieldSet(prisma, created.id, { name: "x", fields: [], base_version: 1 }, ACTOR), 409, "VERSION_CONFLICT");
       assert.deepEqual(stale.extra, { current: now });
       assert.deepEqual(await Lib.listFieldSets(prisma), [now], "nothing written");
     });
@@ -396,11 +333,11 @@ describe(
       const set = await Lib.createFieldSet(prisma, { name: "ערכה", fields: [S_EXT] }, ACTOR);
       const rowsBefore = await H.q("SELECT * FROM option_lists UNION ALL SELECT id, name, fields, version, archived, created_at, updated_at, updated_by FROM field_sets ORDER BY 1, 2");
 
-      await rejectsAdmin(Lib.createOptionList(prisma, [] as never, ACTOR), 400, "INVALID_BODY");
+      await rejectsHttp(Lib.createOptionList(prisma, [] as never, ACTOR), 400, "INVALID_BODY");
       for (const name of [undefined, "", "   ", 5, "x".repeat(101)]) {
-        await rejectsAdmin(Lib.createOptionList(prisma, { name, options: LED_OPTIONS }, ACTOR), 400, "NAME_INVALID");
-        await rejectsAdmin(Lib.createFieldSet(prisma, { name, fields: [] }, ACTOR), 400, "NAME_INVALID");
-        await rejectsAdmin(Lib.updateOptionList(prisma, list.id, { name, options: LED_OPTIONS, base_version: 1 }, ACTOR), 400, "NAME_INVALID");
+        await rejectsHttp(Lib.createOptionList(prisma, { name, options: LED_OPTIONS }, ACTOR), 400, "NAME_INVALID");
+        await rejectsHttp(Lib.createFieldSet(prisma, { name, fields: [] }, ACTOR), 400, "NAME_INVALID");
+        await rejectsHttp(Lib.updateOptionList(prisma, list.id, { name, options: LED_OPTIONS, base_version: 1 }, ACTOR), 400, "NAME_INVALID");
       }
       for (const [options, at] of [
         [undefined, "$.options"],
@@ -410,7 +347,7 @@ describe(
         [[opt("o_aaaaaaaa", "א", "red" as Tone)], "$.options[0]"],
         [[opt("o_aaaaaaaa", "א", "pass"), opt("o_aaaaaaaa", "ב", "fail")], "$.options[1]"],
       ] as const) {
-        const e = await rejectsAdmin(Lib.createOptionList(prisma, { name: "ok", options }, ACTOR), 400, "SHAPE_INVALID");
+        const e = await rejectsHttp(Lib.createOptionList(prisma, { name: "ok", options }, ACTOR), 400, "SHAPE_INVALID");
         assert.equal(e.extra.path, at, JSON.stringify(options));
       }
       for (const [fields, at] of [
@@ -419,38 +356,38 @@ describe(
         [[{ ...S_GND, type: "nope" }], "$.fields[0]"],
         [[S_GND, S_GND], "$.fields[1]"],
       ] as const) {
-        const e = await rejectsAdmin(Lib.createFieldSet(prisma, { name: "ok", fields }, ACTOR), 400, "SHAPE_INVALID");
+        const e = await rejectsHttp(Lib.createFieldSet(prisma, { name: "ok", fields }, ACTOR), 400, "SHAPE_INVALID");
         assert.equal(e.extra.path, at, JSON.stringify(fields));
       }
       for (const base_version of [undefined, null, 0, "1", 1.5, -1]) {
-        await rejectsAdmin(Lib.updateOptionList(prisma, list.id, { name: "ok", options: LED_OPTIONS, base_version }, ACTOR), 400, "INVALID_BODY");
-        await rejectsAdmin(Lib.updateFieldSet(prisma, set.id, { name: "ok", fields: [], base_version }, ACTOR), 400, "INVALID_BODY");
+        await rejectsHttp(Lib.updateOptionList(prisma, list.id, { name: "ok", options: LED_OPTIONS, base_version }, ACTOR), 400, "INVALID_BODY");
+        await rejectsHttp(Lib.updateFieldSet(prisma, set.id, { name: "ok", fields: [], base_version }, ACTOR), 400, "INVALID_BODY");
       }
       for (const targets of ["x", {}, [{}], [{ route_id: R.alpha, step_uid: "bad", field_id: "f_aaaaaaaa" }],
         [{ route_id: 0, step_uid: UID.a1, field_id: "f_aaaaaaaa" }], [{ route_id: R.alpha, step_uid: UID.a1, field_id: "x" }],
         Array.from({ length: 1001 }, () => ({ route_id: R.alpha, step_uid: UID.a1, field_id: "f_aaaaaaaa" }))]) {
-        await rejectsAdmin(Lib.propagateOptionList(prisma, list.id, { targets }, ACTOR), 400, "INVALID_BODY");
-        await rejectsAdmin(Lib.propagateFieldSet(prisma, set.id, { targets }, ACTOR), 400, "INVALID_BODY");
+        await rejectsHttp(Lib.propagateOptionList(prisma, list.id, { targets }, ACTOR), 400, "INVALID_BODY");
+        await rejectsHttp(Lib.propagateFieldSet(prisma, set.id, { targets }, ACTOR), 400, "INVALID_BODY");
       }
-      await rejectsAdmin(Lib.propagateOptionList(prisma, list.id, "x" as never, ACTOR), 400, "INVALID_BODY");
+      await rejectsHttp(Lib.propagateOptionList(prisma, list.id, "x" as never, ACTOR), 400, "INVALID_BODY");
 
       for (const id of [Number.NaN, 0, -1, 3_000_000_000]) {
-        await rejectsAdmin(Lib.updateOptionList(prisma, id, { name: "ok", options: [], base_version: 1 }, ACTOR), 400, "INVALID_ID");
-        await rejectsAdmin(Lib.deleteOptionList(prisma, id, ACTOR), 400, "INVALID_ID");
-        await rejectsAdmin(Lib.optionListUsage(prisma, id), 400, "INVALID_ID");
-        await rejectsAdmin(Lib.propagateOptionList(prisma, id, {}, ACTOR), 400, "INVALID_ID");
-        await rejectsAdmin(Lib.updateFieldSet(prisma, id, { name: "ok", fields: [], base_version: 1 }, ACTOR), 400, "INVALID_ID");
-        await rejectsAdmin(Lib.deleteFieldSet(prisma, id, ACTOR), 400, "INVALID_ID");
-        await rejectsAdmin(Lib.fieldSetUsage(prisma, id), 400, "INVALID_ID");
-        await rejectsAdmin(Lib.propagateFieldSet(prisma, id, {}, ACTOR), 400, "INVALID_ID");
+        await rejectsHttp(Lib.updateOptionList(prisma, id, { name: "ok", options: [], base_version: 1 }, ACTOR), 400, "INVALID_ID");
+        await rejectsHttp(Lib.deleteOptionList(prisma, id, ACTOR), 400, "INVALID_ID");
+        await rejectsHttp(Lib.optionListUsage(prisma, id), 400, "INVALID_ID");
+        await rejectsHttp(Lib.propagateOptionList(prisma, id, {}, ACTOR), 400, "INVALID_ID");
+        await rejectsHttp(Lib.updateFieldSet(prisma, id, { name: "ok", fields: [], base_version: 1 }, ACTOR), 400, "INVALID_ID");
+        await rejectsHttp(Lib.deleteFieldSet(prisma, id, ACTOR), 400, "INVALID_ID");
+        await rejectsHttp(Lib.fieldSetUsage(prisma, id), 400, "INVALID_ID");
+        await rejectsHttp(Lib.propagateFieldSet(prisma, id, {}, ACTOR), 400, "INVALID_ID");
       }
       const missing = 2147483647;
-      const gone = await rejectsAdmin(Lib.updateOptionList(prisma, missing, { name: "ok", options: [], base_version: 1 }, ACTOR), 404, "OPTION_LIST_NOT_FOUND");
+      const gone = await rejectsHttp(Lib.updateOptionList(prisma, missing, { name: "ok", options: [], base_version: 1 }, ACTOR), 404, "OPTION_LIST_NOT_FOUND");
       assert.deepEqual(gone.extra, { id: missing });
-      await rejectsAdmin(Lib.propagateOptionList(prisma, missing, {}, ACTOR), 404, "OPTION_LIST_NOT_FOUND");
-      await rejectsAdmin(Lib.optionListUsage(prisma, missing), 404, "OPTION_LIST_NOT_FOUND");
-      await rejectsAdmin(Lib.updateFieldSet(prisma, missing, { name: "ok", fields: [], base_version: 1 }, ACTOR), 404, "FIELD_SET_NOT_FOUND");
-      await rejectsAdmin(Lib.deleteFieldSet(prisma, missing, ACTOR), 404, "FIELD_SET_NOT_FOUND");
+      await rejectsHttp(Lib.propagateOptionList(prisma, missing, {}, ACTOR), 404, "OPTION_LIST_NOT_FOUND");
+      await rejectsHttp(Lib.optionListUsage(prisma, missing), 404, "OPTION_LIST_NOT_FOUND");
+      await rejectsHttp(Lib.updateFieldSet(prisma, missing, { name: "ok", fields: [], base_version: 1 }, ACTOR), 404, "FIELD_SET_NOT_FOUND");
+      await rejectsHttp(Lib.deleteFieldSet(prisma, missing, ACTOR), 404, "FIELD_SET_NOT_FOUND");
 
       // A name of exactly 100 characters, and targets null / [], are fine.
       assert.deepEqual(await Lib.propagateOptionList(prisma, list.id, { targets: null }, ACTOR), { updated_drafts: 0 });
@@ -474,9 +411,9 @@ describe(
         [LIB.L, { fields: 6, routes: 4 }],   // kit ×3 + ALPHA (draft = published) + BETA (published only) + GAMMA
         [LIB.M, { fields: 1, routes: 1 }],
       ]);
-      const kitUse = (step_uid: string, target: LibraryUse["target"], field_id: string, item_label: string, station_label: string, ver = 1): LibraryUse =>
+      const kitUse = (step_uid: string, target: LibraryUseJson["target"], field_id: string, item_label: string, station_label: string, ver = 1): LibraryUseJson =>
         ({ route_id: R.kit, step_uid, target, field_id, ver, in: "draft", kit_desc: "PACKAGE_CLOSE", station_label, item_label });
-      const itemUse = (route_id: number, step_uid: string, field_id: string, where: "draft" | "published", item_label: string, ver = 1): LibraryUse =>
+      const itemUse = (route_id: number, step_uid: string, field_id: string, where: "draft" | "published", item_label: string, ver = 1): LibraryUseJson =>
         ({ route_id, step_uid, target: "item", field_id, ver, in: where, kit_desc: null, station_label: "FUNC", item_label });
       assert.deepEqual(await Lib.optionListUsage(prisma, LIB.L), [
         kitUse(UID.kOpen, "box", BOX.id, "הקופסה", "INTAKE"),
@@ -680,7 +617,7 @@ describe(
       assert.ok(R.kit < R.alpha);
       const before = await revs();
       const drafts = await H.q("SELECT test_route_id, fields_draft FROM testing_routes ORDER BY test_route_id");
-      const e = await rejectsAdmin(Lib.propagateFieldSet(prisma, LIB.S, {}, ACTOR), 422, "PROPAGATE_INVALID");
+      const e = await rejectsHttp(Lib.propagateFieldSet(prisma, LIB.S, {}, ACTOR), 422, "PROPAGATE_INVALID");
       assert.equal(e.extra.route_id, R.alpha);
       assert.equal(typeof e.extra.path, "string");
       assert.deepEqual(await revs(), before);
@@ -693,15 +630,15 @@ describe(
 
     it("delete: 409 IN_USE while a draft or a published version uses the row — an option list also while a field set's field links to it; otherwise archived: gone from GET and 404 on every by-id call", async () => {
       await seedWorld();
-      const used = await rejectsAdmin(Lib.deleteOptionList(prisma, LIB.L, ACTOR), 409, "IN_USE");
+      const used = await rejectsHttp(Lib.deleteOptionList(prisma, LIB.L, ACTOR), 409, "IN_USE");
       assert.deepEqual(used.extra, { usage: { fields: 6, routes: 4 }, field_sets: [] });
-      const usedSet = await rejectsAdmin(Lib.deleteFieldSet(prisma, LIB.S, ACTOR), 409, "IN_USE");
+      const usedSet = await rejectsHttp(Lib.deleteFieldSet(prisma, LIB.S, ACTOR), 409, "IN_USE");
       assert.deepEqual(usedSet.extra, { usage: { cells: 3, outdated: 0 } });
 
       // A list linked only from a field set's field.
       const N = await Lib.createOptionList(prisma, { name: "נוכחות רכיב", options: EXT_OPTIONS }, ACTOR);
       const T = await Lib.createFieldSet(prisma, { name: "קבלת פריט", fields: [linkTo(S_EXT, N.id)] }, ACTOR);
-      const viaSet = await rejectsAdmin(Lib.deleteOptionList(prisma, N.id, ACTOR), 409, "IN_USE");
+      const viaSet = await rejectsHttp(Lib.deleteOptionList(prisma, N.id, ACTOR), 409, "IN_USE");
       assert.deepEqual(viaSet.extra, { usage: { fields: 0, routes: 0 }, field_sets: [{ id: T.id, name: "קבלת פריט" }] });
 
       // An unused set archives; then its list is free too.
@@ -715,18 +652,18 @@ describe(
         () => Lib.updateOptionList(prisma, N.id, { name: "x", options: [], base_version: 1 }, ACTOR),
         () => Lib.optionListUsage(prisma, N.id),
         () => Lib.propagateOptionList(prisma, N.id, {}, ACTOR),
-      ]) await rejectsAdmin(call(), 404, "OPTION_LIST_NOT_FOUND");
+      ]) await rejectsHttp(call(), 404, "OPTION_LIST_NOT_FOUND");
       for (const call of [
         () => Lib.deleteFieldSet(prisma, T.id, ACTOR),
         () => Lib.updateFieldSet(prisma, T.id, { name: "x", fields: [], base_version: 1 }, ACTOR),
         () => Lib.fieldSetUsage(prisma, T.id),
         () => Lib.propagateFieldSet(prisma, T.id, {}, ACTOR),
-      ]) await rejectsAdmin(call(), 404, "FIELD_SET_NOT_FOUND");
+      ]) await rejectsHttp(call(), 404, "FIELD_SET_NOT_FOUND");
 
       // In use through a published version only: still refused, until the draft that drops it is published.
       await A.discardFieldsDraft(prisma, R.kit, { base_rev: (await routeState(R.kit)).draft_rev }, ACTOR);
       const alphaRev = await saveDraft(R.alpha, config(itemStep(UID.a1, [linkTo(LED, LIB.L)])));
-      const publishedOnly = await rejectsAdmin(Lib.deleteFieldSet(prisma, LIB.S, ACTOR), 409, "IN_USE");
+      const publishedOnly = await rejectsHttp(Lib.deleteFieldSet(prisma, LIB.S, ACTOR), 409, "IN_USE");
       assert.deepEqual(publishedOnly.extra, { usage: { cells: 1, outdated: 0 } });
       assert.deepEqual((await Lib.fieldSetUsage(prisma, LIB.S)).map((u) => [u.route_id, u.in]), [[R.alpha, "published"]]);
       await A.publishFields(prisma, { route_ids: [R.alpha], base_revs: { [R.alpha]: alphaRev }, apply_mode: "new_only" }, ACTOR);
@@ -738,8 +675,7 @@ describe(
     // HTTP and the wire contract
     // -------------------------------------------------------------------------------------
 
-    it("http: every write needs a session (401) and FIELDS_EDIT_ROLES (403, naming them) while reads stay open; answers are the lib's through JSON (201 on create); refusals keep their status and code; the compiler holds the views to the wire types", async () => {
-      assert.deepEqual([LIST_MATCHES_WIRE, SET_MATCHES_WIRE, USE_MATCHES_WIRE], [true, true, true]);
+    it("http: every write needs a session (401) and ACCESS.fieldsEdit (403, naming them) while reads stay open; answers are the lib's through JSON (201 on create); refusals keep their status and code", async () => {
       await seedWorld();
       const L = String(LIB.L);
       const S = String(LIB.S);
@@ -758,7 +694,7 @@ describe(
       session = null;
       for (const w of writes) assert.deepEqual(await w.call(), { status: 401, body: { error: "Unauthorized" } }, w.name);
       session = signedIn("storekeeper", "mashan");
-      for (const w of writes) assert.deepEqual(await w.call(), { status: 403, body: { error: "Forbidden", required: FIELDS_EDIT_ROLES } }, w.name);
+      for (const w of writes) assert.deepEqual(await w.call(), { status: 403, body: { error: "Forbidden", required: ACCESS.fieldsEdit } }, w.name);
       assert.deepEqual({ libraries: await libraries(), revs: await revs() }, before, "nothing written");
 
       // Reads are not wrapped: the middleware signs them in, whatever the roles (spec §3.0).
@@ -833,12 +769,12 @@ describe(
       const logged = t.mock.method(console, "error", () => {});
       await seedWorld();
       await H.q(`UPDATE testing_routes SET fields_draft = '{"schema": 9}'::jsonb WHERE test_route_id = $1`, [R.gamma]);
-      const e = await rejectsAdmin(Lib.listOptionLists(prisma), 500, "CONFIG_INVALID");
+      const e = await rejectsHttp(Lib.listOptionLists(prisma), 500, "CONFIG_INVALID");
       assert.deepEqual(e.extra, { route_id: R.gamma });
-      await rejectsAdmin(Lib.listFieldSets(prisma), 500, "CONFIG_INVALID");
+      await rejectsHttp(Lib.listFieldSets(prisma), 500, "CONFIG_INVALID");
       // GAMMA's published version links L, so L's usage reads that route — and fails on its draft.
-      await rejectsAdmin(Lib.optionListUsage(prisma, LIB.L), 500, "CONFIG_INVALID");
-      await rejectsAdmin(Lib.deleteOptionList(prisma, LIB.L, ACTOR), 500, "CONFIG_INVALID");
+      await rejectsHttp(Lib.optionListUsage(prisma, LIB.L), 500, "CONFIG_INVALID");
+      await rejectsHttp(Lib.deleteOptionList(prisma, LIB.L, ACTOR), 500, "CONFIG_INVALID");
       for (const handler of [http.lists.GET, http.sets.GET]) {
         const r = await httpCall(handler, "GET", "/api/settings/option-lists");
         assert.equal(r.status, 500);

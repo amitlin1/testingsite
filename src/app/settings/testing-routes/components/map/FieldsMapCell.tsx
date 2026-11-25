@@ -4,42 +4,25 @@ import { Check, CircleAlert, Link2, Plus } from "lucide-react";
 import { Tooltip, cn } from "@/components/ui";
 import type { AnyMapCell, MapCell, MapColumn, MapNaCell, MapRow } from "../../lib/mapModel";
 import {
-  UNDRAWN_TEXT, MAP_TEXT, cellErrorsText, cellLabel, emptyCellLabel, fieldsText, notOnRouteTooltip, setTagText,
+  MAP_TEXT, cellErrorsText, cellLabel, emptyCellLabel, fieldsText, notOnRouteTooltip, setTagText,
   sharedCellLabel, sharedCellTooltip,
 } from "../../lib/labels";
 
 /**
  * One cell of the fields map (route-fields spec §5.4.2, §5.4.3; artboard 1, and artboard 11 for the
- * shared state): the role="gridcell" slot and what it shows.
+ * shared state): the role="gridcell" slot and what it shows. In a package-level column the slots of
+ * all rows make ONE continuous frame ("כרטיס אחד לכל המארז").
  *
- * The slot is the grid's cell. In a per-item column it holds a separate tile; in a package-level
- * column the slots of all rows make ONE continuous frame (tint, primary-border edges and dividers,
- * 11px corners on the first and last row, "כרטיס אחד לכל המארז" on top) and the tiles inside it are
- * transparent.
+ * The accessible name is cellLabel (artboard 1) — emptyCellLabel / sharedCellLabel for an empty or a
+ * shared cell (artboard 11). The rest of what the tile shows (count, error, unpublished, the set) is
+ * its description (aria-describedby), so a screen reader hears it too. The tone dots are
+ * decoration: the editor names every tone in words.
  *
- * | state                 | look                                          | text                                   |
- * |-----------------------|-----------------------------------------------|----------------------------------------|
- * | defined               | white, hairline (transparent in a kit column) | "{N} שדות" / "שדה אחד", ≤4 tone dots,   |
- * |                       |                                               | "ערכה: {name}" (ellipsis)              |
- * | empty                 | white, divider-soft (transparent in a kit col)| "ללא שדות"                             |
- * |   hover / focus       | 1.5px dashed border-strong                    | Plus + "הגדר שדות"                     |
- * | n/a ("—")             | parchment, muted-40, not in the tab order     | "—", aria-label "לא במסלול", tooltip   |
- * | error                 | warning-bg + warning-border                   | "{N} שדות" + CircleAlert "שגיאה אחת"   |
- * | unpublished           | 6px status-late dot in the corner              | title "שינוי שלא פורסם"                |
- * | set updated           | 11/600 warning-ink                            | "הערכה עודכנה"                         |
- * | shared (artboard 11)  | Link2 beside the count, a tooltip             | "הוגדר במסלול {r} של {item} · משותף עם {kits}" |
- *
- * The accessible name is "{station} · {row}" (artboard 1); an empty cell "{station} · {row} · ללא
- * שדות" and a shared one "{station} · {row} · {n} שדות משותפים" (artboard 11). The rest of what the
- * tile shows (count, error, unpublished, the set) is its description (aria-describedby), so a
- * screen reader hears it too. The tone dots are decoration: the editor names every tone in words.
- *
- * Selected (artboard 1): a 2px primary frame on tint over whatever the tile shows, and an 18px blue
- * badge with a white Check (a 2px white ring) in the inline-end top corner. Artboard 1 marks it with
- * aria-pressed because its demo toggles on click; here a click OPENS the editor (spec §10.3), so the
- * state is the grid's own — aria-selected on the gridcell (the grid is aria-multiselectable) —
- * and the button is not announced as a toggle it is not. A click hands its event to `onActivate`:
- * FieldsMap opens the editor, or with Ctrl / ⌘ / Shift changes the selection.
+ * Selected: artboard 1 marks it with aria-pressed because its demo toggles on click; here a click
+ * OPENS the editor (spec §10.3), so the state is the grid's own — aria-selected on the gridcell (the
+ * grid is aria-multiselectable) — and the button is not announced as a toggle it is not. A click
+ * hands its event to `onActivate`: FieldsMap opens the editor, or with Ctrl / ⌘ / Shift changes the
+ * selection.
  */
 
 export type FieldsMapCellProps = {
@@ -78,7 +61,6 @@ export function naTooltip(cell: MapNaCell): string | null {
   if (cell.reason === "not_on_route" && cell.tooltip) {
     return notOnRouteTooltip(cell.tooltip.item, cell.tooltip.station, cell.tooltip.routeNumber);
   }
-  if (cell.reason === "package_level") return UNDRAWN_TEXT.packageLevelOnItemRoute;
   return null;
 }
 

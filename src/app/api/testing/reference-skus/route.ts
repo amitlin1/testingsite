@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import { parseDbId } from "@/lib/http/request";
 
 export const runtime = "nodejs";
 
@@ -15,8 +16,8 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const itemTypeId = Number(searchParams.get("itemTypeId"));
-    if (!Number.isInteger(itemTypeId) || itemTypeId <= 0) {
+    const itemTypeId = parseDbId(searchParams.get("itemTypeId"));
+    if (itemTypeId == null) {
       return NextResponse.json({ error: "itemTypeId is required" }, { status: 400 });
     }
 

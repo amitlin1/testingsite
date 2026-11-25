@@ -11,13 +11,10 @@ import { DEFAULT_FIELD_TYPE, activeTypeIn, filterFieldTypes, stepActiveType, vis
 import "./editor-popovers.css";
 
 /**
- * "סוג שדה אחר" — the popover that adds a field of any type (artboard 3, spec §5.6).
- *
- * A search (38px, focused on open, filtering by name or description) over the ten types in five
- * groups; a type is a 48px row with its icon tile, name and description, "שורת בדיקה" tagged
- * "ברירת מחדל". The active row (aria-current, parchment, "Enter" hint) follows the arrow keys and
- * the pointer; Enter or a click picks it. Escape closes the popover and gives focus back to the
- * anchor; so does a press on the anchor itself (the anchor's click is expected to toggle `open`).
+ * "סוג שדה אחר" — the popover that adds a field of any type (artboard 3, spec §5.6): a search over the
+ * types by group (fieldTypes.ts). The active row follows the arrow keys and the pointer; Enter or a
+ * click picks it. Escape closes the popover and gives focus back to the anchor; so does a press on
+ * the anchor itself (the anchor's click is expected to toggle `open`).
  *
  * After a pick the popover closes WITHOUT taking focus back: the editor adds the row (spec §5.6:
  * "opens it expanded when it has settings") and moves focus where it belongs.
@@ -29,9 +26,8 @@ import "./editor-popovers.css";
 /** The picker's id — the anchor's aria-controls (artboard 3: `type-picker`). */
 export const FIELD_TYPE_PICKER_ID = "rf-type-picker";
 
-/** Each type's icon (artboard 3; spec §5.6 table) — the picker's tiles, and any row tile that
- *  shows a field's type. */
-export const FIELD_TYPE_ICON: Record<FieldType, LucideIcon> = {
+/** Each type's icon (artboard 3; spec §5.6 table). */
+const FIELD_TYPE_ICON: Record<FieldType, LucideIcon> = {
   choice_row: ListChecks,
   pass_fail: ToggleLeft,
   number: Hash,
@@ -195,5 +191,3 @@ function PickerBody({ searchRef, onPick }: { searchRef: React.RefObject<HTMLInpu
     </div>
   );
 }
-
-export default FieldTypePicker;

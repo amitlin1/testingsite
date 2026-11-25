@@ -1,26 +1,13 @@
-import { NextResponse } from "next/server";
-import { cronSecretGuard } from "@/lib/auth/cron-secret";
-import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
-import { runJob } from "@/app/lib/metrics/jobRun";
+import type { TransactionClient } from "@/lib/db";
+import { JOB_NAMES, runJob } from "@/app/lib/jobs/jobRun";
+import { evaluateHealth, selfcheckAnomalies, selfcheckValue, type SelfcheckRow } from "@/app/lib/jobs/health";
+import { runSelfcheck } from "@/app/lib/metrics/ledger/selfcheck";
 import {
-  evaluateHealth,
-  runSelfcheck,
-  selfcheckAnomalies,
-  selfcheckValue,
-  type SelfcheckRow,
-} from "@/app/lib/metrics/selfcheck";
-import type { RebuildWorkCalendarResult } from "@/lib/work-calendar";
-import type { TransactionClient } from "@/app/lib/prisma";
-import { errorMessage } from "@/lib/errors";
-
-export const runtime = "nodejs";
-
-/**
- * §7.4 self-heal trigger. Deliberately 60 and not the tile's 30: the job must
- * fix the horizon a month BEFORE the tile would have to shout about it, and it
- * is the same threshold work-calendar.ts uses for "the horizon runs short".
- */
-const HEAL_HORIZON_DAYS = 60;
+  CALENDAR_MIN_HORIZON_DAYS,
+  rebuildWorkCalendarInTx,
+  type RebuildWorkCalendarResult,
+} from "@/app/lib/metrics/ledger/work-calendar";
+import { cronRoute } from "../_lib/cron-route";
 
 /**
  * Rows reconciled per run. Measured on the seeded dev dataset: the
@@ -39,24 +26,6 @@ interface SelfcheckDetail {
   healthy: boolean;
   reasons: string[];
   checks: SelfcheckRow[];
-}
-
-/**
- * The §7.4 self-heal, behind a DYNAMIC import on purpose.
- *
- * It is a cold path — the 01:00 job keeps the horizon long, so this fires only
- * on the night that job did not run — and a static import would drag the whole
- * calendar builder, @hebcal/core included, into the module graph of a route that
- * almost never calls it. @hebcal/core is ESM-only (no "require" condition), so
- * that static edge also makes this route unloadable from the node:test runner,
- * which transpiles to CJS: the integration suite could not drive the endpoint at
- * all. Deferring the import costs one resolution on the rare heal.
- */
-async function healCalendar(
-  tx: TransactionClient,
-): Promise<Exclude<RebuildWorkCalendarResult, { status: "skipped_overlap" }>> {
-  const { rebuildWorkCalendarInTx } = await import("@/lib/work-calendar");
-  return rebuildWorkCalendarInTx(tx);
 }
 
 /**
@@ -103,77 +72,49 @@ async function reconcileStaleCalendar(tx: TransactionClient): Promise<number> {
 }
 
 /**
- * POST /api/cron/metrics-selfcheck
- *
- * The third scheduled job of §10.1 — daily at 02:00, an hour after the calendar
+ * POST /api/cron/metrics-selfcheck — daily at 02:00, an hour after the calendar
  * rebuild. Three things in one transaction, in this order:
  *
- *   1. SELF-HEAL (§7.4). calendar_horizon_days < 60 (or no current version at
- *      all) ⇒ build the calendar in-process, before anything else reads it.
- *      Normally a no-op: the 01:00 job keeps the horizon long. This is the
- *      backstop for the night that job did not run.
+ *   1. SELF-HEAL (§7.4). A calendar horizon under CALENDAR_MIN_HORIZON_DAYS (or
+ *      no current version at all) ⇒ build the calendar in-process, before
+ *      anything else reads it — the backstop for a night the 01:00 job did not
+ *      run, a month before the tile would have to shout about it.
  *   2. RECONCILE (§7.4). Recompute the closed intervals a newer calendar version
  *      has invalidated — including the ones step 1 just invalidated.
- *   3. CHECK (§3.10). Run metrics_selfcheck() and record the verdict. The checks
- *      run AFTER the healing so job_run.detail describes the state the job
- *      leaves behind, not the one it found; `before` is kept only to decide
- *      whether step 1 was needed.
+ *   3. CHECK (§3.10). Run metrics_selfcheck() and record the verdict, AFTER the
+ *      healing, so job_run.detail describes the state the job leaves behind.
  *
- * The response carries the check rows so an operator can `curl` this endpoint
- * and read the same 12 numbers `SELECT * FROM metrics_selfcheck()` prints. A
- * RED verdict is still HTTP 200 with `healthy:false` — the job did its work; the
- * .bat's curl --fail must report a broken JOB, not a dirty database, or the one
- * signal the factory has stops meaning anything.
+ * The response carries the check rows, so an operator can `curl` this endpoint
+ * and read what `SELECT * FROM metrics_selfcheck()` prints. A RED verdict is
+ * still HTTP 200 with `healthy:false`: the job did its work.
  */
-export async function POST(req: Request) {
-  const denied = cronSecretGuard(req);
-  if (denied) return denied;
+export const POST = cronRoute({ schemaGate: true, failure: "Failed to run metrics selfcheck" }, async () => {
+  const outcome = await runJob<SelfcheckDetail>(JOB_NAMES.metricsSelfcheck, async (tx) => {
+    const before = await runSelfcheck(tx);
+    const horizon = selfcheckValue(before, "calendar_horizon_days");
+    const calendar =
+      horizon === null || horizon < CALENDAR_MIN_HORIZON_DAYS ? await rebuildWorkCalendarInTx(tx) : null;
+    const reconciledIntervals = await reconcileStaleCalendar(tx);
+    const checks = calendar || reconciledIntervals > 0 ? await runSelfcheck(tx) : before;
+    // No job rows: whether the OTHER jobs are late is /api/health/jobs's
+    // question, and a job cannot grade its own freshness from inside its run.
+    const { healthy, reasons } = evaluateHealth([], checks);
+    return {
+      rowsAffected: reconciledIntervals,
+      detail: { calendar, reconciledIntervals, healthy, reasons, checks },
+    };
+  });
 
-  // The self-heal builds a calendar version and rewrites ledger columns — same
-  // refuse-to-serve gate every metrics writer carries (§8 stage 3).
-  const schemaDenied = await metricsSchemaGate();
-  if (schemaDenied) return schemaDenied;
-
-  try {
-    const outcome = await runJob<SelfcheckDetail>("metrics-selfcheck", async (tx) => {
-      const before = await runSelfcheck(tx);
-      const horizon = selfcheckValue(before, "calendar_horizon_days");
-
-      const calendar =
-        horizon === null || horizon < HEAL_HORIZON_DAYS ? await healCalendar(tx) : null;
-
-      const reconciledIntervals = await reconcileStaleCalendar(tx);
-
-      const checks = calendar || reconciledIntervals > 0 ? await runSelfcheck(tx) : before;
-      // No job rows here: whether the OTHER jobs are late is /api/health/jobs's
-      // question, and a job cannot meaningfully grade its own freshness from
-      // inside its own run.
-      const { healthy, reasons } = evaluateHealth([], checks);
-
-      return {
-        // The reconciliation is the only thing this job WRITES to the ledger.
-        rowsAffected: reconciledIntervals,
-        detail: { calendar, reconciledIntervals, healthy, reasons, checks },
-      };
-    });
-
-    const detail = outcome.detail;
-    return NextResponse.json({
-      success: true,
-      status: outcome.status,
-      jobRunId: outcome.jobRunId,
-      calendar: detail?.calendar ?? null,
-      reconciledIntervals: detail?.reconciledIntervals ?? 0,
-      healthy: detail?.healthy ?? null,
-      reasons: detail?.reasons ?? [],
-      anomalies: detail ? selfcheckAnomalies(detail.checks) : [],
-      checks: detail?.checks ?? [],
-    });
-  } catch (error) {
-    console.error("Error running metrics selfcheck:", error);
-    return NextResponse.json(
-      { error: "Failed to run metrics selfcheck", message: errorMessage(error) || "Unknown error" },
-      { status: 500 }
-    );
-  }
-}
+  const detail = outcome.detail;
+  return Response.json({
+    success: true,
+    status: outcome.status,
+    jobRunId: outcome.jobRunId,
+    calendar: detail?.calendar ?? null,
+    reconciledIntervals: detail?.reconciledIntervals ?? 0,
+    healthy: detail?.healthy ?? null,
+    reasons: detail?.reasons ?? [],
+    anomalies: detail ? selfcheckAnomalies(detail.checks) : [],
+    checks: detail?.checks ?? [],
+  });
+});

@@ -2,7 +2,7 @@
 import * as React from "react";
 import { Check } from "lucide-react";
 import type { ChecklistField, InputField, PhotoField } from "@/app/lib/station-fields/schema";
-import { PassFail, PhotoUploader, type RefImg } from "../tests-popups/stationKit";
+import type { FieldDraft } from "@/app/lib/station-fields/evaluate";
 import ChoiceAutocomplete, { CHOICE_TEXT, MultiChoiceAutocomplete } from "./ChoiceAutocomplete";
 import { NotesField } from "./NotesField";
 import { NumberField, NumberRangeLine, numberRangeLineId } from "./NumberField";
@@ -10,8 +10,10 @@ import {
   TEXT_VALUE_MAX, VARIANT_SPEC, addShot, hasLabelledControl, isItemChecked, noteEditorTitle, noteLabelText,
   notePlaceholder, removeShot, settleShot, toggleChecklistItem, type FieldRowVariant, type RowState,
 } from "./fieldsBlockModel";
-import type { DraftPatch, FieldDraft } from "./useFieldsState";
-import "@/app/packages/packages.css";
+import { PassFail } from "./PassFail";
+import { PhotoUploader, type RefImg } from "./PhotoUploader";
+import type { DraftPatch } from "./drafts";
+import "@/components/ui/controls.css";
 import "./fields.css";
 
 /**
@@ -97,7 +99,7 @@ export function FieldRow({
       control = (
         <NumberField
           id={ids.control} def={def} value={draft?.num ?? ""} onChange={(num) => onChange({ num })}
-          showRequiredError={showRequiredError} rangeLine="external" describedBy={helpId} />
+          showRequiredError={showRequiredError} describedBy={helpId} />
       );
       break;
     case "pass_fail": {
@@ -230,5 +232,3 @@ function PhotoControl({ def, draft, onChange, labelId, helpId, uploadPhoto }: {
     </div>
   );
 }
-
-export default FieldRow;

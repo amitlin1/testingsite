@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_SHIPMENT_BOXES, matchSavedLines, readShipmentLines } from "../lines";
-import { mintOrderKey } from "../../packages/ids";
+import { lineDetails } from "../line-details";
 
 const code = (e: unknown) => (e as { code?: string }).code;
 
@@ -38,15 +38,6 @@ test("readShipmentLines: past the most boxes a shipment may declare", () => {
   assert.throws(() => readShipmentLines([{ item_type_id: 5, quantity: MAX_SHIPMENT_BOXES + 1 }], "S"), (e) => code(e) === "SHIPMENT_TOO_BIG");
 });
 
-test("mintOrderKey: minting order, not the id's own order (ddMMyy, customer first)", () => {
-  const oct31 = "1007311026000500"; // 31/10/26, counter 5
-  const nov1 = "1007011126000100"; // 01/11/26, counter 1
-  assert.ok(BigInt(nov1) < BigInt(oct31), "the id alone puts November first");
-  assert.ok(mintOrderKey(nov1) > mintOrderKey(oct31), "minting order puts it last");
-  assert.ok(mintOrderKey("1007311026000600") > mintOrderKey(oct31), "same day: by the counter");
-  assert.ok(mintOrderKey("123456") < mintOrderKey(oct31), "a legacy id sorts first");
-});
-
 test("matchSavedLines: line_id first, then the same certificate row, then — for a client without ids — the type, in order", () => {
   const saved = [
     { id: 1, item_type_id: 5, cert_row_raw: "1|A" },
@@ -54,7 +45,7 @@ test("matchSavedLines: line_id first, then the same certificate row, then — fo
     { id: 3, item_type_id: 6, cert_row_raw: null },
   ];
   const line = (o: { lineId?: number | null; itemTypeId: number; raw?: string | null }) =>
-    ({ lineId: o.lineId ?? null, itemTypeId: o.itemTypeId, details: { cert_row_raw: o.raw ?? null } }) as never;
+    ({ lineId: o.lineId ?? null, itemTypeId: o.itemTypeId, details: lineDetails({ cert_row_raw: o.raw ?? null }) });
   // The form sends ids: a line without one is new, even of a type with a free saved line.
   assert.deepEqual(matchSavedLines([line({ lineId: 2, itemTypeId: 5 }), line({ itemTypeId: 6 })], saved, true), [2, null]);
   // … also when every saved line was removed and only new ones are sent.

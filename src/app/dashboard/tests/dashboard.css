@@ -367,7 +367,7 @@
 }
 .dash-nav-item:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
 
-/* The ≤1099px tab pills and the filters button beside them. */
+/* The ≤1100px tab pills and the filters button beside them. */
 .dash-pill {
   box-sizing: border-box;
   display: flex;

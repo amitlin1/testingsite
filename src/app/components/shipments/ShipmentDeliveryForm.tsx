@@ -1,7 +1,8 @@
 "use client";
 import React from "react";
-import { FieldGrid, ReportPage, ReportSection, REPORT_COLORS } from "@/app/components/reports/ReportKit";
-import { formatReportDate } from "@/app/components/reports/reportTheme";
+import { FieldGrid, ReportPage, ReportSection } from "@/app/components/reports/ReportKit";
+import { REPORT_COLORS } from "@/app/components/reports/reportTheme";
+import { formatDocDate } from "@/app/lib/datetime";
 
 type ShipmentDeliveryFormProps = {
     /** The outgoing shipment code (קוד משלוח יוצא). */
@@ -26,7 +27,7 @@ export const ShipmentDeliveryForm = React.forwardRef<HTMLDivElement, ShipmentDel
             <ReportSection title="פרטי משלוח">
                 <FieldGrid large fields={[
                     { label: "משלוח יוצא", value: sentCode || "—", mono: true },
-                    { label: "תאריך שליחה", value: formatReportDate(sentDate) },
+                    { label: "תאריך שליחה", value: formatDocDate(sentDate) },
                     { label: "משלוח מקור", value: sourceShipmentCode || "—", mono: true },
                     { label: "קוד לקוח", value: customerCode || "—", mono: true },
                 ]} />

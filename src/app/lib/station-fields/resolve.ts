@@ -1,5 +1,7 @@
-import { fieldPhotoCode, stepConfigOf, targetKey } from "./schema";
-import type { Field, KitItemFields, KitItemGroup, RouteFieldsConfig, StationFieldsResponse, StepConfig, StepUid } from "./schema";
+import { isResearchStatus } from "@/lib/item-status";
+import { GATE_FINISH_ON_REQUIRED } from "./evaluate";
+import { fieldPhotoCode, stepConfigOf, stepUidAt, targetKey } from "./schema";
+import type { Field, KitItemFields, KitItemGroup, RouteFieldsConfig, StationFieldsResponse, StepConfig } from "./schema";
 import { ShapeError, parseRouteFieldsConfig } from "./validate";
 
 /**
@@ -25,7 +27,7 @@ export interface ResolveInput {
   fields_version: number | null;
   /** item_routes.current_route_step (1-based). */
   current_route_step: number;
-  /** item_routes.current_status — 4 / 5 (research) are always legacy. */
+  /** item_routes.current_status — research (isResearchStatus) is always legacy. */
   current_status: number | null;
   /** The station opening the popup is a research station (test_stations.is_research). */
   stationIsResearch: boolean;
@@ -38,19 +40,11 @@ export interface ResolveInput {
   config: unknown;
   /** Kit rows: every item inside the kit (items.package_id = the kit). Ignored for item rows. */
   kitItems: readonly ResolveKitItem[];
-  /** = GATE_FINISH_ON_REQUIRED, passed through to the popup. */
-  gate: boolean;
 }
 
-/** The uid of a 1-based step, or null when the step is out of range or the route has no
- *  usable uids (step_uids and route_steps of different lengths). */
-export function stepUidAt(route: Pick<ResolveRoute, "route_steps" | "step_uids">, step: number): StepUid | null {
-  const steps = route.route_steps ?? [];
-  const uids = route.step_uids ?? [];
-  if (uids.length !== steps.length) return null;
-  if (!Number.isSafeInteger(step) || step < 1 || step > uids.length) return null;
-  return uids[step - 1] || null;
-}
+/** Today's popup, unchanged — the answer for anything doubtful. */
+export const LEGACY_FIELDS: StationFieldsResponse = { mode: "legacy" };
+
 
 const hasInput = (fields: readonly Field[]): boolean => fields.some((f) => f.type !== "section");
 
@@ -72,7 +66,7 @@ export function kitItemGroups(step: StepConfig, itemTypeId: number): KitItemGrou
 /** The step with every photo field tagging its shots with its own group (fieldPhotoCode) — in
  *  every frozen version alike, whatever group an older config stored. The popup uploads with it,
  *  and the submit check compares against it. */
-export function withFieldPhotoGroups(step: StepConfig, routeId: number): StepConfig {
+function withFieldPhotoGroups(step: StepConfig, routeId: number): StepConfig {
   return {
     ...step,
     groups: step.groups.map((g) => ({
@@ -93,10 +87,10 @@ function parseConfig(raw: unknown): RouteFieldsConfig | null {
 }
 
 export function resolveStationFields(input: ResolveInput): StationFieldsResponse {
-  const legacy: StationFieldsResponse = { mode: "legacy" };
+  const legacy = LEGACY_FIELDS;
   // Research popups (PopUpTestDialog in research mode) never show fields before phase 3, and
   // current_route_step still points at the step the item was sent from.
-  if (input.current_status === 4 || input.current_status === 5 || input.stationIsResearch) return legacy;
+  if (isResearchStatus(input.current_status) || input.stationIsResearch) return legacy;
   const v = input.fields_version;
   if (v == null || !Number.isSafeInteger(v) || v < 1) return legacy;
   const uid = stepUidAt(input.route, input.current_route_step);
@@ -113,7 +107,7 @@ export function resolveStationFields(input: ResolveInput): StationFieldsResponse
   if (!input.rowIsPackage) {
     const fields = groupFields(step, targetKey("item"));
     if (!hasInput(fields)) return legacy;
-    return { mode: "item", schema: { route_id, v, step_uid: uid, target: "item" }, fields, gate: input.gate };
+    return { mode: "item", schema: { route_id, v, step_uid: uid, target: "item" }, fields, gate: GATE_FINISH_ON_REQUIRED };
   }
 
   const box = groupFields(step, targetKey("box"));
@@ -132,6 +126,6 @@ export function resolveStationFields(input: ResolveInput): StationFieldsResponse
     schema: { route_id, v, step_uid: uid },
     box: hasInput(box) ? box : [],
     items,
-    gate: input.gate,
+    gate: GATE_FINISH_ON_REQUIRED,
   };
 }

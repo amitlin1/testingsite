@@ -7,10 +7,8 @@
 // without its work twin is a number a manager will read as lab performance when
 // it is mostly weekends (§16.1).
 //
-// `מסלולים שנסגרו` replaces `פריטים שהסתיימו`: "finished" is a route_run
-// closure and nothing else. `העמדה העמוסה` reads work hours and steps
-// processed; `busiestStationWorkloadScore` was `busy + 0.3*wait` rendered as a
-// count of items, it is DELETED upstream, and nothing here reads it.
+// `מסלולים שנסגרו`: "finished" is a route_run closure and nothing else.
+// `העמדה העמוסה` reads work hours and steps processed.
 //
 // Two of the live counters already INCLUDE their research half —
 // `itemsCurrentlyInQueue` counts `queued` + `queued_research`, and
@@ -25,22 +23,18 @@
 
 import * as React from "react";
 
-import DataCard, { Legend } from "@/app/components/dashboard/DataCard";
-import Sparkline from "@/app/components/dashboard/charts/Sparkline";
+import DataCard, { Legend } from "../_components/DataCard";
+import Sparkline from "../_components/charts/Sparkline";
 import ThroughputBarChart, {
   THROUGHPUT_LEGEND,
   type ThroughputPoint,
-} from "@/app/components/dashboard/charts/ThroughputBarChart";
-import { ChartBody } from "@/app/components/dashboard/charts/chartConfig";
+} from "../_components/charts/ThroughputBarChart";
+import { ChartBody } from "../_components/charts/chartConfig";
 import { Skeleton } from "@/components/ui";
-import type {
-  AverageTimesWire,
-  KpisWire,
-  StationWire,
-  StatusHistoryWire,
-} from "@/app/lib/dashboard/api-types";
+import { boardSummary, type StatusHistoryView } from "@/app/lib/dashboard/contract";
+import { ACTIVE_STATES, WAITING_STATES, type StateKey } from "@/app/lib/metrics/vocabulary";
+import EmptyChart from "../_components/EmptyChart";
 import {
-  DASH_COLORS,
   EM_DASH,
   changePct,
   deltaTone,
@@ -49,18 +43,17 @@ import {
   formatHours,
   formatMinutes,
   isNil,
-} from "@/app/lib/dashboard/format";
-import { textTone } from "@/app/components/dashboard/tone";
-import { EmptyChart } from "./TimesTab";
+  toneMark,
+  toneText,
+  type DashTone,
+} from "../_lib/format";
 import type { TabProps } from "./tabTypes";
 
-const WAITING_STATES = ["queued", "queued_research", "waiting_for_package_items"];
-const ACTIVE_STATES = ["testing", "in_research"];
-
-function seriesFromHistory(rows: StatusHistoryWire[], stateKeys: string[]): Array<number | null> {
+function seriesFromHistory(rows: StatusHistoryView[], stateKeys: readonly StateKey[]): Array<number | null> {
+  const keys: readonly string[] = stateKeys;
   return rows.map((day) =>
     day.statuses
-      .filter((s) => s._new_series === "point_in_time" && stateKeys.includes(s._new_stateKey))
+      .filter((s) => s.series === "point_in_time" && keys.includes(s.stateKey))
       .reduce((sum, s) => sum + s.count, 0),
   );
 }
@@ -70,16 +63,16 @@ interface KpiCard {
   value: string;
   unit?: string;
   note: string;
-  tone: string;
+  tone: DashTone;
   spark: Array<number | null>;
 }
 
 export default function KpisTab({ data }: TabProps) {
-  const kpis = data.get<KpisWire>("kpis");
-  const prev = data.get<KpisWire>("kpisPrev");
-  const times = data.get<AverageTimesWire[]>("times");
-  const history = data.get<StatusHistoryWire[]>("statusHistory");
-  const stations = data.get<StationWire[]>("stationsLive");
+  const kpis = data.get("kpis");
+  const prev = data.get("kpisPrev");
+  const times = data.get("times");
+  const history = data.get("statusHistory");
+  const stations = data.get("stationsLive");
 
   const k = kpis.data;
   // Until the KPI endpoint answers, a card says nothing — not "אין מדידה בתקופה".
@@ -87,19 +80,12 @@ export default function KpisTab({ data }: TabProps) {
   const p = prev.data;
   const timeRows = React.useMemo(() => times.data ?? [], [times.data]);
   const historyRows = React.useMemo(() => history.data ?? [], [history.data]);
-  const stationRows = stations.data ?? [];
-
-  // Station-less and identical on every board row, so it is read once.
-  const researchPool = stationRows.length > 0 ? stationRows[0]._new_researchPoolQueue : null;
-  const inResearch = stationRows.reduce((sum, row) => sum + row._new_itemsInResearch, 0);
-  const activeStations = stationRows.filter(
-    (row) => row.itemsInTest > 0 || row._new_itemsInResearch > 0,
-  ).length;
+  const { researchPool, inResearch, activeStations } = boardSummary(stations.data ?? []);
 
   const queueGap =
-    isNil(k?.averageQueueTimeMinutes) || isNil(k?._new_averageQueueWorkMinutes)
+    isNil(k?.averageQueueTimeMinutes) || isNil(k?.averageQueueWorkMinutes)
       ? null
-      : (k!.averageQueueTimeMinutes as number) - (k!._new_averageQueueWorkMinutes as number);
+      : (k!.averageQueueTimeMinutes as number) - (k!.averageQueueWorkMinutes as number);
 
   const closedDelta = changePct(k?.totalItemsProcessed, p?.totalItemsProcessed);
 
@@ -107,21 +93,21 @@ export default function KpisTab({ data }: TabProps) {
     {
       label: "זמן המתנה ממוצע · ברוטו",
       value: formatMinutes(k?.averageQueueTimeMinutes),
-      note: isNil(k?._new_averageQueueWorkMinutes)
+      note: isNil(k?.averageQueueWorkMinutes)
         ? "אין מדידה בתקופה"
-        : `נטו ${formatMinutes(k?._new_averageQueueWorkMinutes)}${
+        : `נטו ${formatMinutes(k?.averageQueueWorkMinutes)}${
             isNil(queueGap) ? "" : ` · פער ${formatMinutes(queueGap)} מחוץ לשעות`
           }`,
-      tone: DASH_COLORS.muted,
+      tone: "muted",
       spark: timeRows.map((row) => row.avgWaitingMinutes),
     },
     {
       label: "זמן ביצוע ממוצע · ברוטו",
       value: formatMinutes(k?.averageProcessingTimeMinutes),
-      note: isNil(k?._new_averageProcessingWorkMinutes)
+      note: isNil(k?.averageProcessingWorkMinutes)
         ? "אין מדידה בתקופה"
-        : `נטו ${formatMinutes(k?._new_averageProcessingWorkMinutes)}`,
-      tone: DASH_COLORS.muted,
+        : `נטו ${formatMinutes(k?.averageProcessingWorkMinutes)}`,
+      tone: "muted",
       spark: timeRows.map((row) => row.avgProcessingMinutes),
     },
     {
@@ -133,7 +119,7 @@ export default function KpisTab({ data }: TabProps) {
           ? "אין תקופה קודמת להשוואה"
           : `${formatDelta(closedDelta)} מהתקופה הקודמת`,
       tone: deltaTone(closedDelta, false),
-      spark: historyRows.map((day) => day._new_finishedToday),
+      spark: historyRows.map((day) => day.finishedToday),
     },
     {
       label: "ממתינים כרגע",
@@ -141,23 +127,23 @@ export default function KpisTab({ data }: TabProps) {
       note: isNil(researchPool)
         ? "כולל את בריכת המחקר"
         : `מזה ${formatCount(researchPool)} בבריכת המחקר`,
-      tone: DASH_COLORS.muted,
+      tone: "muted",
       spark: seriesFromHistory(historyRows, WAITING_STATES),
     },
     {
       label: "בבדיקה כרגע",
       value: formatCount(k?.itemsCurrentlyInTest),
       note: `מזה ${formatCount(inResearch)} במחקר · ${formatCount(activeStations)} עמדות פעילות`,
-      tone: DASH_COLORS.muted,
+      tone: "muted",
       spark: seriesFromHistory(historyRows, ACTIVE_STATES),
     },
     {
       label: "העמדה העמוסה",
       value: k?.busiestStationName ?? EM_DASH,
-      note: isNil(k?._new_busiestStationWorkHours)
+      note: isNil(k?.busiestStationWorkHours)
         ? "אין שעות עבודה בתקופה"
-        : `${formatHours(k?._new_busiestStationWorkHours)} עבודה · ${formatCount(k?.busiestStationCount)} צעדים`,
-      tone: DASH_COLORS.muted,
+        : `${formatHours(k?.busiestStationWorkHours)} עבודה · ${formatCount(k?.busiestStationCount)} צעדים`,
+      tone: "muted",
       // No daily series exists for "which station was busiest", and a flat
       // placeholder line would read as "steady", which is a claim.
       spark: [],
@@ -170,8 +156,8 @@ export default function KpisTab({ data }: TabProps) {
     () =>
       historyRows.slice(-20).map((day) => ({
         date: day.date,
-        started: day._new_workStartedToday,
-        finished: day._new_workFinishedToday,
+        started: day.workStartedToday,
+        finished: day.workFinishedToday,
       })),
     [historyRows],
   );
@@ -214,11 +200,11 @@ export default function KpisTab({ data }: TabProps) {
               >
                 {kpiPending ? <Skeleton variant="text" width="70%" height={26} /> : card.value}
               </div>
-              <div style={{ fontSize: "var(--text-fine)", color: textTone(card.tone), fontWeight: 600, marginTop: 2 }}>
+              <div style={{ fontSize: "var(--text-fine)", color: toneText(card.tone), fontWeight: 600, marginTop: 2 }}>
                 {kpiPending ? <Skeleton variant="text" width="80%" height={12} /> : card.note}
               </div>
             </div>
-            <Sparkline points={card.spark} color={card.tone} />
+            <Sparkline points={card.spark} color={toneMark(card.tone)} />
           </div>
         ))}
       </div>

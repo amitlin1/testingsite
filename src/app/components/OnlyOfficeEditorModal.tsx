@@ -9,6 +9,8 @@ import {
   CircularProgress,
 } from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
+import { ApiError, getJson } from "@/lib/api/client";
+import { encodeKeyPath } from "@/lib/file-types";
 
 /**
  * In-browser editor for .docx/.xlsx/.pptx attachments using OnlyOffice DocsAPI.
@@ -34,13 +36,9 @@ import { Close as CloseIcon } from "@/components/ui/icons";
 type OnlyOfficeEditorModalProps = {
   open: boolean;
   onClose: () => void;
-  itemId: number | string;
   objectKey: string;
   fileName: string;
   workerId: number | null;
-  workerName?: string;
-  /** Open in view-only mode (no edits possible). */
-  viewOnly?: boolean;
   /** Called after the editor has closed so the parent can re-list. */
   onSaved?: () => void;
 };
@@ -92,10 +90,7 @@ function loadDocsApi(docServerUrl: string): Promise<void> {
     // Race 1: polling — covers both "load already fired" and "script still
     // executing" cases without depending on event timing.
     const poll = setInterval(() => {
-      if (window.DocsAPI) {
-        console.log("[OnlyOffice] DocsAPI detected via poll");
-        done();
-      }
+      if (window.DocsAPI) done();
     }, 100);
 
     // Race 2: explicit timeout so the modal never spins forever.
@@ -108,30 +103,23 @@ function loadDocsApi(docServerUrl: string): Promise<void> {
     // Race 3: actually load the script if it isn't in the DOM yet.
     let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
     if (!script) {
-      console.log("[OnlyOffice] injecting DocsAPI script tag", `${docServerUrl}/web-apps/apps/api/documents/api.js`);
       script = document.createElement("script");
       script.id = SCRIPT_ID;
       script.src = `${docServerUrl}/web-apps/apps/api/documents/api.js`;
       script.async = true;
       document.head.appendChild(script);
-    } else {
-      console.log("[OnlyOffice] DocsAPI script tag already in DOM, waiting");
     }
     script.addEventListener("load", () => {
-      console.log("[OnlyOffice] DocsAPI script load event fired");
       // give DocsAPI a microtask to register itself
       queueMicrotask(() => {
         if (window.DocsAPI) done();
       });
     });
-    script.addEventListener("error", (ev) => {
-      console.error("[OnlyOffice] script load error", ev);
+    script.addEventListener("error", () => {
       done(new Error("OnlyOffice api.js לא נטען (script error)"));
     });
   });
 }
-
-const BUILD_TAG = "onlyoffice-modal/v7";
 
 export default function OnlyOfficeEditorModal({
   open,
@@ -139,8 +127,6 @@ export default function OnlyOfficeEditorModal({
   objectKey,
   fileName,
   workerId,
-  workerName,
-  viewOnly = false,
   onSaved,
 }: OnlyOfficeEditorModalProps) {
   const editorRef = React.useRef<{ destroyEditor: () => void } | null>(null);
@@ -152,7 +138,7 @@ export default function OnlyOfficeEditorModal({
 
   // The container is tracked as STATE, not a ref, so React re-runs the editor
   // effect once the Box actually mounts. Refs alone are unreliable here because
-  // MUI Dialog's portal can commit the inner subtree on a later cycle than the
+  // the Dialog's portal can commit the inner subtree on a later cycle than the
   // outer component, leaving a ref still-null when a useEffect first fires.
   // A ref callback that flips state guarantees the effect re-runs at the right
   // moment, with no timing assumptions.
@@ -161,7 +147,7 @@ export default function OnlyOfficeEditorModal({
   // Every (re)init of the editor below starts from a clean spinner. The reset
   // happens during render, when the inputs the effect depends on change, so
   // the effect itself only sets state from its async callbacks.
-  const initInputs = [open, container, objectKey, workerId, workerName, viewOnly] as const;
+  const initInputs = [open, container, objectKey, workerId] as const;
   const [seenInputs, setSeenInputs] = React.useState(initInputs);
   if (initInputs.some((v, i) => v !== seenInputs[i])) {
     setSeenInputs(initInputs);
@@ -172,7 +158,6 @@ export default function OnlyOfficeEditorModal({
   }
 
   React.useEffect(() => {
-    console.log(`[${BUILD_TAG}] effect fired`, { open, hasContainer: !!container });
     if (!open || !container) return;
 
     let cancelled = false;
@@ -189,48 +174,31 @@ export default function OnlyOfficeEditorModal({
     container.appendChild(placeholder);
     placeholderRef.current = placeholder;
 
-    const encodedPath = objectKey
-      .split("/")
-      .map(encodeURIComponent)
-      .join("/");
-    const params = new URLSearchParams({
-      worker_id: workerId ? String(workerId) : "",
-      worker_name: workerName || "",
-      mode: viewOnly ? "view" : "edit",
-    });
+    const query = new URLSearchParams({ worker_id: workerId ? String(workerId) : "" });
+    const configUrl = `/api/onlyoffice/config/${encodeKeyPath(objectKey)}?${query.toString()}`;
 
     (async () => {
       try {
-        console.log("[OnlyOffice] modal effect start", { objectKey, uniqueId });
-
         // Config FIRST — it carries the runtime DocServer origin that the script
-        // tag below is loaded from, so this order is required (it used to be the
-        // other way round, back when the origin was baked into the bundle).
-        const configUrl = `/api/onlyoffice/config/${encodedPath}?${params.toString()}`;
-        const r = await fetch(configUrl);
-        console.log("[OnlyOffice] config response", r.status);
-        if (!r.ok) {
-          const j = await r.json().catch(() => ({}));
-          throw new Error(j.error || `שגיאה בקבלת תצורת עורך (${r.status})`);
-        }
+        // tag below is loaded from, so this order is required.
+        const reply = await getJson<{ _docServerUrl: string } & Record<string, unknown>>(configUrl).catch((e: unknown) => {
+          if (e instanceof ApiError && !e.body.error) throw new Error(`שגיאה בקבלת תצורת עורך (${e.status})`);
+          throw e;
+        });
         // Strip the transport-only field: everything else is covered by the
         // signed `token` and must reach DocsAPI byte-for-byte as signed.
-        const { _docServerUrl: docServerUrl = "/onlyoffice", ...config } = await r.json();
+        const { _docServerUrl: docServerUrl, ...config } = reply;
         if (cancelled) return;
 
-        console.log("[OnlyOffice] config ready, loading DocsAPI from", docServerUrl);
         await loadDocsApi(docServerUrl);
         if (cancelled || !window.DocsAPI) return;
-        console.log("[OnlyOffice] instantiating DocEditor", { documentType: config.documentType, fileType: config?.document?.fileType });
 
         editorRef.current = new window.DocsAPI.DocEditor(uniqueId, {
           ...config,
           width: "100%",
           height: "100%",
           events: {
-            onAppReady: () => console.log("[OnlyOffice] onAppReady"),
             onDocumentReady: () => {
-              console.log("[OnlyOffice] onDocumentReady");
               if (!cancelled) setLoading(false);
             },
             onDocumentStateChange: () => {
@@ -240,7 +208,6 @@ export default function OnlyOfficeEditorModal({
               // OnlyOffice's e.data is sometimes a string, sometimes an object
               // like { errorCode, errorDescription } — coerce to something
               // readable instead of letting it stringify as [object Object].
-              console.error("[OnlyOffice] onError", e);
               if (cancelled) return;
               const d = e?.data;
               let msg: string;
@@ -253,7 +220,6 @@ export default function OnlyOfficeEditorModal({
               } else msg = "שגיאה לא ידועה";
               setError(`OnlyOffice: ${msg}`);
             },
-            onWarning: (e: { data?: string }) => console.warn("[OnlyOffice] onWarning", e),
           },
         });
         // Drop the spinner the moment DocsAPI accepted the config; the editor
@@ -261,7 +227,6 @@ export default function OnlyOfficeEditorModal({
         // clear it again on onDocumentReady above, defensively.
         if (!cancelled) setLoading(false);
       } catch (e) {
-        console.error("[OnlyOffice] modal effect failed", e);
         if (!cancelled) {
           setError((e as Error).message);
           setLoading(false);
@@ -290,8 +255,7 @@ export default function OnlyOfficeEditorModal({
         }
       }
     };
-    // Re-init only on actual file/identity change, not on every parent render.
-  }, [open, container, objectKey, workerId, workerName, viewOnly]);
+  }, [open, container, objectKey, workerId]);
 
   const handleClose = () => {
     if (sawSaveRef.current) onSaved?.();
@@ -303,9 +267,8 @@ export default function OnlyOfficeEditorModal({
       open={open}
       onClose={handleClose}
       fullScreen
-      // keepMounted={false} (the default) — when open flips to false, React
-      // unmounts this whole subtree, our effect cleanup runs first, the
-      // container is empty again, and React removes it without complaint.
+      // Closing unmounts this whole subtree: the effect cleanup runs first, so
+      // the container is empty again when React removes it.
       // A dark frame around the editor (OnlyOffice's own chrome is dark);
       // the tile token, not a raw hex.
       PaperProps={{ style: { background: "var(--color-surface-tile-1)" } }}
@@ -325,7 +288,7 @@ export default function OnlyOfficeEditorModal({
         }}
       >
         <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {viewOnly ? "צפייה" : "עריכה"} — <bdi>{fileName}</bdi>
+          עריכה — <bdi>{fileName}</bdi>
         </span>
         <IconButton
           onClick={handleClose}

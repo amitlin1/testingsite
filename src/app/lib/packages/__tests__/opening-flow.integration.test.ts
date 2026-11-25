@@ -10,7 +10,7 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import * as H from "../../metrics/__tests__/write-path-helpers";
+import * as H from "@/test-support/db-harness";
 
 const BOX_TYPE = H.ITEM_TYPE_PACKAGE_CLOSE; // route [INTAKE, CLOSE]
 const CERT = { makat: "CERT-MK", model: "CERT-MODEL", manufacturer_name: "CERT-MFR", manufacturer_no: "CERT-NO" };

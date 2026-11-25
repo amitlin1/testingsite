@@ -12,28 +12,28 @@
 //   7. שישי                                              → closed, may open to 12:00
 //   8. Weekly template (ראשון–חמישי)                    → working / off
 //
-// Pure: no clock, no I/O. `resolveRange` assembles per-date context and calls
-// `resolveDay`, which every consumer (calendar, reports, future overtime calc)
-// shares so no two screens can disagree.
+// Pure: no clock, no I/O. The settings calendar and the ledger's work calendar
+// (metrics/ledger/work-calendar.ts) both resolve through `resolveRange`, so the
+// screen and the work clock cannot disagree on a day.
 
+import { FRIDAY, SATURDAY, eachDate, weekdayOf, type Weekday } from "@/lib/time/civil";
 import type {
   DateString,
   DepartmentHoliday,
   IsraeliHolidayInfo,
   ResolvedDay,
-  Weekday,
   WeekdayDefault,
   WorkdayOverride,
   WorkHoursContext,
 } from "./types";
 import { OVERRIDE_LABELS } from "./types";
 import {
+  DEFAULT_BREAK_END,
+  DEFAULT_BREAK_START,
+  DEFAULT_END,
   DEFAULT_START,
   HALF_DAY_END,
-  eachDate,
-  isDateInRange,
   netMinutes,
-  weekdayOf,
 } from "./time";
 
 export interface ResolveDayInput {
@@ -71,17 +71,14 @@ export function resolveDay(input: ResolveDayInput): ResolvedDay {
   const { date, weekday, weekdayDefault, israeli, override, departmentHoliday } = input;
   const day = base(date, weekday);
 
-  // 1. National full holiday — locked.
   if (israeli?.category === "full_off") {
     return { ...day, source: "holiday", category: "full_off", locked: true, label: israeli.label };
   }
 
-  // 2. שבת — locked, fixed.
-  if (weekday === 6) {
+  if (weekday === SATURDAY) {
     return { ...day, source: "shabbat", category: "shabbat", locked: true, label: "שבת" };
   }
 
-  // 3. Department internal holiday covering this date.
   if (departmentHoliday) {
     if (departmentHoliday.isHalfDay) {
       const start = weekdayDefault.start ?? DEFAULT_START;
@@ -107,12 +104,12 @@ export function resolveDay(input: ResolveDayInput): ResolvedDay {
     };
   }
 
-  // 4. Manual override for this exact date. friday_work / eve_work are only
-  //    honoured on a matching date; a stale one falls through to the defaults.
+  // friday_work / eve_work count only on a matching date; a stale one falls
+  // through to the layers below.
   if (override) {
     const applies =
       override.kind === "friday_work"
-        ? weekday === 5
+        ? weekday === FRIDAY
         : override.kind === "eve_work"
           ? israeli?.category === "eve"
           : true;
@@ -146,7 +143,6 @@ export function resolveDay(input: ResolveDayInput): ResolvedDay {
     }
   }
 
-  // 5. National half day — יום הזיכרון / יום השואה: work 07:00–12:00 by default.
   if (israeli?.category === "half_day") {
     const start = weekdayDefault.start ?? DEFAULT_START;
     return {
@@ -161,7 +157,6 @@ export function resolveDay(input: ResolveDayInput): ResolvedDay {
     };
   }
 
-  // 6. National ערב חג — closed by default, may be opened for a half day.
   if (israeli?.category === "eve") {
     return {
       ...day,
@@ -173,31 +168,13 @@ export function resolveDay(input: ResolveDayInput): ResolvedDay {
     };
   }
 
-  // 7. שישי — closed by default, may be opened for a half day (unless the admin
-  //    turned the whole weekday on in the template).
-  if (weekday === 5) {
-    if (weekdayDefault.isWorking && weekdayDefault.start && weekdayDefault.end) {
-      return {
-        ...day,
-        category: "working",
-        isWorking: true,
-        start: weekdayDefault.start,
-        end: weekdayDefault.end,
-        breakStart: weekdayDefault.breakStart,
-        breakEnd: weekdayDefault.breakEnd,
-        netMinutes: netMinutes(
-          weekdayDefault.start,
-          weekdayDefault.end,
-          weekdayDefault.breakStart,
-          weekdayDefault.breakEnd,
-        ),
-      };
-    }
+  const templateWorks = weekdayDefault.isWorking && !!weekdayDefault.start && !!weekdayDefault.end;
+  // שישי is closed unless the weekly template turns it on.
+  if (weekday === FRIDAY && !templateWorks) {
     return { ...day, category: "friday", canOpenHalfDay: true, halfDayMaxEnd: HALF_DAY_END };
   }
 
-  // 8. Weekly template — ראשון–חמישי.
-  if (weekdayDefault.isWorking && weekdayDefault.start && weekdayDefault.end) {
+  if (templateWorks) {
     return {
       ...day,
       category: "working",
@@ -214,20 +191,26 @@ export function resolveDay(input: ResolveDayInput): ResolvedDay {
       ),
     };
   }
-  return day; // non-working template day
+  return day;
 }
 
-/** Fallback template when the DB is missing a weekday row (defensive). */
-function fallbackDefault(weekday: Weekday): WeekdayDefault {
-  const working = weekday >= 0 && weekday <= 4;
-  return working
-    ? { weekday, isWorking: true, start: "07:00", end: "15:35", breakStart: "12:00", breakEnd: "13:00" }
+/** The template of a weekday the DB has no row for: ראשון–חמישי work the default hours. */
+export function fallbackDefault(weekday: Weekday): WeekdayDefault {
+  return weekday <= 4
+    ? {
+        weekday,
+        isWorking: true,
+        start: DEFAULT_START,
+        end: DEFAULT_END,
+        breakStart: DEFAULT_BREAK_START,
+        breakEnd: DEFAULT_BREAK_END,
+      }
     : { weekday, isWorking: false, start: null, end: null, breakStart: null, breakEnd: null };
 }
 
 /** Pick the department holiday that decides a date: full-day beats half-day. */
 function pickHoliday(date: DateString, holidays: DepartmentHoliday[]): DepartmentHoliday | null {
-  const covering = holidays.filter((h) => isDateInRange(date, h.startDate, h.endDate));
+  const covering = holidays.filter((h) => date >= h.startDate && date <= h.endDate);
   if (covering.length === 0) return null;
   covering.sort((a, b) => {
     if (a.isHalfDay !== b.isHalfDay) return a.isHalfDay ? 1 : -1; // full day first

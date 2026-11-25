@@ -1,4 +1,4 @@
-import { TransactionClient } from "@/app/lib/prisma";
+import { TransactionClient } from "@/lib/db";
 
 /**
  * What a routed row is in the package model: the box itself, an item inside a
@@ -34,7 +34,6 @@ export async function loadPackageContext(
   };
 }
 
-/** Is this station type a package-level one (opening / closing)? */
 export async function isPackageLevelStationType(
   tx: Pick<TransactionClient, "test_stations_type">,
   stationTypeId: number | null | undefined,

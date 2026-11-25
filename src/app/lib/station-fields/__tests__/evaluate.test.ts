@@ -1,12 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  GATE_FINISH_ON_REQUIRED,
   evaluateFields,
   failValueText,
   fieldHasValue,
   fieldsBlocking,
-  fieldsGateMessage,
   isBlankFieldValue,
   isFieldFail,
   noteRequired,
@@ -72,7 +70,6 @@ test("a fail tone suggests 'fail' and lists ALL fails, in field order", () => {
     { field_id: "f_post0001", label: "הפעלה ו-POST", valueText: "לא עולה" },
     { field_id: "f_gnd00001", label: "התנגדות הארקה", valueText: "0.2 Ω" },
   ]);
-  assert.deepEqual(ev.firstFail, ev.fails[0]);
   assert.equal(
     suggestionText(SUGGEST_PREFIX, ev.fails),
     "מוצע: לא תקין — 'נורית מתח' = לא דולקת · 'הפעלה ו-POST' = לא עולה · 'התנגדות הארקה' = 0.2 Ω",
@@ -276,7 +273,7 @@ test("missingRequired lists required fields without a value; a section is never 
   const ev = evalDrafts(ELEC, { f_led00001: { opt: "o_led00001" } });
   assert.deepEqual(ev.missingRequired, ["f_post0001", "f_gnd00001", "f_iso00001"]);
   const onlySection = evaluateFields([section], {});
-  assert.deepEqual(onlySection, { suggested: null, fails: [], firstFail: null, missingRequired: [], missingNotes: [], noteTooLong: [] });
+  assert.deepEqual(onlySection, { suggested: null, fails: [], missingRequired: [], missingNotes: [], noteTooLong: [] });
   assert.equal(toFieldValue(section, {}), undefined);
   assert.equal(fieldHasValue(section, undefined), false);
   assert.deepEqual(requiredProgress(ELEC, ev), { done: 1, total: 4 });
@@ -384,9 +381,11 @@ test("the popup (every value) and the server (filled values only) evaluate alike
   }
 });
 
+/** The 422 FIELDS_INCOMPLETE text for an evaluation. */
+const gateText = (ev: { missingRequired: string[]; missingNotes: string[] }) => fieldsGateText(ev.missingRequired.length, ev.missingNotes.length);
+
 // ---- gate, statuses ----------------------------------------------------------------------------
-test("the finish gate: constant, blocking rule and the artboard 14 messages", () => {
-  assert.equal(GATE_FINISH_ON_REQUIRED, true);
+test("the finish gate: blocking rule and the artboard 14 messages", () => {
   const none = { missingRequired: [], missingNotes: [], noteTooLong: [] };
   assert.equal(fieldsBlocking(none, true, []), false);
   assert.equal(fieldsBlocking({ ...none, missingRequired: ["f_a"] }, true, []), true);
@@ -397,35 +396,35 @@ test("the finish gate: constant, blocking rule and the artboard 14 messages", ()
   assert.equal(fieldsBlocking(none, false, ["f_a"]), true);
   assert.equal(fieldsBlocking(none, true, ["f_a"]), true);
 
-  assert.equal(fieldsGateMessage({ missingRequired: [], missingNotes: [] }), null);
-  assert.equal(fieldsGateMessage({ missingRequired: ["f_a"], missingNotes: [] }), "נותר שדה חובה אחד בבדיקות העמדה — יש למלא לפני סיום בדיקה");
-  assert.equal(fieldsGateMessage({ missingRequired: [], missingNotes: ["f_a"] }), "חסרה הערה לחריגה בבדיקות העמדה — יש לפרט לפני סיום בדיקה");
-  assert.equal(fieldsGateMessage({ missingRequired: ["f_a", "f_b"], missingNotes: ["f_c"] }), "נותרו 3 שדות חובה בבדיקות העמדה — יש למלא לפני סיום בדיקה");
+  assert.equal(gateText({ missingRequired: [], missingNotes: [] }), null);
+  assert.equal(gateText({ missingRequired: ["f_a"], missingNotes: [] }), "נותר שדה חובה אחד בבדיקות העמדה — יש למלא לפני סיום בדיקה");
+  assert.equal(gateText({ missingRequired: [], missingNotes: ["f_a"] }), "חסרה הערה לחריגה בבדיקות העמדה — יש לפרט לפני סיום בדיקה");
+  assert.equal(gateText({ missingRequired: ["f_a", "f_b"], missingNotes: ["f_c"] }), "נותרו 3 שדות חובה בבדיקות העמדה — יש למלא לפני סיום בדיקה");
   // The artboard counts two missing notes as "שדות חובה" too.
   assert.equal(fieldsGateText(0, 2), "נותרו 2 שדות חובה בבדיקות העמדה — יש למלא לפני סיום בדיקה");
   const ev = evalDrafts(ELEC, { ...allPass, f_iso00001: {}, f_led00001: { opt: "o_led00003" } });
-  assert.equal(fieldsGateMessage(ev), "נותרו 2 שדות חובה בבדיקות העמדה — יש למלא לפני סיום בדיקה");
+  assert.equal(gateText(ev), "נותרו 2 שדות חובה בבדיקות העמדה — יש למלא לפני סיום בדיקה");
 });
 
 test("a field missing both its value and its note counts once, as every artboard counts it", () => {
   const both: ChoiceRowField = { ...led, notes: "required" };   // required, and a note always
   const empty = evalDrafts([both], {});
   assert.deepEqual([empty.missingRequired, empty.missingNotes], [["f_led00001"], []]);
-  assert.equal(fieldsGateMessage(empty), "נותר שדה חובה אחד בבדיקות העמדה — יש למלא לפני סיום בדיקה");
+  assert.equal(gateText(empty), "נותר שדה חובה אחד בבדיקות העמדה — יש למלא לפני סיום בדיקה");
   assert.deepEqual(statusA(empty.missingRequired.length, empty.missingNotes.length), { text: "נותר שדה חובה אחד", tone: "muted" });
   assert.equal(missLabel(empty.missingRequired.length, empty.missingNotes.length), "נותר שדה חובה אחד");
   assert.deepEqual(requiredProgress([both], empty), { done: 0, total: 1 });
   // Once the value is in, the blank note is what is left.
   const noNote = evalDrafts([both], { f_led00001: { opt: "o_led00001" } });
   assert.deepEqual([noNote.missingRequired, noNote.missingNotes], [[], ["f_led00001"]]);
-  assert.equal(fieldsGateMessage(noNote), "חסרה הערה לחריגה בבדיקות העמדה — יש לפרט לפני סיום בדיקה");
-  assert.equal(fieldsGateMessage(evalDrafts([both], { f_led00001: { opt: "o_led00001", note: "נבדק" } })), null);
+  assert.equal(gateText(noNote), "חסרה הערה לחריגה בבדיקות העמדה — יש לפרט לפני סיום בדיקה");
+  assert.equal(gateText(evalDrafts([both], { f_led00001: { opt: "o_led00001", note: "נבדק" } })), null);
   // A note-only demand on a field that is not required still counts — once.
   const optionalField = evalDrafts([{ ...both, required: false }], {});
   assert.deepEqual([optionalField.missingRequired, optionalField.missingNotes], [[], ["f_led00001"]]);
   // Two such fields plus a required one left empty: three fields, not five.
   const many = evalDrafts([both, { ...both, id: "f_led00002" }, post], {});
-  assert.equal(fieldsGateMessage(many), "נותרו 3 שדות חובה בבדיקות העמדה — יש למלא לפני סיום בדיקה");
+  assert.equal(gateText(many), "נותרו 3 שדות חובה בבדיקות העמדה — יש למלא לפני סיום בדיקה");
   // The gate still holds a missing field back whichever list it sits in.
   assert.equal(fieldsBlocking(empty, true, []), true);
   assert.equal(fieldsBlocking(noNote, true, []), true);

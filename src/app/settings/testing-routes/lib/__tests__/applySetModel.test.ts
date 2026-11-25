@@ -4,23 +4,24 @@ import { stepConfigOf } from "@/app/lib/station-fields/schema";
 import type { Field, RouteFieldsConfig } from "@/app/lib/station-fields/schema";
 import { parseRouteFieldsConfig } from "@/app/lib/station-fields/validate";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
-import { EMPTY_DRAFT_MODEL, copyConfig, currentConfigs, draftReducer, summarize } from "../draftModel";
+import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "../draftModel";
 import type { ConfigMutator } from "../draftModel";
 import type { IdSource } from "../editorModel";
-import { buildFieldsMap, getCell, groupFieldsOf } from "../mapModel";
+import { buildFieldsMap } from "../mapModel";
 import type { FieldsMapModel, MapCell } from "../mapModel";
-import type { RouteEdit } from "../bulkModel";
+import { groupFieldsOf } from "../cellGroups";
+import type { RouteEdit } from "../cellFill";
 import {
-  applyFieldSet, applyPreview, cellFieldsForSet, cellStations, duplicateLines, firstColumnCells, initialSetId, replaceCell,
-  setTemplate, showsPackageNote, targetChips, visibleSets,
+  applyFieldSet, applyPreview, applyTargetChips, cellFieldsForSet, cellStations, duplicateLines, firstColumnCells, initialSetId,
+  showsPackageNote,
 } from "../applySetModel";
 import type { ApplySetSource } from "../applySetModel";
 import {
   APPLY_SET_UNDRAWN_TEXT, applyButtonText, applySubText, applyTitleText, fieldMetaText, previewCountText, previewTitleText,
   savedAsSetText,
 } from "../applySetLabels";
-import { EDITOR_TEXT, cellMenuText } from "../labels";
-import { ELEC, MECH, VISU, artboard1, choice } from "./fixtures";
+import { cellMenuText } from "../labels";
+import { ELEC, MECH, VISU, artboard1, cellAt, choice } from "./fixtures";
 
 /**
  * "החלת ערכת שדות" (route-fields spec §5.10; artboard 9; D8): what the cells take, add vs. replace,
@@ -40,18 +41,13 @@ function bench(ctx: FieldsContextJson = artboard1()) {
   const edits: number[] = [];
   const edit: RouteEdit = (routeId: number, mutate: ConfigMutator) => {
     edits.push(routeId);
-    const copy = copyConfig(configs[routeId]);
+    const copy = structuredClone(configs[routeId]);
     configs[routeId] = mutate(copy) ?? copy;
   };
   const map = (): FieldsMapModel => buildFieldsMap({ context: ctx, configs, issues: summarize(model0).issuesByRoute });
   return { ctx, configs, edits, edit, map };
 }
 
-const cellAt = (m: FieldsMapModel, row: string, col: string): MapCell => {
-  const c = getCell(m, row, col);
-  assert.ok(c && !c.na, `expected a cell at ${row} · ${col}`);
-  return c;
-};
 const fieldsOf = (configs: Record<number, RouteFieldsConfig>, c: MapCell) => groupFieldsOf(configs[c.binding.route_id], c.binding.step_uid, c.binding.target);
 const labels = (fs: readonly Field[]) => fs.map((f) => f.label);
 const elec = `step:${ELEC}:1`;
@@ -78,17 +74,24 @@ function withPackedEachItem(configs: Record<number, RouteFieldsConfig>): void {
 }
 
 // ---- what the cells take ---------------------------------------------------------------------------
-test("setTemplate: deep copies; from_set {id, ver} on every input field when linked, none when not; sections bare", () => {
+test("what a cell takes: from_set {id, ver} on every input field when linked, none when not; sections bare; list_ref kept", () => {
+  const b = bench();
+  const m = b.map();
+  const pcOpen = cellAt(m, "line:1", "kit:0");
   const set = pkgSet();
-  const linked = setTemplate(set, true);
+  applyFieldSet(b.edit, { set, cells: [pcOpen], mode: "replace", linked: true }, ids());
+  const linked = fieldsOf(b.configs, pcOpen);
   assert.deepEqual(linked.map((f) => (f.type === "section" ? null : f.from_set)), [null, { id: 9, ver: 3 }, { id: 9, ver: 3 }]);
-  assert.deepEqual(linked[0], { id: "f_set00sec", type: "section", label: "קבלה" });
-  const copy = setTemplate({ ...set, fields: [{ ...set.fields[1], from_set: { id: 1, ver: 1 } } as Field] }, false);
-  assert.ok(copy[0].type !== "section" && copy[0].from_set === undefined, "an independent copy carries no link at all");
-  // list_ref (a shared option list) stays: the field is still linked to its list.
+  assert.deepEqual({ ...linked[0], id: "" }, { id: "", type: "section", label: "קבלה" });
+  // A shared option list stays linked: the field is still linked to its list.
   assert.deepEqual(linked[2].type === "choice_row" ? linked[2].list_ref : null, { id: 4, ver: 2 });
   linked[1].label = "שונה";
   assert.equal(set.fields[1].label, "הפריט ארוז במקומו", "the set itself is untouched");
+
+  const independent = { ...set, fields: [{ ...set.fields[1], from_set: { id: 1, ver: 1 } } as Field] };
+  applyFieldSet(b.edit, { set: independent, cells: [pcOpen], mode: "replace", linked: false }, ids());
+  const copy = fieldsOf(b.configs, pcOpen);
+  assert.ok(copy[0].type !== "section" && copy[0].from_set === undefined, "an independent copy carries no link at all");
 });
 
 test("add (artboard 9): four kit items at the closing station — the each_item duplicate skipped, the rest linked; one edit", () => {
@@ -152,14 +155,14 @@ test("replace never skips — not even a name each_item holds (artboard 9 draws 
   assert.deepEqual(labels(fieldsOf(b.configs, pcClose)), ["קבלה", "הפריט ארוז במקומו", "מצב חיצוני בסגירה"]);
 });
 
-test("replaceCell creates the step when the config has none", () => {
+test("replace creates the step when the config has none", () => {
   const b = bench();
   delete b.configs[104].steps.s_msvisu00;
   const m = b.map();
   const msVisu = cellAt(m, "line:4", visu);
-  const cfg = copyConfig(b.configs[104]);
-  assert.equal(replaceCell(cfg, msVisu.binding, msVisu.stepMeta, setTemplate(pkgSet(), true), ids()), 2);
-  const made = stepConfigOf(cfg, "s_msvisu00");
+  const counts = applyFieldSet(b.edit, { set: pkgSet(), cells: [msVisu], mode: "replace", linked: true }, ids());
+  assert.equal(counts.added, 2);
+  const made = stepConfigOf(b.configs[104], "s_msvisu00");
   assert.deepEqual(made && [made.station_type_id, made.scope, made.groups.length], [VISU, "item", 1]);
 });
 
@@ -188,7 +191,7 @@ test("preview: a field only some cells already have gets no Tag; its line names 
   const p = applyPreview(b.configs, [mon, kb], set.fields, "add");
   assert.deepEqual(p.rows.map((x) => x.skip), [false, false]);
   assert.deepEqual(duplicateLines(m, p), ["שדה 'מקשים 1' כבר קיים ב'מכניקה · 04 מקלדת' — יידלג כדי למנוע כפילות"]);
-  // The preview's walk is addToCell's: what it marks is what the apply skips.
+  // The preview is a dry run of the fill: what it marks is what the apply skips.
   const counts = applyFieldSet(b.edit, { set, cells: [mon, kb], mode: "add", linked: true }, ids());
   assert.equal(counts.skipped, p.skips.length);
 });
@@ -198,12 +201,12 @@ test("target chips (artboard 9): '{station} · {seq} {item}[ ×{qty}]' in map or
   const b = bench();
   const m = b.map();
   const cells = [cellAt(m, "line:2", "kit:1"), cellAt(m, "line:1", "kit:1"), cellAt(m, "box", "kit:0")];
-  assert.deepEqual(targetChips(m, cells).map((c) => c.text), [
+  assert.deepEqual(applyTargetChips(m, cells).map((c) => c.text), [
     "פתיחת מארז · הקופסה",
     "סגירת מארז · 01 מחשב",
     "סגירת מארז · 02–03 מסך ×2",
   ]);
-  assert.deepEqual(targetChips(m, [cells[0]])[0], { key: cells[0].key, station: "סגירת מארז", seq: "02–03", item: "מסך", qty: "×2", text: "סגירת מארז · 02–03 מסך ×2" });
+  assert.deepEqual(applyTargetChips(m, [cells[0]])[0], { key: cells[0].key, station: "סגירת מארז", seq: "02–03", item: "מסך", qty: "×2", text: "סגירת מארז · 02–03 מסך ×2" });
   assert.deepEqual(cellStations(m, cells), ["פתיחת מארז", "סגירת מארז"]);
   assert.deepEqual(cellStations(m, cells.slice(0, 2)), ["סגירת מארז"]);
   assert.equal(showsPackageNote(cells.slice(0, 1)), true);
@@ -226,14 +229,12 @@ test("entry points: the onboarding's first column; the editor's 'שמור כער
   assert.ok(fs[1].type !== "section" && fs[1].from_set?.id === 7, "the cell's own field is untouched");
 });
 
-test("the set to start on, and the search", () => {
+test("the set to start on", () => {
   const sets = [{ id: 3, name: "קבלת פריט במארז" }, { id: 5, name: "תקינות אריזה" }, { id: 8, name: "בדיקה חזותית בסיסית" }];
   assert.equal(initialSetId(sets, 5), 5);
   assert.equal(initialSetId(sets, 99), 3);
   assert.equal(initialSetId(sets, null), 3);
   assert.equal(initialSetId([], 5), null);
-  assert.deepEqual(visibleSets(sets, " אריזה ").map((s) => s.id), [5]);
-  assert.deepEqual(visibleSets(sets, "").length, 3);
 });
 
 // ---- strings ---------------------------------------------------------------------------------------------
@@ -257,6 +258,6 @@ test("artboard 9's strings, and the undrawn singulars", () => {
 });
 
 test("the editor's ⋯ names only the items its menu has (artboard 2's label with all three)", () => {
-  assert.equal(cellMenuText(["saveAsSet", "applySet", "clear"]), EDITOR_TEXT.cellMenuLabel);
+  assert.equal(cellMenuText(["saveAsSet", "applySet", "clear"]), "פעולות נוספות לתא: שמור כערכה, החל ערכה, נקה את התא");
   assert.equal(cellMenuText(["clear", "saveAsSet"]), "פעולות נוספות לתא: שמור כערכה, נקה את התא");
 });

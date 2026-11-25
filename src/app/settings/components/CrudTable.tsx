@@ -1,15 +1,18 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import {
   Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Alert, Snackbar, ConfirmDialog,
+  TextField, Alert, ConfirmDialog,
 } from "@/components/ui";
 import DataTable, { RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import SettingsToolbar from "./SettingsToolbar";
-import { apiFetch } from "@/lib/api/client";
+import { useSettingsToast } from "./useSettingsToast";
+import { ApiError, getArray, sendJson } from "@/lib/api/client";
+import { useListQuery } from "@/lib/hooks/useListQuery";
 import { omit } from "@/lib/omit";
-import { errorMessage } from "@/lib/errors";
+import { NAME_TAKEN } from "@/app/lib/lookups/contract";
+import { useInvalidateLookup, type LookupTable } from "@/app/components/lookups";
 
 /** A row as the settings API returns it: a JSON record, read by the columns' field names. */
 export type Row = Record<string, unknown>;
@@ -38,25 +41,15 @@ interface CrudTableProps {
   subtitle?: string;
   /** Plural noun for the header count pill, e.g. "לקוחות". */
   countLabel?: string;
+  /** The app's pickers of this table, read again after a write. */
+  lookup?: LookupTable;
 }
 
-/** The table's rows, or null when they could not be read. */
-async function readRows(apiUrl: string): Promise<Row[] | null> {
-  try {
-    const res = await apiFetch(apiUrl);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return null;
-  }
-}
+const SAVE_FAILED = "השמירה נכשלה. בדוק את החיבור לשרת ונסה שוב.";
+const DELETE_FAILED = "המחיקה נכשלה. ייתכן שהרשומה בשימוש במסכים אחרים; בדוק ונסה שוב.";
 
-export default function CrudTable({ apiUrl, columns, idField, nameField, entityName, title, subtitle, countLabel }: CrudTableProps) {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-  // A failed load is not an empty table: it gets its own band and a retry.
-  const [loadError, setLoadError] = useState(false);
+export default function CrudTable({ apiUrl, columns, idField, nameField, entityName, title, subtitle, countLabel, lookup }: CrudTableProps) {
+  const { rows, loading, failed: loadError, reload, update } = useListQuery<Row>([apiUrl], () => getArray<Row>(apiUrl));
   const [searchTerm, setSearchTerm] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -69,32 +62,9 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
   const [rowToDelete, setRowToDelete] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false, message: "", severity: "success",
-  });
-  const showSnackbar = (message: string, severity: "success" | "error") => setSnackbar({ open: true, message, severity });
-
-  const applyRows = useCallback((list: Row[] | null) => {
-    if (list) setRows(list);
-    else setLoadError(true);
-    setLoading(false);
-  }, []);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setLoadError(false);
-    applyRows(await readRows(apiUrl));
-  }, [apiUrl, applyRows]);
-
-  // Another table starts its load during render; the effect only reads, and
-  // applies the reply. (`loading` starts true for the first one.)
-  const [loadingUrl, setLoadingUrl] = useState(apiUrl);
-  if (loadingUrl !== apiUrl) {
-    setLoadingUrl(apiUrl);
-    setLoading(true);
-    setLoadError(false);
-  }
-  useEffect(() => { readRows(apiUrl).then(applyRows); }, [apiUrl, applyRows]);
+  const showSnackbar = useSettingsToast({ duration: 6000 });
+  const invalidateLookup = useInvalidateLookup();
+  const changed = () => { if (lookup) invalidateLookup(lookup); };
 
   const handleAdd = () => { setEditingRow(null); setFormData({}); setFormErrors({}); setOpenDialog(true); };
   const handleEdit = (row: Row) => { setEditingRow(row); setFormData({ ...row }); setFormErrors({}); setOpenDialog(true); };
@@ -109,34 +79,25 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
       }
     }
     if (Object.keys(errors).length > 0) { setFormErrors(errors); return; }
-    const isDuplicate = rows.some((r) =>
-      String(r[nameField] ?? "").toLowerCase().trim() === String(formData[nameField] ?? "").toLowerCase().trim() &&
-      r[idField] !== editingRow?.[idField]
-    );
-    if (isDuplicate) { setFormErrors({ [nameField]: "ערך זה כבר קיים. בחר ערך אחר." }); return; }
 
     setSaveLoading(true);
     try {
       const method = editingRow ? "PUT" : "POST";
       const url = editingRow ? `${apiUrl}/${editingRow[idField]}` : apiUrl;
-      const res = await apiFetch(url, {
-        method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "השמירה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
-      }
-      const savedRow: Row = await res.json();
+      const savedRow = await sendJson<Row>(url, method, formData, SAVE_FAILED);
       if (editingRow && savedRow) {
-        setRows(rows.map((r) => (r[idField] === savedRow[idField] ? savedRow : r)));
+        update((list) => list.map((r) => (r[idField] === savedRow[idField] ? savedRow : r)));
         showSnackbar(`${entityName} עודכן בהצלחה`, "success");
       } else {
-        setRows([...rows, savedRow]);
+        update((list) => [...list, savedRow]);
         showSnackbar(`${entityName} נוצר בהצלחה`, "success");
       }
+      changed();
       setOpenDialog(false);
     } catch (err) {
-      showSnackbar(errorMessage(err), "error");
+      // The server owns the unique-name rule; its refusal is shown on the field.
+      if (err instanceof ApiError && err.body.code === NAME_TAKEN) setFormErrors({ [nameField]: "ערך זה כבר קיים. בחר ערך אחר." });
+      else showSnackbar(err instanceof ApiError ? err.message : SAVE_FAILED, "error");
     } finally {
       setSaveLoading(false);
     }
@@ -146,15 +107,12 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
     if (!rowToDelete) return;
     setDeleting(true);
     try {
-      const res = await apiFetch(`${apiUrl}/${rowToDelete[idField]}`, { method: "DELETE" });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "המחיקה נכשלה. ייתכן שהרשומה בשימוש במסכים אחרים; בדוק ונסה שוב.");
-      }
-      setRows(rows.filter((r) => r[idField] !== rowToDelete[idField]));
+      await sendJson(`${apiUrl}/${rowToDelete[idField]}`, "DELETE", undefined, DELETE_FAILED);
+      update((list) => list.filter((r) => r[idField] !== rowToDelete[idField]));
+      changed();
       showSnackbar(`${entityName} נמחק בהצלחה`, "success");
     } catch (err) {
-      showSnackbar(errorMessage(err), "error");
+      showSnackbar(err instanceof ApiError ? err.message : DELETE_FAILED, "error");
     } finally {
       setDeleting(false);
       setRowToDelete(null);
@@ -206,8 +164,7 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
   );
 
   return (
-    <div dir="rtl" className="settings-fill">
-      {/* Settings header: title + subtitle + count pill, blue add pill, then search row */}
+    <div className="settings-fill">
       <SettingsToolbar
         title={title}
         subtitle={subtitle}
@@ -221,12 +178,11 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
         searchPlaceholder="חיפוש…"
       />
 
-      {/* Table */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {loadError ? (
           <div className="settings-card settings-error">
             <Alert severity="error">טעינת הרשימה נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
-            <Button variant="outlined" color="inherit" onClick={fetchData}>נסה שוב</Button>
+            <Button variant="outlined" color="inherit" onClick={() => reload()}>נסה שוב</Button>
           </div>
         ) : (
           <DataTable
@@ -241,10 +197,9 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
         )}
       </div>
 
-      {/* Edit/Add Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editingRow ? `עריכת ${entityName}` : `${entityName} חדש`}</DialogTitle>
-        <DialogContent dir="rtl">
+        <DialogContent>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
             {columns.map((col) => {
               if (col.field === idField || col.readOnly) return null;
@@ -274,7 +229,6 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
       </Dialog>
 
       <ConfirmDialog
-        draggable={false}
         open={rowToDelete != null}
         title={`מחיקת ${entityName}`}
         message={rowToDelete ? `למחוק את ${entityName} "${rowToDelete[nameField]}"? פעולה זו אינה ניתנת לביטול.` : ""}
@@ -284,17 +238,6 @@ export default function CrudTable({ apiUrl, columns, idField, nameField, entityN
         onConfirm={handleDeleteConfirm}
         onCancel={() => setRowToDelete(null)}
       />
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-      >
-        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </div>
   );
 }

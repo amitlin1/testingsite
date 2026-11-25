@@ -1,16 +1,7 @@
-/* NumberField (src/app/testing/fields/NumberField.tsx; route-fields spec §4.7, artboards 14 and 6):
-   a 44px input joined to its unit box, typed left to right, and the range line under it (or beside
-   it, artboard 6). What an inline style cannot say: focus, the invalid edge, the joined corners.
-   Colours are tokens (src/styles/tokens.css). Imported by NumberField.tsx. */
-
-/* The field with its own range line. */
-.tst-fx-num { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
-.tst-fx-num > .tst-fx-num-group { align-self: stretch; }
-/* Artboard 6: an 88px input and its unit, the line beside them. */
-.tst-fx-num--beside { flex-direction: row; align-items: center; gap: 10px; }
-.tst-fx-num--beside > .tst-fx-num-group { align-self: auto; flex: none; }
-.tst-fx-num--beside .tst-fx-num-input { flex: none; width: 88px; }
-.tst-fx-num--beside > .tst-fx-num-range { flex: 1; min-width: 0; }
+/* NumberField (src/app/testing/fields/NumberField.tsx; route-fields spec §4.7, artboard 14): a
+   44px input joined to its unit box, typed left to right, and its range line. What an inline style
+   cannot say: focus, the invalid edge, the joined corners. Colours are tokens
+   (src/styles/tokens.css). Imported by NumberField.tsx. */
 
 /* Input + unit: one control. The group is dir="ltr", so inline-start is its left edge — the number
    reads left to right and the unit box closes it on the right (artboard 14). */

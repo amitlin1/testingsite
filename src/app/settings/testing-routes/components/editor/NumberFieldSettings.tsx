@@ -2,29 +2,25 @@
 import * as React from "react";
 import { ChevronUp } from "lucide-react";
 import { Button, MenuItem, Select, Switch, cn } from "@/components/ui";
-import { UNDRAWN_TEXT as FIELDS_UNDRAWN_TEXT } from "@/app/lib/station-fields/labels";
+import { FIELDS_UNDRAWN_TEXT } from "@/app/lib/station-fields/labels";
 import type { NumberField } from "@/app/lib/station-fields/schema";
 import { LIMITS } from "@/app/lib/station-fields/validate";
 import { UNDRAWN_TEXT, NUMBER_SETTINGS_TEXT, NUMBER_UNITS } from "../../lib/labels";
+import { withFieldHelp } from "../../lib/editorModel";
 import {
-  formatDecimal, numberPreviewMessage, numberRangeInverted, parseDecimalText, toleranceNegative, withHelp,
-  withNumberSetting, withUnit, type NumberSettingKey,
+  formatDecimal, numberRangeInverted, parseDecimalText, toleranceNegative, withNumberSetting, withUnit, type NumberSettingKey,
 } from "../../lib/numberText";
 import "./editor-popovers.css";
 
-export { numberPreviewMessage, numberSummaryParts, numberSummaryText } from "../../lib/numberText";
-export type { NumberPreviewMessage } from "../../lib/numberText";
-
 /**
  * The expanded number row (artboard 3 `gnd-settings`, spec §5.6): the settings of a `number` field,
- * opened in place under its row (180ms) on pearl — a two-column grid of יחידה, מינימום, מקסימום, ערך
- * ייחוס, סטייה מותרת ±%, the 'ערך מחוץ לטווח נחשב "לא תקין"' switch, the worker's help text, and
- * "סגור הגדרות".
+ * opened in place under its row.
  *
  * Every edit is reported at once (onChange with the whole field). Numbers are typed as text: a ","
  * reads as "."; an emptied input removes the setting (undefined); text that is not a number removes
- * it too and says so under the input once focus leaves it (undrawn). Clearing the reference
- * value removes the tolerance with it (tol_pct only exists next to ref).
+ * it too and says so under the input once focus leaves it (undrawn) — unlike the row's own "מקס׳"
+ * input, which goes back to the stored value. Clearing the reference value removes the tolerance with
+ * it (tol_pct only exists next to ref).
  *
  * `id` is the panel's id — the row's summary button points at it (aria-controls) — and the prefix
  * of every control's id.
@@ -231,7 +227,7 @@ export function NumberFieldSettings({ id, field, onChange, onClose }: NumberFiel
           placeholder={NUMBER_SETTINGS_TEXT.helpPlaceholder}
           value={field.help ?? ""}
           maxLength={LIMITS.help}
-          onChange={(e) => onChange(withHelp(field, e.target.value))}
+          onChange={(e) => onChange(withFieldHelp(field, e.target.value))}
           aria-describedby={`${ids.help}-note`}
         />
         <span id={`${ids.help}-note`} className="rf-nfs__help">{NUMBER_SETTINGS_TEXT.helpNote}</span>
@@ -245,19 +241,3 @@ export function NumberFieldSettings({ id, field, onChange, onClose }: NumberFiel
     </div>
   );
 }
-
-/** The live preview's line under a number field (artboard 3 `rangeMsg`): "בטווח · עד 0.1 Ω" and the
- *  rest of numberPreviewMessage, numbers with their unit isolated left to right. `value` is the
- *  number typed into the preview (null while nothing is). */
-export function NumberPreviewLine({ field, value, id, className }: { field: NumberField; value: number | null; id?: string; className?: string }) {
-  const m = numberPreviewMessage(field, value);
-  return (
-    <span id={id} className={cn("rf-num-preview", className)} data-tone={m.tone}>
-      {m.segments.map((s, i) => (s.ltr
-        ? <span key={i} dir="ltr" className="rf-ltr">{s.text}</span>
-        : <React.Fragment key={i}>{s.text}</React.Fragment>))}
-    </span>
-  );
-}
-
-export default NumberFieldSettings;

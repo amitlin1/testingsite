@@ -12,8 +12,8 @@
 // ימים לאומיים אחרים) is a normal working day and is intentionally ignored.
 
 import { HebrewCalendar, flags, type Event } from "@hebcal/core";
+import { localCivilDate } from "@/lib/time/civil";
 import type { DateString, IsraeliHolidayCategory, IsraeliHolidayInfo } from "./types";
-import { toDateString } from "./time";
 
 /** Precedence when two classified events land on the same civil date. */
 const CATEGORY_RANK: Record<IsraeliHolidayCategory, number> = {
@@ -40,14 +40,11 @@ function classify(ev: Event): IsraeliHolidayCategory | null {
 
 /** Clean Hebrew label without nikud, with the trailing Hebrew year stripped. */
 function hebrewLabel(ev: Event): string {
-  let s: string;
-  try {
-    s = ev.render("he-x-NoNikud");
-  } catch {
-    s = ev.render("he");
-  }
   // "ראש השנה 5787" → "ראש השנה"
-  return s.replace(/\s+\d{3,4}\s*$/, "").trim();
+  return ev
+    .render("he-x-NoNikud")
+    .replace(/\s+\d{3,4}\s*$/, "")
+    .trim();
 }
 
 const yearCache = new Map<number, IsraeliHolidayInfo[]>();
@@ -73,7 +70,8 @@ function computeYear(year: number): IsraeliHolidayInfo[] {
   for (const ev of events) {
     const category = classify(ev);
     if (!category) continue;
-    const date = toDateString(ev.getDate().greg());
+    // greg() is a Date at LOCAL midnight of the civil day.
+    const date = localCivilDate(ev.getDate().greg());
     const existing = byDate.get(date);
     if (existing && CATEGORY_RANK[existing.category] >= CATEGORY_RANK[category]) continue;
     byDate.set(date, { date, category, label: hebrewLabel(ev), desc: ev.getDesc() });
@@ -97,23 +95,8 @@ export function getIsraeliHolidays(fromISO: DateString, toISO: DateString): Isra
   return out;
 }
 
-/** Same data keyed by date, for O(1) lookup while resolving a range. */
-export function getIsraeliHolidayMap(
-  fromISO: DateString,
-  toISO: DateString,
-): Map<DateString, IsraeliHolidayInfo> {
-  const map = new Map<DateString, IsraeliHolidayInfo>();
-  for (const h of getIsraeliHolidays(fromISO, toISO)) map.set(h.date, h);
-  return map;
-}
-
 /** The Israeli special-day info for a single civil date, or null. */
 export function getIsraeliHolidayForDate(date: DateString): IsraeliHolidayInfo | null {
   const year = Number(date.slice(0, 4));
   return computeYear(year).find((h) => h.date === date) ?? null;
-}
-
-/** Test/maintenance hook — clears the per-year memoization. */
-export function _clearIsraeliHolidayCache(): void {
-  yearCache.clear();
 }

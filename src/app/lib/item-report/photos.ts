@@ -7,7 +7,9 @@
  * A draft is rendered again on every download, so the small copies are kept in memory between
  * renders, checked against the object's etag. Server-only.
  */
-import { contentTypeFromName, getObjectBuffer, statObject } from "@/lib/storage";
+import { getObjectBuffer, statObject, toDataUrl } from "@/lib/storage";
+import { contentTypeFromName } from "@/lib/file-types";
+import { mapWithConcurrency } from "@/lib/async";
 import { shrinkPhotoForPdf } from "./render";
 
 /** Already this small → inlined as it is (it cannot weigh the report down). */
@@ -46,8 +48,8 @@ async function photoDataUrl(key: string): Promise<string | null> {
       return hit.url;
     }
     const buf = await getObjectBuffer(key);
-    const type = key.toLowerCase().endsWith(".svg") ? "image/svg+xml" : contentTypeFromName(key);
-    const original = `data:${type};base64,${buf.toString("base64")}`;
+    const type = contentTypeFromName(key);
+    const original = toDataUrl(buf, key);
     let url = original;
     if (type.startsWith("image/") && type !== "image/svg+xml" && buf.length > SMALL_ENOUGH_BYTES) {
       try {
@@ -67,15 +69,11 @@ async function photoDataUrl(key: string): Promise<string | null> {
 
 /** key → data URL of each photo that could be read (the others render as a placeholder). */
 export async function reportPhotoDataUrls(keys: readonly string[]): Promise<Record<string, string>> {
+  const urls = await mapWithConcurrency(keys, CONCURRENCY, photoDataUrl);
   const out: Record<string, string> = {};
-  let next = 0;
-  const worker = async () => {
-    while (next < keys.length) {
-      const key = keys[next++]!;
-      const url = await photoDataUrl(key);
-      if (url) out[key] = url;
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, keys.length) }, worker));
+  keys.forEach((key, i) => {
+    const url = urls[i];
+    if (url) out[key] = url;
+  });
   return out;
 }

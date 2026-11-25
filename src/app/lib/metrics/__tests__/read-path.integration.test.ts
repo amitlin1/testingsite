@@ -2,15 +2,8 @@
 // §5 the read path, §5.0 the cross-cutting rules, §2.8 the two clocks, §6.3 the
 // UI cap).
 //
-// WHY IT EXISTS. Stage 5 shipped ten converted endpoints and eight query
-// builders with ZERO tests; the only thing watching them was
-// scripts/dashboard-parity.mjs, and it was watching the wrong object — its
-// default mode graded a second copy of each route's mapping, and its row
-// comparison only ever looked at fields the OLD response carried, so every
-// §2.8 addition was stamped NEW_ONLY and never read. That is how four
-// permanently-null fields on tests/by-station passed a green parity run twice.
-// The harness is fixed; this suite is the other half, and it drives the REAL
-// route handlers, not a copy of their arithmetic.
+// It drives the REAL route handlers against a deterministic ledger, so a golden
+// row is a statement about what ships, not about a copy of its arithmetic.
 //
 // HOW THE ROUTES ARE REACHED. All fourteen dashboard routes are
 // withAuth(role:"manager"), and withAuth calls Auth.js's auth(), which reads
@@ -44,43 +37,31 @@
 //
 // The DB half runs ONLY when TEST_DATABASE_URL points at a throwaway database
 // carrying migration 20260825000000_metrics_ledger_additive. Without it those
-// describe blocks skip and plain `npm test` stays green. The two pure blocks
-// (period arithmetic and the §5.0(9) build-time sweep) touch nothing and run
-// unconditionally — they are the parts that protect a `next build`.
+// describe blocks skip and plain `npm test` stays green — and says so in its
+// skip reason. The pure parts (period arithmetic, the §5.0(9) sweep) are unit
+// tests in src/app/lib/metrics/read/__tests__.
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import path from "node:path";
+import { stubSession } from "@/lib/auth/testing";
 import { Pool, types } from "pg";
 
+import { UI_MONTH_CAP } from "@/app/lib/dashboard/contract";
+import { addDays, addMonths, businessDay } from "@/lib/time/civil";
+import { resolvePeriod } from "../read/period";
 import {
-  UI_MONTH_CAP,
-  addDays,
-  addMonths,
-  businessDay,
-  daysBetween,
-  endOfBusinessDayExclusive,
-  resolvePeriod,
-  startOfBusinessDay,
-  todayBusinessDay,
-} from "../period";
-import {
-  QUERY_BUILDERS,
-  allBuiltStatements,
-  guardAllBuilders,
-  guardRangeProbes,
   entityProgress,
   finishedCumulative,
   finishedInWindow,
   flow,
-  kpiWindowOne,
+  kpiWindow,
   pitSeries,
   pointInTime,
   quality,
   slowSteps,
   stationBoard,
-  type MetricsClient,
-} from "../queries";
+} from "../read/queries";
+import type { MetricsClient } from "../read/sql";
+import { LEDGER_TRUNCATE_LOCK } from "@/test-support/ledger-lock";
 
 // pg hands bigint (OID 20) and numeric (1700) back as strings by default; every
 // value this suite asserts on fits a JS number.
@@ -96,246 +77,8 @@ function skipReason(): string | false {
 }
 
 // ===========================================================================
-// §6.3 / §7.2 — resolvePeriod: the cap, the clamp, and DST
-// ===========================================================================
-
-describe("stage 5 — resolvePeriod (§6.3 the 13-month cap, §7.2 business days)", () => {
-  // A fixed clock, so these assertions are about the arithmetic and not about
-  // the day the suite happens to run on.
-  const NOW = new Date("2026-08-28T09:00:00Z"); // 12:00 Asia/Jerusalem
-  const TODAY = "2026-08-28";
-
-  it("caps a 3-year request at 13 calendar months and REPORTS the cap", () => {
-    const p = resolvePeriod({ startDate: "2023-01-01", endDate: TODAY, now: NOW });
-    // A calendar cap, not 13 * 30 days: the floor is the day after the same
-    // day-of-month 13 months back, which is what the picker shows (§6.3).
-    const floor = addDays(addMonths(TODAY, -UI_MONTH_CAP), 1);
-    assert.equal(floor, "2025-07-29");
-    assert.equal(p.capFloor, floor);
-    assert.equal(p.from, floor);
-    assert.equal(p.capped, true);
-    // The request survives beside the answer — a route cannot report "showing
-    // X of Y" from a window that forgot what was asked for.
-    assert.equal(p.requestedFrom, "2023-01-01");
-    assert.equal(p.days, daysBetween(floor, TODAY));
-  });
-
-  it("does not cap a window that starts exactly on the floor, and does cap one day earlier", () => {
-    const floor = addDays(addMonths(TODAY, -UI_MONTH_CAP), 1);
-    assert.equal(resolvePeriod({ startDate: floor, endDate: TODAY, now: NOW }).capped, false);
-    const justOver = resolvePeriod({ startDate: addDays(floor, -1), endDate: TODAY, now: NOW });
-    assert.equal(justOver.capped, true);
-    assert.equal(justOver.from, floor);
-  });
-
-  it("clamps a request that reaches into the future to today, and REPORTS the clamp", () => {
-    const p = resolvePeriod({ startDate: "2026-08-01", endDate: "2026-12-31", now: NOW });
-    assert.equal(p.to, TODAY);
-    assert.equal(p.clampedEnd, true);
-    assert.equal(p.requestedTo, "2026-12-31");
-    assert.equal(p.capped, false);
-  });
-
-  it("a window entirely in the future degenerates to today rather than to an error", () => {
-    const p = resolvePeriod({ startDate: "2027-01-01", endDate: "2027-02-01", now: NOW });
-    assert.equal(p.from, TODAY);
-    assert.equal(p.to, TODAY);
-    assert.equal(p.days, 1);
-    assert.equal(p.clampedEnd, true);
-  });
-
-  it("both clamps can fire at once and both are reported", () => {
-    const p = resolvePeriod({ startDate: "2020-01-01", endDate: "2030-01-01", now: NOW });
-    assert.equal(p.capped, true);
-    assert.equal(p.clampedEnd, true);
-    assert.equal(p.from, p.capFloor);
-    assert.equal(p.to, TODAY);
-  });
-
-  it("startDate after endDate is a PeriodError, not a silently swapped window", () => {
-    assert.throws(
-      () => resolvePeriod({ startDate: "2026-08-20", endDate: "2026-08-01", now: NOW }),
-      /startDate .* is after endDate/,
-    );
-  });
-
-  // -------------------------------------------------------------------------
-  // DST. Israel starts DST on the Friday before the last Sunday of March and
-  // ends it on the last Sunday of October, both at 02:00 — 2026-03-27 and
-  // 2026-10-25. Those two days are 23 and 25 hours long, and every one of
-  // §7.3(2)'s rules exists because `timestamptz + interval '1 day'` is not a
-  // civil day.
-  // -------------------------------------------------------------------------
-
-  it("2026-03-27 is a 23-hour business day and its boundaries are local midnight", () => {
-    const start = startOfBusinessDay("2026-03-27");
-    const end = endOfBusinessDayExclusive("2026-03-27");
-    assert.equal(start.toISOString(), "2026-03-26T22:00:00.000Z"); // 00:00 +02:00
-    assert.equal(end.toISOString(), "2026-03-27T21:00:00.000Z"); // 00:00 +03:00
-    assert.equal((end.getTime() - start.getTime()) / 3600000, 23);
-    // The days on either side are ordinary, so the hour is lost exactly once.
-    for (const d of ["2026-03-26", "2026-03-28"]) {
-      const s = startOfBusinessDay(d);
-      const e = endOfBusinessDayExclusive(d);
-      assert.equal((e.getTime() - s.getTime()) / 3600000, 24, d);
-    }
-  });
-
-  it("2026-10-25 is a 25-hour business day and its boundaries are local midnight", () => {
-    const start = startOfBusinessDay("2026-10-25");
-    const end = endOfBusinessDayExclusive("2026-10-25");
-    assert.equal(start.toISOString(), "2026-10-24T21:00:00.000Z"); // 00:00 +03:00
-    assert.equal(end.toISOString(), "2026-10-25T22:00:00.000Z"); // 00:00 +02:00
-    assert.equal((end.getTime() - start.getTime()) / 3600000, 25);
-    for (const d of ["2026-10-24", "2026-10-26"]) {
-      const s = startOfBusinessDay(d);
-      const e = endOfBusinessDayExclusive(d);
-      assert.equal((e.getTime() - s.getTime()) / 3600000, 24, d);
-    }
-  });
-
-  it("business days are counted as CIVIL dates across both boundaries, never as 86,400-second steps", () => {
-    // The bug this rules out: a range built by adding 24h at a time loses a day
-    // in March and gains one in October (§7.3(2)).
-    assert.equal(addDays("2026-03-26", 2), "2026-03-28");
-    assert.equal(addDays("2026-10-24", 2), "2026-10-26");
-    assert.equal(daysBetween("2026-03-25", "2026-03-30"), 6);
-    assert.equal(daysBetween("2026-10-23", "2026-10-28"), 6);
-    // A month step across the spring boundary lands on the same day-of-month.
-    assert.equal(addMonths("2026-04-15", -1), "2026-03-15");
-  });
-
-  it("the instant→day mapping flips at LOCAL midnight on both boundary days", () => {
-    // 23:30 on 2026-03-26 is 21:30Z (+02:00); 00:30 on 2026-03-27 is 22:30Z.
-    assert.equal(businessDay(new Date("2026-03-26T21:30:00Z")), "2026-03-26");
-    assert.equal(businessDay(new Date("2026-03-26T22:30:00Z")), "2026-03-27");
-    // 01:30 on 2026-10-25 is still +03:00, i.e. 22:30Z on the 24th.
-    assert.equal(businessDay(new Date("2026-10-24T20:30:00Z")), "2026-10-24");
-    assert.equal(businessDay(new Date("2026-10-24T22:30:00Z")), "2026-10-25");
-  });
-
-  it("resolvePeriod over a DST boundary reports the right day COUNT and the right instants", () => {
-    const spring = resolvePeriod({
-      startDate: "2026-03-25",
-      endDate: "2026-03-30",
-      now: new Date("2026-03-30T09:00:00Z"),
-    });
-    assert.equal(spring.days, 6);
-    assert.equal(spring.fromTs.toISOString(), "2026-03-24T22:00:00.000Z");
-    assert.equal(spring.toTsExclusive.toISOString(), "2026-03-30T21:00:00.000Z");
-    // Six civil days across spring-forward is 6*24 - 1 hours of wall clock.
-    assert.equal((spring.toTsExclusive.getTime() - spring.fromTs.getTime()) / 3600000, 6 * 24 - 1);
-
-    const autumn = resolvePeriod({
-      startDate: "2026-10-23",
-      endDate: "2026-10-28",
-      now: new Date("2026-10-28T09:00:00Z"),
-    });
-    assert.equal(autumn.days, 6);
-    assert.equal((autumn.toTsExclusive.getTime() - autumn.fromTs.getTime()) / 3600000, 6 * 24 + 1);
-  });
-});
-
-// ===========================================================================
-// §5.0(9) — the build-time sweep over EVERY builder in QUERY_BUILDERS
-// ===========================================================================
-
-describe("stage 5 — §5.0(9) every range probe keeps its NOT <alias>.is_terminal", () => {
-  const PROBE = /\b([A-Za-z_][A-Za-z0-9_]*)\.valid_range\s*(@>|&&)/g;
-
-  it("the catalogue covers every builder in QUERY_BUILDERS, and every SHAPE of it", () => {
-    const built = allBuiltStatements();
-    const labels = built.map((b) => b.sql.slice(3, b.sql.indexOf("\n")));
-    for (const key of Object.keys(QUERY_BUILDERS)) {
-      assert.ok(
-        labels.some((l) => l.startsWith(key + " ")),
-        `${key} is in QUERY_BUILDERS but nothing in allBuiltStatements() builds it`,
-      );
-    }
-    // Q4's shape changes with the dimension and the family, Q5's with the
-    // dimension, Q7's with the entity: 1+1+1+1 + 8*2 + 7 + 1 + 3 + 1 = 32.
-    assert.equal(built.length, 32);
-  });
-
-  it("guardAllBuilders() passes on the shipped text", () => {
-    assert.doesNotThrow(() => guardAllBuilders());
-  });
-
-  it("EVERY guard in EVERY statement is load-bearing — remove one and the lint fires", () => {
-    const built = allBuiltStatements();
-    let guardedProbes = 0;
-    let unprobedGuards = 0;
-
-    for (const b of built) {
-      const label = b.sql.slice(3, b.sql.indexOf("\n"));
-      // Every `NOT <alias>.is_terminal` in the statement, deleted one at a time.
-      const guards = [...b.sql.matchAll(/NOT\s+([A-Za-z_][A-Za-z0-9_]*)\.is_terminal\b/g)];
-      for (const g of guards) {
-        const alias = g[1];
-        const at = g.index ?? 0;
-        const without = b.sql.slice(0, at) + b.sql.slice(at + g[0].length);
-        // The guard only matters where the SAME alias also carries a range
-        // probe. Q4 and Q6 carry `NOT i.is_terminal` with no probe at all, and
-        // the lint has — correctly — nothing to say about those.
-        PROBE.lastIndex = 0;
-        const probed = [...b.sql.matchAll(PROBE)].some((m) => m[1] === alias);
-        if (!probed) {
-          unprobedGuards++;
-          assert.doesNotThrow(
-            () => guardRangeProbes(without, label),
-            `${label}: ${alias} carries no range probe, so removing its guard must NOT fire the lint`,
-          );
-          continue;
-        }
-        guardedProbes++;
-        assert.throws(
-          () => guardRangeProbes(without, label),
-          new RegExp(`range probe on ${alias}\\.valid_range`),
-          `${label}: NOT ${alias}.is_terminal at offset ${at} can be deleted and the §5.0(9) lint does not notice`,
-        );
-      }
-    }
-
-    // Q3 alone carries five probes all aliased `q`, and the whole point of the
-    // clause-scoped lint is that each of the five is checked on its own — so
-    // the count here is well above one guard per statement.
-    assert.ok(guardedProbes >= 12, `expected many guarded probes, found ${guardedProbes}`);
-    assert.ok(unprobedGuards > 0, "expected at least one is_terminal that guards no probe");
-  });
-
-  it("the Q3 repeated-alias case specifically: one surviving guard does not cover the others", () => {
-    // Q3 is the statement the clause-scoped lint exists for: it is the one that
-    // aliases the interval `q` in more than one place, so the first version of
-    // the guard — a search of the whole statement text — was satisfied by any
-    // single survivor and the rest could be deleted in silence.
-    //
-    // The count is 2, not the 4 it was: Q3's three correlated queue subqueries
-    // had an identical WHERE and differed only in their aggregate, which cost
-    // 358,562 and pulled the statement over jit_above_cost, and they are now one
-    // grouped CTE. Two `q` probes in two separate CTE bodies still make the
-    // point — the property under test is that a guard covers its OWN clause and
-    // nothing else, not how many clauses there happen to be.
-    const sql = QUERY_BUILDERS.Q3().sql;
-    const guards = [...sql.matchAll(/NOT\s+q\.is_terminal\b/g)];
-    assert.equal(guards.length, 2);
-    assert.equal([...sql.matchAll(/\bq\.valid_range\s*@>/g)].length, 2);
-    for (const g of guards) {
-      const at = g.index ?? 0;
-      const without = sql.slice(0, at) + sql.slice(at + g[0].length);
-      assert.throws(
-        () => guardRangeProbes(without, "Q3 stationBoard"),
-        /range probe on q\.valid_range/,
-      );
-    }
-  });
-});
-
-// ===========================================================================
 // The fixture
 // ===========================================================================
-
-/** One dedicated lock for every suite that truncates the ledger. */
-const LEDGER_TRUNCATE_LOCK = 526050825;
 
 const CUSTOMER = 7701;
 const SHIPMENT = 7801;
@@ -387,7 +130,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
   let prisma: { $disconnect: () => Promise<void> } & MetricsClient;
 
   /** today, and the fixture's day labels D0 (today) .. D20. */
-  const T = () => todayBusinessDay();
+  const T = () => businessDay();
   const D = (n: number) => addDays(T(), -n);
 
   /** The default window every converted screen opens on: last 30 days. */
@@ -521,7 +264,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
   // -------------------------------------------------------------------------
 
   before(async () => {
-    // MUST precede the dynamic imports below: src/app/lib/prisma.ts builds its
+    // MUST precede the dynamic imports below: src/lib/db.ts builds its
     // Pool from process.env.DATABASE_URL at module-evaluation time and every
     // route module imports it transitively.
     process.env.DATABASE_URL = TEST_DATABASE_URL;
@@ -529,22 +272,10 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
     // The auth stub. Seeded into require.cache BEFORE withAuth (and therefore
     // the real auth.ts) is ever resolved; see the header for why this is the
     // only way to reach a withAuth-wrapped handler in-process.
-    const req = createRequire(path.resolve(process.cwd(), "package.json"));
-    const authPath = req.resolve("./auth.ts");
-    const CjsModule = req("node:module") as typeof import("node:module");
-    const stub = new CjsModule(authPath);
-    stub.filename = authPath;
-    stub.loaded = true;
-    stub.exports = {
-      auth: async () => ({
-        user: { name: "read-path suite", email: "readpath@example.local" },
-        roles: ["manager"],
-      }),
-      handlers: {},
-      signIn: () => {},
-      signOut: () => {},
-    };
-    req.cache[authPath] = stub;
+    stubSession(() => ({
+      user: { name: "read-path suite", email: "readpath@example.local" },
+      roles: ["manager"],
+    }));
 
     pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 6 });
     await assertLedgerSchemaPresent();
@@ -579,7 +310,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
       "tests/average-times": avgTimes.GET as never,
       "stats/completion-history": completion.GET as never,
     };
-    prisma = (await import("../../prisma")).prisma as never;
+    prisma = (await import("@/lib/db")).prisma as never;
   });
 
   after(async () => {
@@ -1005,7 +736,7 @@ describe("stage 5 — the read path against a deterministic ledger", { skip: ski
 
   it("Q5 (§5.6) clips every interval to the window and keeps the ones still open", async () => {
     const period = resolvePeriod({ startDate: windowFrom(), endDate: windowTo() });
-    const k = await kpiWindowOne(prisma, period.fromTs, period.toTsExclusive);
+    const k = await kpiWindow(prisma, period.fromTs, period.toTsExclusive);
 
     // 11 closed queues + 3 open + 2 closed research queues + 1 open = 17.
     assert.equal(k.wait_n, 17);

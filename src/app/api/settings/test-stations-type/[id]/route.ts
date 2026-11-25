@@ -1,71 +1,44 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import { HttpError } from "@/lib/http/errors";
+import { parseDbId, readJsonObject } from "@/lib/http/request";
 import { fixSequence } from "@/app/lib/fix-sequence";
+import { assertNameFree, parseStaleAfterMinutes, prismaRefusal, requiredText } from "@/app/lib/lookups";
+import { DEFAULT_STALE_AFTER_MINUTES } from "@/lib/item-status";
 import { renameStationTypeInDrafts } from "@/app/lib/station-fields/route-steps";
-import { Prisma } from "@prisma/client";
+import { stationTypeName } from "../name";
 
 export const runtime = "nodejs";
 
-/**
- * stale_after_minutes = minutes an item may sit in test / in research on a
- * station of this type with no result before /api/cron/release-stale-tests
- * reverts it. 0 = never auto-release. Absent in the body means "leave the value
- * alone"; a present value must be a whole number >= 0. Deliberately duplicated
- * from ../route.ts: a Next route file may only export its handlers, so there is
- * nowhere to share it from without inventing a module.
- */
-function parseStaleAfterMinutes(raw: unknown): { value?: number } | { error: string } {
-  if (raw === undefined || raw === null || `${raw}`.trim() === "") return {};
-  const n = typeof raw === "number" ? raw : Number(`${raw}`.trim());
-  if (!Number.isInteger(n) || n < 0) {
-    return { error: "זמן שחרור אוטומטי חייב להיות מספר שלם של דקות, 0 או יותר" };
-  }
-  return { value: n };
-}
+type Ctx = { params: Promise<{ id: string }> };
 
-export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+const NOT_FOUND = "Test station type not found";
+
+/** Body { test_type_desc, package_level, stale_after_minutes?, test_station_type_id? (a new id) }. */
+export async function PUT(req: Request, { params }: Ctx) {
   try {
-    const { id } = await params;
-    const body = await req.json();
-    const { test_type_desc, test_station_type_id: newIdRaw } = body;
-    const parentsOnly = Boolean(body.package_level);
+    const oldId = parseDbId((await params).id);
+    const body = await readJsonObject(req);
+    const packageLevel = Boolean(body.package_level);
+    // Absent: the column keeps whatever it holds (Prisma skips undefined).
+    const staleAfterMinutes = parseStaleAfterMinutes(body.stale_after_minutes);
+    const desc = requiredText(body.test_type_desc);
+    if (!desc) throw new HttpError(400, "Description is required");
+    if (oldId === null) throw new HttpError(404, NOT_FOUND);
 
-    const stale = parseStaleAfterMinutes(body.stale_after_minutes);
-    if ("error" in stale) {
-      return NextResponse.json({ error: stale.error }, { status: 400 });
-    }
-    // Omitted -> the column keeps whatever it holds; Prisma skips undefined.
-    const staleAfterMinutes = stale.value;
-
-    if (!test_type_desc || typeof test_type_desc !== "string" || !test_type_desc.trim()) {
-      return NextResponse.json(
-        { error: "Description is required" },
-        { status: 400 }
-      );
-    }
-
-    const oldId = parseInt(id, 10);
-    const trimmedDesc = test_type_desc.trim();
-
-    // Determine whether the primary key itself is being changed.
+    const newIdRaw = body.test_station_type_id;
     let newId = oldId;
     if (newIdRaw !== undefined && newIdRaw !== null && `${newIdRaw}`.trim() !== "") {
       newId = typeof newIdRaw === "number" ? newIdRaw : parseInt(`${newIdRaw}`, 10);
-      if (!Number.isInteger(newId) || newId <= 0) {
-        return NextResponse.json(
-          { error: "מזהה חייב להיות מספר שלם חיובי" },
-          { status: 400 }
-        );
-      }
+      if (!Number.isInteger(newId) || newId <= 0) throw new HttpError(400, "מזהה חייב להיות מספר שלם חיובי");
     }
+    await assertNameFree(stationTypeName(desc), oldId);
 
-    // Simple case: only the description changed.
     if (newId === oldId) {
       const updated = await prisma.test_stations_type.update({
         where: { test_station_type_id: oldId },
-        data: { test_type_desc: trimmedDesc, package_level: parentsOnly, stale_after_minutes: staleAfterMinutes },
+        data: { test_type_desc: desc, package_level: packageLevel, stale_after_minutes: staleAfterMinutes },
       });
-
       return NextResponse.json({
         test_station_type_id: updated.test_station_type_id,
         test_type_desc: updated.test_type_desc.trim(),
@@ -74,23 +47,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       });
     }
 
-    // The primary key is changing — make sure the target id is free.
-    const existing = await prisma.test_stations_type.findUnique({
-      where: { test_station_type_id: newId },
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: `מזהה ${newId} כבר קיים` },
-        { status: 409 }
-      );
-    }
+    const existing = await prisma.test_stations_type.findUnique({ where: { test_station_type_id: newId } });
+    if (existing) throw new HttpError(409, `מזהה ${newId} כבר קיים`);
 
-    // The id change recreates the row, so the column needs a concrete value
-    // even when the body omitted it: carry the current one over.
+    // The id change recreates the row, so the column needs a concrete value even when the body
+    // omitted it: carry the current one over.
     const current = await prisma.test_stations_type.findUnique({
       where: { test_station_type_id: oldId },
       select: { stale_after_minutes: true },
     });
+    const stale = staleAfterMinutes ?? current?.stale_after_minutes ?? DEFAULT_STALE_AFTER_MINUTES;
 
     // Cascade the id change across the referencing tables inside one transaction.
     // (FKs are declared onUpdate: NoAction, so we repoint children manually:
@@ -104,10 +70,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         data: { test_type_desc: `__renaming_${oldId}` },
       });
       await tx.test_stations_type.create({
-        data: {
-          test_station_type_id: newId, test_type_desc: trimmedDesc, package_level: parentsOnly,
-          stale_after_minutes: staleAfterMinutes ?? current?.stale_after_minutes ?? 30,
-        },
+        data: { test_station_type_id: newId, test_type_desc: desc, package_level: packageLevel, stale_after_minutes: stale },
       });
       await tx.test_stations.updateMany({
         where: { test_station_type_id: oldId },
@@ -135,69 +98,30 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       });
     });
 
-    // Keep the autoincrement sequence ahead of any manually-assigned id.
     await fixSequence(prisma, "test_stations_type", "test_station_type_id", "test_stations_type_test_station_type_id_seq");
 
     return NextResponse.json({
       test_station_type_id: newId,
-      test_type_desc: trimmedDesc,
-      package_level: parentsOnly,
-      stale_after_minutes: staleAfterMinutes ?? current?.stale_after_minutes ?? 30,
+      test_type_desc: desc,
+      package_level: packageLevel,
+      stale_after_minutes: stale,
     });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
-      return NextResponse.json(
-        { error: "Test station type not found" },
-        { status: 404 }
-      );
-    }
-    console.error("Error updating test station type:", error);
-    return NextResponse.json(
-      { error: "Failed to update test station type" },
-      { status: 500 }
-    );
+    return prismaRefusal(error, { notFound: NOT_FOUND }, "Failed to update test station type");
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: Request, { params }: Ctx) {
+  const { id } = await params;
   try {
-    const { id } = await params;
-
-    try {
-      await prisma.test_stations_type.delete({
-        where: { test_station_type_id: parseInt(id, 10) },
-      });
-
-      return NextResponse.json({ success: true, id });
-    } catch (dbError) {
-      if (
-        dbError instanceof Prisma.PrismaClientKnownRequestError &&
-        dbError.code === "P2003"
-      ) {
-        return NextResponse.json(
-          { error: "Cannot delete test station type because it is referenced by other records." },
-          { status: 409 }
-        );
-      }
-      if (
-        dbError instanceof Prisma.PrismaClientKnownRequestError &&
-        dbError.code === "P2025"
-      ) {
-        return NextResponse.json(
-          { error: "Test station type not found" },
-          { status: 404 }
-        );
-      }
-      throw dbError;
-    }
+    const typeId = parseDbId(id);
+    if (typeId === null) throw new HttpError(404, NOT_FOUND);
+    await prisma.test_stations_type.delete({ where: { test_station_type_id: typeId } });
+    return NextResponse.json({ success: true, id });
   } catch (error) {
-    console.error("Error deleting test station type:", error);
-    return NextResponse.json(
-      { error: "Failed to delete test station type" },
-      { status: 500 }
-    );
+    return prismaRefusal(error, {
+      notFound: NOT_FOUND,
+      inUse: "לא ניתן למחוק כי קיימות עמדות משויכות. מחק או העבר אותן קודם.",
+    }, "Failed to delete test station type");
   }
 }

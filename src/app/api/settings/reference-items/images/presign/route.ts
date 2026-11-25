@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
-import { readJson } from '@/lib/directUpload/server';
+import { prisma } from "@/lib/db";
+import { HttpError, errorResponse } from "@/lib/http/errors";
+import { parseDbId, readJsonObject } from "@/lib/http/request";
 import type { PresignResponse } from '@/lib/directUpload/shared';
 import {
-  MAX_IMAGE_SIZE,
   parseReferenceImageDescriptors,
   presignReferenceImages,
   checkStationTypeIds,
-} from '@/lib/reference-items';
+} from '@/app/lib/reference-items/server';
+import { MAX_IMAGE_SIZE } from '@/app/lib/reference-items/wire';
 
 export const runtime = 'nodejs';
 
@@ -24,51 +25,32 @@ export const runtime = 'nodejs';
  * (POST/PUT /api/settings/reference-items[/id]), which verifies them.
  */
 
-type PresignBody = { files?: unknown; referenceItemId?: unknown };
-
 export async function POST(request: Request) {
   try {
-    const body = await readJson<PresignBody>(request);
-    if (!body) {
-      return NextResponse.json({ error: 'גוף הבקשה אינו JSON תקין' }, { status: 400 });
-    }
+    const body = await readJsonObject(request, 'גוף הבקשה אינו JSON תקין');
 
     const parsed = parseReferenceImageDescriptors(body.files);
-    if (!parsed.ok) {
-      return NextResponse.json({ error: parsed.error }, { status: 400 });
-    }
+    if (!parsed.ok) throw new HttpError(400, parsed.error);
 
     let referenceItemId: number | null = null;
     if (body.referenceItemId != null && body.referenceItemId !== '') {
-      const n = Number(body.referenceItemId);
-      if (!Number.isFinite(n)) {
-        return NextResponse.json({ error: 'מזהה לא תקין' }, { status: 400 });
-      }
+      const n = parseDbId(body.referenceItemId);
+      if (n == null) throw new HttpError(400, 'מזהה לא תקין');
       const exists = await prisma.reference_items.findUnique({
         where: { reference_item_id: n },
         select: { reference_item_id: true },
       });
-      if (!exists) {
-        return NextResponse.json({ error: 'פריט הייחוס לא נמצא' }, { status: 404 });
-      }
+      if (!exists) throw new HttpError(404, 'פריט הייחוס לא נמצא');
       referenceItemId = n;
     }
 
     // Unknown station types are refused here, before any ticket or row exists.
-    try {
-      await checkStationTypeIds(parsed.files.map((f) => f.stationTypeId));
-    } catch (e) {
-      return NextResponse.json(
-        { error: e instanceof Error ? e.message : 'עמדה לא תקינה' },
-        { status: 400 },
-      );
-    }
+    await checkStationTypeIds(parsed.files.map((f) => f.stationTypeId));
 
     const uploads = await presignReferenceImages(parsed.files, referenceItemId);
     const res: PresignResponse = { uploads, maxBytes: MAX_IMAGE_SIZE };
     return NextResponse.json(res);
   } catch (error) {
-    console.error('Reference image presign error:', error);
-    return NextResponse.json({ error: 'שגיאה בהכנת העלאת התמונות' }, { status: 500 });
+    return errorResponse(error, 'שגיאה בהכנת העלאת התמונות');
   }
 }

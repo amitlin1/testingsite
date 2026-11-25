@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import { parseDbId } from "@/lib/http/request";
 
 export const runtime = "nodejs";
 
+/** GET /api/testing/test-stations?typeId — the stations of a type. E2E support: only
+ *  scripts/e2e-packages reads it (the screens list stations through /api/stations). */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -15,8 +18,8 @@ export async function GET(req: Request) {
       );
     }
 
-    const typeIdNumber = Number(typeId);
-    if (Number.isNaN(typeIdNumber)) {
+    const typeIdNumber = parseDbId(typeId);
+    if (typeIdNumber == null) {
       return NextResponse.json(
         { error: "typeId must be a number" },
         { status: 400 }

@@ -6,11 +6,11 @@
 // UTC instant. A work day is a calendar day, so dates carry no time-of-day and
 // never cross a timezone boundary.
 
-export type TimeString = string; // "07:00"
-export type DateString = string; // "2026-09-17"
+import type { CivilDate, Weekday } from "@/lib/time/civil";
 
-/** 0 = ראשון, 1 = שני … 5 = שישי, 6 = שבת */
-export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export type TimeString = string; // "07:00"
+/** A civil date ("2026-09-17"): the same string as CivilDate. */
+export type DateString = CivilDate;
 
 export const WEEKDAY_LABELS: Record<Weekday, string> = {
   0: "ראשון", 1: "שני", 2: "שלישי", 3: "רביעי", 4: "חמישי", 5: "שישי", 6: "שבת",

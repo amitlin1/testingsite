@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import { parseDbId } from "@/lib/http/request";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
+import type { StationHistoryRow } from "@/app/lib/testing/contract";
 
 export const runtime = "nodejs";
 
-/**
- * API endpoint to fetch test history for a specific station
- * Returns history from item_route_history filtered by test_station_id
- */
+/** GET /api/testing/station-history?stationId — the station's last 100 results, newest first. */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -20,8 +19,8 @@ export async function GET(req: Request) {
       );
     }
 
-    const stationIdNum = Number(stationId);
-    if (isNaN(stationIdNum)) {
+    const stationIdNum = parseDbId(stationId);
+    if (stationIdNum == null) {
       return NextResponse.json(
         { error: "Invalid stationId" },
         { status: 400 }
@@ -68,7 +67,7 @@ export async function GET(req: Request) {
       LIMIT 100
     `;
 
-    const normalizedRows = rows.map((row) => ({
+    const normalizedRows = rows.map((row): StationHistoryRow => ({
       ...row,
       logId: Number(row.logId),
       itemId: Number(row.itemId),

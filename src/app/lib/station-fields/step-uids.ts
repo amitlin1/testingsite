@@ -1,3 +1,8 @@
+import { HttpError } from "@/lib/http/errors";
+import { isRecord } from "@/lib/json-guards";
+import { mintFree, newPrefixedId, type RandomSource } from "@/lib/random-id";
+import type { StationTypeJson } from "./admin-types";
+import { alignedStepUids } from "./schema";
 import type { ChecklistItemId, FieldId, OptionId, RouteFieldsConfig, StepConfig, StepUid } from "./schema";
 
 /**
@@ -8,61 +13,23 @@ import type { ChecklistItemId, FieldId, OptionId, RouteFieldsConfig, StepConfig,
  * that still holds its config must not come back to life on some other step.
  */
 
-const ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
-const ID_LENGTH = 8;
-
-/** Fills the array with random bytes and returns it. */
-export type RandomSource = (bytes: Uint8Array<ArrayBuffer>) => Uint8Array;
-
-/** crypto.getRandomValues, NOT randomUUID: the app is served over plain http, an insecure context
- *  in which browsers leave randomUUID undefined. The server uses the same helper. */
-const cryptoRandom: RandomSource = (bytes) => globalThis.crypto.getRandomValues(bytes);
-
-/** 8 chars of [a-z0-9]. */
-function randomSuffix(random: RandomSource): string {
-  let out = "";
-  for (let round = 0; out.length < ID_LENGTH; round++) {
-    if (round >= 64) throw new Error("random source produced no usable bytes");
-    for (const b of random(new Uint8Array(16))) {
-      if (b >= 252) continue;   // 252 = 7 × 36: dropping 252..255 keeps every character equally likely
-      out += ID_ALPHABET[b % 36];
-      if (out.length === ID_LENGTH) break;
-    }
-  }
-  return out;
-}
-
 /** A new step uid that is in none of `taken` (the route's current uids AND every uid in any
  *  published version of the route). */
-export function newStepUid(taken: ReadonlySet<string>, random: RandomSource = cryptoRandom): StepUid {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const uid = "s_" + randomSuffix(random);
-    if (!taken.has(uid)) return uid;
-  }
-  throw new Error("could not mint a free step uid");
+export function newStepUid(taken: ReadonlySet<string>, random?: RandomSource): StepUid {
+  return mintFree(() => newPrefixedId("s_", random), taken, "step uid");
 }
 
 /** Minted in the browser, so autosave never waits for the server; the shape check enforces
  *  format and uniqueness. */
-export const newFieldId = (random: RandomSource = cryptoRandom): FieldId => "f_" + randomSuffix(random);
-export const newOptionId = (random: RandomSource = cryptoRandom): OptionId => "o_" + randomSuffix(random);
-export const newChecklistItemId = (random: RandomSource = cryptoRandom): ChecklistItemId => "c_" + randomSuffix(random);
-/** The same id for another module's prefix (popup templates: "p_" steps, "k_" components). */
-export const newPrefixedId = (prefix: string, random: RandomSource = cryptoRandom): string => prefix + randomSuffix(random);
+export const newFieldId = (random?: RandomSource): FieldId => newPrefixedId("f_", random);
+export const newOptionId = (random?: RandomSource): OptionId => newPrefixedId("o_", random);
+export const newChecklistItemId = (random?: RandomSource): ChecklistItemId => newPrefixedId("c_", random);
 
-export type StepUidErrorCode = "STEP_UID_UNKNOWN" | "STEP_UID_DUPLICATE";
+type StepUidErrorCode = "STEP_UID_UNKNOWN" | "STEP_UID_DUPLICATE";
 
-/** A route save that names a uid the route does not have, or one uid twice → HTTP 400 `code`. */
-export class StepUidError extends Error {
-  readonly code: StepUidErrorCode;
-  readonly uid: string;
-  constructor(code: StepUidErrorCode, uid: string) {
-    super(`${code}: ${uid}`);
-    this.name = "StepUidError";
-    this.code = code;
-    this.uid = uid;
-  }
-}
+/** A route save that names a uid the route does not have, or one uid twice → HTTP 400 `code`
+ *  (the routes API answers it as it is, spec §3.5). */
+const uidRefusal = (code: StepUidErrorCode, uid: string) => new HttpError(400, `${code}: ${uid}`, { code });
 
 /**
  * The step_uids to store next to the incoming route_steps (same length as `incoming`).
@@ -74,14 +41,14 @@ export function assignStepUids(
   current: readonly string[],
   incoming: readonly (string | null)[],
   publishedUids: ReadonlySet<string>,
-  random: RandomSource = cryptoRandom,
+  random?: RandomSource,
 ): StepUid[] {
   const known = new Set(current);
   const seen = new Set<string>();
   for (const uid of incoming) {
     if (uid == null) continue;
-    if (!known.has(uid)) throw new StepUidError("STEP_UID_UNKNOWN", String(uid));
-    if (seen.has(uid)) throw new StepUidError("STEP_UID_DUPLICATE", uid);
+    if (!known.has(uid)) throw uidRefusal("STEP_UID_UNKNOWN", String(uid));
+    if (seen.has(uid)) throw uidRefusal("STEP_UID_DUPLICATE", uid);
     seen.add(uid);
   }
   const taken = new Set<string>([...current, ...publishedUids]);
@@ -105,12 +72,11 @@ export function inferUidsByOccurrence(
   curUids: readonly string[],
   nextSteps: readonly number[],
 ): (StepUid | null)[] {
-  if (curSteps.length !== curUids.length) return nextSteps.map(() => null);
   const byType = new Map<number, string[]>();
-  curSteps.forEach((typeId, i) => {
-    const list = byType.get(typeId) ?? [];
-    list.push(curUids[i]);
-    byType.set(typeId, list);
+  alignedStepUids({ route_steps: curSteps, step_uids: curUids }).forEach((uid, i) => {
+    const list = byType.get(curSteps[i]) ?? [];
+    list.push(uid);
+    byType.set(curSteps[i], list);
   });
   const used = new Map<number, number>();
   return nextSteps.map((typeId) => {
@@ -119,8 +85,6 @@ export function inferUidsByOccurrence(
     return byType.get(typeId)?.[k] || null;
   });
 }
-
-export type StationTypeInfo = { label: string; package_level: boolean };
 
 export type PruneResult = {
   /** The pruned draft — the same object when nothing changed; null when there was no draft. */
@@ -142,7 +106,7 @@ export function pruneDraft(
   draft: RouteFieldsConfig | null,
   stepUids: readonly string[],
   routeSteps: readonly number[],
-  stationTypes: ReadonlyMap<number, StationTypeInfo>,
+  stationTypes: ReadonlyMap<number, StationTypeJson>,
 ): PruneResult {
   if (!draft) return { config: null, removed: [], changed: false, scopeChanged: [] };
   const position = new Map<string, number>();
@@ -176,8 +140,6 @@ export function pruneDraft(
   }
   return { config: changed ? { schema: 1, steps } : draft, removed, changed, scopeChanged };
 }
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
  * A station type's id was edited (spec §3.6): point the draft's informational station_type_id at

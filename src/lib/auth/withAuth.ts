@@ -1,14 +1,13 @@
-// Route-Handler wrapper for /api/* endpoints. PORTABLE — copy verbatim
-// (destination filename: src/lib/auth/withAuth.ts).
+// Route-Handler wrapper for /api/* endpoints.
 //
 // Usage:
-//   export const POST = withAuth(async (req, ctx) => {...}, { role: "manager" });
+//   export const POST = withAuth(async (req, { session }) => {...}, { role: ACCESS.dashboard });
+//   export const PUT = withAuth<{ id: string }>(async (req, { session, params }) => {...});
 //
 // Behavior:
-//   - 401 when there's no session
-//   - 401 when session.error === "RefreshAccessTokenError" (terminal)
+//   - 401 when there's no live session (none, or session.error is terminal — isLiveSession)
 //   - 403 when a required role is missing
-//   - else: handler runs with ctx.session injected
+//   - else: the handler runs with the session and Next's route params (already awaited)
 //
 // CONTRACT with apiFetch (lib/api/client.ts): the 401 here is a real JSON 401,
 // NEVER an HTML redirect — that is the signal apiFetch keys off to refresh-and-
@@ -17,44 +16,39 @@
 // NOT an expiry case (valid session, missing role) and must stay a 403.
 
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import { auth } from "@/../auth";
+import { currentSession } from "@/lib/auth/current-session";
+import { forbidden, unauthorized } from "@/lib/auth/deny";
 import { hasAnyRole, type AppRole } from "@/lib/auth/roles";
+import { isLiveSession } from "@/lib/auth/session";
 import type { Session } from "next-auth";
 
-export interface WithAuthCtx {
+/** A route's dynamic segments, as Next names them: [id] → string, [...path] → string[]. */
+export type RouteParams = Record<string, string | string[]>;
+
+export interface WithAuthCtx<P extends RouteParams = Record<string, never>> {
   session: Session;
+  /** Next's route params; {} for a route without dynamic segments. */
+  params: P;
 }
 
 export interface WithAuthOptions {
-  /** Required role(s). If multiple, ANY of them grants access. */
-  role?: AppRole | AppRole[];
+  /** Required role(s) — an ACCESS entry. If several, ANY of them grants access. */
+  role?: readonly AppRole[];
 }
 
-// Third parameter: Next's own route context ({ params: Promise<...> }), passed
-// through untouched so dynamic routes ([id]/...) can be wrapped too. Handlers
-// that don't need it just declare two parameters.
-type Handler = (
-  req: NextRequest,
-  ctx: WithAuthCtx,
-  routeCtx?: unknown,
-) => Promise<Response>;
-
-export function withAuth(handler: Handler, options: WithAuthOptions = {}) {
-  return async (req: NextRequest, routeCtx?: unknown): Promise<Response> => {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export function withAuth<P extends RouteParams = Record<string, never>>(
+  handler: (req: NextRequest, ctx: WithAuthCtx<P>) => Promise<Response>,
+  options: WithAuthOptions = {},
+) {
+  return async (req: NextRequest, routeCtx?: { params?: Promise<P> }): Promise<Response> => {
+    const session = await currentSession();
+    if (!isLiveSession(session)) {
+      return unauthorized();
     }
-    if (session.error === "RefreshAccessTokenError") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (options.role && !hasAnyRole(session.roles ?? [], options.role)) {
+      return forbidden(options.role);
     }
-    if (options.role) {
-      const required = Array.isArray(options.role) ? options.role : [options.role];
-      if (!hasAnyRole(session.roles ?? [], required)) {
-        return NextResponse.json({ error: "Forbidden", required }, { status: 403 });
-      }
-    }
-    return handler(req, { session }, routeCtx);
+    const params = ((await routeCtx?.params) ?? {}) as P;
+    return handler(req, { session, params });
   };
 }

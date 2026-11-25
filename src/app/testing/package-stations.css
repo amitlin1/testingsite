@@ -1,0 +1,104 @@
+/* The package station screens' own classes: the queue card's start button
+   (PackageQueueCard), the contents step's "הוסף פריט" row (OpeningContents),
+   the rail steps and the rail + body layout of the station wizards
+   (PackageWizardShell), and the report signing step. The controls they sit
+   among are src/components/ui/controls.css. */
+
+/* The start button on a station queue card (Testing Screen Packages.dc.html:
+   44px, radius 11, hover and press). */
+.pkg-cta {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-cta:hover:not(:disabled) { background: var(--color-primary-hover); } }
+.pkg-cta:active:not(:disabled) { transform: scale(.97); }
+.pkg-cta:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.pkg-cta:disabled { background: var(--color-canvas-parchment); color: var(--color-ink-muted-48); cursor: not-allowed; }
+.pkg-cta[aria-busy="true"]:disabled { background: var(--color-primary); color: var(--color-on-primary); opacity: .7; cursor: progress; }
+
+/* "הוסף פריט" — the full-width row under the contents table (OpeningContents). */
+.pkg-addrow {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 16px;
+  border: 0;
+  border-top: 1px solid var(--color-divider-soft);
+  background: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-addrow:hover { background: var(--color-surface-pearl); } }
+.pkg-addrow:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+
+/* ---- Rail steps (station wizards) ---------------------------------------- */
+.pkg-step {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  margin: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) { .pkg-step:hover:not([aria-current]) { background: color-mix(in srgb, var(--color-ink) 4%, transparent); } }
+.pkg-step[aria-current] { background: var(--color-primary-soft); }
+.pkg-step:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+
+/* Rail + body dialogs (station wizards). */
+.pkg-wiz { flex: 1; min-height: 0; display: flex; }
+.pkg-wiz-rail { flex-shrink: 0; display: flex; flex-direction: column; background: var(--color-canvas-parchment); border-inline-end: 1px solid var(--color-hairline); overflow-y: auto; }
+.pkg-wiz-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.pkg-wiz-body { flex: 1; min-height: 0; overflow-y: auto; padding: 24px 28px; }
+/* The report signing step (ReportSignStep) takes the body's free height, so its report preview
+   grows with the dialog; on a short screen the body still scrolls. */
+.pkg-wiz-body:has(> .pkg-report-sign) { display: flex; flex-direction: column; }
+.pkg-report-sign { flex: 1 0 auto; }
+.pkg-wiz-steps { display: flex; flex-direction: column; gap: 2px; }
+.pkg-wiz-foot { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 14px 28px; border-top: 1px solid var(--color-hairline); }
+
+/* Tablet and under (Package Stations.dc.html / Testing Screen Packages.dc.html
+   @media 760): the rail sits on top with the steps in one scrolling row, and
+   its secondary blocks drop out. !important because the rail is sized inline. */
+@media (max-width: 760px) {
+  .pkg-wiz { flex-direction: column; }
+  .pkg-wiz-rail { width: auto !important; flex-shrink: 0; overflow: visible; border-inline-end: none; border-bottom: 1px solid var(--color-hairline); padding: 12px 16px !important; }
+  .pkg-wiz-steps { flex-direction: row; overflow-x: auto; gap: 6px; margin-top: 12px !important; }
+  .pkg-wiz-steps > .pkg-step { width: auto; flex-shrink: 0; }
+  .pkg-wiz-sub { display: none !important; }
+  .pkg-wiz-body { padding: 18px 16px; }
+  .pkg-wiz-foot { padding: 12px 16px; flex-wrap: wrap; }
+}
+
+/* Reduced motion: presses don't scale. */
+@media (prefers-reduced-motion: reduce) {
+  .pkg-cta:active { transform: none !important; }
+}

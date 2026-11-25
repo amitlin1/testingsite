@@ -7,22 +7,18 @@ import { neighbourStop } from "../../lib/editorModel";
 import type { TimelineStop } from "../../lib/editorModel";
 import type { MapCell } from "../../lib/mapModel";
 
-/**
- * The station bar above the editor (artboard 2, spec §5.5 item 2): <section aria-label="עמדות
- * המסלול">, white, radius 16, min-height 64. A stop per map column — a 44px button with a 26px mark:
- * the number on white; a package-level station a radius-7 tint square with Package; the current one
- * primary-soft with a 2px primary ring and aria-current="step" — its name (13/600) and "{N} שדות" or
- * "שגיאה" (red / 600). Hairlines between the stops; ghost "העמדה הקודמת" / "העמדה הבאה: {name}" at the
- * ends (left out where there is no station that way).
- */
+/** The station bar above the editor (artboard 2, spec §5.5 item 2): a stop per map column, and the
+ *  previous / next station that has a cell to open. */
 
 export type StationTimelineProps = {
   stops: readonly TimelineStop[];
+  /** Set to the current stop's button. */
+  currentRef?: React.Ref<HTMLButtonElement>;
   /** Open a stop's cell in the editor. */
   onGo: (cell: MapCell) => void;
 };
 
-export function StationTimeline({ stops, onGo }: StationTimelineProps) {
+export function StationTimeline({ stops, currentRef, onGo }: StationTimelineProps) {
   const prev = neighbourStop(stops, -1);
   const next = neighbourStop(stops, 1);
   return (
@@ -42,6 +38,7 @@ export function StationTimeline({ stops, onGo }: StationTimelineProps) {
             {i > 0 && <li aria-hidden="true" className="sfe-stops__line" />}
             <li className="sfe-stops__item">
               <button
+                ref={s.current ? currentRef : undefined}
                 type="button"
                 className="sfe-stop"
                 aria-current={s.current ? "step" : undefined}
@@ -74,5 +71,3 @@ export function StationTimeline({ stops, onGo }: StationTimelineProps) {
     </section>
   );
 }
-
-export default StationTimeline;

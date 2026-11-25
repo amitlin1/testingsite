@@ -26,5 +26,3 @@ export function ToneDot({ tone, className, style }: { tone: Tone; className?: st
     />
   );
 }
-
-export default ToneDot;

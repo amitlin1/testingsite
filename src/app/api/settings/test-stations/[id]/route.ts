@@ -1,25 +1,36 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { HttpError } from "@/lib/http/errors";
+import { parseDbId, readJsonObject } from "@/lib/http/request";
+import { prismaRefusal, updateLookupRow } from "@/app/lib/lookups";
+import { stationName } from "../name";
 
 export const runtime = "nodejs";
 
-export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+type Ctx = { params: Promise<{ id: string }> };
+
+const NOT_FOUND = "Test station not found";
+
+export async function PUT(req: Request, { params }: Ctx) {
   try {
-    const { id } = await params;
-    const body = await req.json();
-    const { test_station_type_id, test_station_desc, status, is_research } = body;
-
-    const updated = await prisma.test_stations.update({
-      where: { test_station_id: parseInt(id, 10) },
-      data: {
-        test_station_type_id,
-        test_station_desc: test_station_desc.trim(),
-        status,
-        is_research,
-      },
-    });
-
+    const id = parseDbId((await params).id);
+    const { test_station_type_id, test_station_desc, status, is_research } = await readJsonObject(req);
+    if (id === null) throw new HttpError(404, NOT_FOUND);
+    const desc = (test_station_desc as string).trim();
+    const updated = await updateLookupRow(
+      id,
+      () =>
+        prisma.test_stations.update({
+          where: { test_station_id: id },
+          data: {
+            test_station_type_id: test_station_type_id as number,
+            test_station_desc: desc,
+            status: status as number,
+            is_research: is_research as boolean,
+          },
+        }),
+      stationName(desc),
+    );
     return NextResponse.json({
       test_station_id: updated.test_station_id,
       test_station_type_id: updated.test_station_type_id,
@@ -28,54 +39,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       is_research: updated.is_research,
     });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
-      return NextResponse.json({ error: "Test station not found" }, { status: 404 });
-    }
-    console.error("Error updating test station:", error);
-    return NextResponse.json(
-      { error: "Failed to update test station" },
-      { status: 500 }
-    );
+    return prismaRefusal(error, { notFound: NOT_FOUND }, "Failed to update test station");
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: Request, { params }: Ctx) {
+  const { id } = await params;
   try {
-    const { id } = await params;
-
-    try {
-      await prisma.test_stations.delete({
-        where: { test_station_id: parseInt(id, 10) },
-      });
-
-      return NextResponse.json({ success: true, id });
-    } catch (dbError) {
-      // Check for FK constraint
-      if (
-        dbError instanceof Prisma.PrismaClientKnownRequestError &&
-        dbError.code === "P2003"
-      ) {
-        return NextResponse.json(
-          { error: "Cannot delete test station because it is referenced by other records." },
-          { status: 409 }
-        );
-      }
-      if (
-        dbError instanceof Prisma.PrismaClientKnownRequestError &&
-        dbError.code === "P2025"
-      ) {
-        return NextResponse.json({ error: "Test station not found" }, { status: 404 });
-      }
-      throw dbError;
-    }
+    const stationId = parseDbId(id);
+    if (stationId === null) throw new HttpError(404, NOT_FOUND);
+    await prisma.test_stations.delete({ where: { test_station_id: stationId } });
+    return NextResponse.json({ success: true, id });
   } catch (error) {
-    console.error("Error deleting test station:", error);
-    return NextResponse.json(
-      { error: "Failed to delete test station" },
-      { status: 500 }
-    );
+    return prismaRefusal(error, {
+      notFound: NOT_FOUND,
+      inUse: "לא ניתן למחוק כי העמדה בשימוש. שחרר אותה מבדיקות ומסלולים קודם.",
+    }, "Failed to delete test station");
   }
 }

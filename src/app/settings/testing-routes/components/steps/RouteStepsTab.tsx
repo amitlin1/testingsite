@@ -1,34 +1,40 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
-import { Snackbar, Alert, Button, IconButton, Skeleton, Tag } from "@/components/ui";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
+import { Alert, Button, IconButton, Skeleton, Tag, SearchableCombobox } from "@/components/ui";
+import { useSettingsToast } from "../../../components/useSettingsToast";
 import { AlertTriangle, ArrowUp, ArrowDown, ExternalLink, Package, X, Plus, Save, Route } from "lucide-react";
-import { apiFetch } from "@/lib/api/client";
+import { getJson, sendJson } from "@/lib/api/client";
+import { popupTemplatesHref } from "@/app/lib/links";
 import { checkItemRouteAgainstPackage, checkPackageRoute } from "@/app/lib/packages/route-rules";
 import type { RouteShape } from "@/app/lib/packages/route-rules";
-import type { ContextLineJson, FieldsContextJson } from "@/app/lib/station-fields/admin-types";
+import type { ContextLineJson, FieldsContextJson, StationTypeJson } from "@/app/lib/station-fields/admin-types";
 import { roleAtStep } from "@/app/lib/popup-templates/placement";
-import { usePopupTemplateTypes } from "../../lib/usePopupTemplateTypes";
+import { usePopupTemplateTypes } from "../../lib/resources";
 import { SharedRouteNotice } from "../editor/SharedRouteNotice";
 import { useDraftStore } from "../../lib/draftStore";
+import { alignedStepUids, kitIdOf, otherKits, packageLevelIds, stationLabel } from "../../lib/fieldsContext";
+import { API, parseRouteRow, parseRouteRows } from "../../lib/wire";
+import type { RouteRowJson } from "../../lib/wire";
 import type { FieldsContextState } from "../../lib/useFieldsContext";
 import type { RouteRef } from "../../lib/routeQuery";
 import {
-  NO_ROUTE_TEXT, STEPS_PARTS_TEXT, lineRouteMissingText, lineSubText, qtyText, routeNumberText, sharedStepsNoticeText, stepsTitleText,
+  EDITOR_TEXT, MAP_STATE_TEXT, NO_ROUTE_TEXT, STEPS_PARTS_TEXT, lineSubText, qtyText, routeNumberText,
+  sharedStepsNoticeText, stepsTitleText,
 } from "../../lib/labels";
+import { STEPS_EDITOR_TEXT, moveStepDownTitle, moveStepUpTitle, removeStepTitle, routeNotCreatedText } from "../../lib/stepsLabels";
 import { errorMessage } from "@/lib/errors";
+import { itemRouteMissingText } from "@/app/lib/packages/template-wire";
 
 /**
  * The "שלבי המסלול" tab (route-fields spec §5.13, §3.5; reworked 2026-10-26). The context card
  * picks a KIT route (package type + route number); this tab shows the parts of that kit side by
  * side with the steps of the part chosen:
  *
- *   "חלקי המארז"  "המארז עצמו" (the kit route itself), then one row per template line (its item
- *                 type, ×quantity, the item route it runs: "מסלול {r} · {n} עמדות"). Each row is a
- *                 link (?item={item_type_id}; none = the box), so the URL holds the choice. A row
- *                 whose saved route breaks the package rules (docs/packages/PLAN.md §4,
- *                 route-rules.ts) carries a warning with the reason.
+ *   "חלקי המארז"  the kit route itself, then one row per template line (the item route it runs).
+ *                 Each row is a link (?item={item_type_id}; none = the box), so the URL holds the
+ *                 choice. A row whose saved route breaks the package rules (docs/packages/PLAN.md
+ *                 §4, route-rules.ts) carries a warning with the reason.
  *   the editor    the steps of that route, as the old page edited them: the box edits
  *                 (package type, route number); an item edits (item type, the LINE's route_number),
  *                 which the item type's other kits may run too (the shared notice, with "צור מסלול
@@ -43,32 +49,17 @@ import { errorMessage } from "@/lib/errors";
  * the steps (the route list, the fields context: the map's columns and this tab's parts).
  */
 
-interface Option {
-  id: number;
-  label: string;
-  /** Station types only: a package-level (opening / closing) station type. */
-  packageLevel?: boolean;
-}
-
-interface RouteData {
-  test_route_id: number;
-  item_type_id: number;
-  test_station_type_id: number;
-  route_number: number;
-  route_steps: number[];
-  /** Parallel to route_steps (spec §3.5); another length = a route without uids. */
-  step_uids?: string[] | null;
-}
+/** A station type of "הוסף שלב (סוג עמדה)". */
+export type StationOption = { id: number; label: string };
 
 /** One step of the route: its station type, and its uid (null = added here, not saved yet). */
 type Step = { uid: string | null; typeId: number };
 
-/** The route's steps with their uids: step_uids[i] belongs to route_steps[i]; when the two do not
- *  line up, no step has a uid (the server infers them on save). */
-function stepsOf(route: RouteData): Step[] {
-  const typeIds = route.route_steps || [];
-  const uids = Array.isArray(route.step_uids) && route.step_uids.length === typeIds.length ? route.step_uids : null;
-  return typeIds.map((typeId, i) => ({ uid: uids ? uids[i] || null : null, typeId }));
+/** The route's steps with their uids (fieldsContext.alignedStepUids: none when the two arrays do not
+ *  line up — the server infers them on save). */
+function stepsOf(route: RouteRowJson): Step[] {
+  const uids = alignedStepUids(route);
+  return route.route_steps.map((typeId, i) => ({ uid: uids[i], typeId }));
 }
 
 const sameSteps = (a: readonly Step[], b: readonly Step[]) =>
@@ -81,8 +72,8 @@ export type RouteStepsTabProps = {
   item: number | null;
   /** The fields context of the kit route: its own route and its template lines. */
   ctx: FieldsContextState;
-  /** Every station type, for the step names, "הוסף שלב (סוג עמדה)" and the package rules. */
-  stationTypes: Option[];
+  /** Every station type, for "הוסף שלב (סוג עמדה)". */
+  stationTypes: StationOption[];
   /** The link of a part: a line's item_type_id, or null for the box. */
   hrefOfItem: (item: number | null) => string;
   /** /settings/packages?type={kit} — where the template (and each line's route number) is edited. */
@@ -98,7 +89,7 @@ export default function RouteStepsTab({ route, item, ctx, stationTypes, hrefOfIt
         <div className="settings-empty" style={{ padding: "48px 0" }}>
           <Route size={34} strokeWidth={1.5} color="var(--color-ink-muted-48)" aria-hidden />
           <div className="settings-empty__title">{NO_ROUTE_TEXT}</div>
-          <div>שלבי המסלול יופיעו כאן לעריכה.</div>
+          <div>{STEPS_EDITOR_TEXT.noRouteHint}</div>
         </div>
       </div>
     );
@@ -107,11 +98,11 @@ export default function RouteStepsTab({ route, item, ctx, stationTypes, hrefOfIt
     return (
       <div className="settings-card settings-error">
         <Alert severity="error">{STEPS_PARTS_TEXT.loadFailed}</Alert>
-        <Button variant="outlined" color="inherit" size="small" loading={ctx.retrying} onClick={ctx.retry}>נסה שוב</Button>
+        <Button variant="outlined" color="inherit" size="small" loading={ctx.retrying} onClick={ctx.retry}>{MAP_STATE_TEXT.retry}</Button>
       </div>
     );
   }
-  if (ctx.status !== "ready" || ctx.data.kind !== "package") {
+  if (ctx.status !== "ready") {
     return (
       <div className="rf-steps" aria-busy="true">
         <div className="settings-card rf-parts">
@@ -142,7 +133,7 @@ type KitStepsProps = Omit<RouteStepsTabProps, "ctx"> & {
 };
 
 function KitSteps({ route, item, context, reloadContext, stationTypes, hrefOfItem, packagesHref, onSaved }: KitStepsProps) {
-  const packageLevel = useMemo(() => new Set(stationTypes.filter((t) => t.packageLevel).map((t) => t.id)), [stationTypes]);
+  const packageLevel = useMemo(() => new Set(packageLevelIds(context)), [context]);
   const kitShape: RouteShape | null = context.kit
     ? { itemTypeId: route.type, routeNumber: route.route, steps: context.kit.route.route_steps }
     : null;
@@ -152,7 +143,7 @@ function KitSteps({ route, item, context, reloadContext, stationTypes, hrefOfIte
   // A line without its item route blocks intake, so it is flagged once the kit route exists.
   const lineWarning = (line: ContextLineJson): string | null => {
     if (!kitShape) return null;
-    if (!line.route) return lineRouteMissingText(line.route_number);
+    if (!line.route) return itemRouteMissingText(line.route_number);
     if (!kitValid) return null;
     const shape = { itemTypeId: line.item_type_id, routeNumber: line.route_number, steps: line.route.route.route_steps };
     return checkItemRouteAgainstPackage(shape, kitShape, packageLevel, line.route_number);
@@ -175,7 +166,7 @@ function KitSteps({ route, item, context, reloadContext, stationTypes, hrefOfIte
         check: (steps) => checkPackageRoute({ itemTypeId: route.type, routeNumber: route.route, steps }, packageLevel, route.route),
       };
 
-  const others = line?.route ? line.route.shared_with.filter((k) => k.package_type_id !== route.type).map((k) => k.desc) : [];
+  const others = line?.route ? otherKits(line.route.shared_with, kitIdOf(context)).map((k) => k.desc) : [];
 
   return (
     <div className="rf-steps">
@@ -190,7 +181,7 @@ function KitSteps({ route, item, context, reloadContext, stationTypes, hrefOfIte
               current={line == null}
               icon={<Package size={17} strokeWidth={1.75} aria-hidden />}
               name={STEPS_PARTS_TEXT.box}
-              sub={context.kit ? lineSubText(route.route, context.kit.route.route_steps.length) : routeNumberText(route.route) + " · " + STEPS_PARTS_TEXT.notCreated}
+              sub={context.kit ? lineSubText(route.route, context.kit.route.route_steps.length) : routeNotCreatedText(route.route)}
               warning={kitShape ? checkPackageRoute(kitShape, packageLevel, route.route) : null}
             />
           </li>
@@ -210,7 +201,7 @@ function KitSteps({ route, item, context, reloadContext, stationTypes, hrefOfIte
                   current={line?.line_id === l.line_id}
                   name={l.item_type_desc.trim()}
                   qty={l.quantity}
-                  sub={l.route ? lineSubText(l.route_number, l.route.route.route_steps.length) : routeNumberText(l.route_number) + " · " + STEPS_PARTS_TEXT.notCreated}
+                  sub={l.route ? lineSubText(l.route_number, l.route.route.route_steps.length) : routeNotCreatedText(l.route_number)}
                   warning={lineWarning(l)}
                 />
               </li>
@@ -224,6 +215,7 @@ function KitSteps({ route, item, context, reloadContext, stationTypes, hrefOfIte
         key={`${target.typeId}:${target.routeNumber}`}
         target={target}
         stationTypes={stationTypes}
+        stations={context.stations}
         onSaved={onSaved}
         notice={line ? (
           <>
@@ -237,8 +229,7 @@ function KitSteps({ route, item, context, reloadContext, stationTypes, hrefOfIte
                   routeId: line.route.route.test_route_id,
                   packageTypeId: route.type,
                   kitName: context.subject.desc.trim(),
-                  onForked: () => reloadContext(),
-                  onStale: () => reloadContext(),
+                  onReload: reloadContext,
                 }}
               />
             )}
@@ -298,26 +289,25 @@ type EditorTarget = {
 
 type StepsEditorProps = {
   target: EditorTarget;
-  stationTypes: Option[];
+  stationTypes: StationOption[];
+  /** The context's station types: names and package_level. */
+  stations: Readonly<Record<number, StationTypeJson>>;
   onSaved: () => void;
   /** Under the title: an item route's shared notice and where its number comes from. */
   notice: React.ReactNode;
 };
 
-/** A route's row (GET /api/settings/testing-routes?itemTypeId=&routeNumber=): the route, null when
- *  it does not exist yet, "error" when it could not be read. */
-async function fetchRoute(typeId: number, routeNumber: number): Promise<RouteData | null | "error"> {
+/** A route's row: the route, null when it does not exist yet, "error" when it could not be read. */
+async function fetchRoute(typeId: number, routeNumber: number): Promise<RouteRowJson | null | "error"> {
   try {
-    const res = await apiFetch(`/api/settings/testing-routes?itemTypeId=${typeId}&routeNumber=${routeNumber}`);
-    if (!res.ok) return "error";
-    const data = await res.json();
-    return Array.isArray(data) && data.length > 0 ? (data[0] as RouteData) : null;
-  } catch {
+    return parseRouteRows(await getJson<unknown>(API.routeOf(typeId, routeNumber)))[0] ?? null;
+  } catch (e) {
+    console.error("Route " + typeId + "/" + routeNumber + " failed to load", e);
     return "error";
   }
 }
 
-function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps) {
+function StepsEditor({ target, stationTypes, stations, onSaved, notice }: StepsEditorProps) {
   const store = useDraftStore();
   const { typeId, routeNumber } = target;
   // The box's own route: a package-level step's template plays the role of its place (placement.ts).
@@ -331,19 +321,16 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
   // Route Data
   const [loadingRoute, setLoadingRoute] = useState(true);
   const [routeError, setRouteError] = useState(false);
-  const [currentRoute, setCurrentRoute] = useState<RouteData | null>(null);
+  const [currentRoute, setCurrentRoute] = useState<RouteRowJson | null>(null);
   const [loadedSteps, setLoadedSteps] = useState<Step[]>([]);
   const [steps, setSteps] = useState<Step[]>([]);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Add Step
-  const [stepToAdd, setStepToAdd] = useState<Option | null>(null);
+  const [stepToAdd, setStepToAdd] = useState<StationOption | null>(null);
 
-  // UI
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false, message: "", severity: "success"
-  });
+  const say = useSettingsToast({ dismissible: false });
 
   // The editor is keyed by its route: a reply that lands after it left the screen is dropped.
   const alive = useRef(true);
@@ -355,7 +342,7 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
   // Load Route — read (fetchRoute), then applied in the promise's callback: the editor is keyed by
   // its route and starts loading, so nothing is set in an effect's own body. "נסה שוב" shows
   // loading first (retryRoute).
-  const applyRoute = useCallback((found: RouteData | null | "error") => {
+  const applyRoute = useCallback((found: RouteRowJson | null | "error") => {
     if (!alive.current) return;
     if (found === "error") {
       setRouteError(true);
@@ -417,44 +404,27 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
         step_uids: steps.map((s) => s.uid),
       };
 
-      let url = "/api/settings/testing-routes";
-      let method = "POST";
-
-      if (!isNew && currentRoute) {
-        url = `/api/settings/testing-routes/${currentRoute.test_route_id}`;
-        method = "PUT";
-      }
-
-      const res = await apiFetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "שמירת המסלול נכשלה. בדוק את החיבור לשרת ונסה שוב.");
-      }
-
-      const saved: RouteData = await res.json();
+      const existing = !isNew && currentRoute ? currentRoute : null;
+      const saved = parseRouteRow(await sendJson<unknown>(
+        existing ? API.route(existing.test_route_id) : API.routes,
+        existing ? "PUT" : "POST",
+        body,
+        STEPS_EDITOR_TEXT.saveFailed,
+      ));
       if (alive.current) {
         setCurrentRoute(saved);
         // The server's uids: a step added here has one now, and the next save must send it.
         setLoadedSteps(stepsOf(saved));
         setSteps(stepsOf(saved));
         setIsNew(false);
-        setSnackbar({ open: true, message: "מסלול נשמר בהצלחה", severity: "success" });
+        say(STEPS_EDITOR_TEXT.saved, "success");
       }
       onSaved();
     } catch (err) {
-      if (alive.current) setSnackbar({ open: true, message: errorMessage(err) || "שמירת המסלול נכשלה. נסה שוב.", severity: "error" });
+      if (alive.current) say(errorMessage(err) || STEPS_EDITOR_TEXT.saveFailedRetry, "error");
     } finally {
       if (alive.current) setSaving(false);
     }
-  };
-
-  const getStationName = (id: number) => {
-    return stationTypes.find(s => s.id === id)?.label || `ID ${id}`;
   };
 
   const dirty = !loadingRoute && !routeError && !sameSteps(steps, loadedSteps);
@@ -480,15 +450,15 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
           loading={saving}
           startIcon={<Save size={18} strokeWidth={2} aria-hidden />}
         >
-          שמור
+          {STEPS_EDITOR_TEXT.save}
         </Button>
       </div>
 
       <div style={{ padding: 18 }}>
         {routeError ? (
           <div className="settings-error" style={{ padding: 0 }}>
-            <Alert severity="error">טעינת המסלול נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
-            <Button variant="outlined" color="inherit" size="small" onClick={retryRoute}>נסה שוב</Button>
+            <Alert severity="error">{STEPS_EDITOR_TEXT.loadFailed}</Alert>
+            <Button variant="outlined" color="inherit" size="small" onClick={retryRoute}>{MAP_STATE_TEXT.retry}</Button>
           </div>
         ) : (
           <>
@@ -498,11 +468,11 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
                 {ruleBroken}. {STEPS_PARTS_TEXT.ruleTail}
               </Alert>
             )}
-            <div className="sh-field-label" style={{ marginBottom: 10 }}>שלבי המסלול · לפי הסדר</div>
+            <div className="sh-field-label" style={{ marginBottom: 10 }}>{STEPS_EDITOR_TEXT.stepsLabel}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)", maxWidth: 560 }}>
               {loadingRoute ? (
                 // While the route loads its steps are unknown — never "no steps".
-                <div aria-busy="true" aria-label="טוען שלבים" style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
+                <div aria-busy="true" aria-label={STEPS_EDITOR_TEXT.loadingSteps} style={{ display: "flex", flexDirection: "column", gap: "var(--space-xs)" }}>
                   {[0, 1, 2].map((i) => (
                     <Skeleton key={i} variant="rounded" height={48} />
                   ))}
@@ -510,8 +480,8 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
               ) : (
                 <>
                   {steps.map((step, index) => {
-                    const name = getStationName(step.typeId);
-                    const packageLevel = stationTypes.find((t) => t.id === step.typeId)?.packageLevel ?? false;
+                    const name = stationLabel(stations, step.typeId);
+                    const packageLevel = stations[step.typeId]?.package_level ?? false;
                     const tpl = packageLevel ? templateRoleAt(step.typeId, index, steps.length) : null;
                     return (
                       // The uid is the step's identity; a step added here (no uid yet) is keyed
@@ -523,17 +493,17 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
                           {name}
                           {packageLevel && (
                             // design/Settings.dc.html — a package-level step (opening / closing) is marked on the route.
-                            <Tag tone="primary">עמדה ברמת מארז</Tag>
+                            <Tag tone="primary">{EDITOR_TEXT.packageLevel}</Tag>
                           )}
                           {tpl && <Tag tone={tpl.fits ? "neutral" : "warning"}>{STEPS_PARTS_TEXT.templateRole(tpl.role)}</Tag>}
                         </span>
-                        <IconButton size="small" className="route-step__btn" title={`הקדם את ${name}`} disabled={index === 0} onClick={() => handleMoveStep(index, "up")}>
+                        <IconButton size="small" className="route-step__btn" title={moveStepUpTitle(name)} disabled={index === 0} onClick={() => handleMoveStep(index, "up")}>
                           <ArrowUp size={15} strokeWidth={1.9} aria-hidden />
                         </IconButton>
-                        <IconButton size="small" className="route-step__btn" title={`אחר את ${name}`} disabled={index === steps.length - 1} onClick={() => handleMoveStep(index, "down")}>
+                        <IconButton size="small" className="route-step__btn" title={moveStepDownTitle(name)} disabled={index === steps.length - 1} onClick={() => handleMoveStep(index, "down")}>
                           <ArrowDown size={15} strokeWidth={1.9} aria-hidden />
                         </IconButton>
-                        <IconButton size="small" className="route-step__btn route-step__btn--danger" title={`הסר את ${name} מהמסלול`} onClick={() => handleRemoveStep(index)}>
+                        <IconButton size="small" className="route-step__btn route-step__btn--danger" title={removeStepTitle(name)} onClick={() => handleRemoveStep(index)}>
                           <X size={15} strokeWidth={1.9} aria-hidden />
                         </IconButton>
                       </div>
@@ -542,7 +512,7 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
                           <AlertTriangle size={15} strokeWidth={1.9} aria-hidden />
                           <span>
                             {STEPS_PARTS_TEXT.templateRoleMismatch(tpl.role)}{" "}
-                            <Link href={`/settings/popup-templates?type=${step.typeId}`} className="sh-link">{STEPS_PARTS_TEXT.templateLink}</Link>
+                            <Link href={popupTemplatesHref(step.typeId)} className="sh-link">{STEPS_PARTS_TEXT.templateLink}</Link>
                           </span>
                         </div>
                       )}
@@ -550,7 +520,7 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
                     );
                   })}
                   {steps.length === 0 && (
-                    <div style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", padding: "var(--space-xs) 0" }}>אין שלבים. הוסף עמדה למסלול.</div>
+                    <div style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", padding: "var(--space-xs) 0" }}>{STEPS_EDITOR_TEXT.noSteps}</div>
                   )}
                 </>
               )}
@@ -558,29 +528,25 @@ function StepsEditor({ target, stationTypes, onSaved, notice }: StepsEditorProps
               {/* add-step row */}
               <div style={{ display: "flex", gap: "var(--space-xs)", alignItems: "flex-end", marginTop: 6, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 220, maxWidth: 340 }}>
-                  <SearchableCombobox<Option>
+                  <SearchableCombobox<StationOption>
                     options={stationTypes}
                     getOptionLabel={(option) => option.label}
                     isOptionEqualToValue={(option, value) => option.id === value.id}
                     value={stepToAdd}
                     onChange={(newValue) => setStepToAdd(newValue)}
-                    label="הוסף שלב (סוג עמדה)"
-                    placeholder="בחר סוג עמדה…"
+                    label={STEPS_EDITOR_TEXT.addStepLabel}
+                    placeholder={STEPS_EDITOR_TEXT.addStepPlaceholder}
                     disabled={loadingRoute}
                   />
                 </div>
                 <button type="button" className="route-add" onClick={handleAddStep} disabled={!stepToAdd || loadingRoute}>
-                  <Plus size={16} strokeWidth={2} aria-hidden />הוסף שלב
+                  <Plus size={16} strokeWidth={2} aria-hidden />{STEPS_EDITOR_TEXT.addStep}
                 </button>
               </div>
             </div>
           </>
         )}
       </div>
-
-      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
-      </Snackbar>
     </div>
   );
 }

@@ -154,7 +154,7 @@ the review pass (the flip rule, keyboard, text reset, disabled adornments, icon 
 
 ### What `SearchableCombobox` adds
 
-[src/app/components/common/SearchableCombobox.tsx](../../src/app/components/common/SearchableCombobox.tsx)
+[src/components/ui/SearchableCombobox.tsx](../../src/components/ui/SearchableCombobox.tsx)
 is thin again: the above-field / floating label, `startIcon`, `getOptionSubtitle` (a second line
 that typing also matches, unless the consumer brings its own `filterOptions`), `locked` (a
 read-only input, grey field, a lock where the arrow was, no ×, never opens — the primitive's

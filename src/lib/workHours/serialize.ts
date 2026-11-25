@@ -8,10 +8,10 @@ import type {
   HolidayType,
   OverrideKind,
   TimeString,
-  Weekday,
   WeekdayDefault,
   WorkdayOverride,
 } from "./types";
+import type { Weekday } from "@/lib/time/civil";
 
 /** A Prisma @db.Date value → "YYYY-MM-DD" (UTC components — no tz shift). */
 export function dbDateToString(d: Date): DateString {
@@ -25,7 +25,7 @@ export function stringToDbDate(s: DateString): Date {
   return new Date(`${s}T00:00:00.000Z`);
 }
 
-/* ---------- row shapes (structural — no @prisma/client import needed) ---------- */
+// Row shapes are structural, so this module needs no @prisma/client import.
 
 interface WeekdayDefaultRow {
   weekday: number;
@@ -61,8 +61,6 @@ interface HolidayTypeRow {
   name: string;
   is_system: boolean;
 }
-
-/* ---------- mappers ---------- */
 
 export function toWeekdayDefault(r: WeekdayDefaultRow): WeekdayDefault {
   return {

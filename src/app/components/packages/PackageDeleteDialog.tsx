@@ -1,10 +1,12 @@
 "use client";
+import { NO_CONNECTION_TEXT, failureText } from "@/app/components/failureText";
 import React from "react";
-import type { PackageView } from "@/app/lib/packages/read";
-import { apiFetch } from "@/lib/api/client";
+import type { PackageView } from "@/app/lib/packages/contract";
+import { sendJson } from "@/lib/api/client";
 import { DialogTitle } from "@/components/ui";
-import { PackageDialog } from "./PackageDialog";
-import { HAIR, HAIR_2, INK, INK_2, MUTED, RED, fmtId, seq2 } from "./packageUi";
+import { ArtboardDialog } from "@/components/ui/ArtboardDialog";
+import { HAIR, HAIR_2, INK, INK_2, MUTED, RED } from "@/components/ui/colors";
+import { formatId, seq2 } from "@/app/lib/packages/ids";
 
 /**
  * מחיקת מארז — design/Packages.dc.html (deleteOpen). Lists the items that go
@@ -25,7 +27,6 @@ export default function PackageDeleteDialog({
 }) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  // Opening starts without the last attempt's error.
   const [wasOpen, setWasOpen] = React.useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
@@ -37,21 +38,18 @@ export default function PackageDeleteDialog({
   const run = async () => {
     setBusy(true); setError(null);
     try {
-      const res = await apiFetch(`/api/packages/${pkg.item_id}`, {
-        method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cascade: true }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(data?.error || "מחיקת המארז נכשלה"); return; }
+      // The box and every item in it.
+      await sendJson(`/api/packages/${pkg.item_id}`, "DELETE", { cascade: true });
       onDeleted();
-    } catch {
-      setError("שגיאה בתקשורת");
+    } catch (e) {
+      setError(failureText(e, "מחיקת המארז נכשלה", NO_CONNECTION_TEXT));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <PackageDialog open onClose={onClose} busy={busy} width="min(520px, 94vw)" draggable={false}>
+    <ArtboardDialog open onClose={onClose} busy={busy} width="min(520px, 94vw)" draggable={false}>
       <div style={{ padding: "22px 24px 0" }}>
         <DialogTitle style={{ padding: 0, display: "block" }}>מחיקת מארז</DialogTitle>
         <div style={{ fontSize: 14, color: INK_2, marginTop: 8, lineHeight: 1.55 }}>
@@ -60,7 +58,7 @@ export default function PackageDeleteDialog({
       </div>
       <div style={{ margin: "16px 24px", border: `1px solid ${HAIR}`, borderRadius: 12, overflow: "hidden", maxHeight: 260, overflowY: "auto", flexShrink: 1, minHeight: 0 }}>
         {pkg.items.map((it) => {
-          const f = fmtId(it.item_id);
+          const f = formatId(it.item_id);
           return (
             <div key={it.item_id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 14px", borderBottom: `1px solid ${HAIR_2}` }}>
               <span style={{ fontSize: 12.5, color: MUTED, fontVariantNumeric: "tabular-nums", direction: "ltr", unicodeBidi: "isolate" }}>
@@ -79,6 +77,6 @@ export default function PackageDeleteDialog({
           מחק מארז ו-{count} פריטים
         </button>
       </div>
-    </PackageDialog>
+    </ArtboardDialog>
   );
 }

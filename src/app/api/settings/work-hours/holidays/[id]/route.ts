@@ -1,78 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
 import { withAuth } from "@/lib/auth/withAuth";
-import { WH_ROLES, segmentAfter } from "../../_shared";
-import { toHoliday, stringToDbDate } from "@/lib/workHours/serialize";
-import { validateHoliday } from "@/lib/workHours/validate";
-import { rebuildWorkCalendar } from "@/lib/work-calendar";
-import type { DepartmentHolidayInput } from "@/lib/workHours/types";
+import { ACCESS } from "@/lib/auth/roles";
+import { HttpError } from "@/lib/http/errors";
+import { readJsonObject, requireDbId } from "@/lib/http/request";
+import { toHoliday } from "@/lib/workHours/serialize";
+import { calendarWrite, holidayColumns, holidayInputOf, refusing } from "../../_lib/write";
 
 export const runtime = "nodejs";
 
-function idOf(req: NextRequest): number {
-  return Number(segmentAfter(req, "holidays"));
-}
+const BAD_ID = "מזהה לא תקין";
+const notFound = () => new HttpError(404, "החופשה לא נמצאה");
 
-export const PUT = withAuth(async (req: NextRequest) => {
-  const id = idOf(req);
-  if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "מזהה לא תקין" }, { status: 400 });
+export const PUT = withAuth<{ id: string }>((req: NextRequest, { params }) => calendarWrite("עדכון החופשה נכשל", async () => {
+  const id = requireDbId(params.id, BAD_ID);
+  const input = holidayInputOf(await readJsonObject(req, "קלט לא תקין"));
+  const saved = await prisma.department_holidays.update({
+    where: { id },
+    data: holidayColumns(input),
+    include: { type: { select: { name: true } } },
+  }).catch(refusing({ P2025: notFound(), P2003: new HttpError(400, "סוג החופשה שנבחר אינו קיים") }));
+  return NextResponse.json(toHoliday(saved));
+}), { role: ACCESS.workHours });
 
-  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!body || typeof body.name !== "string") return NextResponse.json({ error: "קלט לא תקין" }, { status: 400 });
-
-  const input: DepartmentHolidayInput = {
-    name: body.name.trim(),
-    typeId: Number(body.typeId),
-    startDate: String(body.startDate ?? ""),
-    endDate: String(body.endDate ?? ""),
-    isHalfDay: !!body.isHalfDay,
-    halfDayEndTime: body.isHalfDay ? ((body.halfDayEndTime as string | null) ?? null) : null,
-    note: typeof body.note === "string" ? body.note.slice(0, 500) : null,
-  };
-  const check = validateHoliday(input);
-  if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
-
-  try {
-    const saved = await prisma.department_holidays.update({
-      where: { id },
-      data: {
-        name: input.name,
-        type_id: input.typeId,
-        start_date: stringToDbDate(input.startDate),
-        end_date: stringToDbDate(input.endDate),
-        is_half_day: input.isHalfDay,
-        half_day_end_time: input.halfDayEndTime,
-        note: input.note,
-      },
-      include: { type: { select: { name: true } } },
-    });
-    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
-    // forget — the user's save never waits on, or fails with, the rebuild.
-    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
-    return NextResponse.json(toHoliday(saved));
-  } catch (e: unknown) {
-    const code = (e as { code?: string })?.code;
-    if (code === "P2025") return NextResponse.json({ error: "החופשה לא נמצאה" }, { status: 404 });
-    if (code === "P2003") return NextResponse.json({ error: "סוג החופשה שנבחר אינו קיים" }, { status: 400 });
-    console.error("work-hours holidays PUT", e);
-    return NextResponse.json({ error: "עדכון החופשה נכשל" }, { status: 500 });
-  }
-}, { role: WH_ROLES });
-
-export const DELETE = withAuth(async (req: NextRequest) => {
-  const id = idOf(req);
-  if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "מזהה לא תקין" }, { status: 400 });
-  try {
-    await prisma.department_holidays.delete({ where: { id } });
-    // §7.4: every work-hours write refreshes the versioned calendar. Fire-and-
-    // forget — the user's save never waits on, or fails with, the rebuild.
-    rebuildWorkCalendar(prisma).catch((err) => console.error("work-calendar rebuild failed", err));
-    return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
-    if ((e as { code?: string })?.code === "P2025") {
-      return NextResponse.json({ error: "החופשה לא נמצאה" }, { status: 404 });
-    }
-    console.error("work-hours holidays DELETE", e);
-    return NextResponse.json({ error: "מחיקת החופשה נכשלה" }, { status: 500 });
-  }
-}, { role: WH_ROLES });
+export const DELETE = withAuth<{ id: string }>((_req: NextRequest, { params }) => calendarWrite("מחיקת החופשה נכשלה", async () => {
+  const id = requireDbId(params.id, BAD_ID);
+  await prisma.department_holidays.delete({ where: { id } }).catch(refusing({ P2025: notFound() }));
+  return NextResponse.json({ ok: true });
+}), { role: ACCESS.workHours });

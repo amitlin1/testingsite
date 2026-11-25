@@ -6,12 +6,12 @@ import {
   removeObject,
   type UploadedObjectInfo,
 } from '@/lib/storage';
-import type { UploadTicket } from './shared';
+import type { ConfirmEntry, ConfirmResponse, UploadTicket } from './shared';
 
 /**
  * Server half of the direct-upload flow (see ./shared.ts for the contract).
  * Route handlers stay thin: they validate their own request shape, then call
- * issueTicket() on presign and verifyUploaded() on confirm.
+ * issueTicket() on presign and confirmUploads() on confirm.
  */
 
 /** Per-file ceiling for the item files and the file manager (env MAX_FILE_SIZE_MB, default 100). */
@@ -24,20 +24,10 @@ export const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
  * tail of a big batch on a slow Wi-Fi link. Same 1h the OnlyOffice download
  * token uses.
  */
-export const PRESIGN_EXPIRY_SECONDS = 60 * 60;
+const PRESIGN_EXPIRY_SECONDS = 60 * 60;
 
 export const newUploadId = (): string => randomUUID();
 
-/** Read a JSON body; null when it is missing or malformed. */
-export async function readJson<T>(request: Request): Promise<T | null> {
-  try {
-    return (await request.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
-/** Sign one upload ticket. */
 export async function issueTicket(opts: {
   key: string;
   fileName: string;
@@ -94,7 +84,6 @@ export async function verifyUploaded(
   return { ok: true, info };
 }
 
-/** Parse `{ uploads: [{objectKey, fileName}] }` from a confirm body. */
 export function parseConfirmEntries(
   raw: unknown,
   max: number,
@@ -123,9 +112,50 @@ export function parseConfirmEntries(
   return { ok: true, entries };
 }
 
-/** Normalise the optional worker id the client tags an upload with. */
-export function workerIdOf(raw: unknown): string | null {
+/** The worker a request names, as the registry's created_by / updated_by text; null when none. */
+export function uploadedByOf(raw: unknown): string | null {
   if (raw == null) return null;
   const s = String(raw).trim();
   return s === '' ? null : s;
+}
+
+/**
+ * The confirm step for a batch: each entry must pass the route's own `accept`
+ * (an error to report, or null), exist in MinIO within `maxBytes`, and is then
+ * registered. 200 when any entry was confirmed — a partial batch lists both —
+ * else the first failure's status, with its message as `error`.
+ */
+export async function confirmUploads(
+  entries: readonly ConfirmEntry[],
+  opts: {
+    accept: (entry: ConfirmEntry) => string | null;
+    maxBytes: number;
+    register: (entry: ConfirmEntry, info: UploadedObjectInfo) => Promise<void>;
+  },
+): Promise<{ status: number; body: ConfirmResponse & { error?: string } }> {
+  const result: ConfirmResponse = { confirmed: [], failed: [] };
+  let firstFailureStatus: number | null = null;
+
+  for (const entry of entries) {
+    const refused = opts.accept(entry);
+    if (refused) {
+      result.failed.push({ objectKey: entry.objectKey, error: refused });
+      firstFailureStatus ??= 400;
+      continue;
+    }
+    const verified = await verifyUploaded(entry.objectKey, opts.maxBytes);
+    if (!verified.ok) {
+      result.failed.push({ objectKey: entry.objectKey, error: verified.error });
+      firstFailureStatus ??= verified.status;
+      continue;
+    }
+    await opts.register(entry, verified.info);
+    result.confirmed.push({ objectKey: entry.objectKey, fileName: entry.fileName });
+  }
+
+  const status = result.confirmed.length > 0 ? 200 : firstFailureStatus ?? 400;
+  return {
+    status,
+    body: status === 200 ? result : { ...result, error: result.failed[0]?.error ?? 'אימות ההעלאה נכשל' },
+  };
 }

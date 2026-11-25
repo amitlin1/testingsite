@@ -5,16 +5,14 @@
 // a tester picking a storekeeper on a shipment form isn't managing accounts.
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth/withAuth";
-import { getWorkersDirectory } from "@/lib/keycloak-admin";
+import { adminErrorResponse, getWorkersDirectory } from "@/lib/keycloak-admin";
 
 export const runtime = "nodejs";
 
 export const GET = withAuth(async () => {
   try {
-    const workers = await getWorkersDirectory();
-    return NextResponse.json(workers);
+    return NextResponse.json(await getWorkersDirectory());
   } catch (e) {
-    console.error("workers-directory error", e);
-    return NextResponse.json({ error: "טעינת רשימת העובדים נכשלה" }, { status: 502 });
+    return adminErrorResponse(e, "טעינת רשימת העובדים נכשלה");
   }
 });

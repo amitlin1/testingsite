@@ -12,9 +12,8 @@ import { NextResponse } from "next/server";
  *   - CRON_SECRET set   → require an exact header match, else 401.
  *   - CRON_SECRET unset → CLOSED (503). The endpoints run unauthenticated
  *     transactions against production data, so "not configured" must mean "off",
- *     not "open to anyone on the network". This used to return null (open) for
- *     dev convenience; a deploy that forgot the variable silently published
- *     snapshot creation to the whole network.
+ *     not "open to anyone on the network" — a deploy that forgets the variable
+ *     must not publish the jobs to the whole network.
  *
  * To run a job manually (dev or prod), set CRON_SECRET on the server and send
  * the matching header — there is no unauthenticated path any more.

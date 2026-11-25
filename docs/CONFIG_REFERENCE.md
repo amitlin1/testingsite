@@ -10,8 +10,6 @@ Guide to environment variables and when changes require rebuild vs restart.
 | --------------------- | ------------------------- | -------- |
 | DB host/port/password | Edit `.env.prod`, restart | NO       |
 | Auth secrets          | Edit `.env.prod`, restart | NO       |
-| Client API URL        | Edit `.env.prod`, restart | NO       |
-| Feature flags         | Edit `.env.prod`, restart | NO       |
 | `NEXT_PUBLIC_*` vars  | **REBUILD**               | YES      |
 | Package dependencies  | **REBUILD**               | YES      |
 | Source code           | **REBUILD**               | YES      |
@@ -30,11 +28,9 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 const apiUrl = "https://api.example.com";
 ```
 
-**Solution**: Use the runtime config mechanism instead:
-
-1. Nginx generates `/config.js` at startup from env vars
-2. Client loads `window.__RUNTIME_CONFIG__`
-3. Use `useRuntimeConfig()` hook in components
+There is no runtime config for browser code: nginx still writes `/config.js`
+(`window.__RUNTIME_CONFIG__`) at startup, but nothing in the app reads it. A value the browser
+must get without a rebuild has to come from the server (a route handler or a server component).
 
 ---
 
@@ -64,17 +60,6 @@ JWT_SECRET=another_random_string
 ```
 
 **Change procedure**: Edit file → `docker compose up -d`
-
-### Client Runtime (Runtime - Client Visible)
-
-```ini
-APP_BASE_URL=https://app.example.com
-APP_VERSION=1.2.0
-FEATURE_FLAGS={"newUI": true}
-```
-
-**Change procedure**: Edit file → `docker compose up -d`
-(Nginx regenerates `/config.js` on startup)
 
 ---
 
@@ -121,23 +106,8 @@ MY_NEW_VAR=value
 
 ### For Client-Side Code
 
-1. Add to nginx `entrypoint.sh`:
-
-```bash
-MY_CLIENT_VAR="${MY_CLIENT_VAR:-default}"
-cat > /usr/share/nginx/html/config.js << EOF
-window.__RUNTIME_CONFIG__ = {
-  myClientVar: "${MY_CLIENT_VAR}",
-  ...
-};
-EOF
-```
-
-2. Update `RuntimeConfig` interface in `useRuntimeConfig.ts`
-
-3. Add to `.env.prod.example`
-
-4. Restart containers.
+Read it on the server and hand it to the page (a server component's prop, or a route handler the
+page fetches); a `NEXT_PUBLIC_*` variable works too but needs a rebuild.
 
 ---
 

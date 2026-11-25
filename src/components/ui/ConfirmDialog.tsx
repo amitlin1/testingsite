@@ -17,7 +17,7 @@ export interface ConfirmDialogProps {
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-  /** Moved by its title like other dialogs. Delete confirmations pass false. */
+  /** Moved by its title like other dialogs. Default: a destructive question stays put, any other moves. */
   draggable?: boolean;
 }
 
@@ -36,7 +36,7 @@ export function ConfirmDialog({
   busy,
   onConfirm,
   onCancel,
-  draggable = true,
+  draggable = !destructive,
 }: ConfirmDialogProps) {
   const Icon = destructive ? Warning : Info;
   return (

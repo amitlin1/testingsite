@@ -4,12 +4,13 @@ import Link from "next/link";
 import { CircleAlert, ExternalLink, Package, RefreshCw, Route } from "lucide-react";
 import { Button, Skeleton } from "@/components/ui";
 import { MAP_STATE_TEXT } from "../../lib/labels";
+import { PAGE_TEXT } from "../../lib/stepsLabels";
 
 /**
  * The fields map's states other than the map itself (route-fields spec §5.12; artboard 11, the
  * strip of extra states): loading, load failure, a route without steps, a kit without contents.
- * Each fills the map's place under the tabs. The onboarding card of a route without fields
- * (artboard 11, top) is session 2e's.
+ * Each fills the map's place under the tabs; the onboarding card of a route without fields
+ * (artboard 11, top) is FieldsOnboarding.
  *
  * Never "ללא שדות" before the data is in, and never during a failure: a route that could not be
  * read must not look like a route without fields ("המסלול לא מוצג כריק כדי לא לאבד נתונים").
@@ -19,12 +20,11 @@ import { MAP_STATE_TEXT } from "../../lib/labels";
 const SKELETON_COLUMNS = 5;
 const SKELETON_ROWS = 6;
 
-/** Loading: the map's shape — a column header and 6 rows. The aria-label is the old page's route
- *  skeleton's ("טוען מסלול"). */
+/** Loading: the map's shape — a column header and 6 rows. */
 export function MapLoadingState() {
   const cols = Array.from({ length: SKELETON_COLUMNS }, (_, i) => i);
   return (
-    <div className="rf-map-skeleton" aria-busy="true" aria-label="טוען מסלול">
+    <div className="rf-map-skeleton" aria-busy="true" aria-label={PAGE_TEXT.loadingRoute}>
       <div className="rf-map-skeleton__row rf-map-skeleton__row--head">
         <div className="rf-map-skeleton__label">
           <Skeleton variant="text" width="45%" height={14} />

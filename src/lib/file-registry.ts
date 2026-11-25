@@ -1,14 +1,14 @@
-import { prisma } from '@/app/lib/prisma';
+import { prisma } from "@/lib/db";
 import { BUCKET } from './storage';
 
 /**
  * File registry — keeps the Postgres `file_objects` table in sync with MinIO.
  *
  * The registry is an auxiliary index/audit log: MinIO remains the source of
- * truth for bytes. Every helper here is BEST-EFFORT — it runs on its own
- * connection and swallows errors so a registry hiccup can never break the
- * primary operation (saving a shipment, uploading a file). Drift is repaired
- * by `scripts/reconcile-file-registry.mjs`.
+ * truth for bytes. Every helper here is BEST-EFFORT — it swallows (and logs)
+ * its errors so a registry hiccup can never break the primary operation
+ * (saving a shipment, uploading a file). Drift is repaired by
+ * `scripts/reconcile-file-registry.mjs`.
  *
  * Row lifecycle:
  *   pending → active → deleted

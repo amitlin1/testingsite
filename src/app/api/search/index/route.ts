@@ -1,5 +1,6 @@
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
+import type { SearchIndex } from "@/app/lib/search/contract";
 
 export const runtime = "nodejs";
 
@@ -10,42 +11,8 @@ export const runtime = "nodejs";
 // them client-side — that's what makes typing an עמדה name feel instant, with
 // no round-trip per keystroke.
 //
-// Items are deliberately NOT here: that table is unbounded and /api/items
-// already returns every row with no WHERE clause. Item search goes through
-// /api/search/items instead, which filters in the database and caps the result.
-
-export interface SearchStation {
-  id: number;
-  desc: string;
-  typeId: number;
-  typeDesc: string;
-  status: number;
-  /**
-   * Human label for `status` (1 "עבודה", 2 "המתנה", 3 "לא פעילה"). Resolved
-   * here because `test_stations.status` has no FK to `test_station_status` —
-   * assuming "anything but 1 is inactive" mislabels a station in המתנה.
-   */
-  statusDesc: string;
-  isResearch: boolean;
-}
-
-export interface SearchStationType {
-  id: number;
-  desc: string;
-  packageLevel: boolean;
-  stationCount: number;
-}
-
-export interface SearchItemType {
-  id: number;
-  desc: string;
-}
-
-export interface SearchIndex {
-  stations: SearchStation[];
-  stationTypes: SearchStationType[];
-  itemTypes: SearchItemType[];
-}
+// Items are deliberately NOT here: that table is unbounded. Item search goes
+// through /api/search/items, which filters in the database and caps the result.
 
 const EMPTY: SearchIndex = { stations: [], stationTypes: [], itemTypes: [] };
 

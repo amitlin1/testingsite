@@ -1,0 +1,47 @@
+/* The settings page header (SettingsToolbar), also /files': title, subtitle, the count pill
+   (`.settings-count`, also used beside other settings headings), the filters row. */
+
+/* --------------------------------------------------------- page header --- */
+/* Settings.dc.html: 30/700 title, 15px muted subtitle, the action at the end. */
+.settings-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-ml);
+  flex-wrap: wrap;
+}
+.settings-header__title {
+  margin: 0;
+  font-size: var(--text-page);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-display);
+  color: var(--color-ink);
+}
+.settings-header__subtitle {
+  margin: var(--space-xs) 0 0;
+  max-width: 720px;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--color-ink-muted-48);
+}
+.settings-header__actions { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.settings-count {
+  font-size: var(--text-small);
+  color: var(--color-ink-muted-48);
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+  padding: 4px 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.settings-filters {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: var(--space-lg);
+}
+.settings-filters__search { flex: 1; min-width: 240px; max-width: 340px; }
+

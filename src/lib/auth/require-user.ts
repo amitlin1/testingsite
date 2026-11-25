@@ -1,4 +1,5 @@
-// Server-side auth guard for Server Actions (and Server Components). PORTABLE.
+// Server-side auth guard for Server Actions (and Server Components). The app has
+// no Server Actions today; the users settings layout is its one caller.
 //
 // WHY THIS EXISTS (the Server-Action redirect gap):
 //   A Server Action POST cannot be redirected by middleware — Next swallows a
@@ -26,12 +27,10 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentUser, type CurrentUser } from "./current-user";
 import { hasAnyRole, type AppRole } from "./roles";
-import { normalizeBasePath } from "@/lib/base-path";
-
-const BASE_PATH = normalizeBasePath(process.env.NEXT_BASE_PATH);
+import { SERVER_BASE_PATH, loginUrl, noAuthUrl } from "@/lib/base-path";
 
 async function loginRedirectTarget(): Promise<string> {
-  let callback = `${BASE_PATH}/`;
+  let callback = `${SERVER_BASE_PATH}/`;
   try {
     const referer = (await headers()).get("referer");
     if (referer) {
@@ -42,33 +41,23 @@ async function loginRedirectTarget(): Promise<string> {
   } catch {
     // headers() unavailable in this context — fall back to the root.
   }
-  return `${BASE_PATH}/login?callbackUrl=${encodeURIComponent(callback)}`;
+  return loginUrl(callback);
 }
 
 /** Resolve the current user or redirect to login on a genuinely dead session. */
 export async function requireUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
-  if (!user) {
-    // In dev there's no Keycloak; a null user just means no dev user picked yet.
-    // Sending them to the Keycloak-only /login would 500, so bounce to root.
-    if (process.env.IS_DEV === "1") {
-      redirect(`${BASE_PATH}/`);
-    }
-    redirect(await loginRedirectTarget());
-  }
+  if (!user) redirect(await loginRedirectTarget());
   return user;
 }
 
 /** requireUser() + a role gate. On a role miss, redirects to /no-auth. For a
  *  soft "missing role" message in an action, check the role inline and return a
  *  FORBIDDEN result instead of calling this. */
-export async function requireRole(
-  roles: AppRole | AppRole[],
-): Promise<CurrentUser> {
+export async function requireRole(roles: readonly AppRole[]): Promise<CurrentUser> {
   const user = await requireUser();
-  const required = Array.isArray(roles) ? roles : [roles];
-  if (!hasAnyRole(user.roles, required)) {
-    redirect(`${BASE_PATH}/no-auth`);
+  if (!hasAnyRole(user.roles, roles)) {
+    redirect(noAuthUrl());
   }
   return user;
 }

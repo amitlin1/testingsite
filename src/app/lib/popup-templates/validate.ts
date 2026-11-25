@@ -1,16 +1,21 @@
 import { NOTE_MAX_CHOICES, NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
 import type { NoteMax } from "@/app/lib/station-fields/schema";
-import { COMPONENT_KINDS, KINDS_ALLOWED, PACKAGE_ROLES, SYSTEM_KINDS, TEMPLATE_BASES, TEMPLATE_ID_PATTERNS, allComponentsOf } from "./schema";
+import {
+  COMPONENT_KINDS, KINDS_ALLOWED, MANDATORY_SYSTEM_KINDS, PACKAGE_ROLES, SYSTEM_KINDS, TEMPLATE_BASES, TEMPLATE_ID_PATTERNS, TEMPLATE_LIMITS,
+  allComponentsOf,
+} from "./schema";
 import type {
   ComponentId, ComponentKind, PackageRole, PopupTemplateConfig, TemplateBase, TemplateComponent, TemplateStep, TemplateStepId,
 } from "./schema";
+import { ShapeError } from "@/app/lib/station-fields/validate";
 import { COMPONENT_NAME, TEMPLATE_LINT_TEXT } from "./labels";
+import { isInt, isNum, isPlainObj, isStr, jsonSize, oneOf, own, type JsonObject as Obj } from "@/lib/json-guards";
 
 /**
  * Validation of a popup template, shared by the editor and the API (the station-fields
  * pattern, station-fields/validate.ts):
  *
- * - parsePopupTemplateConfig — STRUCTURE. Throws TemplateShapeError on anything the editor could
+ * - parsePopupTemplateConfig — STRUCTURE. Throws ShapeError on anything the editor could
  *   never produce (the API answers 400). Returns a sanitized copy: only known keys survive.
  * - lintPopupTemplate — CONTENT. Every issue blocks a save; the editor shows each where it is.
  */
@@ -34,80 +39,34 @@ export type TemplateIssue = {
   message: string;
 };
 
-/** Hard limits of the shape check; the content rules are stricter (6 steps, 8 photo components). */
-export const TEMPLATE_LIMITS = {
-  configJson: 64_000,
-  steps: 12,
-  componentsPerStep: 20,
-  stepTitle: 60,
-  stepDesc: 200,
-  message: 500,
-  question: 80,
-  photoTitle: 60,
-  finishLabel: 40,
-  photoMin: 20,
-  checklistItems: 20,
-  checklistTitle: 60,
-  checklistLabel: 120,
-  notesLabel: 60,
-  /** Content rules. */
-  maxSteps: 6,
-  maxPhotos: 8,
-} as const;
-
-/** Structural parse failure — HTTP 400. */
-export class TemplateShapeError extends Error {
-  readonly code = "TEMPLATE_SHAPE_INVALID";
-  readonly path: string;
-  constructor(path: string, msg: string) {
-    super(`${path}: ${msg}`);
-    this.name = "TemplateShapeError";
-    this.path = path;
-  }
-}
+/** Structural parse failure (a ShapeError, code TEMPLATE_SHAPE_INVALID) — HTTP 400. */
+const shapeError = (path: string, msg: string) => new ShapeError(path, msg, "TEMPLATE_SHAPE_INVALID");
 
 // ---- helpers --------------------------------------------------------------------
-type Obj = Record<string, unknown>;
-
-function isPlainObj(v: unknown): v is Obj {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
-  const proto: unknown = Object.getPrototypeOf(v);
-  return proto === Object.prototype || proto === null;
-}
-/** Own property only — never a value inherited from a (possibly polluted) prototype. */
-function own(o: Obj, k: string): unknown {
-  return Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined;
-}
-const isStr = (v: unknown, max: number): v is string => typeof v === "string" && v.length <= max;
-const isBool = (v: unknown): v is boolean => typeof v === "boolean";
-const isInt = (v: unknown): v is number => Number.isSafeInteger(v);
-const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const oneOf = <T extends string | number>(list: readonly T[], v: unknown): v is T => (list as readonly unknown[]).includes(v);
-
 function str(o: Obj, k: string, max: number, p: string): string {
   const v = own(o, k);
-  if (!isStr(v, max)) throw new TemplateShapeError(`${p}.${k}`, "not a string within its limit");
+  if (!isStr(v, max)) throw shapeError(`${p}.${k}`, "not a string within its limit");
   return v;
 }
 function bool(o: Obj, k: string, p: string): boolean {
   const v = own(o, k);
-  if (!isBool(v)) throw new TemplateShapeError(`${p}.${k}`, "not a boolean");
+  if (typeof v !== "boolean") throw shapeError(`${p}.${k}`, "not a boolean");
   return v;
 }
 
-/** The base as stored / sent; anything else → TemplateShapeError. */
+/** The base as stored / sent; anything else → ShapeError. */
 export function parseTemplateBase(raw: unknown): TemplateBase {
-  if (!oneOf(TEMPLATE_BASES, raw)) throw new TemplateShapeError("base", "unknown base");
+  if (!oneOf(TEMPLATE_BASES, raw)) throw shapeError("base", "unknown base");
   return raw;
 }
 
 // ---- structure ------------------------------------------------------------------
 function parseComponent(raw: unknown, p: string): TemplateComponent {
-  if (!isPlainObj(raw)) throw new TemplateShapeError(p, "not an object");
+  if (!isPlainObj(raw)) throw shapeError(p, "not an object");
   const id = own(raw, "id");
-  if (typeof id !== "string" || !TEMPLATE_ID_PATTERNS.component.test(id)) throw new TemplateShapeError(`${p}.id`, "bad component id");
+  if (typeof id !== "string" || !TEMPLATE_ID_PATTERNS.component.test(id)) throw shapeError(`${p}.id`, "bad component id");
   const kind = own(raw, "kind");
-  if (!oneOf(COMPONENT_KINDS, kind)) throw new TemplateShapeError(`${p}.kind`, "unknown component kind");
+  if (!oneOf(COMPONENT_KINDS, kind)) throw shapeError(`${p}.kind`, "unknown component kind");
   switch (kind) {
     case "sku_scan":
       return { id, kind, required: bool(raw, "required", p), carry_last: bool(raw, "carry_last", p), lookup_reference: bool(raw, "lookup_reference", p) };
@@ -115,33 +74,33 @@ function parseComponent(raw: unknown, p: string): TemplateComponent {
       return { id, kind, text: str(raw, "text", TEMPLATE_LIMITS.message, p) };
     case "photo": {
       const code = own(raw, "photo_code");
-      if (typeof code !== "string" || !TEMPLATE_ID_PATTERNS.photoCode.test(code)) throw new TemplateShapeError(`${p}.photo_code`, "bad photo code");
+      if (typeof code !== "string" || !TEMPLATE_ID_PATTERNS.photoCode.test(code)) throw shapeError(`${p}.photo_code`, "bad photo code");
       const min = own(raw, "min");
-      if (!isInt(min) || min < 0 || min > TEMPLATE_LIMITS.photoMin) throw new TemplateShapeError(`${p}.min`, "out of range");
+      if (!isInt(min) || min < 0 || min > TEMPLATE_LIMITS.photoMin) throw shapeError(`${p}.min`, "out of range");
       return { id, kind, title: str(raw, "title", TEMPLATE_LIMITS.photoTitle, p), photo_code: code, min, show_reference: bool(raw, "show_reference", p) };
     }
     case "weight": {
       const tol = own(raw, "tolerance_pct");
-      if (!isNum(tol)) throw new TemplateShapeError(`${p}.tolerance_pct`, "not a number");
+      if (!isNum(tol)) throw shapeError(`${p}.tolerance_pct`, "not a number");
       return { id, kind, required: bool(raw, "required", p), tolerance_pct: tol };
     }
     case "route_fields":
       return { id, kind };
     case "verdict": {
       const noteMax: unknown = own(raw, "note_max") ?? NOTE_MAX_DEFAULT;
-      if (!oneOf<NoteMax>(NOTE_MAX_CHOICES, noteMax)) throw new TemplateShapeError(`${p}.note_max`, "not an allowed length");
+      if (!oneOf<NoteMax>(NOTE_MAX_CHOICES, noteMax)) throw shapeError(`${p}.note_max`, "not an allowed length");
       return { id, kind, question: str(raw, "question", TEMPLATE_LIMITS.question, p), note_max: noteMax };
     }
     case "checklist": {
       const items = own(raw, "items");
-      if (!Array.isArray(items) || items.length > TEMPLATE_LIMITS.checklistItems) throw new TemplateShapeError(`${p}.items`, "not a list within its limit");
+      if (!Array.isArray(items) || items.length > TEMPLATE_LIMITS.checklistItems) throw shapeError(`${p}.items`, "not a list within its limit");
       return {
         id, kind, title: str(raw, "title", TEMPLATE_LIMITS.checklistTitle, p),
         items: items.map((it, i) => {
           const q = `${p}.items[${i}]`;
-          if (!isPlainObj(it)) throw new TemplateShapeError(q, "not an object");
+          if (!isPlainObj(it)) throw shapeError(q, "not an object");
           const itemId = own(it, "id");
-          if (typeof itemId !== "string" || !TEMPLATE_ID_PATTERNS.checkItem.test(itemId)) throw new TemplateShapeError(`${q}.id`, "bad checklist row id");
+          if (typeof itemId !== "string" || !TEMPLATE_ID_PATTERNS.checkItem.test(itemId)) throw shapeError(`${q}.id`, "bad checklist row id");
           return { id: itemId, label: str(it, "label", TEMPLATE_LIMITS.checklistLabel, q) };
         }),
       };
@@ -158,11 +117,11 @@ function parseComponent(raw: unknown, p: string): TemplateComponent {
 }
 
 function parseStep(raw: unknown, p: string): TemplateStep {
-  if (!isPlainObj(raw)) throw new TemplateShapeError(p, "not an object");
+  if (!isPlainObj(raw)) throw shapeError(p, "not an object");
   const id = own(raw, "id");
-  if (typeof id !== "string" || !TEMPLATE_ID_PATTERNS.step.test(id)) throw new TemplateShapeError(`${p}.id`, "bad step id");
+  if (typeof id !== "string" || !TEMPLATE_ID_PATTERNS.step.test(id)) throw shapeError(`${p}.id`, "bad step id");
   const comps = own(raw, "components");
-  if (!Array.isArray(comps) || comps.length > TEMPLATE_LIMITS.componentsPerStep) throw new TemplateShapeError(`${p}.components`, "not a list within its limit");
+  if (!Array.isArray(comps) || comps.length > TEMPLATE_LIMITS.componentsPerStep) throw shapeError(`${p}.components`, "not a list within its limit");
   const descRaw = own(raw, "desc");
   return {
     id,
@@ -175,28 +134,24 @@ function parseStep(raw: unknown, p: string): TemplateStep {
 /** A template config from the wire or the DB, as a sanitized copy. Ids must be unique — steps,
  *  components (the item flow's too) and checklist rows alike. */
 export function parsePopupTemplateConfig(raw: unknown): PopupTemplateConfig {
-  let size: number;
-  try {
-    size = JSON.stringify(raw)?.length ?? 0;
-  } catch {
-    throw new TemplateShapeError("config", "not JSON");
-  }
-  if (size > TEMPLATE_LIMITS.configJson) throw new TemplateShapeError("config", "too large");
-  if (!isPlainObj(raw)) throw new TemplateShapeError("config", "not an object");
+  const size = jsonSize(raw);
+  if (size === null) throw shapeError("config", "not JSON");
+  if (size > TEMPLATE_LIMITS.configJson) throw shapeError("config", "too large");
+  if (!isPlainObj(raw)) throw shapeError("config", "not an object");
   const steps = own(raw, "steps");
-  if (!Array.isArray(steps) || steps.length > TEMPLATE_LIMITS.steps) throw new TemplateShapeError("config.steps", "not a list within its limit");
+  if (!Array.isArray(steps) || steps.length > TEMPLATE_LIMITS.steps) throw shapeError("config.steps", "not a list within its limit");
   const cfg: PopupTemplateConfig = {
     steps: steps.map((s, i) => parseStep(s, `config.steps[${i}]`)),
     finish_label: str(raw, "finish_label", TEMPLATE_LIMITS.finishLabel, "config"),
   };
   const role = own(raw, "role");
   if (role !== undefined && role !== null) {
-    if (!oneOf<PackageRole>(PACKAGE_ROLES, role)) throw new TemplateShapeError("config.role", "unknown role");
+    if (!oneOf<PackageRole>(PACKAGE_ROLES, role)) throw shapeError("config.role", "unknown role");
     cfg.role = role;
   }
   const flow = own(raw, "item_flow");
   if (flow !== undefined && flow !== null) {
-    if (!Array.isArray(flow) || flow.length > TEMPLATE_LIMITS.steps) throw new TemplateShapeError("config.item_flow", "not a list within its limit");
+    if (!Array.isArray(flow) || flow.length > TEMPLATE_LIMITS.steps) throw shapeError("config.item_flow", "not a list within its limit");
     cfg.item_flow = flow.map((s, i) => parseStep(s, `config.item_flow[${i}]`));
   }
   const seen = new Set<string>();
@@ -206,7 +161,7 @@ export function parsePopupTemplateConfig(raw: unknown): PopupTemplateConfig {
     ...allComponentsOf(cfg).flatMap((c) => (c.kind === "checklist" ? c.items.map((it) => it.id) : [])),
   ];
   for (const id of ids) {
-    if (seen.has(id)) throw new TemplateShapeError("config", `duplicate id ${id}`);
+    if (seen.has(id)) throw shapeError("config", `duplicate id ${id}`);
     seen.add(id);
   }
   return cfg;
@@ -316,9 +271,10 @@ export function lintPopupTemplate(cfg: PopupTemplateConfig, base: TemplateBase =
   if (base === "item" && cfg.steps.length > 0 && st.verdicts === 0) add("VERDICT_MISSING", T.verdictMissing);
 
   // ---- the package base: its system parts and the item flow ----
+  if (role) {
+    for (const kind of MANDATORY_SYSTEM_KINDS[role]) if (!systemAt[kind]) add("SYSTEM_MISSING", T.systemMissing(COMPONENT_NAME[kind]));
+  }
   if (role === "opening") {
-    if (!systemAt.contents) add("SYSTEM_MISSING", T.systemMissing(COMPONENT_NAME.contents));
-    if (!systemAt.items) add("SYSTEM_MISSING", T.systemMissing(COMPONENT_NAME.items));
     const order = [systemAt.contents, systemAt.items, systemAt.labels].filter((x) => x != null);
     if (order.some((x, i) => i > 0 && x.si < order[i - 1].si)) add("SYSTEM_ORDER", T.systemOrder);
 
@@ -347,7 +303,6 @@ export function lintPopupTemplate(cfg: PopupTemplateConfig, base: TemplateBase =
       });
     });
   } else if (role === "closing") {
-    if (!systemAt.arrival) add("SYSTEM_MISSING", T.systemMissing(COMPONENT_NAME.arrival));
     if ((cfg.item_flow?.length ?? 0) > 0) add("ITEM_FLOW_NOT_HERE", T.roleOnItem);
     const sign = systemAt.report_sign;
     if (sign && sign.si !== cfg.steps.length - 1) add("REPORT_SIGN_NOT_LAST", T.reportSignNotLast, sign.stepId, sign.id);

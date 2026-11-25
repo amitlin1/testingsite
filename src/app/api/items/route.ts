@@ -1,100 +1,16 @@
-import { prisma } from "@/app/lib/prisma";
 import { NextResponse } from "next/server";
-import { normalizeToUtcIso } from "@/app/lib/datetime";
+import { loadItemList } from "@/app/lib/items/read";
 
 export const runtime = "nodejs";
 
-/** One row of the query below — the item, its route, and the names around them. */
-type ItemListRow = {
-  item_id: bigint;
-  serial_no: string | null;
-  item_type_id: number;
-  item_type_desc: string | null;
-  current_status: number | null;
-  item_status_desc: string | null;
-  current_route_step: number | null;
-  test_station_id: number | null;
-  test_station_desc: string | null;
-  created_at: Date | null;
-  finished_at: Date | null;
-  is_finished: boolean | null;
-  customer_id: number;
-  customer_code: string | null;
-  makat: string;
-  manufacturer_name: string;
-  manufacturer_no: string;
-  model: string;
-  total_steps: number;
-  shipment_id: number;
-  shipment_code: string | null;
-  source_id: number | null;
-};
-
 export async function GET() {
   try {
-    const rows = await prisma.$queryRaw<ItemListRow[]>`
-      SELECT
-    i.item_id,
-    i.serial_no,
-    i.item_type_id,
-    it.item_type_desc,
-    ir.current_status,
-    ist.item_status_desc,
-    ir.current_route_step,
-    ir.test_station_id,
-    ts.test_station_desc,
-    ir.created_at,
-    ir.finished_at,
-    ir.is_finished,
-    i.customer_id,
-    RTRIM(c.customer_code) AS customer_code,
-    i.makat,
-    RTRIM(i.manufacturer_name) AS manufacturer_name,
-    i.manufacturer_no AS manufacturer_no,
-    RTRIM(i.model) AS model,
-    COALESCE(array_length(tr.route_steps, 1), 0) as total_steps,
-    i.shipment_id,
-    sh.shipment_code,
-    sh.source_id
-FROM items i
-LEFT JOIN item_types it ON it.item_type_id = i.item_type_id
-LEFT JOIN item_routes ir ON ir.item_id = i.item_id
-LEFT JOIN item_status ist ON ist.item_status_id = ir.current_status
-LEFT JOIN test_stations ts ON ts.test_station_id = ir.test_station_id
-LEFT JOIN customers c ON c.id = i.customer_id
-LEFT JOIN testing_routes tr ON tr.item_type_id = i.item_type_id AND tr.route_number = ir.route_number
-LEFT JOIN shipments sh ON sh.id = i.shipment_id
--- Taken in only: a box waiting for intake has no route yet (lib/packages/boxes.ts).
-WHERE ir.item_id IS NOT NULL
-ORDER BY i.item_id DESC
-    `;
-
-    // Normalize all timestamp fields to UTC ISO strings and handle BigInt
-    const normalizedRows = rows.map((row) => ({
-      ...row,
-      created_at: normalizeToUtcIso(row.created_at),
-      finished_at: normalizeToUtcIso(row.finished_at),
-      // specific BigInt fields if known, or generic replacer
-      item_id: row.item_id?.toString(),
-      shipment_id: row.shipment_id?.toString(),
-      test_station_id: row.test_station_id?.toString(),
-      source_id: row.source_id?.toString(),
-    }));
-
-    // Use a custom stringify to handle any remaining BigInts safely
-    const json = JSON.stringify(normalizedRows, (key, value) =>
-      typeof value === 'bigint' ? value.toString() : value
-    );
-
-    return new NextResponse(json, {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return NextResponse.json(await loadItemList());
   } catch (error) {
     console.error("Error loading items:", error);
     return NextResponse.json([]);
   }
 }
-
 
 // Items are no longer created one at a time: every item lives inside a
 // package, and the box and its contents are created together by

@@ -1,9 +1,9 @@
 "use client";
 import * as React from "react";
 import { Check } from "lucide-react";
-import { Autocomplete, TextField } from "@/components/ui";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
-import { TONE_WORD, type ChoiceOption } from "@/app/lib/station-fields/schema";
+import { Autocomplete, TextField, SearchableCombobox } from "@/components/ui";
+import type { ChoiceOption } from "@/app/lib/station-fields/schema";
+import { TONE_WORD } from "@/app/lib/station-fields/labels";
 import { choiceCountText } from "./labels";
 import { ToneDot } from "./ToneDot";
 import "./choice.css";
@@ -39,9 +39,6 @@ export const CHOICE_TEXT = {
   /** Artboards 12/14 (`noMatch`) — the primitive's own default as well. */
   noOptions: "אין אפשרויות",
 } as const;
-
-/** The list footer's count (labels.ts). */
-export { choiceCountText };
 
 /** Keys 1–4 reach the first four options. */
 const KEY_COUNT = 4;
@@ -152,12 +149,6 @@ function ListFooter({ listLabel, count, hint }: { listLabel: string; count: stri
   );
 }
 
-/** What a host can do with the control (React 19 `ref` prop). */
-export interface ChoiceAutocompleteHandle {
-  /** Focuses the trigger, which opens its list (the primitive opens on focus). */
-  focus: () => void;
-}
-
 export interface ChoiceAutocompleteProps {
   /** The trigger input's id — the row's <label htmlFor> points at it. */
   id: string;
@@ -188,12 +179,11 @@ export interface ChoiceAutocompleteProps {
   onPicked?: () => void;
   /** More ids that describe the trigger (help text, a row message); kept with the control's own. */
   "aria-describedby"?: string;
-  ref?: React.Ref<ChoiceAutocompleteHandle>;
 }
 
 export default function ChoiceAutocomplete({
   id, label, options, value, onChange, required, invalid, typeToFilter, placeholderOpen, footerHint,
-  highlightFirst = false, onPicked, "aria-describedby": describedBy, ref,
+  highlightFirst = false, onPicked, "aria-describedby": describedBy,
 }: ChoiceAutocompleteProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.id === value) ?? null;
@@ -215,7 +205,6 @@ export default function ChoiceAutocomplete({
     if (keyPicks > 0) notifyPicked();
   }, [keyPicks]);
 
-  React.useImperativeHandle(ref, () => ({ focus: () => rootRef.current?.querySelector("input")?.focus() }), []);
   const inputEl = () => rootRef.current?.querySelector("input") ?? null;
 
   const handleChange = (o: ChoiceOption | null) => {
@@ -336,8 +325,6 @@ export default function ChoiceAutocomplete({
     </div>
   );
 }
-export { ChoiceAutocomplete };
-
 export interface MultiChoiceAutocompleteProps extends Omit<ChoiceAutocompleteProps, "value" | "onChange" | "onPicked"> {
   /** The chosen OptionIds; reported back in option order. */
   value: string[];
@@ -351,7 +338,7 @@ export interface MultiChoiceAutocompleteProps extends Omit<ChoiceAutocompletePro
  */
 export function MultiChoiceAutocomplete({
   id, label, options, value, onChange, required, invalid, typeToFilter, placeholderOpen, footerHint,
-  "aria-describedby": describedBy, ref,
+  "aria-describedby": describedBy,
 }: MultiChoiceAutocompleteProps) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const chosen = options.filter((o) => value.includes(o.id));
@@ -361,7 +348,6 @@ export function MultiChoiceAutocomplete({
   const shown = filterChoices(options, search);
   const searching = typeToFilter && open;
 
-  React.useImperativeHandle(ref, () => ({ focus: () => rootRef.current?.querySelector("input")?.focus() }), []);
   const inputEl = () => rootRef.current?.querySelector("input") ?? null;
 
   const report = (ids: Set<string>) => onChange(options.filter((o) => ids.has(o.id)).map((o) => o.id));

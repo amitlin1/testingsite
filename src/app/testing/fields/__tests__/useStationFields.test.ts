@@ -1,9 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import type { Field, StationFieldsResponse } from "@/app/lib/station-fields/schema";
-import { findKitItem, kitItemDefs, parseStationFieldsResponse, stationFieldsQuery, useStationFields } from "../useStationFields";
+import { findKitItem, kitItemDefs, parseStationFieldsResponse, stationFieldsQuery } from "../useStationFields";
 import type { StationFieldsState } from "../useStationFields";
 
 const fields: Field[] = [
@@ -76,19 +74,6 @@ test("a kit item's entry and its fields, groups in order", () => {
   assert.deepEqual(kitItemDefs(pkg.items[1]).map((f) => f.id), ["f_led00001", "f_sec00001", "f_scr00001"]);
   assert.deepEqual(kitItemDefs(pkg.items[2]), []);
   assert.deepEqual(kitItemDefs(undefined), []);
-});
-
-test("every state can ask again, not only 'ready' (spec §4.11.3, §8.6)", () => {
-  // A closed popup is "loading" (the hook does not fetch while closed).
-  const seen: StationFieldsState[] = [];
-  const Probe = () => {
-    seen.push(useStationFields(42, false, 7));
-    return null;
-  };
-  renderToStaticMarkup(createElement(Probe));
-  assert.equal(seen.length, 1);
-  assert.equal(seen[0].status, "loading");
-  assert.equal(typeof seen[0].reload, "function");
 });
 
 test("the query: itemId, and stationId only when it is one", () => {

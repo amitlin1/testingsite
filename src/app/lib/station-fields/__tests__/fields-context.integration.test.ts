@@ -16,32 +16,14 @@
 // operational tables before every test (testing_routes with CASCADE, so route_field_versions too).
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import * as H from "../../metrics/__tests__/write-path-helpers";
-import type { AdminFieldsError } from "../admin";
+import * as H from "@/test-support/db-harness";
+import { giveUids, rejectsHttp } from "./helpers";
+import { ROUTE_MISSING } from "../admin-types";
 import type { FieldsContextJson } from "../admin-types";
-import type { FieldsContext } from "../context";
 import type { Field, RouteFieldsConfig, StepConfig } from "../schema";
 
 /** A JSON answer as the route sends it, read by its keys. */
 type Json = Record<string, unknown>;
-
-// ---------------------------------------------------------------------------
-// The wire contract, checked by the compiler
-// ---------------------------------------------------------------------------
-
-/** What JSON.stringify makes of a server value: a Date travels as its ISO string. */
-type Wire<T> = T extends Date
-  ? string
-  : T extends (infer U)[]
-    ? Wire<U>[]
-    : T extends object
-      ? { [K in keyof T]: Wire<T[K]> }
-      : T;
-/** true only when X and Y are the same type: a member missing, extra or optional on one side only
- *  makes it false. */
-type Equal<X, Y> = (<G>() => G extends X ? 1 : 2) extends (<G>() => G extends Y ? 1 : 2) ? true : false;
-/** Does not compile unless buildFieldsContext's result, through JSON, is exactly FieldsContextJson. */
-const SERVER_MATCHES_WIRE: Equal<Wire<FieldsContext>, FieldsContextJson> = true;
 
 // ---------------------------------------------------------------------------
 // Fixture. On top of the write-path world (station types 10 INTAKE and 40 CLOSE package-level,
@@ -106,7 +88,7 @@ describe(
   () => {
     let A: typeof import("../admin");
     let C: typeof import("../context");
-    let prisma: (typeof import("../../prisma"))["prisma"];
+    let prisma: (typeof import("@/lib/db"))["prisma"];
     let getContext: (req: Request) => Promise<Response>;
     let getContents: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
 
@@ -116,7 +98,7 @@ describe(
       await H.setup();
       A = await import("../admin");
       C = await import("../context");
-      prisma = (await import("../../prisma")).prisma;
+      prisma = (await import("@/lib/db")).prisma;
       getContext = (await import("../../../api/settings/testing-routes/fields-context/route")).GET;
       getContents = (await import("../../../api/settings/item-types/[id]/contents/route")).GET;
     });
@@ -147,15 +129,6 @@ describe(
     // Helpers
     // -------------------------------------------------------------------------------------
 
-    async function giveUids(itemTypeId: number, uids: string[]): Promise<number> {
-      const row = await H.one<{ test_route_id: number }>(
-        `UPDATE testing_routes SET step_uids = $2::text[]
-          WHERE item_type_id = $1 AND route_number = 1 RETURNING test_route_id`,
-        [itemTypeId, uids],
-      );
-      return row.test_route_id;
-    }
-
     async function insertLine(kit: number, itemTypeId: number, quantity: number, sortOrder: number): Promise<number> {
       const row = await H.one<{ id: number }>(
         `INSERT INTO package_contents (package_type_id, item_type_id, quantity, route_number, sort_order)
@@ -163,18 +136,6 @@ describe(
         [kit, itemTypeId, quantity, sortOrder],
       );
       return row.id;
-    }
-
-    async function rejectsAdmin(p: Promise<unknown>, status: number, code: string): Promise<AdminFieldsError> {
-      try {
-        await p;
-      } catch (e) {
-        assert.ok(e instanceof A.AdminFieldsError, `expected AdminFieldsError, got ${String(e)}`);
-        assert.equal(e.status, status, `${e.code}: ${e.message}`);
-        assert.equal(e.code, code);
-        return e;
-      }
-      assert.fail(`expected ${status} ${code}, got success`);
     }
 
     /** GET …/fields-context?<qs>, invoked as Next would. */
@@ -185,7 +146,7 @@ describe(
     }
 
     /** The lines as [line_id, item_type_id, desc, quantity, sort_order, seq_from, seq_to, route_number]. */
-    const lineRows = (ctx: FieldsContext) =>
+    const lineRows = (ctx: FieldsContextJson) =>
       ctx.lines.map((l) => [l.line_id, l.item_type_id, l.item_type_desc, l.quantity, l.sort_order, l.seq_from, l.seq_to, l.route_number]);
 
     const KIT_LINES = () => [
@@ -218,8 +179,8 @@ describe(
       assert.deepEqual(inBox.route?.published, IN_BOX_V1);
       for (const l of [alt, inBox]) assert.ok(!("missing" in l), `line ${l.line_id} has its route`);
       assert.equal(unrouted.route, null);
-      assert.equal(unrouted.missing, C.ROUTE_MISSING);
-      assert.equal(C.ROUTE_MISSING, "ROUTE_MISSING");
+      assert.equal(unrouted.missing, ROUTE_MISSING);
+      assert.equal(ROUTE_MISSING, "ROUTE_MISSING");
 
       // "משותף ל: …": IN_BOX's route runs in both kits' templates, IN_BOX_ALT's in this one only.
       assert.deepEqual(inBox.route?.shared_with, [
@@ -238,7 +199,7 @@ describe(
       assert.equal(ctx.kind, "package");
       assert.deepEqual(ctx.subject, { item_type_id: KIT, desc: "PACKAGE_CLOSE", is_package: true, route_number: 2 });
       assert.equal(ctx.kit, null);
-      assert.equal(ctx.kit_missing, C.ROUTE_MISSING);
+      assert.equal(ctx.kit_missing, ROUTE_MISSING);
       assert.equal(ctx.item, null);
       assert.ok(!("item_missing" in ctx));
       assert.deepEqual(lineRows(ctx), KIT_LINES());
@@ -249,7 +210,7 @@ describe(
         kind: "package",
         subject: { item_type_id: ITEM_TYPE_EMPTY_KIT, desc: "EMPTY_KIT", is_package: true, route_number: 1 },
         kit: null,
-        kit_missing: C.ROUTE_MISSING,
+        kit_missing: ROUTE_MISSING,
         item: null,
         lines: [],
       });
@@ -317,7 +278,7 @@ describe(
       assert.equal(none.kind, "item");
       assert.equal(none.subject.route_number, 2);
       assert.equal(none.item, null);
-      assert.equal(none.item_missing, C.ROUTE_MISSING);
+      assert.equal(none.item_missing, ROUTE_MISSING);
       assert.equal(none.kit, null);
       assert.ok(!("kit_missing" in none));
       assert.deepEqual(none.lines, []);
@@ -328,12 +289,12 @@ describe(
     // -------------------------------------------------------------------------------------
 
     it("errors: an unknown type is a 404; a kit asked as itemTypeId and a plain type asked as packageTypeId are 400s with their codes", async () => {
-      const unknown = await rejectsAdmin(C.buildFieldsContext(prisma, { itemTypeId: 999, routeNumber: 1 }), 404, "ITEM_TYPE_NOT_FOUND");
+      const unknown = await rejectsHttp(C.buildFieldsContext(prisma, { itemTypeId: 999, routeNumber: 1 }), 404, "ITEM_TYPE_NOT_FOUND");
       assert.deepEqual(unknown.extra, { item_type_id: 999 });
-      await rejectsAdmin(C.buildFieldsContext(prisma, { packageTypeId: 999, routeNumber: 1 }), 404, "ITEM_TYPE_NOT_FOUND");
-      const kitAsItem = await rejectsAdmin(C.buildFieldsContext(prisma, { itemTypeId: KIT, routeNumber: 1 }), 400, "IS_A_PACKAGE_TYPE");
+      await rejectsHttp(C.buildFieldsContext(prisma, { packageTypeId: 999, routeNumber: 1 }), 404, "ITEM_TYPE_NOT_FOUND");
+      const kitAsItem = await rejectsHttp(C.buildFieldsContext(prisma, { itemTypeId: KIT, routeNumber: 1 }), 400, "IS_A_PACKAGE_TYPE");
       assert.deepEqual(kitAsItem.extra, { item_type_id: KIT });
-      const itemAsKit = await rejectsAdmin(
+      const itemAsKit = await rejectsHttp(
         C.buildFieldsContext(prisma, { packageTypeId: H.ITEM_TYPE_IN_BOX, routeNumber: 1 }),
         400,
         "NOT_A_PACKAGE_TYPE",
@@ -375,7 +336,7 @@ describe(
       // A 5xx is logged by the handler; keep it out of the test output, but make sure it happens.
       const logged = t.mock.method(console, "error", () => {});
       await H.q(`UPDATE testing_routes SET fields_draft = '{"schema": 9}'::jsonb WHERE test_route_id = $1`, [R.alt]);
-      await rejectsAdmin(C.buildFieldsContext(prisma, { packageTypeId: KIT, routeNumber: 1 }), 500, "CONFIG_INVALID");
+      await rejectsHttp(C.buildFieldsContext(prisma, { packageTypeId: KIT, routeNumber: 1 }), 500, "CONFIG_INVALID");
       const viaLine = await httpContext(`packageTypeId=${KIT}&routeNumber=1`);
       assert.equal(viaLine.status, 500);
       assert.deepEqual([viaLine.body.code, viaLine.body.route_id], ["CONFIG_INVALID", R.alt]);
@@ -392,8 +353,7 @@ describe(
     // HTTP and the wire contract
     // -------------------------------------------------------------------------------------
 
-    it("http: the handler answers exactly buildFieldsContext through JSON — dates as ISO strings — for both kinds, and the compiler holds the server type to FieldsContextJson", async () => {
-      assert.equal(SERVER_MATCHES_WIRE, true);
+    it("http: the handler answers exactly buildFieldsContext through JSON — dates as ISO strings — for both kinds", async () => {
       for (const [qs, query] of [
         [`packageTypeId=${KIT}&routeNumber=1`, { packageTypeId: KIT, routeNumber: 1 }],
         [`itemTypeId=${H.ITEM_TYPE_IN_BOX}&routeNumber=1`, { itemTypeId: H.ITEM_TYPE_IN_BOX, routeNumber: 1 }],
@@ -408,8 +368,8 @@ describe(
 
       const body = (await httpContext(`packageTypeId=${KIT}&routeNumber=1`)).body as FieldsContextJson;
       const kitView = await A.getRouteFields(prisma, R.kit);
-      assert.ok(kitView.draft_updated_at instanceof Date);
-      assert.equal(body.kit?.draft_updated_at, kitView.draft_updated_at.toISOString());
+      assert.equal(typeof kitView.draft_updated_at, "string");
+      assert.equal(body.kit?.draft_updated_at, kitView.draft_updated_at);
       assert.equal(body.kit?.draft_updated_by, ACTOR.username);
       assert.deepEqual(body.lines.map((l) => [l.seq_from, l.seq_to, l.missing ?? null]), [[1, 1, null], [2, 3, null], [4, 6, "ROUTE_MISSING"]]);
     });

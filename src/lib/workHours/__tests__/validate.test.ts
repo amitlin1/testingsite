@@ -23,9 +23,24 @@ test("vacation is always valid on a non-locked day", () => {
   assert.deepEqual(validateOverride(ov({ date: "2026-09-15", kind: "vacation" }), { weekday: 2, israeli: null }), { ok: true });
 });
 
+test("an unknown override kind is rejected", () => {
+  const bogus = { ...ov({ date: "2026-09-15", kind: "vacation" }), kind: "bogus" as WorkdayOverrideInput["kind"] };
+  assert.deepEqual(validateOverride(bogus, { weekday: 2, israeli: null }), { ok: false, error: "סוג חריגה לא תקין" });
+});
+
 test("no override may be entered on a full holiday or on Shabbat", () => {
   assert.deepEqual(validateOverride(ov({ date: "2026-04-22", kind: "vacation" }), { weekday: 3, israeli: full }), { ok: false, error: ERR_LOCKED_DAY });
   assert.deepEqual(validateOverride(ov({ date: "2026-09-12", kind: "vacation" }), { weekday: 6, israeli: null }), { ok: false, error: ERR_LOCKED_DAY });
+});
+
+test("a break must lie inside the working hours", () => {
+  const at = (breakStart: string, breakEnd: string) =>
+    validateOverride(
+      ov({ date: "2026-09-15", kind: "short_hours", start: "07:00", end: "10:00", breakStart, breakEnd }),
+      { weekday: 2, israeli: null },
+    );
+  assert.equal(at("08:00", "08:30").ok, true);
+  assert.deepEqual(at("12:00", "13:00"), { ok: false, error: "ההפסקה חייבת להיות בתוך שעות העבודה" });
 });
 
 test("short_hours requires end strictly after start", () => {

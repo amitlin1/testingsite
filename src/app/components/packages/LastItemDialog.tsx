@@ -2,8 +2,9 @@
 import React from "react";
 import { Trash2, Replace } from "lucide-react";
 import { DialogTitle } from "@/components/ui";
-import { PackageDialog } from "./PackageDialog";
-import { HAIR, INK_2, MUTED, seq2 } from "./packageUi";
+import { ArtboardDialog } from "@/components/ui/ArtboardDialog";
+import { HAIR, INK_2, MUTED } from "@/components/ui/colors";
+import { seq2 } from "@/app/lib/packages/ids";
 
 /**
  * אי אפשר להסיר את הפריט האחרון — design/Package Dialogs.dc.html ("last").
@@ -24,7 +25,7 @@ export default function LastItemDialog({
     { icon: <Replace size={16} strokeWidth={1.75} aria-hidden />, title: "החלף את הפריט", note: "הוסף קודם את הפריט החדש, ואז הסר את הפריט הזה." },
   ];
   return (
-    <PackageDialog open onClose={onClose} width="min(520px, 94vw)" draggable={false}>
+    <ArtboardDialog open onClose={onClose} width="min(520px, 94vw)" draggable={false}>
       <div style={{ padding: "22px 24px 0" }}>
         <DialogTitle style={{ padding: 0, display: "block" }}>אי אפשר להסיר את הפריט האחרון</DialogTitle>
         <div style={{ fontSize: 14, color: INK_2, marginTop: 9, lineHeight: 1.55 }}>
@@ -49,6 +50,6 @@ export default function LastItemDialog({
         <button type="button" onClick={onClose} className="pkg-pill pkg-pill--ghost" style={{ padding: "11px 20px" }}>הבנתי</button>
         <button type="button" onClick={onDeletePackage} className="pkg-pill pkg-pill--ghost pkg-pill--danger-text" style={{ padding: "11px 20px" }}>מחק את המארז</button>
       </div>
-    </PackageDialog>
+    </ArtboardDialog>
   );
 }

@@ -33,14 +33,10 @@ const TAG: Record<Exclude<Variant, "inherit">, string> = {
   caption: "span", overline: "span", button: "span",
 };
 
+/** MUI's Typography-only colour names; the tone names resolve as in `sx`. */
 const LEGACY_COLOR: Record<string, string> = {
   textPrimary: "var(--color-ink)",
   textSecondary: "var(--color-ink-muted-48)",
-  primary: "var(--color-primary)",
-  secondary: "var(--color-ink-muted-80)",
-  error: "var(--color-destructive)",
-  success: "var(--color-success-ink)",
-  warning: "var(--color-warning-ink)",
   inherit: "inherit",
 };
 

@@ -10,6 +10,10 @@ import type { NumberField } from "@/app/lib/station-fields/schema";
  * artboard draws lives in WORKER_UNDRAWN_TEXT (spec "העיצוב סגור" rule 2; approved on 2026-10-14).
  */
 
+/** A note's character counter shows from this share of its maximum (NotesField); the settings
+ *  editor's footnote states it. */
+export const NOTE_COUNTER_FROM = 0.8;
+
 // ---- not drawn in any worker artboard ---------------------------------------------------
 /** Text the worker artboards never draw, worded here and approved on 2026-10-14. */
 export const WORKER_UNDRAWN_TEXT = {

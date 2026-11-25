@@ -1,15 +1,13 @@
-import { NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
-import { newPrefixedId } from "@/app/lib/station-fields/step-uids";
-import type { RandomSource } from "@/app/lib/station-fields/step-uids";
-import { allComponentsOf } from "@/app/lib/popup-templates/schema";
+import type { RandomSource } from "@/lib/random-id";
+import { jsonEqual } from "@/lib/json-guards";
+import { KINDS_ALLOWED, MANDATORY_SYSTEM_KINDS, SYSTEM_KINDS, TEMPLATE_LIMITS, allComponentsOf } from "@/app/lib/popup-templates/schema";
 import type {
   ComponentKind, PackageRole, PopupTemplateConfig, TemplateComponent, TemplateStep,
 } from "@/app/lib/popup-templates/schema";
 import { COMPONENT_NAME, TEMPLATE_DEFAULTS } from "@/app/lib/popup-templates/labels";
-import { TEMPLATE_LIMITS } from "@/app/lib/popup-templates/validate";
 import type { TemplateIssue } from "@/app/lib/popup-templates/validate";
 import {
-  closingTemplate, newComponentId, newTemplateStepId, openingTemplate, photoStationTemplate, verdictStationTemplate,
+  closingTemplate, newChecklistRowId, newComponent, newTemplateStepId, openingTemplate, photoStationTemplate, verdictStationTemplate,
 } from "@/app/lib/popup-templates/templates";
 import { OPENING_PHOTO_CODES } from "@/app/lib/popup-templates/codePopups";
 import type { CodePopup } from "@/app/lib/popup-templates/codePopups";
@@ -24,25 +22,21 @@ import type { CodePopup } from "@/app/lib/popup-templates/codePopups";
  * edit finds its target in whichever list holds it.
  */
 
-/** The catalog of the item base, in the order the "הוסף רכיב" menu lists it. */
-export const CATALOG_ORDER: readonly ComponentKind[] = ["message", "photo", "weight", "route_fields", "sku_scan", "verdict"];
-
 /** Which list of a template: its steps, or the opening's item flow. */
 export type StepList = "steps" | "item_flow";
 
-/** The catalog of a list: the item base's, a package role's steps (the labels may be added back;
- *  the mandatory system parts are always there), or the item flow's. */
-export function catalogFor(role: PackageRole | null, where: StepList): readonly ComponentKind[] {
-  if (where === "item_flow") return CATALOG_ORDER;
-  if (role === "opening") return ["message", "photo", "route_fields", "sku_scan", "verdict", "checklist", "notes", "labels"];
-  if (role === "closing") return ["message", "photo", "route_fields", "sku_scan", "verdict", "checklist", "notes"];
-  return CATALOG_ORDER;
-}
-
 /** The package wizards' own parts: they keep their step, and their settings are the wizards'. */
-export const SYSTEM_PART_KINDS: readonly ComponentKind[] = ["contents", "items", "labels", "arrival", "report_sign"];
+const SYSTEM_PART_KINDS: readonly ComponentKind[] = SYSTEM_KINDS;
 /** Of those, the ones a template must have: neither they nor their step can be removed. */
-const MANDATORY_PART_KINDS: readonly ComponentKind[] = ["contents", "items", "arrival"];
+const MANDATORY_PART_KINDS: readonly ComponentKind[] = [...MANDATORY_SYSTEM_KINDS.opening, ...MANDATORY_SYSTEM_KINDS.closing];
+
+/** The "הוסף רכיב" catalog of a list: what the place may hold, in menu order, minus the mandatory
+ *  system parts (always there) and the report signing (added as a step of its own,
+ *  addReportSignStep). */
+export function catalogFor(role: PackageRole | null, where: StepList): readonly ComponentKind[] {
+  const allowed: readonly ComponentKind[] = where === "item_flow" ? KINDS_ALLOWED.item_flow : KINDS_ALLOWED[role ?? "item"];
+  return allowed.filter((k) => !MANDATORY_PART_KINDS.includes(k) && k !== "report_sign");
+}
 
 export const isSystemPart = (c: TemplateComponent) => SYSTEM_PART_KINDS.includes(c.kind);
 /** A system part the admin may remove (and add back): the labels, the report signing. */
@@ -66,34 +60,12 @@ function whereIs(cfg: PopupTemplateConfig, test: (step: TemplateStep) => boolean
 const withList = (cfg: PopupTemplateConfig, where: StepList, steps: TemplateStep[]): PopupTemplateConfig =>
   (where === "steps" ? { ...cfg, steps } : { ...cfg, item_flow: steps });
 
-/** A new component of a kind, with the defaults today's popups use. A photo component's group is
- *  its own: its code is its id. */
-export function newComponent(kind: ComponentKind, random?: RandomSource): TemplateComponent {
-  const id = newComponentId(random);
-  switch (kind) {
-    case "sku_scan": return { id, kind, required: true, carry_last: true, lookup_reference: true };
-    case "message": return { id, kind, text: "" };
-    case "photo": return { id, kind, title: TEMPLATE_DEFAULTS.photoTitle, photo_code: id, min: 0, show_reference: true };
-    case "weight": return { id, kind, required: true, tolerance_pct: 5 };
-    case "route_fields": return { id, kind };
-    case "verdict": return { id, kind, question: TEMPLATE_DEFAULTS.verdictQuestion, note_max: NOTE_MAX_DEFAULT };
-    case "checklist": return { id, kind, title: "רשימת סימון", items: [{ id: newPrefixedId("i_", random), label: "" }] };
-    case "notes": return { id, kind, label: "הערות" };
-    case "contents":
-    case "items":
-    case "labels":
-    case "arrival":
-    case "report_sign":
-      return { id, kind };
-  }
-}
-
 /** A blank template: the SKU, then one step with the route's fields and the verdict. */
 export function blankTemplate(random?: RandomSource): PopupTemplateConfig {
   return {
     steps: [
       { id: newTemplateStepId(random), title: TEMPLATE_DEFAULTS.skuStepTitle, desc: TEMPLATE_DEFAULTS.skuStepDesc, components: [newComponent("sku_scan", random)] },
-      { id: newTemplateStepId(random), title: "בדיקת {עמדה}", desc: "", components: [newComponent("route_fields", random), newComponent("verdict", random)] },
+      { id: newTemplateStepId(random), title: TEMPLATE_DEFAULTS.checkStepTitle, desc: "", components: [newComponent("route_fields", random), newComponent("verdict", random)] },
     ],
     finish_label: TEMPLATE_DEFAULTS.finishLabel,
   };
@@ -227,7 +199,7 @@ export function moveComponent(cfg: PopupTemplateConfig, componentId: string, by:
 
 // ---- a checklist's rows ---------------------------------------------------------------
 type Rows = { id: string; label: string }[];
-export const addChecklistRow = (rows: Rows, random?: RandomSource): Rows => [...rows, { id: newPrefixedId("i_", random), label: "" }];
+export const addChecklistRow = (rows: Rows, random?: RandomSource): Rows => [...rows, { id: newChecklistRowId(random), label: "" }];
 export const setChecklistRow = (rows: Rows, rowId: string, label: string): Rows => rows.map((r) => (r.id === rowId ? { ...r, label } : r));
 export const removeChecklistRow = (rows: Rows, rowId: string): Rows => rows.filter((r) => r.id !== rowId);
 
@@ -237,7 +209,7 @@ export function setFinishLabel(cfg: PopupTemplateConfig, finish_label: string): 
 
 // ---- reading ------------------------------------------------------------------------
 /** The same config (the draft has no unsaved change). */
-export const sameConfig = (a: PopupTemplateConfig | null, b: PopupTemplateConfig | null) => JSON.stringify(a) === JSON.stringify(b);
+export const sameConfig = (a: PopupTemplateConfig | null, b: PopupTemplateConfig | null) => jsonEqual(a, b);
 
 /** The issues of one place: a step's own (no component), or one component's. */
 export function issuesAt(issues: readonly TemplateIssue[], at: { stepId: string; componentId?: string }): TemplateIssue[] {

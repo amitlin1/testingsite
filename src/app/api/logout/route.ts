@@ -15,15 +15,16 @@
 // URL and 302s to it.
 
 import { NextResponse, type NextRequest } from "next/server";
+import { SERVER_BASE_PATH } from "@/lib/base-path";
 
 export const runtime = "nodejs";
 // Never prerender/cache: the whole point is a fresh process.env read per request.
 export const dynamic = "force-dynamic";
 
-const FALLBACK_ISSUER = "http://localhost:8080/realms/testing";
-
 export function GET(request: NextRequest) {
-  const issuer = (process.env.AUTH_KEYCLOAK_ISSUER || FALLBACK_ISSUER).replace(/\/+$/, "");
+  const issuer = (process.env.AUTH_KEYCLOAK_ISSUER ?? "").replace(/\/+$/, "");
+  // No issuer, no Keycloak provider (auth.ts): there is no SSO session to end.
+  if (!issuer) return NextResponse.redirect(new URL(`${SERVER_BASE_PATH}/login`, request.url));
 
   const params = new URLSearchParams();
 

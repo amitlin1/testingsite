@@ -1,0 +1,5 @@
+/* ItemFilesPanel: a file row lights up under the pointer. */
+.items-file-row { transition: background-color var(--dur-fast) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .items-file-row:hover { background: var(--color-surface-pearl); }
+}

@@ -1,92 +1,34 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { Prisma } from "@prisma/client";
-import { CUSTOMER_CODE_RULE, idCustomerCode } from "@/app/lib/packages/ids";
+import { prisma } from "@/lib/db";
+import { HttpError } from "@/lib/http/errors";
+import { parseDbId, readJsonObject } from "@/lib/http/request";
+import { IN_USE_TEXT, prismaRefusal, updateLookupRow } from "@/app/lib/lookups";
+import { customerJson, customerName, readCustomer } from "../customer";
 
 export const runtime = "nodejs";
 
-export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+type Ctx = { params: Promise<{ id: string }> };
+
+export async function PUT(req: Request, { params }: Ctx) {
   try {
-    const { id } = await params;
-    const { name, customer_code } = await req.json();
-
-    if (!name || typeof name !== "string" || !name.trim()) {
-      return NextResponse.json(
-        { error: "שם לקוח הוא שדה חובה" },
-        { status: 400 }
-      );
-    }
-
-    if (!customer_code || typeof customer_code !== "string" || !customer_code.trim()) {
-      return NextResponse.json(
-        { error: "קוד לקוח הוא שדה חובה" },
-        { status: 400 }
-      );
-    }
-
-    // The code goes into every box id minted for the customer (lib/packages/ids.ts).
-    if (idCustomerCode(customer_code) == null) {
-      return NextResponse.json({ error: CUSTOMER_CODE_RULE }, { status: 400 });
-    }
-
-    const updated = await prisma.customers.update({
-      where: { id: parseInt(id, 10) },
-      data: { name: name.trim(), customer_code: customer_code.trim() },
-    });
-
-    return NextResponse.json({
-      id: updated.id,
-      name: updated.name.trim(),
-      customer_code: updated.customer_code.trim(),
-    });
+    const id = parseDbId((await params).id);
+    const data = readCustomer(await readJsonObject(req));
+    if (id === null) throw new HttpError(404, "לקוח לא נמצא");
+    const updated = await updateLookupRow(id, () => prisma.customers.update({ where: { id }, data }), customerName(data.name));
+    return NextResponse.json(customerJson(updated));
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
-      return NextResponse.json({ error: "לקוח לא נמצא" }, { status: 404 });
-    }
-    console.error("Error updating customer:", error);
-    return NextResponse.json(
-      { error: "שגיאה בעדכון לקוח" },
-      { status: 500 }
-    );
+    return prismaRefusal(error, { notFound: "לקוח לא נמצא" }, "שגיאה בעדכון לקוח");
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: Request, { params }: Ctx) {
+  const { id } = await params;
   try {
-    const { id } = await params;
-
-    try {
-      await prisma.customers.delete({
-        where: { id: parseInt(id, 10) },
-      });
-
-      return NextResponse.json({ success: true, id });
-    } catch (dbError) {
-      if (
-        dbError instanceof Prisma.PrismaClientKnownRequestError &&
-        dbError.code === "P2003"
-      ) {
-        return NextResponse.json(
-          { error: "Cannot delete customer because it is referenced by other records." },
-          { status: 409 }
-        );
-      }
-      if (
-        dbError instanceof Prisma.PrismaClientKnownRequestError &&
-        dbError.code === "P2025"
-      ) {
-        return NextResponse.json({ error: "Customer not found" }, { status: 404 });
-      }
-      throw dbError;
-    }
+    const customerId = parseDbId(id);
+    if (customerId === null) throw new HttpError(404, "Customer not found");
+    await prisma.customers.delete({ where: { id: customerId } });
+    return NextResponse.json({ success: true, id });
   } catch (error) {
-    console.error("Error deleting customer:", error);
-    return NextResponse.json(
-      { error: "Failed to delete customer" },
-      { status: 500 }
-    );
+    return prismaRefusal(error, { notFound: "Customer not found", inUse: IN_USE_TEXT }, "Failed to delete customer");
   }
 }

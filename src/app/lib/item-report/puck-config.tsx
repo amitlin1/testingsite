@@ -1,11 +1,13 @@
 // Puck configuration — the item-report document components.
 //
 // Ported from ticketflow (src/lib/pdf/puck-config.tsx). SINGLE source of truth
-// for the report template: imported by BOTH the editor (ReportTemplateEditor via
-// <Puck>) and the server renderer (render-react via a custom tree walk). Every
-// component is isomorphic (renders under renderToStaticMarkup, no browser APIs)
-// and styled with the shared classes in `pdf-styles`, so the editor canvas
-// matches the PDF.
+// for how a report template prints: the server renderer (render-react, a
+// custom tree walk) and the editor canvas (ReportCanvas) both call these
+// renders. Every component is isomorphic (renders under renderToStaticMarkup,
+// no browser APIs) and styled with the shared classes in `pdf-styles`, so the
+// editor canvas matches the PDF. What the editor lets the author set — the
+// fields, their options and summaries — is the editor's
+// (components/item-report/editorConfig.tsx).
 //
 // LAYOUT — "drag into the same row": every block carries a `width` (absolute
 // mm fraction of the A4 content width). The drop zone is a flex-wrap row, so
@@ -21,67 +23,19 @@
 
 import * as React from "react";
 import type { Config } from "@measured/puck";
-import { withBasePath } from "@/lib/base-path";
-import { renderRichModel, isRichValue, type RichValue } from "./rich";
-import type {
-  ReportRenderMeta as PdfRenderMeta,
-  ReportSignerInfo,
-  ReportStepResult,
-  ReportTone,
-} from "./types";
-import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
-import { FONT_STACK, REPORT_FONT_OPTIONS, fontOf, type ReportFont } from "./fonts";
+import { FillValue, renderRichModel, isRichValue, type RichValue } from "./rich";
+import type { ReportRenderMeta, ReportSignerInfo, ReportStepResult, ReportTone, SignCell } from "./types";
+import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND, REPORT_TONE_WORD, signCellsOf } from "./types";
+import { PASS_FAIL_WORD } from "@/app/lib/station-fields/labels";
+import { REPORT_FONTS, fontOf } from "./fonts";
+import { DEFAULT_ROOT_PROPS, WIDTH_MM, logoUrl, type HeaderSettings, type RootProps } from "./document";
 
 /** The page's font, as the --pdf-font the stylesheet reads. */
 export function pageFontStyle(font: unknown): React.CSSProperties {
-  return { ["--pdf-font" as string]: FONT_STACK[fontOf(font)] } as React.CSSProperties;
+  return { ["--pdf-font" as string]: REPORT_FONTS[fontOf(font)].stack } as React.CSSProperties;
 }
 
-// ---------------------------------------------------------------- widths
-
-// A4 portrait content width = 210mm − 2×16mm margin = 178mm. Fractions are
-// kept slightly under budget so N-per-row always wraps cleanly.
-export const WIDTH_MM: Record<string, string> = {
-  full: "178mm",
-  "three-quarters": "132mm",
-  "two-thirds": "117mm",
-  half: "87mm",
-  third: "57mm",
-  quarter: "43mm",
-};
-
-const BOOL_OPTIONS = [
-  { label: "כן", value: true },
-  { label: "לא", value: false },
-];
-
-const BORDER_OPTIONS = [
-  { label: "ללא מסגרת", value: "none" },
-  { label: "מסגרת מלאה", value: "solid" },
-  { label: "מסגרת מקווקוות", value: "dashed" },
-];
-const PAGENUM_OPTIONS = [
-  { label: "עמוד N", value: "plain" },
-  { label: "עמוד N מתוך M", value: "of" },
-  { label: "N / M", value: "slash" },
-];
-const ALIGN3_OPTIONS = [
-  { label: "ימין", value: "right" },
-  { label: "מרכז", value: "center" },
-  { label: "שמאל", value: "left" },
-];
-
-/** The page-number preset → a template string with {page}/{pages} tokens.
- *  Shared by the editor footer preview and the server PDF footer. */
-export function pageNumberTemplate(style: string | undefined): string {
-  if (style === "plain") return "עמוד {page}";
-  if (style === "slash") return "{page} / {pages}";
-  return "עמוד {page} מתוך {pages}"; // "of" (default)
-}
-
-// ---------------------------------------------------------------- metadata
-
-const DEFAULT_META: PdfRenderMeta = {
+const DEFAULT_META: ReportRenderMeta = {
   mode: "edit",
   vars: [],
   steps: [],
@@ -93,11 +47,9 @@ const DEFAULT_META: PdfRenderMeta = {
   logos: {},
 };
 
-function readMeta(puck: { metadata?: Record<string, unknown> } | undefined): PdfRenderMeta {
-  return { ...DEFAULT_META, ...((puck?.metadata as Partial<PdfRenderMeta>) ?? {}) };
+function readMeta(puck: { metadata?: Record<string, unknown> } | undefined): ReportRenderMeta {
+  return { ...DEFAULT_META, ...((puck?.metadata as Partial<ReportRenderMeta>) ?? {}) };
 }
-
-// ---------------------------------------------------------------- rich text + tokens
 
 const TOKEN_RE = /\{\{\s*([\w.\- ]+?)\s*\}\}/g;
 // inline markdown: **bold**, __underline__, *italic*
@@ -134,21 +86,14 @@ function renderRich(text: string, values: Record<string, string>): React.ReactNo
     if (m.index > last) {
       out.push(...parseInline(text.slice(last, m.index), `t${key}`));
     }
-    const name = m[1] ?? "";
-    const val = values[name];
-    out.push(
-      <span key={`f${key++}`} className="pdf-fill">
-        {val != null && val !== "" ? <bdi>{val}</bdi> : null}
-      </span>,
-    );
+    out.push(<FillValue key={`f${key++}`} value={values[m[1] ?? ""]} />);
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push(...parseInline(text.slice(last), `t${key}`));
   return out;
 }
 
-// Render a text value that may be either a rich model (from the WYSIWYG
-// editor) or a plain string (markdown + {{tokens}}).
+/** A text value: a rich model (from the WYSIWYG editor) or a plain string (markdown + {{tokens}}). */
 function renderText(
   content: string | RichValue | undefined,
   values: Record<string, string>,
@@ -158,49 +103,21 @@ function renderText(
     : renderRich(String(content ?? ""), values);
 }
 
-// ---------------------------------------------------------------- verdict chips
-
-const TONE_WORD: Record<ReportTone, string> = {
-  pass: "תקין",
-  warn: "אזהרה",
-  fail: "לא תקין",
-  neutral: "—",
-};
-
 function VerdictChip({ verdict }: { verdict: "pass" | "fail" | null }) {
   if (!verdict) return <span className="pdf-chip pdf-chip--none">—</span>;
   return (
     <span className={`pdf-chip pdf-chip--${verdict}`}>
-      {verdict === "pass" ? "✓ תקין" : "✕ לא תקין"}
+      {verdict === "pass" ? "✓" : "✕"} {PASS_FAIL_WORD[verdict]}
     </span>
   );
 }
 
 function ToneMark({ tone }: { tone: ReportTone | null }) {
   if (!tone || tone === "neutral") return null;
-  return <span className={`pdf-chip pdf-chip--${tone}`}>{tone === "pass" ? "✓" : tone === "fail" ? "✕" : "!"} {TONE_WORD[tone]}</span>;
+  return <span className={`pdf-chip pdf-chip--${tone}`}>{tone === "pass" ? "✓" : tone === "fail" ? "✕" : "!"} {REPORT_TONE_WORD[tone]}</span>;
 }
 
-// ---------------------------------------------------------------- signature cells
-
-// A signature block is a single row of cells the author orders freely: the
-// drawn signature, any of the signer's auto-filled identity fields, or free
-// text. The signer is whoever the block's `bind` points at: "closing" = who
-// signed at the kit's closing; "final" = the approver whose signature locks the
-// finished report; "step:<uid>" = the worker who ran that station (no drawn
-// signature — workers don't draw one at the station).
-export interface SignCell {
-  /** "signature" | "text" | a signer attribute (fullName / number / date / station / role). */
-  kind: string;
-  /** Caption under the cell (e.g. "(תאריך)"). */
-  label?: string;
-  /** Text for kind==="text" — supports {{name}} tokens + inline markdown. For kind==="role", what
-   *  a signature without a kept role prints (one given before roles were kept), e.g. "בודק". */
-  text?: string;
-  /** Relative width within the row (flex-grow). Default 1 = equal cells. */
-  weight?: number;
-}
-
+/** The signer's identity fields a Signature cell can print (types.ts SignCell). */
 export const SIGNER_ATTRS: { suffix: keyof ReportSignerInfo; label: string }[] = [
   { suffix: "fullName", label: "שם מלא" },
   { suffix: "number", label: "מספר עובד" },
@@ -210,41 +127,17 @@ export const SIGNER_ATTRS: { suffix: keyof ReportSignerInfo; label: string }[] =
   { suffix: "role", label: "תפקיד החותם" },
 ];
 
-const ATTR_LABELS: Record<string, string> = Object.fromEntries(
+export const ATTR_LABELS: Record<string, string> = Object.fromEntries(
   SIGNER_ATTRS.map((a) => [a.suffix, a.label]),
 );
-
-export const SIGN_CELL_KINDS = [
-  { label: "✍ חתימה", value: "signature" },
-  ...SIGNER_ATTRS.map((a) => ({ label: a.label, value: a.suffix })),
-  { label: "טקסט חופשי", value: "text" },
-];
 
 function signerAttr(info: ReportSignerInfo | undefined, suffix: string): string {
   if (!info) return "";
   return (info as unknown as Record<string, string | undefined>)[suffix] ?? "";
 }
 
-/** A role cell's fallback text, as plain text (it is printed inside <bdi>, never as markup). */
-function renderPlainFallback(text: string | undefined): string {
-  return (text ?? "").trim();
-}
-
-// Readable summary for the array-field item chips in the editor.
-export function signCellSummary(c: SignCell): string {
-  const base =
-    c.kind === "signature"
-      ? "✍ חתימה"
-      : c.kind === "text"
-        ? `טקסט: ${c.text || "—"}`
-        : c.kind === "role" && c.text
-          ? `${ATTR_LABELS.role} (בלי תפקיד: ${c.text})`
-          : ATTR_LABELS[c.kind] ?? c.kind;
-  return c.label ? `${base}  ·  ${c.label}` : base;
-}
-
 // Human-readable "who signs here" for the editor canvas.
-function signerLabel(bind: string, meta: PdfRenderMeta): string {
+function signerLabel(bind: string, meta: ReportRenderMeta): string {
   if (bind === FINAL_SIGNATURE_BIND) return "חתימת מאשר הדוח (סופית)";
   if (bind === CLOSING_SIGNATURE_BIND) return "חתימת החותם בסגירת המארז";
   const step = /^step:(.+)$/.exec(bind);
@@ -255,15 +148,6 @@ function signerLabel(bind: string, meta: PdfRenderMeta): string {
   return "בחר/י חותם במאפיינים";
 }
 
-function logoSrc(meta: PdfRenderMeta, key: string | undefined | null): string | null {
-  if (!key) return null;
-  if (meta.logos[key]) return meta.logos[key];
-  // Bundled emblems (public/report-logos) are referenced by path.
-  if (key.startsWith("/")) return withBasePath(key);
-  return withBasePath(`/api/item-reports/logo?key=${encodeURIComponent(key)}`);
-}
-
-// Outer wrapper that carries the block's row-width.
 function Block({
   width,
   className,
@@ -292,11 +176,13 @@ export function HeaderBand({
   h,
   meta,
 }: {
-  h: Partial<HeaderSettings> & { rightLogo?: string; leftLogo?: string };
-  meta: PdfRenderMeta;
+  h: Partial<HeaderSettings>;
+  meta: ReportRenderMeta;
 }) {
-  const right = logoSrc(meta, h.rightLogo);
-  const left = logoSrc(meta, h.leftLogo);
+  // In print every logo is a data URL (meta.logos); in the editor, its URL.
+  const logo = (key: string | undefined) => (key ? meta.logos[key] || logoUrl(key) : null);
+  const right = logo(h.rightLogo);
+  const left = logo(h.leftLogo);
   // Header texts are plain strings ({{tokens}}) or rich values (the editor's chips).
   const has = (v: string | RichValue | undefined): v is string | RichValue =>
     Array.isArray(v) ? v.length > 0 : !!v;
@@ -336,27 +222,15 @@ export function HeaderBand({
   );
 }
 
-/** The classification marking (בלמ"ס / שמור / …) — printed on every page by
- *  Chromium's header/footer; drawn at the top and bottom of each sheet in the editor. */
-export const CLASSIFICATION_OPTIONS = [
-  { label: "ללא סימון", value: "" },
-  { label: "בלמ\"ס", value: "בלמ\"ס" },
-  { label: "שמור", value: "שמור" },
-  { label: "סודי", value: "סודי" },
-  { label: "סודי ביותר", value: "סודי ביותר" },
-];
-
-// ---------------------------------------------------------------- step-bound helpers
-
 /** The results to print for a step-bound block: the real ones in print; in the
  *  editor a placeholder per configured step, so the layout is visible; in the
  *  preview without an item, sample stations (the general template's canvas). */
-function resultsFor(meta: PdfRenderMeta, uid: string): ReportStepResult[] {
+function resultsFor(meta: ReportRenderMeta, uid: string): ReportStepResult[] {
   const all = meta.mode === "edit" ? sampleResults(meta) : meta.sample && meta.results.length === 0 ? GENERAL_SAMPLE : meta.results;
   return uid ? all.filter((r) => r.uid === uid) : all;
 }
 
-function sampleResults(meta: PdfRenderMeta): ReportStepResult[] {
+function sampleResults(meta: ReportRenderMeta): ReportStepResult[] {
   return meta.steps.map((s, i) => ({
     uid: s.uid,
     position: i + 1,
@@ -389,7 +263,35 @@ const GENERAL_SAMPLE: ReportStepResult[] = [
   ],
 }));
 
-// ---------------------------------------------------------------- prop types
+/** Photos per row and photo height (mm), as a block's props ask, kept in range. */
+const clampPerRow = (v: unknown): number => Math.max(1, Math.min(4, Number(v) || 3));
+const clampPhotoHeight = (v: unknown, fallback: number): number => Math.max(20, Math.min(200, Number(v) || fallback));
+
+/** A grid of photos (object keys → meta.photos); an empty key prints the placeholder. */
+function PhotoGrid({ shots, perRow, height, captions, meta }: {
+  shots: { key: string; caption: string }[];
+  perRow: number;
+  height: number;
+  captions: boolean;
+  meta: ReportRenderMeta;
+}) {
+  return (
+    <div className="pdf-photos" style={{ gridTemplateColumns: `repeat(${perRow}, 1fr)` }}>
+      {shots.map((s, i) => {
+        const src = s.key ? meta.photos[s.key] : undefined;
+        return (
+          <figure key={i} className="pdf-photo pdf-keep">
+            <div className="pdf-photo__frame" style={{ height: `${height}mm` }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {src ? <img src={src} alt="" /> : <span className="pdf-sign__placeholder">תמונה</span>}
+            </div>
+            {captions ? <figcaption>{s.caption}</figcaption> : null}
+          </figure>
+        );
+      })}
+    </div>
+  );
+}
 
 interface WidthProp {
   width?: string;
@@ -472,40 +374,6 @@ export interface SpacerProps {
 export type DividerProps = Record<string, never>;
 export type PageBreakProps = Record<string, never>;
 
-export interface HeaderSettings {
-  show: boolean;
-  /** The issuing body, one per line ("מדינת ישראל / משרד … / מעבדת הבדיקות"). */
-  org: string | RichValue;
-  /** The document's particulars, top-left ("מספר: … / תאריך: … / סימוכין: …"). */
-  meta: string | RichValue;
-  title: string | RichValue;
-  subtitle: string | RichValue;
-  /** @deprecated superseded by org / meta; still printed when set. */
-  cornerRight?: string | RichValue;
-  cornerCenter?: string | RichValue;
-  cornerLeft?: string | RichValue;
-  rightLogo: string;
-  leftLogo: string;
-}
-export interface FooterSettings {
-  show: boolean;
-  text: string;
-  textAlign: "right" | "center" | "left";
-  pageNumbers: boolean;
-  pageNumberStyle: "plain" | "of" | "slash";
-  pageNumberAlign: "right" | "center" | "left";
-}
-export interface RootProps {
-  header: HeaderSettings;
-  footer: FooterSettings;
-  /** A frame drawn on EVERY page. */
-  border: "none" | "solid" | "dashed";
-  /** The document font (fonts.ts). */
-  font: ReportFont;
-  /** The classification marking, top and bottom of every page; "" = none. */
-  classification: string;
-}
-
 export interface PdfComponentProps {
   Section: SectionProps;
   Text: TextProps;
@@ -524,61 +392,9 @@ export interface PdfComponentProps {
   PageBreak: PageBreakProps;
 }
 
-export const DEFAULT_ROOT_PROPS: RootProps = {
-  header: {
-    show: true,
-    org: [{ text: "מדינת ישראל", b: true }, { text: "\nשם היחידה\nמעבדת הבדיקות" }],
-    meta: [
-      { text: "מספר: " }, { v: "item.item_id" },
-      { text: "\nתאריך: " }, { v: "report.generated_at" },
-      { text: "\nסימוכין: " }, { v: "item.shipment_code" },
-    ],
-    title: [{ text: "דוח בדיקה", b: true, u: true }],
-    subtitle: [{ v: "item.item_type" }, { text: " · מק\"ט " }, { v: "item.makat" }],
-    rightLogo: "/report-logos/emblem-navy.png",
-    leftLogo: "/report-logos/emblem-atom.jpg",
-  },
-  footer: { show: true, text: "", textAlign: "center", pageNumbers: true, pageNumberStyle: "of", pageNumberAlign: "center" },
-  border: "none",
-  font: "david",
-  classification: "",
-};
-
-// ---------------------------------------------------------------- config
-
 export const puckConfig: Config<PdfComponentProps, RootProps> = {
   root: {
     label: "המסמך",
-    fields: {
-      header: {
-        type: "object",
-        label: "כותרת עליונה",
-        objectFields: {
-          show: { type: "radio", label: "להציג כותרת עליונה", options: BOOL_OPTIONS },
-          org: { type: "textarea", label: "הגוף המוציא (שורה לכל רמה)" },
-          meta: { type: "textarea", label: "פרטי המסמך (מספר, תאריך, סימוכין)" },
-          title: { type: "text", label: "כותרת המסמך" },
-          subtitle: { type: "text", label: "כותרת משנה" },
-          rightLogo: { type: "text", label: "סמל ימין" },
-          leftLogo: { type: "text", label: "סמל שמאל" },
-        },
-      },
-      footer: {
-        type: "object",
-        label: "כותרת תחתונה",
-        objectFields: {
-          show: { type: "radio", label: "להציג כותרת תחתונה", options: BOOL_OPTIONS },
-          text: { type: "text", label: "טקסט קבוע בתחתית" },
-          textAlign: { type: "radio", label: "מיקום הטקסט", options: ALIGN3_OPTIONS },
-          pageNumbers: { type: "radio", label: "מספור עמודים", options: BOOL_OPTIONS },
-          pageNumberStyle: { type: "select", label: "תבנית מספור", options: PAGENUM_OPTIONS },
-          pageNumberAlign: { type: "radio", label: "מיקום המספור (שורה נפרדת)", options: ALIGN3_OPTIONS },
-        },
-      },
-      classification: { type: "select", label: "סיווג (בראש ובתחתית כל עמוד)", options: CLASSIFICATION_OPTIONS },
-      font: { type: "select", label: "גופן", options: REPORT_FONT_OPTIONS },
-      border: { type: "select", label: "מסגרת לכל העמודים", options: BORDER_OPTIONS },
-    },
     defaultProps: DEFAULT_ROOT_PROPS,
     render: ({ header, border, font, children, puck }) => {
       const meta = readMeta(puck);
@@ -597,29 +413,9 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
       );
     },
   },
-  categories: {
-    "תוכן": { title: "תוכן", components: ["Section", "Text", "DetailsTable", "FieldValue", "List", "Table"] },
-    "תוצאות": { title: "תוצאות הבדיקות", components: ["ResultsTable", "StepDetails", "StepFields", "Photos"] },
-    "חתימות": { title: "חתימות וערכים", components: ["Signature", "FieldLine"] },
-    "עיצוב": { title: "מרווחים ומפרידים", components: ["Spacer", "Divider"] },
-    other: { visible: false },
-  },
   components: {
     Section: {
       label: "כותרת",
-      fields: {
-        heading: { type: "text", label: "טקסט הכותרת" },
-        variant: {
-          type: "select",
-          label: "סגנון",
-          options: [
-            { label: "סעיף ממוספר (1. 2. 3.)", value: "numbered" },
-            { label: "רגיל", value: "plain" },
-            { label: "מסגרת", value: "box" },
-          ],
-        },
-        align: { type: "radio", label: "יישור", options: ALIGN3_OPTIONS },
-      },
       defaultProps: { heading: [{ text: "כותרת", b: true }], variant: "numbered", align: "right", width: "full" },
       render: ({ heading, variant, align, width, puck }) => {
         const meta = readMeta(puck);
@@ -638,19 +434,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
 
     Text: {
       label: "טקסט",
-      fields: {
-        content: { type: "textarea", label: "תוכן" },
-        align: {
-          type: "select",
-          label: "יישור",
-          options: [
-            { label: "ימין", value: "right" },
-            { label: "מרכז", value: "center" },
-            { label: "שמאל", value: "left" },
-            { label: "מיושר לשני הצדדים", value: "justify" },
-          ],
-        },
-      },
       defaultProps: { content: "טקסט חופשי", align: "right", width: "full" },
       render: ({ content, align, width, puck }) => {
         const meta = readMeta(puck);
@@ -666,19 +449,14 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
 
     FieldValue: {
       label: "ערך ממשתנה",
-      fields: {
-        field: { type: "text", label: "משתנה" },
-        caption: { type: "text", label: "תווית לפני הערך (לא חובה)" },
-      },
       defaultProps: { field: "", caption: "", width: "full" },
       render: ({ field, caption, width, puck }) => {
         const meta = readMeta(puck);
-        const val = meta.values[field];
         return (
           <Block width={width}>
             <div className="pdf-text">
               {caption ? <span style={{ color: "var(--pdf-soft)" }}>{caption} </span> : null}
-              <span className="pdf-fill">{val != null && val !== "" ? <bdi>{val}</bdi> : null}</span>
+              <FillValue value={meta.values[field]} />
             </div>
           </Block>
         );
@@ -687,17 +465,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
 
     List: {
       label: "רשימה",
-      fields: {
-        ordered: { type: "radio", label: "ממוספרת", options: BOOL_OPTIONS },
-        items: {
-          type: "array",
-          label: "פריטים",
-          arrayFields: { content: { type: "textarea", label: "טקסט" } },
-          defaultItemProps: { content: "פריט" },
-          getItemSummary: (item: { content: string | RichValue }) =>
-            typeof item.content === "string" ? item.content || "פריט" : "פריט",
-        },
-      },
       defaultProps: { ordered: true, items: [{ content: "סעיף ראשון" }], width: "full" },
       render: ({ ordered, items, width, puck }) => {
         const meta = readMeta(puck);
@@ -716,35 +483,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
 
     Table: {
       label: "טבלה",
-      fields: {
-        headerBackground: { type: "radio", label: "רקע לכותרות", options: BOOL_OPTIONS },
-        columns: {
-          type: "array",
-          label: "עמודות (כותרות)",
-          arrayFields: {
-            header: { type: "text", label: "כותרת" },
-            width: { type: "number", label: "משקל רוחב" },
-          },
-          defaultItemProps: { header: "עמודה", width: 1 },
-          getItemSummary: (item: { header: string }) => item.header || "עמודה",
-        },
-        rows: {
-          type: "array",
-          label: "שורות",
-          arrayFields: {
-            cells: {
-              type: "array",
-              label: "תאים",
-              arrayFields: { content: { type: "textarea", label: "תוכן" } },
-              defaultItemProps: { content: "" },
-              getItemSummary: (item: { content: string | RichValue }) =>
-                typeof item.content === "string" ? item.content || "תא" : "תא",
-            },
-          },
-          defaultItemProps: { cells: [{ content: "" }] },
-          getItemSummary: (_i: unknown, i?: number) => `שורה ${(i ?? 0) + 1}`,
-        },
-      },
       defaultProps: {
         headerBackground: true,
         columns: [
@@ -791,26 +529,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     // each value, one or two pairs per row.
     DetailsTable: {
       label: "טבלת פרטים",
-      fields: {
-        perRow: {
-          type: "radio",
-          label: "זוגות בשורה",
-          options: [
-            { label: "1", value: 1 },
-            { label: "2", value: 2 },
-          ],
-        },
-        rows: {
-          type: "array",
-          label: "שורות",
-          arrayFields: {
-            label: { type: "text", label: "תווית" },
-            value: { type: "text", label: "ערך" },
-          },
-          defaultItemProps: { label: "תווית", value: "" },
-          getItemSummary: (item: { label: string }) => item.label || "שורה",
-        },
-      },
       defaultProps: {
         perRow: 2,
         rows: [
@@ -853,10 +571,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
 
     FieldLine: {
       label: "שורת ערך (קו + תווית)",
-      fields: {
-        value: { type: "text", label: "ערך" },
-        caption: { type: "text", label: "תווית מתחת" },
-      },
       defaultProps: { value: "", caption: "תווית", width: "full" },
       render: ({ value, caption, width, puck }) => {
         const meta = readMeta(puck);
@@ -877,13 +591,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     // the worker, date and verdict; optionally its fields underneath.
     ResultsTable: {
       label: "טבלת תוצאות (כל העמדות)",
-      fields: {
-        showFields: { type: "radio", label: "להציג את השדות של כל עמדה", options: BOOL_OPTIONS },
-        showStation: { type: "radio", label: "עמודת עמדה", options: BOOL_OPTIONS },
-        showWorker: { type: "radio", label: "עמודת עובד", options: BOOL_OPTIONS },
-        showDate: { type: "radio", label: "עמודת תאריך", options: BOOL_OPTIONS },
-        showComments: { type: "radio", label: "עמודת הערות", options: BOOL_OPTIONS },
-      },
       defaultProps: { showFields: true, showStation: true, showWorker: true, showDate: true, showComments: true, width: "full" },
       render: ({ showFields, showStation, showWorker, showDate, showComments, width, puck }) => {
         const meta = readMeta(puck);
@@ -952,11 +659,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     // The fields one station step filled, as a label / value / verdict table.
     StepFields: {
       label: "שדות של עמדה",
-      fields: {
-        step: { type: "text", label: "עמדה" },
-        showHeader: { type: "radio", label: "שורת עמדה · עובד · תאריך", options: BOOL_OPTIONS },
-        showNotes: { type: "radio", label: "עמודת הערות", options: BOOL_OPTIONS },
-      },
       defaultProps: { step: "", showHeader: true, showNotes: true, width: "full" },
       render: ({ step, showHeader, showNotes, width, puck }) => {
         const meta = readMeta(puck);
@@ -1021,27 +723,12 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     // route (docs/ITEM_REPORTS.md).
     StepDetails: {
       label: "פירוט לפי עמדה (כל העמדות)",
-      fields: {
-        showPhotos: { type: "radio", label: "להציג את התמונות של כל עמדה", options: BOOL_OPTIONS },
-        perRow: {
-          type: "select",
-          label: "תמונות בשורה",
-          options: [
-            { label: "1", value: 1 },
-            { label: "2", value: 2 },
-            { label: "3", value: 3 },
-            { label: "4", value: 4 },
-          ],
-        },
-        height: { type: "number", label: "גובה תמונה (מ\"מ)", min: 20, max: 200 },
-        showComments: { type: "radio", label: "להציג הערות", options: BOOL_OPTIONS },
-      },
       defaultProps: { showPhotos: true, perRow: 3, height: 45, showComments: true, width: "full" },
       render: ({ showPhotos, perRow, height, showComments, width, puck }) => {
         const meta = readMeta(puck);
+        // The general template's editor (no steps to sample) shows the sample stations, as its
+        // preview does; the other step blocks stay empty there.
         const rows = meta.mode === "edit" && meta.steps.length === 0 ? GENERAL_SAMPLE : resultsFor(meta, "");
-        const n = Math.max(1, Math.min(4, Number(perRow) || 3));
-        const h = Math.max(20, Math.min(200, Number(height) || 45));
         if (rows.length === 0) {
           return <Block width={width}><div className="pdf-stepdetail__empty">{meta.mode === "edit" ? "העמדות של הפריט יופיעו כאן" : "לא נרשמו תוצאות"}</div></Block>;
         }
@@ -1075,20 +762,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                   ) : null}
                   {showComments && r.comments ? <div className="pdf-stepdetail__note">הערות: {r.comments}</div> : null}
                   {showPhotos && shots.length > 0 ? (
-                    <div className="pdf-photos" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
-                      {shots.map((s, i) => {
-                        const src = s.key ? meta.photos[s.key] : undefined;
-                        return (
-                          <figure key={i} className="pdf-photo pdf-keep">
-                            <div className="pdf-photo__frame" style={{ height: `${h}mm` }}>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              {src ? <img src={src} alt="" /> : <span className="pdf-sign__placeholder">תמונה</span>}
-                            </div>
-                            <figcaption>{s.caption}</figcaption>
-                          </figure>
-                        );
-                      })}
-                    </div>
+                    <PhotoGrid shots={shots} perRow={clampPerRow(perRow)} height={clampPhotoHeight(height, 45)} captions meta={meta} />
                   ) : null}
                   {fields.length === 0 && shots.length === 0 && !(showComments && r.comments) ? (
                     <div className="pdf-stepdetail__empty">לא נשמרו נתונים בעמדה זו</div>
@@ -1104,29 +778,11 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     // Photos captured in photo fields — one step's, or every step's.
     Photos: {
       label: "תמונות מעמדה",
-      fields: {
-        step: { type: "text", label: "עמדה" },
-        field: { type: "text", label: "שדה צילום" },
-        perRow: {
-          type: "select",
-          label: "תמונות בשורה",
-          options: [
-            { label: "1", value: 1 },
-            { label: "2", value: 2 },
-            { label: "3", value: 3 },
-            { label: "4", value: 4 },
-          ],
-        },
-        height: { type: "number", label: "גובה תמונה (מ\"מ)", min: 20, max: 200 },
-        captions: { type: "radio", label: "כיתוב מתחת לתמונה", options: BOOL_OPTIONS },
-      },
       defaultProps: { step: "", field: "", perRow: 3, height: 50, captions: true, width: "full" },
       render: ({ step, field, perRow, height, captions, width, puck }) => {
         const meta = readMeta(puck);
-        const n = Math.max(1, Math.min(4, Number(perRow) || 3));
-        const h = Math.max(20, Math.min(200, Number(height) || 50));
-        type Shot = { key: string; caption: string };
-        const shots: Shot[] = [];
+        const n = clampPerRow(perRow);
+        const shots: { key: string; caption: string }[] = [];
         if (meta.mode === "edit") {
           for (let i = 0; i < n; i++) shots.push({ key: "", caption: "תמונה" });
         } else {
@@ -1140,20 +796,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
         if (shots.length === 0) return <Block width={width}><span /></Block>;
         return (
           <Block width={width}>
-            <div className="pdf-photos" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
-              {shots.map((s, i) => {
-                const src = s.key ? meta.photos[s.key] : undefined;
-                return (
-                  <figure key={i} className="pdf-photo pdf-keep">
-                    <div className="pdf-photo__frame" style={{ height: `${h}mm` }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {src ? <img src={src} alt="" /> : <span className="pdf-sign__placeholder">תמונה</span>}
-                    </div>
-                    {captions ? <figcaption>{s.caption}</figcaption> : null}
-                  </figure>
-                );
-              })}
-            </div>
+            <PhotoGrid shots={shots} perRow={n} height={clampPhotoHeight(height, 50)} captions={captions} meta={meta} />
           </Block>
         );
       },
@@ -1161,21 +804,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
 
     Signature: {
       label: "בלוק חתימה",
-      fields: {
-        bind: { type: "text", label: "חותם" },
-        cells: {
-          type: "array",
-          label: "תאים בשורה (בחר/י סוג וסדר)",
-          arrayFields: {
-            kind: { type: "select", label: "סוג התא", options: SIGN_CELL_KINDS },
-            label: { type: "text", label: "כיתוב מתחת (לא חובה)" },
-            text: { type: "text", label: 'טקסט (ל"טקסט חופשי"; ב"תפקיד החותם" — מה שיודפס לחתימה ישנה בלי תפקיד)' },
-            weight: { type: "number", label: "רוחב יחסי", min: 1 },
-          },
-          defaultItemProps: { kind: "signature", label: "", text: "", weight: 1 },
-          getItemSummary: (item: SignCell) => signCellSummary(item),
-        },
-      },
       defaultProps: {
         bind: FINAL_SIGNATURE_BIND,
         cells: [
@@ -1190,11 +818,10 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
         const meta = readMeta(puck);
         const sig = meta.signatures[bind];
         const info = meta.signerMeta[bind];
-        const list: SignCell[] = Array.isArray(cells) && cells.length > 0 ? cells : [{ kind: "signature", label: "חתימה" }];
         return (
           <Block width={width}>
             <div className="pdf-sigrow pdf-keep">
-              {list.map((c, i) => {
+              {signCellsOf(cells).map((c, i) => {
                 const weight = c.weight && c.weight > 0 ? c.weight : 1;
                 const isSig = c.kind === "signature";
                 const highlight = isSig && !sig && meta.highlightBind === bind && bind !== "";
@@ -1212,8 +839,8 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                   inner = <span>{renderRich(c.text ?? "", meta.values)}</span>;
                 } else {
                   // A role cell of a given signature that kept no role (signed before roles were
-                  // kept, or a step's worker) prints the cell's own text, as the row did before.
-                  const val = signerAttr(info, c.kind) || (c.kind === "role" && info ? renderPlainFallback(c.text) : "");
+                  // kept, or a step's worker) prints the cell's own text, as plain text.
+                  const val = signerAttr(info, c.kind) || (c.kind === "role" && info ? (c.text ?? "").trim() : "");
                   inner = val ? (
                     <bdi>{val}</bdi>
                   ) : meta.mode === "edit" ? (
@@ -1239,7 +866,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
 
     Spacer: {
       label: "רווח",
-      fields: { height: { type: "number", label: "גובה (מ\"מ)" } },
       defaultProps: { height: 8 },
       render: ({ height }) => (
         <Block width="full">
@@ -1250,7 +876,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
 
     Divider: {
       label: "קו מפריד",
-      fields: {},
       defaultProps: {},
       render: () => (
         <Block width="full">
@@ -1262,7 +887,6 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     // Not in the palette — pages are added/removed via the +/- page controls.
     PageBreak: {
       label: "מעבר עמוד",
-      fields: {},
       defaultProps: {},
       render: ({ puck }) => {
         const meta = readMeta(puck);
@@ -1276,5 +900,3 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     },
   },
 };
-
-export type PdfPuckConfig = typeof puckConfig;

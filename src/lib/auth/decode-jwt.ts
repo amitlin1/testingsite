@@ -1,4 +1,4 @@
-// Edge-safe JWT payload decoder. PORTABLE — copy verbatim.
+// Edge-safe JWT payload decoder.
 //
 // We read claims from the Keycloak access token in places where Node `Buffer`
 // may not exist (middleware on the Edge runtime). `atob` + `TextDecoder` are
@@ -25,15 +25,9 @@ export interface KeycloakAccessTokenPayload {
   email?: string;
   /** Custom realm attribute (מספר עובד), via the employeeNumber token mapper. */
   employee_number?: string;
-  // The nested `profile` claim is supplied by a realm client-scope. Shape is
-  // app/realm dependent — extend as needed.
+  // The nested `profile` claim is supplied by a realm client-scope.
   profile?: {
     display_name?: string;
-    rank?: string;
-    title?: string;
-    service_type?: string;
-    company?: string;
-    base?: string;
   };
 }
 

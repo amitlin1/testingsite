@@ -6,16 +6,15 @@ import { EDITOR_TEXT } from "../../lib/labels";
 import "./editor.css";
 
 /**
- * The cell editor's breadcrumb (artboard 2, spec §5.5 פריסה 1): <nav aria-label="מיקום"> with ghost
- * "חזרה למפה" (ArrowRight — the reading way back in RTL), then "מפת שדות › {station} › {item}", the
- * last ink / 600 and aria-current="page". Artboard 2 draws it at the inline end of the view tabs'
- * row, so the page renders it in RouteViewTabs' `trailing` slot while the editor is open.
+ * The cell editor's breadcrumb (artboard 2, spec §5.5 פריסה 1). Artboard 2 draws it at the inline end
+ * of the view tabs' row, so the page renders it in RouteViewTabs' `trailing` slot while the editor is
+ * open.
  */
 
 export type EditorBreadcrumbProps = {
   /** The cell's station (its map column). */
   stationLabel: string;
-  /** The cell's row — "מחשב", "הקופסה", "כל פריט במארז" … */
+  /** The cell's row. */
   rowLabel: string;
   /** "חזרה למפה" and "מפת שדות". */
   onBackToMap: () => void;
@@ -41,5 +40,3 @@ export function EditorBreadcrumb({ stationLabel, rowLabel, onBackToMap }: Editor
     </nav>
   );
 }
-
-export default EditorBreadcrumb;

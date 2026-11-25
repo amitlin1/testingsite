@@ -1,11 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  UNDRAWN_TEXT, SAVED_JUST_NOW, cellErrorsText, cellLabel, changesText, columnCoverageText, columnPickLabel, coverageText, draftPillText,
-  editorFooterText, emptyCellLabel, fieldsText, filterChipText, issuesToFixText, kitRouteMissingText, kitSummaryText, lineRouteMissingText,
-  lineSubText, mapErrorBarText, mapFooterText, notOnRouteTooltip, openKitText, publishedPillText, qtyText, routeOptionText,
-  routesCountText, savedAgoText, selectedCellsText, seqText, setTagText, sharedCellLabel, sharedCellTooltip, sharedFilledText, sharedRowTitle,
+  UNDRAWN_TEXT, cellErrorsText, changesText, draftPillText, editorFooterText, fieldsText, issuesToFixText,
+  kitRoutesText, kitSummaryText, lineSubText, mapErrorBarText, mapFooterText, notOnRouteTooltip, routesCountText, savedAgoText,
+  selectedCellsText, seqText, sharedCellTooltip, sharedFilledText, sharedRowTitle, stationsText,
 } from "../labels";
+
+/** The phrases with a rule of their own — singular forms, composed parts, relative times; a phrase
+ *  that only joins its arguments is the artboard's text and is not repeated here. */
 
 test("the artboard scripts' singular / plural forms", () => {
   assert.equal(fieldsText(1), "שדה אחד");
@@ -21,36 +23,26 @@ test("the artboard scripts' singular / plural forms", () => {
   assert.equal(issuesToFixText(3), "3 בעיות לתיקון");
   assert.equal(routesCountText(14), "14 מסלולים");
   assert.equal(routesCountText(1), UNDRAWN_TEXT.routesOne);
-  assert.equal(coverageText(15, 20), "כיסוי 15/20");
-  assert.equal(columnCoverageText(5, 6), "מוגדרים 5/6");
+  assert.equal(kitRoutesText(1), UNDRAWN_TEXT.routesOne);
+  assert.equal(kitRoutesText(3), "3 מסלולים");
+  assert.equal(stationsText(1), UNDRAWN_TEXT.stationsOne);
+  assert.equal(stationsText(4), "4 עמדות");
   assert.equal(kitSummaryText(4, 5), "מארז · 4 סוגי פריטים · 5 יחידות");
   assert.equal(kitSummaryText(1, 1), "מארז · " + UNDRAWN_TEXT.kitKindsOne + " · " + UNDRAWN_TEXT.kitUnitsOne);
-  assert.equal(publishedPillText(4), "מפורסם · גרסה 4");
 });
 
-test("the map's rows, cells and tooltips", () => {
+test("the map's rows, cells and tooltips: seq ranges, singulars, the composed route phrases", () => {
   assert.equal(seqText(1, 1), "01");
   assert.equal(seqText(2, 3), "02–03");
   assert.equal(seqText(12, 12), "12");
-  assert.equal(qtyText(2), "×2");
   assert.equal(lineSubText(1, 4), "מסלול 1 · 4 עמדות");
   assert.equal(lineSubText(2, 1), "מסלול 2 · " + UNDRAWN_TEXT.stationsOne);
-  assert.equal(lineRouteMissingText(2), "לסוג הפריט אין מסלול מספר 2");
-  assert.equal(kitRouteMissingText(1), "לסוג המארז אין מסלול מספר 1");
-  assert.equal(routeOptionText("מארז עמדת עבודה", 1), "מארז עמדת עבודה · מסלול 1");
-  assert.equal(columnPickLabel("חשמל"), "בחירת כל התאים בעמדה חשמל");
-  assert.equal(filterChipText("ללא שדות", 5), "ללא שדות · 5");
-  assert.equal(cellLabel("מכניקה", "מסך"), "מכניקה · מסך");
-  assert.equal(sharedCellLabel("חשמל", "מסך", 3), "חשמל · מסך · 3 שדות משותפים");
-  assert.equal(emptyCellLabel("חשמל", "מקלדת"), "חשמל · מקלדת · ללא שדות");
   assert.equal(cellErrorsText(1), "שגיאה אחת");
   assert.equal(cellErrorsText(2), "2" + UNDRAWN_TEXT.errorsSuffix);
-  assert.equal(setTagText("חזותית בסיסית"), "ערכה: חזותית בסיסית");
   assert.equal(notOnRouteTooltip("מקלדת", "חשמל", 1), "עמדת חשמל לא נמצאת במסלול 1 של מקלדת");
   assert.equal(sharedRowTitle(["מארז ציוד היקפי"]), "משותף ל: מארז ציוד היקפי");
   assert.equal(sharedCellTooltip(1, "מסך", ["מארז עמדת עבודה"]), "הוגדר במסלול 1 של מסך · משותף עם מארז עמדת עבודה");
   assert.equal(sharedFilledText(3, "מסך", 1, ["מארז עמדת עבודה"]), "3 תאים כבר מלאים: מסך משתמש במסלול 1 שלו, שמוגדר גם במארז עמדת עבודה.");
-  assert.equal(openKitText("מארז עמדת עבודה"), "פתח את מארז עמדת עבודה");
 });
 
 test("the map footer, as artboards 1 and 11 write it", () => {
@@ -72,13 +64,13 @@ test("the editor card's footer (artboard 2)", () => {
 
 test("the save time as a relative time", () => {
   const t = Date.parse("2026-10-14T10:00:00.000Z");
-  assert.equal(savedAgoText(t, t + 59_000), SAVED_JUST_NOW);
-  assert.equal(savedAgoText(t, t - 5_000), SAVED_JUST_NOW, "clock skew reads as just now");
-  assert.equal(savedAgoText(t, t + 60_000), UNDRAWN_TEXT.savedMinuteAgo);
+  assert.equal(savedAgoText(t, t + 59_000), "נשמר אוטומטית לפני רגע", "artboards 1–10");
+  assert.equal(savedAgoText(t, t - 5_000), "נשמר אוטומטית לפני רגע", "clock skew reads as just now");
+  assert.equal(savedAgoText(t, t + 60_000), "נשמר אוטומטית לפני דקה");
   assert.equal(savedAgoText(t, t + 5 * 60_000), "נשמר אוטומטית לפני 5 דקות");
-  assert.equal(savedAgoText(t, t + 60 * 60_000), UNDRAWN_TEXT.savedHourAgo);
+  assert.equal(savedAgoText(t, t + 60 * 60_000), "נשמר אוטומטית לפני שעה");
   assert.equal(savedAgoText(t, t + 3 * 3600_000), "נשמר אוטומטית לפני 3 שעות");
-  assert.equal(savedAgoText(t, t + 24 * 3600_000), UNDRAWN_TEXT.savedDayAgo);
+  assert.equal(savedAgoText(t, t + 24 * 3600_000), "נשמר אוטומטית לפני יום");
   assert.equal(savedAgoText(t, t + 2 * 24 * 3600_000), "נשמר אוטומטית לפני יומיים", "two days: artboard 8's word");
   assert.equal(savedAgoText(t, t + 4 * 24 * 3600_000), "נשמר אוטומטית לפני 4 ימים");
 });

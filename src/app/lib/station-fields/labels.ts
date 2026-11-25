@@ -1,5 +1,8 @@
+import { OPTION_COUNT } from "./schema";
+import type { NotesMode, Tone } from "./schema";
+
 /**
- * Hebrew strings shared by the station-fields module, the API and the worker popups.
+ * Hebrew strings of station fields: the module, the API, the worker popups and the admin screen.
  *
  * Every string is copied character for character from an artboard script
  * (route-fields handoff, design/*.dc.html) or the spec: "—" is U+2014, "·" is U+00B7,
@@ -7,9 +10,15 @@
  * each popup keeps its own artboard's wording (spec §4.4) — hence statusA / statusB /
  * statusC / missLabel side by side.
  *
- * Text no artboard draws lives in UNDRAWN_TEXT (spec "העיצוב סגור" rule 2; its wording was
- * approved on 2026-10-14). The admin screen keeps its own labels file.
+ * Text no artboard draws lives in FIELDS_UNDRAWN_TEXT (spec "העיצוב סגור" rule 2; its wording was
+ * approved on 2026-10-14). The admin screen's own sentences live in settings/testing-routes/lib.
  */
+
+/** Words as in StationFieldEditor.dc.html ("סוג האפשרות"). */
+export const TONE_WORD: Record<Tone, string> = { pass: "תקין", warn: "אזהרה", fail: "כשל", neutral: "ניטרלי" };
+
+/** Admin labels — StationFieldEditor.dc.html script. Listbox order: optional, required_on_fail, required, off. */
+export const NOTES_MODE_LABEL: Record<NotesMode, string> = { optional: "אופציונלי", required_on_fail: "חובה בכשל", required: "חובה", off: "ללא" };
 
 // ---- lint (spec §2.3) ---------------------------------------------------------
 export const LINT_TEXT = {
@@ -17,8 +26,8 @@ export const LINT_TEXT = {
   fieldLabelEmpty: "יש להזין שם לשדה",
   /** OptionListEditor.dc.html — validation line. */
   optionLabelEmpty: "אפשרות ריקה — מלאו או הסירו",
-  optionsTooMany: "יותר מ-6 אפשרויות — קשה לבחירה מהירה",
-  optionsTooFew: "נדרשות לפחות 2 אפשרויות",
+  optionsTooMany: `יותר מ-${OPTION_COUNT.max} אפשרויות — קשה לבחירה מהירה`,
+  optionsTooFew: `נדרשות לפחות ${OPTION_COUNT.min} אפשרויות`,
   optionsNoFail: "אף אפשרות לא נחשבת 'כשל'",
 } as const;
 
@@ -33,11 +42,6 @@ export function optionEmptyMapText(station: string, item: string, field: string)
   return station + " · " + item + ": אפשרות ריקה בשדה '" + field + "'";
 }
 
-/** ApplyFieldSetDialog.dc.html — a set/paste row skipped because the cell already has it. */
-export function duplicateSkipText(field: string, cell: string): string {
-  return "שדה '" + field + "' כבר קיים ב'" + cell + "' — יידלג כדי למנוע כפילות";
-}
-
 // ---- suggestion line (spec §4.9) ------------------------------------------------
 /** Artboards 12, 13, 15–18. */
 export const SUGGEST_PREFIX = "מוצע: לא תקין — ";
@@ -45,7 +49,7 @@ export const SUGGEST_PREFIX = "מוצע: לא תקין — ";
 export const SUGGEST_PREFIX_DIALOG = "מוצע לסמן כלא תקין — ";
 /** Artboard 13 — muted tail after the suggestion. */
 export const SUGGEST_TAIL_WORKER_DECIDES = " · ההחלטה בידי העובד";
-/** pass_fail words — PassFail (stationKit) and artboard 14. */
+/** pass_fail words — PassFail (testing/fields/PassFail) and artboard 14. */
 export const PASS_FAIL_WORD = { pass: "תקין", fail: "לא תקין" } as const;
 
 // ---- finish gate (spec §3.4 step 6; artboard 14 `alertText`) ---------------------
@@ -106,9 +110,13 @@ export function routeOfTypeLabel(routeNumber: number, itemTypeDesc: string): str
 /** Artboard 10 — the same line for the kit's own route, when the dialog is opened on a kit. */
 export const KIT_ROUTE_LABEL = "מסלול המארז";
 
+// ---- the map's fixed rows (artboard 1) — also artboard 8's usage chips ----------------------------
+export const BOX_ROW_TITLE = "הקופסה";
+export const EACH_ITEM_ROW_TITLE = "כל פריט במארז";
+
 // ---- not drawn in any artboard ----------------------------------------------------
 /** Text the artboards never draw, worded here and approved on 2026-10-14. */
-export const UNDRAWN_TEXT = {
+export const FIELDS_UNDRAWN_TEXT = {
   // OPTIONS_EMPTY — a choice field with 0 options (spec §2.3, §5.15).
   optionsEmpty: "אין אפשרויות — הוסיפו אפשרות",
   // NUMBER_RANGE — minimum above maximum / negative tolerance (spec §2.3, §5.15).

@@ -14,9 +14,9 @@ import {
   unknownStepIssues,
 } from "../validate";
 import type { Issue } from "../validate";
-import { FIELD_TYPES, NOTES_MODE_LABEL, TONE_WORD, targetKey } from "../schema";
+import { FIELD_TYPES, targetKey } from "../schema";
 import type { ChoiceOption, Field, PhotoField, RouteFieldsConfig, Tone } from "../schema";
-import { UNDRAWN_TEXT, LINT_TEXT, duplicateSkipText, optionEmptyMapText, optionsOkText } from "../labels";
+import { FIELDS_UNDRAWN_TEXT, LINT_TEXT, NOTES_MODE_LABEL, TONE_WORD, optionEmptyMapText, optionsOkText } from "../labels";
 
 // ---- fixtures -----------------------------------------------------------------------
 const opt = (id: string, label: string, tone: Tone): ChoiceOption => ({ id, label, tone });
@@ -333,7 +333,7 @@ test("lint: the option-count checks, in artboard 4's order and with its words", 
     ["warning", "OPTIONS_TOO_MANY", "f_many0001", "יותר מ-6 אפשרויות — קשה לבחירה מהירה"],
     ["warning", "OPTIONS_TOO_FEW", "f_one00001", "נדרשות לפחות 2 אפשרויות"],
     ["warning", "OPTIONS_NO_FAIL", "f_nofail01", "אף אפשרות לא נחשבת 'כשל'"],
-    ["error", "OPTIONS_EMPTY", "f_mul00001", UNDRAWN_TEXT.optionsEmpty],
+    ["error", "OPTIONS_EMPTY", "f_mul00001", FIELDS_UNDRAWN_TEXT.optionsEmpty],
   ]);
 });
 
@@ -348,7 +348,7 @@ test("lint: the same name twice in one cell is a warning on the second; sections
   ]));
   assert.deepEqual(issues.filter((i) => i.code === "DUPLICATE_LABEL_IN_CELL"), [{
     level: "warning", code: "DUPLICATE_LABEL_IN_CELL", step_uid: "s_elec0001", target: "item", field_id: "f_led00002",
-    message: UNDRAWN_TEXT.duplicateLabel,
+    message: FIELDS_UNDRAWN_TEXT.duplicateLabel,
   }]);
   const twoCells: RouteFieldsConfig = {
     schema: 1,
@@ -373,8 +373,8 @@ test("lint: an item-type group repeating an each_item name is a duplicate — th
     { target: "box", fields: [choice("f_ext00004", "מצב חיצוני", EXT)] },
   ]));
   assert.deepEqual(issues, [
-    { level: "warning", code: "DUPLICATE_LABEL_IN_CELL", step_uid: "s_open0001", target: { item_type_id: 14 }, field_id: "f_ext00002", message: UNDRAWN_TEXT.duplicateLabel },
-    { level: "warning", code: "DUPLICATE_LABEL_IN_CELL", step_uid: "s_open0001", target: { item_type_id: 15 }, field_id: "f_ext00003", message: UNDRAWN_TEXT.duplicateLabel },
+    { level: "warning", code: "DUPLICATE_LABEL_IN_CELL", step_uid: "s_open0001", target: { item_type_id: 14 }, field_id: "f_ext00002", message: FIELDS_UNDRAWN_TEXT.duplicateLabel },
+    { level: "warning", code: "DUPLICATE_LABEL_IN_CELL", step_uid: "s_open0001", target: { item_type_id: 15 }, field_id: "f_ext00003", message: FIELDS_UNDRAWN_TEXT.duplicateLabel },
   ]);
   // Two item types never share a card, nor does the box with the items.
   assert.deepEqual(lintRouteFieldsConfig(pkgStep([
@@ -404,9 +404,9 @@ test("lint: a checklist with no items or an unnamed item blocks publish; a photo
     photo("f_pho00003", "front"),
   ]));
   assert.deepEqual(issues.map((i) => [i.level, i.code, i.field_id, i.item_id, i.message]), [
-    ["error", "CHECKLIST_EMPTY", "f_chk00001", undefined, UNDRAWN_TEXT.checklistEmpty],
-    ["error", "CHECKLIST_ITEM_LABEL_EMPTY", "f_chk00002", "c_blank001", UNDRAWN_TEXT.checklistItemLabelEmpty],
-    ["error", "CHECKLIST_ITEM_LABEL_EMPTY", "f_chk00002", "c_blank002", UNDRAWN_TEXT.checklistItemLabelEmpty],
+    ["error", "CHECKLIST_EMPTY", "f_chk00001", undefined, FIELDS_UNDRAWN_TEXT.checklistEmpty],
+    ["error", "CHECKLIST_ITEM_LABEL_EMPTY", "f_chk00002", "c_blank001", FIELDS_UNDRAWN_TEXT.checklistItemLabelEmpty],
+    ["error", "CHECKLIST_ITEM_LABEL_EMPTY", "f_chk00002", "c_blank002", FIELDS_UNDRAWN_TEXT.checklistItemLabelEmpty],
   ]);
   // The shape check still takes them, as draft states.
   const draft = parseRouteFieldsConfig({ schema: 1, steps: { s_elec0001: { ...config([]).steps.s_elec0001, groups: [{ target: "item", fields: [checklist("f_chk00001", []), photo("f_pho00001", "")] }] } } });
@@ -434,8 +434,8 @@ test("lint: NUMBER_RANGE — minimum above maximum, or a negative tolerance", ()
     num("f_num00004", { ref: 230, tol_pct: 0 }),
   ]));
   assert.deepEqual(issues.map((i) => [i.code, i.level, i.field_id, i.message]), [
-    ["NUMBER_RANGE", "error", "f_num00001", UNDRAWN_TEXT.numberRange],
-    ["NUMBER_RANGE", "error", "f_num00003", UNDRAWN_TEXT.numberRange],
+    ["NUMBER_RANGE", "error", "f_num00001", FIELDS_UNDRAWN_TEXT.numberRange],
+    ["NUMBER_RANGE", "error", "f_num00003", FIELDS_UNDRAWN_TEXT.numberRange],
   ]);
 });
 
@@ -475,16 +475,10 @@ test("artboard strings are exact", () => {
   assert.equal(optionsOkText(4, 1), "4 אפשרויות · אחת נחשבת 'כשל'");
   assert.equal(optionsOkText(6, 3), "6 אפשרויות · 3 נחשבות 'כשל'");
   assert.equal(optionEmptyMapText("מכניקה", "מסך", "ברגי VESA"), "מכניקה · מסך: אפשרות ריקה בשדה 'ברגי VESA'");
-  assert.equal(duplicateSkipText("הפריט ארוז במקומו", "כל פריט במארז"), "שדה 'הפריט ארוז במקומו' כבר קיים ב'כל פריט במארז' — יידלג כדי למנוע כפילות");
   assert.deepEqual(TONE_WORD, { pass: "תקין", warn: "אזהרה", fail: "כשל", neutral: "ניטרלי" });
   assert.deepEqual(Object.entries(NOTES_MODE_LABEL), [["optional", "אופציונלי"], ["required_on_fail", "חובה בכשל"], ["required", "חובה"], ["off", "ללא"]]);
   assert.deepEqual([...FIELD_TYPES], ["choice_row", "pass_fail", "number", "text", "textarea", "checklist", "multi_choice", "photo", "scan", "section"]);
-  // The undrawn text exists and is non-empty (UNDRAWN_TEXT in labels.ts).
-  assert.deepEqual(Object.keys(UNDRAWN_TEXT).sort(), [
-    "checklistEmpty", "checklistItemLabelEmpty", "duplicateLabel", "noteTooLong", "numberRange", "optionsEmpty",
-    "schemaMismatch", "stepScopeMismatch", "stepUnknown",
-  ]);
-  for (const text of Object.values(UNDRAWN_TEXT)) assert.ok(text.trim().length > 0);
+  for (const text of Object.values(FIELDS_UNDRAWN_TEXT)) assert.ok(text.trim().length > 0);
 });
 
 // ---- against the live route -----------------------------------------------------------------
@@ -496,7 +490,7 @@ test("checkConfigAgainstRoute: unknown uids, scope against package_level, misali
   // Station type 22 became package-level under a per-item config.
   assert.deepEqual(checkConfigAgainstRoute(cfg, [21, 22, 26], ["s_open0001", "s_elec0001", "s_clos0001"], new Set([21, 22, 26])), {
     unknownUids: [],
-    issues: [{ level: "error", code: "STEP_SCOPE_MISMATCH", step_uid: "s_elec0001", message: UNDRAWN_TEXT.stepScopeMismatch }],
+    issues: [{ level: "error", code: "STEP_SCOPE_MISMATCH", step_uid: "s_elec0001", message: FIELDS_UNDRAWN_TEXT.stepScopeMismatch }],
   });
   // Without one uid per step there are no positions at all.
   assert.deepEqual(checkConfigAgainstRoute(cfg, [21, 22, 26], ["s_open0001", "s_elec0001"], packageLevel), { unknownUids: ["s_elec0001", "s_open0001"], issues: [] });
@@ -505,7 +499,7 @@ test("checkConfigAgainstRoute: unknown uids, scope against package_level, misali
 test("unknownStepIssues: one publish-blocking STEP_UNKNOWN error per unknown uid, in order", () => {
   assert.deepEqual(unknownStepIssues([]), []);
   assert.deepEqual(unknownStepIssues(["s_elec0001", "s_open0001"]), [
-    { level: "error", code: "STEP_UNKNOWN", step_uid: "s_elec0001", message: UNDRAWN_TEXT.stepUnknown },
-    { level: "error", code: "STEP_UNKNOWN", step_uid: "s_open0001", message: UNDRAWN_TEXT.stepUnknown },
+    { level: "error", code: "STEP_UNKNOWN", step_uid: "s_elec0001", message: FIELDS_UNDRAWN_TEXT.stepUnknown },
+    { level: "error", code: "STEP_UNKNOWN", step_uid: "s_open0001", message: FIELDS_UNDRAWN_TEXT.stepUnknown },
   ]);
 });

@@ -12,18 +12,15 @@
 
 export type ReportFont = "david" | "rubik";
 
-export const REPORT_FONT_OPTIONS: { label: string; value: ReportFont }[] = [
-  { label: "דוד (מסמך רשמי)", value: "david" },
-  { label: "רוביק", value: "rubik" },
-];
-
-export const FONT_STACK: Record<ReportFont, string> = {
-  david: "'David Libre', 'David', 'Times New Roman', serif",
-  rubik: "'Rubik', Arial, sans-serif",
+export const REPORT_FONTS: Record<ReportFont, { family: string; stack: string; label: string }> = {
+  david: { family: "David Libre", stack: "'David Libre', 'David', 'Times New Roman', serif", label: "דוד (מסמך רשמי)" },
+  rubik: { family: "Rubik", stack: "'Rubik', Arial, sans-serif", label: "רוביק" },
 };
 
+export const DEFAULT_FONT: ReportFont = "david";
+
 export function fontOf(v: unknown): ReportFont {
-  return v === "rubik" ? "rubik" : "david";
+  return v === "rubik" ? "rubik" : DEFAULT_FONT;
 }
 
 const HEBREW = "U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F";
@@ -31,7 +28,7 @@ const LATIN =
   "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD";
 
 export interface FontFile {
-  family: string;
+  font: ReportFont;
   /** Path under public/ ("fonts/…"). */
   file: string;
   format: "woff2" | "truetype";
@@ -41,12 +38,12 @@ export interface FontFile {
 }
 
 export const FONT_FILES: FontFile[] = [
-  { family: "David Libre", file: "fonts/david-libre/david-libre-hebrew-400-normal.woff2", format: "woff2", weight: "400", style: "normal", range: HEBREW },
-  { family: "David Libre", file: "fonts/david-libre/david-libre-hebrew-700-normal.woff2", format: "woff2", weight: "700", style: "normal", range: HEBREW },
-  { family: "David Libre", file: "fonts/david-libre/david-libre-latin-400-normal.woff2", format: "woff2", weight: "400", style: "normal", range: LATIN },
-  { family: "David Libre", file: "fonts/david-libre/david-libre-latin-700-normal.woff2", format: "woff2", weight: "700", style: "normal", range: LATIN },
-  { family: "Rubik", file: "fonts/Rubik-VariableFont_wght.ttf", format: "truetype", weight: "300 900", style: "normal" },
-  { family: "Rubik", file: "fonts/Rubik-Italic-VariableFont_wght.ttf", format: "truetype", weight: "300 900", style: "italic" },
+  { font: "david", file: "fonts/david-libre/david-libre-hebrew-400-normal.woff2", format: "woff2", weight: "400", style: "normal", range: HEBREW },
+  { font: "david", file: "fonts/david-libre/david-libre-hebrew-700-normal.woff2", format: "woff2", weight: "700", style: "normal", range: HEBREW },
+  { font: "david", file: "fonts/david-libre/david-libre-latin-400-normal.woff2", format: "woff2", weight: "400", style: "normal", range: LATIN },
+  { font: "david", file: "fonts/david-libre/david-libre-latin-700-normal.woff2", format: "woff2", weight: "700", style: "normal", range: LATIN },
+  { font: "rubik", file: "fonts/Rubik-VariableFont_wght.ttf", format: "truetype", weight: "300 900", style: "normal" },
+  { font: "rubik", file: "fonts/Rubik-Italic-VariableFont_wght.ttf", format: "truetype", weight: "300 900", style: "italic" },
 ];
 
 /** @font-face rules; `src` maps a font file to its URL (data: on the server, /fonts in the editor). */
@@ -54,7 +51,7 @@ export function fontFaceRules(files: readonly FontFile[], src: (f: FontFile) => 
   return files
     .map(
       (f) =>
-        `@font-face{font-family:'${f.family}';font-style:${f.style};font-weight:${f.weight};font-display:block;` +
+        `@font-face{font-family:'${REPORT_FONTS[f.font].family}';font-style:${f.style};font-weight:${f.weight};font-display:block;` +
         `src:url(${src(f)}) format('${f.format}')${f.range ? `;unicode-range:${f.range}` : ""}}`,
     )
     .join("\n");

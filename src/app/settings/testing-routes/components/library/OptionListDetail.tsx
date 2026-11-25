@@ -2,34 +2,25 @@
 import * as React from "react";
 import { Check, ChevronUp, Copy, Info, Library, Pencil, Trash2 } from "lucide-react";
 import { Alert, Button, ConfirmDialog, IconButton, Tag } from "@/components/ui";
-import { TONE_WORD } from "@/app/lib/station-fields/schema";
+import { TONE_WORD } from "@/app/lib/station-fields/labels";
 import type { FieldSetJson, OptionListJson } from "@/app/lib/station-fields/admin-types";
-import { optionKey } from "../../lib/optionsModel";
-import { OPTION_LIST_TEXT, optionKeyTitle } from "../../lib/labels";
+import { optionKey } from "../../lib/optionFields";
+import { OPTION_LIST_TEXT, fieldsText, optionKeyTitle, optionsCountText } from "../../lib/labels";
 import { failCount, setsUsingList, toneRows } from "../../lib/libraryModel";
 import { withLibrary } from "../../lib/routeQuery";
 import type { RouteQuery } from "../../lib/routeQuery";
 import {
-  LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT, LIST_DETAIL_TEXT, listAlertText, listDetailLabel, listMetaText,
-  listOptionLabel, listOptionsTitle, listSummaryText, setUsesListText,
+  LIBRARY_UNDRAWN_TEXT, LIBRARY_TEXT, LIST_DETAIL_TEXT, listDetailLabel, listMetaText, listOptionLabel, listSummaryText,
+  sharedImpactText,
 } from "../../lib/libraryLabels";
-import { deleteOptionList, saveOptionList } from "../../lib/useLibrary";
+import { deleteOptionList, saveOptionList } from "../../lib/libraryWrites";
 import { RenameInput } from "./FieldSetEditor";
 
 /**
- * "פרטי רשימה" — a shared option list in the library (artboard 8, spec §5.9 OptionListDetail):
- *   head      h2 with Pencil ("שינוי שם הרשימה": the name in place; a new name is a new version, PUT),
- *             Tag "רשימה משותפת"; "בשימוש ב-{N} שדות · {M} אפשרויות"; ghost "שכפל", red ghost "מחק"
- *             (confirm and 409 IN_USE: undrawn), outlined "עריכת האפשרויות" (artboard 4)
- *   options   "אפשרויות · {n}" + "המספר הוא מקש הבחירה המהירה בחלון העובד"; 36px chips: the mono key
- *             box ("1"–"4", then "–" as artboard 4), dot, label, tone word; "{n} אפשרויות · אחת נחשבת
- *             'כשל'"
- *   verdict   "איך כל אפשרות נספרת בפסק הדין": the four tones, each with its labels or "—", and the note
- *   worker    "כך העובד יראה את הרשימה": a static picture of the worker's list ("בחר…", the options with
- *             their key hints) — aria-hidden
- *   in sets   "בערכות שדות" + "לחיצה פותחת את הערכה": a chip per set with fields linked to the list;
- *             none: "אף ערכת שדות לא משתמשת ברשימה הזו. היא מקושרת ישירות לשדות במסלולים."
- *   note      role="note" "שינוי ברשימה המשותפת יחול על {N} שדות לאחר פרסום. …", and the footnote.
+ * "פרטי רשימה" — a shared option list in the library (artboard 8, spec §5.9 OptionListDetail): its
+ * name (a new name is a new version, PUT), its options with their quick keys, how each tone counts in
+ * the verdict, a static picture of the worker's list (aria-hidden), the sets that use it, and the
+ * impact note. Delete's confirm and its 409 IN_USE are undrawn; "עריכת האפשרויות" opens artboard 4.
  */
 
 export type OptionListDetailProps = {
@@ -167,7 +158,7 @@ export function OptionListDetail({
       {/* the options and their keys */}
       <div className="rf-lib-fields">
         <div className="rf-lib-fields__head">
-          <h3 className="rf-lib-fields__title">{listOptionsTitle(list.options.length)}</h3>
+          <h3 className="rf-lib-fields__title">{optionsCountText(list.options.length, false)}</h3>
           <span className="rf-lib-fields__note">{LIST_DETAIL_TEXT.keysNote}</span>
         </div>
         <div role="list" aria-label={LIST_DETAIL_TEXT.optionsLabel} className="rf-lib-opts">
@@ -175,7 +166,7 @@ export function OptionListDetail({
             const key = optionKey(i) ?? OPTION_LIST_TEXT.noKey;
             return (
               <span key={o.id} role="listitem" title={TONE_WORD[o.tone]} aria-label={listOptionLabel(key, o.label, o.tone)} className="rf-lib-opt">
-                <span className="rf-lib-opt__key" dir="ltr" title={optionKeyTitle(i)}>{key}</span>
+                <span className="rf-lib-opt__key" dir="ltr" title={optionKeyTitle(optionKey(i))}>{key}</span>
                 <span className="rf-tone-dot" data-tone={o.tone} />
                 <span>{o.label}</span>
                 <span className="rf-lib-opt__word">{TONE_WORD[o.tone]}</span>
@@ -245,7 +236,7 @@ export function OptionListDetail({
             {inSets.map((s) => (
               <button key={s.id} type="button" className="rf-lib-chip rf-lib-chip--set" onClick={() => onNavigate(withLibrary(query, "sets", s.id))}>
                 <span className="rf-lib-chip__name">{s.name}</span>
-                <span className="rf-lib-chip__line">{setUsesListText(s.count)}</span>
+                <span className="rf-lib-chip__line">{fieldsText(s.count)}</span>
               </button>
             ))}
           </div>
@@ -256,7 +247,7 @@ export function OptionListDetail({
 
       <div role="note" className="rf-lib-note">
         <Info size={18} strokeWidth={1.75} className="rf-lib-note__icon" aria-hidden />
-        <span>{listAlertText(list.usage.fields)}</span>
+        <span>{sharedImpactText(list.usage.fields, 0)}</span>
       </div>
 
       <div className="rf-lib-foot">{LIST_DETAIL_TEXT.footnote}</div>
@@ -274,5 +265,3 @@ export function OptionListDetail({
     </section>
   );
 }
-
-export default OptionListDetail;

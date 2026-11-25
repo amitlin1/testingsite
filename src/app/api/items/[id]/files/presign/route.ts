@@ -1,22 +1,19 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import { prisma } from "@/lib/db";
 import { statObject } from '@/lib/storage';
 import { registerPendingFileObject } from '@/lib/file-registry';
-import {
-  buildItemObjectKey,
-  contentTypeOf,
-  keyBelongsToItem,
-  parseUploadDescriptors,
-  type PresignResponse,
-} from '@/lib/directUpload/shared';
+import type { FileTags } from '@/lib/storage/contract';
+import { contentTypeOf, parseUploadDescriptors, type PresignResponse } from '@/lib/directUpload/shared';
+import { ItemKeys } from '@/lib/storage/keys';
+import { errorResponse } from '@/lib/http/errors';
 import {
   MAX_FILE_SIZE,
   MAX_FILE_SIZE_MB,
   issueTicket,
   newUploadId,
-  readJson,
-  workerIdOf,
+  uploadedByOf,
 } from '@/lib/directUpload/server';
+import { parseItemId, readJsonObject } from '@/lib/http/request';
 
 export const runtime = 'nodejs';
 
@@ -51,36 +48,34 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
-    if (!/^\d+$/.test(id)) {
+    const itemId = parseItemId(id);
+    if (itemId == null) {
       return NextResponse.json({ error: 'מזהה פריט לא תקין' }, { status: 400 });
     }
     const item = await prisma.items.findUnique({
-      where: { item_id: BigInt(id) },
+      where: { item_id: itemId },
       select: { item_id: true },
     });
     if (!item) {
       return NextResponse.json({ error: 'הפריט לא נמצא' }, { status: 404 });
     }
 
-    const body = await readJson<PresignBody>(request);
-    if (!body) {
-      return NextResponse.json({ error: 'גוף הבקשה אינו JSON תקין' }, { status: 400 });
-    }
+    const body: PresignBody = await readJsonObject(request, 'גוף הבקשה אינו JSON תקין');
 
     const parsed = parseUploadDescriptors(body.files, MAX_FILE_SIZE, MAX_FILE_SIZE_MB);
     if (!parsed.ok) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
-    const workerId = workerIdOf(body.worker_id);
+    const workerId = uploadedByOf(body.worker_id);
 
-    // ---- replace: re-sign an existing key, no new registry row ----
+    // A replace re-signs an existing key; no new registry row.
     if (typeof body.replace_key === 'string' && body.replace_key !== '') {
       const key = body.replace_key;
       if (parsed.files.length !== 1) {
         return NextResponse.json({ error: 'להחלפה יש לשלוח קובץ אחד בלבד' }, { status: 400 });
       }
-      if (!keyBelongsToItem(key, id)) {
+      if (!ItemKeys.belongs(key, id)) {
         return NextResponse.json({ error: 'מפתח קובץ לא תקין' }, { status: 400 });
       }
       // Refuses to "replace" a deleted/missing file — same rule the old PATCH had.
@@ -98,26 +93,23 @@ export async function POST(
       return NextResponse.json(res);
     }
 
-    // ---- new attachments ----
     const stationTypeRaw = body.station_type_id;
-    const stationTypeId =
-      stationTypeRaw != null &&
-      String(stationTypeRaw) !== '' &&
-      Number.isFinite(Number(stationTypeRaw))
-        ? Number(stationTypeRaw)
-        : null;
-    const isGlobal = body.is_global === true || String(body.is_global ?? '') === 'true';
-    const photoType =
-      typeof body.photo_type === 'string' && body.photo_type.trim() !== ''
-        ? body.photo_type.trim()
-        : null;
+    const tags: FileTags = {
+      stationTypeId:
+        stationTypeRaw != null && String(stationTypeRaw) !== '' && Number.isFinite(Number(stationTypeRaw))
+          ? Number(stationTypeRaw)
+          : null,
+      isGlobal: body.is_global === true || String(body.is_global ?? '') === 'true',
+      photoType:
+        typeof body.photo_type === 'string' && body.photo_type.trim() !== '' ? body.photo_type.trim() : null,
+    };
 
     const uploads = await Promise.all(
       parsed.files.map(async (file) => {
-        const objectKey = buildItemObjectKey(id, file.name, newUploadId());
+        const objectKey = ItemKeys.build(id, file.name, newUploadId());
         const contentType = contentTypeOf(file);
-        // The classification tags live on the pending row from the start, so
-        // the confirm step only has to name the key.
+        // The tags live on the pending row from the start, so the confirm step
+        // only has to name the key.
         await registerPendingFileObject({
           objectKey,
           fileName: file.name,
@@ -125,7 +117,7 @@ export async function POST(
           sizeBytes: file.size,
           entityType: 'item_attachment',
           entityId: id,
-          metadata: { originalName: file.name, stationTypeId, isGlobal, photoType },
+          metadata: { originalName: file.name, ...tags },
           createdBy: workerId,
           updatedBy: workerId,
         });
@@ -136,7 +128,6 @@ export async function POST(
     const res: PresignResponse = { uploads, maxBytes: MAX_FILE_SIZE };
     return NextResponse.json(res);
   } catch (error) {
-    console.error('Item file presign error:', error);
-    return NextResponse.json({ error: 'שגיאה בהכנת ההעלאה' }, { status: 500 });
+    return errorResponse(error, 'שגיאה בהכנת ההעלאה');
   }
 }

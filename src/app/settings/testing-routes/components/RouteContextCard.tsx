@@ -2,8 +2,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { ExternalLink, Package } from "lucide-react";
-import { Button, Tag } from "@/components/ui";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
+import { Button, Tag, SearchableCombobox } from "@/components/ui";
+import { settingsPackagesHref } from "@/app/lib/links";
 import {
   CONTEXT_CARD_TEXT, ROUTE_PICK_TEXT, coverageText, kitRoutesText, kitSummaryText, routeNumberSubText, routeNumberText,
 } from "../lib/labels";
@@ -12,18 +12,10 @@ import type { RouteRef } from "../lib/routeQuery";
 import KeyboardHelp from "./KeyboardHelp";
 
 /**
- * The context card (route-fields spec §5.2; artboards 1, 2, 11): <section aria-label="מסלול נבחר">,
- * one row that wraps —
- *   "סוג מארז"     every package type (never an item type: an item's route is reached from its kit,
- *                  in "שלבי המסלול"), by name; the subtitle counts its routes. Picking one opens
- *                  the route the page chooses for it (routeForKitType).
- *   "מספר מסלול"   the routes of that package type, then one number without a route ("חדש —
- *                  ייווצר בשמירה"); the subtitle counts the steps and marks the default.
- *   tags           primary "מארז · {k} סוגי פריטים · {u} יחידות" (from the context's lines) and the
- *                  count "כיסוי {defined}/{relevant}" (mapModel coverage) — each only once known.
- *   actions        ghost "פתח במסך המארזים" → /settings/packages?type={id}; the "?" of the
- *                  keyboard shortcuts.
- * Hidden on the library view (artboard 8) — the page decides.
+ * The context card (route-fields spec §5.2; artboards 1, 2, 11): the package type (never an item
+ * type: an item's route is reached from its kit, in "שלבי המסלול"), then one of its route numbers
+ * (routePickModel); the kit's tags and the map's coverage once known; the link to the package types
+ * screen and the keyboard help. The page hides it on the library view (artboard 8).
  */
 
 export type RouteContextCardProps = {
@@ -94,7 +86,7 @@ export default function RouteContextCard({
           <Button
             variant="text"
             component={Link}
-            href={`/settings/packages?type=${type.id}`}
+            href={settingsPackagesHref(type.id)}
             startIcon={<ExternalLink size={16} strokeWidth={1.75} aria-hidden />}
           >
             {CONTEXT_CARD_TEXT.openPackages}

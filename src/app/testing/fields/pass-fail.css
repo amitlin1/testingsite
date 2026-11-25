@@ -1,0 +1,33 @@
+/* The pass / fail pair (PassFail.tsx): a real toggle (aria-pressed), so it gets every state that an
+   inline style cannot say — hover (only on a fine pointer: station touchscreens would keep it
+   stuck), focus-visible, pressed. */
+.tst-passfail {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--color-border-strong);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: var(--text-lead);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: transform var(--t-press) var(--ease-press), background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.tst-passfail:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .tst-passfail:not([aria-pressed="true"]):hover { background: var(--color-surface-pearl); border-color: var(--color-field-border); }
+}
+.tst-passfail--pass[aria-pressed="true"] { border-color: var(--color-success-ink); background: var(--color-success-bg); color: var(--color-success-ink); }
+.tst-passfail--fail[aria-pressed="true"] { border-color: var(--color-destructive); background: var(--color-danger-bg); color: var(--color-destructive); }
+/* The pair inside a station-field row (PassFail size="row"; route-fields
+   artboard 14): 44px, 14px/600, sized to its column. */
+.tst-passfail--row { min-height: 44px; min-width: 0; gap: 4px; padding: 0 6px; font-size: var(--text-body-sm); white-space: nowrap; }
+/* A required pair left empty after a save attempt: both edges red, no text
+   (artboard 14 `pfErr`). Holds on hover. */
+.tst-passfail.tst-passfail--invalid:not([aria-pressed="true"]) { border-color: var(--color-destructive); }

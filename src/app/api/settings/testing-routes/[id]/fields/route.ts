@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { adminFieldsErrorResponse, getRouteFields, parsePathId } from "@/app/lib/station-fields/admin";
+import { prisma } from "@/lib/db";
+import { getRouteFields } from "@/app/lib/station-fields/admin";
+import { errorResponse } from "@/lib/http/errors";
+import { parseDbId } from "@/lib/http/request";
 
 export const runtime = "nodejs";
 
@@ -13,8 +15,8 @@ export const runtime = "nodejs";
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return NextResponse.json(await getRouteFields(prisma, parsePathId(id)));
+    return NextResponse.json(await getRouteFields(prisma, parseDbId(id)));
   } catch (error) {
-    return adminFieldsErrorResponse(error, "Failed to load route fields");
+    return errorResponse(error, "Failed to load route fields");
   }
 }

@@ -13,8 +13,8 @@
 
 /* ------------------------------------------------------------ the card --- */
 /* Beside the editor (artboard 2: `flex: 1 1 380px`, sticky 16px from the top). At most as tall as
-   the settings frame it sticks in shows — the viewport under the app's top bar (56px) and the
-   settings sub-nav (52px), less 16px above and below — with its body scrolling inside, so the mini
+   the settings frame it sticks in shows — the viewport under the app's top bar and the settings
+   sub-nav (shell.css), less 16px above and below — with its body scrolling inside, so the mini
    footer stays reachable beside a long editor. */
 .rf-pv {
   flex: 1 1 380px;
@@ -22,7 +22,7 @@
   align-self: flex-start;
   position: sticky;
   top: 16px;
-  max-height: calc(100vh - 56px - 52px - 32px);
+  max-height: calc(100vh - var(--shell-topbar-h) - var(--settings-subnav-h) - 32px);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;

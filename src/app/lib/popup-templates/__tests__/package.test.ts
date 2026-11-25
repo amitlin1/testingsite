@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { allComponentsOf, photoCodesOf, reportSignStepOf } from "../schema";
+import { allComponentsOf, reportSignStepOf } from "../schema";
 import type { PopupTemplateConfig, TemplateComponent } from "../schema";
-import { TemplateShapeError, lintPopupTemplate, parsePopupTemplateConfig } from "../validate";
+import { ShapeError } from "@/app/lib/station-fields/validate";
+import { lintPopupTemplate, parsePopupTemplateConfig } from "../validate";
 import { closingTemplate, openingTemplate, verdictStationTemplate } from "../templates";
 
 const codes = (cfg: PopupTemplateConfig, base: "item" | "package" = "package") => lintPopupTemplate(cfg, base).map((i) => i.code);
@@ -18,7 +19,7 @@ test("today's two package wizards are valid package templates, unchanged by the 
   }
   assert.deepEqual(kinds(open), [["sku_scan"], ["message", "photo", "route_fields", "verdict"], ["contents"], ["items"], ["labels"]]);
   assert.deepEqual(open.item_flow!.map((s) => s.components.map((c) => c.kind)), [["sku_scan"], ["message", "photo", "route_fields", "verdict"], ["message", "weight"]]);
-  assert.deepEqual(photoCodesOf(open), ["pkg", "prod"], "the box's group and the items' — the item flow counts");
+  assert.deepEqual(allComponentsOf(open).flatMap((c) => (c.kind === "photo" ? [c.photo_code] : [])), ["pkg", "prod"], "the box's group and the items' — the item flow counts");
   assert.deepEqual(kinds(close), [["sku_scan"], ["arrival"], ["route_fields", "checklist", "notes"]]);
   const checks = allComponentsOf(close).find((c) => c.kind === "checklist") as Extract<TemplateComponent, { kind: "checklist" }>;
   assert.equal(checks.items.length, 3);
@@ -107,7 +108,7 @@ test("the shape parse: role, item flow, checklist rows, unique ids across all of
   for (const [what, mutate] of bad) {
     const c = clone(closingTemplate());
     mutate(c);
-    assert.throws(() => parsePopupTemplateConfig(c), TemplateShapeError, what);
+    assert.throws(() => parsePopupTemplateConfig(c), ShapeError, what);
   }
 });
 

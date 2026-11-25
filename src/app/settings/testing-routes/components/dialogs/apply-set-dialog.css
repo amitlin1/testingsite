@@ -3,7 +3,7 @@
    §5.10). Dialog maxWidth "sm" (600, the artboard's width). rf-afs-*
    classes only, tokens only (src/styles/tokens.css); logical properties
    (the dialog is RTL). The set and mode cards reuse .pkg-choice
-   (packages.css: hairline edge, blue edge + tint once chosen).
+   (src/components/ui/controls.css: hairline edge, blue edge + tint once chosen).
    ========================================================================= */
 
 /* ------------------------------------------------------------ head --- */

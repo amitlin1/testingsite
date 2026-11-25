@@ -1,10 +1,13 @@
 "use client";
 import * as React from "react";
+import { BLUE, INK, MUTED } from "@/components/ui/colors";
 import { ChevronRight, ChevronLeft, Pencil, Trash2, Plus } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
+import { useSettingsToast } from "../components/useSettingsToast";
 import DataTable, { RowActions, IconAction, type Column } from "@/components/DataTable";
-import { Snackbar, Alert, ConfirmDialog, Button, IconButton } from "@/components/ui";
-import { apiFetch } from "@/lib/api/client";
+import { ConfirmDialog, Button, IconButton } from "@/components/ui";
+import { ApiError, getJson, sendJson } from "@/lib/api/client";
+import { FRIDAY, SATURDAY, addDays, localCivilDate, monthEnd, monthStart, weekdayOf, type Weekday } from "@/lib/time/civil";
 import {
   WEEKDAY_LABELS,
   OVERRIDE_LABELS,
@@ -13,22 +16,24 @@ import {
   type IsraeliHolidayCategory,
   type IsraeliHolidayInfo,
   type ResolvedDay,
-  type Weekday,
   type WeekdayDefault,
   type WorkdayOverride,
 } from "@/lib/workHours/types";
-import {
-  netMinutes, formatNet, weekdayOf, toDateString, addDays, monthStartISO, monthEndISO,
-} from "@/lib/workHours/time";
+import { netMinutes, formatNet } from "@/lib/workHours/time";
 import WeekdayEditorDialog from "./WeekdayEditorDialog";
 import DayEditorDialog from "./DayEditorDialog";
 import HolidayDialog from "./HolidayDialog";
 import {
-  Bdi, timeRange, dayNum, dayDotMonth, monthTitle, recordDetail,
-  BLUE, INK, MUTED, FAINT, WEEKDAY_HEADERS, EM_DASH,
+  Bdi,
+  timeRange,
+  dayNum,
+  dayDotMonth,
+  monthTitle,
+  recordDetail,
+  WEEKDAY_HEADERS,
+  EM_DASH,
 } from "./ui";
-
-type Toast = { open: boolean; sev: "success" | "error"; msg: string };
+import "./work-hours.css";
 
 /** Merge consecutive same-label days into one "record" for the month list. */
 type MonthRecord = { startDate: string; endDate: string; label: string; day: ResolvedDay };
@@ -37,9 +42,6 @@ function buildRecords(days: ResolvedDay[]): MonthRecord[] {
   const out: MonthRecord[] = [];
   for (const d of notable) {
     const prev = out[out.length - 1];
-    // addDays, not `new Date(iso) + 86400000`: that parses as UTC midnight and
-    // then reads LOCAL components, so west of Greenwich the "next day" comes
-    // back as the SAME date and consecutive days never merge into one record.
     const nextOfPrev = prev ? addDays(prev.endDate, 1) : null;
     if (prev && prev.label === d.label && prev.day.category === d.category && nextOfPrev === d.date) {
       prev.endDate = d.date;
@@ -56,22 +58,30 @@ function recordDateLabel(r: MonthRecord): string {
   return sm === em ? `${sd}–${ed}.${sm}` : `${sd}.${sm}–${ed}.${em}`;
 }
 
+/** The body of a GET; null (logged) for an error answer. No answer at all still throws. */
+async function readOrNull<T>(url: string): Promise<T | null> {
+  try {
+    return await getJson<T>(url);
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e;
+    console.error(`work-hours: ${url} answered ${e.status}`);
+    return null;
+  }
+}
+
 /** The weekday defaults, holiday types and holidays (each null when not OK); null when unreachable. */
 async function readStatic(): Promise<{
   defaults: WeekdayDefault[] | null; types: HolidayType[] | null; holidays: DepartmentHoliday[] | null;
 } | null> {
   try {
-    const [d, t, h] = await Promise.all([
-      apiFetch("/api/settings/work-hours/defaults"),
-      apiFetch("/api/settings/work-hours/holiday-types"),
-      apiFetch("/api/settings/work-hours/holidays"),
+    const [defaults, types, holidays] = await Promise.all([
+      readOrNull<WeekdayDefault[]>("/api/settings/work-hours/defaults"),
+      readOrNull<HolidayType[]>("/api/settings/work-hours/holiday-types"),
+      readOrNull<DepartmentHoliday[]>("/api/settings/work-hours/holidays"),
     ]);
-    return {
-      defaults: d.ok ? await d.json() : null,
-      types: t.ok ? await t.json() : null,
-      holidays: h.ok ? await h.json() : null,
-    };
-  } catch {
+    return { defaults, types, holidays };
+  } catch (e) {
+    console.error("work-hours: reading the settings failed", e);
     return null;
   }
 }
@@ -81,15 +91,13 @@ async function readMonth(from: string, to: string): Promise<{
   calendar: { days: ResolvedDay[]; israeli: IsraeliHolidayInfo[] } | null; overrides: WorkdayOverride[] | null;
 } | null> {
   try {
-    const [cal, ov] = await Promise.all([
-      apiFetch(`/api/settings/work-hours/calendar?from=${from}&to=${to}`),
-      apiFetch(`/api/settings/work-hours/overrides?from=${from}&to=${to}`),
+    const [calendar, overrides] = await Promise.all([
+      readOrNull<{ days: ResolvedDay[]; israeli: IsraeliHolidayInfo[] }>(`/api/settings/work-hours/calendar?from=${from}&to=${to}`),
+      readOrNull<WorkdayOverride[]>(`/api/settings/work-hours/overrides?from=${from}&to=${to}`),
     ]);
-    return {
-      calendar: cal.ok ? ((await cal.json()) as { days: ResolvedDay[]; israeli: IsraeliHolidayInfo[] }) : null,
-      overrides: ov.ok ? await ov.json() : null,
-    };
-  } catch {
+    return { calendar, overrides };
+  } catch (e) {
+    console.error("work-hours: reading the month failed", e);
     return null;
   }
 }
@@ -105,9 +113,8 @@ export default function WorkHoursPage() {
   const [monthOverrides, setMonthOverrides] = React.useState<WorkdayOverride[]>([]);
   const [israeliCat, setIsraeliCat] = React.useState<Map<string, IsraeliHolidayCategory>>(new Map());
   const [loading, setLoading] = React.useState(true);
-  const [toast, setToast] = React.useState<Toast>({ open: false, sev: "success", msg: "" });
-  // One confirmation for every delete / reset on this page — the app's own
-  // dialog, like the rest of the system, not the browser's window.confirm.
+  const notify = useSettingsToast();
+  // One confirmation for every delete / reset on this page.
   const [confirm, setConfirm] = React.useState<{ title: string; message: string; confirmText: string; run: () => Promise<void> } | null>(null);
   const [confirmBusy, setConfirmBusy] = React.useState(false);
   async function runConfirmed() {
@@ -122,11 +129,22 @@ export default function WorkHoursPage() {
   const [addingType, setAddingType] = React.useState(false);
   const [newType, setNewType] = React.useState("");
 
-  const ok = (msg: string) => setToast({ open: true, sev: "success", msg });
-  const fail = (msg: string) => setToast({ open: true, sev: "error", msg });
+  const ok = React.useCallback((msg: string) => notify(msg, "success"), [notify]);
+  const fail = React.useCallback((msg: string) => notify(msg, "error"), [notify]);
+  /** A write whose error answer becomes the error toast; a network failure still throws. */
+  async function write(run: () => Promise<unknown>, onDone: () => void) {
+    try {
+      await run();
+    } catch (e) {
+      if (!(e instanceof ApiError)) throw e;
+      fail(e.message);
+      return;
+    }
+    onDone();
+  }
 
-  const from = monthStartISO(view.y, view.m);
-  const to = monthEndISO(view.y, view.m);
+  const from = monthStart(view.y, view.m);
+  const to = monthEnd(view.y, view.m);
 
   // Read, then applied in the promise's callback, so the effects below can run these.
   const loadStatic = React.useCallback(
@@ -137,7 +155,7 @@ export default function WorkHoursPage() {
         if (read.types) setHolidayTypes(read.types);
         if (read.holidays) setHolidays(read.holidays);
       }),
-    [],
+    [fail],
   );
 
   const fetchMonth = React.useCallback(
@@ -155,7 +173,7 @@ export default function WorkHoursPage() {
         }
         setLoading(false);
       }),
-    [from, to],
+    [from, to, fail],
   );
   const loadMonth = React.useCallback(() => {
     setLoading(true);
@@ -202,7 +220,7 @@ export default function WorkHoursPage() {
 
   function openDay(day: ResolvedDay) { setDayDlg({ open: true, day }); }
   function openTodayException() {
-    const today = toDateString(now);
+    const today = localCivilDate(now);
     openDay(daysByDate.get(today) ?? monthDays[0] ?? ({} as ResolvedDay));
   }
 
@@ -210,43 +228,42 @@ export default function WorkHoursPage() {
     setConfirm({
       title: "מחיקת חופשה", confirmText: "מחק",
       message: `למחוק את "${h.name}"? פעולה זו אינה ניתנת לביטול.`,
-      run: async () => {
-        const res = await apiFetch(`/api/settings/work-hours/holidays/${h.id}`, { method: "DELETE" });
-        if (res.ok) { ok("החופשה נמחקה"); afterSave(); }
-        else fail((await res.json().catch(() => null))?.error || "מחיקת החופשה נכשלה");
-      },
+      run: () =>
+        write(
+          () => sendJson(`/api/settings/work-hours/holidays/${h.id}`, "DELETE", undefined, "מחיקת החופשה נכשלה"),
+          () => { ok("החופשה נמחקה"); afterSave(); },
+        ),
     });
   }
   function deleteOverride(o: WorkdayOverride) {
     setConfirm({
       title: "איפוס חריגה", confirmText: "אפס",
       message: `לאפס את ${OVERRIDE_LABELS[o.kind]} בתאריך ${o.date} לברירת המחדל?`,
-      run: async () => {
-        const res = await apiFetch(`/api/settings/work-hours/overrides/${o.id}`, { method: "DELETE" });
-        if (res.ok) { ok("החריגה בוטלה"); afterSave(); }
-        else fail((await res.json().catch(() => null))?.error || "ביטול החריגה נכשל");
-      },
+      run: () =>
+        write(
+          () => sendJson(`/api/settings/work-hours/overrides/${o.id}`, "DELETE", undefined, "ביטול החריגה נכשל"),
+          () => { ok("החריגה בוטלה"); afterSave(); },
+        ),
     });
   }
   function deleteType(t: HolidayType) {
     setConfirm({
       title: "מחיקת סוג חופשה", confirmText: "מחק",
       message: `למחוק את סוג החופשה "${t.name}"? פעולה זו אינה ניתנת לביטול.`,
-      run: async () => {
-        const res = await apiFetch(`/api/settings/work-hours/holiday-types/${t.id}`, { method: "DELETE" });
-        if (res.ok) { ok("הסוג נמחק"); void loadStatic(); }
-        else fail((await res.json().catch(() => null))?.error || "מחיקת הסוג נכשלה");
-      },
+      run: () =>
+        write(
+          () => sendJson(`/api/settings/work-hours/holiday-types/${t.id}`, "DELETE", undefined, "מחיקת הסוג נכשלה"),
+          () => { ok("הסוג נמחק"); void loadStatic(); },
+        ),
     });
   }
   async function addType() {
     const n = newType.trim();
     if (!n) return;
-    const res = await apiFetch("/api/settings/work-hours/holiday-types", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: n }),
-    });
-    if (res.ok) { setAddingType(false); setNewType(""); ok("הסוג נוסף"); void loadStatic(); }
-    else fail((await res.json().catch(() => null))?.error || "יצירת הסוג נכשלה");
+    await write(
+      () => sendJson("/api/settings/work-hours/holiday-types", "POST", { name: n }, "יצירת הסוג נכשלה"),
+      () => { setAddingType(false); setNewType(""); ok("הסוג נוסף"); void loadStatic(); },
+    );
   }
 
   // Unified management table: department holidays (all) + the shown month's
@@ -302,7 +319,7 @@ export default function WorkHoursPage() {
   const firstWeekday = weekdayOf(from); // 0..6 leading blanks
 
   // The settings layout owns the frame (scroll, padding, 94% column). Hover /
-  // press / focus of the tiles, cells and records live in settings.css (.wh-*).
+  // press / focus of the tiles, cells and records live in work-hours.css (.wh-*).
   return (
     <div dir="rtl" style={{ color: INK }}>
       <SettingsToolbar
@@ -324,7 +341,7 @@ export default function WorkHoursPage() {
             <div style={{ fontSize: "var(--text-small)", color: MUTED, marginTop: 4 }}>חלות על כל יום שלא הוזנה לו חריגה.</div>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: "var(--text-small)", color: FAINT }}>נטו ליום</span>
+            <span style={{ fontSize: "var(--text-small)", color: MUTED }}>נטו ליום</span>
             <Bdi><span style={{ fontSize: "var(--text-title)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{formatNet(dailyNet)}</span></Bdi>
           </div>
         </div>
@@ -332,8 +349,8 @@ export default function WorkHoursPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 10, marginTop: 16 }}>
           {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((wd) => {
             const d = defByWeekday.get(wd);
-            const isSat = wd === 6;
-            const isFri = wd === 5;
+            const isSat = wd === SATURDAY;
+            const isFri = wd === FRIDAY;
             const working = !!d?.isWorking && !!d.start && !!d.end;
             return (
               <button
@@ -349,7 +366,7 @@ export default function WorkHoursPage() {
                 {working ? (
                   <>
                     <Bdi><span style={{ fontSize: "var(--text-body-sm)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{timeRange(d!.start, d!.end)}</span></Bdi>
-                    <div style={{ fontSize: "var(--text-fine)", color: FAINT }}>
+                    <div style={{ fontSize: "var(--text-fine)", color: MUTED }}>
                       {d!.breakStart && d!.breakEnd ? <>הפסקה <Bdi>{timeRange(d!.breakStart, d!.breakEnd)}</Bdi></> : "ללא הפסקה"}
                     </div>
                   </>
@@ -361,7 +378,7 @@ export default function WorkHoursPage() {
                         <span style={{ width: 6, height: 6, borderRadius: "50%", background: BLUE }} />ניתן להזין עבודה
                       </div>
                     ) : (
-                      <div style={{ fontSize: "var(--text-fine)", color: FAINT }}>קבוע</div>
+                      <div style={{ fontSize: "var(--text-fine)", color: MUTED }}>קבוע</div>
                     )}
                   </>
                 )}
@@ -387,7 +404,7 @@ export default function WorkHoursPage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 6, marginBottom: 6 }}>
             {WEEKDAY_HEADERS.map((h) => (
-              <div key={h} style={{ textAlign: "center", fontSize: "var(--text-fine)", fontWeight: 600, color: FAINT }}>{h}</div>
+              <div key={h} style={{ textAlign: "center", fontSize: "var(--text-fine)", fontWeight: 600, color: MUTED }}>{h}</div>
             ))}
           </div>
 
@@ -408,10 +425,10 @@ export default function WorkHoursPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="wh-card" style={{ padding: 20 }}>
             <h2 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 700 }}>החודש</h2>
-            <div style={{ fontSize: "var(--text-fine)", color: FAINT, marginTop: 4 }}>{records.length} רשומות ב{monthTitle(view.y, view.m).split(" ")[0]}.</div>
+            <div style={{ fontSize: "var(--text-fine)", color: MUTED, marginTop: 4 }}>{records.length} רשומות ב{monthTitle(view.y, view.m).split(" ")[0]}.</div>
             <div style={{ marginTop: 12 }}>
               {records.length === 0 ? (
-                <div style={{ fontSize: "var(--text-small)", color: FAINT }}>אין רשומות מיוחדות החודש.</div>
+                <div style={{ fontSize: "var(--text-small)", color: MUTED }}>אין רשומות מיוחדות החודש.</div>
               ) : (
                 records.map((r) => (
                   <button
@@ -423,7 +440,7 @@ export default function WorkHoursPage() {
                     <Bdi><span style={{ fontSize: "var(--text-small)", fontWeight: 700, color: INK, minWidth: 46, display: "inline-block", fontVariantNumeric: "tabular-nums" }}>{recordDateLabel(r)}</span></Bdi>
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: "var(--text-body-sm)", fontWeight: 600 }}>{r.label}</span>
-                      <span style={{ display: "block", fontSize: "var(--text-fine)", color: FAINT, marginTop: 2 }}>{recordDetail(r.day)}</span>
+                      <span style={{ display: "block", fontSize: "var(--text-fine)", color: MUTED, marginTop: 2 }}>{recordDetail(r.day)}</span>
                     </span>
                   </button>
                 ))
@@ -433,7 +450,7 @@ export default function WorkHoursPage() {
 
           <div className="wh-card" style={{ padding: 20 }}>
             <h2 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 700 }}>סוגי חופשה</h2>
-            <div style={{ fontSize: "var(--text-fine)", color: FAINT, marginTop: 4 }}>ניתן להוסיף סוג משלך.</div>
+            <div style={{ fontSize: "var(--text-fine)", color: MUTED, marginTop: 4 }}>ניתן להוסיף סוג משלך.</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12, alignItems: "center" }}>
               {holidayTypes.map((t) => {
                 const removable = !t.isSystem && (t.usageCount ?? 0) === 0;
@@ -441,7 +458,7 @@ export default function WorkHoursPage() {
                   <span key={t.id} className={"wh-type" + (removable ? "" : " wh-type--plain")}>
                     {t.name}
                     {removable && (
-                      <IconButton size="small" aria-label={`מחק את הסוג ${t.name}`} onClick={() => deleteType(t)} style={{ color: FAINT }}>
+                      <IconButton size="small" aria-label={`מחק את הסוג ${t.name}`} onClick={() => deleteType(t)} style={{ color: MUTED }}>
                         <Trash2 size={13} strokeWidth={1.75} aria-hidden />
                       </IconButton>
                     )}
@@ -473,7 +490,7 @@ export default function WorkHoursPage() {
       {/* ---------- holidays + single-day exceptions ---------- */}
       <div style={{ marginTop: 18 }}>
         <h2 style={{ margin: "0 0 4px", fontSize: "var(--text-body)", fontWeight: 700 }}>חופשות וחריגות</h2>
-        <div style={{ fontSize: "var(--text-fine)", color: FAINT, marginBottom: 12 }}>
+        <div style={{ fontSize: "var(--text-fine)", color: MUTED, marginBottom: 12 }}>
           חופשות מרוכזות של המחלקה, וחריגות יומיות של {monthTitle(view.y, view.m)}. חגי ישראל נוספים אוטומטית ואינם מופיעים כאן.
         </div>
         <DataTable<EntryRow>
@@ -529,7 +546,6 @@ export default function WorkHoursPage() {
       )}
 
       <ConfirmDialog
-        draggable={false}
         open={confirm != null}
         title={confirm?.title ?? ""}
         message={confirm?.message}
@@ -539,10 +555,6 @@ export default function WorkHoursPage() {
         onConfirm={runConfirmed}
         onCancel={() => setConfirm(null)}
       />
-
-      <Snackbar open={toast.open} autoHideDuration={4000} onClose={() => setToast((t) => ({ ...t, open: false }))} anchorOrigin={{ vertical: "bottom", horizontal: "left" }}>
-        <Alert severity={toast.sev} onClose={() => setToast((t) => ({ ...t, open: false }))}>{toast.msg}</Alert>
-      </Snackbar>
 
     </div>
   );
@@ -564,7 +576,7 @@ function CalendarCell({ d, onClick }: { d: ResolvedDay; onClick: () => void }) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
         {manualWorking && <span style={{ width: 6, height: 6, borderRadius: "50%", background: BLUE, flexShrink: 0 }} />}
-        <span style={{ fontSize: "var(--text-small)", fontWeight: 600, color: muted ? FAINT : INK, fontVariantNumeric: "tabular-nums" }}>{dayNum(d.date)}</span>
+        <span style={{ fontSize: "var(--text-small)", fontWeight: 600, color: muted ? MUTED : INK, fontVariantNumeric: "tabular-nums" }}>{dayNum(d.date)}</span>
       </div>
       {d.label && (
         <span style={{ fontSize: "var(--text-micro)", color: isOff ? MUTED : BLUE, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</span>
@@ -574,7 +586,7 @@ function CalendarCell({ d, onClick }: { d: ResolvedDay; onClick: () => void }) {
       {d.isWorking && d.start && d.end && (
         <Bdi><span style={{ fontSize: "var(--text-micro)", color: MUTED, fontVariantNumeric: "tabular-nums" }}>{timeRange(d.start, d.end)}</span></Bdi>
       )}
-      {isOff && d.category !== "shabbat" && <span style={{ fontSize: "var(--text-micro)", color: FAINT }}>יום מלא</span>}
+      {isOff && d.category !== "shabbat" && <span style={{ fontSize: "var(--text-micro)", color: MUTED }}>יום מלא</span>}
     </button>
   );
 }

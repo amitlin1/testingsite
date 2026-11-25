@@ -18,7 +18,7 @@ export const FIELD_TYPE_GROUPS: readonly FieldTypeGroup[] = [
   { key: "structure", name: FIELD_TYPE_GROUP_TEXT.structure, types: ["section"] },
 ];
 
-/** The default type — "שורת בדיקה", the one with the "ברירת מחדל" tag. */
+/** The default type — the one with the picker's default tag. */
 export const DEFAULT_FIELD_TYPE: FieldType = FIELD_TYPES[0];
 
 /** Artboard 3's filter: a type matches when the trimmed query is part of its name or of its

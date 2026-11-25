@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { HttpError } from "@/lib/http/errors";
 import {
-  StepUidError,
   assignStepUids,
   inferUidsByOccurrence,
   newChecklistItemId,
@@ -11,12 +11,13 @@ import {
   pruneDraft,
   renameStationTypeInConfig,
 } from "../step-uids";
-import type { RandomSource, StationTypeInfo } from "../step-uids";
+import type { RandomSource } from "@/lib/random-id";
+import type { StationTypeJson } from "../admin-types";
 import { ID_PATTERNS } from "../schema";
 import type { RouteFieldsConfig, StepConfig } from "../schema";
 
 // Station types as the demo seed names them: 21 פתיחת מארז, 22 חשמל, 23 מכניקה, 24 בדיקה ויזואלית, 26 סגירת מארז.
-const TYPES = new Map<number, StationTypeInfo>([
+const TYPES = new Map<number, StationTypeJson>([
   [21, { label: "פתיחת מארז", package_level: true }],
   [22, { label: "חשמל", package_level: false }],
   [23, { label: "מכניקה", package_level: false }],
@@ -48,13 +49,12 @@ test("new ids: prefix + 8 chars of [a-z0-9], from crypto.getRandomValues", () =>
   assert.equal(many.size, 500);
 });
 
-test("new ids: bytes 252..255 are skipped, so every character is equally likely", () => {
-  const source: RandomSource = (bytes) => {
-    bytes.set([252, 253, 254, 255, 0, 35, 36, 71, 251, 1, 2, 3, 4, 5]);
-    return bytes;
-  };
-  // 252..255 skipped; then byte % 36: 0 → a, 35 → 9, 36 → a, 71 → 9, 251 → 9, 1 → b, 2 → c, 3 → d.
-  assert.equal(newFieldId(source), "f_a9a99bcd");
+test("new ids: every character of [a-z0-9] equally likely; a source with no usable bytes is refused", () => {
+  const counts = new Map<string, number>();
+  for (let i = 0; i < 10_000; i++) for (const ch of newFieldId().slice(2)) counts.set(ch, (counts.get(ch) ?? 0) + 1);
+  assert.equal(counts.size, 36);
+  const expected = (10_000 * 8) / 36;
+  for (const [ch, n] of counts) assert.ok(Math.abs(n - expected) < expected / 4, `${ch}: ${n} of ~${Math.round(expected)}`);
   assert.throws(() => newOptionId((bytes) => bytes.fill(255)), /no usable bytes/);
 });
 
@@ -86,15 +86,15 @@ test("assignStepUids: a removal drops the uid; a new step gets a fresh one", () 
 
 test("assignStepUids: an unknown or a repeated uid is refused", () => {
   assert.throws(() => assignStepUids([A, B], [A, D], new Set()), (e: unknown) => {
-    assert.ok(e instanceof StepUidError);
-    assert.deepEqual([e.code, e.uid], ["STEP_UID_UNKNOWN", D]);
+    assert.ok(e instanceof HttpError);
+    assert.deepEqual([e.status, e.body], [400, { error: `STEP_UID_UNKNOWN: ${D}`, code: "STEP_UID_UNKNOWN" }]);
     return true;
   });
   // A uid of a published version that is no longer on the route cannot be re-attached either.
   assert.throws(() => assignStepUids([A], [A, B], new Set([A, B])), { code: "STEP_UID_UNKNOWN" });
   assert.throws(() => assignStepUids([A, B], [A, B, A], new Set()), (e: unknown) => {
-    assert.ok(e instanceof StepUidError);
-    assert.deepEqual([e.code, e.uid], ["STEP_UID_DUPLICATE", A]);
+    assert.ok(e instanceof HttpError);
+    assert.deepEqual([e.status, e.body], [400, { error: `STEP_UID_DUPLICATE: ${A}`, code: "STEP_UID_DUPLICATE" }]);
     return true;
   });
 });

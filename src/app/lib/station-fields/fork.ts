@@ -1,18 +1,16 @@
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
-import type { TransactionClient } from "@/app/lib/prisma";
-import {
-  checkItemRouteAgainstPackage,
-  checkPackageRoute,
-  loadPackageLevelTypeIds,
-  loadRouteShape,
-} from "@/app/lib/packages/route-rules";
+import type { TransactionClient } from "@/lib/db";
+import { checkPackageRoute, loadPackageLevelTypeIds, loadRouteShape } from "@/app/lib/packages/route-rules";
 import type { RouteShape } from "@/app/lib/packages/route-rules";
-import { AdminFieldsError } from "./admin";
-import type { Actor } from "./admin";
+import { kitRouteFit } from "@/app/lib/packages/template";
+import { KIT_HAS_NO_ROUTE } from "@/app/lib/packages/template-wire";
+import type { Actor } from "@/lib/auth/identity";
+import { HttpError } from "@/lib/http/errors";
+import { isDbId } from "@/lib/http/request";
+import { isRecord } from "@/lib/json-guards";
 import type { ForkResultJson } from "./admin-types";
-import type { RouteFieldsConfig } from "./schema";
-import { ShapeError, parseRouteFieldsConfig } from "./validate";
+import { STATION_FIELDS_TX, loadRoute, readDraft, readPublished } from "./route-store";
 
 /**
  * Station fields — "צור מסלול נפרד למארז הזה" (route-fields spec §3.2.1, decision 4; artboard 2):
@@ -40,8 +38,8 @@ import { ShapeError, parseRouteFieldsConfig } from "./validate";
  * must fit every well-formed route of the kit; a kit with no well-formed route at all cannot take
  * anything in (createPackage refuses it), so neither can its line be forked.
  *
- * SERVER ONLY (prisma). The handler is thin, as admin.ts's are. Error contract — AdminFieldsError,
- * answered as { error: message, code, ...extra }:
+ * SERVER ONLY (prisma). The handler is thin, as admin.ts's are. Error contract — HttpError
+ * (route-store.ts), answered as { error: message, code, ...extra }:
  *   400 INVALID_ID (route id) · INVALID_BODY (package_type_id not an int4 id ≥ 1)
  *   400 NOT_A_PACKAGE_TYPE {item_type_id} — package_type_id is not a kit
  *   400 KIT_LINE_NOT_FOUND {package_type_id, item_type_id} — the kit's template has no line for the
@@ -62,71 +60,10 @@ import { ShapeError, parseRouteFieldsConfig } from "./validate";
 /** Any handle that can read: the client or a transaction. */
 type Db = TransactionClient;
 
-/** The body as it arrives; checked here (400 when wrong). */
-export type ForkInput = { package_type_id?: unknown };
-
-export type ForkResult = ForkResultJson;
-
-/** The same bounds as admin.ts's transactions: the source row may be held by an autosave. */
-const TX_OPTIONS = { maxWait: 5_000, timeout: 30_000 } as const;
-
-/** The template screen's word for a kit without a route (GET …/item-types/[id]/contents). */
-const KIT_HAS_NO_ROUTE = "לסוג המארז עדיין אין מסלול";
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-/** Ids are int4 columns: a larger number can name no row, and Postgres would refuse it as a
- *  parameter (a 500) rather than find nothing. */
-const INT4_MAX = 2147483647;
-const isId = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 1 && (v as number) <= INT4_MAX;
-
-type SourceRow = {
-  test_route_id: number;
-  item_type_id: number;
-  test_station_type_id: number;
-  route_number: number;
-  route_steps: number[];
-  step_uids: string[];
-  fields_draft: unknown;
-  fields_version: number;
-  item_type_desc: string;
-};
-
-/** A stored config, parsed — it was stored parsed, so a failure here is corrupt data: a real 500,
- *  never a fork "without fields". */
-function parseStored(raw: unknown, routeId: number, what: string): RouteFieldsConfig {
-  try {
-    return parseRouteFieldsConfig(raw);
-  } catch (e) {
-    if (e instanceof ShapeError) {
-      throw new AdminFieldsError(500, "CONFIG_INVALID", `Route ${routeId}: the stored ${what} does not parse (${e.message})`, {
-        route_id: routeId,
-      });
-    }
-    throw e;
-  }
-}
-
-/** Step 4: the source's draft, else the config of its latest published version, else null. */
-async function configToCopy(db: Db, src: SourceRow): Promise<RouteFieldsConfig | null> {
-  const id = src.test_route_id;
-  if (src.fields_draft != null) return parseStored(src.fields_draft, id, "draft");
-  if (src.fields_version < 1) return null;
-  const row = await db.route_field_versions.findUnique({
-    where: { test_route_id_version: { test_route_id: id, version: src.fields_version } },
-    select: { config: true },
-  });
-  if (!row) {
-    throw new AdminFieldsError(500, "VERSION_MISSING", `Route ${id} points at version ${src.fields_version}, which does not exist`, {
-      route_id: id,
-    });
-  }
-  return parseStored(row.config, id, `version ${src.fields_version}`);
-}
-
 /**
- * Step 6: the new route against every well-formed route of the kit, as createPackage checks a
- * line's route against the kit route it is taken in on (create-package.ts resolveItemRoute) and
- * the template screen lists a misfit. Throws the 409 that rolls the fork back.
+ * Step 6: the new route against every well-formed route of the kit (template.ts kitRouteFit, the
+ * template screen's rule; the intake checks a line's route against the kit route it is taken in on,
+ * lifecycle.ts resolveItemRoute). Throws the 409 that rolls the fork back.
  */
 async function checkAgainstKit(db: Db, kitId: number, itemTypeId: number, itemTypeDesc: string, routeNumber: number): Promise<void> {
   const packageLevel = await loadPackageLevelTypeIds(db);
@@ -139,48 +76,35 @@ async function checkAgainstKit(db: Db, kitId: number, itemTypeId: number, itemTy
   const wellFormed = kitShapes.filter((s) => checkPackageRoute(s, packageLevel, s.routeNumber) === null);
   if (wellFormed.length === 0) {
     const reason = kitShapes.length === 0 ? KIT_HAS_NO_ROUTE : checkPackageRoute(kitShapes[0], packageLevel, kitShapes[0].routeNumber);
-    throw new AdminFieldsError(409, "PACKAGE_ROUTE_SHAPE", `Kit ${kitId} has no well-formed route to check the new route against`, {
+    throw new HttpError(409, `Kit ${kitId} has no well-formed route to check the new route against`, { code: "PACKAGE_ROUTE_SHAPE", extra: {
       reason,
-    });
+    } });
   }
-  const shape = await loadRouteShape(db, itemTypeId, routeNumber);
-  for (const kit of wellFormed) {
-    const problem = checkItemRouteAgainstPackage(shape, kit, packageLevel, routeNumber);
-    if (problem) {
-      throw new AdminFieldsError(409, "ITEM_ROUTE_SHAPE", `The new route does not fit route ${kit.routeNumber} of kit ${kitId}`, {
-        reason: `${itemTypeDesc}: ${problem}`,
-        package_route_number: kit.routeNumber,
-      });
-    }
+  const misfit = kitRouteFit(wellFormed, await loadRouteShape(db, itemTypeId, routeNumber), packageLevel, routeNumber);
+  if (misfit) {
+    throw new HttpError(409, `The new route does not fit route ${misfit.kit.routeNumber} of kit ${kitId}`, { code: "ITEM_ROUTE_SHAPE", extra: {
+      reason: `${itemTypeDesc}: ${misfit.problem}`,
+      package_route_number: misfit.kit.routeNumber,
+    } });
   }
 }
 
 /** POST /api/settings/testing-routes/[id]/fork (spec §3.2.1) — see the module comment. */
-export async function forkRouteForKit(db: PrismaClient, routeId: number, input: ForkInput, actor: Actor): Promise<ForkResult> {
-  if (!isId(routeId)) throw new AdminFieldsError(400, "INVALID_ID", "Route id must be a positive integer");
-  if (!isRecord(input)) throw new AdminFieldsError(400, "INVALID_BODY", "Body must be {package_type_id}");
+export async function forkRouteForKit(db: PrismaClient, routeId: number | null, input: unknown, actor: Actor): Promise<ForkResultJson> {
+  if (!isDbId(routeId)) throw new HttpError(400, "Route id must be a positive integer", { code: "INVALID_ID" });
+  if (!isRecord(input)) throw new HttpError(400, "Body must be {package_type_id}", { code: "INVALID_BODY" });
   const kitId = input.package_type_id;
-  if (!isId(kitId)) throw new AdminFieldsError(400, "INVALID_BODY", "package_type_id must be a kit's item type id");
+  if (!isDbId(kitId)) throw new HttpError(400, "package_type_id must be a kit's item type id", { code: "INVALID_BODY" });
 
   return db.$transaction(async (tx) => {
-    // 1. The source route, locked.
-    const [src] = await tx.$queryRaw<SourceRow[]>`
-      SELECT tr.test_route_id, tr.item_type_id, tr.test_station_type_id, tr.route_number,
-             COALESCE(tr.route_steps, '{}') AS route_steps,
-             COALESCE(tr.step_uids, '{}') AS step_uids,
-             tr.fields_draft, tr.fields_version,
-             TRIM(t.item_type_desc) AS item_type_desc
-        FROM testing_routes tr
-        JOIN item_types t ON t.item_type_id = tr.item_type_id
-       WHERE tr.test_route_id = ${routeId}
-         FOR UPDATE OF tr`;
-    if (!src) throw new AdminFieldsError(404, "ROUTE_NOT_FOUND", `Route ${routeId} not found`, { route_id: routeId });
+    const src = await loadRoute(tx, routeId, { lock: true });
+    if (!src) throw new HttpError(404, `Route ${routeId} not found`, { code: "ROUTE_NOT_FOUND", extra: { route_id: routeId } });
 
     const [kit] = await tx.$queryRaw<{ is_package: boolean }[]>`
       SELECT is_package FROM item_types WHERE item_type_id = ${kitId}`;
-    if (!kit) throw new AdminFieldsError(404, "ITEM_TYPE_NOT_FOUND", `Item type ${kitId} not found`, { item_type_id: kitId });
+    if (!kit) throw new HttpError(404, `Item type ${kitId} not found`, { code: "ITEM_TYPE_NOT_FOUND", extra: { item_type_id: kitId } });
     if (!kit.is_package) {
-      throw new AdminFieldsError(400, "NOT_A_PACKAGE_TYPE", `Item type ${kitId} is not a package type`, { item_type_id: kitId });
+      throw new HttpError(400, `Item type ${kitId} is not a package type`, { code: "NOT_A_PACKAGE_TYPE", extra: { item_type_id: kitId } });
     }
 
     // This kit's line for the item type (package_contents_type_uq: at most one), locked.
@@ -189,20 +113,20 @@ export async function forkRouteForKit(db: PrismaClient, routeId: number, input: 
        WHERE package_type_id = ${kitId} AND item_type_id = ${src.item_type_id}
          FOR UPDATE`;
     if (!line) {
-      throw new AdminFieldsError(400, "KIT_LINE_NOT_FOUND", `Kit ${kitId} has no template line for item type ${src.item_type_id}`, {
+      throw new HttpError(400, `Kit ${kitId} has no template line for item type ${src.item_type_id}`, { code: "KIT_LINE_NOT_FOUND", extra: {
         package_type_id: kitId,
         item_type_id: src.item_type_id,
-      });
+      } });
     }
     if (line.route_number !== src.route_number) {
-      throw new AdminFieldsError(409, "LINE_NOT_ON_ROUTE", `Kit ${kitId} runs route ${line.route_number} of item type ${src.item_type_id}, not route ${src.route_number}`, {
+      throw new HttpError(409, `Kit ${kitId} runs route ${line.route_number} of item type ${src.item_type_id}, not route ${src.route_number}`, { code: "LINE_NOT_ON_ROUTE", extra: {
         package_type_id: kitId,
         item_type_id: src.item_type_id,
         route_number: line.route_number,
-      });
+      } });
     }
 
-    const config = await configToCopy(tx, src);
+    const config = readDraft(src) ?? readPublished(src);
 
     // 2. The next route number of the item type. Two forks of one item type queue here (until the
     //    first commits), so the second reads the first one's number.
@@ -210,7 +134,6 @@ export async function forkRouteForKit(db: PrismaClient, routeId: number, input: 
     const [{ next }] = await tx.$queryRaw<{ next: number }[]>`
       SELECT COALESCE(MAX(route_number), 0)::int + 1 AS next FROM testing_routes WHERE item_type_id = ${src.item_type_id}`;
 
-    // 3–4. The new route.
     let created: { test_route_id: number; route_number: number };
     try {
       created = await tx.testing_routes.create({
@@ -224,7 +147,7 @@ export async function forkRouteForKit(db: PrismaClient, routeId: number, input: 
           fields_version: 0,
           // Without a config the column keeps its SQL NULL ("no draft"), never a JSON null.
           ...(config
-            ? { fields_draft: config as unknown as Prisma.InputJsonValue, draft_updated_at: new Date(), draft_updated_by: actor.username || null }
+            ? { fields_draft: config as unknown as Prisma.InputJsonValue, draft_updated_at: new Date(), draft_updated_by: actor.username }
             : {}),
         },
         select: { test_route_id: true, route_number: true },
@@ -232,19 +155,18 @@ export async function forkRouteForKit(db: PrismaClient, routeId: number, input: 
     } catch (e) {
       // testing_routes_type_number_uq: a route POSTed meanwhile took the number.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        throw new AdminFieldsError(409, "ROUTE_NUMBER_TAKEN", `Route ${next} of item type ${src.item_type_id} was created meanwhile`, {
+        throw new HttpError(409, `Route ${next} of item type ${src.item_type_id} was created meanwhile`, { code: "ROUTE_NUMBER_TAKEN", extra: {
           route_number: next,
-        });
+        } });
       }
       throw e;
     }
 
-    // 5. This kit's line only.
     await tx.$executeRaw`UPDATE package_contents SET route_number = ${created.route_number} WHERE id = ${line.id}`;
 
     // 6. The new route against the kit's shape; a misfit rolls the whole fork back.
     await checkAgainstKit(tx, kitId, src.item_type_id, src.item_type_desc, created.route_number);
 
     return { test_route_id: created.test_route_id, route_number: created.route_number };
-  }, TX_OPTIONS);
+  }, STATION_FIELDS_TX);
 }

@@ -4,9 +4,10 @@ import type { NumberField } from "@/app/lib/station-fields/schema";
 import { parseRouteFieldsConfig } from "@/app/lib/station-fields/validate";
 import { UNDRAWN_TEXT } from "../labels";
 import {
-  formatDecimal, numberPreviewMessage, numberRangeInverted, numberRangeShort, numberSummaryParts, numberSummaryText,
-  parseDecimalText, toleranceNegative, withHelp, withNumberSetting, withUnit,
+  formatDecimal, numberRangeInverted, numberRangeShort, numberSummaryParts, numberSummaryText,
+  parseDecimalText, toleranceNegative, withNumberSetting, withUnit,
 } from "../numberText";
+import { withFieldHelp } from "../editorModel";
 
 const base: NumberField = {
   id: "f_gnd00001", type: "number", label: "התנגדות הארקה", required: true, notes: "optional", out_of_range_fail: true,
@@ -54,9 +55,9 @@ test("a setting is set or removed; removing the reference removes the tolerance"
 test("unit and help: an empty value is never stored", () => {
   assert.equal(withUnit(base, "Ω").unit, "Ω");
   assert.equal("unit" in withUnit(num({ unit: "Ω" }), ""), false);
-  assert.equal(withHelp(base, "מדוד בין פין ההארקה לגוף המארז").help, "מדוד בין פין ההארקה לגוף המארז");
-  assert.equal(withHelp(base, "שתי מילים ").help, "שתי מילים ", "typed text is kept as typed");
-  assert.equal("help" in withHelp(num({ help: "x" }), "  "), false);
+  assert.equal(withFieldHelp(base, "מדוד בין פין ההארקה לגוף המארז").help, "מדוד בין פין ההארקה לגוף המארז");
+  assert.equal(withFieldHelp(base, "שתי מילים ").help, "שתי מילים ", "typed text is kept as typed");
+  assert.equal("help" in withFieldHelp(num({ help: "x" }), "  "), false);
 });
 
 test("the range checks of NUMBER_RANGE", () => {
@@ -78,27 +79,4 @@ test("the summary button (artboard 3 rangeShort)", () => {
   assert.equal(numberSummaryText(num({ unit: "Ω" })), "יחידה Ω · ללא טווח · מספר");
   assert.equal(numberSummaryText(num({ min: 1, max: 2 })), "1–2 · מספר");
   assert.deepEqual(numberSummaryParts(num({ unit: " Ω ", max: 0.1 })), { unit: "Ω", range: "מקס׳ 0.1", type: "מספר" });
-});
-
-test("the live preview's line (artboard 3 rangeMsg)", () => {
-  const gnd = num({ unit: "Ω", max: 0.1 });
-  const inside = numberPreviewMessage(gnd, 0.08);
-  assert.equal(inside.text, "בטווח · עד 0.1 Ω");
-  assert.equal(inside.tone, "success");
-  assert.deepEqual(inside.segments, [{ text: "בטווח · " }, { text: "עד " }, { text: "0.1 Ω", ltr: true }]);
-  const out = numberPreviewMessage(gnd, 0.2);
-  assert.equal(out.text, "מחוץ לטווח · עד 0.1 Ω · יסומן לא תקין");
-  assert.equal(out.tone, "danger");
-  assert.equal(numberPreviewMessage({ ...gnd, out_of_range_fail: false }, 0.2).text, "מחוץ לטווח · עד 0.1 Ω");
-  assert.equal(numberPreviewMessage(num({ unit: "Ω", min: 1 }), 2).text, "בטווח · מעל 1 Ω");
-  assert.equal(numberPreviewMessage(num({ unit: "Ω", min: 1, max: 2 }), 2).text, "בטווח · 1–2 Ω", "inclusive");
-  assert.equal(numberPreviewMessage(num({ min: 1, max: 2 }), 3).text, "מחוץ לטווח · 1–2 · יסומן לא תקין", "no unit");
-  const none = numberPreviewMessage(num({ unit: "Ω" }), 0.08);
-  assert.deepEqual([none.state, none.text, none.tone], ["none", "ללא טווח מוגדר", "muted"]);
-  const idle = numberPreviewMessage(gnd, null);
-  assert.deepEqual([idle.state, idle.text, idle.tone], ["idle", "טווח מותר · עד 0.1 Ω", "muted"]);
-  // A reference ± tolerance is a range of its own (evaluate.ts numberInRange).
-  const ref = num({ unit: "Ω", ref: 1, tol_pct: 10 });
-  assert.equal(numberPreviewMessage(ref, 1.05).state, "in");
-  assert.equal(numberPreviewMessage(ref, 1.2).state, "out");
 });

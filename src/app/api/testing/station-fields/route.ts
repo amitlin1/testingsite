@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { StationFieldsNotFoundError, loadStationFields } from "@/app/lib/station-fields/submit";
+import { prisma } from "@/lib/db";
+import { loadStationFields } from "@/app/lib/station-fields/submit";
+import { errorResponse } from "@/lib/http/errors";
+import { parseDbId, parseItemId } from "@/lib/http/request";
 
 export const runtime = "nodejs";
-
-/** item_routes.item_id is a BIGINT. */
-const INT8_MAX = BigInt("9223372036854775807");
 
 /**
  * GET /api/testing/station-fields?itemId=&stationId= — the fields the popup opening on this row
@@ -22,25 +21,14 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const itemIdRaw = (searchParams.get("itemId") ?? "").trim();
     if (itemIdRaw === "") return NextResponse.json({ error: "itemId is required" }, { status: 400 });
-    const itemId = /^\d{1,19}$/.test(itemIdRaw) ? BigInt(itemIdRaw) : null;
-    if (itemId == null || itemId < BigInt(1) || itemId > INT8_MAX) {
-      return NextResponse.json({ error: "Invalid itemId" }, { status: 400 });
-    }
+    const itemId = parseItemId(itemIdRaw);
+    if (itemId == null) return NextResponse.json({ error: "Invalid itemId" }, { status: 400 });
     const stationIdRaw = (searchParams.get("stationId") ?? "").trim();
-    let stationId: number | null = null;
-    if (stationIdRaw !== "") {
-      stationId = /^\d{1,10}$/.test(stationIdRaw) ? Number(stationIdRaw) : NaN;
-      if (!(stationId >= 1 && stationId <= 2147483647)) {
-        return NextResponse.json({ error: "Invalid stationId" }, { status: 400 });
-      }
-    }
+    const stationId = stationIdRaw === "" ? null : parseDbId(stationIdRaw);
+    if (stationIdRaw !== "" && stationId == null) return NextResponse.json({ error: "Invalid stationId" }, { status: 400 });
 
     return NextResponse.json(await loadStationFields(prisma, { itemId, stationId }));
   } catch (error) {
-    if (error instanceof StationFieldsNotFoundError) {
-      return NextResponse.json({ error: "Item route not found", code: error.code }, { status: 404 });
-    }
-    console.error("Error loading station fields:", error);
-    return NextResponse.json({ error: "Failed to load station fields" }, { status: 500 });
+    return errorResponse(error, "Failed to load station fields");
   }
 }

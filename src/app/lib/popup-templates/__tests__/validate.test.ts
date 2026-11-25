@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fillVariables, photoCodesOf, skuScanOf } from "../schema";
+import { allComponentsOf, fillVariables, skuScanOf } from "../schema";
 import type { PopupTemplateConfig, TemplateComponent } from "../schema";
-import { TemplateShapeError, lintPopupTemplate, parsePopupTemplateConfig, parseTemplateBase } from "../validate";
+import { ShapeError } from "@/app/lib/station-fields/validate";
+import { lintPopupTemplate, parsePopupTemplateConfig, parseTemplateBase } from "../validate";
 import { photoStationTemplate, verdictStationTemplate } from "../templates";
 
 /** A deterministic random source: ids differ per call, the same in every run. */
@@ -23,7 +24,7 @@ test("today's two popups are valid templates, and survive the shape parse unchan
     assert.deepEqual(parsePopupTemplateConfig(clone(cfg)), cfg);
   }
   const photo = photoStationTemplate("grp_3", seeded());
-  assert.deepEqual(photoCodesOf(photo), ["grp_3"]);
+  assert.deepEqual(allComponentsOf(photo).flatMap((c) => (c.kind === "photo" ? [c.photo_code] : [])), ["grp_3"]);
   assert.equal(skuScanOf(photo)?.lookup_reference, true);
   assert.equal(skuScanOf(verdictStationTemplate(seeded()))?.lookup_reference, false);
 });
@@ -49,12 +50,12 @@ test("the shape parse drops unknown keys and refuses what the editor never sends
   for (const [what, mutate] of bad) {
     const c = clone(photoStationTemplate("grp_3", seeded()));
     mutate(c);
-    assert.throws(() => parsePopupTemplateConfig(c), TemplateShapeError, what);
+    assert.throws(() => parsePopupTemplateConfig(c), ShapeError, what);
   }
-  assert.throws(() => parsePopupTemplateConfig(null), TemplateShapeError);
-  assert.throws(() => parsePopupTemplateConfig({ steps: [], finish_label: "x".repeat(41) }), TemplateShapeError);
+  assert.throws(() => parsePopupTemplateConfig(null), ShapeError);
+  assert.throws(() => parsePopupTemplateConfig({ steps: [], finish_label: "x".repeat(41) }), ShapeError);
   assert.equal(parseTemplateBase("item"), "item");
-  assert.throws(() => parseTemplateBase("box"), TemplateShapeError);
+  assert.throws(() => parseTemplateBase("box"), ShapeError);
 });
 
 test("the verdict: required, single, last", () => {

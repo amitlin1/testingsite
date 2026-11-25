@@ -1,14 +1,18 @@
-import type { TransactionClient } from "@/app/lib/prisma";
+import type { TransactionClient } from "@/lib/db";
+import { HttpError } from "@/lib/http/errors";
 import { isPackageLevelStationType, loadPackageContext, type PackageContext } from "@/app/lib/packages/context";
-import { GATE_FINISH_ON_REQUIRED, evaluateFields, toResultBlock } from "./evaluate";
+import { evaluateFields, toResultBlock } from "./evaluate";
 import type { Drafts, FieldDraft } from "./evaluate";
-import { UNDRAWN_TEXT, fieldsGateText } from "./labels";
-import { resolveStationFields } from "./resolve";
+import { FIELDS_UNDRAWN_TEXT, fieldsGateText } from "./labels";
+import { isResearchStatus } from "@/lib/item-status";
+import { LEGACY_FIELDS, resolveStationFields } from "./resolve";
 import type { ResolveKitItem, ResolveRoute } from "./resolve";
 import type {
-  Field, FieldId, FieldValue, FieldsSchemaRef, InputField, KitItemFields, StationFieldsResponse,
+  Field, FieldId, FieldValue, FieldsSchemaRef, InputField, KitItemFields, MissingField,
+  StationFieldsResponse,
 } from "./schema";
 import { omit } from "@/lib/omit";
+import { isRecord, own, type JsonObject as Obj } from "@/lib/json-guards";
 
 /**
  * Station fields on the server (route-fields spec §3.3, §3.4). SERVER ONLY: it reads the database.
@@ -29,11 +33,6 @@ import { omit } from "@/lib/omit";
 
 /** The client this module reads through: the app's prisma, or the caller's transaction. */
 export type StationFieldsDb = Pick<TransactionClient, "$queryRaw" | "test_stations_type" | "route_field_versions">;
-
-const LEGACY: StationFieldsResponse = { mode: "legacy" };
-
-/** current_status 4 (waiting for research) and 5 (in research): research popups never carry fields. */
-const isResearchStatus = (status: number | null): boolean => status === 4 || status === 5;
 
 /** An item_routes row with its route (item_routes ⋈ testing_routes on item_type_id + route_number). */
 type RouteRow = {
@@ -145,9 +144,9 @@ type ResolveContext = {
 
 /** Loads what resolveStationFields needs for one row (`itemId`) and asks it. */
 async function resolveRow(db: StationFieldsDb, itemId: bigint, row: RouteRow, ctx: ResolveContext): Promise<StationFieldsResponse> {
-  if (!mayHaveFields(row)) return LEGACY;
+  if (!mayHaveFields(row)) return LEGACY_FIELDS;
   const config = await loadConfig(db, row.route.test_route_id, row.fields_version);
-  if (config == null) return LEGACY;
+  if (config == null) return LEGACY_FIELDS;
   const stepTypeId = row.route.route_steps?.[row.current_route_step - 1];
   const stepIsPackageLevel = await ctx.levelOf(stepTypeId);
   const stationIsResearch = ctx.stationId != null && (await isResearchStation(db, ctx.stationId));
@@ -162,33 +161,23 @@ async function resolveRow(db: StationFieldsDb, itemId: bigint, row: RouteRow, ct
     rowIsPackage: ctx.rowIsPackage,
     config,
     kitItems,
-    gate: GATE_FINISH_ON_REQUIRED,
   });
 }
 
 // ---- GET /api/testing/station-fields ------------------------------------------------------
-/** The item has no item_routes row → 404. */
-export class StationFieldsNotFoundError extends Error {
-  readonly code = "ITEM_ROUTE_NOT_FOUND";
-  constructor(itemId: bigint) {
-    super(`no item_routes row for item ${itemId}`);
-    this.name = "StationFieldsNotFoundError";
-  }
-}
-
 /**
  * What the popup opening on `itemId` shows at the row's current step (spec §3.3). A kit row at a
- * package-level step answers "package" with the box fields and every kit item's groups. Throws
- * StationFieldsNotFoundError when the item has no route row; any other failure propagates — the
- * caller answers 500, never "legacy" (the popup blocks on an error, spec §4.2).
+ * package-level step answers "package" with the box fields and every kit item's groups. A 404
+ * ITEM_ROUTE_NOT_FOUND when the item has no route row; any other failure propagates — the caller
+ * answers 500, never "legacy" (the popup blocks on an error, spec §4.2).
  */
 export async function loadStationFields(
   db: StationFieldsDb,
   input: { itemId: bigint; stationId?: number | null },
 ): Promise<StationFieldsResponse> {
   const row = await loadRouteRow(db, input.itemId);
-  if (!row) throw new StationFieldsNotFoundError(input.itemId);
-  if (!mayHaveFields(row)) return LEGACY;
+  if (!row) throw new HttpError(404, "Item route not found", { code: "ITEM_ROUTE_NOT_FOUND" });
+  if (!mayHaveFields(row)) return LEGACY_FIELDS;
   const pkg = await loadPackageContext(db, input.itemId);
   return resolveRow(db, input.itemId, row, {
     rowIsPackage: pkg?.isPackage === true,
@@ -277,42 +266,16 @@ export async function resolveForSubmission(
 /** JSON.stringify(Details).length above this → 413 (spec §3.4 step 8), when the row has a config. */
 export const MAX_DETAILS_JSON = 256_000;
 
-export type FieldsSubmissionCode =
-  | "FIELDS_SCHEMA_MISMATCH"   // 409 — the popup was built from another config: reload it
-  | "FIELDS_INVALID"           // 400 — a value that does not fit its field (a client bug)
-  | "NOTE_TOO_LONG"            // 400 — a note over its note_max, whatever the gate says
-  | "FIELDS_INCOMPLETE"        // 422 — the finish gate: required fields or notes missing
-  | "DETAILS_TOO_LARGE";       // 413
+/** A refusal is an HttpError { error, code: FieldsSubmissionCode, missing? } (schema.ts). */
 
-/** A field the finish gate is waiting for. item_id: a close-wizard decision's item. */
-export type MissingField = { field_id: FieldId; reason: "required" | "note"; item_id?: string };
-
-/** Mapped by POST /api/testing/results to { error: message, code, missing } with `status`. */
-export class FieldsSubmissionError extends Error {
-  readonly status: 400 | 409 | 413 | 422;
-  readonly code: FieldsSubmissionCode;
-  readonly missing?: MissingField[];
-  constructor(status: 400 | 409 | 413 | 422, code: FieldsSubmissionCode, message: string, missing?: MissingField[]) {
-    super(message);
-    this.name = "FieldsSubmissionError";
-    this.status = status;
-    this.code = code;
-    if (missing) this.missing = missing;
-  }
-}
-
-const schemaMismatch = () => new FieldsSubmissionError(409, "FIELDS_SCHEMA_MISMATCH", UNDRAWN_TEXT.schemaMismatch);
+const schemaMismatch = () => new HttpError(409, FIELDS_UNDRAWN_TEXT.schemaMismatch, { code: "FIELDS_SCHEMA_MISMATCH" });
 // Technical detail in English, like the route's other client-bug errors: a popup built from the
 // config never triggers it.
-const invalid = (detail: string) => new FieldsSubmissionError(400, "FIELDS_INVALID", `Invalid station fields: ${detail}`);
+const invalid = (detail: string) => new HttpError(400, `Invalid station fields: ${detail}`, { code: "FIELDS_INVALID" });
 
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
-/** Own property only — never a value inherited through the prototype. */
-const own = (o: Obj, k: string): unknown => (Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
 
 function sameSchema(raw: unknown, want: FieldsSchemaRef): boolean {
-  return isObj(raw)
+  return isRecord(raw)
     && own(raw, "route_id") === want.route_id
     && own(raw, "v") === want.v
     && own(raw, "step_uid") === want.step_uid
@@ -326,7 +289,7 @@ function sameSchema(raw: unknown, want: FieldsSchemaRef): boolean {
  * checklist item it names must exist in the field; a bad value is a 400.
  */
 function draftOf(def: InputField, raw: unknown, at: string): FieldDraft {
-  if (!isObj(raw) || own(raw, "t") !== def.type) throw invalid(`${at}: expected a ${def.type} value`);
+  if (!isRecord(raw) || own(raw, "t") !== def.type) throw invalid(`${at}: expected a ${def.type} value`);
   const note = own(raw, "note");
   if (note != null && typeof note !== "string") throw invalid(`${at}.note`);
   const d: FieldDraft = typeof note === "string" ? { note } : {};
@@ -343,7 +306,7 @@ function draftOf(def: InputField, raw: unknown, at: string): FieldDraft {
       if (!Array.isArray(opts)) throw invalid(`${at}.opts`);
       const ids: string[] = [];
       for (const o of opts as unknown[]) {
-        const id = isObj(o) ? own(o, "id") : undefined;
+        const id = isRecord(o) ? own(o, "id") : undefined;
         if (typeof id !== "string" || !def.options.some((x) => x.id === id)) throw invalid(`${at}.opts: unknown option`);
         ids.push(id);
       }
@@ -375,8 +338,8 @@ function draftOf(def: InputField, raw: unknown, at: string): FieldDraft {
       if (!Array.isArray(items)) throw invalid(`${at}.items`);
       const checked: Record<string, boolean> = {};
       for (const it of items as unknown[]) {
-        const id = isObj(it) ? own(it, "id") : undefined;
-        const ok = isObj(it) ? own(it, "ok") : undefined;
+        const id = isRecord(it) ? own(it, "id") : undefined;
+        const ok = isRecord(it) ? own(it, "ok") : undefined;
         if (typeof id !== "string" || !def.items.some((x) => x.id === id) || typeof ok !== "boolean") {
           throw invalid(`${at}.items: unknown item`);
         }
@@ -398,7 +361,7 @@ function draftOf(def: InputField, raw: unknown, at: string): FieldDraft {
 /** Drafts for the defined fields only: keys of fields not in the config (and sections) are dropped. */
 function draftsOf(defs: readonly Field[], raw: unknown, at: string): Drafts {
   if (raw == null) return {};
-  if (!isObj(raw)) throw invalid(`${at}: expected an object`);
+  if (!isRecord(raw)) throw invalid(`${at}: expected an object`);
   const drafts: Drafts = {};
   for (const def of defs) {
     if (def.type === "section") continue;
@@ -411,7 +374,7 @@ function draftsOf(defs: readonly Field[], raw: unknown, at: string): Drafts {
 /** The worker's own verdict: ok only as "pass" / "fail", note only as text. */
 function verdictInputOf(raw: unknown): { ok?: "pass" | "fail"; note?: string } {
   if (raw == null) return {};
-  if (!isObj(raw)) throw invalid("verdict");
+  if (!isRecord(raw)) throw invalid("verdict");
   const ok = own(raw, "ok");
   const note = own(raw, "note");
   return { ...(ok === "pass" || ok === "fail" ? { ok } : {}), ...(typeof note === "string" ? { note } : {}) };
@@ -435,7 +398,7 @@ type Answer = { defs: readonly Field[]; values: Record<FieldId, FieldValue>; ite
  */
 function checkDecisions(raw: unknown[], target: FieldsTarget, answers: Answer[]): unknown[] {
   return raw.map((d, i) => {
-    if (!isObj(d)) return d;
+    if (!isRecord(d)) return d;
     if (own(d, "decision") !== "packed_anyway") return withoutFields(d);
     const itemId = own(d, "item_id");
     const kitItem = typeof itemId === "string" || typeof itemId === "number"
@@ -451,7 +414,7 @@ function checkDecisions(raw: unknown[], target: FieldsTarget, answers: Answer[])
 }
 
 /**
- * Spec §3.4 steps 2–8: the Details to store, or a FieldsSubmissionError.
+ * Spec §3.4 steps 2–8: the Details to store, or a refusal (FieldsSubmissionCode).
  *
  * No config (target null): the Details exactly as sent — unless they carry a schema, i.e. a popup
  * built from a config the row no longer resolves to (409: reload it). With a config:
@@ -471,13 +434,13 @@ function checkDecisions(raw: unknown[], target: FieldsTarget, answers: Answer[])
 export function checkFieldsSubmission(target: FieldsTarget | null, input: { details: unknown; gate: boolean }): unknown {
   const { details, gate } = input;
   if (target == null) {
-    if (isObj(details) && isObj(own(details, "schema"))) throw schemaMismatch();
+    if (isRecord(details) && isRecord(own(details, "schema"))) throw schemaMismatch();
     return details;
   }
   if ((JSON.stringify(details) ?? "").length > MAX_DETAILS_JSON) {
-    throw new FieldsSubmissionError(413, "DETAILS_TOO_LARGE", "Details too large");
+    throw new HttpError(413, "Details too large", { code: "DETAILS_TOO_LARGE" });
   }
-  if (!isObj(details) || !sameSchema(own(details, "schema"), target.schema)) throw schemaMismatch();
+  if (!isRecord(details) || !sameSchema(own(details, "schema"), target.schema)) throw schemaMismatch();
 
   const block = toResultBlock(
     target.fields,
@@ -491,12 +454,12 @@ export function checkFieldsSubmission(target: FieldsTarget | null, input: { deta
   if (Array.isArray(decisions)) {
     out.decisions = target.schema.target === "box"
       ? checkDecisions(decisions, target, answers)
-      : decisions.map((d) => (isObj(d) ? withoutFields(d) : d));
+      : decisions.map((d) => (isRecord(d) ? withoutFields(d) : d));
   }
 
   const evaluated = answers.map((a) => ({ answer: a, ev: evaluateFields(a.defs, a.values) }));
   if (evaluated.some(({ ev }) => ev.noteTooLong.length > 0)) {
-    throw new FieldsSubmissionError(400, "NOTE_TOO_LONG", UNDRAWN_TEXT.noteTooLong);
+    throw new HttpError(400, FIELDS_UNDRAWN_TEXT.noteTooLong, { code: "NOTE_TOO_LONG" });
   }
   if (gate) {
     const missing: MissingField[] = [];
@@ -510,7 +473,7 @@ export function checkFieldsSubmission(target: FieldsTarget | null, input: { deta
       notes += ev.missingNotes.length;
     }
     const message = fieldsGateText(required, notes);
-    if (message) throw new FieldsSubmissionError(422, "FIELDS_INCOMPLETE", message, missing);
+    if (message) throw new HttpError(422, message, { code: "FIELDS_INCOMPLETE", extra: { missing } });
   }
   return out;
 }

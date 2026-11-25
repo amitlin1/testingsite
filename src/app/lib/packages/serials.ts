@@ -1,8 +1,6 @@
-import { prisma, TransactionClient } from "@/app/lib/prisma";
+import { prisma, TransactionClient } from "@/lib/db";
 import { PackageError } from "./errors";
 import { serialKey, serialProblem, type SerialMatch } from "./serial-key";
-
-export { serialKey, serialProblem, type SerialMatch };
 
 /**
  * Serial numbers at intake. Two serials are the same label when they match
@@ -14,11 +12,12 @@ export { serialKey, serialProblem, type SerialMatch };
  * type, another shipment: a unit back for a retest) is only reported to the
  * worker, never refused.
  *
- * The rule lives in the routes, not in createPackage / addPackageItem, so
- * the write path's own tests keep their fixed serials.
+ * The intake requests (create-package.ts intakePackage / addItemToPackage)
+ * and the opening (boxes.ts saveOpeningContents) apply it; createPackage and
+ * addPackageItem themselves do not, so the seed and the write-path suites can
+ * mint boxes with fixed serials.
  */
 
-/** Items already carrying any of these serials, newest first. */
 export async function findSerials(db: TransactionClient | typeof prisma, serials: string[]): Promise<SerialMatch[]> {
   const keys = [...new Set(serials.map(serialKey).filter(Boolean))];
   if (keys.length === 0) return [];
@@ -58,11 +57,17 @@ export async function assertSerialFreeForItem(
   }
 }
 
-/** Refuses the hard-rule duplicates; `itemIndex` on the error names the row. */
+/**
+ * Refuses the hard-rule duplicates; `itemIndex` on the error names the row.
+ * `requireSerial`: a row without one is refused too (the opening, where the
+ * serial is the one thing recorded). `inPackage`: the box these rows belong
+ * to — its own items do not clash with themselves (a re-saved opening).
+ */
 export async function assertSerialsFree(
   tx: TransactionClient,
   shipmentId: number,
   items: { itemType: number; serialNumber: string }[],
+  opts: { requireSerial?: boolean; inPackage?: bigint } = {},
 ): Promise<void> {
   const types = await tx.item_types.findMany({
     where: { item_type_id: { in: [...new Set(items.map((i) => i.itemType))] } },
@@ -72,20 +77,25 @@ export async function assertSerialsFree(
 
   const seen = new Map<string, number>();
   for (let i = 0; i < items.length; i++) {
-    const notSerial = serialProblem(items[i].serialNumber);
-    if (notSerial) throw new PackageError("ITEM_SERIAL_INVALID", `${desc(items[i].itemType)}: ${notSerial}`, 400, i);
-    const key = serialKey(items[i].serialNumber);
+    const { itemType, serialNumber } = items[i];
+    if (opts.requireSerial && !serialNumber?.trim()) {
+      throw new PackageError("ITEM_SERIAL_REQUIRED", `${desc(itemType)}: חסר מספר סריאלי`, 400, i);
+    }
+    const notSerial = serialProblem(serialNumber);
+    if (notSerial) throw new PackageError("ITEM_SERIAL_INVALID", `${desc(itemType)}: ${notSerial}`, 400, i);
+    const key = serialKey(serialNumber);
     const first = seen.get(key);
     if (first != null) {
-      throw new PackageError("ITEM_SERIAL_DUPLICATE", `${desc(items[i].itemType)}: הסריאלי ${items[i].serialNumber.trim()} כבר הוזן בשורה ${first + 1}`, 409, i);
+      throw new PackageError("ITEM_SERIAL_DUPLICATE", `${desc(itemType)}: הסריאלי ${serialNumber.trim()} כבר הוזן בשורה ${first + 1}`, 409, i);
     }
     seen.set(key, i);
   }
 
   const existing = await findSerials(tx, items.map((i) => i.serialNumber));
+  const sameBox = (m: SerialMatch) => opts.inPackage != null && String(m.package_id) === opts.inPackage.toString();
   for (let i = 0; i < items.length; i++) {
     const key = serialKey(items[i].serialNumber);
-    if (existing.some((m) => m.serial === key && m.shipment_id === shipmentId && m.item_type_id === items[i].itemType)) {
+    if (existing.some((m) => m.serial === key && m.shipment_id === shipmentId && m.item_type_id === items[i].itemType && !sameBox(m))) {
       throw new PackageError("ITEM_SERIAL_EXISTS", `${desc(items[i].itemType)}: הסריאלי ${items[i].serialNumber.trim()} כבר נקלט במשלוח הזה`, 409, i);
     }
   }

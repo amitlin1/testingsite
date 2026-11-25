@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { adminFieldsErrorResponse, getFieldVersion, parsePathId } from "@/app/lib/station-fields/admin";
+import { prisma } from "@/lib/db";
+import { getFieldVersion } from "@/app/lib/station-fields/admin";
+import { errorResponse } from "@/lib/http/errors";
+import { parseDbId } from "@/lib/http/request";
 
 export const runtime = "nodejs";
 
@@ -11,8 +13,8 @@ export const runtime = "nodejs";
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string; v: string }> }) {
   try {
     const { id, v } = await params;
-    return NextResponse.json(await getFieldVersion(prisma, parsePathId(id), parsePathId(v)));
+    return NextResponse.json(await getFieldVersion(prisma, parseDbId(id), parseDbId(v)));
   } catch (error) {
-    return adminFieldsErrorResponse(error, "Failed to load the field version");
+    return errorResponse(error, "Failed to load the field version");
   }
 }

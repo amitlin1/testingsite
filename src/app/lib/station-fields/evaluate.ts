@@ -3,7 +3,8 @@ import type {
   ChecklistItemId, ChoiceOption, Field, FieldId, FieldValue, FieldsResultBlock, FieldsSchemaRef,
   FieldsVerdict, InputField, NumberField, OptionId,
 } from "./schema";
-import { PASS_FAIL_WORD, fieldsGateText } from "./labels";
+import { PASS_FAIL_WORD } from "./labels";
+import { own } from "@/lib/json-guards";
 
 /**
  * "מוצע" and the finish gate (route-fields spec §2.6, decision D3). Pure — the popups run it
@@ -32,8 +33,6 @@ export type FieldsEvaluation = {
   suggested: "pass" | "fail" | null;
   /** ALL failing fields, in field order. Every artboard joins them with " · ". */
   fails: FailItem[];
-  /** = fails[0] ?? null (kept for convenience). */
-  firstFail: FailItem | null;
   /** Required fields without a value (and photos below their minimum) → "נותר שדה חובה אחד" / "נותרו N שדות חובה". */
   missingRequired: FieldId[];
   /** Notes the field demands but the worker left blank → "חסרה הערה לחריגה" / "יש לפרט את החריגה".
@@ -45,9 +44,6 @@ export type FieldsEvaluation = {
 };
 
 // ---- helpers ------------------------------------------------------------------------
-function own<T>(o: Readonly<Record<string, T>> | undefined, k: string): T | undefined {
-  return o != null && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined;
-}
 const optionById = (options: readonly ChoiceOption[], id: unknown): ChoiceOption | undefined =>
   options.find((o) => o.id === id);
 /** The field's options (in their configured order) that the stored value picked. */
@@ -209,12 +205,7 @@ export function evaluateFields(
     }
   }
   const suggested = fails.length > 0 ? "fail" : driving > 0 && drivingFilled === driving ? "pass" : null;
-  return { suggested, fails, firstFail: fails[0] ?? null, missingRequired, missingNotes, noteTooLong };
-}
-
-/** The finish-gate message (spec §3.4 step 6) — the 422 FIELDS_INCOMPLETE text — or null. */
-export function fieldsGateMessage(ev: Pick<FieldsEvaluation, "missingRequired" | "missingNotes">): string | null {
-  return fieldsGateText(ev.missingRequired.length, ev.missingNotes.length);
+  return { suggested, fails, missingRequired, missingNotes, noteTooLong };
 }
 
 /** Spec §4.3: the gate (when on) waits for required fields and notes. Two things block whatever
@@ -241,7 +232,7 @@ export function requiredProgress(
 }
 
 // ---- the popup's draft → the saved block (spec §4.3) ------------------------------------
-/** stationKit's Shot, structurally (a pure module cannot import the React kit). */
+/** A shot as the popups keep it while it uploads (testing/fields/PhotoUploader). */
 export type DraftShot = { previewUrl: string; objectKey?: string; uploading?: boolean; failed?: boolean };
 
 /** What a popup keeps per field while the worker types. */

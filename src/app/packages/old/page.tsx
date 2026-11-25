@@ -3,22 +3,25 @@ import React from "react";
 import NextLink from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Printer, Search } from "lucide-react";
-import type { PackageView } from "@/app/lib/packages/read";
+import { packageMatches, type PackageView } from "@/app/lib/packages/contract";
+import { PACKAGES_PARAMS, itemHistoryHref, packageHref } from "@/app/lib/links";
+import { customerLabel, type Option } from "@/app/components/lookups";
 import { apiFetch } from "@/lib/api/client";
-import { Alert, Skeleton } from "@/components/ui";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
-import PackageIdText, { MiniItems, StatusPill } from "@/app/components/packages/PackageIdText";
+import { Alert, Skeleton, SearchableCombobox } from "@/components/ui";
+import IdText from "@/app/components/IdText";
+import { DotPill, MiniItems } from "@/components/ui/ArtboardControls";
 import PackageScanIntakeDialog from "@/app/components/packages/PackageScanIntakeDialog";
 import PackageDeleteDialog from "@/app/components/packages/PackageDeleteDialog";
 import PackageEditDialog from "@/app/components/packages/PackageEditDialog";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import PackageRelabelDialog, { type RelabelPackage } from "@/app/components/packages/PackageRelabelDialog";
-import {
-  AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, HAIR, HAIR_2, INK, INK_2, ITEM_STATES, LEGEND, MUTED, PKG_STATUS, RED,
-  fmtDate, fmtDateTime, seq2,
-} from "@/app/components/packages/packageUi";
+import { ITEM_STATES, LEGEND, PKG_STATUS, fmtDate, fmtDateTime } from "@/app/components/packages/packageUi";
+import { AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, HAIR, HAIR_2, INK, INK_2, MUTED, RED } from "@/components/ui/colors";
+import { seq2 } from "@/app/lib/packages/ids";
+import "@/components/ui/controls.css";
 import "../packages.css";
-import type { Customers, ItemTypeOption, Shipment } from "@/types";
+import type { ItemTypeOption } from "@/app/lib/items/contract";
+import type { Customers, Shipment } from "@/app/lib/shipments/contract";
 
 /**
  * ניהול מארזים — design/Packages.dc.html (list + side panel). Five columns,
@@ -33,8 +36,6 @@ import type { Customers, ItemTypeOption, Shipment } from "@/types";
  * so the header and filters still stay put. The layout classes live in
  * packages.css (anything a media query must override cannot be inline).
  */
-
-type Option = { value: string; label: string };
 
 const chipBg = (s: PackageView["items"][number]["state"]) => (s === "done" ? "var(--color-success-bg)" : s === "missing" ? "var(--color-danger-bg)" : "var(--color-canvas-parchment)");
 const chipTone = (s: PackageView["items"][number]["state"]) => (s === "done" ? GREEN : s === "missing" ? RED : MUTED);
@@ -58,7 +59,6 @@ function FilterSelect({ value, onChange, options, allLabel }: { value: string; o
   );
 }
 
-/** useSearchParams needs a Suspense boundary (deep links: ?shipment= / ?status= / ?q=). */
 /** `list` null = keep what is on screen (the request itself failed). */
 type PackagesRead = { list: PackageView[] | null; failed: boolean };
 
@@ -72,6 +72,7 @@ async function readPackages(): Promise<PackagesRead> {
   }
 }
 
+/** useSearchParams needs a Suspense boundary (deep links: ?shipment= / ?status= / ?q=). */
 export default function PackagesPage() {
   return (
     <React.Suspense fallback={null}>
@@ -87,14 +88,14 @@ function PackagesPageInner() {
   const [loading, setLoading] = React.useState(true);
   // A failed load is not "no packages": it gets an error with a retry.
   const [loadError, setLoadError] = React.useState(false);
-  const [q, setQ] = React.useState(sp.get("q") ?? "");
+  const [q, setQ] = React.useState(sp.get(PACKAGES_PARAMS.q) ?? "");
   const [customer, setCustomer] = React.useState("");
   const [shipment, setShipment] = React.useState(sp.get("shipment") ?? "");
   const [type, setType] = React.useState("");
   const [status, setStatus] = React.useState(sp.get("status") ?? "");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  // ?new=1 (command palette "מארז חדש", items page) opens the intake directly.
-  const [intakeOpen, setIntakeOpen] = React.useState(sp.get("new") === "1");
+  // ?new=1 opens the intake directly (the command palette's "מארז חדש" opens the board's now).
+  const [intakeOpen, setIntakeOpen] = React.useState(sp.get(PACKAGES_PARAMS.intake) === "1");
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [labelsOpen, setLabelsOpen] = React.useState(false);
@@ -135,10 +136,9 @@ function PackagesPageInner() {
     applyPackages(await readPackages());
   }, [applyPackages]);
 
-  // The first load: `loading` starts true, so only the reply sets state.
   React.useEffect(() => { readPackages().then(applyPackages); }, [applyPackages]);
   React.useEffect(() => {
-    apiFetch("/api/customers").then((r) => (r.ok ? r.json() : [])).then((d: Customers[]) => setCustomers((Array.isArray(d) ? d : []).map((c) => ({ value: String(c.id), label: c.customer_code ? `${c.name} (${c.customer_code})` : c.name })))).catch(() => {});
+    apiFetch("/api/customers").then((r) => (r.ok ? r.json() : [])).then((d: Customers[]) => setCustomers((Array.isArray(d) ? d : []).map((c) => ({ value: String(c.id), label: customerLabel(c) })))).catch(() => {});
     apiFetch("/api/shipments").then((r) => (r.ok ? r.json() : [])).then((d: Shipment[]) => setShipments((Array.isArray(d) ? d : []).map((s) => ({ value: String(s.id), label: s.shipment_code })))).catch(() => {});
     apiFetch("/api/settings/package-types").then((r) => (r.ok ? r.json() : [])).then((d: ItemTypeOption[]) => setTypes((Array.isArray(d) ? d : []).map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })))).catch(() => {});
   }, []);
@@ -161,15 +161,12 @@ function PackagesPageInner() {
     (shipment === "" || String(p.shipment_id) === shipment) &&
     (type === "" || String(p.item_type_id) === type) &&
     (status === "" || p.status === status) &&
-    (ql === "" || p.item_id.includes(ql) || p.item_type_desc.toLowerCase().includes(ql) || (p.makat ?? "").toLowerCase().includes(ql) ||
-      (p.shipment_code ?? "").toLowerCase().includes(ql) || (p.customer_name ?? "").toLowerCase().includes(ql) ||
-      p.items.some((it) => it.item_id.includes(ql) || (it.serial_no ?? "").toLowerCase().includes(ql) || (it.makat ?? "").toLowerCase().includes(ql))),
+    (ql === "" || packageMatches(p, ql)),
   );
   const sel = list.find((p) => p.item_id === selectedId) ?? null;
 
   return (
     <div dir="rtl" className="pkg-page" style={{ color: INK }}>
-      {/* Header */}
       <div className="pkg-fixed" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -190,7 +187,6 @@ function PackagesPageInner() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="pkg-fixed pkg-stats">
         {stats.map((s) => (
           <div key={s.label} className="pkg-stat">
@@ -200,7 +196,6 @@ function PackagesPageInner() {
         ))}
       </div>
 
-      {/* Search + filters + legend */}
       <div className="pkg-fixed" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 24 }}>
         <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 360 }}>
           {/* 44px and the field radius, like the dense comboboxes beside it. */}
@@ -219,7 +214,6 @@ function PackagesPageInner() {
         </div>
       </div>
 
-      {/* Table + panel */}
       <div className="pkg-split">
         <div className="pkg-table-wrap" style={{ background: "var(--color-canvas)", border: `1px solid ${HAIR}` }}>
           <div className="pkg-table-scroll">
@@ -256,7 +250,7 @@ function PackagesPageInner() {
                       onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setSelectedId(p.item_id); } }}
                       style={{ borderTop: `1px solid ${HAIR_2}` }}>
                       <td style={{ padding: "11px 16px", whiteSpace: "nowrap" }}>
-                        <PackageIdText id={p.item_id} />
+                        <IdText id={p.item_id} />
                         <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{p.status === "pending" ? "טרם נקלט" : `נקלט ${fmtDate(p.created_at)}`}</div>
                       </td>
                       <td style={{ padding: "11px 12px", whiteSpace: "nowrap" }}>
@@ -265,7 +259,7 @@ function PackagesPageInner() {
                       </td>
                       <td style={{ padding: "11px 12px", fontSize: 14, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{p.items.length}</td>
                       <td style={{ padding: "11px 12px" }}>
-                        <StatusPill label={st.label} dot={st.dot} />
+                        <DotPill label={st.label} dot={st.dot} />
                         {p.status === "waitItems" && p.blocked_by.length > 0 && (
                           <div style={{ fontSize: 11.5, color: AMBER_INK, marginTop: 4, maxWidth: 200, lineHeight: 1.45 }}>{blockedNote(p)}</div>
                         )}
@@ -308,10 +302,10 @@ function PackagesPageInner() {
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 11.5, color: MUTED, fontWeight: 600 }}>{sel.item_type_desc}</div>
-                    <div style={{ marginTop: 3 }}><PackageIdText id={sel.item_id} size={17} headColor={INK} letterSpacing=".4px" /></div>
+                    <div style={{ marginTop: 3 }}><IdText id={sel.item_id} size={17} headColor={INK} letterSpacing=".4px" /></div>
                     <div style={{ fontSize: 12.5, color: MUTED, marginTop: 5 }}>{sel.customer_name ?? sel.customer_code ?? "—"} · משלוח {sel.shipment_code ?? "—"} · {sel.status === "pending" ? "טרם נקלט" : `נקלט ${fmtDate(sel.created_at)}`}</div>
                   </div>
-                  <StatusPill label={PKG_STATUS[sel.status].label} dot={PKG_STATUS[sel.status].dot} />
+                  <DotPill label={PKG_STATUS[sel.status].label} dot={PKG_STATUS[sel.status].dot} />
                 </div>
                 {sel.status === "waitItems" && sel.blocked_by.length > 0 && (
                   <div style={{ marginTop: 12, fontSize: 12.5, color: AMBER_INK, background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`, borderRadius: 8, padding: "8px 11px", lineHeight: 1.5 }}>{blockedNote(sel)}</div>
@@ -340,7 +334,7 @@ function PackagesPageInner() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
                   {sel.items.map((it) => (
                     // A real link: keyboard, middle-click and "open in a new tab" work.
-                    <NextLink key={it.item_id} href={`/items/${it.item_id}/history`} className="pkg-row" style={{ display: "flex", alignItems: "center", gap: 11, border: `1px solid ${HAIR}`, borderRadius: 12, padding: "10px 12px" }}>
+                    <NextLink key={it.item_id} href={itemHistoryHref(it.item_id)} className="pkg-row" style={{ display: "flex", alignItems: "center", gap: 11, border: `1px solid ${HAIR}`, borderRadius: 12, padding: "10px 12px" }}>
                       <span style={{ width: 30, height: 30, borderRadius: 8, background: chipBg(it.state), color: chipTone(it.state), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{seq2(it.package_seq)}</span>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.item_type_desc}</div>
@@ -351,7 +345,7 @@ function PackagesPageInner() {
                   ))}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
-                  <button type="button" onClick={() => router.push(`/packages/${sel.item_id}`)} className="pkg-pill pkg-pill--primary pkg-pill--sm" style={{ flex: 1, minWidth: 130, paddingInline: 16 }}>עמוד המארז</button>
+                  <button type="button" onClick={() => router.push(packageHref(sel.item_id))} className="pkg-pill pkg-pill--primary pkg-pill--sm" style={{ flex: 1, minWidth: 130, paddingInline: 16 }}>עמוד המארז</button>
                   <button type="button" onClick={() => setLabelsOpen(true)} className="pkg-pill pkg-pill--ghost pkg-pill--sm">מדבקות</button>
                   <button type="button" onClick={() => setEditOpen(true)} className="pkg-pill pkg-pill--ghost pkg-pill--sm">עריכה</button>
                   <button type="button" onClick={() => setDeleteOpen(true)} className="pkg-pill pkg-pill--ghost pkg-pill--sm pkg-pill--danger-text">מחיקה</button>
@@ -372,10 +366,7 @@ function PackagesPageInner() {
         <PackageLabelsDialog
           open
           onClose={() => setLabelsOpen(false)}
-          packageId={sel.item_id}
-          packageType={sel.item_type_desc}
-          customerLine={`${sel.customer_name ?? sel.customer_code ?? ""} · משלוח ${sel.shipment_code ?? ""}`}
-          items={sel.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
+          pkg={sel}
         />
       )}
     </div>

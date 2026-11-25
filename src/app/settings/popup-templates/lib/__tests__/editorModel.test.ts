@@ -2,10 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { lintPopupTemplate } from "@/app/lib/popup-templates/validate";
 import type { PhotoComponent } from "@/app/lib/popup-templates/schema";
+import { newComponent } from "@/app/lib/popup-templates/templates";
 import {
   addChecklistRow, addComponent, addReportSignStep, addStep, blankTemplate, canAddKind, canAddReportSign, canMoveStep, catalogFor, codeTemplateFor,
   isLockedStep, isOptionalPart, isSystemPart, issuesAt,
-  moveComponent, moveStep, newComponent, packageCodeTemplate, removeChecklistRow, removeComponent, removeStep, sameConfig,
+  moveComponent, moveStep, packageCodeTemplate, removeChecklistRow, removeComponent, removeStep, sameConfig,
   setChecklistRow, setFinishLabel, templateIssues, updateComponent, updateStep,
 } from "../editorModel";
 
@@ -76,7 +77,7 @@ test("the catalog: one SKU, one verdict, one place for the fields, up to 8 photo
 
 test("dirty check and where issues belong", () => {
   const cfg = blankTemplate();
-  assert.equal(sameConfig(cfg, JSON.parse(JSON.stringify(cfg))), true);
+  assert.equal(sameConfig(cfg, { finish_label: cfg.finish_label, steps: cfg.steps }), true, "key order does not matter");
   const edited = setFinishLabel(cfg, "");
   assert.equal(sameConfig(cfg, edited), false);
   const issues = lintPopupTemplate(updateStep(edited, cfg.steps[1].id, { title: "" }));
@@ -89,8 +90,12 @@ test("package templates: today's wizards are valid, the item flow is edited like
   const close = packageCodeTemplate("closing");
   assert.deepEqual(lintPopupTemplate(open, "package"), []);
   assert.deepEqual(lintPopupTemplate(close, "package"), []);
-  assert.deepEqual(catalogFor("closing", "steps").includes("arrival"), false, "a mandatory part is never in the catalog");
-  assert.ok(catalogFor("opening", "steps").includes("labels"), "the labels may come back");
+  // The "הוסף רכיב" menus, in their order: never a mandatory part or the report signing; the labels may come back.
+  const item = ["message", "photo", "weight", "route_fields", "sku_scan", "verdict"];
+  assert.deepEqual(catalogFor(null, "steps"), item);
+  assert.deepEqual(catalogFor("opening", "item_flow"), item);
+  assert.deepEqual(catalogFor("opening", "steps"), ["message", "photo", "route_fields", "sku_scan", "verdict", "checklist", "notes", "labels"]);
+  assert.deepEqual(catalogFor("closing", "steps"), ["message", "photo", "route_fields", "sku_scan", "verdict", "checklist", "notes"]);
 
   // A step of the item flow: renamed, given a component, moved — the box's steps untouched.
   const phase = open.item_flow![2];

@@ -92,8 +92,8 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
 }
 
-/* A row: the .stz-row pattern as one 56px button. */
-.stz-row.rf-lib-row {
+/* A row: the .set-row pattern as one 56px button. */
+.set-row.rf-lib-row {
   box-sizing: border-box;
   width: 100%;
   min-height: 56px;
@@ -107,8 +107,8 @@
   font: inherit;
   text-align: start;
 }
-.stz-row.rf-lib-row[data-selected] { background: var(--color-primary-tint); }
-.stz-row.rf-lib-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+.set-row.rf-lib-row[data-selected] { background: var(--color-primary-tint); }
+.set-row.rf-lib-row:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
 .rf-lib-rows > :first-child > .rf-lib-row,
 .rf-lib-rows > .rf-lib-row:first-child { border-top: 0; }
 .rf-lib-row__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }

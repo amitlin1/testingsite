@@ -1,13 +1,12 @@
-import { stepConfigOf } from "@/app/lib/station-fields/schema";
-import type { Field, RouteFieldsConfig, StepUid } from "@/app/lib/station-fields/schema";
-import { LIMITS, takenLabels } from "@/app/lib/station-fields/validate";
-import { setGroupFields } from "./draftModel";
-import type { ConfigMutator } from "./draftModel";
+import type { Field, RouteFieldsConfig } from "@/app/lib/station-fields/schema";
+import { bindingKey, groupFieldsOf, setGroupFields } from "./cellGroups";
+import { cellStateOf, editByRoute, fillCell } from "./cellFill";
+import type { PasteCounts, RouteEdit } from "./cellFill";
 import { DEFAULT_IDS } from "./editorModel";
 import type { IdSource, SharedListLike } from "./editorModel";
-import { bindingKey, groupFieldsOf } from "./mapModel";
-import type { CellBinding, FieldsMapModel, MapCell, StepMeta } from "./mapModel";
-import { parseTsvRows, tsvRowField } from "./pasteTsv";
+import type { FieldsMapModel, MapCell } from "./mapModel";
+import { inputFields, isInputField, isOptionField } from "./optionFields";
+import { parseTsvRows, tsvFields } from "./pasteTsv";
 import type { TsvRow } from "./pasteTsv";
 
 /**
@@ -21,7 +20,7 @@ import type { TsvRow } from "./pasteTsv";
  * fields as TSV for the system clipboard — a line per field, "name⇥option 1⇥option 2⇥…" (section
  * headers are left out; a field without options is its name alone).
  *
- * Paste ("הוסף לשדות הקיימים" — nothing a cell has is replaced or removed):
+ * Paste ("הוסף לשדות הקיימים" — nothing a cell has is replaced or removed; cellFill's "add"):
  *   - a clipboard of ONE cell goes into every target cell;
  *   - a clipboard of SEVERAL cells keeps its shape, like a spreadsheet: its top-left lands on the
  *     top-left of the targets' bounding box (rows and columns of the whole map, whatever the filter
@@ -29,41 +28,13 @@ import type { TsvRow } from "./pasteTsv";
  *     the map takes nothing (counted as `outside`). The rest of the selection takes nothing either;
  *   - text from the system clipboard that is not the internal copy is parsed as TSV (pasteTsv) and
  *     its rows go into every target cell.
- *   In a cell, a field whose trimmed name the cell already has is skipped — artboard 9's rule: for
- *   a kit item's group at a package-level step the each_item group's names count too
- *   (validate.takenLabels; the box is a card of its own). Every copy gets a FRESH field id (unique
- *   in its step); option and checklist-item ids are kept (they are unique per field). Section
- *   headers come along, except one whose copied fields were all skipped. A cell never grows past
- *   LIMITS.fieldsPerList (the rest is `overflow`).
- * Clear: every field of the target cells goes (setGroupFields with [] — the step stays, see
- * draftModel); "ביטול הטיוטה" brings them back.
+ * Clear: every field of the target cells goes (setGroupFields with [] — the step stays);
+ * "ביטול הטיוטה" brings them back.
  * Targets are deduplicated by binding: two rows showing one group (two lines on one route) are one
  * cell to change.
  */
 
-// ---- cells and their groups ----------------------------------------------------------------------
-/** The fields the worker sees on the same card ahead of the cell's own: each_item's, for a kit
- *  item's group at a package-level step (the order of validate.lintRouteFieldsConfig). */
-export function alongsideFields(cfg: RouteFieldsConfig | null | undefined, binding: Pick<CellBinding, "step_uid" | "target">): Field[] {
-  if (!cfg || typeof binding.target !== "object") return [];
-  const step = stepConfigOf(cfg, binding.step_uid);
-  if (!step || step.scope !== "package") return [];
-  return groupFieldsOf(cfg, binding.step_uid, "each_item");
-}
-
-/** The names a field added to the cell must not repeat (artboard 9's rule; validate.takenLabels). */
-export function cellTakenLabels(cfg: RouteFieldsConfig | null | undefined, binding: Pick<CellBinding, "step_uid" | "target">): Set<string> {
-  return takenLabels([...alongsideFields(cfg, binding), ...groupFieldsOf(cfg, binding.step_uid, binding.target)]);
-}
-
-/** Every field id of a step, across its groups (field ids are unique per step — validate.ts). */
-export function stepFieldIds(cfg: RouteFieldsConfig | null | undefined, stepUid: StepUid): Set<string> {
-  const step = cfg ? stepConfigOf(cfg, stepUid) : undefined;
-  const out = new Set<string>();
-  for (const g of step?.groups ?? []) for (const f of g.fields) out.add(f.id);
-  return out;
-}
-
+// ---- cells -------------------------------------------------------------------------------------------
 /** The cells once per group, in the order given. */
 export function uniqueByBinding(cells: readonly MapCell[]): MapCell[] {
   const seen = new Set<string>();
@@ -105,7 +76,6 @@ export type BulkClipboard = {
   fieldCount: number;
 };
 
-const copyFields = (fields: readonly Field[]): Field[] => JSON.parse(JSON.stringify(fields)) as Field[];
 const cleanCell = (s: string): string => s.replace(/[\t\r\n]+/g, " ").trim();
 
 /** The system clipboard's text of a field list: a line per field, "name⇥option 1⇥option 2⇥…" —
@@ -113,8 +83,8 @@ const cleanCell = (s: string): string => s.replace(/[\t\r\n]+/g, " ").trim();
 export function fieldsToTsv(fields: readonly Field[]): string {
   const lines: string[] = [];
   for (const f of fields) {
-    if (f.type === "section") continue;
-    const options = f.type === "choice_row" || f.type === "multi_choice" ? f.options.map((o) => cleanCell(o.label)) : [];
+    if (!isInputField(f)) continue;
+    const options = isOptionField(f) ? f.options.map((o) => cleanCell(o.label)) : [];
     lines.push([cleanCell(f.label), ...options].join("\t"));
   }
   return lines.join("\n");
@@ -130,10 +100,10 @@ export function copyCells(model: FieldsMapModel, configs: Readonly<Record<number
   const out: ClipCell[] = placed.map(({ cell, pos }) => ({
     row: pos.row - top,
     col: pos.col - left,
-    fields: copyFields(groupFieldsOf(configs[cell.binding.route_id], cell.binding.step_uid, cell.binding.target)),
+    fields: structuredClone(groupFieldsOf(configs[cell.binding.route_id], cell.binding.step_uid, cell.binding.target)),
   }));
   const all = out.flatMap((c) => c.fields);
-  return { cells: out, tsv: fieldsToTsv(all), fieldCount: all.filter((f) => f.type !== "section").length };
+  return { cells: out, tsv: fieldsToTsv(all), fieldCount: inputFields(all).length };
 }
 
 // ---- where a paste comes from --------------------------------------------------------------------
@@ -163,7 +133,7 @@ export function pasteSource(clip: BulkClipboard | null, systemText: string | nul
 }
 
 // ---- paste ---------------------------------------------------------------------------------------
-/** What goes into one cell. The fields are templates: addToCell copies them with fresh ids. */
+/** What goes into one cell. The fields are templates: the fill copies them with fresh ids. */
 export type CellAddition = { cell: MapCell; fields: readonly Field[] };
 
 /** Where the internal clipboard goes among `targets` (see the module comment). */
@@ -187,130 +157,38 @@ export function planInternalPaste(model: FieldsMapModel, clip: BulkClipboard, ta
   return { additions, outside };
 }
 
-/** The TSV rows as fields, the same rows for every target cell (addToCell copies them). */
+/** The TSV rows as fields, the same rows for every target cell. */
 export function planTsvPaste(rows: readonly TsvRow[], targets: readonly MapCell[], lists: readonly SharedListLike[] | null = null, ids: IdSource = DEFAULT_IDS): CellAddition[] {
-  const fields: Field[] = rows.map((r) => tsvRowField(r, lists, ids));
+  const fields = tsvFields(rows, lists, ids);
   return uniqueByBinding(targets).map((cell) => ({ cell, fields }));
 }
 
-export type AddResult = { added: number; skipped: number; overflow: number };
-
-/**
- * Copies of `incoming` after the cell's fields (see the module comment): duplicates by name skipped,
- * fresh field ids, section headers kept unless every field they head was skipped, at most
- * LIMITS.fieldsPerList in the cell. Mutates `cfg` (the copy draftStore.edit hands out); leaves it
- * alone when nothing is added.
- */
-export function addToCell(cfg: RouteFieldsConfig, binding: CellBinding, meta: StepMeta, incoming: readonly Field[], ids: IdSource = DEFAULT_IDS): AddResult {
-  const current = groupFieldsOf(cfg, binding.step_uid, binding.target);
-  const taken = cellTakenLabels(cfg, binding);
-  const used = stepFieldIds(cfg, binding.step_uid);
-  // Walk the incoming list section by section: a header goes in only when a field under it does,
-  // or when it headed nothing in the first place.
-  type Entry = { field: Field; heads: boolean };
-  const picked: Entry[] = [];
-  let skipped = 0;
-  let pending: Field | null = null;
-  let pendingHeads = false;
-  const flushPending = () => {
-    if (pending && !pendingHeads) picked.push({ field: pending, heads: false });
-    pending = null;
-    pendingHeads = false;
-  };
-  for (const f of incoming) {
-    if (f.type === "section") {
-      flushPending();
-      pending = f;
-      continue;
-    }
-    if (pending) pendingHeads = true;
-    const name = f.label.trim();
-    if (name && taken.has(name)) {
-      skipped += 1;
-      continue;
-    }
-    if (name) taken.add(name);
-    if (pending) {
-      picked.push({ field: pending, heads: true });
-      pending = null;
-    }
-    picked.push({ field: f, heads: false });
-  }
-  flushPending();
-
-  // The cell's room: what does not fit is left out, and a header left with nothing under it too.
-  const room = Math.max(0, LIMITS.fieldsPerList - current.length);
-  const kept = picked.slice(0, room);
-  const overflow = picked.slice(room).filter((e) => e.field.type !== "section").length;
-  while (kept.length > 0 && kept[kept.length - 1].heads) kept.pop();
-  if (kept.length === 0) return { added: 0, skipped, overflow };
-
-  const out = kept.map(({ field }) => {
-    const copy = JSON.parse(JSON.stringify(field)) as Field;
-    let id = ids.field();
-    while (used.has(id)) id = ids.field();
-    used.add(id);
-    copy.id = id;
-    return copy;
-  });
-  setGroupFields(cfg, binding, meta, [...current, ...out]);
-  return { added: out.filter((f) => f.type !== "section").length, skipped, overflow };
-}
-
-/** draftStore.edit, or a test's stand-in: mutate the working copy of one route. */
-export type RouteEdit = (routeId: number, mutate: ConfigMutator) => void;
-
-export type PasteCounts = {
-  /** Cells that took at least one field. */
-  cells: number;
-  added: number;
-  skipped: number;
-  overflow: number;
-  outside: number;
-};
-
-/** The additions grouped by route: ONE edit per route touched. */
-export function applyAdditions(edit: RouteEdit, additions: readonly CellAddition[], ids: IdSource = DEFAULT_IDS, outside = 0): PasteCounts {
+/** The fill of every cell (cellFill "add", or "replace"), ONE edit per route touched. */
+export function applyAdditions(
+  edit: RouteEdit, additions: readonly CellAddition[], ids: IdSource = DEFAULT_IDS, outside = 0, mode: "add" | "replace" = "add",
+): PasteCounts {
   const counts: PasteCounts = { cells: 0, added: 0, skipped: 0, overflow: 0, outside };
-  const byRoute = new Map<number, CellAddition[]>();
-  for (const a of additions) {
-    const list = byRoute.get(a.cell.binding.route_id) ?? [];
-    list.push(a);
-    byRoute.set(a.cell.binding.route_id, list);
-  }
-  for (const [routeId, list] of byRoute) {
-    edit(routeId, (cfg) => {
-      const filled = new Set<string>();
-      for (const a of list) {
-        const r = addToCell(cfg, a.cell.binding, a.cell.stepMeta, a.fields, ids);
-        counts.added += r.added;
-        counts.skipped += r.skipped;
-        counts.overflow += r.overflow;
-        if (r.added > 0) filled.add(bindingKey(a.cell.binding));
-      }
-      counts.cells += filled.size;
-    });
-  }
+  const filled = new Set<string>();
+  editByRoute(edit, additions, (a) => a.cell.binding.route_id, (cfg, a) => {
+    const r = fillCell(cellStateOf(cfg, a.cell.binding), a.fields, { mode, ids });
+    const added = inputFields(r.added).length;
+    counts.added += added;
+    counts.skipped += r.skipped;
+    counts.overflow += r.overflow;
+    if (mode === "replace" || r.added.length > 0) setGroupFields(cfg, a.cell.binding, a.cell.stepMeta, r.fields);
+    if (mode === "replace" || added > 0) filled.add(bindingKey(a.cell.binding));
+  });
+  counts.cells = filled.size;
   return counts;
 }
 
 // ---- clear ---------------------------------------------------------------------------------------
 /** "נקה": every field of every target cell, ONE edit per route. Answers the cells that had any. */
 export function clearCells(edit: RouteEdit, targets: readonly MapCell[]): number {
-  const byRoute = new Map<number, MapCell[]>();
-  for (const c of uniqueByBinding(targets)) {
-    const list = byRoute.get(c.binding.route_id) ?? [];
-    list.push(c);
-    byRoute.set(c.binding.route_id, list);
-  }
   let cleared = 0;
-  for (const [routeId, cells] of byRoute) {
-    edit(routeId, (cfg) => {
-      for (const c of cells) {
-        if (groupFieldsOf(cfg, c.binding.step_uid, c.binding.target).length > 0) cleared += 1;
-        setGroupFields(cfg, c.binding, c.stepMeta, []);
-      }
-    });
-  }
+  editByRoute(edit, uniqueByBinding(targets), (c) => c.binding.route_id, (cfg, c) => {
+    if (groupFieldsOf(cfg, c.binding.step_uid, c.binding.target).length > 0) cleared += 1;
+    setGroupFields(cfg, c.binding, c.stepMeta, []);
+  });
   return cleared;
 }

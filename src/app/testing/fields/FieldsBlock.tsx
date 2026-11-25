@@ -8,7 +8,8 @@ import { FieldRow, type UploadFieldPhoto } from "./FieldRow";
 import { SuggestionLine } from "./SuggestionLine";
 import { WORKER_UNDRAWN_TEXT } from "./labels";
 import type { StationFieldsState } from "./useStationFields";
-import { inputFieldCount, type Drafts, type FieldDraft } from "./useFieldsState";
+import { own } from "@/lib/json-guards";
+import { inputFieldCount } from "./drafts";
 import {
   BLOCK_TEXT, blockItems, blockStatus, fieldCountText, fieldRowIds, groupFields, rowState, statusRuns,
   type BlockItem, type FieldRowVariant, type FieldsBlockGroup, type FieldsBlockState, type FieldsBlockVariant,
@@ -62,8 +63,9 @@ export interface FieldsBlockProps {
 const FOCUSABLE_CONTROL = "[data-fx-control] :is(input:not([type='file']), textarea, button):not(:disabled):not([tabindex='-1'])";
 
 /** Moves the focus to the first control of the rows after `id` (spec §4.6: after a pick, the
- *  next row — for a list, focusing it opens it and closes the one before). */
-function focusRowAfter(card: HTMLElement | null, id: FieldId) {
+ *  next row — for a list, focusing it opens it and closes the one before). `card` holds the rows
+ *  (FieldRow marks each with data-fx-row) — this block's card, or the settings preview's. */
+export function focusRowAfter(card: HTMLElement | null, id: FieldId) {
   if (!card) return;
   const rows = Array.from(card.querySelectorAll<HTMLElement>("[data-fx-row]"));
   const at = rows.findIndex((r) => r.dataset.fxRow === id);
@@ -75,10 +77,6 @@ function focusRowAfter(card: HTMLElement | null, id: FieldId) {
       return;
     }
   }
-}
-
-function draftOf(drafts: Readonly<Drafts>, id: FieldId): FieldDraft | undefined {
-  return Object.prototype.hasOwnProperty.call(drafts, id) ? drafts[id] : undefined;
 }
 
 /** The card and its lines (group labels, section titles, rows). */
@@ -109,7 +107,7 @@ function FieldsCard({ variant, title, groups, fx, prefix, showRequiredErrors, up
     const id = it.def.id;
     return (
       <FieldRow
-        key={id} def={it.def} draft={draftOf(fx.drafts, id)} onChange={(patch) => fx.set(id, patch)}
+        key={id} def={it.def} draft={own(fx.drafts, id)} onChange={(patch) => fx.set(id, patch)}
         {...rowState(it.def, fx.ev, showRequiredErrors)} variant={variant} ids={fieldRowIds(prefix, id)}
         rule={it.rule} inMini={it.inMini} onFocusNext={() => focusRowAfter(cardRef.current, id)} uploadPhoto={uploadPhoto} />
     );
@@ -333,5 +331,3 @@ function FallbackRegion({ sf }: { sf: Extract<StationFieldsState, { status: "loa
     </div>
   );
 }
-
-export default FieldsBlock;

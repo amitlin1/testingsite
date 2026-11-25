@@ -4,14 +4,16 @@ import { closingTemplate, openingTemplate } from "@/app/lib/popup-templates/temp
 import type { ChecklistComponent, PopupTemplateConfig, TemplateStep } from "@/app/lib/popup-templates/schema";
 import { TEMPLATE_RUN_TEXT, emptyRunState, stepBlocker } from "../templateModel";
 import {
-  bandOf, boxPasses, buildClosingBoxDetails, buildOpeningBoxDetails, buildOpeningItemDetails, closingChecks, closingNote, closingPasses,
-  closingStepKind, freshItemWork, hebrewList, itemOutcome, itemsLine, openingStepKind,
+  bandOf, boxPasses, buildClosingBoxDetails, buildOpeningBoxDetails, buildOpeningItemDetails, closingNote, closingPasses,
+  closingStepKind, freshItemWork, itemOutcome, itemsLine, openingStepKind,
 } from "../packageTemplateModel";
 
 const same = (t: string) => t;
 const open = (): PopupTemplateConfig => openingTemplate("package", "product");
 const photoOf = (st: TemplateStep) => st.components.find((c) => c.kind === "photo")!;
 const weightOf = (cfg: PopupTemplateConfig) => cfg.item_flow![2].components.find((c) => c.kind === "weight")!;
+/** An object's keys as a set: details is jsonb, which keeps no key order. */
+const keySet = (o: object) => Object.keys(o).sort();
 
 test("today's opening reads as the wizard: its system steps, its bands, its items line", () => {
   const cfg = open();
@@ -20,8 +22,7 @@ test("today's opening reads as the wizard: its system steps, its bands, its item
   assert.equal(bandOf(cfg.steps[1], same), "נא לצלם את הקופסה בדיוק לפי תמונות הייחוס.");
   assert.equal(bandOf(cfg.item_flow![2], same), "נא לשקול את הפריט ולהזין את המשקל שנמדד.");
   assert.equal(itemsLine(cfg.item_flow!, same), "כל פריט עובר סריקה, צילום ושקילה. אפשר לעבוד בכל סדר.");
-  assert.equal(hebrewList(["סריקה"]), "סריקה");
-  assert.equal(hebrewList([]), "");
+  assert.equal(itemsLine([cfg.item_flow![0]], same), "כל פריט עובר סריקה. אפשר לעבוד בכל סדר.");
   assert.equal(itemsLine([], same), "אפשר לעבוד בכל סדר.");
 });
 
@@ -55,7 +56,7 @@ test("the results keep the wizard's keys, and add the template's version and com
   w.run = { ...w.run, hasRU: true, refWeight: 400, verdict: { ok: "pass", note: "ok" },
     photos: { [photoOf(flow[1]).id]: [shot("items/1/a.jpg"), { previewUrl: "blob:x", uploading: true }] }, weights: { [weightOf(cfg).id]: "404" } };
   const item = buildOpeningItemDetails(flow, { version: 3, station: "פתיחה", packageId: "77" }, w);
-  assert.deepEqual(Object.keys(item), ["sku", "hasRU", "expectedSku", "refSource", "weight", "product", "package_id", "opening", "template", "components"]);
+  assert.deepEqual(keySet(item), keySet({ sku: 0, hasRU: 0, expectedSku: 0, refSource: 0, weight: 0, product: 0, package_id: 0, opening: 0, template: 0, components: 0 }));
   assert.deepEqual(item.product, { ok: "pass", note: "ok", photos: ["items/1/a.jpg"] }, "only stored shots");
   assert.deepEqual(item.weight, { reference: 400, measured: 404, diffPct: 1, pass: true });
   assert.deepEqual([item.package_id, item.opening, item.template], ["77", true, { v: 3 }]);
@@ -66,9 +67,9 @@ test("the results keep the wizard's keys, and add the template's version and com
   const details = buildOpeningBoxDetails(cfg, { version: 3, station: "פתיחה" }, box, {
     packageReference: null, itemCount: 2, registeredCount: 2, templateCount: 2, labelsPrinted: true, packageItemIds: ["78", "79"],
   });
-  assert.deepEqual(Object.keys(details), [
-    "sku", "hasRU", "packageReference", "pkg", "itemCount", "registeredCount", "templateCount", "labelsPrinted", "packageItemIds", "opening", "template", "components",
-  ]);
+  assert.deepEqual(keySet(details), keySet({
+    sku: 0, hasRU: 0, packageReference: 0, pkg: 0, itemCount: 0, registeredCount: 0, templateCount: 0, labelsPrinted: 0, packageItemIds: 0, opening: 0, template: 0, components: 0,
+  }));
   assert.deepEqual(details.pkg, { ok: "fail", note: "קרוע", photos: ["box/1.jpg"] });
   assert.deepEqual([details.sku, details.hasRU, details.opening], ["BOX-1", false, true]);
 });
@@ -96,12 +97,13 @@ test("today's closing: its checks and note keep the wizard's keys; a missing ite
   const list = cfg.steps[2].components.find((c) => c.kind === "checklist") as ChecklistComponent;
   const notes = cfg.steps[2].components.find((c) => c.kind === "notes")!;
   const box = { ...emptyRunState(" BOX-9 "), hasRU: true, checks: { [list.id]: [list.items[0].id, list.items[2].id] }, notes: { [notes.id]: "סגור" } };
-  assert.deepEqual(closingChecks(cfg, box), [
-    { label: "כל הפריטים שסומנו נמצאים בקופסה", ok: true }, { label: "האריזה סגורה ותקינה", ok: false }, { label: "מדבקת המארז קריאה", ok: true },
-  ]);
   assert.equal(closingNote(cfg, box), "סגור");
   const details = buildClosingBoxDetails(cfg, { version: 2, station: "סגירה" }, box, { packed: ["11"], decisions: [{ item_id: "12", decision: "missing", note: "x" }] });
-  assert.deepEqual(Object.keys(details), ["sku", "hasRU", "closing", "checks", "note", "packed", "decisions", "template", "components"], "no verdict key: the template asks none");
+  assert.deepEqual(details.checks, [
+    { label: "כל הפריטים שסומנו נמצאים בקופסה", ok: true }, { label: "האריזה סגורה ותקינה", ok: false }, { label: "מדבקת המארז קריאה", ok: true },
+  ]);
+  assert.equal(details.note, "סגור");
+  assert.deepEqual(keySet(details), keySet({ sku: 0, hasRU: 0, closing: 0, checks: 0, note: 0, packed: 0, decisions: 0, template: 0, components: 0 }), "no verdict key: the template asks none");
   assert.deepEqual([details.sku, details.closing, details.packed, details.template], ["BOX-9", true, ["11"], { v: 2 }]);
   assert.equal(closingPasses(cfg, box, false), true);
   assert.equal(closingPasses(cfg, box, true), false);

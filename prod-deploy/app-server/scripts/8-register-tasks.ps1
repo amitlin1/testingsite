@@ -29,7 +29,7 @@ $prefix    = "testingsite-"
 #
 # These three are the whole schedule (plan §10.1). The periods are also the
 # staleness thresholds GET /api/health/jobs grades each job against (SCHEDULED_JOBS
-# in src/app/lib/metrics/jobRun.ts, "no success within 2x the period" = red tile),
+# in src/app/lib/jobs/jobRun.ts, "no success within 2x the period" = red tile),
 # so a period changed here must be changed there in the same commit.
 #
 # metrics-selfcheck runs an hour AFTER rebuild-work-calendar on purpose: it heals

@@ -1,11 +1,5 @@
 import { NextResponse } from 'next/server';
-import {
-  getObjectStream,
-  statObject,
-  nodeToWebStream,
-  contentTypeFromName,
-  REFERENCE_BUCKET,
-} from '@/lib/storage';
+import { REFERENCE_BUCKET, serveObject } from '@/lib/storage';
 import { hasAppSession } from '@/lib/auth/session-guard';
 
 export const runtime = 'nodejs';
@@ -23,24 +17,13 @@ export async function GET(_request: Request, context: { params: Promise<{ path: 
   }
 
   try {
-    const stat = await statObject(objectKey, REFERENCE_BUCKET);
-    if (!stat) {
-      return NextResponse.json({ error: 'התמונה לא נמצאה' }, { status: 404 });
-    }
-
-    const nodeStream = await getObjectStream(objectKey, REFERENCE_BUCKET);
-    const contentType =
-      (stat.metaData?.['content-type'] as string) || contentTypeFromName(objectKey);
-    const filename = objectKey.split('/').pop() || 'image';
-
-    return new Response(nodeToWebStream(nodeStream), {
-      headers: {
-        'Content-Type': contentType,
-        'Content-Length': stat.size.toString(),
-        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
-        'Cache-Control': 'private, max-age=3600',
-      },
+    const res = await serveObject(objectKey, {
+      bucket: REFERENCE_BUCKET,
+      disposition: 'inline',
+      filename: objectKey.split('/').pop() || 'image',
+      cacheControl: 'private, max-age=3600',
     });
+    return res ?? NextResponse.json({ error: 'התמונה לא נמצאה' }, { status: 404 });
   } catch (error) {
     console.error('Reference image download error:', error);
     return NextResponse.json({ error: 'שגיאה בטעינת התמונה' }, { status: 500 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import { parseDbId } from "@/lib/http/request";
 import { loadPackages } from "@/app/lib/packages/read";
 
 export const runtime = "nodejs";
@@ -14,8 +15,8 @@ export const runtime = "nodejs";
  */
 export async function GET(req: Request) {
   try {
-    const stationId = Number(new URL(req.url).searchParams.get("stationId"));
-    if (!Number.isFinite(stationId)) return NextResponse.json({ error: "stationId is required" }, { status: 400 });
+    const stationId = parseDbId(new URL(req.url).searchParams.get("stationId"));
+    if (stationId == null) return NextResponse.json({ error: "stationId is required" }, { status: 400 });
 
     const station = await prisma.test_stations.findUnique({
       where: { test_station_id: stationId },

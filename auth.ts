@@ -1,5 +1,4 @@
-// Auth.js v5 — Keycloak production auth config. PORTABLE CORE.
-// Destination: repo ROOT (auth.ts), NOT under src/.
+// Auth.js v5 — Keycloak production auth config. Synced with the keycloak-nextauth-hardening skill.
 //
 // Strategy: JWT (encrypted cookie), NOT a DB session. Keycloak is the sole
 // identity provider; this file plus middleware.ts handle every authn concern,
@@ -15,17 +14,20 @@
 //    token.error; transient failures keep the session. Never throw from refresh.
 
 import NextAuth from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import Keycloak from "next-auth/providers/keycloak";
-import { decodeJwtPayload } from "@/lib/auth/decode-jwt";
-import { normalizeBasePath } from "@/lib/base-path";
-import { authDebug, authStartupBanner } from "@/lib/debug";
+import { decodeJwtPayload, type KeycloakAccessTokenPayload } from "@/lib/auth/decode-jwt";
+import { SERVER_BASE_PATH } from "@/lib/base-path";
+import { TERMINAL_SESSION_ERROR } from "@/lib/auth/session";
+import { internalIssuer, isKeycloakConfigured } from "@/lib/auth/keycloak-env";
+import { REFRESH_LEEWAY_MS } from "@/lib/auth/timing";
+import { authDebug, authStartupBanner } from "@/lib/auth/debug";
 
 // Auth.js needs its OWN basePath — it does NOT inherit Next's. Default is
 // "/api/auth"; if the app is mounted at "/myapp", every URL is
 // "/myapp/api/auth/..." and Auth.js throws UnknownAction (HTTP 400). Set
 // NEXT_BASE_PATH to the mount name; leave unset for a root mount.
-const NEXT_BASE = normalizeBasePath(process.env.NEXT_BASE_PATH);
-const AUTH_BASE_PATH = `${NEXT_BASE}/api/auth`;
+const AUTH_BASE_PATH = `${SERVER_BASE_PATH}/api/auth`;
 
 function derivePathFromAuthUrl(): string | null {
   const v = process.env.AUTH_URL;
@@ -37,23 +39,22 @@ function derivePathFromAuthUrl(): string | null {
   }
 }
 
+// When the Keycloak vars aren't all set, ship NextAuth with no providers so the
+// app can run on a dev path without crashing every request with InvalidEndpoints.
+const keycloakConfigured = isKeycloakConfigured();
+
 authStartupBanner("auth", {
   NEXT_BASE_PATH_ENV: process.env.NEXT_BASE_PATH ?? null,
-  NEXT_BASE_RESOLVED: NEXT_BASE,
+  NEXT_BASE_RESOLVED: SERVER_BASE_PATH,
   AUTH_BASE_PATH_CONFIG: AUTH_BASE_PATH,
   AUTH_URL_PATHNAME: derivePathFromAuthUrl(),
   AUTH_KEYCLOAK_ISSUER: process.env.AUTH_KEYCLOAK_ISSUER ?? null,
   AUTH_SECRET_PRESENT: !!process.env.AUTH_SECRET,
-  WILL_LOAD_KEYCLOAK_PROVIDER: !!(
-    process.env.AUTH_KEYCLOAK_ID &&
-    process.env.AUTH_KEYCLOAK_SECRET &&
-    process.env.AUTH_KEYCLOAK_ISSUER
-  ),
+  WILL_LOAD_KEYCLOAK_PROVIDER: keycloakConfigured,
 });
 
-// Refresh proactively this many ms BEFORE the access token expires. 60s covers
-// network round-trip + clock skew. Keep comfortably below the access-token TTL.
-const REFRESH_LEEWAY_MS = 60_000;
+// Refresh proactively REFRESH_LEEWAY_MS before the access token expires (lib/auth/timing.ts,
+// beside the token TTL and the browser's session poll it must agree with).
 // Per-attempt Keycloak token-endpoint timeout. 8s tolerates an occasionally-slow
 // realm without misreading slowness as a dead session.
 const REFRESH_TIMEOUT_MS = 8_000;
@@ -143,8 +144,7 @@ async function attemptRefresh(
   // configured (see SPLIT-HORIZON KEYCLOAK URLs below). Using the public URL
   // here would make every silent token refresh hang until REFRESH_TIMEOUT_MS on
   // an IP-addressed air-gapped host, logging users out mid-session.
-  const issuer =
-    process.env.KEYCLOAK_INTERNAL_ISSUER || process.env.AUTH_KEYCLOAK_ISSUER;
+  const issuer = internalIssuer();
   const clientId = process.env.AUTH_KEYCLOAK_ID;
   const clientSecret = process.env.AUTH_KEYCLOAK_SECRET;
   if (!issuer || !clientId || !clientSecret) {
@@ -225,13 +225,6 @@ async function attemptRefresh(
   }
 }
 
-// When the Keycloak vars aren't all set, ship NextAuth with no providers so the
-// app can run on a dev path without crashing every request with InvalidEndpoints.
-const keycloakConfigured =
-  !!process.env.AUTH_KEYCLOAK_ID &&
-  !!process.env.AUTH_KEYCLOAK_SECRET &&
-  !!process.env.AUTH_KEYCLOAK_ISSUER;
-
 // kc_idp_hint — route straight to a brokered IdP for seamless login. In OUR
 // realm there is no brokered IdP: users sign in with username + password on
 // Keycloak's own (themed) login page. So AUTH_KEYCLOAK_IDP_HINT is left EMPTY
@@ -266,20 +259,29 @@ if (idpHint) keycloakAuthParams.kc_idp_hint = idpHint;
 // inside) → everything falls back to the public issuer and behaviour is
 // unchanged.
 const PUBLIC_ISSUER = process.env.AUTH_KEYCLOAK_ISSUER;
-const INTERNAL_ISSUER =
-  process.env.KEYCLOAK_INTERNAL_ISSUER || process.env.AUTH_KEYCLOAK_ISSUER;
+const INTERNAL_ISSUER = internalIssuer();
 
 // Roles can be REALM roles (realm_access.roles) OR CLIENT roles
 // (resource_access[clientId].roles). Read and MERGE both — a user whose roles
 // are client-scoped would otherwise have zero permissions. Merging only ADDS.
-function rolesFromAccessToken(payload: {
-  realm_access?: { roles?: string[] };
-  resource_access?: Record<string, { roles?: string[] }>;
-}): string[] {
+function rolesFromAccessToken(payload: KeycloakAccessTokenPayload): string[] {
   const realm = payload.realm_access?.roles ?? [];
   const clientId = process.env.AUTH_KEYCLOAK_ID;
   const client = clientId ? (payload.resource_access?.[clientId]?.roles ?? []) : [];
   return Array.from(new Set([...realm, ...client]));
+}
+
+// Cache the identity claims from the ACCESS token — realm_access lives there.
+// Run at sign-in and after every refresh (roles can change between refreshes).
+function applyClaims(token: JWT, accessToken: string): void {
+  const payload = decodeJwtPayload(accessToken);
+  if (!payload) return;
+  token.preferred_username = payload.preferred_username;
+  token.roles = rolesFromAccessToken(payload);
+  token.profile = payload.profile;
+  token.name = payload.name;
+  token.email = payload.email;
+  token.employee_number = payload.employee_number;
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -316,13 +318,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     : [],
   callbacks: {
     /**
-     * Runs on every request that needs a session. Phases:
-     *   (a) initial sign-in: populate token
-     *   (b) still valid: return token unchanged
-     *   (c) refresh window: proactive refresh with the hardened classification
+     * Runs on every request that needs a session: at sign-in (`account` is the
+     * OAuth response then) it stores the tokens; while the access token is
+     * valid it returns the token unchanged; in the refresh window it refreshes
+     * with the hardened classification above.
      */
     async jwt({ token, account }) {
-      // (a) Initial sign-in — `account` is the OAuth response shape.
       if (account) {
         token.access_token = account.access_token;
         token.refresh_token = account.refresh_token;
@@ -345,18 +346,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             (Math.floor(Date.now() / 1000) + acctRefreshExpiresIn) * 1000;
         }
 
-        // Cache identity claims from the ACCESS token — realm_access lives there.
-        if (account.access_token) {
-          const payload = decodeJwtPayload(account.access_token);
-          if (payload) {
-            token.preferred_username = payload.preferred_username;
-            token.roles = rolesFromAccessToken(payload);
-            token.profile = payload.profile;
-            token.name = payload.name;
-            token.email = payload.email;
-            token.employee_number = payload.employee_number;
-          }
-        }
+        if (account.access_token) applyClaims(token, account.access_token);
         return token;
       }
 
@@ -368,7 +358,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (typeof claims?.exp === "number") token.expires_at = claims.exp * 1000;
       }
 
-      // (b) Token still valid (with leeway) → reuse.
       if (
         typeof token.expires_at === "number" &&
         Date.now() < token.expires_at - REFRESH_LEEWAY_MS
@@ -376,7 +365,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
 
-      // (c) Refresh window. FIRST: is the SESSION already dead? If past the
+      // Refresh window. FIRST: is the SESSION already dead? If past the
       // refresh-token deadline (with a clock-skew margin), the refresh can't
       // succeed — stamp terminal with no network call. Within the margin, fall
       // through and let Keycloak be the authority (a fast clock mustn't evict).
@@ -385,7 +374,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         Date.now() >= token.refresh_expires_at + REFRESH_DEADLINE_SKEW_MS
       ) {
         authDebug("auth:jwt-cb", "past refresh_expires_at (+skew) → terminal");
-        return { ...token, error: "RefreshAccessTokenError" as const };
+        return { ...token, error: TERMINAL_SESSION_ERROR };
       }
 
       // Backoff: if a recent attempt failed transiently AND the access token is
@@ -403,12 +392,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       if (!token.refresh_token) {
         authDebug("auth:jwt-cb", "no refresh_token → terminal");
-        return { ...token, error: "RefreshAccessTokenError" as const };
+        return { ...token, error: TERMINAL_SESSION_ERROR };
       }
 
       const result = await refreshAccessToken(token.refresh_token);
 
-      // SUCCESS → apply new tokens, clear any prior error.
       if (result.ok) {
         const refreshed = result.tokens;
         token.access_token = refreshed.access_token;
@@ -422,25 +410,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (refreshed.id_token) token.id_token = refreshed.id_token;
         delete token.error;
         delete token.lastRefreshAttemptAt;
-
-        // Re-cache identity claims (roles can change between refreshes).
-        const payload = decodeJwtPayload(refreshed.access_token);
-        if (payload) {
-          token.preferred_username = payload.preferred_username;
-          token.roles = rolesFromAccessToken(payload);
-          token.profile = payload.profile;
-          token.name = payload.name;
-          token.email = payload.email;
-          token.employee_number = payload.employee_number;
-        }
+        applyClaims(token, refreshed.access_token);
         authDebug("auth:jwt-cb", "✓ refresh applied", { newExpiresAtMs: token.expires_at });
         return token;
       }
 
-      // TERMINAL → refresh token genuinely dead. Re-login is correct.
       if (result.kind === "terminal") {
         authDebug("auth:jwt-cb", "✗ refresh TERMINAL (invalid_grant)");
-        return { ...token, error: "RefreshAccessTokenError" as const };
+        return { ...token, error: TERMINAL_SESSION_ERROR };
       }
 
       // RETRYABLE → Keycloak momentarily unreachable/slow. Do NOT log out while
@@ -452,10 +429,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
       authDebug("auth:jwt-cb", "retryable AND token expired → degrade to terminal");
-      return { ...token, error: "RefreshAccessTokenError" as const };
+      return { ...token, error: TERMINAL_SESSION_ERROR };
     },
 
-    /** Project the JWT onto the Session the client sees. */
     async session({ session, token }) {
       session.roles = token.roles ?? [];
       // The raw ACCESS token is deliberately NOT projected here. /api/auth/session
@@ -474,7 +450,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // Pass through standard name/email if Auth.js didn't fill them.
         name: session.user?.name ?? token.name ?? null,
         email: session.user?.email ?? token.email ?? null,
-        // מספר עובד — used to auto-resolve the logged-in worker (see future task).
+        // מספר עובד — the logged-in worker's id (identityOf / workerIdOf).
         employeeNumber: token.employee_number ?? null,
       };
       return session;

@@ -8,10 +8,9 @@ import { ListboxPopover } from "./ListboxPopover";
 import type { ListboxOption } from "./ListboxPopover";
 
 /**
- * "אורך מרבי" of a field's note — artboard 2's version (spec §5.5.2: artboard 2 wins over 7א): a
- * ghost 24px "עד {n} תווים" under the notes select, and its listbox "אורך מרבי להערה" — 500 / 1000
- * (the default) / 2000 — with the footnote on the worker's counter. The row hides it while the notes
- * are "ללא". Saved as note_max; the default 1000 is stored as no note_max at all (spec §2.2).
+ * "אורך מרבי" of a field's note — artboard 2's version (spec §5.5.2: artboard 2 wins over 7א): under
+ * the notes select, its listbox of NOTE_MAX_CHOICES. The row hides it while the notes are off. Saved
+ * as note_max; the default is stored as no note_max at all (spec §2.2).
  */
 
 const OPTIONS: readonly ListboxOption<NoteMax>[] = NOTE_MAX_CHOICES.map((n) => ({
@@ -64,5 +63,3 @@ export function NoteMaxSelect({ value, open, onOpenChange, onChange }: NoteMaxSe
     </>
   );
 }
-
-export default NoteMaxSelect;

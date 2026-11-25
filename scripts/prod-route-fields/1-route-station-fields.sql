@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS "field_sets" (
 ALTER TABLE "item_routes" ADD COLUMN IF NOT EXISTS "fields_version" INTEGER;
 
 -- §5 גרסת סכמה ----------------------------------------------------------------
--- The app's write gate (src/app/lib/metrics/schema-gate.ts) requires 4 from
+-- The app's write gate (src/app/lib/metrics/ledger/schema-gate.ts) requires 4 from
 -- this image on: result submits, intake, retype and package reset read or
 -- write item_routes.fields_version, so an older database would fail every one
 -- of them with a missing column. GREATEST: a re-run never lowers a later version.

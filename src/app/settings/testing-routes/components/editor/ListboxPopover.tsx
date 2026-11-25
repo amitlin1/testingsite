@@ -4,9 +4,8 @@ import { Check } from "lucide-react";
 import { AnchoredPopover } from "@/components/ui";
 
 /**
- * The editor's small select lists (artboard 2: "מצב הערות", "אורך מרבי להערה"): a 196px listbox in an
- * AnchoredPopover under its button, with a Check column, the chosen option on tint / blue / 600 and a
- * footnote. Shared by NotesModeSelect and NoteMaxSelect.
+ * The editor's small select lists (artboard 2: the notes mode, the note length): a listbox in an
+ * AnchoredPopover under its button. Shared by NotesModeSelect and NoteMaxSelect.
  *
  * The button is the anchor, not a Radix trigger, so it keeps aria-haspopup="listbox": a press on it
  * is not an outside press (the button itself toggles), arrows / Home / End move between the options,
@@ -113,5 +112,3 @@ export function ListboxPopover<V extends string | number>({
     </AnchoredPopover>
   );
 }
-
-export default ListboxPopover;

@@ -1,9 +1,9 @@
 import { noteRequired, requiredProgress } from "@/app/lib/station-fields/evaluate";
-import type { DraftShot, FieldsEvaluation } from "@/app/lib/station-fields/evaluate";
+import type { DraftShot, Drafts, FieldDraft, FieldsEvaluation } from "@/app/lib/station-fields/evaluate";
 import { statusA, statusB, statusC, type StatusLine } from "@/app/lib/station-fields/labels";
 import type { ChecklistItemId, Field, FieldId, InputField, KitItemFields, SectionField } from "@/app/lib/station-fields/schema";
 import type { RangeSegment } from "./labels";
-import { evaluateDrafts, patchDraft, type DraftPatch, type Drafts, type DraftsEvaluation, type FieldDraft } from "./useFieldsState";
+import { evaluateDrafts, patchDraft, type DraftPatch, type DraftsEvaluation } from "./drafts";
 
 /**
  * The field block's model (route-fields spec §4.4–§4.5): what each popup's block draws, the rows in
@@ -297,7 +297,7 @@ export function toggleChecklistItem(itemId: ChecklistItemId): (draft: FieldDraft
   return (draft) => ({ checked: { ...draft?.checked, [itemId]: !isItemChecked(draft, itemId) } });
 }
 
-/** A shot added while it uploads (stationKit PhotoUploader's lifecycle, as PhotoStation runs it). */
+/** A shot added while it uploads (fields/PhotoUploader; the lifecycle as tests-popups/shots.ts runs it). */
 export function addShot(previewUrl: string): (draft: FieldDraft | undefined) => Partial<FieldDraft> {
   return (draft) => ({ photos: [...(draft?.photos ?? []), { previewUrl, uploading: true }] });
 }

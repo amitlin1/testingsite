@@ -4,15 +4,22 @@ import Link from "next/link";
 import {
   Plus, Pencil, Trash2, ChevronUp, ChevronDown, CircleCheck, CircleAlert, Minus,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, getArray, getJson, sendJson } from "@/lib/api/client";
 import {
   Alert, Button, ConfirmDialog, Dialog, DialogActions, DialogContent, DialogTitle,
-  IconButton, Skeleton, Snackbar, Tag, TextField, type TagTone,
+  IconButton, Skeleton, Tag, TextField, type TagTone, SearchableCombobox,
 } from "@/components/ui";
 import DataTable, { type Column } from "@/components/DataTable";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import SettingsToolbar from "../components/SettingsToolbar";
+import { useSettingsToast } from "../components/useSettingsToast";
 import { omit } from "@/lib/omit";
+import { AMBER_INK, MUTED } from "@/components/ui/colors";
+import type { ItemTypeSettingsRow } from "@/app/lib/lookups/contract";
+import { useInvalidateLookup } from "@/app/components/lookups";
+import {
+  DEFAULT_ROUTE_NUMBER, type PackageTypeSummary, type TemplateDescription as Contents, type TemplateLineView as ServerLine,
+} from "@/app/lib/packages/template-wire";
+import "./packages-settings.css";
 
 /**
  * הגדרות → מארזים — docs/packages/PLAN.md §3, design
@@ -23,41 +30,9 @@ import { omit } from "@/lib/omit";
  * contents editor of the selected type. The screen sets DEFAULT ROUTE NUMBERS
  * only; the routes themselves live in /settings/testing-routes.
  *
- * The artboard's hover / press / focus states live in settings.css (`.stp-*`):
+ * The artboard's hover / press / focus states live in packages-settings.css (`.stp-*`):
  * inline styles cannot express them.
  */
-
-type PackageTypeSummary = {
-  item_type_id: number;
-  item_type_desc: string;
-  default_route_number: number | null;
-  kinds: number;
-  total_items: number;
-  health: "ok" | "warn" | "none";
-  warning: string | null;
-  package_count: number;
-};
-
-type ItemTypeOption = { item_type_id: number; item_type_desc: string; is_package: boolean };
-
-type ServerLine = {
-  id: number;
-  item_type_id: number;
-  item_type_desc: string;
-  quantity: number;
-  route_number: number;
-  sort_order: number;
-  route_warning: string | null;
-};
-
-type Contents = {
-  package_type_id: number;
-  item_type_desc: string;
-  default_route_number: number | null;
-  total_items: number;
-  package_route_warnings: string[];
-  lines: ServerLine[];
-};
 
 /** One editable row. Strings, because every field is an <input>. */
 type DraftLine = {
@@ -71,15 +46,12 @@ type DraftLine = {
 /** Which fields of a row failed the save check (shown on the field). */
 type RowError = { type?: boolean; qty?: boolean };
 
-const MUTED = "var(--color-ink-muted-48)";
-const AMBER_INK = "var(--color-warning-ink)";
-
 let keySeq = 1;
 const toDraft = (l: ServerLine): DraftLine => ({
   key: keySeq++,
   item_type_id: l.item_type_id,
   quantity: String(l.quantity),
-  route_number: l.route_number === 1 ? "" : String(l.route_number),
+  route_number: l.route_number === DEFAULT_ROUTE_NUMBER ? "" : String(l.route_number),
   route_warning: l.route_warning,
 });
 
@@ -91,26 +63,26 @@ type ListRead<T> = { list: T[]; ok: boolean };
 
 /** A settings list; a non-OK answer reads as an empty list with `ok` false. */
 async function readList<T>(url: string): Promise<ListRead<T>> {
-  const res = await apiFetch(url);
-  const data = res.ok ? await res.json() : [];
-  return { list: Array.isArray(data) ? data : [], ok: res.ok };
+  try {
+    return { list: await getArray<T>(url), ok: true };
+  } catch (e) {
+    if (e instanceof ApiError) return { list: [], ok: false };
+    throw e;
+  }
 }
 
 /** A package type's contents; "unreachable" = no answer, "failed" = a non-OK one. */
 async function readContents(typeId: number): Promise<Contents | "unreachable" | "failed"> {
-  let res: Response;
   try {
-    res = await apiFetch(`/api/settings/item-types/${typeId}/contents`);
-  } catch {
-    return "unreachable";
+    return await getJson<Contents>(`/api/settings/item-types/${typeId}/contents`);
+  } catch (e) {
+    return e instanceof ApiError ? "failed" : "unreachable";
   }
-  if (!res.ok) return "failed";
-  return (await res.json()) as Contents;
 }
 
 export default function PackagesSettingsPage() {
   const [types, setTypes] = React.useState<PackageTypeSummary[]>([]);
-  const [itemTypes, setItemTypes] = React.useState<ItemTypeOption[]>([]);
+  const [itemTypes, setItemTypes] = React.useState<ItemTypeSettingsRow[]>([]);
   const [selectedId, setSelectedId] = React.useState<number | null>(null);
   const [contents, setContents] = React.useState<Contents | null>(null);
   const [draft, setDraft] = React.useState<DraftLine[]>([]);
@@ -129,8 +101,8 @@ export default function PackagesSettingsPage() {
   const [newBusy, setNewBusy] = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<PackageTypeSummary | null>(null);
   const [deleting, setDeleting] = React.useState(false);
-  const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: "success" | "error" }>({ open: false, message: "", severity: "success" });
-  const say = (message: string, severity: "success" | "error" = "success") => setToast({ open: true, message, severity });
+  const say = useSettingsToast({ duration: 5000 });
+  const invalidateLookup = useInvalidateLookup();
 
   const applyTypes = React.useCallback((read: ListRead<PackageTypeSummary>): PackageTypeSummary[] => {
     setTypesFailed(!read.ok);
@@ -163,7 +135,7 @@ export default function PackagesSettingsPage() {
 
   const loadAll = React.useCallback(
     () =>
-      Promise.all([loadTypes(), readList<ItemTypeOption>("/api/settings/item-types")])
+      Promise.all([loadTypes(), readList<ItemTypeSettingsRow>("/api/settings/item-types")])
         .then(([list, all]) => {
           if (!all.ok) setTypesFailed(true);
           setItemTypes(all.list);
@@ -249,28 +221,23 @@ export default function PackagesSettingsPage() {
     if (firstMsg) { say(firstMsg, "error"); return; }
     setSaving(true);
     try {
-      const res = await apiFetch(`/api/settings/item-types/${selectedId}/contents`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          default_route_number: draftRoute === "" ? null : Number(draftRoute),
-          lines: draft.map((r, i) => ({
-            item_type_id: r.item_type_id,
-            quantity: Number(r.quantity),
-            route_number: r.route_number === "" ? 1 : Number(r.route_number),
-            sort_order: i,
-          })),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { say(data?.error || "שמירת התכולה נכשלה. נסה שוב.", "error"); return; }
+      const data = await sendJson<Contents>(`/api/settings/item-types/${selectedId}/contents`, "PUT", {
+        default_route_number: draftRoute === "" ? null : Number(draftRoute),
+        lines: draft.map((r, i) => ({
+          item_type_id: r.item_type_id,
+          quantity: Number(r.quantity),
+          route_number: r.route_number === "" ? DEFAULT_ROUTE_NUMBER : Number(r.route_number),
+          sort_order: i,
+        })),
+      }, "שמירת התכולה נכשלה. נסה שוב.");
       setContents(data);
-      setDraft((data.lines as ServerLine[]).map(toDraft));
+      setDraft(data.lines.map(toDraft));
       setDraftRoute(data.default_route_number == null ? "" : String(data.default_route_number));
       await loadTypes();
+      invalidateLookup("packageTypes");
       say("התכולה נשמרה");
-    } catch {
-      say("שמירת התכולה נכשלה: אין חיבור לשרת. בדוק את הרשת ונסה שוב.", "error");
+    } catch (e) {
+      say(e instanceof ApiError ? e.message : "שמירת התכולה נכשלה: אין חיבור לשרת. בדוק את הרשת ונסה שוב.", "error");
     } finally {
       setSaving(false);
     }
@@ -282,23 +249,23 @@ export default function PackagesSettingsPage() {
     if (!newName.trim()) { setNewNameError("יש להזין שם לסוג המארז"); return; }
     setNewBusy(true);
     try {
-      const res = await apiFetch("/api/settings/item-types", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_type_desc: newName.trim(), is_package: true, default_route_number: newRoute === "" ? null : Number(newRoute) }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { say(data?.error || "יצירת סוג המארז נכשלה. נסה שוב.", "error"); return; }
+      const data = await sendJson<{ item_type_id: number }>(
+        "/api/settings/item-types",
+        "POST",
+        { item_type_desc: newName.trim(), is_package: true, default_route_number: newRoute === "" ? null : Number(newRoute) },
+        "יצירת סוג המארז נכשלה. נסה שוב.",
+      );
       setNewOpen(false); setNewName(""); setNewRoute("");
       const list = await loadTypes();
       // A failed re-read keeps the list we have: it is not "no item types" (the new type is a
       // package type, which the contents editor does not list anyway).
-      const all = await apiFetch("/api/settings/item-types").then((r) => (r.ok ? r.json() : null));
-      if (Array.isArray(all)) setItemTypes(all);
+      const all = await readList<ItemTypeSettingsRow>("/api/settings/item-types");
+      if (all.ok) setItemTypes(all.list);
       setSelectedId(list.find((t) => t.item_type_id === data.item_type_id)?.item_type_id ?? data.item_type_id);
+      invalidateLookup("packageTypes");
       say("סוג המארז נוצר");
-    } catch {
-      say("יצירת סוג המארז נכשלה: אין חיבור לשרת. בדוק את הרשת ונסה שוב.", "error");
+    } catch (e) {
+      say(e instanceof ApiError ? e.message : "יצירת סוג המארז נכשלה: אין חיבור לשרת. בדוק את הרשת ונסה שוב.", "error");
     } finally {
       setNewBusy(false);
     }
@@ -308,17 +275,17 @@ export default function PackagesSettingsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await apiFetch(`/api/settings/item-types/${deleteTarget.item_type_id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        say(res.status === 409 ? "לא ניתן למחוק: קיימים מארזים או פריטים מסוג זה" : data?.error || "המחיקה נכשלה. נסה שוב.", "error");
-        return;
-      }
+      await sendJson(`/api/settings/item-types/${deleteTarget.item_type_id}`, "DELETE", undefined, "המחיקה נכשלה. נסה שוב.");
       const list = await loadTypes();
       if (selectedId === deleteTarget.item_type_id) setSelectedId(list[0]?.item_type_id ?? null);
+      invalidateLookup("packageTypes");
       say("סוג המארז נמחק");
-    } catch {
-      say("המחיקה נכשלה: אין חיבור לשרת. בדוק את הרשת ונסה שוב.", "error");
+    } catch (e) {
+      say(
+        !(e instanceof ApiError) ? "המחיקה נכשלה: אין חיבור לשרת. בדוק את הרשת ונסה שוב."
+          : e.status === 409 ? "לא ניתן למחוק: קיימים מארזים או פריטים מסוג זה" : e.message,
+        "error",
+      );
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -350,7 +317,7 @@ export default function PackagesSettingsPage() {
     },
     { key: "kinds", header: "סוגי פריטים בתכולה", align: "center", nums: true, cell: (t) => t.kinds },
     { key: "total", header: "סה״כ פריטים", align: "center", nums: true, cell: (t) => t.total_items },
-    { key: "route", header: "מסלול ברירת מחדל", align: "center", nums: true, bold: true, cell: (t) => t.default_route_number ?? 1 },
+    { key: "route", header: "מסלול ברירת מחדל", align: "center", nums: true, bold: true, cell: (t) => t.default_route_number ?? DEFAULT_ROUTE_NUMBER },
     {
       key: "health", header: "תקינות התכולה",
       cell: (t) => { const h = health(t); return <Tag tone={h.tone} size="md" icon={h.icon}>{h.label}</Tag>; },
@@ -437,7 +404,7 @@ export default function PackagesSettingsPage() {
             <div style={{ display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap" }}>
               <div>
                 <label htmlFor="pkg-default-route" className="sh-field-label">מסלול ברירת מחדל למארז</label>
-                <input id="pkg-default-route" className="stp-input stp-input--lg stp-input--num stp-input--route" value={draftRoute}
+                <input id="pkg-default-route" className="set-input set-input--lg set-input--num set-input--route" value={draftRoute}
                   onChange={(e) => setDraftRoute(digits(e.target.value))} placeholder="1" inputMode="numeric" aria-describedby="pkg-default-route-help" />
               </div>
               <div id="pkg-default-route-help" style={{ fontSize: "var(--text-fine)", color: MUTED, maxWidth: 210, lineHeight: 1.45, paddingBottom: 10 }}>ריק פירושו מסלול 1. המסלול עצמו נקבע במסך מסלולי הבדיקה.</div>
@@ -484,7 +451,7 @@ export default function PackagesSettingsPage() {
                         </td>
                         {/* No overflow on this cell: the list is portaled and must open over the rows below. */}
                         <td style={{ ...td, minWidth: 186 }}>
-                          <SearchableCombobox<ItemTypeOption>
+                          <SearchableCombobox<ItemTypeSettingsRow>
                             dense
                             denseHeight={38}
                             options={memberTypes}
@@ -504,13 +471,13 @@ export default function PackagesSettingsPage() {
                         </td>
                         <td style={td}>
                           <input aria-label={`כמות, ${row}`} aria-invalid={err.qty || undefined}
-                            className={"stp-input stp-input--num" + (err.qty ? " stp-input--error" : "")}
+                            className={"set-input set-input--num" + (err.qty ? " set-input--error" : "")}
                             value={r.quantity} onChange={(e) => { patchRow(i, { quantity: digits(e.target.value) }); clearRowError(r.key, "qty"); }}
                             inputMode="numeric" style={{ minWidth: 56 }} />
                         </td>
                         <td style={td}>
                           <input aria-label={`מסלול ברירת מחדל, ${row}`} value={r.route_number} onChange={(e) => patchRow(i, { route_number: digits(e.target.value), route_warning: null })} placeholder="1" inputMode="numeric"
-                            className={"stp-input stp-input--num stp-input--route" + (r.route_number === "" ? "" : " stp-input--route-set")} style={{ minWidth: 76 }} />
+                            className={"set-input set-input--num set-input--route" + (r.route_number === "" ? "" : " set-input--route-set")} style={{ minWidth: 76 }} />
                           <div style={{ fontSize: "var(--text-micro)", color: MUTED, marginTop: 5, textAlign: "center" }}>{r.route_number === "" ? "ברירת מחדל 1" : `מסלול ${r.route_number}`}</div>
                         </td>
                         <td style={{ ...td, paddingInline: 16, textAlign: "center" }}>
@@ -597,7 +564,6 @@ export default function PackagesSettingsPage() {
       </Dialog>
 
       <ConfirmDialog
-        draggable={false}
         open={deleteTarget != null}
         title="מחיקת סוג מארז"
         message={deleteTarget ? `למחוק את סוג המארז "${deleteTarget.item_type_desc}"? פעולה זו אינה ניתנת לביטול.` : ""}
@@ -608,10 +574,6 @@ export default function PackagesSettingsPage() {
         onConfirm={deleteType}
         onCancel={() => setDeleteTarget(null)}
       />
-
-      <Snackbar open={toast.open} autoHideDuration={5000} onClose={() => setToast({ ...toast, open: false })} anchorOrigin={{ vertical: "bottom", horizontal: "left" }}>
-        <Alert onClose={() => setToast({ ...toast, open: false })} severity={toast.severity}>{toast.message}</Alert>
-      </Snackbar>
     </div>
   );
 }

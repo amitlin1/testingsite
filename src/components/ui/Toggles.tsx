@@ -2,7 +2,6 @@
 import React, { forwardRef } from "react";
 import * as RSwitch from "@radix-ui/react-switch";
 import * as RCheckbox from "@radix-ui/react-checkbox";
-import * as RRadio from "@radix-ui/react-radio-group";
 import { Check, Minus } from "lucide-react";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
@@ -83,70 +82,6 @@ export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(function Ch
         {indeterminate ? <Minus size={14} strokeWidth={3} /> : <Check size={14} strokeWidth={3} />}
       </RCheckbox.Indicator>
     </RCheckbox.Root>
-  );
-});
-
-/* --------------------------------------------------------- RadioGroup ---- */
-export interface RadioGroupProps {
-  value?: unknown;
-  defaultValue?: unknown;
-  onChange?: (e: { target: { value: string; name?: string } }, value: string) => void;
-  name?: string;
-  row?: boolean;
-  sx?: SxInput;
-  style?: React.CSSProperties;
-  className?: string;
-  children?: React.ReactNode;
-  id?: string;
-  "aria-label"?: string;
-  role?: string;
-}
-
-export const RadioGroup = forwardRef<HTMLDivElement, RadioGroupProps>(function RadioGroup(
-  { value, defaultValue, onChange, name, row, sx, style, children, ...rest },
-  ref,
-) {
-  return (
-    <RRadio.Root
-      ref={ref}
-      value={value != null ? String(value) : undefined}
-      defaultValue={defaultValue != null ? String(defaultValue) : undefined}
-      name={name}
-      onValueChange={(v) => onChange?.({ target: { value: v, name } }, v)}
-      style={{ display: "flex", flexDirection: row ? "row" : "column", gap: row ? 20 : 10, ...sxToStyle(sx), ...style }}
-      {...rest}
-    >
-      {children}
-    </RRadio.Root>
-  );
-});
-
-/* -------------------------------------------------------------- Radio ---- */
-export interface RadioProps {
-  value?: unknown;
-  disabled?: boolean;
-  size?: "small" | "medium";
-  color?: string;
-  sx?: SxInput;
-  className?: string;
-  id?: string;
-}
-
-export const Radio = forwardRef<HTMLButtonElement, RadioProps>(function Radio(
-  { value, disabled, sx, style, className, id }: RadioProps & { style?: React.CSSProperties },
-  ref,
-) {
-  return (
-    <RRadio.Item
-      ref={ref}
-      id={id}
-      value={value != null ? String(value) : ""}
-      disabled={disabled}
-      className={cn("sh-radio", className)}
-      style={{ ...sxToStyle(sx), ...style }}
-    >
-      <RRadio.Indicator className="sh-radio-dot" />
-    </RRadio.Item>
   );
 });
 

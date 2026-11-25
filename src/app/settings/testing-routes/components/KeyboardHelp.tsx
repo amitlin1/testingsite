@@ -2,7 +2,7 @@
 import * as React from "react";
 import { CircleHelp } from "lucide-react";
 import { AnchoredPopover, IconButton } from "@/components/ui";
-import { CONTEXT_CARD_TEXT, MAP_HINT_TEXT } from "../lib/labels";
+import { CONTEXT_CARD_TEXT, MAP_KEYS, OPTION_LIST_TEXT, REORDER_HINT_TEXT, TYPE_PICKER_TEXT } from "../lib/labels";
 
 /**
  * The context card's "?" (aria-label "קיצורי מקלדת", artboards 1, 2, 11) and the popover it opens:
@@ -11,17 +11,15 @@ import { CONTEXT_CARD_TEXT, MAP_HINT_TEXT } from "../lib/labels";
  * out rather than given invented text.
  */
 
-/** Spec §5.16, in the artboards' own words. */
+/** Spec §5.16, in the artboards' own words: the map footer's keys (artboard 1), the editor footer's
+ *  reorder hint (artboard 2), the editor's tip (artboard 3), the option list's add placeholder and
+ *  quick-pick hint (artboard 4). */
 const SHORTCUTS: readonly string[] = [
-  // Artboard 1, the map footer: "חיצים לניווט · Shift לבחירת טווח · Enter לעריכה · Ctrl C / Ctrl V".
-  ...MAP_HINT_TEXT.keys.split(" · "),
-  // Artboard 2, the editor card's footer (`footLabel`).
-  "גרירה או Alt+חיצים לשינוי סדר",
-  // Artboard 3, the editor's tip ("טיפ: Enter בשם השדה האחרון מוסיף שורת בדיקה חדשה").
-  "Enter בשם השדה האחרון מוסיף שורת בדיקה חדשה",
-  // Artboard 4, the option list: the add field's placeholder and the quick-pick hint.
-  "הוסף אפשרות (Enter)",
-  "מקשים 1–4 לבחירה מהירה בעמדה",
+  ...MAP_KEYS,
+  REORDER_HINT_TEXT,
+  TYPE_PICKER_TEXT.tipKey + TYPE_PICKER_TEXT.tipTail,
+  OPTION_LIST_TEXT.addPlaceholder,
+  OPTION_LIST_TEXT.keysLead + OPTION_LIST_TEXT.keysRange + OPTION_LIST_TEXT.keysTail,
 ];
 
 /** A key name or a key range inside a Hebrew line: "Shift", "Ctrl C / Ctrl V", "Alt+", "1–4". */

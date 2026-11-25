@@ -1,9 +1,6 @@
 import { randomUUID } from "crypto";
-import { getCurrentUtcIso } from "@/app/lib/datetime";
-import { findStationForRouteStep } from "@/app/lib/station-assignment";
-import { recordTransition } from "@/app/lib/metrics/record";
-import { abandonRun } from "@/app/lib/metrics/item-lifecycle";
-import { TransactionClient } from "@/app/lib/prisma";
+import { TransactionClient } from "@/lib/db";
+import { restartRoute } from "./lifecycle";
 
 /**
  * Send a whole box back to its opening station — docs/packages/PLAN.md §4,
@@ -11,16 +8,12 @@ import { TransactionClient } from "@/app/lib/prisma";
  * opened, so the intake that was done against the old type is void and the
  * package, with every item in it, starts over.
  *
- * For each routed row (the package first, then its items): the open ledger
- * run is abandoned (closed with is_trusted = false, so it never counts as a
- * completion), item_routes goes back to step 1 / queued / the opening
- * station, and a fresh `queued` transition opens the next run. All in the
- * caller's transaction.
- *
- * The caller has already written the new item_type_id / route_number onto
- * item_routes for the retyped item (and validated its route shape), so this
- * function reads each row's CURRENT type and route and does not care which
- * one changed.
+ * Every routed row (the package first, then its items) restarts its route
+ * (lifecycle.ts restartRoute), all in the caller's transaction. The caller
+ * has already written the new item_type_id / route_number onto item_routes
+ * for the retyped item (and validated its route shape): each row restarts on
+ * its CURRENT type and route, whichever one changed — so the retyped row
+ * freezes its new route's fields_version here.
  */
 export type PackageResetOutcome = {
   packageId: bigint;
@@ -42,52 +35,23 @@ export async function resetPackageToOpening(
   `;
   if (rows.length === 0) return { packageId, resetItemIds: [] };
 
-  const now = new Date(getCurrentUtcIso());
+  const now = new Date();
   const actionId = randomUUID();
-  const resetItemIds: bigint[] = [];
-
   for (const r of rows) {
-    const stationId = await findStationForRouteStep(tx, r.item_type_id, r.route_number, 1);
-    // The intake is void, so fields_version is frozen afresh (route-fields
-    // spec §1.5): the version the row's route has published NOW — for the
-    // retyped item, its new route's. 0 (never published) → NULL = the fixed
-    // popups.
-    await tx.$executeRaw`
-      UPDATE item_routes
-         SET current_route_step = 1,
-             current_status = 2,
-             test_station_id = ${stationId},
-             is_finished = false,
-             finished_at = NULL,
-             queue_start_time = ${now}::timestamp,
-             processing_start_time = NULL,
-             fields_version = (SELECT NULLIF(tr.fields_version, 0) FROM testing_routes tr
-                                WHERE tr.item_type_id = ${r.item_type_id} AND tr.route_number = ${r.route_number})
-       WHERE item_id = ${r.item_id}
-    `;
-
-    // Close the old run first: metrics_record reuses an OPEN run, and
-    // route_run_one_open forbids a second one.
-    await abandonRun(tx, r.item_id, ctx.reason);
-
-    const route = await tx.testing_routes.findFirst({
-      where: { item_type_id: r.item_type_id, route_number: r.route_number },
-      select: { route_steps: true },
-    });
-    await recordTransition(tx, {
-      eventKey: `package_reset:${actionId}:${r.item_id}`,
+    await restartRoute(tx, {
       itemId: r.item_id,
-      toState: "queued",
-      stepNo: 1,
-      stationId: null,
-      stationTypeId: route?.route_steps?.[0] ?? null,
-      workerId: ctx.workerId ?? null,
-      workerName: ctx.workerName ?? null,
-      reason: "package_reset",
-      payload: { package_id: packageId.toString(), trigger: ctx.reason },
+      itemType: r.item_type_id,
+      routeNumber: r.route_number,
+      now,
+      abandonReason: ctx.reason,
+      event: {
+        key: { actionId, item: true },
+        reason: "package_reset",
+        workerId: ctx.workerId ?? null,
+        workerName: ctx.workerName ?? null,
+        payload: { package_id: packageId.toString(), trigger: ctx.reason },
+      },
     });
-    resetItemIds.push(r.item_id);
   }
-
-  return { packageId, resetItemIds };
+  return { packageId, resetItemIds: rows.map((r) => r.item_id) };
 }

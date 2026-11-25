@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     Dialog,
     DialogTitle,
@@ -9,50 +10,66 @@ import {
     TextField,
     IconButton,
     Alert,
+    SearchableCombobox,
+    FieldLabel,
 } from "@/components/ui";
 import { Add as AddIcon, Delete as DeleteIcon, Print as PrintIcon } from "@/components/ui/icons";
 import { useReactToPrint } from "react-to-print";
-import SearchableCombobox from "../common/SearchableCombobox";
-import FieldLabel from "../common/FieldLabel";
 import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
-import { Shipment } from "@/types";
-import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
+import { Shipment, type ShipmentSentTotal } from "@/app/lib/shipments/contract";
+import { dateInputValue } from "@/app/lib/shipments/form";
+import { declaredLineOf, maxToSend, type SentRow } from "@/app/lib/shipments/send";
+import type { DirectoryWorker } from "@/lib/users/rules";
 import SignatureCanvas from 'react-signature-canvas';
-import { apiFetch } from "@/lib/api/client";
-import { useShipmentWorker } from "@/lib/hooks/useShipmentWorker";
-import ShipmentSignatureField from "./ShipmentSignatureField";
-import { serverErrorMessage, NETWORK_ERROR } from "./serverError";
+import { ApiError, getArray, getJson, sendJson } from "@/lib/api/client";
+import { useWorkersDirectory } from "@/app/components/lookups";
+import { useShipmentWorker } from "./useShipmentWorker";
+import SignaturePad from "@/components/SignaturePad";
+import { failureText } from "@/app/components/failureText";
+import { READ_PER_VISIT } from "@/app/components/screenQuery";
+import { shipmentSendsKey } from "./ShipmentHistoryPopup";
 import { ShipmentDeliveryForm } from "./ShipmentDeliveryForm";
+import { SHIPMENT_FORM_NO_ANSWER, WorkerField, WorkerUnknownAlert } from "./ShipmentFormFields";
 
 type ShipmentSendPopupProps = {
     open: boolean;
     onClose: () => void;
-    onSend: (success: boolean) => void;
+    onSent: () => void;
     shipment: Shipment | null;
 };
 
 type SendFormValues = {
     sent_shipment_code: string;
-    sent_date: string; // ISO date string YYYY-MM-DD
+    /** YYYY-MM-DD, as the date input holds it. */
+    sent_date: string;
     sending_worker_id: number | null;
     sending_worker_name: string | null;
     items: {
         item_type_id: number | null;
-        makat: number | null;
+        makat: string | null;
         amount: number | '';
-        // Helper to store the original index or id to lookup details if needed
-        original_item_index?: number;
     }[];
 };
+
+const NO_WORKERS: DirectoryWorker[] = [];
 
 export default function ShipmentSendPopup({
     open,
     onClose,
-    onSend,
+    onSent,
     shipment,
 }: ShipmentSendPopupProps) {
-    const [workers, setWorkers] = useState<{ worker_id: number; worker_name: string; roles: string[] }[]>([]);
-    const [history, setHistory] = useState<{ item_type_id: number; makat: number | null; total_sent: number }[]>([]);
+    const workers = useWorkersDirectory().data ?? NO_WORKERS;
+    // What already went out, per type and makat: read on every opening. A failed read keeps the
+    // last answer.
+    const sentQ = useQuery({
+        queryKey: [...shipmentSendsKey(shipment?.id), "totals"],
+        enabled: open && shipment?.id != null,
+        queryFn: () => getArray<ShipmentSentTotal>(`/api/shipment-history?shipment_id=${shipment!.id}`),
+        ...READ_PER_VISIT,
+    });
+    const history = React.useMemo<SentRow[]>(() => (sentQ.data ?? []).map((h) => ({ ...h, amount: h.total_sent })), [sentQ.data]);
+    const queryClient = useQueryClient();
     const fieldId = React.useId();
 
     const [isSigned, setIsSigned] = useState(false);
@@ -75,7 +92,7 @@ export default function ShipmentSendPopup({
         mode: "onChange",
         defaultValues: {
             sent_shipment_code: "",
-            sent_date: new Date().toISOString().split("T")[0],
+            sent_date: dateInputValue(new Date()),
             sending_worker_id: null,
             sending_worker_name: null,
             items: [{ item_type_id: null, makat: null, amount: '' }],
@@ -102,42 +119,6 @@ export default function ShipmentSendPopup({
     const printRef = React.useRef<HTMLDivElement>(null);
     const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: "טופס מסירת משלוח" });
 
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const res = await apiFetch("/api/workers-directory");
-                const data = await res.json();
-                if (!cancelled && Array.isArray(data)) {
-                    setWorkers(data);
-                }
-            } catch (err) {
-                console.error("Error loading workers:", err);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, []);
-
-    // Another shipment: one without an id has no history (cleared during
-    // render); one with an id loads its own.
-    const [historyFor, setHistoryFor] = useState(shipment);
-    if (historyFor !== shipment) {
-        setHistoryFor(shipment);
-        if (!shipment?.id) setHistory([]);
-    }
-    useEffect(() => {
-        if (shipment?.id) {
-            apiFetch(`/api/shipment-history?shipment_id=${shipment.id}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (Array.isArray(data)) {
-                        setHistory(data);
-                    }
-                })
-                .catch(err => console.error("Error loading history:", err));
-        }
-    }, [shipment]);
-
     // Every opening starts clean: the screen state during render, the form in
     // the effect below.
     const [openedFor, setOpenedFor] = useState<{ open: boolean; shipment: typeof shipment } | null>(null);
@@ -155,7 +136,7 @@ export default function ShipmentSendPopup({
         if (open && shipment) {
             reset({
                 sent_shipment_code: "",
-                sent_date: new Date().toLocaleDateString('en-CA', { timeZone: DISPLAY_TIMEZONE }),
+                sent_date: dateInputValue(new Date()),
                 sending_worker_id: null,
                 sending_worker_name: null,
                 items: [{ item_type_id: null, makat: null, amount: '' }],
@@ -172,10 +153,9 @@ export default function ShipmentSendPopup({
         if (!missingTypes) return;
         let cancelled = false;
         for (const id of missingTypes.split(",").map(Number)) {
-            apiFetch(`/api/settings/item-types/${id}/contents`)
-                .then((res) => (res.ok ? res.json() : null))
+            getJson<{ lines?: { quantity?: number }[] }>(`/api/settings/item-types/${id}/contents`)
                 .catch(() => null)
-                .then((data: { lines?: { quantity?: number }[] } | null) => {
+                .then((data) => {
                     if (cancelled) return;
                     const n = Array.isArray(data?.lines) ? data.lines.reduce((sum, l) => sum + Math.max(0, Number(l.quantity) || 0), 0) : 0;
                     setPerBox((m) => ({ ...m, [id]: n > 0 ? n : null }));
@@ -196,21 +176,14 @@ export default function ShipmentSendPopup({
         setSubmitError(null);
         // The dialog closes only once the server has accepted the return; a
         // refusal keeps the typed lines and the signature, with the reason shown.
-        let saved = false;
-
+        const validItems = data.items.filter(i => i.item_type_id && Number(i.amount) > 0);
+        if (validItems.length === 0) {
+            setSubmitError("יש להוסיף לפחות סוג מארז אחד לשליחה.");
+            return;
+        }
         try {
-            // Filter valid items
-            const validItems = data.items.filter(i => i.item_type_id && Number(i.amount) > 0);
-            if (validItems.length === 0) {
-                setSubmitError("יש להוסיף לפחות סוג מארז אחד לשליחה.");
-                return;
-            }
-
-
-
             const signature_base64 = sigCanvas.current && !sigCanvas.current.isEmpty() ? sigCanvas.current.toDataURL() : null;
-
-            const payload = {
+            await sendJson("/api/shipment-history", "POST", {
                 shipment_id: shipment.id,
                 sent_shipment_code: data.sent_shipment_code,
                 sent_date: new Date(data.sent_date).toISOString(),
@@ -218,33 +191,20 @@ export default function ShipmentSendPopup({
                 sending_worker_name: data.sending_worker_name,
                 items: validItems,
                 signature_base64
-            };
-
-            const res = await apiFetch("/api/shipment-history", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
             });
-
-            if (res.ok) {
-                saved = true;
-                setSent({ code: data.sent_shipment_code, date: data.sent_date, itemsTotal });
-            } else {
-                console.error("Failed to send shipment items");
-                setSubmitError(await serverErrorMessage(res, "המשלוח לא נשלח. בדוק את הכמויות ונסה שוב."));
-            }
         } catch (error) {
-            console.error(error);
-            setSubmitError(NETWORK_ERROR);
-        } finally {
-            // The dialog stays open, to offer the delivery form for what was sent.
-            if (saved) onSend(true);
+            console.error(error instanceof ApiError ? "Failed to send shipment items" : error);
+            setSubmitError(failureText(error, "המשלוח לא נשלח. בדוק את הכמויות ונסה שוב.", SHIPMENT_FORM_NO_ANSWER));
+            return;
         }
+        void queryClient.invalidateQueries({ queryKey: shipmentSendsKey(shipment.id) });
+        setSent({ code: data.sent_shipment_code, date: data.sent_date, itemsTotal });
+        // The dialog stays open, to offer the delivery form for what was sent.
+        onSent();
     };
 
     if (!shipment) return null;
 
-    // Available items options from the shipment
     const availableItems = shipment.shipment_items || [];
 
     // The send counts boxes as declared, not as tested: say what is still not
@@ -330,11 +290,7 @@ export default function ShipmentSendPopup({
             ) : (
             <form onSubmit={(e) => handleSubmit(onSubmit)(e)} noValidate style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <DialogContent>
-                    {sender.blocked && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            לא ניתן לזהות אותך — לחשבון שלך אין מספר עובד מוגדר. פנה למנהל להוספתו בהגדרות משתמשים.
-                        </Alert>
-                    )}
+                    {sender.blocked && <WorkerUnknownAlert />}
                     <Alert severity="info" sx={{ mb: 2 }}>
                         הכמויות הן מספר מארזים. לכל סוג מארז אפשר לשלוח עד הכמות שהוצהרה פחות מה שכבר נשלח.
                     </Alert>
@@ -395,32 +351,26 @@ export default function ShipmentSendPopup({
                             />
                         </div>
 
-                        <div>
-                            <Controller
-                                name="sending_worker_id"
-                                control={control}
-                                render={({ field: { onChange, value } }) => (
-                                    <SearchableCombobox<{ worker_id: number; worker_name: string; roles: string[] }>
-                                        label="עובד מוציא"
-                                        options={sender.options}
-                                        getOptionLabel={(option) => option.worker_name}
-                                        isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
-                                        value={workers.find((w) => w.worker_id === value) || null}
-                                        onChange={(newValue) => {
-                                            onChange(newValue?.worker_id ?? null);
-                                            setValue("sending_worker_name", newValue?.worker_name ?? null);
-                                        }}
-                                        disabled={sender.locked}
-                                        placeholder={sender.locked ? "מזוהה מההתחברות" : "בחר עובד…"}
-                                        error={!!errors.sending_worker_id}
-                                    />
-                                )}
-                            />
-                            {sender.locked && !sender.blocked && <div className="sh-field-helper">מזוהה מההתחברות</div>}
-                        </div>
+                        <Controller
+                            name="sending_worker_id"
+                            control={control}
+                            render={({ field: { onChange, value } }) => (
+                                <WorkerField
+                                    label="עובד מוציא"
+                                    options={sender.options}
+                                    workers={workers}
+                                    value={value}
+                                    onChange={(worker) => {
+                                        onChange(worker?.worker_id ?? null);
+                                        setValue("sending_worker_name", worker?.worker_name ?? null);
+                                    }}
+                                    locked={sender.locked}
+                                    helper={sender.locked && !sender.blocked ? "מזוהה מההתחברות" : null}
+                                />
+                            )}
+                        />
                     </div>
 
-                    {/* Dynamic Items Selection */}
                     <div style={{ marginTop: "var(--space-lg)", borderTop: "1px solid var(--color-hairline)", paddingTop: "var(--space-md)" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
                             <div style={{ fontSize: "var(--text-body)", fontWeight: 600 }}>מארזים לשליחה</div>
@@ -449,16 +399,13 @@ export default function ShipmentSendPopup({
                                             getOptionLabel={(option) =>
                                                 `${option.item_type_desc || '—'}`
                                             }
-                                            // Find the matching option based on item_type_id and makat
-                                            value={availableItems.find(opt =>
-                                                opt.item_type_id === value.item_type_id && opt.makat == value.makat
-                                            ) || null}
+                                            value={declaredLineOf(availableItems, value.item_type_id, value.makat) || null}
                                             onChange={(newValue) => {
                                                 if (newValue) {
                                                     onChange({
                                                         item_type_id: newValue.item_type_id,
                                                         makat: newValue.makat || null,
-                                                        amount: value.amount // Keep typed amount or reset? User didn't specify. Keeping it is safer unless we change item.
+                                                        amount: value.amount,
                                                     });
                                                 } else {
                                                     onChange({ item_type_id: null, makat: null, amount: '' });
@@ -475,23 +422,10 @@ export default function ShipmentSendPopup({
                                     control={control}
                                     rules={{
                                         validate: (value, formValues) => {
-                                            // Allow empty or 0 during input
                                             if (value === '' || value === 0) return true;
-
                                             const currentItem = formValues.items[index];
-                                            if (!currentItem.item_type_id) return true; // Skip if no item selected yet
-
-                                            const originalItem = availableItems.find(opt =>
-                                                opt.item_type_id === currentItem.item_type_id && opt.makat == currentItem.makat
-                                            );
-                                            const totalReceived = originalItem ? originalItem.quantity : 0;
-
-                                            const sentItem = history.find(h =>
-                                                h.item_type_id === currentItem.item_type_id && h.makat == currentItem.makat
-                                            );
-                                            const previouslySent = sentItem ? sentItem.total_sent : 0;
-                                            const maxAllowed = Math.max(0, totalReceived - previouslySent);
-
+                                            if (!currentItem.item_type_id) return true;
+                                            const maxAllowed = maxToSend(availableItems, history, currentItem.item_type_id, currentItem.makat);
                                             if (Number(value) > maxAllowed) {
                                                 return `המקסימום לשליחה הוא ${maxAllowed}`;
                                             }
@@ -499,19 +433,10 @@ export default function ShipmentSendPopup({
                                         }
                                     }}
                                     render={({ field }) => {
-                                        // Calculate max allowed. Right after "הוסף" the watched
-                                        // list is a render behind the rows: the new row starts blank.
+                                        // Right after "הוסף" the watched list is a render
+                                        // behind the rows: the new row starts blank.
                                         const currentItem = items?.[index] ?? item;
-                                        const originalItem = availableItems.find(opt =>
-                                            opt.item_type_id === currentItem.item_type_id && opt.makat == currentItem.makat
-                                        );
-                                        const totalReceived = originalItem ? originalItem.quantity : 0;
-
-                                        const sentItem = history.find(h =>
-                                            h.item_type_id === currentItem.item_type_id && h.makat == currentItem.makat
-                                        );
-                                        const previouslySent = sentItem ? sentItem.total_sent : 0;
-                                        const maxAllowed = Math.max(0, totalReceived - previouslySent);
+                                        const maxAllowed = maxToSend(availableItems, history, currentItem.item_type_id, currentItem.makat);
 
                                         return (
                                             <TextField
@@ -539,7 +464,7 @@ export default function ShipmentSendPopup({
                     {/* Signature — required to send (the button waits for it), and
                         now it says so, the same way the receiving form does. */}
                     <div style={{ marginTop: "var(--space-md)", borderTop: "1px solid var(--color-hairline)", paddingTop: "var(--space-sm)" }}>
-                        <ShipmentSignatureField
+                        <SignaturePad
                             canvasRef={sigCanvas}
                             signed={isSigned}
                             onSignedChange={setIsSigned}

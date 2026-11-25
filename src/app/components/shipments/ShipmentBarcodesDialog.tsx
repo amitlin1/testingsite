@@ -1,5 +1,6 @@
 "use client";
 import React, { useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
     Dialog,
     DialogTitle,
@@ -9,13 +10,14 @@ import {
     Alert,
     Skeleton,
 } from "@/components/ui";
-import Barcode from "react-barcode";
 import { useReactToPrint } from "react-to-print";
 import { Print as PrintIcon } from "@/components/ui/icons";
-import { Shipment } from "@/types";
-import { apiFetch } from "@/lib/api/client";
-import type { PackageView } from "@/app/lib/packages/read";
-import { barcodeOf, fmtId } from "@/app/components/packages/packageUi";
+import { Shipment } from "@/app/lib/shipments/contract";
+import { sendJson } from "@/lib/api/client";
+import { NO_CONNECTION_TEXT, failureText } from "@/app/components/failureText";
+import { READ_PER_VISIT } from "@/app/components/screenQuery";
+import type { PackageView } from "@/app/lib/packages/contract";
+import { ShipmentBoxLabel } from "@/app/components/labels/Labels";
 
 type ShipmentBarcodesDialogProps = {
     open: boolean;
@@ -33,24 +35,17 @@ type ShipmentBarcodesDialogProps = {
  */
 export default function ShipmentBarcodesDialog({ open, onClose, shipment }: ShipmentBarcodesDialogProps) {
     const printRef = useRef<HTMLDivElement>(null);
-    const [boxes, setBoxes] = React.useState<PackageView[] | null>(null);
-    const [error, setError] = React.useState<string | null>(null);
     const shipmentId = shipment?.id ?? null;
-
-    React.useEffect(() => {
-        if (!open || shipmentId == null) return;
-        let cancelled = false;
-        apiFetch(`/api/shipments/${shipmentId}/boxes`, { method: "POST" })
-            .then(async (r) => {
-                const d = await r.json().catch(() => ({}));
-                if (cancelled) return;
-                if (!r.ok) { setError(d?.error || "טעינת מארזי המשלוח נכשלה"); setBoxes([]); return; }
-                setError(null);
-                setBoxes(Array.isArray(d.boxes) ? d.boxes : []);
-            })
-            .catch(() => { if (!cancelled) { setError("שגיאה בתקשורת"); setBoxes([]); } });
-        return () => { cancelled = true; setBoxes(null); };
-    }, [open, shipmentId]);
+    // Asked on every opening (the POST also mints what is missing).
+    const boxesQ = useQuery({
+        queryKey: ["shipment-boxes", shipmentId],
+        enabled: open && shipmentId != null,
+        queryFn: async () => (await sendJson<{ boxes: PackageView[] }>(`/api/shipments/${shipmentId}/boxes`, "POST")).boxes,
+        ...READ_PER_VISIT,
+    });
+    const settled = !boxesQ.isFetching;
+    const error = settled && boxesQ.isError ? failureText(boxesQ.error, "טעינת מארזי המשלוח נכשלה", NO_CONNECTION_TEXT) : null;
+    const boxes: PackageView[] | null = !settled ? null : error ? [] : boxesQ.data ?? null;
 
     const total = boxes?.length ?? 0;
     const takenIn = boxes?.filter((b) => b.status !== "pending").length ?? 0;
@@ -79,7 +74,6 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                             יודפסו {total} מדבקות — מדבקה לכל מארז, עם המזהה שלו. את המדבקה מדביקים על הקופסה של השורה שעליה (לפי הסריאלי או המק״ט בתעודה), ובקליטת מארזים סורקים אותה.
                             {takenIn > 0 && ` ${takenIn === 1 ? "מארז אחד כבר נקלט" : `${takenIn} מהמארזים כבר נקלטו`} — המדבקה שלו מודפסת שוב.`}
                         </p>
-                        {/* Printable area: one label per box, each on its own page/label. */}
                         <div
                             style={{
                                 maxHeight: 360,
@@ -90,31 +84,7 @@ export default function ShipmentBarcodesDialog({ open, onClose, shipment }: Ship
                             }}
                         >
                             <div ref={printRef}>
-                                {boxes.map((b) => {
-                                    const { head, suffix } = fmtId(b.item_id);
-                                    return (
-                                        <div
-                                            key={b.item_id}
-                                            style={{
-                                                padding: "20px",
-                                                display: "flex",
-                                                flexDirection: "column",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                pageBreakAfter: "always",
-                                                breakAfter: "page",
-                                            }}
-                                        >
-                                            <Barcode value={barcodeOf(b.item_id)} width={1.6} height={70} displayValue={false} margin={0} />
-                                            <div style={{ marginTop: 8, textAlign: "center", direction: "rtl" }}>
-                                                {/* The id reads left to right; the box's 00 stands out. */}
-                                                <div dir="ltr" style={{ fontSize: 15, letterSpacing: 1.5, fontVariantNumeric: "tabular-nums" }}>
-                                                    {head} <b>{suffix}</b>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                {boxes.map((b) => <ShipmentBoxLabel key={b.item_id} id={b.item_id} />)}
                             </div>
                         </div>
                     </>

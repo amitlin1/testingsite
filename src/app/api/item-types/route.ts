@@ -1,24 +1,11 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { listItemTypes, listJson } from "@/app/lib/lookups";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  try {
-    const rows = await prisma.item_types.findMany({
-      orderBy: { item_type_desc: "asc" },
-    });
-
-    const itemTypes = rows.map((row) => ({
-      id: row.item_type_id,
-      name: (row.item_type_desc ?? "").trim(),
-      is_package: row.is_package,
-    }));
-
-    return NextResponse.json(itemTypes);
-  } catch (error) {
-    console.error("Error loading item types:", error);
-    // Return empty array instead of error to prevent frontend crashes
-    return NextResponse.json([]);
-  }
+  return listJson(
+    async () => (await listItemTypes({ byName: true })).map((t) => ({ id: t.item_type_id, name: t.item_type_desc, is_package: t.is_package })),
+    "Error loading item types:",
+    { emptyOnError: true },
+  );
 }

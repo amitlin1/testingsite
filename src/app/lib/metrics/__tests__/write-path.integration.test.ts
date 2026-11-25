@@ -27,8 +27,17 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import * as H from "./write-path-helpers";
+import * as H from "@/test-support/db-harness";
 import { errorCode } from "@/lib/errors";
+import { eventKeyOf, type EventKeyParts } from "../ledger/record";
+import type { MetricsReason } from "../vocabulary";
+
+/** The key an event is recorded under, from the parts its write path keys it by (record.ts). */
+const keyOf = (reason: MetricsReason, itemId: number | string | bigint, key: EventKeyParts, seq?: number): string =>
+  eventKeyOf({ reason, itemId: BigInt(itemId), key, seq });
+/** A result submit's events: keyed by the submit, the item and the seq. */
+const submitKey = (reason: MetricsReason, submitId: string, itemId: number | string | bigint, seq: number): string =>
+  keyOf(reason, itemId, { actionId: submitId, item: true, seq: true }, seq);
 
 /** The drift detector must be silent after every covered path. */
 async function assertNoDrift(): Promise<void> {
@@ -102,7 +111,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     for (const id of [packageId, ...created.itemIds]) {
       const ev = await H.events(id);
       assert.equal(ev.length, 1, `events of ${id}`);
-      assert.equal(ev[0].event_key, `item_created:${id}`);
+      assert.equal(ev[0].event_key, keyOf("item_created", id, { item: true }));
       assert.equal(ev[0].reason, "item_created");
       assert.equal(ev[0].to_state, "queued");
       assert.equal(ev[0].kind, "transition");
@@ -228,7 +237,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     }
     // One click, three keys: the box's plain key and one per item.
     const evA = await H.events(a);
-    assert.equal(evA[evA.length - 1].event_key, `test_started:${startUuid}:${a}`);
+    assert.equal(evA[evA.length - 1].event_key, keyOf("test_started", a, { actionId: startUuid, item: true }));
     await assertNoDrift();
 
     const released = await H.releaseTest({ itemId: box.packageId, stationId: H.STATION_INTAKE, actionUuid: randomUUID() });
@@ -464,13 +473,13 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
       ev.map((e) => e.reason),
       ["item_created", "test_started", "result_submitted", "result_submitted"],
     );
-    assert.equal(ev[1].event_key, `test_started:${startUuid}`);
+    assert.equal(ev[1].event_key, keyOf("test_started", 0, { actionId: startUuid }));
 
     const [advance, finish] = [ev[2], ev[3]];
     // §4.4: the key carries the identity of the TRANSITION, not just the human
     // action — otherwise ON CONFLICT DO NOTHING would swallow the route close.
-    assert.equal(advance.event_key, `result_submitted:${submitId}:${itemId}:0`);
-    assert.equal(finish.event_key, `result_submitted:${submitId}:${itemId}:1`);
+    assert.equal(advance.event_key, submitKey("result_submitted", submitId, itemId, 0));
+    assert.equal(finish.event_key, submitKey("result_submitted", submitId, itemId, 1));
     assert.equal(advance.seq, 0);
     assert.equal(finish.seq, 1);
     assert.equal(advance.to_state, "queued");
@@ -573,10 +582,10 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
       ],
     );
     const sendEvent = transitions[2];
-    assert.equal(sendEvent.event_key, `sent_to_research:${sendId}:${itemId}:0`);
+    assert.equal(sendEvent.event_key, submitKey("sent_to_research", sendId, itemId, 0));
     assert.equal(sendEvent.step_no, 1, "sendToResearch does not advance the step");
     const returnEvent = transitions[4];
-    assert.equal(returnEvent.event_key, `returned_to_route:${returnId}:${itemId}:0`);
+    assert.equal(returnEvent.event_key, submitKey("returned_to_route", returnId, itemId, 0));
     assert.equal(returnEvent.step_no, 1, "returnToRoute re-queues at the SAME step");
 
     const isi = await H.intervals(itemId);
@@ -632,7 +641,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     const finish = ev[ev.length - 1];
     // Only ONE event on this branch: the route ends where the research sits,
     // so nothing advances and no next-station recommendation is computed.
-    assert.equal(finish.event_key, `result_submitted:${submitId}:${itemId}:0`);
+    assert.equal(finish.event_key, submitKey("result_submitted", submitId, itemId, 0));
     assert.equal(finish.reason, "result_submitted");
     assert.equal(finish.to_state, "done");
     assert.equal(finish.seq, 0);
@@ -691,7 +700,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     const ev = await H.events(itemId);
     const note = ev[ev.length - 1];
     // §4.4: the note key carries no seq suffix.
-    assert.equal(note.event_key, `research_note:${noteId}:${itemId}`);
+    assert.equal(note.event_key, keyOf("research_note", itemId, { actionId: noteId, item: true }));
     assert.equal(note.kind, "note");
     assert.equal(note.reason, "research_note");
     assert.equal(note.to_state, null);
@@ -785,7 +794,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
 
     const ev = await H.events(itemId);
     const released = ev[ev.length - 1];
-    assert.equal(released.event_key, `released_by_user:${actionUuid}`);
+    assert.equal(released.event_key, keyOf("released_by_user", 0, { actionId: actionUuid }));
     assert.equal(released.reason, "released_by_user");
     assert.equal(released.to_state, "queued");
     assert.equal(released.step_no, 1);
@@ -852,14 +861,12 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     await H.runReaper();
 
     // Overlapping reaper runs are the real hazard the per-minute stamp guards
-    // against. Re-arming the row out of band (detector lifted — this is setup,
-    // not a write path) reproduces the window without a second process.
-    await H.withDriftDetectorOff(() =>
-      H.q(
-        `UPDATE item_routes SET current_status = 1, processing_start_time = NOW() - INTERVAL '120 minutes'
-          WHERE item_id = $1`,
-        [itemId],
-      ),
+    // against. Re-arming the row out of band (setup, not a write path)
+    // reproduces the window without a second process.
+    await H.q(
+      `UPDATE item_routes SET current_status = 1, processing_start_time = NOW() - INTERVAL '120 minutes'
+        WHERE item_id = $1`,
+      [itemId],
     );
     // Assert the second pass actually RAN and released the row. Without this a
     // crashed or no-op second pass leaves exactly one event and satisfies the
@@ -1126,12 +1133,12 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
         ["result_submitted", "done", 2],
       ],
     );
-    assert.equal(ev[1].event_key, `test_started:${submitId}:${accessoryId}:0`);
+    assert.equal(ev[1].event_key, submitKey("test_started", submitId, accessoryId, 0));
     assert.equal(ev[1].payload.synthetic_pair, true);
     assert.equal(ev[1].station_id, H.STATION_INTAKE);
     // Every later event of the tx shifts by +1 (§4.5 #9/#10 "1 כשקדם #15").
-    assert.equal(ev[2].event_key, `result_submitted:${submitId}:${accessoryId}:1`);
-    assert.equal(ev[3].event_key, `result_submitted:${submitId}:${accessoryId}:2`);
+    assert.equal(ev[2].event_key, submitKey("result_submitted", submitId, accessoryId, 1));
+    assert.equal(ev[3].event_key, submitKey("result_submitted", submitId, accessoryId, 2));
     // One human action, one submit_id, across the whole pair.
     assert.equal(new Set(ev.slice(1).map((e) => e.submit_id)).size, 1);
 
@@ -1184,7 +1191,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     const finish = ev[ev.length - 1];
     assert.equal(advance.reason, "result_submitted");
     assert.equal(advance.to_state, "queued");
-    assert.equal(finish.event_key, `no_station_for_type:${submitId}:${itemId}:1`);
+    assert.equal(finish.event_key, submitKey("no_station_for_type", submitId, itemId, 1));
     assert.equal(finish.reason, "no_station_for_type");
     assert.equal(finish.to_state, "done");
     assert.equal(finish.seq, 1);
@@ -1252,9 +1259,9 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     const ev = await H.events(itemId);
     const requeue = ev[ev.length - 2];
     const finish = ev[ev.length - 1];
-    assert.equal(requeue.event_key, `returned_to_route:${submitId}:${itemId}:0`);
+    assert.equal(requeue.event_key, submitKey("returned_to_route", submitId, itemId, 0));
     assert.equal(requeue.to_state, "queued");
-    assert.equal(finish.event_key, `no_station_for_type:${submitId}:${itemId}:1`);
+    assert.equal(finish.event_key, submitKey("no_station_for_type", submitId, itemId, 1));
     assert.equal(finish.to_state, "done");
     assert.equal(finish.payload.branch, "route_shortened");
     assert.ok(ms(finish.occurred_at) > ms(requeue.occurred_at));
@@ -1297,9 +1304,9 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     const notes = (await H.events(itemId)).filter((e) => e.reason === "station_reassigned");
     assert.equal(notes.length, 2);
     const bySeq = new Map(notes.map((n) => [n.seq, n]));
-    assert.equal(bySeq.get(2)!.event_key, `station_reassigned:${submitId}:${itemId}:2`);
+    assert.equal(bySeq.get(2)!.event_key, submitKey("station_reassigned", submitId, itemId, 2));
     assert.equal(bySeq.get(2)!.payload.site, "route_step_assignment");
-    assert.equal(bySeq.get(3)!.event_key, `station_reassigned:${submitId}:${itemId}:3`);
+    assert.equal(bySeq.get(3)!.event_key, submitKey("station_reassigned", submitId, itemId, 3));
     assert.equal(bySeq.get(3)!.payload.site, "next_station_load_balancing");
     assert.equal(bySeq.get(3)!.station_type_id, H.TYPE_FUNC);
     // The last pick is the one item_routes ends up carrying.
@@ -1345,9 +1352,9 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     assert.equal(new Set(notes.map((n) => n.event_key)).size, 2);
     assert.equal(new Set(notes.map((n) => n.event_id)).size, 2);
     const bySeq = new Map(notes.map((n) => [n.seq, n]));
-    assert.equal(bySeq.get(3)!.event_key, `station_reassigned:${submitId}:${itemId}:3`);
+    assert.equal(bySeq.get(3)!.event_key, submitKey("station_reassigned", submitId, itemId, 3));
     assert.equal(bySeq.get(3)!.payload.site, "find_best_research_station");
-    assert.equal(bySeq.get(2)!.event_key, `station_reassigned:${submitId}:${itemId}:2`);
+    assert.equal(bySeq.get(2)!.event_key, submitKey("station_reassigned", submitId, itemId, 2));
     assert.equal(bySeq.get(2)!.payload.site, "research_load_balancing");
     assert.ok(notes.every((n) => n.kind === "note"));
 
@@ -1577,7 +1584,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
 
     const ev = await H.events(itemId);
     assert.equal(ev.length, 1);
-    assert.equal(ev[0].event_key, `test_started:${actionUuid}`);
+    assert.equal(ev[0].event_key, keyOf("test_started", 0, { actionId: actionUuid }));
     assert.equal(ev[0].payload.auto_opened_run, true, "surprise opens are marked and counted in selfcheck");
 
     const [run] = await H.runs(itemId);
@@ -1685,24 +1692,22 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     // adds ir_item_fk as NOT VALID: dropping and re-adding it NOT VALID around
     // the insert reproduces the production shape exactly (existing rows
     // unchecked, new writes enforced).
-    await H.withDriftDetectorOff(async () => {
-      await H.q("ALTER TABLE item_routes DROP CONSTRAINT ir_item_fk");
-      try {
-        await H.q(
-          `INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step,
-                                    test_station_id, created_at, is_finished, queue_start_time,
-                                    processing_start_time, route_number)
-           VALUES ($1, $2, 1, 1, $3, NOW(), false, NOW() - INTERVAL '180 minutes',
-                   NOW() - INTERVAL '150 minutes', 1)`,
-          [orphan, H.ITEM_TYPE_ONE_STEP, H.STATION_INTAKE],
-        );
-      } finally {
-        await H.q(
-          `ALTER TABLE item_routes ADD CONSTRAINT ir_item_fk
-             FOREIGN KEY (item_id) REFERENCES items(item_id) NOT VALID`,
-        );
-      }
-    });
+    await H.q("ALTER TABLE item_routes DROP CONSTRAINT ir_item_fk");
+    try {
+      await H.q(
+        `INSERT INTO item_routes (item_id, item_type_id, current_status, current_route_step,
+                                  test_station_id, created_at, is_finished, queue_start_time,
+                                  processing_start_time, route_number)
+         VALUES ($1, $2, 1, 1, $3, NOW(), false, NOW() - INTERVAL '180 minutes',
+                 NOW() - INTERVAL '150 minutes', 1)`,
+        [orphan, H.ITEM_TYPE_ONE_STEP, H.STATION_INTAKE],
+      );
+    } finally {
+      await H.q(
+        `ALTER TABLE item_routes ADD CONSTRAINT ir_item_fk
+           FOREIGN KEY (item_id) REFERENCES items(item_id) NOT VALID`,
+      );
+    }
 
     const res = await H.runReaper();
     assert.equal(res.status, 200, "the reaper must survive an orphan row");
@@ -1729,11 +1734,9 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
     // item failed, while the equivalent transition succeeded.
     const itemId = 7310;
     await H.seedLegacyItem({ itemId, itemTypeId: H.ITEM_TYPE_ONE_STEP });
-    await H.withDriftDetectorOff(() =>
-      H.q(
-        `UPDATE item_routes SET current_status = 5, processing_start_time = NOW()
-          WHERE item_id = $1`, [itemId],
-      ),
+    await H.q(
+      `UPDATE item_routes SET current_status = 5, processing_start_time = NOW()
+        WHERE item_id = $1`, [itemId],
     );
     assert.equal((await H.q("SELECT 1 FROM route_run WHERE item_id = $1", [itemId])).length, 0);
 

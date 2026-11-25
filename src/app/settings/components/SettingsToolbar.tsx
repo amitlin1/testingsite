@@ -2,7 +2,7 @@
 import * as React from "react";
 import { Plus } from "lucide-react";
 import { Button, SearchInput } from "@/components/ui";
-import "../settings.css";
+import "./settings-header.css";
 
 /* =========================================================================
    SettingsToolbar — THE page header for /settings/* (and /files).
@@ -13,7 +13,7 @@ import "../settings.css";
    the page's own filter controls) beneath it.
 
    One header for every settings page, so the title, its size and the action
-   look the same wherever you are. Styles: settings.css `.settings-header*`.
+   look the same wherever you are. Styles: settings-header.css.
    ========================================================================= */
 
 type Props = {
@@ -56,7 +56,7 @@ export default function SettingsToolbar({
   const pill = countText ?? (count != null ? `${count}${countLabel ? ` ${countLabel}` : ""}` : null);
 
   return (
-    <div dir="rtl" style={{ flexShrink: 0 }}>
+    <div style={{ flexShrink: 0 }}>
       <div className="settings-header">
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>

@@ -2,24 +2,14 @@
 import React, { forwardRef } from "react";
 import { sxToStyle, type SxInput } from "./sx";
 
-type TColor = "standard" | "primary" | "secondary" | "success" | "error" | "warning" | "info";
-
-const TINT: Record<TColor, { bg: string; fg: string }> = {
-  standard: { bg: "color-mix(in srgb, var(--color-primary) 8%, transparent)", fg: "var(--color-primary)" },
-  primary: { bg: "color-mix(in srgb, var(--color-primary) 10%, transparent)", fg: "var(--color-primary)" },
-  secondary: { bg: "rgba(0,0,0,.06)", fg: "var(--color-ink)" },
-  success: { bg: "color-mix(in srgb, var(--color-status-approved) 10%, transparent)", fg: "var(--color-status-approved)" },
-  error: { bg: "color-mix(in srgb, var(--color-destructive) 10%, transparent)", fg: "var(--color-destructive)" },
-  warning: { bg: "color-mix(in srgb, var(--color-status-late) 10%, transparent)", fg: "var(--color-status-late)" },
-  info: { bg: "color-mix(in srgb, var(--color-primary) 8%, transparent)", fg: "var(--color-primary)" },
-};
+/** The pressed option: the primary tint. */
+const PRESSED = { bg: "color-mix(in srgb, var(--color-primary) 10%, transparent)", fg: "var(--color-primary)" };
 
 interface GroupCtx {
   value?: unknown;
   exclusive?: boolean;
   onItemClick?: (e: React.MouseEvent, v: unknown) => void;
   size?: "small" | "medium" | "large";
-  color?: TColor;
   disabled?: boolean;
 }
 const Ctx = React.createContext<GroupCtx | null>(null);
@@ -27,14 +17,13 @@ const Ctx = React.createContext<GroupCtx | null>(null);
 export interface ToggleButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "value" | "onChange" | "color"> {
   value: unknown;
   selected?: boolean;
-  color?: TColor;
   size?: "small" | "medium" | "large";
   onChange?: (e: React.MouseEvent, value: unknown) => void;
   sx?: SxInput;
 }
 
 export const ToggleButton = forwardRef<HTMLButtonElement, ToggleButtonProps>(function ToggleButton(
-  { value, selected, color, size, onChange, disabled, sx, style, children, onClick, ...rest },
+  { value, selected, size, onChange, disabled, sx, style, children, onClick, ...rest },
   ref,
 ) {
   const group = React.useContext(Ctx);
@@ -43,8 +32,6 @@ export const ToggleButton = forwardRef<HTMLButtonElement, ToggleButtonProps>(fun
       ? group.value === value
       : Array.isArray(group.value) && (group.value as unknown[]).includes(value)
     : selected;
-  const col = color ?? group?.color ?? "standard";
-  const tint = TINT[col];
   const sz = size ?? group?.size ?? "medium";
   const pad = sz === "small" ? "6px 14px" : sz === "large" ? "11px 26px" : "9px 22px";
   const isDisabled = disabled ?? group?.disabled;
@@ -68,8 +55,8 @@ export const ToggleButton = forwardRef<HTMLButtonElement, ToggleButtonProps>(fun
         fontSize: 15,
         textAlign: "center",
         border: "none",
-        background: isSelected ? tint.bg : "transparent",
-        color: isSelected ? tint.fg : "var(--color-ink-muted-48)",
+        background: isSelected ? PRESSED.bg : "transparent",
+        color: isSelected ? PRESSED.fg : "var(--color-ink-muted-48)",
         fontWeight: isSelected ? 600 : 400,
         transition: "background var(--dur-fast) ease, color var(--dur-fast) ease",
         opacity: isDisabled ? 0.5 : 1,
@@ -88,7 +75,6 @@ export interface ToggleButtonGroupProps extends Omit<React.HTMLAttributes<HTMLDi
   exclusive?: boolean;
   onChange?: (event: React.MouseEvent, value: unknown) => void;
   size?: "small" | "medium" | "large";
-  color?: TColor;
   orientation?: "horizontal" | "vertical";
   fullWidth?: boolean;
   disabled?: boolean;
@@ -96,7 +82,7 @@ export interface ToggleButtonGroupProps extends Omit<React.HTMLAttributes<HTMLDi
 }
 
 export const ToggleButtonGroup = forwardRef<HTMLDivElement, ToggleButtonGroupProps>(function ToggleButtonGroup(
-  { value, exclusive, onChange, size, color, orientation = "horizontal", fullWidth, disabled, sx, style, children, ...rest },
+  { value, exclusive, onChange, size, orientation = "horizontal", fullWidth, disabled, sx, style, children, ...rest },
   ref,
 ) {
   const vertical = orientation === "vertical";
@@ -112,7 +98,7 @@ export const ToggleButtonGroup = forwardRef<HTMLDivElement, ToggleButtonGroupPro
   };
   const items = React.Children.toArray(children).filter(React.isValidElement);
   return (
-    <Ctx.Provider value={{ value, exclusive, onItemClick, size, color, disabled }}>
+    <Ctx.Provider value={{ value, exclusive, onItemClick, size, disabled }}>
       <div
         ref={ref}
         style={{

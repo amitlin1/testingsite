@@ -1,27 +1,24 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
-import { Prisma } from '@prisma/client';
-import { readJson } from '@/lib/directUpload/server';
-import { serializeReferenceItem, referenceItemWithMembersInclude } from '@/lib/reference-items';
-import { ReferenceSaveError, deleteReferenceItem, saveReferenceItem } from '@/lib/reference-items-save';
+import { prisma } from "@/lib/db";
+import { errorCode } from "@/lib/errors";
+import { errorResponse } from "@/lib/http/errors";
+import { requireDbId, readJsonObject } from "@/lib/http/request";
+import { serializeReferenceItem, referenceItemWithMembersInclude } from '@/app/lib/reference-items/server';
+import { deleteReferenceItem, saveReferenceItem } from '@/app/lib/reference-items/save';
 
 export const runtime = 'nodejs';
 
-// PUT /api/settings/reference-items/[id]  (JSON) — the body is described in
-// lib/reference-items-save.ts. A package reference's member is edited only
-// through its package reference.
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const refId = Number(id);
-    if (!Number.isFinite(refId)) {
-      return NextResponse.json({ error: 'מזהה לא תקין' }, { status: 400 });
-    }
+type Ctx = { params: Promise<{ id: string }> };
 
-    const body = await readJson<Record<string, unknown>>(request);
-    if (!body) {
-      return NextResponse.json({ error: 'גוף הבקשה אינו JSON תקין' }, { status: 400 });
-    }
+const idOf = async (params: Ctx['params']): Promise<number> => requireDbId((await params).id, 'מזהה לא תקין');
+
+// PUT /api/settings/reference-items/[id]  (JSON) — the body is described in
+// app/lib/reference-items/save.ts. A package reference's member is edited only
+// through its package reference.
+export async function PUT(request: Request, { params }: Ctx) {
+  try {
+    const refId = await idOf(params);
+    const body = await readJsonObject(request, 'גוף הבקשה אינו JSON תקין');
 
     await saveReferenceItem(refId, body);
     const full = await prisma.reference_items.findUnique({
@@ -31,36 +28,21 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     return NextResponse.json(serializeReferenceItem(full!));
   } catch (error) {
-    if (error instanceof ReferenceSaveError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    console.error('Error updating reference item:', error);
-    const message = error instanceof Error ? error.message : 'שגיאה בעדכון פריט ייחוס';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return errorResponse(error, 'שגיאה בעדכון פריט ייחוס');
   }
 }
 
 // DELETE /api/settings/reference-items/[id] — removes the item, its image rows,
 // and the corresponding objects in the RU bucket; a package reference takes
 // its members (and their images) with it.
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_request: Request, { params }: Ctx) {
   try {
-    const { id } = await params;
-    const refId = Number(id);
-    if (!Number.isFinite(refId)) {
-      return NextResponse.json({ error: 'מזהה לא תקין' }, { status: 400 });
-    }
-
+    const refId = await idOf(params);
     await deleteReferenceItem(refId);
     return NextResponse.json({ success: true, id: refId });
   } catch (error) {
-    if (error instanceof ReferenceSaveError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      return NextResponse.json({ error: 'פריט הייחוס לא נמצא' }, { status: 404 });
-    }
-    console.error('Error deleting reference item:', error);
-    return NextResponse.json({ error: 'שגיאה במחיקת פריט ייחוס' }, { status: 500 });
+    // Deleted meanwhile, between the existence check and the delete.
+    if (errorCode(error) === 'P2025') return NextResponse.json({ error: 'פריט הייחוס לא נמצא' }, { status: 404 });
+    return errorResponse(error, 'שגיאה במחיקת פריט ייחוס');
   }
 }

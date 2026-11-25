@@ -14,8 +14,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 export function useUrlState<K extends string>(defaultsArg: Record<K, string>) {
   // A literal per screen, re-created each render: kept as first given, so it is a stable dep.
   const [defaults] = React.useState(defaultsArg);
-  const router = useRouter();
-  const pathname = usePathname();
+  const replaceQuery = useReplaceQuery();
   const sp = useSearchParams();
 
   const values = React.useMemo(() => {
@@ -39,13 +38,26 @@ export function useUrlState<K extends string>(defaultsArg: Record<K, string>) {
       queueMicrotask(() => {
         const qs = pendingRef.current?.toString() ?? "";
         pendingRef.current = null;
-        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+        replaceQuery(qs);
       });
     },
-    [sp, pathname, router, defaults],
+    [sp, replaceQuery, defaults],
   );
 
   return [values, set] as const;
+}
+
+/**
+ * Write `query` as the current page's query string ("" clears it): router.replace, so no history
+ * entry per change and no scroll jump. The one way screen state reaches the URL.
+ */
+export function useReplaceQuery(): (query: string) => void {
+  const router = useRouter();
+  const pathname = usePathname();
+  return React.useCallback(
+    (query: string) => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }),
+    [router, pathname],
+  );
 }
 
 /**

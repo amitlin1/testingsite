@@ -75,8 +75,8 @@ should be reworded before a pull request; and because phases 1/3a/3c import
 - **Screens / components**: `src/app/packages/`, `src/app/settings/packages/`,
   `src/app/components/packages/` (dialogs, `PackageIdText`, `MyPackageCard`, `packageUi.ts`
   tokens), `src/app/testing/tests-popups/Package*.tsx` (wizards, shell, decision dialog),
-  `src/app/components/testing/PackageQueueCard.tsx`, `src/app/testing/page.tsx`,
-  `src/app/components/shipments/*`, `src/components/CommandPalette.tsx`.
+  `src/app/testing/queue/PackageQueueCard.tsx`, `src/app/testing/page.tsx`,
+  `src/app/components/shipments/*`, `src/app/components/command-palette/CommandPalette.tsx`.
 - **Removed**: the old add-item form (`insertPopup.tsx`, `AddItemDialog.tsx`) and the old
   "קליטה וצילום" / "אריזה" wizards (`Photo.tsx`, `Packaging.tsx`).
 - **Prisma**: `prisma/schema.prisma`, `prisma/migrations/20260915120000_package_model/migration.sql`.

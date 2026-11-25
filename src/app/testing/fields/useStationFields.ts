@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { apiFetch } from "@/lib/api/client";
+import { isInt, isRecord } from "@/lib/json-guards";
 import type { Field, FieldsSchemaRef, KitItemFields, KitItemTarget, StationFieldsResponse } from "@/app/lib/station-fields/schema";
 
 /**
@@ -19,8 +20,8 @@ import type { Field, FieldsSchemaRef, KitItemFields, KitItemTarget, StationField
  * never "legacy": a passing glitch must not save a result without the fields it should carry (the
  * server would refuse it anyway, 409).
  *
- * Loads once per opening (open false → true), again when itemId or stationId change, and on
- * reload() / retry(). Closing or unmounting aborts the request; an answer to anything but the
+ * Loads once per mount (the page mounts a popup per opening), again when itemId or stationId
+ * change, and on reload() / retry(). Unmounting aborts the request; an answer to anything but the
  * current request is dropped.
  *
  * Every state can reload(): back to "loading", and ask again. A popup does after a 409
@@ -35,32 +36,29 @@ export type StationFieldsState =
   | ({ status: "ready"; reload: () => void } & Exclude<StationFieldsResponse, { mode: "legacy" }>);
 
 // ---- the response, checked before a popup builds on it ----------------------------------
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
-const isInt = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v);
 
 /** Every entry an object with the keys every field type has (the server parsed the config). */
 function isFieldList(v: unknown): v is Field[] {
-  return Array.isArray(v) && v.every((f) => isObj(f) && typeof f.id === "string" && typeof f.type === "string" && typeof f.label === "string");
+  return Array.isArray(v) && v.every((f) => isRecord(f) && typeof f.id === "string" && typeof f.type === "string" && typeof f.label === "string");
 }
 
 /** The schema reference, rebuilt from its own keys — what the popup sends back in Details.schema. */
 function schemaRefOf(v: unknown): Omit<FieldsSchemaRef, "target"> | null {
-  if (!isObj(v) || !isInt(v.route_id) || !isInt(v.v) || typeof v.step_uid !== "string") return null;
+  if (!isRecord(v) || !isInt(v.route_id) || !isInt(v.v) || typeof v.step_uid !== "string") return null;
   return { route_id: v.route_id, v: v.v, step_uid: v.step_uid };
 }
 
 function kitTargetOf(v: unknown): KitItemTarget | null {
   if (v === "each_item") return v;
-  return isObj(v) && isInt(v.item_type_id) ? { item_type_id: v.item_type_id } : null;
+  return isRecord(v) && isInt(v.item_type_id) ? { item_type_id: v.item_type_id } : null;
 }
 
 function parseKitItem(v: unknown): KitItemFields | null {
-  if (!isObj(v) || typeof v.item_id !== "string" || !isInt(v.package_seq) || !isInt(v.item_type_id)
+  if (!isRecord(v) || typeof v.item_id !== "string" || !isInt(v.package_seq) || !isInt(v.item_type_id)
     || typeof v.item_type_desc !== "string" || !Array.isArray(v.groups)) return null;
   const groups: KitItemFields["groups"] = [];
   for (const g of v.groups) {
-    const target = isObj(g) ? kitTargetOf(g.target) : null;
+    const target = isRecord(g) ? kitTargetOf(g.target) : null;
     if (!target || !isFieldList(g.fields)) return null;
     groups.push({ target, fields: g.fields });
   }
@@ -69,13 +67,13 @@ function parseKitItem(v: unknown): KitItemFields | null {
 
 /** The GET body as a StationFieldsResponse, or null when it is not one (→ "error"). */
 export function parseStationFieldsResponse(raw: unknown): StationFieldsResponse | null {
-  if (!isObj(raw)) return null;
+  if (!isRecord(raw)) return null;
   if (raw.mode === "legacy") return { mode: "legacy" };
   if (typeof raw.gate !== "boolean") return null;
   const ref = schemaRefOf(raw.schema);
   if (!ref) return null;
   if (raw.mode === "item") {
-    if (!isObj(raw.schema) || raw.schema.target !== "item" || !isFieldList(raw.fields)) return null;
+    if (!isRecord(raw.schema) || raw.schema.target !== "item" || !isFieldList(raw.fields)) return null;
     return { mode: "item", schema: { ...ref, target: "item" }, fields: raw.fields, gate: raw.gate };
   }
   if (raw.mode === "package") {
@@ -125,22 +123,16 @@ async function fetchStationFields(query: string, signal: AbortSignal): Promise<S
 type Answer = { key: string; response: StationFieldsResponse | null };
 
 /**
- * itemId: item.item_id — in the package wizards the box row's. open: the popup's `open`; each
- * opening loads afresh (the item may be at another step by now). stationId: the popup's station
- * (station.test_station_id) — the server answers "legacy" for a research station.
+ * itemId: item.item_id — in the package wizards the box row's. stationId: the popup's station
+ * (station.test_station_id) — the server answers "legacy" for a research station. `enabled` false
+ * (the settings preview): nothing is loaded, the state stays "loading".
  */
-export function useStationFields(itemId: string | number, open: boolean, stationId?: number | null): StationFieldsState {
-  // Every opening is a session of its own, so reopening never shows the previous opening's answer
-  // (React's "adjusting state when a prop changes", during render — no effect round-trip).
-  const [opening, setOpening] = React.useState(() => ({ open, session: open ? 1 : 0 }));
-  if (opening.open !== open) setOpening({ open, session: open ? opening.session + 1 : opening.session });
-
+export function useStationFields(itemId: string | number, stationId?: number | null, enabled = true): StationFieldsState {
   const [attempt, setAttempt] = React.useState(0);
   const reload = React.useCallback(() => setAttempt((n) => n + 1), []);
 
   const query = stationFieldsQuery(itemId, stationId);
-  // "" while closed: nothing is loaded, and the cleanup below aborts what was in flight.
-  const key = open ? `${opening.session}:${attempt}:${query}` : "";
+  const key = enabled ? `${attempt}:${query}` : "";
   const [answer, setAnswer] = React.useState<Answer | null>(null);
 
   React.useEffect(() => {
@@ -157,6 +149,7 @@ export function useStationFields(itemId: string | number, open: boolean, station
   const legacy = React.useMemo((): StationFieldsState => ({ status: "legacy", reload }), [reload]);
 
   return React.useMemo((): StationFieldsState => {
+    // Loading until the current request's own answer is in.
     if (!key || answer?.key !== key) return loading;
     const response = answer.response;
     if (response == null) return { status: "error", retry: reload, reload };

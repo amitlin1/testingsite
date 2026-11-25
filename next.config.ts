@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
 
   experimental: {
     // Body ceiling for every route the middleware touches — which is ALL of
-    // /api (src/middleware.ts matches them deliberately: most route handlers
+    // /api (src/middleware.ts matches them deliberately: many route handlers
     // have no auth guard of their own).
     //
     // Next clones the request body to hand a copy to the middleware, and past

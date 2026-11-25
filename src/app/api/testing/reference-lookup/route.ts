@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { serializeReferenceItem, referenceItemWithMembersInclude } from "@/lib/reference-items";
+import { prisma } from "@/lib/db";
+import { parseDbId } from "@/lib/http/request";
+import { serializeReferenceItem, referenceItemWithMembersInclude } from "@/app/lib/reference-items/server";
 
 export const runtime = "nodejs";
 
 /**
- * Reference ("RU") lookup for the intake wizard.
+ * GET /api/testing/reference-lookup?sku=&itemTypeId= — the reference ("RU") item of a manufacturer
+ * SKU, for every station popup's SKU step (the item popups and the package wizards).
  *
- * Given an item type + manufacturer SKU, returns whether a reference item exists
- * (`hasRU`), its reference weight, and its reference images by station type — sourced from the
- * `reference_items` / `reference_item_images` tables (the /settings/reference-items
- * infrastructure). Used by the RU-check, photo-by-reference, and weighing steps.
+ * Returns whether a reference item exists (`hasRU`), its reference weight, and its reference images
+ * by station type (/settings/reference-items). `images` and the `coverUrl`s are answered too,
+ * although no station client reads them.
  *
  * When the item found IS a package reference (the box label at the opening
  * station), `packageMembers` carries its members — one per content line — so
@@ -27,12 +28,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const sku = (searchParams.get("sku") ?? "").trim();
     const itemTypeIdRaw = searchParams.get("itemTypeId");
-    const itemTypeId = itemTypeIdRaw != null ? Number(itemTypeIdRaw) : null;
+    const itemTypeId = itemTypeIdRaw != null ? parseDbId(itemTypeIdRaw) : null;
 
     if (!sku) {
       return NextResponse.json({ error: "sku is required" }, { status: 400 });
     }
-    if (itemTypeIdRaw != null && Number.isNaN(itemTypeId)) {
+    if (itemTypeIdRaw != null && itemTypeId == null) {
       return NextResponse.json({ error: "itemTypeId must be a number" }, { status: 400 });
     }
 

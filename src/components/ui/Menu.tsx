@@ -122,6 +122,14 @@ export function Menu({ anchorEl, open, onClose, children, anchorOrigin, sx, Menu
           ...PaperProps?.style,
         }}
         onKeyDown={onKeyDown}
+        // A disabled item (MenuItem's aria-disabled) takes no press: its onClick never runs.
+        onClickCapture={(e) => {
+          const item = e.target instanceof Element ? e.target.closest('[role="menuitem"]') : null;
+          if (item?.getAttribute("aria-disabled") === "true") {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
       >
         {children}
       </ul>

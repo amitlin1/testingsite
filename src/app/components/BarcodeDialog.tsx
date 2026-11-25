@@ -7,24 +7,22 @@ import {
     Button,
     Box,
 } from "@/components/ui";
-import Barcode from 'react-barcode';
 import { useReactToPrint } from 'react-to-print';
 import { Print as PrintIcon } from "@/components/ui/icons";
+import { ItemBarcode } from "@/app/components/labels/Labels";
 
 type BarcodeDialogProps = {
     open: boolean;
     onClose: () => void;
-    itemId: number;
+    itemId: number | string;
 };
 
 export default function BarcodeDialog({ open, onClose, itemId }: BarcodeDialogProps) {
     const componentRef = useRef<HTMLDivElement>(null);
 
-    const barcodeValue = itemId.toString();
-
     const handlePrint = useReactToPrint({
         contentRef: componentRef,
-        documentTitle: `Barcode-${barcodeValue}`,
+        documentTitle: `Barcode-${itemId}`,
     });
 
     return (
@@ -41,13 +39,9 @@ export default function BarcodeDialog({ open, onClose, itemId }: BarcodeDialogPr
                         minHeight: 200
                     }}
                 >
-                    <div ref={componentRef} style={{ padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        {/* A label carries the code only: the barcode and its digits. */}
-                        <Barcode value={barcodeValue} width={2} height={100} fontSize={16} />
-                    </div>
+                    <ItemBarcode ref={componentRef} id={itemId} />
                 </Box>
             </DialogContent>
-            {/* Close then the action; DialogActions keeps the filled one last. */}
             <DialogActions>
                 <Button variant="outlined" color="inherit" onClick={onClose}>סגור</Button>
                 <Button

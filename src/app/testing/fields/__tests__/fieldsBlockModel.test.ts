@@ -6,13 +6,13 @@ import type {
   PhotoField, SectionField, Tone,
 } from "@/app/lib/station-fields/schema";
 import {
-  BLOCK_UNDRAWN_TEXT, BLOCK_TITLE, CHOICE_HINT, CHOICE_PROMPT, NOTE_TEXT, TEXT_VALUE_MAX, VARIANT_SPEC,
-  addShot, blockItems, blockStatus, draftsFieldsState, fieldCountText, fieldRowIds, groupFields,
+  BLOCK_UNDRAWN_TEXT, BLOCK_TITLE, CHOICE_HINT, CHOICE_PROMPT, NOTE_TEXT, addShot, blockItems, blockStatus, draftsFieldsState, fieldCountText, fieldRowIds, groupFields,
   hasLabelledControl, isItemChecked, kitItemFieldGroups, noteEditorTitle, noteLabelText, notePlaceholder,
   removeShot, rowState, settleShot, stationBlockTitle, statusRuns, toggleChecklistItem,
   type FieldRowVariant, type FieldsBlockGroup,
 } from "../fieldsBlockModel";
-import { evaluateDrafts, patchDraft, type Drafts, type FieldDraft } from "../useFieldsState";
+import type { Drafts, FieldDraft } from "@/app/lib/station-fields/evaluate";
+import { evaluateDrafts, patchDraft } from "../drafts";
 
 // ---- fixtures (artboard 14's fields, artboard 16's kit item) -----------------------------------------
 const opt = (id: string, label: string, tone: Tone): ChoiceOption => ({ id, label, tone });
@@ -33,26 +33,6 @@ const ALL_VARIANTS: FieldRowVariant[] = ["station", "photo", "dialog", "wizard",
 
 /** A string as it shows: without the invisible isolates (U+2066 … U+2069). */
 const visible = (s: string): string => s.replace(/[⁦-⁩]/g, "");
-
-test("each popup keeps its own artboard's list wording, status and note (spec §4.4)", () => {
-  const typing = (v: FieldRowVariant) => [VARIANT_SPEC[v].typeToFilter, visible(VARIANT_SPEC[v].placeholderOpen), VARIANT_SPEC[v].footerHint];
-  assert.deepEqual(typing("station"), [true, "הקלד לסינון או 1–4…", "1–4 בחירה מהירה"]);
-  assert.deepEqual(typing("photo"), [true, "הקלד לסינון…", "1–4 · Enter בחירה"]);
-  assert.deepEqual(typing("dialog"), [true, "הקלד לסינון…", "1–4 · Enter בחירה"]);
-  assert.deepEqual(typing("wizard"), typing("station"));
-  assert.deepEqual(typing("kit-item"), typing("station"));
-  assert.deepEqual(typing("pack-item"), [false, "", "1–4 בחירה"]);
-  assert.deepEqual(typing("pack"), typing("pack-item"));
-
-  assert.deepEqual(ALL_VARIANTS.map((v) => VARIANT_SPEC[v].status), ["A", "B", "C", "A", "A", null, null]);
-  assert.deepEqual(ALL_VARIANTS.map((v) => VARIANT_SPEC[v].note), ["row", "row", "row", "row", "row", "row-compact", "row-compact"]);
-  assert.deepEqual(ALL_VARIANTS.filter((v) => VARIANT_SPEC[v].noteLabel === "legend"), ["dialog"]);
-  // An empty list opens on its first row in 12, 13, 15, 16 (`hlIdx = list[0]`); 14 highlights only
-  // while typing, and 17/18 draw no highlight.
-  assert.deepEqual(ALL_VARIANTS.filter((v) => VARIANT_SPEC[v].highlightFirst), ["station", "photo", "wizard", "kit-item"]);
-  // The counter at the limit and "סיום": 12/14 plain, 15/16 "הגעת לאורך המרבי · {count}", 13/17/18 bold.
-  assert.deepEqual(ALL_VARIANTS.map((v) => VARIANT_SPEC[v].noteLook), ["plain", "bold", "plain", "dot", "dot", "bold", "bold"]);
-});
 
 test("the artboards' characters: en dash, ellipsis and middle dot, never their ASCII look-alikes", () => {
   for (const s of [CHOICE_PROMPT.filterOrKeys, CHOICE_HINT.quick, CHOICE_HINT.enter, CHOICE_HINT.pick]) assert.ok(s.includes("1–4"), s);
@@ -158,7 +138,6 @@ test("kit item groups carry artboard 16's labels; ids and label kinds", () => {
   const labelled: InputField["type"][] = ["choice_row", "multi_choice", "number", "text", "textarea", "scan"];
   assert.ok(labelled.every(hasLabelledControl));
   assert.deepEqual([hasLabelledControl("pass_fail"), hasLabelledControl("checklist"), hasLabelledControl("photo")], [false, false, false]);
-  assert.equal(TEXT_VALUE_MAX, 2000);
 });
 
 test("patchDraft takes a function of the draft as it is when the change lands", () => {

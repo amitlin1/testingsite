@@ -1,26 +1,27 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth/withAuth";
-import { contentTypeFromName, getObjectStream, nodeToWebStream, putObject } from "@/lib/storage";
+import { ACCESS } from "@/lib/auth/roles";
+import { putObject, serveObject } from "@/lib/storage";
+import { ReportKeys } from "@/lib/storage/keys";
 import { registerFileObject } from "@/lib/file-registry";
-import { ReportKeys } from "@/app/lib/item-report/generate";
-import { REPORT_TEMPLATE_ROLES } from "@/app/lib/item-report/roles";
-import { actorOf, decodeImageDataUrl } from "@/app/lib/item-report/http";
+import { decodeImageDataUrl } from "@/lib/data-url";
+import { actorOf } from "@/app/lib/item-report/http";
 
 export const runtime = "nodejs";
 
 /** GET ?key=reports/logos/… — a header logo uploaded in the template editor. */
 export const GET = withAuth(async (req) => {
   const key = new URL(req.url).searchParams.get("key") ?? "";
-  if (!key.startsWith(ReportKeys.LOGO_PREFIX) || key.includes("..")) {
+  if (!ReportKeys.isLogo(key)) {
     return NextResponse.json({ error: "Bad key" }, { status: 400 });
   }
   try {
-    const stream = await getObjectStream(key);
-    const type = key.endsWith(".svg") ? "image/svg+xml" : contentTypeFromName(key);
-    return new Response(nodeToWebStream(stream), { headers: { "Content-Type": type, "Cache-Control": "private, max-age=3600" } });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const res = await serveObject(key, { cacheControl: "private, max-age=3600" });
+    if (res) return res;
+  } catch (e) {
+    console.error(`[item-report] logo ${key} could not be read`, e);
   }
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
 });
 
 /** POST { dataUrl } → { key }: upload a header logo (PNG / JPEG / WebP / SVG, ≤ 2MB). */
@@ -35,4 +36,4 @@ export const POST = withAuth(async (req, { session }) => {
     checksum: stored.checksum, entityType: "report_logo", createdBy: actorOf(session).username,
   });
   return NextResponse.json({ key });
-}, { role: REPORT_TEMPLATE_ROLES });
+}, { role: ACCESS.reportTemplate });

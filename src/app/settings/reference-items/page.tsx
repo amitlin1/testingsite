@@ -12,42 +12,33 @@ import {
   DialogTitle,
   Skeleton,
   Tag,
+  SearchableCombobox,
 } from "@/components/ui";
 import { Add as AddIcon } from "@/components/ui/icons";
 import { EditOutlined as EditOutlinedIcon } from "@/components/ui/icons";
 import { Inventory2Outlined as Inventory2OutlinedIcon } from "@/components/ui/icons";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import SettingsToolbar from "../components/SettingsToolbar";
-import { apiFetch } from "@/lib/api/client";
+import { getArray, getJson, sendJson } from "@/lib/api/client";
 import PackageReferenceDialog from "./PackageReferenceDialog";
 import {
   stationsFor,
-  type ItemType, type ReferenceItem, type ReferenceStations, type TemplateLine,
+  type ItemType, type TemplateLine,
 } from "./referenceForm";
+import type { ReferenceStations } from "@/app/lib/reference-items/stations";
+import type { ReferenceItemJson } from "@/app/lib/reference-items/wire";
 import Image from "next/image";
+import { BLUE, HAIR, INK, MUTED } from "@/components/ui/colors";
+import "./reference-items.css";
 
-// ---- Design tokens (Shifthouse) --------------------------------------------
-// States (hover / focus / drag) live in settings.css (.ri-*): inline styles
-// cannot express them.
-const C = {
-  accent: "var(--color-primary)",
-  ink: "var(--color-ink)",
-  muted: "var(--color-ink-muted-48)",
-  hairline: "var(--color-hairline)",
-  card: "var(--color-canvas)",
-};
-
-// A non-OK reply counts as a failure (it used to read as an empty list).
-const okJson = (r: Response) => {
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-};
+// States (hover / focus / drag) live in reference-items.css (.ri-*): inline styles cannot express
+// them.
+const CARD = "var(--color-canvas)";
 
 /** The selected package type's contents: what its package references hold. */
 type LinesState = { status: "loading" } | { status: "error" } | { status: "ready"; lines: TemplateLine[] };
 
 /** Every reference item not inside a package reference; the page keeps those of regular types. */
-type LegacyState = { status: "loading" } | { status: "error" } | { status: "ready"; items: ReferenceItem[] };
+type LegacyState = { status: "loading" } | { status: "error" } | { status: "ready"; items: ReferenceItemJson[] };
 
 /**
  * הגדרות → פריטי ייחוס. Only package types are offered: a package reference
@@ -64,7 +55,7 @@ export default function ReferenceItemsPage() {
   // The stations that take reference images, per item type in route order; null until loaded.
   const [stations, setStations] = React.useState<ReferenceStations | null>(null);
 
-  const [items, setItems] = React.useState<ReferenceItem[]>([]);
+  const [items, setItems] = React.useState<ReferenceItemJson[]>([]);
   const [loadingItems, setLoadingItems] = React.useState(false);
   // A failed load is not "no items": each gets an error band and a retry.
   const [itemsError, setItemsError] = React.useState(false);
@@ -76,28 +67,26 @@ export default function ReferenceItemsPage() {
 
   // older reference items of regular types: the list, and the one open to view / delete
   const [legacy, setLegacy] = React.useState<LegacyState>({ status: "loading" });
-  const [viewing, setViewing] = React.useState<ReferenceItem | null>(null);
+  const [viewing, setViewing] = React.useState<ReferenceItemJson | null>(null);
   const [viewError, setViewError] = React.useState("");
   const [deleting, setDeleting] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   // package reference dialog: open with the reference being edited (null: new);
   // a fresh key per opening, so its state starts from that reference
-  const [pkgDialog, setPkgDialog] = React.useState<{ key: number; editing: ReferenceItem | null } | null>(null);
+  const [pkgDialog, setPkgDialog] = React.useState<{ key: number; editing: ReferenceItemJson | null } | null>(null);
   const pkgOpenings = React.useRef(0);
 
   // ---- data loading --------------------------------------------------------
   // The fetches set state only from their callbacks, so the effects below can
   // run them; the retries clear the error first.
   const fetchOptions = React.useCallback(() => {
-    apiFetch("/api/settings/item-types")
-      .then(okJson)
-      .then((data: ItemType[]) => setItemTypes(Array.isArray(data) ? data : []))
-      .catch(() => { setItemTypes([]); setOptionsError(true); });
-    apiFetch("/api/settings/reference-items/stations")
-      .then(okJson)
-      .then((data: ReferenceStations) => setStations(data && Array.isArray(data.stations) && data.byItemType ? data : null))
-      .catch(() => { setStations(null); setOptionsError(true); });
+    getArray<ItemType>("/api/settings/item-types")
+      .then(setItemTypes)
+      .catch((e) => { console.error("Reference items: item types failed", e); setItemTypes([]); setOptionsError(true); });
+    getJson<ReferenceStations>("/api/settings/reference-items/stations")
+      .then((data) => setStations(data && Array.isArray(data.stations) && data.byItemType ? data : null))
+      .catch((e) => { console.error("Reference items: stations failed", e); setStations(null); setOptionsError(true); });
   }, []);
   const loadOptions = React.useCallback(() => {
     setOptionsError(false);
@@ -107,10 +96,9 @@ export default function ReferenceItemsPage() {
   React.useEffect(() => { fetchOptions(); }, [fetchOptions]);
 
   const fetchLegacy = React.useCallback(() => {
-    apiFetch("/api/settings/reference-items")
-      .then(okJson)
-      .then((data: ReferenceItem[]) => setLegacy({ status: "ready", items: Array.isArray(data) ? data : [] }))
-      .catch(() => setLegacy({ status: "error" }));
+    getArray<ReferenceItemJson>("/api/settings/reference-items")
+      .then((items) => setLegacy({ status: "ready", items }))
+      .catch((e) => { console.error("Reference items: list failed", e); setLegacy({ status: "error" }); });
   }, []);
   const loadLegacy = React.useCallback(() => {
     setLegacy({ status: "loading" });
@@ -120,10 +108,9 @@ export default function ReferenceItemsPage() {
   React.useEffect(() => { fetchLegacy(); }, [fetchLegacy]);
 
   const fetchItems = React.useCallback((typeId: number) => {
-    apiFetch(`/api/settings/reference-items?itemTypeId=${typeId}`)
-      .then(okJson)
-      .then((data: ReferenceItem[]) => setItems(Array.isArray(data) ? data : []))
-      .catch(() => { setItems([]); setItemsError(true); })
+    getArray<ReferenceItemJson>(`/api/settings/reference-items?itemTypeId=${typeId}`)
+      .then(setItems)
+      .catch((e) => { console.error("Reference items: the type's items failed", e); setItems([]); setItemsError(true); })
       .finally(() => setLoadingItems(false));
   }, []);
   const loadItems = React.useCallback((typeId: number) => {
@@ -133,10 +120,9 @@ export default function ReferenceItemsPage() {
   }, [fetchItems]);
 
   const fetchLines = React.useCallback((typeId: number) => {
-    apiFetch(`/api/settings/item-types/${typeId}/contents`)
-      .then(okJson)
-      .then((data: { lines?: TemplateLine[] }) => setLines({ status: "ready", lines: Array.isArray(data.lines) ? data.lines : [] }))
-      .catch(() => setLines({ status: "error" }));
+    getJson<{ lines?: TemplateLine[] }>(`/api/settings/item-types/${typeId}/contents`)
+      .then((data) => setLines({ status: "ready", lines: Array.isArray(data.lines) ? data.lines : [] }))
+      .catch((e) => { console.error("Reference items: package contents failed", e); setLines({ status: "error" }); });
   }, []);
   const loadLines = React.useCallback((typeId: number) => {
     setLines({ status: "loading" });
@@ -203,34 +189,28 @@ export default function ReferenceItemsPage() {
     setSkuFilter(null);
     setManuFilter(null);
   };
-  const noun = isPackage ? "ייחוסי מארז" : "פריטים";
   const headerCount = anyFilter
     ? `${filtered.length} מתוך ${items.length}`
-    : `${items.length} ${noun}`;
+    : `${items.length} ייחוסי מארז`;
 
   // ---- dialogs -------------------------------------------------------------
-  const openPackage = (editing: ReferenceItem | null) => setPkgDialog({ key: ++pkgOpenings.current, editing });
+  const openPackage = (editing: ReferenceItemJson | null) => setPkgDialog({ key: ++pkgOpenings.current, editing });
 
   const openNew = () => openPackage(null);
 
   // A package type's reference opens for editing; an older regular one only to view.
-  const openEdit = (it: ReferenceItem) => {
+  const openEdit = (it: ReferenceItemJson) => {
     if (itemTypes.find((t) => t.item_type_id === it.item_type_id)?.is_package) { openPackage(it); return; }
     setViewError("");
     setViewing(it);
   };
 
-  // Asked through the app's ConfirmDialog (below), not window.confirm.
   const deleteViewed = async () => {
     if (!viewing) return;
     setConfirmDelete(false);
     setDeleting(true);
     try {
-      const res = await apiFetch(`/api/settings/reference-items/${viewing.reference_item_id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "שגיאה במחיקה");
-      }
+      await sendJson(`/api/settings/reference-items/${viewing.reference_item_id}`, "DELETE", undefined, "שגיאה במחיקה");
       setViewing(null);
       loadLegacy();
     } catch (e) {
@@ -250,7 +230,7 @@ export default function ReferenceItemsPage() {
 
   // The settings layout owns the frame (scroll, padding, 94% column).
   return (
-    <div dir="rtl" style={{ color: C.ink }}>
+    <div dir="rtl" style={{ color: INK }}>
       <SettingsToolbar
         title="פריטי ייחוס"
         subtitle="בחר סוג מארז, ואז סנן לפי מק״ט יצרן או יצרן. בייחוס המארז מגדירים גם את המק״ט, התמונות והמשקל של כל פריט בתכולה."
@@ -280,13 +260,13 @@ export default function ReferenceItemsPage() {
               placeholder="הקלד או בחר סוג מארז…"
             />
           </div>
-          <p style={{ margin: 0, fontSize: "var(--text-small)", color: C.muted, maxWidth: 240, lineHeight: 1.45 }}>
+          <p style={{ margin: 0, fontSize: "var(--text-small)", color: MUTED, maxWidth: 240, lineHeight: 1.45 }}>
             בחירת הסוג תציג את ייחוסי המארז שלו בלבד.
           </p>
         </div>
         {isPackage && (
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 16, padding: "12px 14px", fontSize: "var(--text-small)", background: "var(--color-primary-tint)", border: "1px solid var(--color-primary-soft)", borderRadius: "var(--r-md)" }}>
-            <Package size={18} strokeWidth={1.75} aria-hidden style={{ color: C.accent, marginTop: 1, flexShrink: 0 }} />
+            <Package size={18} strokeWidth={1.75} aria-hidden style={{ color: BLUE, marginTop: 1, flexShrink: 0 }} />
             <span>
               <span style={{ fontWeight: 600 }}>{typeName} הוא סוג מארז.</span>{" "}
               כל ייחוס שלו כולל את הקופסה עצמה ופריט ייחוס לכל פריט בתכולה
@@ -328,7 +308,7 @@ export default function ReferenceItemsPage() {
             </div>
           </div>
 
-          {isPackage && lines.status === "error" && (
+          {lines.status === "error" && (
             <div className="settings-card settings-error" style={{ marginTop: "var(--space-lg)" }}>
               <Alert severity="error">טעינת התכולה של {typeName} נכשלה. בלעדיה אי אפשר לערוך ייחוסי מארז. בדוק את החיבור לשרת ונסה שוב.</Alert>
               <Button variant="outlined" color="inherit" size="small" onClick={() => loadLines(selectedType.item_type_id)}>נסה שוב</Button>
@@ -341,7 +321,6 @@ export default function ReferenceItemsPage() {
               <Button variant="outlined" color="inherit" size="small" onClick={() => loadItems(selectedType.item_type_id)}>נסה שוב</Button>
             </div>
           ) : loadingItems ? (
-            // Skeleton cards in the grid's own shape, not a centred spinner.
             <div className="ri-grid" aria-busy="true" aria-label="טוען פריטי ייחוס">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="settings-card" aria-hidden>
@@ -357,18 +336,14 @@ export default function ReferenceItemsPage() {
           ) : filtered.length === 0 ? (
             anyFilter ? (
               <div className="settings-empty" style={{ padding: "64px 0" }}>
-                <div className="settings-empty__title">אין {isPackage ? "ייחוסי מארז" : "פריטי ייחוס"} שתואמים לסינון.</div>
-                <div>נקה את הסינון כדי לראות את כל {isPackage ? "ייחוסי המארז" : "פריטי הייחוס"} של {typeName}.</div>
+                <div className="settings-empty__title">אין ייחוסי מארז שתואמים לסינון.</div>
+                <div>נקה את הסינון כדי לראות את כל ייחוסי המארז של {typeName}.</div>
                 <Button variant="outlined" color="inherit" onClick={clearFilters}>נקה סינון</Button>
               </div>
             ) : (
               <div className="settings-empty" style={{ padding: "64px 0" }}>
-                <div className="settings-empty__title">עדיין אין {isPackage ? "ייחוסי מארז" : "פריטי ייחוס"} ל{typeName}.</div>
-                <div>
-                  {isPackage
-                    ? "צור ייחוס מארז כדי שעמדת הפתיחה תדע מה צריך להיות בקופסה ומול מה להשוות כל פריט."
-                    : "צור פריט ייחוס כדי שהבדיקות של סוג זה יושוו אליו אוטומטית."}
-                </div>
+                <div className="settings-empty__title">עדיין אין ייחוסי מארז ל{typeName}.</div>
+                <div>צור ייחוס מארז כדי שעמדת הפתיחה תדע מה צריך להיות בקופסה ומול מה להשוות כל פריט.</div>
                 {canAdd && <Button onClick={openNew} startIcon={<AddIcon fontSize={18} aria-hidden />}>{newLabel}</Button>}
               </div>
             )
@@ -390,12 +365,12 @@ export default function ReferenceItemsPage() {
               width: 64,
               height: 64,
               borderRadius: "var(--r-pill)",
-              background: C.card,
-              border: `1px solid ${C.hairline}`,
+              background: CARD,
+              border: `1px solid ${HAIR}`,
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              color: C.muted,
+              color: MUTED,
             }}
           >
             <Inventory2OutlinedIcon fontSize={30} aria-hidden />
@@ -412,11 +387,11 @@ export default function ReferenceItemsPage() {
           <Button variant="outlined" color="inherit" size="small" onClick={loadLegacy}>נסה שוב</Button>
         </div>
       ) : legacyItems.length > 0 && (
-        <section aria-labelledby="ri-legacy-title" style={{ marginTop: "var(--space-xl)", paddingTop: "var(--space-lg)", borderTop: `1px solid ${C.hairline}` }}>
-          <h2 id="ri-legacy-title" style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 600, color: C.ink }}>
-            פריטי ייחוס ישנים <span style={{ fontWeight: 400, color: C.muted, fontVariantNumeric: "tabular-nums" }}>· {legacyItems.length}</span>
+        <section aria-labelledby="ri-legacy-title" style={{ marginTop: "var(--space-xl)", paddingTop: "var(--space-lg)", borderTop: `1px solid ${HAIR}` }}>
+          <h2 id="ri-legacy-title" style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 600, color: INK }}>
+            פריטי ייחוס ישנים <span style={{ fontWeight: 400, color: MUTED, fontVariantNumeric: "tabular-nums" }}>· {legacyItems.length}</span>
           </h2>
-          <p style={{ margin: "6px 0 0", fontSize: "var(--text-small)", color: C.muted, maxWidth: 640, lineHeight: 1.5 }}>
+          <p style={{ margin: "6px 0 0", fontSize: "var(--text-small)", color: MUTED, maxWidth: 640, lineHeight: 1.5 }}>
             הוגדרו לסוג פריט רגיל, לפני שפריטי הייחוס עברו לייחוס המארז. העמדות עדיין משתמשות בהם, והם קודמים לפריט באותו מק״ט שבתוך ייחוס מארז. אפשר לצפות בהם ולמחוק אותם.
           </p>
           <div className="ri-grid">
@@ -439,7 +414,7 @@ export default function ReferenceItemsPage() {
         <DialogTitle onClose={() => setViewing(null)}>
           <span style={{ minWidth: 0 }}>
             {viewing?.name || viewing?.manufacturer_sku || "פריט ייחוס"}
-            <span style={{ display: "block", fontSize: "var(--text-small)", fontWeight: 400, color: C.muted, marginTop: 4, fontFamily: "var(--font-text)" }}>
+            <span style={{ display: "block", fontSize: "var(--text-small)", fontWeight: 400, color: MUTED, marginTop: 4, fontFamily: "var(--font-text)" }}>
               פריט ייחוס ישן · לצפייה ולמחיקה בלבד
             </span>
           </span>
@@ -456,8 +431,8 @@ export default function ReferenceItemsPage() {
                   ["משקל ייחוס", viewing.reference_weight ? `${viewing.reference_weight} גר׳` : "לא מוגדר", false],
                 ] as const).map(([label, value, code]) => (
                   <div key={label}>
-                    <dt style={{ fontSize: "var(--text-small)", color: C.muted }}>{label}</dt>
-                    <dd style={{ margin: "4px 0 0", fontSize: "var(--text-body)", color: C.ink }}>
+                    <dt style={{ fontSize: "var(--text-small)", color: MUTED }}>{label}</dt>
+                    <dd style={{ margin: "4px 0 0", fontSize: "var(--text-body)", color: INK }}>
                       {code ? <bdi dir="ltr" style={{ fontVariantNumeric: "tabular-nums" }}>{value}</bdi> : value}
                     </dd>
                   </div>
@@ -465,24 +440,24 @@ export default function ReferenceItemsPage() {
               </dl>
               {viewing.notes?.trim() && (
                 <div>
-                  <div style={{ fontSize: "var(--text-small)", color: C.muted }}>הערות</div>
+                  <div style={{ fontSize: "var(--text-small)", color: MUTED }}>הערות</div>
                   <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{viewing.notes}</div>
                 </div>
               )}
               <div>
-                <div style={{ fontSize: "var(--text-small)", color: C.muted, marginBottom: 8 }}>
+                <div style={{ fontSize: "var(--text-small)", color: MUTED, marginBottom: 8 }}>
                   תמונות ייחוס {viewing.images.length > 0 && <span style={{ fontVariantNumeric: "tabular-nums" }}>· {viewing.images.length}</span>}
                 </div>
                 {viewing.images.length === 0 ? (
-                  <div style={{ fontSize: "var(--text-small)", color: C.muted }}>אין תמונות.</div>
+                  <div style={{ fontSize: "var(--text-small)", color: MUTED }}>אין תמונות.</div>
                 ) : (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
                     {viewing.images.map((img) => (
-                      <figure key={img.id} style={{ margin: 0, border: `1px solid ${C.hairline}`, borderRadius: "var(--r-md)", overflow: "hidden", background: "var(--color-canvas-parchment)" }}>
+                      <figure key={img.id} style={{ margin: 0, border: `1px solid ${HAIR}`, borderRadius: "var(--r-md)", overflow: "hidden", background: "var(--color-canvas-parchment)" }}>
                         <a href={img.url} target="_blank" rel="noreferrer" style={{ display: "block" }} aria-label={`פתיחת ${img.file_name}`}>
                           <Image src={img.url} alt="" width={0} height={0} unoptimized style={{ width: "100%", height: 110, objectFit: "contain", display: "block" }} />
                         </a>
-                        <figcaption style={{ padding: "6px 8px", fontSize: "var(--text-fine)", color: C.muted, background: C.card }}>
+                        <figcaption style={{ padding: "6px 8px", fontSize: "var(--text-fine)", color: MUTED, background: CARD }}>
                           {img.station_type_id != null ? viewStations.nameOf(img.station_type_id) : "לא משויכת לעמדה"}
                         </figcaption>
                       </figure>
@@ -512,7 +487,6 @@ export default function ReferenceItemsPage() {
       </Dialog>
 
       <ConfirmDialog
-        draggable={false}
         open={confirmDelete}
         title="מחיקת פריט ייחוס"
         message={`למחוק את פריט הייחוס "${viewing?.name?.trim() || viewing?.manufacturer_sku.trim() || "ללא שם"}"? העמדות יחפשו את המק״ט שלו בייחוסי המארזים. פעולה זו אינה ניתנת לביטול.`}
@@ -547,7 +521,7 @@ function StepBadge({ n, label }: { n: number; label: string }) {
           width: 24,
           height: 24,
           borderRadius: "var(--r-pill)",
-          background: C.accent,
+          background: BLUE,
           color: "var(--color-on-primary)",
           display: "flex",
           alignItems: "center",
@@ -559,7 +533,7 @@ function StepBadge({ n, label }: { n: number; label: string }) {
       >
         {n}
       </span>
-      <h2 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 600, color: C.ink }}>
+      <h2 style={{ margin: 0, fontSize: "var(--text-body)", fontWeight: 600, color: INK }}>
         {label}
       </h2>
     </div>
@@ -569,13 +543,13 @@ function StepBadge({ n, label }: { n: number; label: string }) {
 /** A reference item's card. With `lines` (a package type's contents) it is a
  *  package reference's: which content lines have a reference item. `viewOnly`:
  *  an older regular one, opened to view (no edit mark). */
-function ReferenceCard({ item, lines, onEdit, viewOnly = false }: { item: ReferenceItem; lines: TemplateLine[] | null; onEdit: () => void; viewOnly?: boolean }) {
+function ReferenceCard({ item, lines, onEdit, viewOnly = false }: { item: ReferenceItemJson; lines: TemplateLine[] | null; onEdit: () => void; viewOnly?: boolean }) {
   const title = item.name || item.item_type_desc || "פריט ייחוס";
   const lineState = lines?.map((l) => ({ ...l, has: item.members.some((m) => m.item_type_id === l.item_type_id) })) ?? null;
   const missing = lineState?.filter((l) => !l.has).map((l) => l.item_type_desc) ?? [];
   return (
     // The whole card opens the item for editing: a real button (Tab, Enter /
-    // Space), hover and focus in settings.css (.ri-card).
+    // Space), hover and focus in reference-items.css (.ri-card).
     <button type="button" className="ri-card" onClick={onEdit} aria-label={`${viewOnly ? "צפייה ב" : "עריכת "}${title}`}>
       {item.cover_url ? (
         <span style={{ display: "block", position: "relative", background: "var(--color-canvas-parchment)" }}>
@@ -617,7 +591,7 @@ function ReferenceCard({ item, lines, onEdit, viewOnly = false }: { item: Refere
             justifyContent: "center",
             gap: 8,
             background: "var(--color-canvas-parchment)",
-            color: C.muted,
+            color: MUTED,
           }}
         >
           <Inventory2OutlinedIcon fontSize={40} aria-hidden />
@@ -632,26 +606,26 @@ function ReferenceCard({ item, lines, onEdit, viewOnly = false }: { item: Refere
           </span>
           {!viewOnly && <EditOutlinedIcon fontSize={16} color="var(--color-ink-muted-48)" aria-hidden />}
         </span>
-        <span style={{ fontSize: "var(--text-body)", fontWeight: 600, lineHeight: 1.25, color: C.ink }}>
+        <span style={{ fontSize: "var(--text-body)", fontWeight: 600, lineHeight: 1.25, color: INK }}>
           {title}
         </span>
-        <span style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: "var(--text-small)", color: C.muted }}>
+        <span style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: "var(--text-small)", color: MUTED }}>
           <span>
             מק״ט יצרן ·{" "}
-            <bdi dir="ltr" style={{ color: C.ink, fontVariantNumeric: "tabular-nums" }}>
+            <bdi dir="ltr" style={{ color: INK, fontVariantNumeric: "tabular-nums" }}>
               {item.manufacturer_sku}
             </bdi>
           </span>
           <span>
-            יצרן · <bdi style={{ color: C.ink }}>{item.manufacturer}</bdi>
+            יצרן · <bdi style={{ color: INK }}>{item.manufacturer}</bdi>
           </span>
         </span>
         {lineState && lineState.length > 0 && (
           <>
             <span style={{ height: 1, background: "var(--color-divider-soft)" }} />
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "var(--text-fine)", color: C.muted }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "var(--text-fine)", color: MUTED }}>
               <span>פריטי ייחוס בתכולה</span>
-              <span style={{ fontWeight: 600, color: C.ink, fontVariantNumeric: "tabular-nums" }}>{lineState.length - missing.length} מתוך {lineState.length}</span>
+              <span style={{ fontWeight: 600, color: INK, fontVariantNumeric: "tabular-nums" }}>{lineState.length - missing.length} מתוך {lineState.length}</span>
             </span>
             <span className="ri-lines">
               {lineState.map((l) => (

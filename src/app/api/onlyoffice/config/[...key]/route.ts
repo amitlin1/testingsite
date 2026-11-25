@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import { prisma } from "@/lib/db";
 import { statObject } from '@/lib/storage';
-import { signJwt } from '@/lib/onlyoffice-jwt';
+import { signJwt } from '@/lib/onlyoffice/jwt';
+import { signDownloadToken } from '@/lib/onlyoffice/tokens';
 import { hasAppSession } from '@/lib/auth/session-guard';
+import { encodeKeyPath, extOf, officeDocTypeOf } from '@/lib/file-types';
+import { ItemKeys } from '@/lib/storage/keys';
+import { errorResponse } from '@/lib/http/errors';
 
 export const runtime = 'nodejs';
 
@@ -12,7 +16,7 @@ export const runtime = 'nodejs';
  * The config tells OnlyOffice:
  *   - which file to fetch (URL into our /api/files/download route)
  *   - where to POST when the user saves (our /api/onlyoffice/callback route)
- *   - who the active user is (worker_id from the page-level picker)
+ *   - who the active user is (worker_id from the panel's worker)
  *
  * The whole config is HS256-signed with ONLYOFFICE_JWT_SECRET so OnlyOffice
  * refuses configs we didn't issue.
@@ -27,7 +31,7 @@ export const runtime = 'nodejs';
 // a container cannot connect back to it (Windows Firewall drops inbound LAN
 // traffic arriving from the docker bridge). The document would never load and
 // saves would silently fail. APP_INTERNAL_URL points at nginx over the compose
-// network instead. Falls back to APP_PUBLIC_URL when unset. See auth.ts.
+// network instead. Falls back to APP_PUBLIC_URL when unset.
 const APP_INTERNAL_URL = (
   process.env.APP_INTERNAL_URL ||
   process.env.APP_PUBLIC_URL ||
@@ -42,17 +46,6 @@ const APP_INTERNAL_URL = (
 // Route handlers read process.env at request time, so one image fits any env.
 const DOC_SERVER_URL = (process.env.ONLYOFFICE_PUBLIC_URL || '/onlyoffice').replace(/\/+$/, '');
 
-const EXT_TO_DOCTYPE: Record<string, 'word' | 'cell' | 'slide'> = {
-  docx: 'word', doc: 'word', odt: 'word', rtf: 'word', txt: 'word',
-  xlsx: 'cell', xls: 'cell', ods: 'cell', csv: 'cell',
-  pptx: 'slide', ppt: 'slide', odp: 'slide',
-};
-
-function extOf(key: string): string {
-  const dot = key.lastIndexOf('.');
-  return dot === -1 ? '' : key.slice(dot + 1).toLowerCase();
-}
-
 export async function GET(
   request: Request,
   context: { params: Promise<{ key: string[] }> },
@@ -66,14 +59,12 @@ export async function GET(
     const { key: keyParts } = await context.params;
     const objectKey = keyParts.join('/');
 
-    // Path must live under items/{id}/ — anything else is rejected.
-    const match = objectKey.match(/^items\/(\d+)\//);
-    if (!match || objectKey.includes('..')) {
+    if (ItemKeys.itemIdOf(objectKey) == null) {
       return NextResponse.json({ error: 'מפתח קובץ לא תקין' }, { status: 400 });
     }
 
     const ext = extOf(objectKey);
-    const documentType = EXT_TO_DOCTYPE[ext];
+    const documentType = officeDocTypeOf(objectKey);
     if (!documentType) {
       return NextResponse.json(
         { error: `סוג קובץ לא נתמך לעריכה ב-OnlyOffice (${ext || 'unknown'})` },
@@ -81,7 +72,6 @@ export async function GET(
       );
     }
 
-    // Make sure the object actually exists before handing OnlyOffice a URL.
     if (!(await statObject(objectKey))) {
       return NextResponse.json({ error: 'הקובץ לא נמצא' }, { status: 404 });
     }
@@ -92,12 +82,7 @@ export async function GET(
     });
     const fileName = row?.file_name ?? objectKey.split('/').pop() ?? 'file';
 
-    // The url query gives the caller a chance to identify the editing user
-    // (the worker_id picked on the testing page or in the panel).
-    const { searchParams } = new URL(request.url);
-    const workerId = searchParams.get('worker_id') || '';
-    const workerName = searchParams.get('worker_name') || `Worker ${workerId || '?'}`;
-    const mode = searchParams.get('mode') === 'view' ? 'view' : 'edit';
+    const workerId = new URL(request.url).searchParams.get('worker_id') || '';
 
     // document.key must:
     //   - change whenever the bytes change (so OnlyOffice doesn't serve cached)
@@ -107,8 +92,8 @@ export async function GET(
     const docKeyRaw = `${row?.checksum_sha256 ?? 'nochk'}_${row?.updated_at?.getTime() ?? Date.now()}`;
     const docKey = docKeyRaw.replace(/[^0-9a-zA-Z_=.-]/g, '_').slice(0, 128);
 
-    const encodedPath = objectKey.split('/').map(encodeURIComponent).join('/');
-    const dlToken = await signJwt({ key: objectKey, purpose: 'download' }, 3600);
+    const encodedPath = encodeKeyPath(objectKey);
+    const dlToken = await signDownloadToken(objectKey);
     // Both URLs are consumed by the OnlyOffice SERVER, never by the browser, so
     // both use the internal address (see APP_INTERNAL_URL above).
     const documentUrl = `${APP_INTERNAL_URL}/api/files/download/${encodedPath}?dl=${encodeURIComponent(dlToken)}`;
@@ -117,23 +102,23 @@ export async function GET(
     const config = {
       document: {
         fileType: ext,
-        key: docKey || `${objectKey}-fallback`,
+        key: docKey,
         title: fileName,
         url: documentUrl,
         permissions: {
-          edit: mode === 'edit',
+          edit: true,
           download: true,
           print: true,
         },
       },
       documentType,
       editorConfig: {
-        mode,
+        mode: 'edit',
         lang: 'he',
         callbackUrl,
         user: {
           id: workerId || 'anonymous',
-          name: workerName,
+          name: `Worker ${workerId || '?'}`,
         },
         customization: {
           forcesave: true,
@@ -150,7 +135,6 @@ export async function GET(
     // token check (it validates the signature against the config it receives).
     return NextResponse.json({ ...config, token, _docServerUrl: DOC_SERVER_URL });
   } catch (error) {
-    console.error('OnlyOffice config error:', error);
-    return NextResponse.json({ error: 'שגיאה ביצירת תצורת עורך' }, { status: 500 });
+    return errorResponse(error, 'שגיאה ביצירת תצורת עורך');
   }
 }

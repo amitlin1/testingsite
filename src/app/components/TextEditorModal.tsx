@@ -13,6 +13,9 @@ import {
   ConfirmDialog,
 } from "@/components/ui";
 import { Save as SaveIcon } from "@/components/ui/icons";
+import { getJson, sendJson } from "@/lib/api/client";
+import { encodeKeyPath } from "@/lib/file-types";
+import { failureText } from "@/app/components/failureText";
 
 type TextEditorModalProps = {
   open: boolean;
@@ -49,16 +52,7 @@ export default function TextEditorModal({
 
   const dirty = content !== original;
 
-  // URL-encode the catch-all segments; the backend joins with /.
-  const contentUrl = React.useMemo(
-    () =>
-      `/api/items/${encodeURIComponent(String(itemId))}/files/content/` +
-      objectKey
-        .split("/")
-        .map((s) => encodeURIComponent(s))
-        .join("/"),
-    [itemId, objectKey],
-  );
+  const contentUrl = `/api/items/${encodeURIComponent(String(itemId))}/files/content/${encodeKeyPath(objectKey)}`;
 
   // Opening (or another file) starts the load during render; the effect only
   // sets state from the reply.
@@ -75,21 +69,14 @@ export default function TextEditorModal({
   React.useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    fetch(contentUrl)
-      .then(async (r) => {
-        if (!r.ok) {
-          const j = await r.json().catch(() => ({}));
-          throw new Error(j.error || "שגיאה בטעינת הקובץ");
-        }
-        return r.json();
-      })
-      .then((j: { content: string }) => {
+    getJson<{ content: string }>(contentUrl)
+      .then((j) => {
         if (cancelled) return;
         setContent(j.content ?? "");
         setOriginal(j.content ?? "");
       })
-      .catch((e: Error) => {
-        if (!cancelled) setError(e.message);
+      .catch((e: unknown) => {
+        if (!cancelled) setError(failureText(e, "שגיאה בטעינת הקובץ"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -103,20 +90,12 @@ export default function TextEditorModal({
     setError(null);
     setSaving(true);
     try {
-      const r = await fetch(contentUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, worker_id: workerId }),
-      });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || "שגיאה בשמירה");
-      }
+      await sendJson(contentUrl, "PUT", { content, worker_id: workerId });
       setOriginal(content);
       onSaved?.();
       onClose();
     } catch (e) {
-      setError((e as Error).message);
+      setError(failureText(e, "שגיאה בשמירה"));
     } finally {
       setSaving(false);
     }

@@ -12,31 +12,26 @@ import {
   rowGripLabel, rowMoreLabel,
 } from "../../lib/labels";
 import { LIBRARY_TEXT } from "../../lib/libraryLabels";
-import { addOption, removeOption, renameOption, setOptionTone, withFieldHelp } from "../../lib/editorModel";
-import type { EditorPopover, OptionField } from "../../lib/editorModel";
-import { formatDecimal, parseDecimalText, withNumberSetting, withUnit } from "../../lib/numberText";
+import { withFieldHelp } from "../../lib/editorModel";
+import { addOption, removeOption, renameOption, setOptionTone } from "../../lib/optionFields";
+import type { EditorPopover } from "../../lib/editorModel";
+import type { OptionField } from "../../lib/optionFields";
+import { formatDecimal, numberSummaryText, parseDecimalText, withNumberSetting, withUnit } from "../../lib/numberText";
 import { NotesModeSelect } from "./NotesModeSelect";
 import { NoteMaxSelect } from "./NoteMaxSelect";
 import { OptionChip } from "./OptionChip";
-import { NumberFieldSettings, numberSummaryText } from "./NumberFieldSettings";
+import { NumberFieldSettings } from "./NumberFieldSettings";
 import { OPTION_LIST_POPOVER_ID, OptionListPopover } from "./OptionListPopover";
 import { ChecklistItemsEditor } from "./ChecklistItemsEditor";
 import { PhotoFieldSettings } from "./PhotoFieldSettings";
+import { rowIds } from "./useFieldListEditor";
 
 /**
- * One row of the fields table (artboard 2, spec §5.5.2): a section header, or a field —
- *   grip (28×38, GripVertical; HTML5 drag and Alt+↑/↓) | name (.stp-input 38px; a Hash / ToggleLeft
- *   tile for number / pass-fail; the new-row placeholder; "יש להזין שם לשדה" once the row is no longer
- *   new — spec §5.15) | options by type | notes (NotesModeSelect + NoteMaxSelect) | "חובה" | ⋯.
- * Options by type: choice_row / multi_choice — the option chips, "רשימה: …" (artboard 4) and
- *   "+ אפשרות"; number — artboard 2's "יחידה" / "מקס׳" and the summary button that expands
- *   NumberFieldSettings in place (artboard 3); pass_fail — the two framed chips; checklist — its
- *   boxes (ChecklistItemsEditor); photo — its photo type and minimum (PhotoFieldSettings); those two
- *   and every other type — the help text and the type's name in the picker. No artboard draws the
- *   settings of the other types (spec §5.5.2 "לא אומת"): the checklist's and the photo's are the
- *   minimum a publish needs (the lint blocks an empty checklist, an unnamed box, a photo without a
- *   type). A field new in the draft carries "חדש בטיוטה".
- * The popovers of the row share the editor's one-at-a-time state (EditorPopover).
+ * One row of the fields table (artboard 2, spec §5.5.2): a section header, or a field with its
+ * options by type. No artboard draws the settings of the checklist, photo, text and scan types (spec
+ * §5.5.2 "לא אומת"): the checklist's and the photo's are the minimum a publish needs (the lint blocks
+ * an empty checklist, an unnamed box, a photo without a type); the others take the help text.
+ * The popovers of the row share the list's one-at-a-time state (EditorPopover).
  */
 
 export type RowDnd = {
@@ -44,10 +39,10 @@ export type RowDnd = {
   drop: "before" | "after" | null;
   onDragStart: (e: React.DragEvent<HTMLButtonElement>) => void;
   onDragEnd: () => void;
-  onDragEnter: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnter: (e: React.DragEvent<HTMLElement>) => void;
+  onDragOver: (e: React.DragEvent<HTMLElement>) => void;
+  onDragLeave: (e: React.DragEvent<HTMLElement>) => void;
+  onDrop: (e: React.DragEvent<HTMLElement>) => void;
 };
 
 export type FieldRowEditorProps = {
@@ -81,18 +76,6 @@ export type FieldRowEditorProps = {
    *  instead of the options popover. */
   onOpenList?: (ref: VersionRef) => void;
 };
-
-/** DOM ids of a row's controls — the table focuses them after a move, an add, "עבור לשדה". */
-export const rowIds = (fieldId: string) => ({
-  name: "sfe-nm-" + fieldId,
-  grip: "sfe-grip-" + fieldId,
-  error: "sfe-err-" + fieldId,
-  numberSettings: "sfe-num-" + fieldId,
-  numberToggle: "sfe-numsum-" + fieldId,
-  unit: "sfe-unit-" + fieldId,
-  max: "sfe-max-" + fieldId,
-  photoMin: "sfe-photomin-" + fieldId,
-});
 
 const isMoveKey = (e: React.KeyboardEvent) => e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown");
 
@@ -180,7 +163,7 @@ export function FieldRowEditor(props: FieldRowEditorProps) {
           {grip}
           <div className="sfe-section__main">
             <Heading size={16} strokeWidth={1.75} className="sfe-section__icon" aria-hidden />
-            <label htmlFor={ids.name} className="sfe-sr">{EDITOR_TEXT.sectionLabel}</label>
+            <label htmlFor={ids.name} className="sh-visually-hidden">{EDITOR_TEXT.sectionLabel}</label>
             <input
               id={ids.name}
               className="sfe-section__input"
@@ -268,7 +251,7 @@ function NameCell({ field, fresh, issues, onChange, onMove, onNameBlur, onNameEn
     : null;
   return (
     <div className="sfe-name">
-      <label htmlFor={ids.name} className="sfe-sr">{EDITOR_TEXT.nameLabel}</label>
+      <label htmlFor={ids.name} className="sh-visually-hidden">{EDITOR_TEXT.nameLabel}</label>
       <div className="sfe-name__box">
         {tile && (
           <span className="sfe-name__tile" title={tile.title}>
@@ -278,10 +261,10 @@ function NameCell({ field, fresh, issues, onChange, onMove, onNameBlur, onNameEn
         <input
           id={ids.name}
           className={cn(
-            "stp-input sfe-name__input",
+            "set-input sfe-name__input",
             tile && "sfe-name__input--tiled",
             fresh && field.label === "" && "sfe-name__input--fresh",
-            missing && "stp-input--error",
+            missing && "set-input--error",
           )}
           value={field.label}
           maxLength={LIMITS.fieldLabel}
@@ -325,7 +308,7 @@ function DraftNew({ show }: { show: boolean }) {
 function HelpInput({ field, onChange }: FieldRowEditorProps & { field: InputField }) {
   return (
     <input
-      className="stp-input"
+      className="set-input"
       aria-label={NUMBER_SETTINGS_TEXT.help}
       placeholder={NUMBER_SETTINGS_TEXT.helpPlaceholder}
       value={field.help ?? ""}
@@ -559,5 +542,3 @@ function DecimalInput({ id, className, value, onValue }: { id: string; className
     />
   );
 }
-
-export default FieldRowEditor;

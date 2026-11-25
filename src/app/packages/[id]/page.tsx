@@ -2,94 +2,51 @@
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import type { PackageView, PackageTimelineEntry } from "@/app/lib/packages/read";
-import { apiFetch } from "@/lib/api/client";
+import { waitsForItems, type PackageItemView } from "@/app/lib/packages/contract";
+import { ApiError } from "@/lib/api/client";
+import { useInvalidatePackages, useMarkPackagesStale, usePackagePage, type PackageTimeline } from "@/app/components/packages/data";
+import { PACKAGES_HREF, itemHistoryHref } from "@/app/lib/links";
 import { Alert, Skeleton } from "@/components/ui";
-import PackageIdText, { MiniItems, StatusPill } from "@/app/components/packages/PackageIdText";
+import IdText from "@/app/components/IdText";
+import { DotPill, MiniItems } from "@/components/ui/ArtboardControls";
 import PackageDeleteDialog from "@/app/components/packages/PackageDeleteDialog";
 import PackageEditDialog from "@/app/components/packages/PackageEditDialog";
 import PackageLabelsDialog from "@/app/components/packages/PackageLabelsDialog";
 import ItemFilesPanel from "@/app/components/ItemFilesPanel";
-import {
-  AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, ITEM_STATES, MUTED, PKG_STATUS,
-  fmtDate, fmtDateTime, seq2,
-} from "@/app/components/packages/packageUi";
-import "../packages.css";
+import { ITEM_STATES, PKG_STATUS, fmtDate, fmtDateTime } from "@/app/components/packages/packageUi";
+import { AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, MUTED } from "@/components/ui/colors";
+import { seq2 } from "@/app/lib/packages/ids";
+import "@/components/ui/controls.css";
 
 /** עמוד מארז — design/Packages.dc.html (isPage). */
-type Timeline = (PackageTimelineEntry & { worker_name: string | null })[];
-
 const card: React.CSSProperties = { background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 16 };
-
-type PackageRead =
-  | { kind: "notFound" }
-  | { kind: "error" }
-  | { kind: "ok"; pkg: PackageView | null; timeline: Timeline };
-
-/** The package and its timeline; any failure but a 404 is an error. */
-async function readPackage(id: string): Promise<PackageRead> {
-  try {
-    const res = await apiFetch(`/api/packages/${id}`);
-    if (res.status === 404) return { kind: "notFound" };
-    if (!res.ok) return { kind: "error" };
-    const data = await res.json();
-    return { kind: "ok", pkg: data.package ?? null, timeline: Array.isArray(data.timeline) ? data.timeline : [] };
-  } catch {
-    return { kind: "error" };
-  }
-}
 
 export default function PackagePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [pkg, setPkg] = React.useState<PackageView | null>(null);
-  const [timeline, setTimeline] = React.useState<Timeline>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [notFound, setNotFound] = React.useState(false);
-  // Any failure but a 404 is an error with a retry — not "the package doesn't exist".
-  const [loadError, setLoadError] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [labelsOpen, setLabelsOpen] = React.useState(false);
 
   const id = params?.id;
-
-  const applyPackage = React.useCallback((read: PackageRead) => {
-    if (read.kind === "notFound") { setNotFound(true); setPkg(null); }
-    else if (read.kind === "error") setLoadError(true);
-    else {
-      setPkg(read.pkg);
-      setTimeline(read.timeline);
-    }
-    setLoading(false);
-  }, []);
-
-  const load = React.useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setLoadError(false);
-    applyPackage(await readPackage(id));
-  }, [id, applyPackage]);
-
-  // Another package starts its load during render; the effect only reads, and
-  // applies the reply. (`loading` starts true for the first one.)
-  const [loadingId, setLoadingId] = React.useState(id);
-  if (loadingId !== id) {
-    setLoadingId(id);
-    if (id) { setLoading(true); setLoadError(false); }
-  }
-  React.useEffect(() => {
-    if (id) readPackage(id).then(applyPackage);
-  }, [id, applyPackage]);
+  const page = usePackagePage(id);
+  const invalidate = useInvalidatePackages();
+  const markStale = useMarkPackagesStale();
+  const notFound = page.error instanceof ApiError && page.error.status === 404;
+  // Any failure but a 404 is an error with a retry — not "the package doesn't exist".
+  const loadError = page.isError && !notFound && !page.isFetching;
+  const pkg = notFound ? null : (page.data?.pkg ?? null);
+  const timeline = page.data?.timeline ?? [];
+  const load = () => { void page.refetch(); };
+  const loading = page.isPending || page.isFetching;
 
   const back = (
-    <button type="button" onClick={() => router.push("/packages")} className="pkg-link" style={{ fontSize: 13.5 }}>
+    <button type="button" onClick={() => router.push(PACKAGES_HREF)} className="pkg-link" style={{ fontSize: 13.5 }}>
       <ChevronRight size={15} strokeWidth={2} aria-hidden />חזרה למארזים
     </button>
   );
   const retry = <button type="button" onClick={load} className="pkg-pill pkg-pill--ghost pkg-pill--sm">נסה שוב</button>;
 
-  // First load: the page's own shape (header card, items table, timeline).
   if (loading && !pkg && !notFound) {
     return (
       <div dir="rtl" aria-busy="true" style={{ height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
@@ -123,26 +80,26 @@ export default function PackagePage() {
         ) : (
           <div style={{ fontSize: 16, fontWeight: 600 }}>המארז לא נמצא.</div>
         )}
-        <button type="button" onClick={() => router.push("/packages")} className="pkg-pill pkg-pill--ghost" style={{ marginTop: 14 }}>חזרה למארזים</button>
+        <button type="button" onClick={() => router.push(PACKAGES_HREF)} className="pkg-pill pkg-pill--ghost" style={{ marginTop: 14 }}>חזרה למארזים</button>
       </div>
     );
   }
 
   const st = PKG_STATUS[pkg.status];
-  const blocked = pkg.status === "waitItems" && pkg.blocked_by.length > 0;
+  const blocked = waitsForItems(pkg);
   // A box waiting for intake has its label but no route yet: nothing waits at a station.
   const pending = pkg.status === "pending";
   const milestones = [
     { label: "נפתח", note: pkg.opened_at ? fmtDateTime(pkg.opened_at) : pending ? "ממתין לקליטה — יש לסרוק את המדבקה בקליטת מארזים" : "ממתין בעמדת הפתיחה", bar: pkg.opened_at ? GREEN : HAIR_2, tone: pkg.opened_at ? INK : MUTED },
     { label: "נסגר", note: pkg.closed_at ? fmtDateTime(pkg.closed_at) : blocked ? "ממתין לפריטי המארז" : "טרם נסגר", bar: pkg.closed_at ? GREEN : blocked ? AMBER : HAIR_2, tone: pkg.closed_at ? INK : MUTED },
   ];
-  const progress = (it: PackageView["items"][number]) => {
+  const progress = (it: PackageItemView) => {
     const steps = it.route_length || 0;
     const step = it.state === "done" ? steps : it.state === "new" ? 0 : Math.min(steps, it.current_route_step ?? 0);
     return { pct: steps > 0 ? Math.round((step / steps) * 100) : 0, text: `${step}/${steps}` };
   };
-  const dotOf = (t: Timeline[number]) => (t.state === "done" ? GREEN : t.state === "pending" || t.state === "queued" || t.state === "blocked" ? (t.state === "blocked" || t.state === "queued" ? AMBER : BLUE) : GREY);
-  const openItem = (id: string) => router.push(`/items/${id}/history`);
+  const dotOf = (t: PackageTimeline[number]) => (t.state === "done" ? GREEN : t.state === "pending" || t.state === "queued" || t.state === "blocked" ? (t.state === "blocked" || t.state === "queued" ? AMBER : BLUE) : GREY);
+  const openItem = (id: string) => router.push(itemHistoryHref(id));
 
   // The page scrolls its own wrapper, inside the fixed frame (same principle
   // as /packages), never the shell's content box.
@@ -160,7 +117,7 @@ export default function PackagePage() {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, color: MUTED, fontWeight: 600 }}>{pkg.item_type_desc}</div>
             {/* The id is the page's heading (the artboard's h1). */}
-            <h1 style={{ margin: "6px 0 0", fontSize: "inherit", fontWeight: "inherit" }}><PackageIdText id={pkg.item_id} size={30} headColor={INK} weight={700} letterSpacing="-0.4px" /></h1>
+            <h1 style={{ margin: "6px 0 0", fontSize: "inherit", fontWeight: "inherit" }}><IdText id={pkg.item_id} size={30} headColor={INK} weight={700} letterSpacing="-0.4px" /></h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap", fontSize: 13.5, color: INK_2 }}>
               <span>{pkg.customer_name ?? pkg.customer_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
               <span>משלוח {pkg.shipment_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
@@ -169,7 +126,7 @@ export default function PackagePage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <StatusPill label={st.label} dot={st.dot} size={13} />
+            <DotPill label={st.label} dot={st.dot} size={13} />
             <button type="button" onClick={() => setLabelsOpen(true)} className="pkg-pill pkg-pill--ghost pkg-pill--sm" style={{ paddingInline: 16 }}>מדבקות</button>
             <button type="button" onClick={() => setEditOpen(true)} className="pkg-pill pkg-pill--primary pkg-pill--sm" style={{ paddingInline: 18 }}>עריכת מארז</button>
           </div>
@@ -228,11 +185,11 @@ export default function PackagePage() {
                       onClick={() => openItem(it.item_id)}
                       onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openItem(it.item_id); } }}
                       style={{ borderTop: `1px solid ${HAIR_2}` }}>
-                      <td style={{ padding: "12px 20px", whiteSpace: "nowrap" }}><PackageIdText id={it.item_id} size={13} /></td>
+                      <td style={{ padding: "12px 20px", whiteSpace: "nowrap" }}><IdText id={it.item_id} size={13} /></td>
                       <td style={{ padding: 12, fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>{it.item_type_desc}</td>
                       <td style={{ padding: 12, fontSize: 14, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{it.serial_no ?? "—"}</td>
                       <td style={{ padding: 12, fontSize: 14, color: INK_2, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{it.makat ?? "—"}</td>
-                      <td style={{ padding: 12, whiteSpace: "nowrap" }}><StatusPill label={it.state_label} dot={color} /></td>
+                      <td style={{ padding: 12, whiteSpace: "nowrap" }}><DotPill label={it.state_label} dot={color} /></td>
                       <td style={{ padding: 12 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                           <div style={{ flex: 1, height: 5, borderRadius: 9999, background: HAIR_2, overflow: "hidden", minWidth: 70 }}><div style={{ height: "100%", width: `${pr.pct}%`, background: color, borderRadius: 9999 }} /></div>
@@ -276,16 +233,13 @@ export default function PackagePage() {
         </div>
       </div>
 
-      <PackageEditDialog open={editOpen} pkg={pkg} onClose={() => setEditOpen(false)} onChanged={load} onDeleteRequest={() => { setEditOpen(false); setDeleteOpen(true); }} />
-      <PackageDeleteDialog open={deleteOpen} pkg={pkg} onClose={() => setDeleteOpen(false)} onDeleted={() => router.push("/packages")} />
+      <PackageEditDialog open={editOpen} pkg={pkg} onClose={() => setEditOpen(false)} onChanged={invalidate} onDeleteRequest={() => { setEditOpen(false); setDeleteOpen(true); }} />
+      <PackageDeleteDialog open={deleteOpen} pkg={pkg} onClose={() => setDeleteOpen(false)} onDeleted={() => { markStale(); router.push(PACKAGES_HREF); }} />
       {labelsOpen && (
         <PackageLabelsDialog
           open
           onClose={() => setLabelsOpen(false)}
-          packageId={pkg.item_id}
-          packageType={pkg.item_type_desc}
-          customerLine={`${pkg.customer_name ?? pkg.customer_code ?? ""} · משלוח ${pkg.shipment_code ?? ""}`}
-          items={pkg.items.map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, serial_no: it.serial_no }))}
+          pkg={pkg}
         />
       )}
     </div>

@@ -10,7 +10,7 @@
  * Fields come from the route's draft when there is one (the admin is about to
  * publish it), else its latest published version.
  */
-import type { TransactionClient } from "@/app/lib/prisma";
+import type { TransactionClient } from "@/lib/db";
 import { parseRouteFieldsConfig, ShapeError } from "@/app/lib/station-fields/validate";
 import type { RouteFieldsConfig } from "@/app/lib/station-fields/schema";
 import { buildCatalog } from "./variables";
@@ -29,25 +29,28 @@ type RouteRow = {
   fields_version: number;
 };
 
-function parse(raw: unknown): RouteFieldsConfig | null {
+/** A saved route fields config, or null when there is none or it no longer parses (logged — the
+ *  report then prints those steps without their fields, in their saved order). */
+export function parseFieldsConfigOrNull(raw: unknown, where: string): RouteFieldsConfig | null {
   if (raw == null) return null;
   try {
     return parseRouteFieldsConfig(raw);
   } catch (e) {
-    if (e instanceof ShapeError) return null; // an unreadable config → the steps without fields
-    throw e;
+    if (!(e instanceof ShapeError)) throw e;
+    console.warn(`[item-report] the fields config of ${where} does not parse — its steps print without it`, e.message);
+    return null;
   }
 }
 
 async function configOf(db: Db, r: RouteRow): Promise<RouteFieldsConfig | null> {
-  const draft = parse(r.fields_draft);
+  const draft = parseFieldsConfigOrNull(r.fields_draft, `route ${r.test_route_id} (draft)`);
   if (draft) return draft;
   if (r.fields_version < 1) return null;
   const v = await db.route_field_versions.findUnique({
     where: { test_route_id_version: { test_route_id: r.test_route_id, version: r.fields_version } },
     select: { config: true },
   });
-  return v ? parse(v.config) : null;
+  return v ? parseFieldsConfigOrNull(v.config, `route ${r.test_route_id} v${r.fields_version}`) : null;
 }
 
 const ROUTE_SELECT = {
@@ -55,7 +58,7 @@ const ROUTE_SELECT = {
   step_uids: true, fields_draft: true, fields_version: true,
 } as const;
 
-export async function loadStationTypes(db: Db): Promise<CatalogStationTypes> {
+async function loadStationTypes(db: Db): Promise<CatalogStationTypes> {
   const rows = await db.test_stations_type.findMany({
     select: { test_station_type_id: true, test_type_desc: true, package_level: true },
   });

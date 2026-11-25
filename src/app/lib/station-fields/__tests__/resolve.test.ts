@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { kitItemGroups, resolveStationFields, stepUidAt } from "../resolve";
+import { kitItemGroups, resolveStationFields } from "../resolve";
+import { stepUidAt } from "../schema";
 import type { ResolveInput } from "../resolve";
 import { parseRouteFieldsConfig } from "../validate";
 import type { ChoiceOption, Field, RouteFieldsConfig, Tone } from "../schema";
@@ -66,11 +67,11 @@ const KIT_ITEMS = [
 
 const itemInput = (over: Partial<ResolveInput> = {}): ResolveInput => ({
   route: ITEM_ROUTE, fields_version: 3, current_route_step: 2, current_status: 1, stationIsResearch: false,
-  stepIsPackageLevel: false, rowIsPackage: false, config: ITEM_CONFIG, kitItems: [], gate: true, ...over,
+  stepIsPackageLevel: false, rowIsPackage: false, config: ITEM_CONFIG, kitItems: [], ...over,
 });
 const kitInput = (over: Partial<ResolveInput> = {}): ResolveInput => ({
   route: KIT_ROUTE, fields_version: 5, current_route_step: 1, current_status: 1, stationIsResearch: false,
-  stepIsPackageLevel: true, rowIsPackage: true, config: KIT_CONFIG, kitItems: KIT_ITEMS, gate: true, ...over,
+  stepIsPackageLevel: true, rowIsPackage: true, config: KIT_CONFIG, kitItems: KIT_ITEMS, ...over,
 });
 const LEGACY = { mode: "legacy" };
 
@@ -87,8 +88,6 @@ test("item: a per-item step with a published config", () => {
     fields: [sectionHead, led, gnd],
     gate: true,
   });
-  const ungated = resolveStationFields(itemInput({ gate: false }));
-  assert.deepEqual([ungated.mode, ungated.mode === "item" ? ungated.gate : null], ["item", false]);
   // Kit items are irrelevant to an item row.
   assert.deepEqual(resolveStationFields(itemInput({ kitItems: KIT_ITEMS })), resolveStationFields(itemInput()));
 });

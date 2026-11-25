@@ -1,12 +1,14 @@
 "use client";
 
-import { apiFetch } from "./client";
+import { ApiError, apiFetch, getJson } from "./client";
+import { mapWithConcurrency } from "@/lib/async";
 import type {
   ConfirmResponse,
   PresignResponse,
   UploadDescriptor,
   UploadTicket,
 } from "@/lib/directUpload/shared";
+import type { ItemFile } from "@/lib/storage/contract";
 
 /**
  * Browser side of direct-to-MinIO uploads.
@@ -36,7 +38,7 @@ export class DirectUploadError extends Error {
 
 export type ProgressFn = (loaded: number, total: number) => void;
 
-export function describeFiles(files: File[]): UploadDescriptor[] {
+function describeFiles(files: File[]): UploadDescriptor[] {
   return files.map((f) => ({ name: f.name, type: f.type || null, size: f.size }));
 }
 
@@ -76,7 +78,7 @@ function storageErrorMessage(xhr: XMLHttpRequest): string {
  * POST one file to MinIO with its ticket. S3 POST rules: every field from the
  * ticket goes in verbatim and the file itself must be the LAST field.
  */
-export function postToStorage(ticket: UploadTicket, file: File, onProgress?: ProgressFn): Promise<void> {
+function postToStorage(ticket: UploadTicket, file: File, onProgress?: ProgressFn): Promise<void> {
   return new Promise((resolve, reject) => {
     const form = new FormData();
     for (const [key, value] of Object.entries(ticket.fields)) form.append(key, value);
@@ -101,30 +103,28 @@ export function postToStorage(ticket: UploadTicket, file: File, onProgress?: Pro
   });
 }
 
-/** Run `fn` over `items`, at most `limit` at a time, preserving order in the result. */
-export async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    for (;;) {
-      const i = next++;
-      if (i >= items.length) return;
-      results[i] = await fn(items[i], i);
-    }
-  };
-  const workers = Math.max(1, Math.min(limit, items.length));
-  await Promise.all(Array.from({ length: workers }, worker));
-  return results;
+/** Steps 2 and 3 of one file: POST it to MinIO with its ticket, then confirm its key at
+ *  `confirmUrl` (`body` + the upload). A key the confirm did not accept throws its reason. */
+async function storeAndConfirm(
+  ticket: UploadTicket,
+  file: File,
+  confirm: { url: string; body: Record<string, unknown>; fallback: string },
+  onProgress?: ProgressFn,
+): Promise<void> {
+  await postToStorage(ticket, file, onProgress);
+  const answer = await postJson<ConfirmResponse>(
+    confirm.url,
+    { ...confirm.body, uploads: [{ objectKey: ticket.objectKey, fileName: file.name }] },
+    "confirm",
+    confirm.fallback,
+  );
+  if (!answer.confirmed.some((c) => c.objectKey === ticket.objectKey)) {
+    throw new DirectUploadError(answer.failed[0]?.error ?? confirm.fallback, "confirm");
+  }
 }
 
 /** A few uploads in flight at once: enough to overlap, not enough to flood a Wi-Fi link. */
 const DEFAULT_CONCURRENCY = 3;
-
-// ---- item attachments -----------------------------------------------------
 
 export interface ItemUploadOptions {
   workerId?: string | number | null;
@@ -145,6 +145,28 @@ export interface ItemUploadResult {
 
 const itemFilesBase = (itemId: number | string) =>
   `/api/items/${encodeURIComponent(String(itemId))}/files`;
+
+/**
+ * The item's active attachments, newest first. `stationTypeId` scopes them to
+ * one station (its own files plus the global ones), `photoType` to one capture
+ * group; without either, every file. Throws ApiError with the server's message.
+ */
+export async function listItemFiles(
+  itemId: number | string,
+  scope: { stationTypeId?: number | null; photoType?: string | null } = {},
+): Promise<ItemFile[]> {
+  const qs = new URLSearchParams();
+  if (scope.stationTypeId != null) qs.set("stationTypeId", String(scope.stationTypeId));
+  if (scope.photoType) qs.set("photoType", scope.photoType);
+  const query = qs.toString();
+  const url = query ? `${itemFilesBase(itemId)}?${query}` : itemFilesBase(itemId);
+  try {
+    return (await getJson<{ files?: ItemFile[] }>(url)).files ?? [];
+  } catch (e) {
+    if (e instanceof ApiError && !e.body.error) throw new ApiError(e.status, "שגיאה בטעינת קבצים", e.body);
+    throw e;
+  }
+}
 
 /**
  * Upload attachments to an item. Presign is one call for the whole batch; each
@@ -177,23 +199,12 @@ export async function uploadItemFiles(
     const ticket = presign.uploads[i];
     if (!ticket) return { fileName: file.name, objectKey: null, error: "לא התקבל אישור העלאה" };
     try {
-      await postToStorage(ticket, file, (loaded, total) => opts.onProgress?.(i, loaded, total));
-      const confirm = await postJson<ConfirmResponse>(
-        `${base}/confirm`,
-        {
-          uploads: [{ objectKey: ticket.objectKey, fileName: file.name }],
-          worker_id: opts.workerId ?? null,
-        },
-        "confirm",
-        "אימות ההעלאה נכשל",
+      await storeAndConfirm(
+        ticket,
+        file,
+        { url: `${base}/confirm`, body: { worker_id: opts.workerId ?? null }, fallback: "אימות ההעלאה נכשל" },
+        (loaded, total) => opts.onProgress?.(i, loaded, total),
       );
-      if (!confirm.confirmed.some((c) => c.objectKey === ticket.objectKey)) {
-        return {
-          fileName: file.name,
-          objectKey: null,
-          error: confirm.failed[0]?.error ?? "אימות ההעלאה נכשל",
-        };
-      }
       return { fileName: file.name, objectKey: ticket.objectKey, error: null };
     } catch (e) {
       return {
@@ -222,22 +233,12 @@ export async function replaceItemFile(
   );
   const ticket = presign.uploads[0];
   if (!ticket) throw new DirectUploadError("לא התקבל אישור העלאה", "presign");
-
-  await postToStorage(ticket, file, onProgress);
-
-  const confirm = await postJson<ConfirmResponse>(
-    `${base}/confirm`,
-    {
-      uploads: [{ objectKey: ticket.objectKey, fileName: file.name }],
-      worker_id: workerId ?? null,
-      replaced: true,
-    },
-    "confirm",
-    "אימות ההחלפה נכשל",
+  await storeAndConfirm(
+    ticket,
+    file,
+    { url: `${base}/confirm`, body: { worker_id: workerId ?? null, replaced: true }, fallback: "אימות ההחלפה נכשל" },
+    onProgress,
   );
-  if (!confirm.confirmed.some((c) => c.objectKey === ticket.objectKey)) {
-    throw new DirectUploadError(confirm.failed[0]?.error ?? "אימות ההחלפה נכשל", "confirm");
-  }
 }
 
 /**
@@ -260,8 +261,6 @@ export async function deleteItemFile(
   }
 }
 
-// ---- file manager -----------------------------------------------------------
-
 /** Upload one file into a file-manager folder ('' = root). Throws on any failure. */
 export async function uploadFileManagerFile(
   folderPath: string,
@@ -276,21 +275,13 @@ export async function uploadFileManagerFile(
   );
   const ticket = presign.uploads[0];
   if (!ticket) throw new DirectUploadError("לא התקבל אישור העלאה", "presign");
-
-  await postToStorage(ticket, file, onProgress);
-
-  const confirm = await postJson<ConfirmResponse>(
-    "/api/files/upload/confirm",
-    { path: folderPath, uploads: [{ objectKey: ticket.objectKey, fileName: file.name }] },
-    "confirm",
-    "אימות ההעלאה נכשל",
+  await storeAndConfirm(
+    ticket,
+    file,
+    { url: "/api/files/upload/confirm", body: { path: folderPath }, fallback: "אימות ההעלאה נכשל" },
+    onProgress,
   );
-  if (!confirm.confirmed.some((c) => c.objectKey === ticket.objectKey)) {
-    throw new DirectUploadError(confirm.failed[0]?.error ?? "אימות ההעלאה נכשל", "confirm");
-  }
 }
-
-// ---- reference-item images -----------------------------------------------------
 
 export interface ReferenceImageInput {
   file: File;

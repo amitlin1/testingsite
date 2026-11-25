@@ -22,7 +22,7 @@ async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) throw new Error("set DATABASE_URL");
   const apply = process.argv.includes("--apply");
   // After DATABASE_URL is known: the Prisma client reads it when its module loads.
-  const { prisma } = await import("../src/app/lib/prisma");
+  const { prisma } = await import("../src/lib/db");
   const store = await import("../src/app/lib/popup-templates/store");
   try {
     for (const [id, popup] of Object.entries(CODE_POPUPS)) {

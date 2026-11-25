@@ -1,10 +1,10 @@
 /**
- * Shared look for every printed document TESTINGSITE produces (תעודות, דוחות).
+ * The look of the shipment documents (תעודות) — not of the item reports, which
+ * print with lib/item-report/pdf-styles.
  * Colors are taken from the unit emblems (public/report-logos). Fonts are the
  * locally-bundled Rubik — the system is air-gapped, never load a web font here.
  * Design reference: docs/REPORT_TEMPLATE.md.
  */
-import { DISPLAY_TIMEZONE } from "@/app/lib/datetime";
 
 export const REPORT_COLORS = {
     navy: "#1B2F6B",      // titles, table header, section marks
@@ -18,11 +18,6 @@ export const REPORT_COLORS = {
     border: "#C9D0DE",    // frames
     rowLine: "#DDE2EC",   // table row separators
     zebra: "#F6F8FB",     // odd table rows
-    passBg: "#E4ECF8",
-    passFg: "#1B3F7A",
-    failBg: "#FBE6E4",
-    failFg: "#A1231D",
-    neutralBg: "#EEF0F3",
 } as const;
 
 export const REPORT_FONT = `var(--font-rubik), "Rubik", "Arial", sans-serif`;
@@ -39,22 +34,3 @@ export const REPORT_ORG_NAME = "";
 
 /** Classification marking printed top and bottom. Empty string hides it. */
 export const REPORT_CLASSIFICATION = "";
-
-export type ReportStatus = "pass" | "fail" | "pending" | "none";
-
-export const STATUS_STYLE: Record<ReportStatus, { bg: string; fg: string }> = {
-    pass: { bg: REPORT_COLORS.passBg, fg: REPORT_COLORS.passFg },
-    fail: { bg: REPORT_COLORS.failBg, fg: REPORT_COLORS.failFg },
-    pending: { bg: REPORT_COLORS.neutralBg, fg: REPORT_COLORS.muted },
-    none: { bg: "transparent", fg: "#8A93A8" },
-};
-
-export function formatReportDate(d: Date | string | null | undefined, withTime = false): string {
-    if (!d) return "—";
-    const date = typeof d === "string" ? new Date(d) : d;
-    if (Number.isNaN(date.getTime())) return "—";
-    const day = date.toLocaleDateString("he-IL", { timeZone: DISPLAY_TIMEZONE, day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, ".");
-    if (!withTime) return day;
-    const time = date.toLocaleTimeString("he-IL", { timeZone: DISPLAY_TIMEZONE, hour: "2-digit", minute: "2-digit" });
-    return `${day} · ${time}`;
-}

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";
 // Never cached — a cached 200 would keep reporting healthy after the app died.
 export const dynamic = "force-dynamic";
 

@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
 import { registerFileObject } from '@/lib/file-registry';
-import {
-  MAX_UPLOAD_BATCH,
-  buildFileManagerKey,
-  isValidFileManagerName,
-  normalizeFolderPath,
-  type ConfirmResponse,
-} from '@/lib/directUpload/shared';
-import { MAX_FILE_SIZE, parseConfirmEntries, readJson, verifyUploaded } from '@/lib/directUpload/server';
+import { MAX_UPLOAD_BATCH } from '@/lib/directUpload/shared';
+import { MAX_FILE_SIZE, confirmUploads, parseConfirmEntries } from '@/lib/directUpload/server';
+import { readJsonObject } from '@/lib/http/request';
+import { FileManagerKeys } from '@/lib/storage/keys';
+import { errorResponse } from '@/lib/http/errors';
 
 export const runtime = 'nodejs';
 
@@ -21,15 +18,10 @@ export const runtime = 'nodejs';
  * within the size cap. Registered as entity_type='file_manager'.
  */
 
-type ConfirmBody = { path?: unknown; uploads?: unknown };
-
 export async function POST(request: Request) {
   try {
-    const body = await readJson<ConfirmBody>(request);
-    if (!body) {
-      return NextResponse.json({ error: 'גוף הבקשה אינו JSON תקין' }, { status: 400 });
-    }
-    const folder = normalizeFolderPath(body.path);
+    const body = await readJsonObject(request, 'גוף הבקשה אינו JSON תקין');
+    const folder = FileManagerKeys.normalizeFolder(body.path);
     if (!folder.ok) {
       return NextResponse.json({ error: folder.error }, { status: 400 });
     }
@@ -38,42 +30,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
-    const result: ConfirmResponse = { confirmed: [], failed: [] };
-    let firstFailureStatus: number | null = null;
-
-    for (const { objectKey, fileName } of parsed.entries) {
-      if (!isValidFileManagerName(fileName) || objectKey !== buildFileManagerKey(folder.path, fileName)) {
-        result.failed.push({ objectKey, error: 'מפתח קובץ לא תקין' });
-        firstFailureStatus ??= 400;
-        continue;
-      }
-      const verified = await verifyUploaded(objectKey, MAX_FILE_SIZE);
-      if (!verified.ok) {
-        result.failed.push({ objectKey, error: verified.error });
-        firstFailureStatus ??= verified.status;
-        continue;
-      }
-
-      await registerFileObject({
-        objectKey,
-        fileName,
-        contentType: verified.info.contentType,
-        sizeBytes: verified.info.size,
-        // No server-side sha256 for direct uploads; MinIO's ETag stands in.
-        checksum: null,
-        entityType: 'file_manager',
-        metadata: { folder: folder.path || '/', etag: verified.info.etag, uploadedVia: 'direct' },
-      });
-      result.confirmed.push({ objectKey, fileName });
-    }
-
-    const status = result.confirmed.length > 0 ? 200 : firstFailureStatus ?? 400;
-    return NextResponse.json(
-      status === 200 ? result : { ...result, error: result.failed[0]?.error ?? 'אימות ההעלאה נכשל' },
-      { status },
-    );
+    const { status, body: result } = await confirmUploads(parsed.entries, {
+      accept: ({ objectKey, fileName }) =>
+        FileManagerKeys.validName(fileName) && objectKey === FileManagerKeys.build(folder.path, fileName)
+          ? null
+          : 'מפתח קובץ לא תקין',
+      maxBytes: MAX_FILE_SIZE,
+      register: ({ objectKey, fileName }, info) =>
+        registerFileObject({
+          objectKey,
+          fileName,
+          contentType: info.contentType,
+          sizeBytes: info.size,
+          // No server-side sha256 for direct uploads; MinIO's ETag stands in.
+          checksum: null,
+          entityType: 'file_manager',
+          metadata: { folder: folder.path || '/', etag: info.etag, uploadedVia: 'direct' },
+        }),
+    });
+    return NextResponse.json(result, { status });
   } catch (error) {
-    console.error('File manager confirm error:', error);
-    return NextResponse.json({ error: 'שגיאה באימות ההעלאה' }, { status: 500 });
+    return errorResponse(error, 'שגיאה באימות ההעלאה');
   }
 }

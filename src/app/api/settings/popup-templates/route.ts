@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { errorResponse } from "@/lib/http/errors";
 import { listTemplateSummaries } from "@/app/lib/popup-templates/store";
 
 export const runtime = "nodejs";
@@ -13,7 +14,6 @@ export async function GET() {
   try {
     return NextResponse.json(await listTemplateSummaries());
   } catch (error) {
-    console.error("Error listing popup templates:", error);
-    return NextResponse.json({ error: "Failed to list popup templates" }, { status: 500 });
+    return errorResponse(error, "Failed to list popup templates");
   }
 }

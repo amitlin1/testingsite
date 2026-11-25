@@ -1,23 +1,28 @@
-import { TransactionClient } from "@/app/lib/prisma";
-import { forgetItem, resyncItemDims } from "@/app/lib/metrics/item-lifecycle";
+import { TransactionClient } from "@/lib/db";
+import { resyncItemDims } from "@/app/lib/metrics/ledger/item-lifecycle";
 import { parseItemQr, sameShipmentNumber } from "@/app/lib/itemQrParser";
+import type { BoxSync } from "@/app/lib/shipments/contract";
 import { PackageError } from "./errors";
 import { MAX_PACKAGE_SEQ, baseOfId, itemIdFromBase, localDateParts, mintOrderKey, packageIdBase, packageIdFromBase } from "./ids";
+import { addPackageItem, type CreatedPackage } from "./create-package";
 import {
-  CHAR50,
-  CreatedPackage,
-  PackageItemInput,
-  addPackageItem,
+  type BoxDetails,
+  type DetailCols,
+  assertPackageRoute,
+  boxDetails,
+  deleteItemRows,
+  enterRoute,
+  forgetRouted,
   idCodeOrRefuse,
   insertItemRow,
   loadTemplate,
   reserveDailyPackageCounters,
   resolveItemRoute,
-  routeRow,
-} from "./create-package";
-import { checkPackageRoute, firstStep, loadPackageLevelTypeIds, loadRouteShape } from "./route-rules";
-import { findSerials, serialKey } from "./serials";
-import { serialProblem } from "./serial-key";
+} from "./lifecycle";
+import { firstStep } from "./route-rules";
+import { boxRouteNumber, unitsOfLine } from "./template-wire";
+import { isOpeningRoute } from "./rules";
+import { assertSerialsFree } from "./serials";
 import { workDoneOn } from "./untouched";
 
 /**
@@ -45,8 +50,6 @@ import { workDoneOn } from "./untouched";
  * recorded at intake, when the box gets its route.
  */
 
-type DetailCols = { makat: string | null; model: string | null; manufacturer_name: string | null; manufacturer_no: string | null };
-
 type BoxRow = DetailCols & {
   item_id: bigint;
   customer_id: number;
@@ -60,15 +63,6 @@ type BoxRow = DetailCols & {
   is_sent: boolean | null;
 };
 
-/** What a box says about its contents: its shipment line's certificate row. */
-type BoxDetails = { makat: string; model: string; manufacturer: string; manufacturerNo: string };
-
-const boxDetails = (r: DetailCols): BoxDetails => ({
-  makat: (r.makat ?? "").trim(),
-  model: CHAR50(r.model),
-  manufacturer: CHAR50(r.manufacturer_name),
-  manufacturerNo: (r.manufacturer_no ?? "").trim(),
-});
 const sameDetails = (a: BoxDetails, b: BoxDetails) =>
   a.makat === b.makat && a.model === b.model && a.manufacturer === b.manufacturer && a.manufacturerNo === b.manufacturerNo;
 const byMintOrder = (a: { item_id: bigint }, b: { item_id: bigint }) => mintOrderKey(a.item_id).localeCompare(mintOrderKey(b.item_id));
@@ -94,8 +88,6 @@ async function lockBox(tx: TransactionClient, packageId: bigint): Promise<BoxRow
   return box;
 }
 
-/** Pending boxes for one shipment line: the package rows, their ids from one
- *  reserved run of the day's counter, all written in one statement. */
 async function mintPendingBoxes(
   tx: TransactionClient,
   args: { customer: number; customerCode: string | null; shipment: number; packageType: number; lineId: number; details: BoxDetails; count: number },
@@ -115,17 +107,6 @@ async function mintPendingBoxes(
   `;
   return ids;
 }
-
-/** What a sync did to the boxes — what a shipment edit tells the worker. */
-export type BoxSync = {
-  /** Boxes minted. */
-  created: number;
-  /** Pending boxes deleted: their labels no longer scan. */
-  removed: string[];
-  /** Pending boxes minted again under the shipment's new customer (the id
-   *  holds the customer): their labels are printed again. */
-  reminted: number;
-};
 
 type SyncBox = DetailCols & {
   item_id: bigint;
@@ -183,9 +164,7 @@ export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: numbe
   let created = 0;
   let reminted = 0;
   const removed: bigint[] = [];
-  const del = async (ids: bigint[]) => {
-    if (ids.length > 0) await tx.items.deleteMany({ where: { item_id: { in: ids } } });
-  };
+  const del = (ids: bigint[]) => deletePendingBoxes(tx, ids);
 
   const byLine = new Map<number, SyncBox[]>(lines.map((l) => [l.id, []]));
   const loose: SyncBox[] = [];
@@ -195,7 +174,6 @@ export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: numbe
     else loose.push(b);
   }
 
-  // Boxes no line claims: taken-in ones are placed first, oldest first.
   loose.sort((a, b) => Number(b.routed) - Number(a.routed) || byMintOrder(a, b));
   for (const b of loose) {
     const line = lines.find((l) => l.item_type_id === b.item_type_id && byLine.get(l.id)!.filter((x) => x.item_type_id === l.item_type_id).length < l.quantity);
@@ -248,7 +226,6 @@ export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: numbe
     reminted += replaced;
     removed.push(...stale.slice(replaced).map((b) => b.item_id));
 
-    // Too many: the newest pending boxes go.
     if (mine.length > line.quantity) {
       const extra = mine.filter((b) => !b.routed).sort((a, b) => byMintOrder(b, a)).slice(0, mine.length - line.quantity);
       await del(extra.map((b) => b.item_id));
@@ -279,6 +256,12 @@ export async function syncShipmentBoxes(tx: TransactionClient, shipmentId: numbe
   return { created, removed: removed.map(String), reminted };
 }
 
+/** Pending boxes go: an items row each and nothing else — no route row, so
+ *  nothing in the ledger (item_created is recorded at intake). */
+export async function deletePendingBoxes(tx: TransactionClient, ids: bigint[]): Promise<void> {
+  if (ids.length > 0) await tx.items.deleteMany({ where: { item_id: { in: ids } } });
+}
+
 /** Removes a shipment's pending boxes; refuses while any box was taken in. */
 export async function dropShipmentBoxes(tx: TransactionClient, shipmentId: number): Promise<void> {
   await tx.$queryRaw`SELECT item_id FROM items WHERE shipment_id = ${shipmentId} FOR UPDATE`;
@@ -290,7 +273,49 @@ export async function dropShipmentBoxes(tx: TransactionClient, shipmentId: numbe
   if (rows.some((r) => r.routed)) {
     throw new PackageError("SHIPMENT_TAKEN_IN", "לא ניתן למחוק משלוח שמארזים ממנו כבר נקלטו", 409);
   }
-  await tx.items.deleteMany({ where: { item_id: { in: rows.map((r) => r.item_id) } } });
+  await deletePendingBoxes(tx, rows.map((r) => r.item_id));
+}
+
+/** A shipment that went out takes no more intakes: its boxes still waiting
+ *  for one go (they hold nothing and no ledger rows). */
+export async function dropPendingBoxesOfSentShipment(tx: TransactionClient, shipmentId: number): Promise<void> {
+  await tx.$executeRaw`
+    DELETE FROM items i
+    USING item_types t
+    WHERE t.item_type_id = i.item_type_id AND t.is_package
+      AND i.shipment_id = ${shipmentId} AND i.package_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM item_routes ir WHERE ir.item_id = i.item_id)
+      AND NOT EXISTS (SELECT 1 FROM items m WHERE m.package_id = i.item_id)
+  `;
+}
+
+/** Was any box of the shipment taken in? */
+export async function anyBoxTakenIn(tx: TransactionClient, shipmentId: number): Promise<boolean> {
+  const rows = await tx.$queryRaw<{ n: number }[]>`
+    SELECT COUNT(*)::int AS n FROM items i JOIN item_routes ir ON ir.item_id = i.item_id WHERE i.shipment_id = ${shipmentId}
+  `;
+  return (rows[0]?.n ?? 0) > 0;
+}
+
+/** The boxes of shipment lines being removed: refused while one was taken in,
+ *  otherwise deleted. Answers their ids. */
+export async function dropLineBoxes(tx: TransactionClient, lineIds: number[]): Promise<string[]> {
+  // Lock, then read fresh: an intake of one of these boxes that got there
+  // first is seen as taken in.
+  await tx.$queryRaw`SELECT item_id FROM items WHERE shipment_item_id = ANY(${lineIds}::int[]) FOR UPDATE`;
+  const boxes = await tx.$queryRaw<{ item_id: bigint; routed: boolean; item_type_desc: string }[]>`
+    SELECT i.item_id, (ir.item_id IS NOT NULL) AS routed, TRIM(t.item_type_desc) AS item_type_desc
+    FROM items i
+    JOIN item_types t ON t.item_type_id = i.item_type_id
+    LEFT JOIN item_routes ir ON ir.item_id = i.item_id
+    WHERE i.shipment_item_id = ANY(${lineIds}::int[]) AND i.package_id IS NULL
+  `;
+  const taken = boxes.find((b) => b.routed);
+  if (taken) {
+    throw new PackageError("SHIPMENT_LINE_TAKEN_IN", `אי אפשר להסיר את השורה של ${taken.item_type_desc}: כבר נקלטו ממנה מארזים`, 409);
+  }
+  await deletePendingBoxes(tx, boxes.map((b) => b.item_id));
+  return boxes.map((b) => String(b.item_id));
 }
 
 /**
@@ -307,7 +332,7 @@ export async function intakeBox(tx: TransactionClient, packageId: bigint): Promi
   if (box.is_sent) throw new PackageError("SHIPMENT_SENT", "המשלוח של המארז הזה כבר נשלח", 409);
 
   const template = await loadTemplate(tx, box.item_type_id);
-  const units = template.flatMap((l) => Array.from({ length: Math.max(1, l.quantity) }, () => l));
+  const units = template.flatMap((l) => Array.from({ length: unitsOfLine(l.quantity) }, () => l));
   if (units.length === 0) {
     throw new PackageError("NO_TEMPLATE", `ל${box.item_type_desc} לא הוגדרה תכולה — יש להגדיר אותה בהגדרות סוגי המארזים`, 409);
   }
@@ -316,13 +341,9 @@ export async function intakeBox(tx: TransactionClient, packageId: bigint): Promi
   }
 
   const typeRow = await tx.item_types.findUnique({ where: { item_type_id: box.item_type_id }, select: { default_route_number: true } });
-  const routeNumber = typeRow?.default_route_number ?? 1;
-  const packageLevel = await loadPackageLevelTypeIds(tx);
-  const pkgShape = await loadRouteShape(tx, box.item_type_id, routeNumber);
-  const pkgProblem = checkPackageRoute(pkgShape, packageLevel, routeNumber);
-  if (pkgProblem || !pkgShape) throw new PackageError("PACKAGE_ROUTE_SHAPE", pkgProblem ?? "מסלול המארז לא תקין", 409);
+  const routeNumber = boxRouteNumber(null, typeRow?.default_route_number);
+  const pkgRoute = await assertPackageRoute(tx, box.item_type_id, routeNumber);
 
-  // Every unit's route before anything is written.
   const descs = new Map(
     (await tx.item_types.findMany({
       where: { item_type_id: { in: [...new Set(units.map((u) => u.item_type_id))] } },
@@ -331,15 +352,15 @@ export async function intakeBox(tx: TransactionClient, packageId: bigint): Promi
   );
   const routes: number[] = [];
   for (const u of units) {
-    const asInput: PackageItemInput = { itemType: u.item_type_id, serialNumber: "", makat: "", model: "", manufacturer: "", routeNumber: null };
-    routes.push(await resolveItemRoute(tx, asInput, template, pkgShape, packageLevel, descs.get(u.item_type_id) ?? ""));
+    routes.push(await resolveItemRoute(tx, { itemType: u.item_type_id }, template, pkgRoute, descs.get(u.item_type_id) ?? ""));
   }
 
   await tx.$executeRaw`
     UPDATE items SET template_snapshot = ${JSON.stringify(template)}::jsonb, package_next_seq = ${units.length + 1}::smallint
     WHERE item_id = ${packageId}
   `;
-  await routeRow(tx, { itemId: packageId, itemType: box.item_type_id, routeNumber, firstStepTypeId: firstStep(pkgShape) });
+  const firstStepTypeId = firstStep(pkgRoute.shape);
+  await enterRoute(tx, { itemId: packageId, itemType: box.item_type_id, routeNumber, firstStepTypeId });
 
   const base = baseOfId(packageId);
   const fromBox = boxDetails(box);
@@ -358,7 +379,7 @@ export async function intakeBox(tx: TransactionClient, packageId: bigint): Promi
       packageSeq: i + 1,
       templateSnapshot: null,
     });
-    await routeRow(tx, { itemId, itemType: u.item_type_id, routeNumber: routes[i], firstStepTypeId: firstStep(pkgShape) });
+    await enterRoute(tx, { itemId, itemType: u.item_type_id, routeNumber: routes[i], firstStepTypeId });
     itemIds.push(Number(itemId));
   }
   return { packageId: Number(packageId), itemIds };
@@ -373,26 +394,21 @@ export async function undoIntake(tx: TransactionClient, packageId: bigint): Prom
   const ids = [packageId, ...members.map((m) => m.item_id)];
   const why = await workDoneOn(tx, ids);
   if (why) throw new PackageError("PACKAGE_TOUCHED", `${why} — אי אפשר לבטל את הקליטה`, 409);
-  for (const id of ids) await forgetItem(tx, id);
-  await tx.item_routes.deleteMany({ where: { item_id: { in: ids } } });
+  await forgetRouted(tx, ids);
   await tx.items.deleteMany({ where: { package_id: packageId } });
   await tx.$executeRaw`UPDATE items SET template_snapshot = NULL, package_next_seq = 1 WHERE item_id = ${packageId}`;
 }
 
-/** Only the opening station changes what is in a box: the box is at step 1 of
- *  its route, waiting or open, not finished. */
+/** Only the opening station changes what is in a box (rules.ts isOpeningRoute). */
 async function assertAtOpening(tx: TransactionClient, packageId: bigint): Promise<void> {
   const route = await tx.item_routes.findUnique({
     where: { item_id: packageId },
     select: { current_route_step: true, current_status: true, is_finished: true },
   });
   if (!route) throw new PackageError("NOT_TAKEN_IN", "המארז עוד לא נקלט", 409);
-  const opening = route.current_route_step === 1 && !route.is_finished && (route.current_status === 1 || route.current_status === 2);
-  if (!opening) throw new PackageError("PACKAGE_NOT_OPENING", "את תכולת המארז מעדכנים רק בעמדת הפתיחה", 409);
+  if (!isOpeningRoute(route)) throw new PackageError("PACKAGE_NOT_OPENING", "את תכולת המארז מעדכנים רק בעמדת הפתיחה", 409);
 }
 
-/** A box takes a shipment line: the link, and the line's details on the box
- *  and, once taken in, on its items. */
 async function setBoxLine(tx: TransactionClient, boxId: bigint, lineId: number | null, d: BoxDetails): Promise<void> {
   await tx.$executeRaw`
     UPDATE items SET shipment_item_id = ${lineId}, makat = ${d.makat}, model = ${d.model},
@@ -455,7 +471,6 @@ export async function bindCertificateRow(tx: TransactionClient, packageId: bigin
   const detailsOf = (l: DetailCols) => boxDetails({ ...l, makat: l.makat?.trim() || ship?.makat || "" });
   if (box.shipment_item_id === line.id) return { ...base, matched: true, moved: false, details: boxDetails(box) };
 
-  // The scanned row's other boxes, and whether anyone opened them yet.
   const partners = await tx.$queryRaw<{ item_id: bigint; routed: boolean; opened: boolean }[]>`
     SELECT i.item_id, (ir.item_id IS NOT NULL) AS routed,
            EXISTS (SELECT 1 FROM items m WHERE m.package_id = i.item_id AND m.serial_no IS NOT NULL) AS opened
@@ -518,38 +533,10 @@ export async function saveOpeningContents(
     throw new PackageError("EMPTY_PACKAGE", "מארז חייב להכיל לפחות פריט אחד");
   }
 
-  // Every serial of the box as it will be: required, a serial, and free.
-  const entries = [
-    ...input.items.map((it) => ({ itemType: memberType.get(it.itemId)!, serial: it.serialNumber, it })),
-    ...input.add.map((it) => ({ itemType: it.itemType, serial: it.serialNumber, it })),
-  ];
-  const types = new Map(
-    (await tx.item_types.findMany({
-      where: { item_type_id: { in: [...new Set(entries.map((e) => e.itemType))] } },
-      select: { item_type_id: true, item_type_desc: true },
-    })).map((t) => [t.item_type_id, t.item_type_desc.trim()]),
-  );
-  const seen = new Map<string, number>();
-  for (let i = 0; i < entries.length; i++) {
-    const { it, itemType } = entries[i];
-    const desc = types.get(itemType) ?? "פריט";
-    if (!it.serialNumber?.trim()) throw new PackageError("ITEM_SERIAL_REQUIRED", `${desc}: חסר מספר סריאלי`, 400, i);
-    const notSerial = serialProblem(it.serialNumber);
-    if (notSerial) throw new PackageError("ITEM_SERIAL_INVALID", `${desc}: ${notSerial}`, 400, i);
-    const key = serialKey(it.serialNumber);
-    const first = seen.get(key);
-    if (first != null) throw new PackageError("ITEM_SERIAL_DUPLICATE", `${desc}: הסריאלי ${it.serialNumber.trim()} כבר הוזן בשורה ${first + 1}`, 409, i);
-    seen.set(key, i);
-  }
-  const existing = await findSerials(tx, entries.map((e) => e.serial));
-  for (let i = 0; i < entries.length; i++) {
-    const { serial, itemType } = entries[i];
-    const clash = existing.find((m) =>
-      m.serial === serialKey(serial) && m.shipment_id === box.shipment_id && m.item_type_id === itemType && String(m.package_id) !== packageId.toString());
-    if (clash) {
-      throw new PackageError("ITEM_SERIAL_EXISTS", `${types.get(itemType) ?? "פריט"}: הסריאלי ${serial.trim()} כבר נקלט במשלוח הזה`, 409, i);
-    }
-  }
+  await assertSerialsFree(tx, box.shipment_id, [
+    ...input.items.map((it) => ({ itemType: memberType.get(it.itemId)!, serialNumber: it.serialNumber })),
+    ...input.add,
+  ], { requireSerial: true, inPackage: packageId });
 
   // Items that did not come: still at the opening with the box, nothing
   // recorded on them (the station started them along with the box).
@@ -557,9 +544,7 @@ export async function saveOpeningContents(
     const itemId = BigInt(id);
     const why = await workDoneOn(tx, [itemId], { atOpening: true, noun: "פריט" });
     if (why) throw new PackageError("ITEM_TOUCHED", `${why} — אי אפשר לסמן אותו כ״לא הגיע״`, 409);
-    await forgetItem(tx, itemId);
-    await tx.item_routes.deleteMany({ where: { item_id: itemId } });
-    await tx.items.delete({ where: { item_id: itemId } });
+    await deleteItemRows(tx, itemId);
   }
   for (const it of input.items) {
     const itemId = BigInt(it.itemId);

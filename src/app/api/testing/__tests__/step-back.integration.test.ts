@@ -9,30 +9,19 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "crypto";
-import { createRequire } from "node:module";
-import path from "node:path";
 import type { AppRole } from "@/lib/auth/roles";
-import * as H from "../../../lib/metrics/__tests__/write-path-helpers";
+import * as H from "@/test-support/db-harness";
+import { stubSession } from "@/lib/auth/testing";
 
 /** FUNC → FUNC: two regular steps (the fixture's other routes start at the package-level INTAKE). */
 const ITEM_TYPE_FUNC_TWICE = 8;
 
-// The session withAuth sees (as item-report.integration.test.ts stubs it).
+// The session withAuth sees.
 let session: unknown = null;
 const signedIn = (...roles: AppRole[]) => ({
   user: { preferredUsername: "step-back", displayName: "בודק", name: "step-back", employeeNumber: "9001" },
   roles,
 });
-function stubAuth(): void {
-  const req = createRequire(path.resolve(process.cwd(), "package.json"));
-  const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as typeof import("node:module");
-  const stub = new CjsModule(authPath);
-  stub.filename = authPath;
-  stub.loaded = true;
-  stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
-  req.cache[authPath] = stub;
-}
 
 describe(
   "step back — one step back to the station before, or a refusal in words",
@@ -41,7 +30,7 @@ describe(
     let POST: (req: Request) => Promise<Response>;
 
     before(async () => {
-      stubAuth();
+      stubSession(() => session);
       await H.setup();
       POST = (await import("../step-back/route")).POST as unknown as typeof POST;
     });

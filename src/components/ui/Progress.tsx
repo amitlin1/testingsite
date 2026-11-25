@@ -1,19 +1,11 @@
 "use client";
 import React, { forwardRef } from "react";
 import { sxToStyle, type SxInput } from "./sx";
+import { toneColors } from "./tones";
 
-/** MUI colour names → tokens. Anything else (a var(), a hex) is used as is;
- *  passing "success" straight to `background` was invalid CSS, so the bar
- *  never painted. */
-const PROGRESS_COLOR: Record<string, string> = {
-  primary: "var(--color-primary)",
-  info: "var(--color-primary)",
-  secondary: "var(--color-ink-muted-80)",
-  success: "var(--color-status-approved)",
-  warning: "var(--color-status-late)",
-  error: "var(--color-destructive)",
-  inherit: "currentColor",
-};
+/** A tone name paints the bar in the tone's mark (tones.ts). Anything else (a var(), a hex) is used
+ *  as is. */
+const PROGRESS_COLOR: Record<string, string> = { ...toneColors("mark"), inherit: "currentColor" };
 const progressColor = (c: string) => PROGRESS_COLOR[c] ?? c;
 
 /* ---------------------------------------------------- LinearProgress ----- */

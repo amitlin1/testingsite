@@ -3,19 +3,19 @@ import assert from "node:assert/strict";
 import type { ChoiceOption, ChoiceRowField, Field, RouteFieldsConfig } from "@/app/lib/station-fields/schema";
 import type { FieldSetJson, LibraryUseJson, OptionListJson } from "@/app/lib/station-fields/admin-types";
 import {
-  DEFAULT_CHECK_LIST_NAME, LibraryBodyError, agoText, copyName, copySetFields, failCount, filterByName, findDefaultCheckList,
-  hasUnnamedField, libraryWriteError, linkToList, listDraftChanged, matchesName, outdatedUses, parseFieldSetJson,
-  parseFieldSetsJson, parseLibraryUses, parseOptionListJson, parseOptionListSaved, parseOptionListsJson, parsePropagated,
-  parseRouteIndex, parseVersionAnswer, placesOutside, relinkListInConfig, sameOptions, setCounts, setDraftDirty, setMetaText,
-  setsUsingList, toneRows, usageChips, usageFullText, usageQuery,
+  copyName, copySetFields, failCount, filterByName, hasUnnamedField, libraryWriteError, listDraftChanged, matchesName,
+  outdatedUses, placesOutside, setCounts, setDraftDirty, setMetaText, setsUsingList, toneRows, usageChips,
 } from "../libraryModel";
+import { findDefaultCheckList, linkToList, relinkListInConfig, sameOptions } from "../optionFields";
+import { agoText } from "../labels";
 import {
-  LIBRARY_UNDRAWN_TEXT, failCountText, linkedHelpText, listAlertText, listMetaText, listOptionLabel, listRowLine,
+  LIBRARY_TEXT, LIBRARY_UNDRAWN_TEXT, failCountText, linkedHelpText, listMetaText, listOptionLabel, listRowLine,
   listSummaryText, listsSegText, localOptionsTitleOf, moreUsesText, outdatedText, saveAsVersionText, setFieldsTitle,
   setFootStats, setRowLine, setsSegText, sharedImpactText, sharedListRowLabel, unsavedVersionText, updateAllText,
   usageChipLabel, usedInCellsText, willLinkHelpText,
 } from "../libraryLabels";
-import { DEFAULT_ROUTE_QUERY, parseRouteQuery, serializeRouteQuery } from "../routeQuery";
+import { parseRouteQuery, serializeRouteQuery } from "../routeQuery";
+import type { RouteRowJson } from "../wire";
 
 // ---- fixtures (artboard 8's script) ------------------------------------------------------------------
 const opts = (...list: [string, ChoiceOption["tone"]][]): ChoiceOption[] =>
@@ -42,37 +42,6 @@ const setJson = (over: Partial<FieldSetJson> = {}): FieldSetJson => ({
 const use = (over: Partial<LibraryUseJson> = {}): LibraryUseJson => ({
   route_id: 101, step_uid: "s_visual01", target: "item", field_id: "f_aaaaaaa1", ver: 3, in: "draft",
   kit_desc: "מארז עמדת עבודה", station_label: "בדיקה ויזואלית", item_label: "מחשב", ...over,
-});
-
-// ---- the wire ----------------------------------------------------------------------------------------
-test("an option list and a field set from the wire are checked, their options / fields through the shape check", () => {
-  const l = listJson();
-  assert.deepEqual(parseOptionListJson(JSON.parse(JSON.stringify(l))), l);
-  assert.deepEqual(parseOptionListsJson([l, l]).length, 2);
-  const s = setJson();
-  assert.deepEqual(parseFieldSetJson(JSON.parse(JSON.stringify(s))), s);
-  assert.deepEqual(parseFieldSetsJson([]), []);
-  assert.throws(() => parseOptionListJson({ ...l, id: 0 }), LibraryBodyError);
-  assert.throws(() => parseOptionListJson({ ...l, usage: { fields: 1 } }), LibraryBodyError);
-  assert.throws(() => parseOptionListJson({ ...l, options: [{ id: "x", label: "a", tone: "pass" }] }), LibraryBodyError);
-  assert.throws(() => parseFieldSetJson({ ...s, fields: [{ id: "f_bad", type: "choice_row" }] }), LibraryBodyError);
-  assert.throws(() => parseFieldSetsJson({}), LibraryBodyError);
-});
-
-test("usage rows, the route index and the write answers are checked", () => {
-  const u = use({ target: { item_type_id: 5 } });
-  assert.deepEqual(parseLibraryUses([u]), [u]);
-  assert.throws(() => parseLibraryUses([{ ...u, target: "kit" }]), LibraryBodyError);
-  assert.throws(() => parseLibraryUses([{ ...u, in: "both" }]), LibraryBodyError);
-  assert.deepEqual(parseRouteIndex([{ test_route_id: 1, item_type_id: 2, route_number: 1, route_steps: [3] }]), [{ test_route_id: 1, item_type_id: 2, route_number: 1 }]);
-  assert.throws(() => parseRouteIndex([{ test_route_id: 1 }]), LibraryBodyError);
-  assert.equal(parseVersionAnswer({ version: 4 }), 4);
-  assert.deepEqual(parseOptionListSaved({ version: 3, linked: [{ route_id: 1, step_uid: "s_a", field_id: "f_b" }] }), {
-    version: 3, linked: [{ route_id: 1, step_uid: "s_a", field_id: "f_b" }],
-  });
-  assert.throws(() => parseOptionListSaved({ version: 3 }), LibraryBodyError);
-  assert.equal(parsePropagated({ updated_drafts: 0 }), 0);
-  assert.throws(() => parsePropagated({}), LibraryBodyError);
 });
 
 test("a write that did not go through: conflict, in use, refused, failed", () => {
@@ -154,34 +123,36 @@ test("the meta line: duplicated, created, updated — with the relative time and
 test("relative times: artboard 8's 'עכשיו' and 'לפני יומיים', the rest undrawn", () => {
   const t = Date.parse("2026-10-14T08:00:00.000Z");
   const m = 60_000;
-  assert.equal(agoText(t - 30_000, t), "עכשיו");
-  assert.equal(agoText(t + 5 * m, t), "עכשיו", "a clock ahead reads as now");
-  assert.equal(agoText(t - m, t), LIBRARY_UNDRAWN_TEXT.agoMinute);
-  assert.equal(agoText(t - 5 * m, t), "לפני 5 דקות");
-  assert.equal(agoText(t - 60 * m, t), LIBRARY_UNDRAWN_TEXT.agoHour);
-  assert.equal(agoText(t - 3 * 60 * m, t), "לפני 3 שעות");
-  assert.equal(agoText(t - 24 * 60 * m, t), LIBRARY_UNDRAWN_TEXT.agoDay);
-  assert.equal(agoText(t - 48 * 60 * m, t), "לפני יומיים");
-  assert.equal(agoText(t - 5 * 24 * 60 * m, t), "לפני 5 ימים");
+  const ago = (at: number) => agoText(at, t, LIBRARY_TEXT.now);
+  assert.equal(ago(t - 30_000), "עכשיו");
+  assert.equal(ago(t + 5 * m), "עכשיו", "a clock ahead reads as now");
+  assert.equal(ago(t - m), "לפני דקה");
+  assert.equal(ago(t - 5 * m), "לפני 5 דקות");
+  assert.equal(ago(t - 60 * m), "לפני שעה");
+  assert.equal(ago(t - 3 * 60 * m), "לפני 3 שעות");
+  assert.equal(ago(t - 24 * 60 * m), "לפני יום");
+  assert.equal(ago(t - 48 * 60 * m), "לפני יומיים");
+  assert.equal(ago(t - 5 * 24 * 60 * m), "לפני 5 ימים");
 });
 
 // ---- usage ---------------------------------------------------------------------------------------------------
-const ROUTES = [
-  { test_route_id: 100, item_type_id: 50, route_number: 1 },   // the kit's own route
-  { test_route_id: 101, item_type_id: 12, route_number: 1 },   // an item route
+const ROUTES: RouteRowJson[] = [
+  { test_route_id: 100, item_type_id: 50, route_number: 1, route_steps: [], step_uids: [] },   // the kit's own route
+  { test_route_id: 101, item_type_id: 12, route_number: 1, route_steps: [], step_uids: [] },   // an item route
 ];
 const BASE = parseRouteQuery("type=50&route=1&view=library&lib=sets&id=11");
 
 test("a usage chip opens the cell editor on the route that holds the place", () => {
-  const item = usageQuery(use(), ROUTES, BASE);
+  const queryOf = (u: LibraryUseJson, base = BASE) => usageChips([u], 3, ROUTES, base).chips[0].query;
+  const item = queryOf(use());
   assert.ok(item);
   assert.equal(serializeRouteQuery(item), "type=12&route=1&view=map&step=s_visual01&target=item&field=f_aaaaaaa1");
-  const box = usageQuery(use({ route_id: 100, step_uid: "s_closebox", target: "box", field_id: "f_bbbbbbb1" }), ROUTES, BASE);
+  const box = queryOf(use({ route_id: 100, step_uid: "s_closebox", target: "box", field_id: "f_bbbbbbb1" }));
   assert.equal(box && serializeRouteQuery(box), "type=50&route=1&view=map&step=s_closebox&target=box&field=f_bbbbbbb1");
-  const typed = usageQuery(use({ route_id: 100, target: { item_type_id: 12 }, field_id: "not-a-field-id" }), ROUTES, DEFAULT_ROUTE_QUERY);
+  const typed = queryOf(use({ route_id: 100, target: { item_type_id: 12 }, field_id: "not-a-field-id" }), parseRouteQuery(""));
   assert.equal(typed && serializeRouteQuery(typed), "type=50&route=1&view=map&step=s_visual01&target=item%3A12");
-  assert.equal(usageQuery(use({ route_id: 999 }), ROUTES, BASE), null, "a route the list does not have");
-  assert.equal(usageQuery(use({ step_uid: "bad uid" }), ROUTES, BASE), null);
+  assert.equal(queryOf(use({ route_id: 999 })), null, "a route the list does not have");
+  assert.equal(queryOf(use({ step_uid: "bad uid" })), null);
 });
 
 test("usage chips: five, the same kit and station shortened, an older version marked, the rest counted", () => {
@@ -204,7 +175,7 @@ test("usage chips: five, the same kit and station shortened, an older version ma
   assert.equal(chips[3].aria, "מארז עמדת עבודה › בדיקה ויזואלית › עכבר · גרסה 2");
   assert.equal(chips[0].aria, "מארז עמדת עבודה › בדיקה ויזואלית › מחשב");
   assert.equal(usageChipLabel("x", null), "x");
-  assert.equal(usageFullText(use({ kit_desc: null })), "בדיקה ויזואלית › מחשב");
+  assert.equal(usageChips([use({ kit_desc: null })], 3, ROUTES, BASE).chips[0].text, "בדיקה ויזואלית › מחשב", "an item route: no kit");
   assert.equal(outdatedUses(uses, 3).length, 1);
   assert.equal(outdatedText(2), "2 תאים משתמשים בגרסה קודמת של הערכה");
   assert.equal(outdatedText(1), "תא אחד משתמש בגרסה קודמת של הערכה");
@@ -221,7 +192,6 @@ test("the list detail: tone table, fail count, meta and the note", () => {
   assert.equal(listSummaryText(4, 1), "4 אפשרויות · אחת נחשבת 'כשל'");
   assert.equal(listMetaText(31, 4), "בשימוש ב-31 שדות · 4 אפשרויות");
   assert.equal(listOptionLabel("1", "תקין", "pass"), "1 · תקין · תקין");
-  assert.equal(listAlertText(31), "שינוי ברשימה המשותפת יחול על 31 שדות לאחר פרסום. תוצאות שכבר נשמרו לא ישתנו.");
 });
 
 test("'בערכות שדות': the sets with fields linked to the list, and how many", () => {
@@ -290,7 +260,6 @@ test("a saved list reaches the linked fields of a working copy; others and up-to
 });
 
 test("the default check row's list is the one named 'תקינות כללית'", () => {
-  assert.equal(DEFAULT_CHECK_LIST_NAME, "תקינות כללית");
   const lists = [listJson(), listJson({ id: 1, name: "תקינות כללית" })];
   assert.equal(findDefaultCheckList(lists)?.id, 1);
   assert.equal(findDefaultCheckList([listJson()]), null);

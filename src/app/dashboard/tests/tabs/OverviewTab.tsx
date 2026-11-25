@@ -22,38 +22,33 @@ import * as React from "react";
 
 import { Skeleton } from "@/components/ui";
 import { ArrowForward } from "@/components/ui/icons";
-import DataCard, { IgnoredFiltersPill, Legend } from "@/app/components/dashboard/DataCard";
-import DenseTable from "@/app/components/dashboard/DenseTable";
-import JobHealthStrip from "@/app/components/dashboard/JobHealthStrip";
-import StatusDonut from "@/app/components/dashboard/charts/StatusDonut";
-import TimesLineChart, { TIMES_LEGEND } from "@/app/components/dashboard/charts/TimesLineChart";
-import { ChartBody } from "@/app/components/dashboard/charts/chartConfig";
-import { STATE_COLOR, stateColor } from "@/app/components/dashboard/charts/palette";
-import { textTone } from "@/app/components/dashboard/tone";
-import type {
-  AverageTimesWire,
-  ShipmentWire,
-  StationWire,
-  StatusWire,
-} from "@/app/lib/dashboard/api-types";
+import DataCard, { IgnoredFiltersPill, Legend } from "../_components/DataCard";
+import DenseTable from "../_components/DenseTable";
+import EmptyChart from "../_components/EmptyChart";
+import JobHealthStrip from "../_components/JobHealthStrip";
+import { FillBar } from "../_components/LoadBar";
+import StatusDonut from "../_components/charts/StatusDonut";
+import TimesLineChart, { TIMES_LEGEND } from "../_components/charts/TimesLineChart";
+import { ChartBody } from "../_components/charts/chartConfig";
+import { STATE_COLOR, stateColor } from "../_components/charts/palette";
 import {
   completionTone,
   describeIgnoredFilters,
   formatClock,
   formatPercent,
   isNil,
-} from "@/app/lib/dashboard/format";
-import type { JobsHealthPayload } from "@/app/lib/metrics/selfcheck";
-import { SHARED_QUEUE_NOTE, stationColumns } from "./stationColumns";
-import { EmptyChart } from "./TimesTab";
+  toneMark,
+  toneText,
+} from "../_lib/format";
+import { SHARED_QUEUE_NOTE, stationColumns, stationHistoryTarget, stationsEmpty } from "./stationColumns";
 import type { TabProps } from "./tabTypes";
 
 export default function OverviewTab({ api, data, openHistory }: TabProps) {
-  const stations = data.get<StationWire[]>("stationsLive");
-  const status = data.get<StatusWire[]>("status");
-  const shipments = data.get<ShipmentWire[]>("shipments");
-  const times = data.get<AverageTimesWire[]>("timesShort");
-  const jobs = data.get<JobsHealthPayload>("jobs");
+  const stations = data.get("stationsLive");
+  const status = data.get("status");
+  const shipments = data.get("shipments");
+  const times = data.get("timesShort");
+  const jobs = data.get("jobs");
 
   const ignored = describeIgnoredFilters(stations.meta.ignoredFilters);
   // No useMemo: the React Compiler memoises this, and a hand-written dependency
@@ -69,7 +64,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
 
   const slices = status.data ?? [];
   const activeTotal = slices.reduce((sum, slice) => sum + slice.count, 0);
-  const asOf = slices[0]?._new_asOf ?? null;
+  const asOf = slices[0]?.asOf ?? null;
 
   const atRisk = React.useMemo(
     () =>
@@ -113,19 +108,8 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
           rowKey={(row) => row.stationId}
           loading={stations.loading}
           defaultSort={{ key: "queue", dir: "desc" }}
-          onRowClick={(row) =>
-            openHistory({
-              kind: "station",
-              id: row.stationId,
-              title: row.stationName,
-              meta: row.stationTypeName ? `סוג ${row.stationTypeName}` : undefined,
-              live: { oldestQueueAgeMinutes: row._new_oldestQueueAgeWallMinutes },
-            })
-          }
-          empty={{
-            text: "אין עמדות שמתאימות למסננים האלה.",
-            action: { label: "נקה את המסננים", onClick: api.clearFilters },
-          }}
+          onRowClick={(row) => openHistory(stationHistoryTarget(row))}
+          empty={stationsEmpty(api.clearFilters)}
         />
       </DataCard>
 
@@ -188,7 +172,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
                 [0, 1, 2].map((i) => <Skeleton key={i} variant="text" height={12} width="100%" />)}
               {slices.map((slice, index) => (
                 <div
-                  key={slice._new_stateKey}
+                  key={slice.stateKey}
                   style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "var(--text-fine)" }}
                 >
                   <span
@@ -197,7 +181,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
                       width: 8,
                       height: 8,
                       borderRadius: 2,
-                      background: stateColor(slice._new_stateKey, index),
+                      background: stateColor(slice.stateKey, index),
                       flexShrink: 0,
                     }}
                   />
@@ -275,30 +259,16 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
                     <span style={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {shipment.shipmentCode} · {shipment.customerName}
                     </span>
-                    <span style={{ color: textTone(tone), fontWeight: 600, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ color: toneText(tone), fontWeight: 600, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                       {formatPercent(shipment.completionPercentage)}
                     </span>
                   </div>
-                  <div
-                    aria-hidden
-                    style={{
-                      height: 5,
-                      background: "var(--color-canvas-parchment)",
-                      borderRadius: 3,
-                      marginTop: 4,
-                      overflow: "hidden",
-                      display: "flex",
-                      // Fills from the reading edge (the right, in RTL).
-                      flexDirection: "row",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${shipment.completionPercentage ?? 0}%`,
-                        background: tone,
-                      }}
-                    />
-                  </div>
+                  <FillBar
+                    pct={shipment.completionPercentage ?? 0}
+                    color={toneMark(tone)}
+                    height={5}
+                    style={{ marginTop: 4 }}
+                  />
                 </button>
               );
             })}

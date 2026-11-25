@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
 import { withAuth } from "@/lib/auth/withAuth";
-import { FIELDS_EDIT_ROLES } from "@/app/lib/station-fields/roles";
-import { RouteStepsError, createRoute, listRoutes } from "@/app/lib/station-fields/route-steps";
-import { errorMessage } from "@/lib/errors";
+import { ACCESS } from "@/lib/auth/roles";
+import { errorResponse } from "@/lib/http/errors";
+import { readJsonObject } from "@/lib/http/request";
+import { createRoute, listRoutes } from "@/app/lib/station-fields/route-steps";
 
 export const runtime = "nodejs";
 
@@ -14,38 +15,21 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const itemTypeId = searchParams.get("itemTypeId");
     const routeNumber = searchParams.get("routeNumber");
-
-    const rows = await listRoutes(prisma, {
+    return NextResponse.json(await listRoutes(prisma, {
       itemTypeId: itemTypeId ? parseInt(itemTypeId, 10) : null,
       routeNumber: routeNumber ? parseInt(routeNumber, 10) : null,
-    });
-
-    return NextResponse.json(rows);
+    }));
   } catch (error) {
-    if (error instanceof RouteStepsError) {
-      return NextResponse.json(error.body, { status: error.status });
-    }
-    console.error("Error fetching testing routes:", error);
     // A real error, never []: the settings screen reads an empty list as
     // "no route yet", so a failed read would look like a missing route.
-    return NextResponse.json({ error: "Failed to fetch testing routes" }, { status: 500 });
+    return errorResponse(error, "Failed to fetch testing routes");
   }
 }
 
 export const POST = withAuth(async (req) => {
-  const body = await req.json();
-
   try {
-    const created = await createRoute(prisma, body);
-    return NextResponse.json(created);
+    return NextResponse.json(await createRoute(prisma, await readJsonObject(req)));
   } catch (error) {
-    if (error instanceof RouteStepsError) {
-      return NextResponse.json(error.body, { status: error.status });
-    }
-    console.error("Error creating testing route:", error);
-    return NextResponse.json(
-      { error: errorMessage(error) || "Failed to create testing route" },
-      { status: 500 }
-    );
+    return errorResponse(error, "Failed to create testing route");
   }
-}, { role: FIELDS_EDIT_ROLES });
+}, { role: ACCESS.fieldsEdit });

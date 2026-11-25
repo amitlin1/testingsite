@@ -2,24 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
 import { buildFieldsMap } from "../mapModel";
-import { UNDRAWN_TEXT, MAP_TEXT } from "../labels";
-import { ONBOARDING_STEPS, ONBOARDING_TEXT, sharedFilledLines } from "../onboardingLabels";
+import { UNDRAWN_TEXT } from "../labels";
+import { sharedFilledLines } from "../onboardingLabels";
 import { CLOSE, ELEC, KIT_A, KIT_B, MON, OPEN, STATIONS, artboard1, artboard11, config, fields, line, route, step } from "./fixtures";
-
-test("the card's text is artboard 11's, character for character", () => {
-  assert.equal(ONBOARDING_TEXT.title, "עדיין לא הוגדרו שדות למסלול הזה");
-  assert.equal(ONBOARDING_TEXT.body, "כל עוד אין שדות, כל עמדה מציגה לעובד את החלון הקבוע של היום. שום דבר לא משתנה בעמדות עד שתפרסמו.");
-  assert.equal(ONBOARDING_TEXT.stepsLabel, "שלושה צעדים");
-  assert.equal(ONBOARDING_TEXT.start, "התחל בעמדה הראשונה");
-  assert.equal(ONBOARDING_TEXT.applySet, "החל ערכת שדות…");
-  assert.deepEqual(ONBOARDING_STEPS, [
-    { title: "בחרו עמדה ופריט", line: "לחיצה על תא במפה" },
-    { title: "הוסיפו שורות בדיקה", line: "שם · 4 אפשרויות · הערות" },
-    { title: "פרסמו", line: "העובדים יראו את השדות בחלון העמדה" },
-  ]);
-  // The left-out outlined button keeps its words where the map toolbar has them.
-  assert.equal(MAP_TEXT.copyFromRoute, "העתק ממסלול אחר…");
-});
 
 test("artboard 11's info bar: the screen's route, filled at three stations by the other kit", () => {
   const m = buildFieldsMap({ context: artboard11() });

@@ -1,11 +1,29 @@
 /**
  * The JSON wire contract of the admin station-fields API, for the settings screen.
  * Pure (no prisma / next / React): the client imports these types; the server
- * (admin.ts, context.ts) produces exactly these shapes. Dates travel as ISO strings.
+ * (admin.ts, context.ts, library.ts, fork.ts) returns exactly these shapes. Dates travel as ISO strings.
  */
 import type { Change } from "./diff";
 import type { ChoiceOption, Field, GroupTarget, RouteFieldsConfig } from "./schema";
 import type { Issue } from "./validate";
+
+/** One route of GET /api/settings/testing-routes. fields_draft itself is never part of it (it has
+ *  its own endpoint). */
+export type RouteListRow = {
+  test_route_id: number;
+  item_type_id: number;
+  test_station_type_id: number;
+  route_number: number;
+  route_steps: number[];
+  /** Parallel to route_steps. A different length means a route without uids (a script inserted
+   *  it): readers treat every step as uid-less. */
+  step_uids: string[];
+  /** Latest published version; 0 = never published. */
+  fields_version: number;
+  draft_rev: number;
+  /** fields_draft IS NOT NULL — there are unpublished changes. */
+  has_draft: boolean;
+};
 
 /** A kit whose template (package_contents) runs an item type on this route. */
 export type SharedKitJson = { package_type_id: number; desc: string };
@@ -34,13 +52,18 @@ export type RouteFieldsJson = {
 /** PUT …/[id]/fields/draft → 200. */
 export type DraftSavedJson = { draft_rev: number; draft_updated_at: string; issues: Issue[] };
 
-/** Which unfinished items a publish moves to the new version (admin.ts APPLY_MODES): none, the
- *  ones that have not started their route, those plus the ones before the changed step, or all. */
+/** Which unfinished items a publish moves to the new version: none, the ones that have not started
+ *  their route, those plus the ones before the changed step, or all (admin.ts movableRows). */
 export const APPLY_MODES = ["new_only", "not_started", "not_reached", "all"] as const;
 export type ApplyMode = (typeof APPLY_MODES)[number];
 
 /** "הערת גרסה" (artboard 10): at most 2000 characters (spec §3.2). */
 export const VERSION_NOTE_MAX = 2000;
+
+/** The refusal codes the settings screen acts on: 409 STEP_UNKNOWN (a draft names a step uid the
+ *  route does not have), 409 IN_USE (a library delete of a row still in use). */
+export const STEP_UNKNOWN = "STEP_UNKNOWN";
+export const IN_USE = "IN_USE";
 
 /** One route of a publish (artboard 10, "מה השתנה"). */
 export type PublishImpactRouteJson = {

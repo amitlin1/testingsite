@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { parseDefaultRoute } from "@/app/lib/packages/settings";
-import { errorCode, errorMessage } from "@/lib/errors";
+import { prisma } from "@/lib/db";
+import { HttpError, errorResponse } from "@/lib/http/errors";
+import { readJsonObject } from "@/lib/http/request";
+import { insertLookupRow, listJson, requiredText } from "@/app/lib/lookups";
+import { parseDefaultRoute } from "@/app/lib/packages/template-wire";
+import { itemTypeName } from "./name";
 
 export const runtime = "nodejs";
 
@@ -10,63 +13,39 @@ export const runtime = "nodejs";
  * ships, whose contents are edited through /api/settings/item-types/[id]/contents.
  */
 export async function GET() {
-  try {
+  // A real error, never []: a settings screen reads an empty list as "no item
+  // types", and the seed scripts would create the "missing" ones (route-fields
+  // spec §11 rule 12).
+  return listJson(async () => {
     const rows = await prisma.item_types.findMany({
       orderBy: { item_type_id: "asc" },
       include: { _count: { select: { package_contents: true } } },
     });
-
-    const trimmed = rows.map((r) => ({
+    return rows.map((r) => ({
       item_type_id: r.item_type_id,
       item_type_desc: r.item_type_desc.trim(),
       is_package: r.is_package,
       default_route_number: r.default_route_number,
       contents_count: r._count.package_contents,
     }));
-
-    return NextResponse.json(trimmed);
-  } catch (error) {
-    console.error("Error fetching item types:", error);
-    // A real error, never []: a settings screen reads an empty list as "no item
-    // types", and the seed scripts would create the "missing" ones (route-fields
-    // spec §11 rule 12).
-    return NextResponse.json({ error: "Failed to fetch item types" }, { status: 500 });
-  }
+  }, "Failed to fetch item types");
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { item_type_desc } = body;
-  const isPackage = Boolean(body.is_package);
-
-  if (!item_type_desc || typeof item_type_desc !== "string" || !item_type_desc.trim()) {
-    return NextResponse.json({ error: "Description is required" }, { status: 400 });
-  }
-  const route = parseDefaultRoute(body.default_route_number);
-  if ("error" in route) return NextResponse.json({ error: route.error }, { status: 400 });
-
-  const trimmedDesc = item_type_desc.trim();
-
   try {
-    const existing = await prisma.item_types.findFirst({
-      where: {
-        item_type_desc: {
-          equals: trimmedDesc,
-          mode: 'insensitive'
-        }
-      }
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: "סוג פריט זה כבר קיים במערכת" },
-        { status: 400 }
-      );
-    }
+    const body = await readJsonObject(req);
+    const desc = requiredText(body.item_type_desc);
+    if (!desc) throw new HttpError(400, "Description is required");
+    const isPackage = Boolean(body.is_package);
+    const route = parseDefaultRoute(body.default_route_number);
+    if ("error" in route) throw new HttpError(400, route.error);
 
-    const created = await prisma.item_types.create({
-      data: { item_type_desc: trimmedDesc, is_package: isPackage, default_route_number: isPackage ? route.value : null },
-    });
-
+    const created = await insertLookupRow(
+      () => prisma.item_types.create({
+        data: { item_type_desc: desc, is_package: isPackage, default_route_number: isPackage ? route.value : null },
+      }),
+      { duplicate: itemTypeName(desc) },
+    );
     return NextResponse.json({
       item_type_id: created.item_type_id,
       item_type_desc: created.item_type_desc.trim(),
@@ -75,14 +54,6 @@ export async function POST(req: Request) {
       contents_count: 0,
     });
   } catch (error) {
-    const msg = errorMessage(error);
-    if (errorCode(error) === "P2002" || /unique constraint/i.test(msg)) {
-      return NextResponse.json({ error: "סוג פריט זה כבר קיים במערכת" }, { status: 400 });
-    }
-    console.error("Error creating item type:", error);
-    return NextResponse.json(
-      { error: errorMessage(error) || "Failed to create item type" },
-      { status: 500 }
-    );
+    return errorResponse(error, "Failed to create item type");
   }
 }

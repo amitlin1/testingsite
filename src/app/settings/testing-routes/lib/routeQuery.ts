@@ -29,7 +29,7 @@ export const LIBRARY_TABS = ["sets", "lists"] as const;
 export type LibraryTab = (typeof LIBRARY_TABS)[number];
 
 export interface RouteQuery {
-  /** item_type_id of the kit or the item whose route is open. */
+  /** item_type_id of the kit whose route is open (the page drops any other type's). */
   type: number | null;
   /** route_number. */
   route: number | null;
@@ -46,10 +46,6 @@ export interface RouteQuery {
 
 /** A route as the screen names it: the pair (item_type_id, route_number). */
 export type RouteRef = { type: number; route: number };
-
-export const DEFAULT_ROUTE_QUERY: RouteQuery = Object.freeze({
-  type: null, route: null, view: "map", step: null, target: null, field: null, item: null, lib: null, id: null,
-});
 
 /** What parseRouteQuery reads: URLSearchParams, Next's ReadonlyURLSearchParams, or a query string. */
 export type ParamSource = { get(name: string): string | null } | string;
@@ -86,12 +82,6 @@ export function parseTargetParam(raw: string | null): GroupTarget | null {
   const m = raw == null ? null : /^item:([0-9]{1,10})$/.exec(raw);
   const id = m ? readId(m[1]) : null;
   return id == null ? null : { item_type_id: id };
-}
-
-/** The same target (an item-type target compares by item_type_id). */
-export function sameTarget(a: GroupTarget | null, b: GroupTarget | null): boolean {
-  if (a == null || b == null) return a === b;
-  return encodeTarget(a) === encodeTarget(b);
 }
 
 // ---- parse / serialise ----------------------------------------------------------------------------
@@ -209,11 +199,6 @@ export function withItem(q: RouteQuery, item: number | null): RouteQuery {
 /** The cell editor on (step, target), optionally focused on a field ("עבור לשדה"). */
 export function withEditor(q: RouteQuery, step: StepUid, target: GroupTarget, field: FieldId | null = null): RouteQuery {
   return normalizeRouteQuery({ ...q, view: "map", step, target, field, lib: null, id: null });
-}
-
-/** Focus a field of the open editor, or none. */
-export function withField(q: RouteQuery, field: FieldId | null): RouteQuery {
-  return normalizeRouteQuery({ ...q, field });
 }
 
 /** The library on a tab, optionally with a set / list open. */

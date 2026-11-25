@@ -1,10 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  getIsraeliHolidays,
-  getIsraeliHolidayForDate,
-  getIsraeliHolidayMap,
-} from "../israeliHolidays";
+import { getIsraeliHolidays, getIsraeliHolidayForDate } from "../israeliHolidays";
 
 // Ground truth captured empirically from @hebcal/core 6.x for Israel, 2026.
 // (Verified stable across 2025–2028 during development.)
@@ -30,7 +26,7 @@ const EVE_2026 = [
 ];
 
 test("2026 classification matches the empirical ground truth", () => {
-  const map = getIsraeliHolidayMap("2026-01-01", "2026-12-31");
+  const map = new Map(getIsraeliHolidays("2026-01-01", "2026-12-31").map((h) => [h.date, h]));
 
   assert.equal(map.size, FULL_OFF_2026.length + HALF_DAY_2026.length + EVE_2026.length, "16 total");
 

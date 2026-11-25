@@ -1,22 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Change } from "@/app/lib/station-fields/diff";
-import type { FieldsContextJson, PublishImpactJson, PublishImpactRouteJson } from "@/app/lib/station-fields/admin-types";
+import type { PublishImpactJson, PublishImpactRouteJson } from "@/app/lib/station-fields/admin-types";
 import { KIT_ROUTE_LABEL, routeOfTypeLabel } from "@/app/lib/station-fields/labels";
-import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "../draftModel";
-import { buildFieldsMap } from "../mapModel";
+import { EMPTY_DRAFT_MODEL, draftReducer } from "../draftModel";
 import { UNDRAWN_TEXT, routeOptionText } from "../labels";
 import {
   PUBLISH_UNDRAWN_TEXT, SCOPE_UNDRAWN_TEXT, countTagsText, filledWarnText, infoNoteText, publishButtonText, publishTitleText,
-  publishedSnackText, replacesVersionText, scopeAllSubText, scopeAllTitleText, scopeLabelText, scopeNotStartedSubText,
+  publishedSnackText, replacesVersionText, scopeAllTitleText, scopeLabelText, scopeNotStartedSubText,
   scopeNotStartedTitleText, scopePendingSubText, scopePendingTitleText, setFilledText,
 } from "../publishLabels";
 import {
-  APPLY_MODE_DEFAULT, PUBLISH_SCOPES, buildPublishGroups, contextKitId, errorCode, fromSetIds, groupLines, ownRouteId,
-  parsePublishImpact, parsePublishResult, parseSetNames, pendingVersion, previewRequestBody, publishRequestBody, publishVersion,
-  publishedVersionOf, scopeCount, sharedNoteText,
+  buildPublishGroups, groupLines, pendingVersion, previewRequestBody, publishRequestBody, publishVersion, publishedVersionOf, scopeCount,
+  sharedNoteText,
 } from "../publishModel";
-import { KIT_A, KIT_B, MON, PC, artboard1, wire } from "./fixtures";
+import { APPLY_MODE_DEFAULT, PUBLISH_SCOPES } from "../publishScopes";
+import { kitIdOf, ownRouteId } from "../fieldsContext";
+import { BadBody, errorCode, parsePublishImpact, parsePublishResult } from "../wire";
+import { KIT_A, KIT_B, MON, PC, artboard1, mapFor, wire } from "./fixtures";
 
 // ---- artboard 10's batch, on the kit of artboard 1 -----------------------------------------------------
 // Kit route 100 (פתיחת מארז s_kitopen1, סגירת מארז s_kitclos1), the computer's route 101 (חשמל
@@ -72,14 +73,9 @@ function artboard10Impact(): PublishImpactJson {
   };
 }
 
-function mapOf(ctx: FieldsContextJson) {
-  const model = draftReducer(EMPTY_DRAFT_MODEL, { type: "load", context: ctx });
-  return buildFieldsMap({ context: ctx, configs: currentConfigs(model), issues: summarize(model).issuesByRoute });
-}
-
 test("artboard 10: the groups of 'מה השתנה' — map order, titles, subs, shared, counts, lines", () => {
   const ctx = artboard1();
-  const groups = buildPublishGroups({ impact: artboard10Impact(), context: ctx, map: mapOf(ctx), setNames: { 9: "קבלת פריט במארז" } });
+  const groups = buildPublishGroups({ impact: artboard10Impact(), context: ctx, map: mapFor(ctx), setNames: { 9: "קבלת פריט במארז" } });
   assert.deepEqual(groups.map((g) => [g.title, g.sub, g.shared, g.count]), [
     ["חשמל · מחשב", "מסלול 1 של מחשב", true, "2 שינויים"],
     ["מכניקה · מסך", "מסלול 1 של מסך", true, "2 שינויים"],
@@ -110,17 +106,6 @@ test("groups without the map fall back to the route's steps, and a removed step 
   assert.equal(groups[1].lines[0].text, "4 תאים מולאו" + PUBLISH_UNDRAWN_TEXT.setFilledUnnamed);
 });
 
-test("a single item route's screen: the item route's groups carry the item", () => {
-  const ctx = artboard1();
-  const itemCtx: FieldsContextJson = { ...ctx, kind: "item", subject: { item_type_id: PC, desc: "מחשב", is_package: false, route_number: 1 }, kit: null, item: ctx.lines[0].route, lines: [] };
-  const impact = artboard10Impact();
-  const pc = impact.routes[2];
-  const groups = buildPublishGroups({ impact: { routes: [pc], shared_outside: [] }, context: itemCtx, map: mapOf(itemCtx) });
-  assert.deepEqual(groups.map((g) => [g.title, g.sub, g.shared]), [["חשמל · מחשב", "מסלול 1 של מחשב", false]]);
-  assert.equal(contextKitId(itemCtx), null);
-  assert.equal(ownRouteId(itemCtx), 101);
-});
-
 test("groupLines: generic rows once per field and cell, removals without fills, sets of one cell", () => {
   const base = { route_id: 1, step_uid: "s_aaaaaaaa" } as const;
   const lines = groupLines([
@@ -135,7 +120,7 @@ test("groupLines: generic rows once per field and cell, removals without fills, 
     ch({ ...base, kind: "field_added", field_id: "f_f", label: "מערכה", detail: { from_set: "3:1" } }),
     ch({ ...base, kind: "field_added", field_id: "f_g", label: "מערכה 2", detail: { from_set: "3:1" } }),
     ch({ ...base, kind: "field_added", field_id: "f_h", label: "חדש", detail: { from_set: "" } }),
-  ], { 3: "בסיסית" });
+  ], { 3: " בסיסית " });
   assert.deepEqual(lines.map((l) => [l.badge, l.text, l.warn]), [
     ["edit", "'שם חדש'", null],
     ["edit", "'שם חדש' סומן כחובה", null],
@@ -154,7 +139,7 @@ test("the dialog's version: the route on screen, else the newest of the batch", 
   assert.deepEqual(publishVersion({ routes: [impact.routes[0], impact.routes[2]] }, 100), { version: 3, fromVersion: 2 });
   assert.equal(publishVersion({ routes: [] }, 100), null);
   assert.equal(ownRouteId(artboard1()), 100);
-  assert.equal(contextKitId(artboard1()), KIT_A.package_type_id);
+  assert.equal(kitIdOf(artboard1()), KIT_A.package_type_id);
 });
 
 test("pendingVersion: the store's guess before the preview answers", () => {
@@ -180,23 +165,21 @@ test("the head: title, count tags, the version it replaces, the button", () => {
 });
 
 test("the warning note: artboard 10's sentence, one kit per route, and the undrawn forms", () => {
-  const ctx = artboard1();
   assert.equal(
-    sharedNoteText(artboard10Impact(), ctx),
+    sharedNoteText(artboard10Impact()),
     "השינויים יחולו גם מחוץ למארז הזה: מסלול 1 של מסך משמש גם ב'מארז ציוד היקפי', ומסלול 1 של מחשב משמש גם ב'מארז מחשב'.",
   );
-  assert.equal(sharedNoteText({ shared_outside: [] }, ctx), null);
+  assert.equal(sharedNoteText({ shared_outside: [] }), null);
   const three = { shared_outside: [
     { route_id: 1, item_type_desc: "א", route_number: 1, kits: [{ package_type_id: 1, desc: "ק1" }, { package_type_id: 2, desc: "ק2" }, { package_type_id: 3, desc: "ק3" }] },
     { route_id: 2, item_type_desc: "ב", route_number: 2, kits: [{ package_type_id: 1, desc: "ק1" }] },
     { route_id: 3, item_type_desc: "ג", route_number: 3, kits: [{ package_type_id: 1, desc: "ק1" }] },
   ] };
   assert.equal(
-    sharedNoteText(three, ctx),
+    sharedNoteText(three),
     "השינויים יחולו גם מחוץ למארז הזה: מסלול 1 של א משמש גם ב'ק1', ב'ק2' וב'ק3', מסלול 2 של ב משמש גם ב'ק1', ומסלול 3 של ג משמש גם ב'ק1'.",
   );
-  const itemCtx: FieldsContextJson = { ...ctx, kind: "item" };
-  assert.equal(sharedNoteText({ shared_outside: [three.shared_outside[1]] }, itemCtx), PUBLISH_UNDRAWN_TEXT.sharedLeadItemRoute + "מסלול 2 של ב משמש גם ב'ק1'.");
+  assert.equal(sharedNoteText({ shared_outside: [three.shared_outside[1]] }), "השינויים יחולו גם מחוץ למארז הזה: מסלול 2 של ב משמש גם ב'ק1'.");
 });
 
 test("the info note and the scope cards: artboard 10's two texts", () => {
@@ -243,7 +226,6 @@ test("the three scopes: order, default, counts, cards and the notes of not_start
   assert.equal(scopeNotStartedTitleText(2), SCOPE_UNDRAWN_TEXT.notStartedTitle + "2 פריטים");
   assert.equal(scopeNotStartedTitleText(1), SCOPE_UNDRAWN_TEXT.notStartedTitle + PUBLISH_UNDRAWN_TEXT.oneItem);
   assert.equal(scopeAllTitleText(9), SCOPE_UNDRAWN_TEXT.allTitle + "9 פריטים");
-  assert.equal(scopeAllSubText(), SCOPE_UNDRAWN_TEXT.allSub);
 
   const tail = "פריטים שייקלטו מעכשיו יקבלו גרסה 5.";
   const v = { version: 5, fromVersion: 4 };
@@ -261,30 +243,26 @@ test("the three scopes: order, default, counts, cards and the notes of not_start
 
 test("requests: the preview body names the kit on screen; publish sends the previewed revs", () => {
   assert.deepEqual(previewRequestBody([100, 101], 50), { route_ids: [100, 101], context_kit_id: 50 });
-  assert.deepEqual(previewRequestBody([101], null), { route_ids: [101] });
   assert.deepEqual(publishRequestBody([100, 101], { base_revs: { 100: 7, 101: 4, 102: 3 } }, "not_reached", "הערה"), {
     route_ids: [100, 101], base_revs: { 100: 7, 101: 4 }, apply_mode: "not_reached", note: "הערה",
   });
 });
 
-test("answers: the impact and the result are checked; set names and error codes are read", () => {
+test("answers: the impact and the result are checked; error codes are read", () => {
   const impact = wire(artboard10Impact());
   assert.deepEqual(parsePublishImpact(impact), impact);
-  assert.equal(parsePublishImpact({ ...impact, totals: null }), null);
-  assert.equal(parsePublishImpact({ ...impact, not_started: undefined }), null, "an answer without the not_started count");
-  assert.equal(parsePublishImpact({ ...impact, routes: [{ ...impact.routes[0], changes: [{ kind: "field_added" }] }] }), null);
-  assert.equal(parsePublishImpact({ ...impact, base_revs: { 100: -1 } }), null);
-  assert.equal(parsePublishImpact([]), null);
-  assert.deepEqual(fromSetIds(impact), [9]);
+  assert.throws(() => parsePublishImpact({ ...impact, totals: null }), BadBody);
+  assert.throws(() => parsePublishImpact({ ...impact, not_started: undefined }), BadBody, "an answer without the not_started count");
+  assert.throws(() => parsePublishImpact({ ...impact, routes: [{ ...impact.routes[0], changes: [{ kind: "field_added" }] }] }), BadBody);
+  assert.throws(() => parsePublishImpact({ ...impact, base_revs: { 100: -1 } }), BadBody);
+  assert.throws(() => parsePublishImpact([]), BadBody);
   const result = { publish_batch: "b", versions: { 100: 5 }, bumped_items: 0 };
   assert.deepEqual(parsePublishResult(result), result);
   assert.equal(publishedVersionOf(parsePublishResult(wire(result)), 100), 5);
   assert.equal(publishedVersionOf({ publish_batch: "b", versions: { 101: 3, 102: 7 }, bumped_items: 2 }, 100), 7);
   assert.equal(publishedVersionOf({ publish_batch: "b", versions: {}, bumped_items: 0 }, 100), null);
   assert.equal(publishedVersionOf(null, 100), null);
-  assert.equal(parsePublishResult({ versions: {} }), null);
-  assert.deepEqual(parseSetNames([{ id: 9, name: " קבלת פריט במארז " }, { id: "x" }, null]), { 9: "קבלת פריט במארז" });
-  assert.deepEqual(parseSetNames({ error: "no" }), {});
+  assert.throws(() => parsePublishResult({ versions: {} }), BadBody);
   assert.equal(errorCode({ error: "x", code: "DRAFT_CONFLICT" }), "DRAFT_CONFLICT");
   assert.equal(errorCode(null), null);
 });

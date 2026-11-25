@@ -1,7 +1,7 @@
-import { optionEmptyMapText } from "@/app/lib/station-fields/labels";
-import { TONE_WORD } from "@/app/lib/station-fields/schema";
+import { BOX_ROW_TITLE, EACH_ITEM_ROW_TITLE, TONE_WORD, optionEmptyMapText, routeOfTypeLabel } from "@/app/lib/station-fields/labels";
 import type { FieldType, Tone } from "@/app/lib/station-fields/schema";
 import type { Issue } from "@/app/lib/station-fields/validate";
+import { NOTE_COUNTER_FROM } from "@/app/testing/fields/labels";
 
 /**
  * Strings of the admin screen "מסלולי בדיקה" (route-fields spec §5). Lint messages, gate texts and
@@ -33,17 +33,6 @@ export const UNDRAWN_TEXT = {
   // the header while an autosave is in flight and nothing was saved yet (spec §5.2:
   // the artboards draw only "נשמר אוטומטית לפני רגע").
   saving: "שומר…",
-  // "נשמר אוטומטית לפני רגע" as a relative time once a minute has passed (spec §5.2
-  // "מתעדכן כזמן יחסי"; the artboards draw only "לפני רגע").
-  savedAgoPrefix: "נשמר אוטומטית לפני ",
-  savedMinuteAgo: "נשמר אוטומטית לפני דקה",
-  savedMinutesAgoSuffix: " דקות",
-  savedHourAgo: "נשמר אוטומטית לפני שעה",
-  savedHoursAgoSuffix: " שעות",
-  savedDayAgo: "נשמר אוטומטית לפני יום",
-  // two days: artboard 8's "לפני יומיים" (the set meta line, libraryLabels LIBRARY_TEXT.twoDaysAgo).
-  savedTwoDaysAgo: "נשמר אוטומטית לפני יומיים",
-  savedDaysAgoSuffix: " ימים",
   // an autosave (PUT …/fields/draft) or a discard (DELETE) that failed — network or
   // 5xx (spec §3.2 "שמירה נכשלה", §5.2, §10.4). The retry button reuses artboard 11's "נסה שוב".
   saveFailed: "השמירה האוטומטית נכשלה",
@@ -68,9 +57,6 @@ export const UNDRAWN_TEXT = {
   sharedFieldsOne: "שדה משותף אחד",
   // artboard 11's info bar with a single filled shared cell (drawn with 3).
   sharedFilledOne: "תא אחד כבר מלא",
-  // a single-item route's map (kind "item", spec §5.4.1 "לא אומת"): a package-level
-  // step's fields live on the kit's route, so its cell is "—" with this tooltip.
-  packageLevelOnItemRoute: "השדות של עמדה ברמת מארז מוגדרים במפת המארז",
   // a number setting (מינימום / מקסימום / ערך ייחוס / סטייה מותרת ±%) holding text that
   // is not a number (spec §5.15 "ערך לא מספרי", not drawn) — the worker's own words for the same
   // case under a number field (artboards 14 and 6, RANGE_WORD.nan in src/app/testing/fields/labels.ts).
@@ -86,44 +72,43 @@ export const UNDRAWN_TEXT = {
 } as const;
 
 // ---- counts -----------------------------------------------------------------------------------
-/** Artboards 1, 2, 11 (`label`): "שדה אחד" / "{n} שדות". */
+/** Artboards 1, 2, 11 (`label`). */
 export function fieldsText(n: number): string {
   return n === 1 ? "שדה אחד" : n + " שדות";
 }
 
-/** Artboard 1 (`selLabel`): "תא אחד נבחר" / "{n} תאים נבחרו". */
+/** Artboard 1 (`selLabel`). */
 export function selectedCellsText(n: number): string {
   return n === 1 ? "תא אחד נבחר" : n + " תאים נבחרו";
 }
 
-/** Artboard 10 (`count`): "שינוי אחד" / "{n} שינויים". */
+/** Artboard 10 (`count`). */
 export function changesText(n: number): string {
   return n === 1 ? "שינוי אחד" : n + " שינויים";
 }
 
-/** The header's draft pill, artboards 1–4, 7–10 (`draftLabel`): "טיוטה · {n} שינויים". Artboard 2
- *  writes the plural for every n; the singular takes artboard 10's "שינוי אחד". */
+/** The header's draft pill, artboards 1–4, 7–10 (`draftLabel`). Artboard 2 writes the plural for
+ *  every n; the singular takes artboard 10's. */
 export function draftPillText(changes: number): string {
   return "טיוטה · " + changesText(changes);
 }
 
-/** The header's warning pill in place of "פרסום לעמדות", artboard 2 (`issueLabel`):
- *  "בעיה אחת לתיקון" / "{n} בעיות לתיקון". */
+/** The header's warning pill in place of the publish button, artboard 2 (`issueLabel`). */
 export function issuesToFixText(n: number): string {
   return n === 1 ? "בעיה אחת לתיקון" : n + " בעיות לתיקון";
 }
 
-/** The header count beside "מסלולי בדיקה", artboards 1–11: "{n} מסלולים". */
+/** The header count beside the title, artboards 1–11. */
 export function routesCountText(n: number): string {
   return n === 1 ? UNDRAWN_TEXT.routesOne : n + " מסלולים";
 }
 
-/** The context card's count tag, artboards 1, 11: "כיסוי {defined}/{relevant}". */
+/** The context card's count tag, artboards 1, 11. */
 export function coverageText(defined: number, relevant: number): string {
   return "כיסוי " + defined + "/" + relevant;
 }
 
-/** The context card's kit tag, artboards 1, 11: "מארז · {k} סוגי פריטים · {u} יחידות". */
+/** The context card's kit tag, artboards 1, 11. */
 export function kitSummaryText(kinds: number, units: number): string {
   const k = kinds === 1 ? UNDRAWN_TEXT.kitKindsOne : kinds + " סוגי פריטים";
   const u = units === 1 ? UNDRAWN_TEXT.kitUnitsOne : units + " יחידות";
@@ -148,24 +133,41 @@ export const HEADER_TEXT = {
   publish: "פרסום לעמדות",
 } as const;
 
-/** Artboards 1–10: "נשמר אוטומטית לפני רגע". */
-export const SAVED_JUST_NOW = "נשמר אוטומטית לפני רגע";
+/** A relative time — the header's save time (spec §5.2 "מתעדכן כזמן יחסי") and the set meta line
+ *  (artboard 8). The artboards draw "לפני רגע" (the header), "עכשיו" and "לפני יומיים" (artboard 8);
+ *  the other spans are undrawn, worded here and approved on 2026-10-14. */
+const AGO = {
+  minute: "לפני דקה",
+  prefix: "לפני ",
+  minutesSuffix: " דקות",
+  hour: "לפני שעה",
+  hoursSuffix: " שעות",
+  day: "לפני יום",
+  twoDays: "לפני יומיים",
+  daysSuffix: " ימים",
+} as const;
 
-/** The header's save time as a relative time (spec §5.2). Under a minute it is the artboards'
- *  "נשמר אוטומטית לפני רגע"; later ones are undrawn. A time in the future (clock skew between
- *  the server's draft_updated_at and this browser) reads as just now. */
-export function savedAgoText(savedAtMs: number, nowMs: number): string {
-  const minutes = Math.floor(Math.max(0, nowMs - savedAtMs) / 60_000);
-  if (minutes < 1) return SAVED_JUST_NOW;
-  if (minutes === 1) return UNDRAWN_TEXT.savedMinuteAgo;
-  if (minutes < 60) return UNDRAWN_TEXT.savedAgoPrefix + minutes + UNDRAWN_TEXT.savedMinutesAgoSuffix;
+/** `atMs` relative to `nowMs`; under a minute — or ahead of this clock (clock skew between the
+ *  server and this browser) — it is `justNow`. */
+export function agoText(atMs: number, nowMs: number, justNow: string): string {
+  const minutes = Math.floor(Math.max(0, nowMs - atMs) / 60_000);
+  if (minutes < 1) return justNow;
+  if (minutes === 1) return AGO.minute;
+  if (minutes < 60) return AGO.prefix + minutes + AGO.minutesSuffix;
   const hours = Math.floor(minutes / 60);
-  if (hours === 1) return UNDRAWN_TEXT.savedHourAgo;
-  if (hours < 24) return UNDRAWN_TEXT.savedAgoPrefix + hours + UNDRAWN_TEXT.savedHoursAgoSuffix;
+  if (hours === 1) return AGO.hour;
+  if (hours < 24) return AGO.prefix + hours + AGO.hoursSuffix;
   const days = Math.floor(hours / 24);
-  if (days === 1) return UNDRAWN_TEXT.savedDayAgo;
-  if (days === 2) return UNDRAWN_TEXT.savedTwoDaysAgo;
-  return UNDRAWN_TEXT.savedAgoPrefix + days + UNDRAWN_TEXT.savedDaysAgoSuffix;
+  if (days === 1) return AGO.day;
+  if (days === 2) return AGO.twoDays;
+  return AGO.prefix + days + AGO.daysSuffix;
+}
+
+const SAVED_PREFIX = "נשמר אוטומטית ";
+
+/** The header's save time (spec §5.2; "לפני רגע": artboards 1–10). */
+export function savedAgoText(savedAtMs: number, nowMs: number): string {
+  return SAVED_PREFIX + agoText(savedAtMs, nowMs, "לפני רגע");
 }
 
 // ---- view tabs and context card -----------------------------------------------------------------
@@ -203,22 +205,30 @@ export const ROUTE_PICK_TEXT = {
   newRoute: "חדש — ייווצר בשמירה",
 } as const;
 
-/** A route number in the "מספר מסלול" list and value: "מסלול {r}". */
+/** A route number in the route-number list and value. */
 export function routeNumberText(routeNumber: number): string {
   return "מסלול " + routeNumber;
 }
 
-/** A package type's subtitle in the "סוג מארז" list: how many routes it has. */
+/** A package type's subtitle in the package-type list: how many routes it has. */
 export function kitRoutesText(n: number): string {
-  if (n === 0) return ROUTE_PICK_TEXT.noRoutes;
-  return n === 1 ? UNDRAWN_TEXT.routesOne : n + " מסלולים";
+  return n === 0 ? ROUTE_PICK_TEXT.noRoutes : routesCountText(n);
 }
 
-/** A route number's subtitle: its steps ("4 עמדות"), and whether it is the kit's default. */
+/** A count of stations (artboards 1, 10, 11 draw the plural; the singular is undrawn). */
+export function stationsText(n: number): string {
+  return n === 1 ? UNDRAWN_TEXT.stationsOne : n + " עמדות";
+}
+
+/** A route number's subtitle: its steps, and whether it is the kit's default. */
 export function routeNumberSubText(stations: number, isDefault: boolean): string {
-  const count = stations === 0 ? STEPS_PARTS_TEXT.noSteps : stations === 1 ? UNDRAWN_TEXT.stationsOne : stations + " עמדות";
+  const count = stations === 0 ? STEPS_PARTS_TEXT.noSteps : stationsText(stations);
   return isDefault ? count + " · " + ROUTE_PICK_TEXT.defaultRoute : count;
 }
+
+/** The link to a station type's popup template (the steps tab, the editor's preview). Not approved
+ *  yet. */
+const POPUP_TEMPLATE_LINK = "פתח את תבנית החלון";
 
 /** "שלבי המסלול": the parts of the kit (the box and its template lines) beside the steps editor. */
 export const STEPS_PARTS_TEXT = {
@@ -228,7 +238,7 @@ export const STEPS_PARTS_TEXT = {
   noLines: "לסוג המארז אין תכולה עדיין.",
   editContents: "עריכת התכולה",
   noSteps: "ללא עמדות",
-  /** A part's sub-line while its route does not exist: "מסלול {r} · טרם נוצר". */
+  /** A part's sub-line while its route does not exist, after the route number. */
   notCreated: "טרם נוצר",
   newRoute: "מסלול חדש — ייווצר בשמירה",
   dirty: "לא נשמר",
@@ -243,23 +253,22 @@ export const STEPS_PARTS_TEXT = {
   templateRoleMismatch: (role: "opening" | "closing") => (role === "opening"
     ? "לעמדה יש תבנית פתיחה, אבל כאן היא סוגרת את המארז. כאן ייפתח אשף הסגירה של היום."
     : "לעמדה יש תבנית סגירה, אבל כאן היא פותחת את המארז. כאן ייפתח אשף הפתיחה של היום."),
-  templateLink: "פתח את תבנית החלון",
+  templateLink: POPUP_TEMPLATE_LINK,
 } as const;
 
-/** The steps editor's title: "שלבי המארז" / "שלבי {item}". */
+/** The steps editor's title: the box's, or an item's. */
 export function stepsTitleText(item: string | null): string {
   return item == null ? "שלבי המארז" : "שלבי " + item;
 }
 
-/** A shared item route in the steps editor (the map's "משותף" notice, about steps): "מסלול {r} של
- *  {item} משמש גם ב: {kits}. שינוי בשלבים יחול גם שם." */
+/** A shared item route in the steps editor (the map's shared notice, about steps). */
 export function sharedStepsNoticeText(routeNumber: number, item: string, kits: readonly string[]): string {
-  return "מסלול " + routeNumber + " של " + item + " משמש גם ב: " + kits.join(", ") + ". שינוי בשלבים יחול גם שם.";
+  return routeOfTypeLabel(routeNumber, item) + " משמש גם ב: " + kits.join(", ") + ". שינוי בשלבים יחול גם שם.";
 }
 
-/** The route combobox value, artboards 1, 11: "{type} · מסלול {r}" ("מארז עמדת עבודה · מסלול 1"). */
+/** The route combobox value, artboards 1, 11. */
 export function routeOptionText(typeDesc: string, routeNumber: number): string {
-  return typeDesc + " · מסלול " + routeNumber;
+  return typeDesc + " · " + routeNumberText(routeNumber);
 }
 
 /** No route chosen and none remembered (spec §5.2). */
@@ -267,34 +276,23 @@ export const NO_ROUTE_TEXT = "בחר סוג מארז ומספר מסלול";
 
 // ---- the map: rows, columns, cells (artboards 1, 11) ---------------------------------------------
 /** The two fixed rows of a kit's map (spec §5.4.1). */
-export const BOX_ROW_TEXT = { title: "הקופסה", sub: "שדות על המארז עצמו" } as const;
-export const EACH_ITEM_ROW_TEXT = { title: "כל פריט במארז", sub: "שדות משותפים לכל הפריטים" } as const;
+export const BOX_ROW_TEXT = { title: BOX_ROW_TITLE, sub: "שדות על המארז עצמו" } as const;
+export const EACH_ITEM_ROW_TEXT = { title: EACH_ITEM_ROW_TITLE, sub: "שדות משותפים לכל הפריטים" } as const;
 
-/** A line's seq badge: "01", or the range of a line with several units "02–03" (en dash). */
+/** A line's seq badge: its unit, or the range of a line with several units. */
 export function seqText(from: number, to: number): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return to > from ? pad(from) + "–" + pad(to) : pad(from);
 }
 
-/** A line's quantity beside its name: "×2". */
+/** A line's quantity beside its name. */
 export function qtyText(quantity: number): string {
   return "×" + quantity;
 }
 
-/** A line's sub-line, artboards 1, 11: "מסלול {r} · {n} עמדות" — n counts every step of the route. */
+/** A line's sub-line, artboards 1, 11 — `stations` counts every step of the route. */
 export function lineSubText(routeNumber: number, stations: number): string {
-  return "מסלול " + routeNumber + " · " + (stations === 1 ? UNDRAWN_TEXT.stationsOne : stations + " עמדות");
-}
-
-/** A line without its item route: the existing reason text of the package route rules
- *  (src/app/lib/packages/route-rules.ts, checkItemRouteAgainstPackage). */
-export function lineRouteMissingText(routeNumber: number): string {
-  return "לסוג הפריט אין מסלול מספר " + routeNumber;
-}
-
-/** A kit without its own route: the existing reason text of checkPackageRoute (route-rules.ts). */
-export function kitRouteMissingText(routeNumber: number): string {
-  return "לסוג המארז אין מסלול מספר " + routeNumber;
+  return routeNumberText(routeNumber) + " · " + stationsText(stations);
 }
 
 /** Map header row and column headers (spec §5.4.2; artboard 1). */
@@ -322,34 +320,31 @@ export const MAP_TEXT = {
   filterEmpty: "ללא שדות",
   filterErrors: "שגיאות",
   filterUnpublished: "לא פורסמו",
-  previewAsWorker: "תצוגה מקדימה כעובד",
-  copyFromRoute: "העתק ממסלול אחר…",
   /** The error bar's action. */
   goToField: "עבור לשדה",
 } as const;
 
-/** The column header's accessible name (artboard 1): "בחירת כל התאים בעמדה {name}". */
+/** The column header's accessible name (artboard 1). */
 export function columnPickLabel(station: string): string {
   return "בחירת כל התאים בעמדה " + station;
 }
 
-/** The column header's last line (artboards 1, 11): "מוגדרים {defined}/{relevant}". */
+/** The column header's last line (artboards 1, 11). */
 export function columnCoverageText(defined: number, relevant: number): string {
   return "מוגדרים " + defined + "/" + relevant;
 }
 
-/** A filter chip (artboard 1): "הכל · 20", "ללא שדות · 5", "שגיאות · 1", "לא פורסמו · 1". */
+/** A filter chip (artboard 1). */
 export function filterChipText(label: string, n: number): string {
   return label + " · " + n;
 }
 
-/** A cell's accessible name (artboard 1 `aria`): "{station} · {row}". */
+/** A cell's accessible name (artboard 1 `aria`). */
 export function cellLabel(station: string, row: string): string {
   return station + " · " + row;
 }
 
-/** Artboard 11 (`aria`): a shared cell "{station} · {row} · {n} שדות משותפים", an empty one
- *  "{station} · {row} · ללא שדות". */
+/** Artboard 11 (`aria`): a shared cell, an empty one. */
 export function sharedCellLabel(station: string, row: string, fields: number): string {
   return cellLabel(station, row) + " · " + fields + " שדות משותפים";
 }
@@ -357,13 +352,12 @@ export function emptyCellLabel(station: string, row: string): string {
   return cellLabel(station, row) + " · " + MAP_TEXT.empty;
 }
 
-/** A cell's error line (artboard 1): "שגיאה אחת"; more than one is undrawn. */
+/** A cell's error line (artboard 1); more than one is undrawn. */
 export function cellErrorsText(n: number): string {
   return n === 1 ? MAP_TEXT.oneError : n + UNDRAWN_TEXT.errorsSuffix;
 }
 
-/** A cell linked to a field set (artboard 1 `setTag`): "ערכה: {name}" — the full name, ellipsed by
- *  CSS (spec §10.3). */
+/** A cell linked to a field set (artboard 1 `setTag`) — the full name, ellipsed by CSS (spec §10.3). */
 export function setTagText(setName: string): string {
   return "ערכה: " + setName;
 }
@@ -373,22 +367,21 @@ export function setTagText(setName: string): string {
  *  is wrong for most item names (spec §10.4); the station leads instead, so the verb always agrees
  *  (approved on 2026-10-14). */
 export function notOnRouteTooltip(item: string, station: string, routeNumber: number): string {
-  return "עמדת " + station + " לא נמצאת במסלול " + routeNumber + " של " + item;
+  return "עמדת " + station + " לא נמצאת ב" + routeOfTypeLabel(routeNumber, item);
 }
 
-/** A shared row's Link2 title (artboards 1, 11): "משותף ל: {kits}". Several kits are joined with
- *  ", " — the artboards draw one. */
+/** A shared row's Link2 title (artboards 1, 11). Several kits are joined with ", " — the artboards
+ *  draw one. */
 export function sharedRowTitle(kits: readonly string[]): string {
   return "משותף ל: " + kits.join(", ");
 }
 
-/** A shared cell's tooltip (artboard 11): "הוגדר במסלול {r} של {item} · משותף עם {kits}". */
+/** A shared cell's tooltip (artboard 11). */
 export function sharedCellTooltip(routeNumber: number, item: string, kits: readonly string[]): string {
-  return "הוגדר במסלול " + routeNumber + " של " + item + " · משותף עם " + kits.join(", ");
+  return "הוגדר ב" + routeOfTypeLabel(routeNumber, item) + " · משותף עם " + kits.join(", ");
 }
 
-/** Artboard 11's info bar: "{n} תאים כבר מלאים: {item} משתמש במסלול {r} שלו, שמוגדר גם ב{kit}." and
- *  its link "פתח את {kit}". The artboard draws n = 3; a single cell is undrawn. */
+/** Artboard 11's info bar and its link. The artboard draws three cells; a single cell is undrawn. */
 export function sharedFilledText(cells: number, item: string, routeNumber: number, kits: readonly string[]): string {
   const head = cells === 1 ? UNDRAWN_TEXT.sharedFilledOne : cells + " תאים כבר מלאים";
   return head + ": " + item + " משתמש במסלול " + routeNumber + " שלו, שמוגדר גם ב" + kits.join(", ") + ".";
@@ -397,9 +390,9 @@ export function openKitText(kit: string): string {
   return "פתח את " + kit;
 }
 
-/** The map footer's summary, artboard 1: "37 שדות · 5 תאים ללא שדות · שגיאה אחת"; artboard 11
- *  (every defined cell shared): "8 שדות משותפים · 13 תאים ללא שדות". Zero parts are left out — the
- *  artboards never draw "0 …" (an assumption: no footer without errors is drawn either). */
+/** The map footer's summary, artboard 1; artboard 11's when every defined cell is shared. Zero parts
+ *  are left out — the artboards never draw a zero (an assumption: no footer without errors is drawn
+ *  either). */
 export function mapFooterText(t: { fields: number; emptyCells: number; errors: number; sharedOnly: boolean }): string {
   const parts: string[] = [];
   if (t.fields > 0) {
@@ -422,15 +415,17 @@ export const LEGEND_TEXT = {
   kitLevel: "עמדה ברמת מארז · כרטיס אחד",
 } as const;
 
+/** The map's keys, each of artboard 1's footer hint (and the shortcuts popover's lines). */
+export const MAP_KEYS = ["חיצים לניווט", "Shift לבחירת טווח", "Enter לעריכה", "Ctrl C / Ctrl V"] as const;
+
 /** The map footer's keyboard hint (artboard 1), and artboard 11's (the onboarding map). */
 export const MAP_HINT_TEXT = {
-  keys: "חיצים לניווט · Shift לבחירת טווח · Enter לעריכה · Ctrl C / Ctrl V",
+  keys: MAP_KEYS.join(" · "),
   clickOpens: "לחיצה על תא פותחת את עורך השדות",
 } as const;
 
-/** The map's error bar (artboard 1): "{station} · {item}: {message}". An empty option takes the
- *  artboard's own wording ("אפשרות ריקה בשדה '{field}'", optionEmptyMapText); every other issue
- *  its lint message. */
+/** The map's error bar (artboard 1). An empty option takes the artboard's own wording
+ *  (optionEmptyMapText); every other issue its lint message. */
 export function mapErrorBarText(station: string, item: string, issue: Pick<Issue, "code" | "message">, fieldLabel: string | null): string {
   if (issue.code === "OPTION_LABEL_EMPTY" && fieldLabel != null) return optionEmptyMapText(station, item, fieldLabel);
   return station + " · " + item + ": " + issue.message;
@@ -439,7 +434,6 @@ export function mapErrorBarText(station: string, item: string, issue: Pick<Issue
 /** The selection bar (artboard 1). */
 export const BULK_TEXT = {
   toolbarLabel: "פעולות על התאים שנבחרו",
-  sharedEdit: "עריכה משותפת",
   applySet: "החל ערכת שדות…",
   paste: "הדבק",
   copy: "העתק",
@@ -462,12 +456,14 @@ export const MAP_STATE_TEXT = {
 } as const;
 
 // ---- the editor card's footer (artboard 2) --------------------------------------------------------
-/** Artboard 2 (`footLabel`): "{N} שדות · {M} חובה[ · {K} שורות ללא שם] · גרירה או Alt+חיצים לשינוי
- *  סדר", with "שדה אחד", "חובה אחד", "שורה אחת ללא שם". N counts named fields only. */
+/** Artboard 2's reorder hint, the footer's last part (and a line of the shortcuts popover). */
+export const REORDER_HINT_TEXT = "גרירה או Alt+חיצים לשינוי סדר";
+
+/** Artboard 2 (`footLabel`); `named` counts named fields only. */
 export function editorFooterText(named: number, required: number, unnamed: number): string {
   const foot = [fieldsText(named), required === 1 ? "חובה אחד" : required + " חובה"];
   if (unnamed > 0) foot.push(unnamed === 1 ? "שורה אחת ללא שם" : unnamed + " שורות ללא שם");
-  foot.push("גרירה או Alt+חיצים לשינוי סדר");
+  foot.push(REORDER_HINT_TEXT);
   return foot.join(" · ");
 }
 
@@ -506,8 +502,7 @@ export const TYPE_PICKER_TEXT = {
   enterKey: "Enter",
   noResultsTitle: "אין סוג שדה מתאים",
   noResultsText: "נסו מילה אחרת, למשל \"מספר\" או \"צילום\"",
-  /** The pearl footer: "טיפ: Enter בשם השדה האחרון מוסיף שורת בדיקה חדשה" — the key set apart so it
-   *  is isolated left to right. */
+  /** The pearl footer — the key set apart so it is isolated left to right. */
   tipLead: "טיפ: ",
   tipKey: "Enter",
   tipTail: " בשם השדה האחרון מוסיף שורת בדיקה חדשה",
@@ -546,14 +541,6 @@ export const NUMBER_SUMMARY_TEXT = {
   minShort: "מינ׳ ",
 } as const;
 
-/** The live preview's line under a number field (artboard 3 `rangeMsg`, spec §5.6 last bullet). */
-export const NUMBER_PREVIEW_TEXT = {
-  inRange: "בטווח",
-  outOfRange: "מחוץ לטווח",
-  markedFail: "יסומן לא תקין",
-  noRange: "ללא טווח מוגדר",
-} as const;
-
 // ---- options of a choice field (artboard 4, spec §5.7) -------------------------------------------------
 /** The popover's fixed text (artboard 4). */
 export const OPTION_LIST_TEXT = {
@@ -563,7 +550,7 @@ export const OPTION_LIST_TEXT = {
   close: "סגירה",
   /** role="list" aria-label. */
   list: "אפשרויות",
-  /** "מקשים 1–4 לבחירה מהירה בעמדה", the key range set apart so it is isolated left to right. */
+  /** The quick-key hint, the key range set apart so it is isolated left to right. */
   keysLead: "מקשים ",
   keysRange: "1–4",
   keysTail: " לבחירה מהירה בעמדה",
@@ -578,57 +565,49 @@ export const OPTION_LIST_TEXT = {
   apply: "החל על השדה",
 } as const;
 
-/** The head (artboard 4): "אפשרויות · {field}". */
+/** The head (artboard 4). */
 export function optionListTitle(field: string): string {
   return field.trim() ? "אפשרויות · " + field.trim() : OPTION_LIST_TEXT.list;
 }
 
-/** Local mode's box title (artboard 4): "אפשרויות מקומיות · {station} · {item}". */
-export function localOptionsTitle(station: string, item: string): string {
-  return "אפשרויות מקומיות · " + station + " · " + item;
-}
-
-/** Local mode's note (artboard 4 `localNote`): 'הועתקו מהרשימה "{list}". שינוי כאן חל רק על {field} ולא
- *  ישפיע על שדות אחרים.' Without the list's name, the first sentence is undrawn. */
+/** Local mode's note (artboard 4 `localNote`). Without the list's name, the first sentence is undrawn. */
 export function localOptionsNote(field: string, listName: string | null): string {
   const copied = listName != null ? "הועתקו מהרשימה \"" + listName + "\"." : UNDRAWN_TEXT.optionsCopiedFromSharedList;
   return copied + " שינוי כאן חל רק על " + field + " ולא ישפיע על שדות אחרים.";
 }
 
-/** The options' header (artboard 4 `optsTitle`): "אפשרויות לשדה הזה · {n}" (local) /
- *  "אפשרויות · {n}" (shared). */
+/** The options' header (artboard 4 `optsTitle`), local or shared (also artboard 8's list detail). */
 export function optionsCountText(n: number, local: boolean): string {
   return (local ? "אפשרויות לשדה הזה" : "אפשרויות") + " · " + n;
 }
 
-/** An option row's accessible name (artboard 4 `aria`): "אפשרות {n}: {label} · {tone word}", an
- *  empty label read as "ריקה". `index` is 0-based. */
+/** An option row's accessible name (artboard 4 `aria`). `index` is 0-based. */
 export function optionRowLabel(index: number, label: string, tone: Tone): string {
   return "אפשרות " + (index + 1) + ": " + (label || "ריקה") + " · " + TONE_WORD[tone];
 }
 
-/** The key box's title (artboard 4 `keyTitle`): "מקש {n} לבחירה מהירה", from the fifth option on
- *  OPTION_LIST_TEXT.noKeyTitle. `index` is 0-based. */
-export function optionKeyTitle(index: number): string {
-  return index < 4 ? "מקש " + (index + 1) + " לבחירה מהירה" : OPTION_LIST_TEXT.noKeyTitle;
+/** The key box's title (artboard 4 `keyTitle`) of an option's quick key (optionFields.optionKey;
+ *  null: the option has none). */
+export function optionKeyTitle(key: string | null): string {
+  return key != null ? "מקש " + key + " לבחירה מהירה" : OPTION_LIST_TEXT.noKeyTitle;
 }
 
-/** The label input's name (artboard 4): "שם האפשרות {n}". `index` is 0-based. */
+/** The label input's name (artboard 4). `index` is 0-based. */
 export function optionNameLabel(index: number): string {
   return "שם האפשרות " + (index + 1);
 }
 
-/** The tone button's name (artboard 4 `toneAria`): "סוג האפשרות: {w}. לחיצה מחליפה ל{next}". */
+/** The tone button's name (artboard 4 `toneAria`). */
 export function toneButtonLabel(tone: Tone, next: Tone): string {
   return "סוג האפשרות: " + TONE_WORD[tone] + ". לחיצה מחליפה ל" + TONE_WORD[next];
 }
 
-/** The drag handle's name (artboard 4): "גרירה לשינוי סדר: {label}". */
+/** The drag handle's name (artboard 4). */
 export function optionDragLabel(label: string): string {
   return "גרירה לשינוי סדר: " + label;
 }
 
-/** The × button's name (artboards 2, 4): "הסרת האפשרות {label}". */
+/** The × button's name (artboards 2, 4). */
 export function optionRemoveLabel(label: string): string {
   return "הסרת האפשרות " + label;
 }
@@ -665,7 +644,7 @@ export const EDITOR_UNDRAWN_TEXT = {
   // a package-level step whose station type has a package template (PLAN.md §5, step 2.6).
   packageTemplateNote: "החלון בעמדה הזו נבנה מתבנית החלון של סוג העמדה, על בסיס האשף של המארז.",
   packageTemplateMismatch: "לעמדה יש תבנית בתפקיד אחר מזה של הצעד הזה במסלול, ולכן כאן ייפתח האשף של היום.",
-  templateLink: "פתח את תבנית החלון",
+  templateLink: POPUP_TEMPLATE_LINK,
   lockedBottomDialog: "הערות נוספות · 'שמור וסיים' · תמיד אחרון",
   // the locked rows of a package-level step (spec §5.5.2 ב/ה "לא אומת לעורך"), in the
   // package wizards' own step names and questions. Opening wizard: the box fields sit in "צילום הקופסה"
@@ -682,7 +661,7 @@ export const EDITOR_UNDRAWN_TEXT = {
 
 /** Fixed text of the editor (artboard 2 DOM and script, spec §5.5). */
 export const EDITOR_TEXT = {
-  /** The breadcrumb <nav aria-label="מיקום">: "חזרה למפה", "מפת שדות › {station} › {item}". */
+  /** The breadcrumb's <nav> label, its back link and its first crumb. */
   breadcrumbLabel: "מיקום",
   backToMap: "חזרה למפה",
   mapCrumb: VIEW_TAB_TEXT.map,
@@ -695,9 +674,7 @@ export const EDITOR_TEXT = {
    *  station types screen's Tag). */
   perItem: MAP_TEXT.perItem,
   packageLevel: "עמדה ברמת מארז",
-  /** The card's ⋯ (artboard 2 aria-label, every item there) — cellMenuText names the items a menu
-   *  really has. Its items: "שמור כערכה…", "החל ערכה…" (spec §5.5.1), "נקה את התא". */
-  cellMenuLabel: "פעולות נוספות לתא: שמור כערכה, החל ערכה, נקה את התא",
+  /** The card's ⋯ items (spec §5.5.1); its aria-label is cellMenuText's. */
   saveAsSet: "שמור כערכה…",
   applySet: "החל ערכה…",
   clearCell: "נקה את התא",
@@ -748,7 +725,7 @@ export const EDITOR_TEXT = {
   /** NoteMaxSelect. */
   noteMaxTitle: "אורך מרבי להערה",
   noteMaxHeader: "אורך מרבי",
-  noteMaxFootnote: "העובד רואה מונה תווים מ-80% מהאורך.",
+  noteMaxFootnote: `העובד רואה מונה תווים מ-${Math.round(NOTE_COUNTER_FROM * 100)}% מהאורך.`,
   /** The "חובה" chip. */
   required: "חובה",
   /** AddFieldBar. */
@@ -766,7 +743,8 @@ export const DEFAULT_CHOICE_OPTIONS: readonly { label: string; tone: Tone }[] = 
   { label: "לא נבדק", tone: "neutral" },
 ];
 
-/** A row's name in the accessible names below — its label, or "שורה ללא שם" (artboard 2 `label`). */
+/** A row's name in the accessible names below — its label, or EDITOR_TEXT.unnamedRow (artboard 2
+ *  `label`). */
 export function rowNameText(label: string): string {
   return label.trim() || EDITOR_TEXT.unnamedRow;
 }
@@ -775,49 +753,46 @@ export function rowNameText(label: string): string {
 export const CELL_MENU_WORDS = { saveAsSet: "שמור כערכה", applySet: "החל ערכה", clear: "נקה את התא" } as const;
 export type CellMenuItem = keyof typeof CELL_MENU_WORDS;
 
-/** The ⋯'s aria-label (artboard 2): "פעולות נוספות לתא: {items}" — only the items the menu has, in
- *  its order ("פעולות נוספות לתא: שמור כערכה, החל ערכה, נקה את התא" with all three). */
+/** The ⋯'s aria-label (artboard 2) — only the items the menu has, in its order. */
 export function cellMenuText(items: readonly CellMenuItem[]): string {
   const order: CellMenuItem[] = ["saveAsSet", "applySet", "clear"];
   return "פעולות נוספות לתא: " + order.filter((i) => items.includes(i)).map((i) => CELL_MENU_WORDS[i]).join(", ");
 }
 
-/** The card's h2 (artboard 2): "שלב {n} מתוך {total} · {station}". */
+/** The card's h2 (artboard 2). */
 export function editorTitleText(n: number, total: number, station: string): string {
   return "שלב " + n + " מתוך " + total + " · " + station;
 }
 
-/** The card's sub-line (artboard 2): "מה העובד ממלא בעמדה הזו עבור: {item}". */
+/** The card's sub-line (artboard 2). */
 export function editorSubText(item: string): string {
   return "מה העובד ממלא בעמדה הזו עבור: " + item;
 }
 
-/** The fields sub-tab (artboard 2 `fieldCount`, named fields only): "שדות · {n}". */
+/** The fields sub-tab (artboard 2 `fieldCount`, named fields only). */
 export function fieldsTabText(named: number): string {
   return "שדות · " + named;
 }
 
-/** The station bar's end button (artboard 2): "העמדה הבאה: {name}". */
+/** The station bar's end button (artboard 2). */
 export function nextStationText(name: string): string {
   return "העמדה הבאה: " + name;
 }
 
-/** A stop's line (artboard 2 `stopsRaw`): "{N} שדות" / "שדה אחד", or "שגיאה". */
+/** A stop's line (artboard 2 `stopsRaw`): its fields, or the error word. */
 export function stopSubText(fields: number, errors: number): string {
   return errors > 0 ? EDITOR_TEXT.stopError : fieldsText(fields);
 }
 
-/** A target chip (artboard 2 `targets`, artboard 7): "{lead} · {named}" — "מחשב · 5", "מסך ×2 · 3",
- *  "הקופסה · 3", "01 מחשב · 2". */
+/** A target chip (artboard 2 `targets`, artboard 7). */
 export function targetChipText(lead: string, named: number): string {
   return lead + " · " + named;
 }
 
-/** The shared notice (artboard 2): "השדות נשמרים במסלול {r} של {item} ומשמשים גם ב: {kits}. שינוי כאן
- *  יחול בשניהם." — more than one other kit ends undrawn. */
+/** The shared notice (artboard 2) — more than one other kit ends undrawn. */
 export function sharedNoticeText(routeNumber: number, item: string, kits: readonly string[]): string {
   const tail = kits.length > 1 ? EDITOR_UNDRAWN_TEXT.sharedAll : "שינוי כאן יחול בשניהם.";
-  return "השדות נשמרים במסלול " + routeNumber + " של " + item + " ומשמשים גם ב: " + kits.join(", ") + ". " + tail;
+  return "השדות נשמרים ב" + routeOfTypeLabel(routeNumber, item) + " ומשמשים גם ב: " + kits.join(", ") + ". " + tail;
 }
 
 /** The settings of a checklist row and of a photo row. No artboard draws them (spec §5.5.2: "photo:
@@ -842,49 +817,49 @@ export const FIELD_SETTINGS_UNDRAWN_TEXT = {
   photoMinTitle: "מינימום תמונות",
 } as const;
 
-/** The checklist row's boxes (undrawn): "תיבות סימון לשדה {name}". */
+/** The checklist row's boxes (undrawn). */
 export function checklistGroupLabel(fieldLabel: string): string {
   return FIELD_SETTINGS_UNDRAWN_TEXT.checklistGroupPrefix + rowNameText(fieldLabel);
 }
 
-/** A checklist box chip (undrawn): "עריכת תיבת הסימון {label}". */
+/** A checklist box chip (undrawn). */
 export function checklistItemEditLabel(label: string): string {
   return FIELD_SETTINGS_UNDRAWN_TEXT.checklistItemEditPrefix + label;
 }
 
-/** A checklist box's × (undrawn): "הסרת תיבת הסימון {label}". */
+/** A checklist box's × (undrawn). */
 export function checklistItemRemoveLabel(label: string): string {
   return FIELD_SETTINGS_UNDRAWN_TEXT.checklistItemRemovePrefix + label;
 }
 
-/** The drag handle (artboard 2 `gripLabel`): "גרירה לשינוי סדר: {name}". */
+/** The drag handle (artboard 2 `gripLabel`). */
 export function rowGripLabel(label: string): string {
   return "גרירה לשינוי סדר: " + rowNameText(label);
 }
 
-/** The row's ⋯ (artboard 2 `moreLabel`): "פעולות נוספות: {name}". */
+/** The row's ⋯ (artboard 2 `moreLabel`). */
 export function rowMoreLabel(label: string): string {
   return "פעולות נוספות: " + rowNameText(label);
 }
 
-/** The options group (artboard 2 `optsLabel`): "אפשרויות לשדה {name}". */
+/** The options group (artboard 2 `optsLabel`). */
 export function optionsGroupLabel(label: string): string {
   return "אפשרויות לשדה " + rowNameText(label);
 }
 
-/** A chip (artboard 2 `aria`): "עריכת האפשרות {label} · {tone word}". */
+/** A chip (artboard 2 `aria`). */
 export function optionEditLabel(label: string, tone: Tone): string {
   return "עריכת האפשרות " + label + " · " + TONE_WORD[tone];
 }
 
-/** The list link under the chips (artboard 2 `listText`): "רשימה: {name}" / "רשימה: מותאמת לשדה". A
- *  linked list whose name is unknown is undrawn. */
+/** The list link under the chips (artboard 2 `listText`). A linked list whose name is unknown is
+ *  undrawn. */
 export function listLinkText(linked: boolean, listName: string | null): string {
   if (!linked) return EDITOR_TEXT.listCustom;
   return "רשימה: " + (listName ?? EDITOR_UNDRAWN_TEXT.listUnnamed);
 }
 
-/** NotesModeSelect's button (artboard 2 `notesAria`): "הערות: {mode}". */
+/** NotesModeSelect's button (artboard 2 `notesAria`). */
 export function notesModeAria(modeLabel: string): string {
   return "הערות: " + modeLabel;
 }
@@ -897,12 +872,12 @@ export function noteMaxAria(n: number): string {
   return "אורך מרבי להערה: " + n + " תווים";
 }
 
-/** A "אורך מרבי" option (artboard 2 `lenOpts`): "{n} תווים", the default "1000 תווים · ברירת מחדל". */
+/** A note-length option (artboard 2 `lenOpts`), the default marked. */
 export function noteMaxOptionText(n: number, isDefault: boolean): string {
   return n + " תווים" + (isDefault ? " · ברירת מחדל" : "");
 }
 
-/** The "חובה" chip (artboard 2 `reqAria`): "שדה חובה: {name}". */
+/** The required chip (artboard 2 `reqAria`). */
 export function requiredAria(label: string): string {
   return "שדה חובה: " + rowNameText(label);
 }
@@ -939,20 +914,13 @@ export const PREVIEW_UNDRAWN_TEXT = {
   finishPackage: "סיום",
 } as const;
 
-/** The preview frame's sub-line (artboard 2 `pvSub`): "{station} · {item} · {N} שדות" — N counts
- *  named fields, "שדה אחד" for one. */
+/** The preview frame's sub-line (artboard 2 `pvSub`) — `named` counts named fields. */
 export function previewSubText(station: string, item: string, named: number): string {
   return station + " · " + item + " · " + fieldsText(named);
 }
 
-/** The preview frame's step (artboard 2): "שלב {n} מתוך {total}". */
+/** The preview frame's step (artboard 2). */
 export function previewStepText(n: number, total: number): string {
   return "שלב " + n + " מתוך " + total;
 }
 
-/** VerdictStation / PhotoStation's finish button (their `finishLabel`): "סיום בדיקת {kind}" from the
- *  station type's name in the DB, "סיום בדיקה" without one. */
-export function stationFinishText(stationTypeName: string | null | undefined): string {
-  const kind = stationTypeName?.trim();
-  return kind ? "סיום בדיקת " + kind : "סיום בדיקה";
-}

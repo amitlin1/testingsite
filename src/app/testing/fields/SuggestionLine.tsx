@@ -99,5 +99,3 @@ export function SuggestionLine({
     </div>
   );
 }
-
-export default SuggestionLine;

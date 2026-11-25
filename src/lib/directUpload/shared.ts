@@ -1,5 +1,6 @@
 /**
- * Direct-to-MinIO uploads — the wire contract and the pure helpers.
+ * Direct-to-MinIO uploads — the wire contract and the pure helpers (the key
+ * layout itself is @/lib/storage/keys).
  *
  * Nothing in this file touches the network, the database or process.env, so it
  * is safe to import from the browser bundle (types + validation) and from unit
@@ -54,23 +55,6 @@ export interface ConfirmResponse {
 /** Sanity ceiling on how many tickets one presign call may mint. */
 export const MAX_UPLOAD_BATCH = 100;
 
-/** Object-key prefix every attachment of an item lives under. */
-export const itemPrefix = (itemId: string) => `items/${itemId}/`;
-
-/** Reject keys that don't belong to this item — prevents cross-item writes via a forged key. */
-export function keyBelongsToItem(key: string, itemId: string): boolean {
-  return key.startsWith(itemPrefix(itemId)) && !key.includes('..');
-}
-
-/** Filesystem-safe file name for embedding in an object key. */
-export const sanitizeFilename = (name: string) =>
-  name.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
-
-/** `items/{id}/{uuid}_{safeName}` — the same layout the old multipart route produced. */
-export function buildItemObjectKey(itemId: string, fileName: string, uploadId: string): string {
-  return `${itemPrefix(itemId)}${uploadId}_${sanitizeFilename(fileName)}`;
-}
-
 export type DescriptorParse =
   | { ok: true; files: UploadDescriptor[] }
   | { ok: false; error: string };
@@ -119,66 +103,4 @@ export function parseUploadDescriptors(
 /** MIME type to pin in the POST policy; the browser must send exactly this. */
 export function contentTypeOf(desc: Pick<UploadDescriptor, 'type'>): string {
   return desc.type && desc.type.trim() !== '' ? desc.type : 'application/octet-stream';
-}
-
-export type FolderPathParse =
-  | { ok: true; path: string }
-  | { ok: false; error: string };
-
-/**
- * File-manager folder: '' for the root, otherwise 'a/b/' (trailing slash, no
- * leading slash, no traversal). Mirrors the folder-create route's rules.
- */
-export function normalizeFolderPath(raw: unknown): FolderPathParse {
-  if (raw == null || raw === '') return { ok: true, path: '' };
-  if (typeof raw !== 'string') return { ok: false, error: 'נתיב לא תקין' };
-  let path = raw.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (path === '') return { ok: true, path: '' };
-  if (path.split('/').some((seg) => seg === '..')) return { ok: false, error: 'נתיב לא תקין' };
-  if (!path.endsWith('/')) path += '/';
-  return { ok: true, path };
-}
-
-/** A file-manager entry name: a single path segment, nothing that could escape the folder. */
-export function isValidFileManagerName(name: string): boolean {
-  return (
-    name.trim() !== '' &&
-    name !== '.' &&
-    name !== '..' &&
-    !name.includes('/') &&
-    !name.includes('\\')
-  );
-}
-
-/** `{folder}{name}` — the file manager keeps the user's own names (overwrites are versioned). */
-export function buildFileManagerKey(folderPath: string, fileName: string): string {
-  return `${folderPath}${fileName}`;
-}
-
-/** Key prefix every reference-item image lives under (inside REFERENCE_BUCKET). */
-export const REFERENCE_PREFIX = 'reference-items';
-
-/** Filesystem-safe object-key segment derived from an uploaded image name. */
-export function safeReferenceName(name: string): string {
-  const base = name.split(/[\\/]/).pop() || 'image';
-  return base.replace(/[^\w.-]+/g, '_').slice(0, 200) || 'image';
-}
-
-/**
- * `reference-items/{itemId|new}/{ts}-{shortId}-{safeName}`. Images for a NOT-YET
- * created reference item are keyed under "new" — the id does not exist until the
- * form is saved, and nothing lists this bucket by prefix.
- */
-export function buildReferenceObjectKey(
-  referenceItemId: number | null,
-  fileName: string,
-  uploadId: string,
-  now: number = Date.now(),
-): string {
-  const owner = referenceItemId != null ? String(referenceItemId) : 'new';
-  return `${REFERENCE_PREFIX}/${owner}/${now}-${uploadId.slice(0, 8)}-${safeReferenceName(fileName)}`;
-}
-
-export function isReferenceObjectKey(key: string): boolean {
-  return key.startsWith(`${REFERENCE_PREFIX}/`) && !key.includes('..');
 }

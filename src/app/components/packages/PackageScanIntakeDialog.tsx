@@ -1,12 +1,14 @@
 "use client";
+import { NO_CONNECTION_TEXT, failureText } from "@/app/components/failureText";
 import React from "react";
 import { Check, CircleAlert, ScanLine, Undo2, Volume2, VolumeX } from "lucide-react";
-import { apiFetch } from "@/lib/api/client";
-import type { PackageView } from "@/app/lib/packages/read";
-import { typeAsUsKeyboard } from "@/app/lib/scannerKeys";
-import { PackageDialog, PackageDialogHeader } from "./PackageDialog";
-import { playCue, setSoundOn, soundOn, subscribeSound } from "./scanSound";
-import { GREEN, GREEN_BG, HAIR, HAIR_2, INK_2, MUTED, RED, RED_BG, fmtId } from "./packageUi";
+import type { PackageView } from "@/app/lib/packages/contract";
+import { typeAsUsKeyboard } from "@/lib/scan/scannerKeys";
+import { ArtboardDialog, ArtboardDialogHeader } from "@/components/ui/ArtboardDialog";
+import { playCue, setSoundOn, soundOn, subscribeSound } from "@/lib/scan/sound";
+import { sendJson } from "@/lib/api/client";
+import { GREEN, GREEN_BG, HAIR, HAIR_2, INK_2, MUTED, RED, RED_BG } from "@/components/ui/colors";
+import { boxLabelKind, formatId } from "@/app/lib/packages/ids";
 
 /**
  * קליטת מארזים — the box labels printed with the shipment are scanned here,
@@ -17,10 +19,6 @@ import { GREEN, GREEN_BG, HAIR, HAIR_2, INK_2, MUTED, RED, RED_BG, fmtId } from 
  */
 
 type Outcome = { tone: "ok" | "error"; text: string };
-
-// A box id: 15 digits, or the 16 minted before the customer code; an older
-// label may still carry "-sourceId".
-const BOX_ID = /^\d{15,16}(-\d+)?$/;
 
 export default function PackageScanIntakeDialog({
   open, onClose, onChanged,
@@ -33,7 +31,6 @@ export default function PackageScanIntakeDialog({
   const [scan, setScan] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
-  // This session's boxes, newest first.
   const [taken, setTaken] = React.useState<PackageView[]>([]);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const sound = React.useSyncExternalStore(subscribeSound, soundOn, () => true);
@@ -49,18 +46,13 @@ export default function PackageScanIntakeDialog({
 
   const takeIn = async (value: string) => {
     try {
-      const res = await apiFetch("/api/packages/intake", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ barcode: value }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) { fail(d?.error || "קליטת המארז נכשלה"); return; }
-      const pkg: PackageView = d.package;
+      const pkg = (await sendJson<{ package: PackageView }>("/api/packages/intake", "POST", { barcode: value })).package;
       setTaken((t) => [pkg, ...t]);
       setOutcome({ tone: "ok", text: `${pkg.item_type_desc} נקלט · ${pkg.items.length} פריטים · משלוח ${pkg.shipment_code ?? ""} — ממתין בעמדת הפתיחה` });
       playCue("ok");
       onChanged?.();
-    } catch {
-      fail("שגיאה בתקשורת");
+    } catch (e) {
+      fail(failureText(e, "קליטת המארז נכשלה", NO_CONNECTION_TEXT));
     }
   };
 
@@ -82,13 +74,14 @@ export default function PackageScanIntakeDialog({
     const value = scan.trim();
     if (!value) return;
     setScan("");
-    if (!BOX_ID.test(value)) {
+    const kind = boxLabelKind(value);
+    if (kind == null) {
       fail(/^\d+(-\d+)?$/.test(value)
         ? `${value} אינו מזהה של מארז (16 ספרות). אם זו מדבקת משלוח — הדפס את מדבקות המארזים מעמוד המשלוחים.`
         : `"${value}" אינו ברקוד של מדבקת מארז.`);
       return;
     }
-    if (!value.split("-")[0].endsWith("00")) { fail("זו מדבקה של פריט בתוך מארז — סרוק את מדבקת המארז (המזהה מסתיים ב-00)."); return; }
+    if (kind === "item") { fail("זו מדבקה של פריט בתוך מארז — סרוק את מדבקת המארז (המזהה מסתיים ב-00)."); return; }
     if (queue.current.includes(value)) return;
     queue.current.push(value);
     setQueued(queue.current.length);
@@ -98,14 +91,12 @@ export default function PackageScanIntakeDialog({
   const undo = async (pkg: PackageView) => {
     setBusy(true);
     try {
-      const res = await apiFetch(`/api/packages/${pkg.item_id}/intake`, { method: "DELETE" });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) { fail(d?.error || "ביטול הקליטה נכשל"); return; }
+      await sendJson(`/api/packages/${pkg.item_id}/intake`, "DELETE");
       setTaken((t) => t.filter((p) => p.item_id !== pkg.item_id));
       setOutcome({ tone: "ok", text: `הקליטה של ${pkg.item_type_desc} בוטלה — המארז ממתין לקליטה, אפשר לסרוק אותו שוב` });
       onChanged?.();
-    } catch {
-      fail("שגיאה בתקשורת");
+    } catch (e) {
+      fail(failureText(e, "ביטול הקליטה נכשל", NO_CONNECTION_TEXT));
     } finally {
       setBusy(false);
       inputRef.current?.focus();
@@ -115,8 +106,8 @@ export default function PackageScanIntakeDialog({
   const close = () => { setScan(""); setOutcome(null); setTaken([]); onClose(); };
 
   return (
-    <PackageDialog open onClose={close} width="min(760px, calc(100vw - 32px))" maxHeight="88vh">
-      <PackageDialogHeader
+    <ArtboardDialog open onClose={close} width="min(760px, calc(100vw - 32px))" maxHeight="88vh">
+      <ArtboardDialogHeader
         title="קליטת מארזים"
         onClose={close}
         subtitle={<div style={{ fontSize: 13.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>סרוק את מדבקת המארז שהודפסה מהמשלוח. המארז נכנס למסלול וממתין בעמדת הפתיחה — שם מזינים את הסריאליים. אפשר לסרוק כמה מארזים ברצף.</div>}
@@ -168,7 +159,7 @@ export default function PackageScanIntakeDialog({
         ) : (
           <div style={{ marginTop: 8, border: `1px solid ${HAIR}`, borderRadius: 12, overflow: "hidden" }}>
             {taken.map((p, i) => {
-              const { head, suffix } = fmtId(p.item_id);
+              const { head, suffix } = formatId(p.item_id);
               return (
                 <div key={p.item_id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderTop: i > 0 ? `1px solid ${HAIR_2}` : undefined, flexWrap: "wrap" }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -200,6 +191,6 @@ export default function PackageScanIntakeDialog({
           <button type="button" onClick={close} disabled={busy} className="pkg-pill pkg-pill--primary" style={{ paddingInline: 22 }}>סיום</button>
         </div>
       </div>
-    </PackageDialog>
+    </ArtboardDialog>
   );
 }

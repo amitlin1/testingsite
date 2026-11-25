@@ -4,10 +4,24 @@
 //
 // NEVER import this into a client component — it holds the admin secret and
 // talks straight to Keycloak's admin API. Used by the /api/users/* route
-// handlers (manager-gated) and by /api/workers-directory (any authenticated
-// user — read-only identity lookups only, no mutation exposed there).
+// handlers (manager-gated), and for read-only identity lookups (no mutation) by
+// /api/workers-directory (any authenticated user) and by the item / package
+// reads and the item report, which name the workers on them.
 
-import { APP_ROLES, type AppRole } from "@/lib/auth/roles";
+import { NextResponse } from "next/server";
+import { ADMIN_ROLE, isAppRole, type AppRole } from "@/lib/auth/roles";
+import { workerIdOf } from "@/lib/auth/identity";
+import { adminApiBase, adminClient, internalIssuer } from "@/lib/auth/keycloak-env";
+import { HttpError, errorResponse } from "@/lib/http/errors";
+import { mapWithConcurrency } from "@/lib/async";
+import {
+  fullNameOf,
+  isServiceAccount,
+  type AdminUser,
+  type CreateUserInput,
+  type DirectoryWorker,
+  type UserStatus,
+} from "@/lib/users/rules";
 
 // Every call from this module is a BACK-CHANNEL call (server -> Keycloak), so it
 // uses the INTERNAL issuer when one is configured. On an air-gapped host reached
@@ -15,15 +29,9 @@ import { APP_ROLES, type AppRole } from "@/lib/auth/roles";
 // back to (Windows Firewall drops inbound LAN traffic from the docker bridge) —
 // the user-management page would hang and then fail. Falls back to the public
 // issuer when KEYCLOAK_INTERNAL_ISSUER is unset. See auth.ts for the full note.
-const ISSUER =
-  process.env.KEYCLOAK_INTERNAL_ISSUER ?? process.env.AUTH_KEYCLOAK_ISSUER ?? "";
-const CLIENT_ID = process.env.KEYCLOAK_ADMIN_CLIENT_ID ?? "testing-admin-api";
-const CLIENT_SECRET = process.env.KEYCLOAK_ADMIN_CLIENT_SECRET ?? "";
-
-// issuer = {server}/realms/{realm}  →  admin base = {server}/admin/realms/{realm}
-const REALM = ISSUER.split("/realms/")[1] ?? "";
-const SERVER = ISSUER.replace(/\/realms\/[^/]+$/, "");
-const ADMIN_BASE = `${SERVER}/admin/realms/${REALM}`;
+const ISSUER = internalIssuer() ?? "";
+const { id: CLIENT_ID, secret: CLIENT_SECRET } = adminClient();
+const ADMIN_BASE = adminApiBase(ISSUER);
 const TOKEN_URL = `${ISSUER}/protocol/openid-connect/token`;
 
 // ---- service-account token (cached in-process until ~10s before expiry) ----
@@ -41,9 +49,7 @@ async function fetchToken(): Promise<string> {
     }),
     cache: "no-store",
   });
-  if (!res.ok) {
-    throw new Error(`keycloak admin token failed: ${res.status} ${await res.text().catch(() => "")}`);
-  }
+  if (!res.ok) throw failed("token", res, await res.text().catch(() => ""));
   const json = (await res.json()) as { access_token: string; expires_in: number };
   cachedToken = { value: json.access_token, expiresAt: Date.now() + json.expires_in * 1000 };
   return json.access_token;
@@ -84,24 +90,6 @@ async function kc(path: string, init: RequestInit = {}, retried = false): Promis
   return res;
 }
 
-/** Run `fn` over `items` with bounded concurrency (order-preserving results). */
-async function mapLimit<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
 // ---- raw Keycloak shapes ----
 interface KcUser {
   id: string;
@@ -119,56 +107,47 @@ interface KcRole {
   name: string;
 }
 
-// ---- app-facing shapes ----
-export type UserStatus = "active" | "disabled" | "locked" | "pending";
-export interface AdminUser {
-  id: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  fullName: string;
-  employeeNumber: string | null;
-  enabled: boolean;
-  createdTimestamp: number | null;
-  role: AppRole | null;
-  status: UserStatus;
+// ---- failures ----
+// Keycloak answering anything but success is a gateway failure: logged with what it said, and
+// answered 502 with the route's own Hebrew text (adminErrorResponse) — never its status or words,
+// which would read as this app's (a 401 passed through would look like an expired session).
+// The refusals a manager should read are HttpErrors in Hebrew.
+
+function failed(op: string, res: Response, detail = ""): Error {
+  return new Error(`keycloak admin ${op}: ${res.status}${detail ? ` ${detail}` : ""}`);
 }
 
-export interface CreateUserInput {
-  username: string;
-  firstName?: string;
-  lastName?: string;
-  employeeNumber?: string;
-  role: AppRole;
-  temporaryPassword: string;
-  mustChangePassword: boolean;
+/** How the users API and the workers directory answer a failure: a refusal (HttpError) as itself;
+ *  anything else is logged and answered 502 with `fallback` — these routes stand in front of
+ *  Keycloak, so its failure is a gateway's. */
+export function adminErrorResponse(e: unknown, fallback: string): Response {
+  if (e instanceof HttpError) return errorResponse(e, fallback);
+  console.error(fallback, e);
+  return NextResponse.json({ error: fallback }, { status: 502 });
 }
-
-const isAppRole = (name: string): name is AppRole =>
-  (APP_ROLES as readonly string[]).includes(name);
 
 // ---- low-level ops ----
-async function listUsers(search?: string): Promise<KcUser[]> {
-  // Page through /users (Keycloak caps a single page); stop on a short page.
+
+/** Every page of a Keycloak list (it caps a single page): stops on a short page, or at a hard
+ *  safety cap of 5000 rows. */
+async function listAll<T>(op: string, path: string, params: Record<string, string> = {}): Promise<T[]> {
   const PAGE = 100;
-  const all: KcUser[] = [];
+  const all: T[] = [];
   for (let first = 0; ; first += PAGE) {
-    const q = new URLSearchParams({
-      first: String(first),
-      max: String(PAGE),
-      briefRepresentation: "false",
-    });
-    if (search) q.set("search", search);
-    const res = await kc(`/users?${q.toString()}`);
-    if (!res.ok) throw new Error(`listUsers ${res.status}`);
-    const page = (await res.json()) as KcUser[];
+    const q = new URLSearchParams({ first: String(first), max: String(PAGE), ...params });
+    const res = await kc(`${path}?${q.toString()}`);
+    if (!res.ok) throw failed(op, res);
+    const page = (await res.json()) as T[];
     all.push(...page);
-    if (page.length < PAGE || all.length >= 5000 /* hard safety cap */) break;
+    if (page.length < PAGE || all.length >= 5000) break;
   }
   return all;
 }
 
-/** Single user, or null if Keycloak doesn't return one. */
+function listUsers(search?: string): Promise<KcUser[]> {
+  return listAll<KcUser>("listUsers", "/users", { briefRepresentation: "false", ...(search ? { search } : {}) });
+}
+
 async function getUser(id: string): Promise<KcUser | null> {
   const res = await kc(`/users/${id}`);
   if (!res.ok) return null;
@@ -178,20 +157,10 @@ async function getUser(id: string): Promise<KcUser | null> {
 /**
  * Users holding realm role `role`, straight from Keycloak — ONE paged call
  * instead of listing every user and asking for each one's role mappings.
- * Direct assignments only, which matches how setSingleAppRole grants them.
+ * Direct assignments only, which matches how setUserRole grants them.
  */
-async function listRoleMembers(role: AppRole): Promise<KcUser[]> {
-  const PAGE = 100;
-  const all: KcUser[] = [];
-  for (let first = 0; ; first += PAGE) {
-    const q = new URLSearchParams({ first: String(first), max: String(PAGE) });
-    const res = await kc(`/roles/${encodeURIComponent(role)}/users?${q.toString()}`);
-    if (!res.ok) throw new AdminError(`roleMembers ${role} ${res.status}`, res.status);
-    const page = (await res.json()) as KcUser[];
-    all.push(...page);
-    if (page.length < PAGE || all.length >= 5000 /* hard safety cap */) break;
-  }
-  return all;
+function listRoleMembers(role: AppRole): Promise<KcUser[]> {
+  return listAll<KcUser>(`roleMembers ${role}`, `/roles/${encodeURIComponent(role)}/users`);
 }
 
 /** Exact-username lookup. "" when no such user. */
@@ -217,7 +186,7 @@ async function getBruteForceStatus(id: string): Promise<{ disabled: boolean }> {
 
 async function getRealmRole(name: string): Promise<KcRole> {
   const res = await kc(`/roles/${encodeURIComponent(name)}`);
-  if (!res.ok) throw new Error(`getRealmRole ${name} ${res.status}`);
+  if (!res.ok) throw failed(`getRealmRole ${name}`, res);
   return (await res.json()) as KcRole;
 }
 
@@ -231,20 +200,20 @@ async function getRealmRole(name: string): Promise<KcRole> {
  * changes nothing; a failed revoke still throws (a demotion that keeps the old
  * role is a real authorization bug), leaving both roles for a retry to fix.
  */
-async function setSingleAppRole(id: string, role: AppRole): Promise<void> {
+export async function setUserRole(id: string, role: AppRole): Promise<void> {
   const current = await getUserRealmRoles(id);
   if (!current.some((r) => r.name === role)) {
     let target: KcRole;
     try {
       target = await getRealmRole(role);
     } catch {
-      throw new AdminError(`התפקיד "${role}" לא מוגדר ב-Keycloak — יש ליצור אותו ב-Realm roles. לא בוצע שינוי.`, 409);
+      throw new HttpError(409, `התפקיד "${role}" לא מוגדר ב-Keycloak — יש ליצור אותו ב-Realm roles. לא בוצע שינוי.`);
     }
     const add = await kc(`/users/${id}/role-mappings/realm`, {
       method: "POST",
       body: JSON.stringify([{ id: target.id, name: target.name }]),
     });
-    if (!add.ok) throw new AdminError(`addRole ${add.status}`, add.status);
+    if (!add.ok) throw failed("addRole", add);
   }
   const stale = current.filter((r) => isAppRole(r.name) && r.name !== role);
   if (stale.length) {
@@ -252,7 +221,7 @@ async function setSingleAppRole(id: string, role: AppRole): Promise<void> {
       method: "DELETE",
       body: JSON.stringify(stale.map((r) => ({ id: r.id, name: r.name }))),
     });
-    if (!del.ok) throw new AdminError(`removeRoles ${del.status}`, del.status);
+    if (!del.ok) throw failed("removeRoles", del);
   }
 }
 
@@ -261,12 +230,10 @@ async function setSingleAppRole(id: string, role: AppRole): Promise<void> {
 /** All managed users (human accounts) shaped for the admin table. Excludes
  *  Keycloak service-account users. */
 export async function getAdminUsers(search?: string): Promise<AdminUser[]> {
-  const users = (await listUsers(search)).filter(
-    (u) => !u.username?.startsWith("service-account-"),
-  );
+  const users = (await listUsers(search)).filter((u) => !isServiceAccount(u.username));
   // Per-user role + brute-force lookups run with bounded concurrency (8) instead
   // of one-at-a-time — turns ~2N serial round-trips into ~2N/8.
-  const out = await mapLimit(users, 8, async (u): Promise<AdminUser> => {
+  const out = await mapWithConcurrency(users, 8, async (u): Promise<AdminUser> => {
     const [roles, brute] = await Promise.all([
       getUserRealmRoles(u.id),
       u.enabled ? getBruteForceStatus(u.id) : Promise.resolve({ disabled: false }),
@@ -280,14 +247,12 @@ export async function getAdminUsers(search?: string): Promise<AdminUser[]> {
         : pending
           ? "pending"
           : "active";
-    const firstName = u.firstName ?? "";
-    const lastName = u.lastName ?? "";
     return {
       id: u.id,
       username: u.username,
-      firstName,
-      lastName,
-      fullName: [firstName, lastName].filter(Boolean).join(" ") || u.username,
+      firstName: u.firstName ?? "",
+      lastName: u.lastName ?? "",
+      fullName: fullNameOf(u),
       employeeNumber: u.attributes?.employeeNumber?.[0] ?? null,
       enabled: u.enabled,
       createdTimestamp: u.createdTimestamp ?? null,
@@ -295,7 +260,6 @@ export async function getAdminUsers(search?: string): Promise<AdminUser[]> {
       status,
     };
   });
-  // Newest first.
   out.sort((a, b) => (b.createdTimestamp ?? 0) - (a.createdTimestamp ?? 0));
   return out;
 }
@@ -308,8 +272,8 @@ export async function isLastEnabledManager(userId: string): Promise<boolean> {
   // Asks Keycloak for the manager role's members directly. getAdminUsers() would
   // answer this too, but at ~2 extra admin round-trips PER USER in the realm —
   // and PUT /api/users/[id] can need the answer twice in one request.
-  const enabledManagers = (await listRoleMembers("manager")).filter(
-    (u) => u.enabled && !u.username?.startsWith("service-account-"),
+  const enabledManagers = (await listRoleMembers(ADMIN_ROLE)).filter(
+    (u) => u.enabled && !isServiceAccount(u.username),
   );
   return enabledManagers.length === 1 && enabledManagers[0].id === userId;
 }
@@ -330,10 +294,8 @@ export async function createManagedUser(input: CreateUserInput): Promise<string>
     }),
   });
   if (!createRes.ok) {
-    if (createRes.status === 409) throw new AdminError("שם המשתמש כבר קיים", 409);
-    // Log the real Keycloak reason server-side; return a generic message.
-    console.error("createUser failed", createRes.status, await createRes.text().catch(() => ""));
-    throw new AdminError("יצירת המשתמש נכשלה", createRes.status);
+    if (createRes.status === 409) throw new HttpError(409, "שם המשתמש כבר קיים");
+    throw failed("createUser", createRes, await createRes.text().catch(() => ""));
   }
   // Keycloak returns the new id in `location`. A reverse proxy can strip that
   // header — and an empty id would turn every follow-up into a request against
@@ -344,13 +306,13 @@ export async function createManagedUser(input: CreateUserInput): Promise<string>
     (await findUserIdByUsername(input.username));
   if (!id) {
     console.error("createUser: no id in location header and username lookup failed", input.username);
-    throw new AdminError("המשתמש נוצר אך לא ניתן היה להשלים את ההגדרה. בדוק ב-Keycloak.", 502);
+    throw new HttpError(502, "המשתמש נוצר אך לא ניתן היה להשלים את ההגדרה. בדוק ב-Keycloak.");
   }
   // Post-create steps. If any fails, ROLL BACK the half-created user so a
   // role-less / password-less orphan isn't left behind.
   try {
     await resetPassword(id, input.temporaryPassword, input.mustChangePassword);
-    await setSingleAppRole(id, input.role);
+    await setUserRole(id, input.role);
   } catch (e) {
     await deleteUser(id).catch(() => {});
     throw e;
@@ -376,16 +338,12 @@ export async function updateUserProfile(
     body.attributes = attributes;
   }
   const res = await kc(`/users/${id}`, { method: "PUT", body: JSON.stringify(body) });
-  if (!res.ok) throw new AdminError(`updateUser ${res.status}`, res.status);
-}
-
-export async function setUserRole(id: string, role: AppRole): Promise<void> {
-  await setSingleAppRole(id, role);
+  if (!res.ok) throw failed("updateUser", res);
 }
 
 export async function setUserEnabled(id: string, enabled: boolean): Promise<void> {
   const res = await kc(`/users/${id}`, { method: "PUT", body: JSON.stringify({ enabled }) });
-  if (!res.ok) throw new AdminError(`setEnabled ${res.status}`, res.status);
+  if (!res.ok) throw failed("setEnabled", res);
   // Re-enabling should also clear a brute-force lock so the user can log in.
   if (enabled) await kc(`/attack-detection/brute-force/users/${id}`, { method: "DELETE" });
 }
@@ -395,7 +353,7 @@ export async function resetPassword(id: string, password: string, temporary: boo
     method: "PUT",
     body: JSON.stringify({ type: "password", value: password, temporary }),
   });
-  if (!res.ok) throw new AdminError(`resetPassword ${res.status}`, res.status);
+  if (!res.ok) throw failed("resetPassword", res);
   // A temporary reset must force a change at next login. requiredActions is
   // REPLACED by a PUT, so merge into whatever is already pending — dropping a
   // UPDATE_PROFILE / VERIFY_EMAIL / CONFIGURE_TOTP here would let the user into
@@ -412,24 +370,15 @@ export async function resetPassword(id: string, password: string, temporary: boo
 
 export async function deleteUser(id: string): Promise<void> {
   const res = await kc(`/users/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new AdminError(`deleteUser ${res.status}`, res.status);
+  if (!res.ok) throw failed("deleteUser", res);
 }
 
-/** Username of a single user (used for the self-action guard). "" if not found. */
+/** "" when Keycloak returns no such user. */
 export async function getUsername(id: string): Promise<string> {
   return (await getUser(id))?.username ?? "";
 }
 
 // ---- worker directory (any authenticated user — see /api/workers-directory) ----
-
-/** Shape for "pick a person" UI (shipment attribution, testing-station roster).
- *  Replaces the old local `workers` table: `worker_id` is the Keycloak
- *  employeeNumber, `worker_name` the display name, `roles` the realm roles. */
-export interface DirectoryWorker {
-  worker_id: number;
-  worker_name: string;
-  roles: string[];
-}
 
 /** Enabled users with a valid numeric employeeNumber, shaped for a picker.
  *  Users without one are excluded — there's no id to attribute them by. No
@@ -437,32 +386,14 @@ export interface DirectoryWorker {
  *  lock status, just identity — keeps this to one round-trip per user instead
  *  of two. */
 export async function getWorkersDirectory(): Promise<DirectoryWorker[]> {
-  const users = (await listUsers()).filter(
-    (u) => u.enabled && !u.username?.startsWith("service-account-"),
-  );
-  const out = await mapLimit(users, 8, async (u): Promise<DirectoryWorker | null> => {
-    const empNo = u.attributes?.employeeNumber?.[0];
-    const workerId = empNo ? Number(empNo) : NaN;
-    if (!Number.isFinite(workerId) || workerId <= 0) return null;
+  const users = (await listUsers()).filter((u) => u.enabled && !isServiceAccount(u.username));
+  const out = await mapWithConcurrency(users, 8, async (u): Promise<DirectoryWorker | null> => {
+    const workerId = workerIdOf(u.attributes?.employeeNumber?.[0]);
+    if (workerId == null) return null;
     const roles = await getUserRealmRoles(u.id);
-    const firstName = u.firstName ?? "";
-    const lastName = u.lastName ?? "";
-    return {
-      worker_id: workerId,
-      worker_name: [firstName, lastName].filter(Boolean).join(" ") || u.username,
-      roles: roles.map((r) => r.name),
-    };
+    return { worker_id: workerId, worker_name: fullNameOf(u), roles: roles.map((r) => r.name) };
   });
   return out
     .filter((w): w is DirectoryWorker => w !== null)
     .sort((a, b) => a.worker_name.localeCompare(b.worker_name, "he"));
-}
-
-/** Typed error carrying an HTTP status so route handlers map it to a response. */
-export class AdminError extends Error {
-  status: number;
-  constructor(message: string, status = 500) {
-    super(message);
-    this.status = status;
-  }
 }

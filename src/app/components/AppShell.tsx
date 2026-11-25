@@ -4,65 +4,17 @@ import * as React from "react";
 import { Box, IconButton, Typography, useMediaQuery } from "@/components/ui";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { withBasePath } from "@/lib/base-path";
+import { loginUrl } from "@/lib/base-path";
+import { TERMINAL_SESSION_ERROR } from "@/lib/auth/session";
+import { useLocalStorageFlag } from "@/lib/hooks/useLocalStorageFlag";
 import { Menu as MenuIcon } from "@/components/ui/icons";
-import { Dashboard as DashboardIcon } from "@/components/ui/icons";
-import { Science as ScienceIcon } from "@/components/ui/icons";
-import { Analytics as AnalyticsIcon } from "@/components/ui/icons";
-import { LocalShipping as LocalShippingIcon } from "@/components/ui/icons";
-import { FolderCopy as FolderCopyIcon } from "@/components/ui/icons";
-import { Settings as SettingsIcon } from "@/components/ui/icons";
-import { History as HistoryIcon } from "@/components/ui/icons";
-import { Inventory as InventoryIcon } from "@/components/ui/icons";
+import { DASHBOARD_ROOT, isUnder, pageTitle } from "@/app/navigation";
 import Sidebar, { SIDEBAR_WIDTH, SIDEBAR_COLLAPSED_WIDTH } from "./navBar";
-import CommandPaletteTrigger from "@/components/CommandPaletteTrigger";
+import CommandPaletteTrigger from "@/app/components/command-palette/CommandPaletteTrigger";
 
-const TOPBAR_HEIGHT = 56;
+/** shell.css --shell-topbar-h. */
+const TOPBAR_HEIGHT = "var(--shell-topbar-h)";
 const MOBILE_QUERY = "(max-width: 980px)";
-const COLLAPSED_STORAGE_KEY = "sidebarCollapsed";
-
-// The desktop collapsed preference, kept in localStorage so it survives reloads
-// and read through useSyncExternalStore, so the server render (expanded) never
-// guesses it. The in-memory copy keeps the toggle working when storage is
-// unavailable (private mode).
-let collapsedPref: boolean | null = null;
-const collapsedListeners = new Set<() => void>();
-function readCollapsed(): boolean {
-  if (collapsedPref === null) {
-    try {
-      collapsedPref = localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1";
-    } catch {
-      collapsedPref = false;
-    }
-  }
-  return collapsedPref;
-}
-function writeCollapsed(value: boolean) {
-  collapsedPref = value;
-  try {
-    localStorage.setItem(COLLAPSED_STORAGE_KEY, value ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-  collapsedListeners.forEach((l) => l());
-}
-function subscribeCollapsed(onChange: () => void) {
-  collapsedListeners.add(onChange);
-  return () => { collapsedListeners.delete(onChange); };
-}
-
-/** Page title + icon resolved from the current route, shown in the top bar. */
-function usePageMeta(pathname: string | null) {
-  if (pathname?.startsWith("/testing")) return { title: "מסך בדיקה", icon: <ScienceIcon fontSize={20} /> };
-  if (pathname?.startsWith("/packages")) return { title: "מארזים ופריטים", icon: <InventoryIcon fontSize={20} /> };
-  if (pathname?.startsWith("/dashboard")) return { title: "לוח ניהול", icon: <AnalyticsIcon fontSize={20} /> };
-  if (pathname?.startsWith("/shipments")) return { title: "משלוחים נכנסים", icon: <LocalShippingIcon fontSize={20} /> };
-  if (pathname?.startsWith("/files")) return { title: "ניהול קבצים", icon: <FolderCopyIcon fontSize={20} /> };
-  if (pathname?.startsWith("/settings")) return { title: "הגדרות מערכת", icon: <SettingsIcon fontSize={20} /> };
-  if (pathname === "/items") return { title: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> };
-  if (pathname?.startsWith("/items")) return { title: "היסטוריית פריט", icon: <HistoryIcon fontSize={20} /> };
-  return { title: "דוחות וניהול פריטים", icon: <DashboardIcon fontSize={20} /> };
-}
 
 /**
  * Responsive app shell: fixed sidebar rail + slim top bar + scrollable content.
@@ -77,8 +29,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const [navOpen, setNavOpen] = React.useState(false); // mobile off-canvas drawer
-  const collapsed = React.useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false); // desktop icon-only rail
-  const { title, icon } = usePageMeta(pathname);
+  // The desktop icon-only rail, kept across reloads.
+  const [collapsed, writeCollapsed] = useLocalStorageFlag("sidebarCollapsed", { defaultValue: false });
+  const { title, icon: TitleIcon } = pageTitle(pathname);
 
   // Idle-tab dead-session redirect (the third of the three redirect sites;
   // middleware + apiFetch are the others). When a session dies while this tab
@@ -87,10 +40,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // only, so a healthy session never navigates.
   const { data: session } = useSession();
   React.useEffect(() => {
-    if (session?.error !== "RefreshAccessTokenError") return;
-    if (typeof window === "undefined") return;
-    const cb = window.location.pathname + window.location.search;
-    window.location.href = `${withBasePath("/login")}?callbackUrl=${encodeURIComponent(cb)}`;
+    if (session?.error !== TERMINAL_SESSION_ERROR) return;
+    window.location.href = loginUrl(window.location.pathname + window.location.search);
   }, [session?.error]);
 
   // Close the drawer on navigation, and never keep it "open" on desktop.
@@ -116,12 +67,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // 56px icon state and the chrome cost drops to ~304px.
   //
   // It is a ROUTE-DRIVEN OVERRIDE, not a user preference: the collapse lives on
-  // the derived value and never calls setCollapsed, so nothing is written to
+  // the derived value and never calls writeCollapsed, so nothing is written to
   // localStorage and leaving /dashboard restores whatever the user had chosen.
   // Expanding the rail by hand while on the dashboard wins for the rest of the
   // visit — `userExpandedOnDashboard` is that escape hatch, and it resets on the
   // way out.
-  const isDashboard = pathname?.startsWith("/dashboard") ?? false;
+  const isDashboard = pathname ? isUnder(pathname, DASHBOARD_ROOT) : false;
   const [userExpandedOnDashboard, setUserExpandedOnDashboard] = React.useState(false);
   if (!isDashboard && userExpandedOnDashboard) setUserExpandedOnDashboard(false);
 
@@ -158,7 +109,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onToggle={handleToggle}
       />
 
-      {/* Dimming backdrop (mobile drawer only) */}
       {isMobile && navOpen && (
         <Box
           onClick={() => setNavOpen(false)}
@@ -166,7 +116,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Top bar */}
       <Box
         component="header"
         style={{ insetInlineStart: railOffset }}
@@ -197,7 +146,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
           {/* Decorative: muted, so blue stays the colour of things you can press. */}
-          <Box sx={{ display: "flex", color: "var(--color-ink-muted-48)" }} aria-hidden>{icon}</Box>
+          <Box sx={{ display: "flex", color: "var(--color-ink-muted-48)" }} aria-hidden><TitleIcon fontSize={20} /></Box>
           <Typography sx={{ fontSize: "var(--text-body)", fontWeight: 600, whiteSpace: "nowrap" }}>
             {title}
           </Typography>
@@ -209,12 +158,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </Box>
       </Box>
 
-      {/* Content */}
       <Box
         style={{ marginInlineStart: railOffset }}
         sx={{
-          marginTop: `${TOPBAR_HEIGHT}px`,
-          height: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
+          marginTop: TOPBAR_HEIGHT,
+          height: `calc(100vh - ${TOPBAR_HEIGHT})`,
           overflowY: "auto",
           overflowX: "hidden",
         }}

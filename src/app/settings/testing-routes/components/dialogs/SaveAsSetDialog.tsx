@@ -4,18 +4,18 @@ import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextF
 import type { FieldSetJson } from "@/app/lib/station-fields/admin-types";
 import type { Field } from "@/app/lib/station-fields/schema";
 import { newFieldId } from "@/app/lib/station-fields/step-uids";
+import { LIMITS } from "@/app/lib/station-fields/validate";
 import { cellFieldsForSet } from "../../lib/applySetModel";
 import { SAVE_AS_SET_UNDRAWN_TEXT } from "../../lib/applySetLabels";
-import { createFieldSet } from "../../lib/useLibrary";
+import { createFieldSet } from "../../lib/libraryWrites";
+import { useSessionPerOpen } from "../shared/useSessionPerOpen";
 import "./apply-set-dialog.css";
 
 /**
  * "שמור כערכה…" — the cell editor's ⋯ (route-fields spec §5.5.1). The dialog is not drawn (spec §10.4),
- * so all of its words are undrawn (applySetLabels.SAVE_AS_SET_UNDRAWN_TEXT): a name, then POST
- * /api/settings/field-sets { name, fields } with the cell's input fields (applySetModel.cellFieldsForSet:
- * no section headers, no from_set, ids of their own). The cell itself does not change and is not
- * linked to the new set. A failed POST keeps the dialog open with the library's "היצירה
- * נכשלה". Each opening starts from `defaultName`.
+ * so all of its words are undrawn: a name, then a new field set with the cell's input fields
+ * (applySetModel.cellFieldsForSet). The cell itself does not change and is not linked to the new set.
+ * A failed write keeps the dialog open. Each opening starts from `defaultName`.
  */
 
 export type SaveAsSetDialogProps = {
@@ -29,23 +29,14 @@ export type SaveAsSetDialogProps = {
   onSaved: (set: FieldSetJson) => void;
 };
 
-/** The name column holds 100 characters (libraryModel.copyName). */
-const NAME_MAX = 100;
-
-export default function SaveAsSetDialog(props: SaveAsSetDialogProps) {
-  const { open } = props;
-  const [session, setSession] = React.useState(0);
-  const [wasOpen, setWasOpen] = React.useState(false);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setSession((s) => s + 1);
-  }
+export function SaveAsSetDialog(props: SaveAsSetDialogProps) {
+  const session = useSessionPerOpen(props.open);
   return session > 0 ? <SaveSession key={session} {...props} /> : null;
 }
 
 function SaveSession({ open, defaultName, fields, onClose, onSaved }: SaveAsSetDialogProps) {
   const C = SAVE_AS_SET_UNDRAWN_TEXT;
-  const [name, setName] = React.useState(defaultName.slice(0, NAME_MAX));
+  const [name, setName] = React.useState(defaultName.slice(0, LIMITS.libraryName));
   const [busy, setBusy] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
   const helpId = React.useId();
@@ -86,7 +77,7 @@ function SaveSession({ open, defaultName, fields, onClose, onSaved }: SaveAsSetD
             fullWidth
             label={C.nameLabel}
             value={name}
-            maxLength={NAME_MAX}
+            maxLength={LIMITS.libraryName}
             aria-describedby={helpId}
             onChange={(e) => setName(e.target.value)}
             onFocus={(e) => e.currentTarget.select()}

@@ -26,19 +26,17 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import type { TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { createRequire } from "node:module";
-import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
-import type { AppRole } from "@/lib/auth/roles";
-import type { TransactionClient } from "../../prisma";
-import * as H from "../../metrics/__tests__/write-path-helpers";
-import type { AdminFieldsError, RouteIssue } from "../admin";
-import type { RouteStepsError } from "../route-steps";
+import { ACCESS, type AppRole } from "@/lib/auth/roles";
+import type { TransactionClient } from "@/lib/db";
+import * as H from "@/test-support/db-harness";
+import { giveUids, insertRoute, rejectsHttp } from "./helpers";
+import type { RouteIssueJson as RouteIssue } from "../admin-types";
 import { GATE_FINISH_ON_REQUIRED } from "../evaluate";
-import { UNDRAWN_TEXT, KIT_ROUTE_LABEL, fieldsGateText, routeOfTypeLabel } from "../labels";
-import { FIELDS_EDIT_ROLES, PUBLISH_ROLES } from "../roles";
+import { FIELDS_UNDRAWN_TEXT, KIT_ROUTE_LABEL, fieldsGateText, routeOfTypeLabel } from "../labels";
 import { ID_PATTERNS } from "../schema";
 import type { ChoiceOption, ChoiceRowField, Field, FieldGroup, PhotoField, RouteFieldsConfig, StepConfig, Tone } from "../schema";
+import { stubSession } from "@/lib/auth/testing";
 
 /** A JSON answer as the route sends it, read by its keys. */
 type Json = Record<string, unknown>;
@@ -157,23 +155,6 @@ const signedIn = (...roles: AppRole[]) => ({
   roles,
 });
 
-/**
- * Replaces the root auth.ts in require.cache with a module whose auth() answers `session`, as
- * read-path.integration.test.ts does. Must run before anything loads auth.ts (withAuth imports
- * it): tsx loads this suite and the route modules as CommonJS, so the cache entry is what every
- * later require of auth.ts gets.
- */
-function stubAuth(): void {
-  const req = createRequire(path.resolve(process.cwd(), "package.json"));
-  const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as typeof import("node:module");
-  const stub = new CjsModule(authPath);
-  stub.filename = authPath;
-  stub.loaded = true;
-  stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
-  req.cache[authPath] = stub;
-}
-
 describe(
   "station fields — routes, drafts, publish, freeze, worker read and result write",
   { skip: H.TEST_DATABASE_URL ? false : "TEST_DATABASE_URL is not set — station-fields integration suite skipped" },
@@ -181,7 +162,7 @@ describe(
     let A: typeof import("../admin");
     let RS: typeof import("../route-steps");
     let S: typeof import("../submit");
-    let prisma: (typeof import("../../prisma"))["prisma"];
+    let prisma: (typeof import("@/lib/db"))["prisma"];
     let getStationFields: (req: Request) => Promise<Response>;
     /** The admin route handlers, as Next runs them (withAuth included). */
     let http: {
@@ -195,14 +176,14 @@ describe(
 
     before(async () => {
       // Before anything can load auth.ts.
-      stubAuth();
+      stubSession(() => session);
       // MUST come next: it points DATABASE_URL at the scratch database before anything imports
       // the Prisma client, and takes the advisory lock.
       await H.setup();
       A = await import("../admin");
       RS = await import("../route-steps");
       S = await import("../submit");
-      prisma = (await import("../../prisma")).prisma;
+      prisma = (await import("@/lib/db")).prisma;
       getStationFields = (await import("../../../api/testing/station-fields/route")).GET;
       http = {
         routes: await import("../../../api/settings/testing-routes/route"),
@@ -235,24 +216,6 @@ describe(
     // Helpers
     // -------------------------------------------------------------------------------------
 
-    async function insertRoute(itemTypeId: number, steps: number[], uids: string[]): Promise<number> {
-      const row = await H.one<{ test_route_id: number }>(
-        `INSERT INTO testing_routes (item_type_id, test_station_type_id, route_steps, route_number, step_uids)
-         VALUES ($1, $2, $3::int[], 1, $4::text[]) RETURNING test_route_id`,
-        [itemTypeId, steps[0], steps, uids],
-      );
-      return row.test_route_id;
-    }
-
-    async function giveUids(itemTypeId: number, uids: string[]): Promise<number> {
-      const row = await H.one<{ test_route_id: number }>(
-        `UPDATE testing_routes SET step_uids = $2::text[]
-          WHERE item_type_id = $1 AND route_number = 1 RETURNING test_route_id`,
-        [itemTypeId, uids],
-      );
-      return row.test_route_id;
-    }
-
     type RouteRow = {
       route_steps: number[];
       step_uids: string[];
@@ -275,7 +238,7 @@ describe(
 
     /** PUT /api/settings/testing-routes/[id]'s work, in its own transaction as the handler runs it. */
     function saveRoute(routeId: number, body: Record<string, unknown>) {
-      return prisma.$transaction((tx) => RS.saveRouteSteps(tx, routeId, body, ACTOR.username));
+      return prisma.$transaction((tx) => RS.saveRouteSteps(tx, routeId, body, ACTOR));
     }
 
     /** Autosave against the current draft_rev; returns the new one. */
@@ -289,31 +252,6 @@ describe(
       const rev = await saveDraft(routeId, cfg);
       const res = await A.publishFields(prisma, { route_ids: [routeId], base_revs: { [routeId]: rev }, apply_mode: "new_only" }, ACTOR);
       return res.versions[routeId];
-    }
-
-    async function rejectsAdmin(p: Promise<unknown>, status: number, code: string): Promise<AdminFieldsError> {
-      try {
-        await p;
-      } catch (e) {
-        assert.ok(e instanceof A.AdminFieldsError, `expected AdminFieldsError, got ${String(e)}`);
-        assert.equal(e.status, status, `${e.code}: ${e.message}`);
-        assert.equal(e.code, code);
-        return e;
-      }
-      assert.fail(`expected ${status} ${code}, got success`);
-    }
-
-    async function rejectsRouteSteps(p: Promise<unknown>, status: number, code: string): Promise<RouteStepsError> {
-      try {
-        await p;
-      } catch (e) {
-        assert.ok(e instanceof RS.RouteStepsError, `expected RouteStepsError, got ${String(e)}`);
-        assert.equal(e.status, status, e.message);
-        assert.equal(e.code, code);
-        assert.deepEqual(e.body, { error: e.message, code });
-        return e;
-      }
-      assert.fail(`expected ${status} ${code}, got success`);
     }
 
     /** A plain item queued at step 1 of `itemTypeId`'s route, frozen at `version` — what intake
@@ -531,10 +469,10 @@ describe(
       assert.deepEqual(back.removed_with_fields, []);
       assert.equal((await routeRow(routeId)).draft_rev, rev + 1);
 
-      await rejectsRouteSteps(saveRoute(routeId, { route_steps: [H.TYPE_FUNC, H.TYPE_FUNC], step_uids: [a, "s_zzzzzzzz"] }), 400, "STEP_UID_UNKNOWN");
-      await rejectsRouteSteps(saveRoute(routeId, { route_steps: [H.TYPE_FUNC, H.TYPE_FUNC], step_uids: [a, a] }), 400, "STEP_UID_DUPLICATE");
+      await rejectsHttp(saveRoute(routeId, { route_steps: [H.TYPE_FUNC, H.TYPE_FUNC], step_uids: [a, "s_zzzzzzzz"] }), 400, "STEP_UID_UNKNOWN");
+      await rejectsHttp(saveRoute(routeId, { route_steps: [H.TYPE_FUNC, H.TYPE_FUNC], step_uids: [a, a] }), 400, "STEP_UID_DUPLICATE");
       // A removed uid cannot be pinned back on.
-      await rejectsRouteSteps(
+      await rejectsHttp(
         saveRoute(routeId, { route_steps: [H.TYPE_FUNC, H.TYPE_INTAKE, H.TYPE_FUNC], step_uids: [a, b, c] }),
         400,
         "STEP_UID_UNKNOWN",
@@ -552,7 +490,7 @@ describe(
       )).test_route_id;
       assert.deepEqual((await routeRow(routeId)).step_uids, [], "the write-path fixture inserts its routes without uids");
 
-      await rejectsRouteSteps(saveRoute(routeId, { route_steps: [H.TYPE_INTAKE, H.TYPE_FUNC], step_uids: ["s_invented", null] }), 400, "STEP_UID_UNKNOWN");
+      await rejectsHttp(saveRoute(routeId, { route_steps: [H.TYPE_INTAKE, H.TYPE_FUNC], step_uids: ["s_invented", null] }), 400, "STEP_UID_UNKNOWN");
       const healed = await saveRoute(routeId, { route_steps: [H.TYPE_INTAKE, H.TYPE_FUNC] });
       assert.equal(healed.step_uids.length, 2);
       for (const uid of healed.step_uids) assert.match(uid, ID_PATTERNS.step);
@@ -584,7 +522,7 @@ describe(
       assert.equal(left(), 0, "both scripted draws were used: the first was refused");
 
       // Nor can a client name it.
-      await rejectsRouteSteps(saveRoute(routeId, { route_steps: [H.TYPE_FUNC, H.TYPE_FUNC], step_uids: [kept, gone] }), 400, "STEP_UID_UNKNOWN");
+      await rejectsHttp(saveRoute(routeId, { route_steps: [H.TYPE_FUNC, H.TYPE_FUNC], step_uids: [kept, gone] }), 400, "STEP_UID_UNKNOWN");
     });
 
     it("routes: a kept uid sent for a step of another station type is a removal plus an addition — a fresh uid, its config pruned and reported — so a frozen version never shows one station's fields at another", async () => {
@@ -643,21 +581,21 @@ describe(
       const s2 = await A.saveFieldsDraft(prisma, R.fields, { config: second, base_rev: 1 }, ACTOR);
       assert.equal(s2.draft_rev, 2);
 
-      const stale = await rejectsAdmin(A.saveFieldsDraft(prisma, R.fields, { config: first, base_rev: 1 }, ACTOR), 409, "DRAFT_CONFLICT");
+      const stale = await rejectsHttp(A.saveFieldsDraft(prisma, R.fields, { config: first, base_rev: 1 }, ACTOR), 409, "DRAFT_CONFLICT");
       assert.deepEqual(stale.extra.draft, second, "the editor reloads from the draft the 409 carries");
       assert.equal(stale.extra.draft_rev, 2);
       assert.equal(stale.extra.draft_updated_by, ACTOR.username);
 
-      const unknown = await rejectsAdmin(
+      const unknown = await rejectsHttp(
         A.saveFieldsDraft(prisma, R.fields, { config: config(itemStep("s_zzzzzzzz", [LED])), base_rev: 2 }, ACTOR),
         409,
         "STEP_UNKNOWN",
       );
       assert.deepEqual(unknown.extra, { route_id: R.fields, uids: ["s_zzzzzzzz"] });
 
-      const shape = await rejectsAdmin(A.saveFieldsDraft(prisma, R.fields, { config: { schema: 2, steps: {} }, base_rev: 2 }, ACTOR), 400, "SHAPE_INVALID");
+      const shape = await rejectsHttp(A.saveFieldsDraft(prisma, R.fields, { config: { schema: 2, steps: {} }, base_rev: 2 }, ACTOR), 400, "SHAPE_INVALID");
       assert.equal(shape.extra.path, "$");
-      const badId = await rejectsAdmin(
+      const badId = await rejectsHttp(
         A.saveFieldsDraft(prisma, R.fields, { config: config(itemStep(UID.f1, [{ ...LED, id: "led" }])), base_rev: 2 }, ACTOR),
         400,
         "SHAPE_INVALID",
@@ -676,7 +614,7 @@ describe(
 
     it("drafts: discarding sets fields_draft to SQL NULL (never JSON null) and bumps draft_rev; a stale base_rev is refused", async () => {
       const rev = await saveDraft(R.fields, config(itemStep(UID.f1, [LED])));
-      await rejectsAdmin(A.discardFieldsDraft(prisma, R.fields, { base_rev: rev - 1 }, ACTOR), 409, "DRAFT_CONFLICT");
+      await rejectsHttp(A.discardFieldsDraft(prisma, R.fields, { base_rev: rev - 1 }, ACTOR), 409, "DRAFT_CONFLICT");
       assert.notEqual((await routeRow(R.fields)).fields_draft, null);
 
       const discarded = await A.discardFieldsDraft(prisma, R.fields, { base_rev: rev }, ACTOR);
@@ -696,20 +634,20 @@ describe(
       const BIG = 2 ** 31;
       const MAX = BIG - 1;
       const rev = await saveDraft(R.fields, config(itemStep(UID.f1, [LED])));
-      await rejectsAdmin(A.getRouteFields(prisma, BIG), 400, "INVALID_ID");
-      await rejectsAdmin(A.listFieldVersions(prisma, BIG), 400, "INVALID_ID");
-      await rejectsAdmin(A.getFieldVersion(prisma, BIG, 1), 400, "INVALID_ID");
-      await rejectsAdmin(A.getFieldVersion(prisma, R.fields, BIG), 400, "INVALID_ID");
-      await rejectsAdmin(A.saveFieldsDraft(prisma, BIG, { config: config(), base_rev: 0 }, ACTOR), 400, "INVALID_ID");
-      await rejectsAdmin(A.discardFieldsDraft(prisma, BIG, { base_rev: 0 }, ACTOR), 400, "INVALID_ID");
-      await rejectsAdmin(A.previewPublish(prisma, { route_ids: [BIG] }), 400, "INVALID_BODY");
-      await rejectsAdmin(A.previewPublish(prisma, { route_ids: [R.fields], context_kit_id: BIG }), 400, "INVALID_BODY");
-      await rejectsAdmin(A.publishFields(prisma, { route_ids: [BIG], base_revs: { [BIG]: 0 }, apply_mode: "new_only" }, ACTOR), 400, "INVALID_BODY");
+      await rejectsHttp(A.getRouteFields(prisma, BIG), 400, "INVALID_ID");
+      await rejectsHttp(A.listFieldVersions(prisma, BIG), 400, "INVALID_ID");
+      await rejectsHttp(A.getFieldVersion(prisma, BIG, 1), 400, "INVALID_ID");
+      await rejectsHttp(A.getFieldVersion(prisma, R.fields, BIG), 400, "INVALID_ID");
+      await rejectsHttp(A.saveFieldsDraft(prisma, BIG, { config: config(), base_rev: 0 }, ACTOR), 400, "INVALID_ID");
+      await rejectsHttp(A.discardFieldsDraft(prisma, BIG, { base_rev: 0 }, ACTOR), 400, "INVALID_ID");
+      await rejectsHttp(A.previewPublish(prisma, { route_ids: [BIG] }), 400, "INVALID_BODY");
+      await rejectsHttp(A.previewPublish(prisma, { route_ids: [R.fields], context_kit_id: BIG }), 400, "INVALID_BODY");
+      await rejectsHttp(A.publishFields(prisma, { route_ids: [BIG], base_revs: { [BIG]: 0 }, apply_mode: "new_only" }, ACTOR), 400, "INVALID_BODY");
 
-      await rejectsAdmin(A.getRouteFields(prisma, MAX), 404, "ROUTE_NOT_FOUND");
-      await rejectsAdmin(A.listFieldVersions(prisma, MAX), 404, "ROUTE_NOT_FOUND");
-      await rejectsAdmin(A.getFieldVersion(prisma, R.fields, MAX), 404, "VERSION_NOT_FOUND");
-      await rejectsAdmin(A.previewPublish(prisma, { route_ids: [MAX] }), 404, "ROUTE_NOT_FOUND");
+      await rejectsHttp(A.getRouteFields(prisma, MAX), 404, "ROUTE_NOT_FOUND");
+      await rejectsHttp(A.listFieldVersions(prisma, MAX), 404, "ROUTE_NOT_FOUND");
+      await rejectsHttp(A.getFieldVersion(prisma, R.fields, MAX), 404, "VERSION_NOT_FOUND");
+      await rejectsHttp(A.previewPublish(prisma, { route_ids: [MAX] }), 404, "ROUTE_NOT_FOUND");
       const preview = await A.previewPublish(prisma, { route_ids: [R.fields], context_kit_id: MAX });
       assert.deepEqual(preview.base_revs, { [R.fields]: rev });
       assert.equal((await routeRow(R.fields)).draft_rev, rev, "nothing written");
@@ -723,11 +661,11 @@ describe(
       const goodRev = await saveDraft(R.fields, config(itemStep(UID.f1, [LED])));
       const badRev = await saveDraft(R.second, config(itemStep(UID.s1, [{ ...INSULATION, label: " " }])));
 
-      const preview = await rejectsAdmin(A.previewPublish(prisma, { route_ids: [R.fields, R.second] }), 422, "LINT_ERRORS");
+      const preview = await rejectsHttp(A.previewPublish(prisma, { route_ids: [R.fields, R.second] }), 422, "LINT_ERRORS");
       const issues = preview.extra.issues as RouteIssue[];
       assert.ok(issues.some((i) =>
         i.route_id === R.second && i.code === "FIELD_LABEL_EMPTY" && i.level === "error" && i.step_uid === UID.s1 && i.field_id === INSULATION.id));
-      await rejectsAdmin(
+      await rejectsHttp(
         A.publishFields(prisma, { route_ids: [R.fields, R.second], base_revs: { [R.fields]: goodRev, [R.second]: badRev }, apply_mode: "new_only" }, ACTOR),
         422,
         "LINT_ERRORS",
@@ -748,7 +686,7 @@ describe(
         base_rev: goodRev,
       }, ACTOR);
       assert.ok(mismatched.issues.some((i) => i.code === "STEP_SCOPE_MISMATCH" && i.level === "error" && i.step_uid === UID.f1));
-      const scope = await rejectsAdmin(
+      const scope = await rejectsHttp(
         A.publishFields(prisma, { route_ids: [R.fields], base_revs: { [R.fields]: mismatched.draft_rev }, apply_mode: "new_only" }, ACTOR),
         422,
         "LINT_ERRORS",
@@ -761,11 +699,11 @@ describe(
       const rev = await saveDraft(R.second, config(itemStep(UID.s1, [INSULATION])));
       // A script rewrote the route without step_uids (spec §1.3): no step has a usable uid now.
       await H.q("UPDATE testing_routes SET step_uids = '{}' WHERE test_route_id = $1", [R.second]);
-      const issue = { level: "error", code: "STEP_UNKNOWN", step_uid: UID.s1, message: UNDRAWN_TEXT.stepUnknown };
+      const issue = { level: "error", code: "STEP_UNKNOWN", step_uid: UID.s1, message: FIELDS_UNDRAWN_TEXT.stepUnknown };
 
-      const preview = await rejectsAdmin(A.previewPublish(prisma, { route_ids: [R.second] }), 422, "LINT_ERRORS");
+      const preview = await rejectsHttp(A.previewPublish(prisma, { route_ids: [R.second] }), 422, "LINT_ERRORS");
       assert.deepEqual(preview.extra.issues, [{ route_id: R.second, ...issue }]);
-      const published = await rejectsAdmin(
+      const published = await rejectsHttp(
         A.publishFields(prisma, { route_ids: [R.second], base_revs: { [R.second]: rev }, apply_mode: "new_only" }, ACTOR),
         422,
         "LINT_ERRORS",
@@ -778,7 +716,7 @@ describe(
       assert.equal(row.fields_version, 0);
       assert.equal(row.draft_rev, rev);
       // Spec §3.2: an autosave naming a uid the route does not have stays a 409.
-      await rejectsAdmin(A.saveFieldsDraft(prisma, R.second, { config: config(itemStep(UID.s1, [LED])), base_rev: rev }, ACTOR), 409, "STEP_UNKNOWN");
+      await rejectsHttp(A.saveFieldsDraft(prisma, R.second, { config: config(itemStep(UID.s1, [LED])), base_rev: rev }, ACTOR), 409, "STEP_UNKNOWN");
     });
 
     it("publish: two routes in one batch each become their own next version under one publish_batch — config, changes, note, apply_mode, publisher — and fields_version moves while the draft clears", async () => {
@@ -798,7 +736,7 @@ describe(
       assert.deepEqual(impact.base_revs, revs);
 
       // One stale base_rev refuses the whole batch, naming the route that moved on.
-      const stale = await rejectsAdmin(
+      const stale = await rejectsHttp(
         A.publishFields(prisma, { route_ids: [R.second, R.fields], base_revs: { ...revs, [R.second]: revs[R.second] - 1 }, apply_mode: "new_only" }, ACTOR),
         409,
         "DRAFT_CONFLICT",
@@ -959,7 +897,7 @@ describe(
       assert.equal(published.bumped_items, 2);
       assert.deepEqual([await versionOf(6301), await versionOf(6302)], [2, 2]);
 
-      const mismatch = { error: UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" };
+      const mismatch = { error: FIELDS_UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" };
       const fromFixed = await submitAt(6301, H.STATION_FUNC_A, { Details: { sku: "MK-1" } });
       assert.equal(fromFixed.status, 409);
       assert.deepEqual(fromFixed.body, mismatch);
@@ -1251,7 +1189,7 @@ describe(
       const before = await footprint(6101);
       const stale = await submitAt(6101, H.STATION_FUNC_A, { Details: { schema: itemSchema(), fields: validFields() } });
       assert.equal(stale.status, 409);
-      assert.deepEqual(stale.body, { error: UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" });
+      assert.deepEqual(stale.body, { error: FIELDS_UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" });
       assert.deepEqual(await footprint(6101), before);
 
       const details = {
@@ -1367,7 +1305,7 @@ describe(
       for (const { label, extra } of refused) {
         const r = await submitAt(6201, H.STATION_FUNC_A, extra);
         assert.equal(r.status, 409, label);
-        assert.deepEqual(r.body, { error: UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" }, label);
+        assert.deepEqual(r.body, { error: FIELDS_UNDRAWN_TEXT.schemaMismatch, code: "FIELDS_SCHEMA_MISMATCH" }, label);
       }
       assert.deepEqual(await footprint(6201), before);
       const accepted = await submitAt(6201, H.STATION_FUNC_A, { Details: { schema: good, fields: validFields() } });
@@ -1498,7 +1436,7 @@ describe(
       ]) {
         const r = await submitAt(6501, H.STATION_FUNC_A, { sendToResearch: true, Details: { schema: itemSchema(), fields } });
         assert.equal(r.status, 400);
-        assert.deepEqual(r.body, { error: UNDRAWN_TEXT.noteTooLong, code: "NOTE_TOO_LONG" });
+        assert.deepEqual(r.body, { error: FIELDS_UNDRAWN_TEXT.noteTooLong, code: "NOTE_TOO_LONG" });
       }
       assert.deepEqual(await footprint(6501), before);
       assert.equal((await H.routeRow(6501)).current_status, H.STATUS.testing, "still in test, not in research");
@@ -1788,21 +1726,21 @@ describe(
     // status and body every refusal reaches the client with
     // -------------------------------------------------------------------------------------
 
-    it("http: every station-field write needs a session (401) and FIELDS_EDIT_ROLES (403, naming them) — publish PUBLISH_ROLES — while reads stay open; nothing is written when refused", async () => {
+    it("http: every station-field write needs a session (401) and ACCESS.fieldsEdit (403, naming them) — publish ACCESS.publish — while reads stay open; nothing is written when refused", async () => {
       const id = String(R.fields);
       const rev = await saveDraft(R.fields, config(itemStep(UID.f1, [LED])));
-      const writes: { name: string; roles: AppRole[]; call: () => Promise<{ status: number; body: Json }> }[] = [
-        { name: "POST route", roles: FIELDS_EDIT_ROLES, call: () => httpCall(http.routes.POST, "POST", "/api/settings/testing-routes", {
+      const writes: { name: string; roles: readonly AppRole[]; call: () => Promise<{ status: number; body: Json }> }[] = [
+        { name: "POST route", roles: ACCESS.fieldsEdit, call: () => httpCall(http.routes.POST, "POST", "/api/settings/testing-routes", {
           body: { item_type_id: ITEM_TYPE_ROUTED, route_number: 1, route_steps: [H.TYPE_FUNC] } }) },
-        { name: "PUT route", roles: FIELDS_EDIT_ROLES, call: () => httpCall(http.route.PUT, "PUT", `/api/settings/testing-routes/${id}`, {
+        { name: "PUT route", roles: ACCESS.fieldsEdit, call: () => httpCall(http.route.PUT, "PUT", `/api/settings/testing-routes/${id}`, {
           body: { route_steps: [H.TYPE_FUNC, H.TYPE_FUNC] }, params: { id } }) },
-        { name: "PUT draft", roles: FIELDS_EDIT_ROLES, call: () => httpCall(http.draft.PUT, "PUT", `/api/settings/testing-routes/${id}/fields/draft`, {
+        { name: "PUT draft", roles: ACCESS.fieldsEdit, call: () => httpCall(http.draft.PUT, "PUT", `/api/settings/testing-routes/${id}/fields/draft`, {
           body: { config: config(itemStep(UID.f1, [LED, GND])), base_rev: rev }, params: { id } }) },
-        { name: "DELETE draft", roles: FIELDS_EDIT_ROLES, call: () => httpCall(http.draft.DELETE, "DELETE", `/api/settings/testing-routes/${id}/fields/draft`, {
+        { name: "DELETE draft", roles: ACCESS.fieldsEdit, call: () => httpCall(http.draft.DELETE, "DELETE", `/api/settings/testing-routes/${id}/fields/draft`, {
           body: { base_rev: rev }, params: { id } }) },
-        { name: "publish-preview", roles: FIELDS_EDIT_ROLES, call: () => httpCall(http.preview.POST, "POST", "/api/settings/testing-routes/fields/publish-preview", {
+        { name: "publish-preview", roles: ACCESS.fieldsEdit, call: () => httpCall(http.preview.POST, "POST", "/api/settings/testing-routes/fields/publish-preview", {
           body: { route_ids: [R.fields] } }) },
-        { name: "publish", roles: PUBLISH_ROLES, call: () => httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", {
+        { name: "publish", roles: ACCESS.publish, call: () => httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", {
           body: { route_ids: [R.fields], base_revs: { [id]: rev }, apply_mode: "new_only" } }) },
       ];
       const routeBefore = await routeRow(R.fields);
@@ -1825,7 +1763,7 @@ describe(
       assert.deepEqual(read.body.draft, config(itemStep(UID.f1, [LED])));
     });
 
-    it("http: a tester may do every write; open decision §10.2-1 flipped the one-line way (PUBLISH_ROLES = manager) leaves the tester the preview but not the publish, and the manager's publish records who published", async () => {
+    it("http: a tester may do every write; open decision §10.2-1 flipped the one-line way (ACCESS.publish = manager) leaves the tester the preview but not the publish, and the manager's publish records who published", async () => {
       session = signedIn("tester");
       const created = await httpCall<{ test_route_id: number; step_uids: string[] }>(http.routes.POST, "POST", "/api/settings/testing-routes", {
         body: { item_type_id: ITEM_TYPE_ROUTED, route_number: 1, route_steps: [H.TYPE_FUNC, H.TYPE_FUNC] },
@@ -1854,20 +1792,20 @@ describe(
       assert.deepEqual(preview.body.base_revs, { [id]: 3 });
       const publishBody = { route_ids: [R.fields], base_revs: preview.body.base_revs, apply_mode: "new_only" };
 
-      const decided = [...PUBLISH_ROLES];
-      PUBLISH_ROLES.splice(0, PUBLISH_ROLES.length, "manager");
+      const decided = [...ACCESS.publish];
+      (ACCESS.publish as AppRole[]).splice(0, ACCESS.publish.length, "manager");
       try {
         assert.deepEqual(
           await httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", { body: publishBody }),
           { status: 403, body: { error: "Forbidden", required: ["manager"] } },
         );
-        assert.equal((await previewOf()).status, 200, "the preview stays with FIELDS_EDIT_ROLES");
+        assert.equal((await previewOf()).status, 200, "the preview stays with ACCESS.fieldsEdit");
         session = signedIn("manager");
         const published = await httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", { body: publishBody });
         assert.equal(published.status, 200, JSON.stringify(published.body));
         assert.deepEqual(published.body.versions, { [id]: 1 });
       } finally {
-        PUBLISH_ROLES.splice(0, PUBLISH_ROLES.length, ...decided);
+        (ACCESS.publish as AppRole[]).splice(0, ACCESS.publish.length, ...decided);
       }
       assert.deepEqual(
         await H.one("SELECT published_by, published_by_name FROM route_field_versions WHERE test_route_id = $1 AND version = 1", [R.fields]),

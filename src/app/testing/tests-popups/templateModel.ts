@@ -2,8 +2,10 @@ import { fillVariables } from "@/app/lib/popup-templates/schema";
 import type {
   PhotoComponent, PopupTemplateConfig, TemplateComponent, TemplateStep, WeightComponent,
 } from "@/app/lib/popup-templates/schema";
+import type { DraftShot } from "@/app/lib/station-fields/evaluate";
 import type { FieldValue } from "@/app/lib/station-fields/schema";
-import type { Shot } from "./stationKit";
+import type { SavedComponent } from "@/app/lib/test-results/details";
+import type { Verdict } from "./shots";
 
 /**
  * The state of a popup built from a template (docs/popup-templates/PLAN.md §3, step 1.3) — pure, so
@@ -20,10 +22,10 @@ export type TemplateRunState = {
   /** The reference item's weight in grams; null = none. */
   refWeight: number | null;
   /** Shots per photo component. */
-  photos: Record<string, Shot[]>;
+  photos: Record<string, DraftShot[]>;
   /** The measured weight per weight component, as typed. */
   weights: Record<string, string>;
-  verdict: { ok: "" | "pass" | "fail"; note: string };
+  verdict: Verdict;
   /** The rows ticked per checklist component, and the text per notes component (the package base). */
   checks: Record<string, string[]>;
   notes: Record<string, string>;
@@ -49,7 +51,7 @@ export const TEMPLATE_RUN_TEXT = {
 } as const;
 
 /** The shots that reached storage. */
-const stored = (shots: readonly Shot[] | undefined) => (shots ?? []).filter((s) => !s.uploading && !s.failed && s.objectKey);
+const stored = (shots: readonly DraftShot[] | undefined) => (shots ?? []).filter((s) => !s.uploading && !s.failed && s.objectKey);
 
 /** The object keys of every shot that reached storage, over the given components' photo groups. */
 export function storedPhotoKeys(components: readonly TemplateComponent[], s: TemplateRunState): string[] {
@@ -127,11 +129,6 @@ export function finishBlocker(cfg: PopupTemplateConfig, s: TemplateRunState, sta
   }
   return null;
 }
-
-/** One component's answer as saved: its id and a FieldValue (the route fields' format, label at
- *  save time). A list, not an object keyed by id: details is jsonb, which keeps an array's order
- *  but not an object's keys', and the report prints the components in popup order. */
-export type SavedComponent = { id: string } & FieldValue;
 
 /**
  * The result's details (PLAN §3.5). `sku` / `hasRU` keep today's keys (the next station starts

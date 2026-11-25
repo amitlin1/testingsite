@@ -1,7 +1,6 @@
 "use client";
 import React, { forwardRef } from "react";
 import { splitSystemProps, sxToStyle, type SxInput, type SystemProps } from "./sx";
-import { lastResponsive } from "./utils";
 
 type AnyProps = Record<string, unknown>;
 
@@ -41,10 +40,10 @@ export interface StackProps
     Partial<Omit<SystemProps, "alignItems" | "justifyContent" | "flexWrap" | "flexDirection">> {
   sx?: SxInput;
   component?: React.ElementType;
-  direction?: string | Record<string, string> | string[];
-  spacing?: number | Record<string, number> | number[];
-  alignItems?: string | Record<string, string>;
-  justifyContent?: string | Record<string, string>;
+  direction?: React.CSSProperties["flexDirection"];
+  spacing?: number | string;
+  alignItems?: React.CSSProperties["alignItems"];
+  justifyContent?: React.CSSProperties["justifyContent"];
   flexWrap?: React.CSSProperties["flexWrap"];
   divider?: React.ReactNode;
 }
@@ -63,16 +62,14 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
   },
   ref,
 ) {
-  const dir = lastResponsive(direction) as React.CSSProperties["flexDirection"];
-  const sp = lastResponsive(spacing) as number | string;
   const { style, rest } = splitSystemProps(props as AnyProps);
 
   const base: React.CSSProperties = {
     display: "flex",
-    flexDirection: dir,
-    gap: typeof sp === "number" ? sp * 8 : sp,
-    alignItems: alignItems ? (lastResponsive(alignItems) as string) : undefined,
-    justifyContent: justifyContent ? (lastResponsive(justifyContent) as string) : undefined,
+    flexDirection: direction,
+    gap: typeof spacing === "number" ? spacing * 8 : spacing,
+    alignItems,
+    justifyContent,
     flexWrap,
   };
 
@@ -134,34 +131,6 @@ export const Divider = forwardRef<HTMLElement, DividerProps>(function Divider(
     : { height: 1, width: "100%", border: "none", backgroundColor: lineColor };
   return (
     <Component ref={ref} role="separator" aria-orientation={orientation} style={{ ...base, ...sxToStyle(sx), ...style }} {...rest}>
-      {children}
-    </Component>
-  );
-});
-
-/* ------------------------------------------------------------ Container --- */
-export interface ContainerProps extends React.HTMLAttributes<HTMLElement> {
-  sx?: SxInput;
-  maxWidth?: "xs" | "sm" | "md" | "lg" | "xl" | false;
-  disableGutters?: boolean;
-  component?: React.ElementType;
-}
-
-const MAXW: Record<string, number> = { xs: 444, sm: 600, md: 900, lg: 1200, xl: 1536 };
-
-export const Container = forwardRef<HTMLElement, ContainerProps>(function Container(
-  { maxWidth = "lg", disableGutters, sx, style, component: Component = "div", children, ...rest },
-  ref,
-) {
-  const base: React.CSSProperties = {
-    width: "100%",
-    marginInline: "auto",
-    maxWidth: maxWidth ? MAXW[maxWidth] : undefined,
-    paddingInline: disableGutters ? undefined : 24,
-    boxSizing: "border-box",
-  };
-  return (
-    <Component ref={ref} style={{ ...base, ...sxToStyle(sx), ...style }} {...rest}>
       {children}
     </Component>
   );

@@ -4,12 +4,13 @@ import type { ChoiceOption, ChoiceRowField, Field, Tone } from "@/app/lib/statio
 import { LIMITS, lintFields, parseFieldList } from "@/app/lib/station-fields/validate";
 import type { IdSource, SharedListLike } from "../editorModel";
 import { DEFAULT_CHOICE_OPTIONS } from "../labels";
-import { TSV_HEADER, exactSharedList, insertTsvRows, parseTsvRows, sharedTone, tsvRowField } from "../pasteTsv";
+import { parseTsvRows, tsvFields, tsvRowField } from "../pasteTsv";
+import { fillCell } from "../cellFill";
 
 /**
  * "הדבק מאקסל" (route-fields spec §5.14, §8.9, §8.10; artboard 2): the TSV format, the default row of
- * a one-column line, links to a shared list that matches exactly, tones by label, duplicates and
- * the shape limits.
+ * a one-column line, links to a shared list that matches exactly, tones by label, the shape limits —
+ * and the rows going into a cell (cellFill: duplicates, place, room, ids).
  */
 
 /** Deterministic ids in the real formats. */
@@ -41,6 +42,17 @@ const choice = (f: Field): ChoiceRowField => {
   return f as ChoiceRowField;
 };
 
+/** The editor's paste: the text's rows into a cell holding `existing` (and `alongside` ahead of it). */
+function pasteInto(
+  existing: readonly Field[],
+  text: string,
+  opts: { lists?: readonly SharedListLike[]; ids?: IdSource; after?: string; alongside?: readonly Field[] } = {},
+) {
+  const src = opts.ids ?? ids();
+  const stepIds = new Set(existing.map((f) => f.id));
+  return fillCell({ fields: existing, alongside: opts.alongside ?? [], stepIds }, tsvFields(parseTsvRows(text), opts.lists ?? null, src), { after: opts.after, ids: src });
+}
+
 // ---- the format -----------------------------------------------------------------------------------
 test("lines split on \\r?\\n, empty ones are skipped, cells trimmed, empty cells at the end dropped", () => {
   const rows = parseTsvRows("  נורית מתח \t תקין\tמהבהבת\t\t\r\n\r\n\t\t\n   \nמאוורר\t\t\nא\t\tב\n");
@@ -55,7 +67,6 @@ test("lines split on \\r?\\n, empty ones are skipped, cells trimmed, empty cells
 });
 
 test("the header 'שם השדה' is skipped on the first line only", () => {
-  assert.equal(TSV_HEADER, "שם השדה");
   const text = "שם השדה\tאפשרות 1\tאפשרות 2\nנורית מתח\tתקין\nשם השדה\tא";
   assert.deepEqual(parseTsvRows(text).map((r) => r.label), ["נורית מתח", "שם השדה"]);
   // Empty lines first: the header is still the first line that has cells.
@@ -82,7 +93,6 @@ test("options that are exactly a shared list (labels and order) link to it, with
   assert.deepEqual(f.options, LED_LIST.options);
   assert.equal(f.notes, "required_on_fail");
   assert.equal(f.required, false);
-  assert.equal(exactSharedList(["תקין", "מהבהבת", "לא דולקת", "לא נבדק"], LISTS)?.name, "מצב נורית");
 });
 
 test("another order, or a part of a list, does not link: each option takes the first matching label's tone, else neutral", () => {
@@ -99,9 +109,10 @@ test("another order, or a part of a list, does not link: each option takes the f
 
   // The first list with the label wins.
   const later: SharedListLike = { id: 9, name: "אחרת", version: 1, options: [opt("o_late0001", "לכלוך", "fail")] };
-  assert.equal(sharedTone("לכלוך", [EXT_LIST, later]), "warn");
-  assert.equal(sharedTone("לכלוך", [later, EXT_LIST]), "fail");
-  assert.equal(sharedTone("לכלוך", null), "neutral");
+  const toneOf = (lists: readonly SharedListLike[] | null) => choice(tsvRowField({ label: "x", options: ["לכלוך", "חדש"] }, lists, ids())).options[0].tone;
+  assert.equal(toneOf([EXT_LIST, later]), "warn");
+  assert.equal(toneOf([later, EXT_LIST]), "fail");
+  assert.equal(toneOf(null), "neutral");
 });
 
 test("what the shape check refuses is cut to its limits: name 80, option 60, 12 options", () => {
@@ -121,7 +132,7 @@ const SPEC_PASTE = [
 ].join("\r\n");
 
 test("§8.9: three TSV rows make three rows; 'תקין / מהבהבת / לא דולקת / לא נבדק' links to 'מצב נורית'", () => {
-  const r = insertTsvRows([], parseTsvRows(SPEC_PASTE), { lists: LISTS, ids: ids() });
+  const r = pasteInto([], SPEC_PASTE, { lists: LISTS });
   assert.equal(r.added.length, 3);
   assert.deepEqual(r.fields.map((f) => f.label), ["נורית מתח", "הפעלה ו-POST", "מאוורר מעבד"]);
   const [led, post, fan] = r.fields.map(choice);
@@ -136,7 +147,7 @@ test("§8.9: three TSV rows make three rows; 'תקין / מהבהבת / לא ד�
 
 test("§8.10: 'שם⇥אפשרות 1⇥…' makes a check row per line", () => {
   const text = ["מעמד\tיציב\tמתנדנד\tשבור", "כבל\tתקין\tפגום", "מסגרת\tללא פגמים\tשריטות קלות\tשבר/סדק\tלכלוך"].join("\n");
-  const r = insertTsvRows([], parseTsvRows(text), { lists: LISTS, ids: ids() });
+  const r = pasteInto([], text, { lists: LISTS });
   assert.equal(r.fields.length, 3);
   assert.ok(r.fields.every((f) => f.type === "choice_row" && !f.required && f.notes === "required_on_fail"));
   assert.deepEqual(choice(r.fields[2]).list_ref, { id: 5, ver: 1 }, "the last row is exactly 'מצב חיצוני'");
@@ -146,9 +157,10 @@ test("a name the cell has — or a kit item's each_item group has, or an earlier
   const existing = [tsvRowField({ label: "נורית מתח", options: ["תקין", "לא תקין"] }, null, ids())];
   const eachItem = [tsvRowField({ label: "מצב חיצוני", options: [] }, null, ids())];
   const text = "נורית מתח \tתקין\nמצב חיצוני\nכבל\nכבל\tא";
-  const r = insertTsvRows(existing, parseTsvRows(text), { ids: ids(), alongside: eachItem });
+  const r = pasteInto(existing, text, { alongside: eachItem });
   assert.deepEqual(r.fields.map((f) => f.label), ["נורית מתח", "כבל"]);
   assert.equal(r.skipped, 3);
+  assert.deepEqual(r.skips.map((x) => x.place), ["cell", "each_item", "cell"]);
   assert.equal(r.overflow, 0);
 });
 
@@ -156,10 +168,9 @@ test("the rows go after the focused row, else at the end — one list", () => {
   const id = ids();
   const a = tsvRowField({ label: "א", options: [] }, null, id);
   const b = tsvRowField({ label: "ב", options: [] }, null, id);
-  const rows = parseTsvRows("ג\nד");
-  assert.deepEqual(insertTsvRows([a, b], rows, { ids: id, after: a.id }).fields.map((f) => f.label), ["א", "ג", "ד", "ב"]);
-  assert.deepEqual(insertTsvRows([a, b], rows, { ids: id, after: "f_nothere1" }).fields.map((f) => f.label), ["א", "ב", "ג", "ד"]);
-  assert.deepEqual(insertTsvRows([a, b], rows, { ids: id }).fields.map((f) => f.label), ["א", "ב", "ג", "ד"]);
+  assert.deepEqual(pasteInto([a, b], "ג\nד", { ids: id, after: a.id }).fields.map((f) => f.label), ["א", "ג", "ד", "ב"]);
+  assert.deepEqual(pasteInto([a, b], "ג\nד", { ids: id, after: "f_nothere1" }).fields.map((f) => f.label), ["א", "ב", "ג", "ד"]);
+  assert.deepEqual(pasteInto([a, b], "ג\nד", { ids: id }).fields.map((f) => f.label), ["א", "ב", "ג", "ד"]);
 });
 
 test("new rows get ids the step does not use yet, and a full cell takes no more", () => {
@@ -172,14 +183,13 @@ test("new rows get ids the step does not use yet, and a full cell takes no more"
     option: () => "o_" + (no++).toString(36).padStart(8, "0"),
     item: () => "c_00000000",
   };
-  const r = insertTsvRows([], parseTsvRows("א\nב"), { ids: sticky, takenIds: new Set(["f_00000001"]) });
-  const fieldIds = r.fields.map((f) => f.id);
-  assert.equal(new Set(fieldIds).size, 2);
-  assert.ok(!fieldIds.includes("f_00000001"));
+  const incoming = tsvFields(parseTsvRows("א\nב"), null, ids());
+  const r = fillCell({ fields: [], alongside: [], stepIds: new Set(["f_00000001"]) }, incoming, { ids: sticky });
+  assert.deepEqual(r.fields.map((f) => f.id), ["f_00000002", "f_00000003"], "the taken id and the repeat are passed over");
 
   const id = ids();
   const full = Array.from({ length: LIMITS.fieldsPerList - 1 }, (_, i) => tsvRowField({ label: "שדה " + i, options: [] }, null, id));
-  const r2 = insertTsvRows(full, parseTsvRows("א\nב\nג"), { ids: id });
+  const r2 = pasteInto(full, "א\nב\nג", { ids: id });
   assert.equal(r2.fields.length, LIMITS.fieldsPerList);
   assert.equal(r2.added.length, 1);
   assert.equal(r2.overflow, 2);

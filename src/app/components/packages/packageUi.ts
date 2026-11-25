@@ -1,42 +1,19 @@
-import type { CSSProperties, KeyboardEvent } from "react";
-import type { PackageItemState, PackageStatusKey } from "@/app/lib/packages/read";
+import { ITEM_STATE_LABEL, PACKAGE_STATUS_LABEL, type PackageItemState, type PackageStatusKey } from "@/app/lib/packages/contract";
+import { AMBER, AMBER_INK, BLUE, GREEN, GREY, MUTED, RED } from "@/components/ui/colors";
 
 /**
- * Shared vocabulary of the package screens — colours, labels and id
- * formatting from claude-code-handoff/packages/design (Packages.dc.html,
- * Package Stations.dc.html). One place, so every screen agrees.
+ * The package screens' colour per state and status (claude-code-handoff/
+ * packages/design: Packages.dc.html, Package Stations.dc.html); the labels
+ * are the contract's, so the screens and the server's state_label agree.
  */
-
-export const BLUE = "var(--color-primary)";
-export const BLUE_HOVER = "var(--color-primary-hover)";
-export const BLUE_SOFT = "var(--color-primary-soft)";
-export const FOCUS = "var(--color-primary-focus)";
-export const INK = "var(--color-ink)";
-export const INK_2 = "var(--color-ink-muted-70)";
-export const MUTED = "var(--color-ink-muted-48)";
-export const MUTED_LT = "var(--color-ink-muted-48)";
-export const HAIR = "var(--color-hairline)";
-export const HAIR_2 = "var(--color-divider-soft)";
-export const PAGE_BG = "var(--color-canvas-parchment)";
-export const AMBER = "var(--color-status-late)";  // dots and fills; text uses AMBER_INK
-export const AMBER_INK = "var(--color-warning-ink)";
-export const AMBER_BG = "var(--color-warning-bg)";
-export const AMBER_BORDER = "var(--color-warning-border)";
-export const GREEN = "var(--color-success-ink)";
-export const GREEN_BG = "var(--color-success-bg)";
-export const RED = "var(--color-destructive)";
-export const RED_HOVER = "var(--color-destructive-hover)";
-export const RED_BG = "var(--color-danger-bg)";
-export const GREY = "var(--color-border-strong)";
-export const SHADOW = "var(--shadow-modal)";
 
 /** Item state → legend colour + label (design: STATES). */
 export const ITEM_STATES: Record<PackageItemState, { label: string; color: string }> = {
-  new: { label: "טרם נפתח", color: GREY },
-  queue: { label: "ממתין", color: AMBER },
-  test: { label: "בבדיקה", color: BLUE },
-  done: { label: "הושלם", color: GREEN },
-  missing: { label: "חסר במארז", color: RED },
+  new: { label: ITEM_STATE_LABEL.new, color: GREY },
+  queue: { label: ITEM_STATE_LABEL.queue, color: AMBER },
+  test: { label: ITEM_STATE_LABEL.test, color: BLUE },
+  done: { label: ITEM_STATE_LABEL.done, color: GREEN },
+  missing: { label: ITEM_STATE_LABEL.missing, color: RED },
 };
 
 /** Item state → the colour its LABEL is written in. ITEM_STATES colours are
@@ -51,50 +28,16 @@ export const ITEM_STATE_INK: Record<PackageItemState, string> = {
 
 /** Box status → pill label + dot colour (design: PKG_STATUS, plus readyClose). */
 export const PKG_STATUS: Record<PackageStatusKey, { label: string; dot: string }> = {
-  pending: { label: "ממתין לקליטה", dot: GREY },
-  queue: { label: "ממתין לפתיחה", dot: AMBER },
-  test: { label: "בבדיקה", dot: BLUE },
-  waitItems: { label: "ממתין לפריטי המארז", dot: AMBER },
-  readyClose: { label: "ממתין לסגירה", dot: AMBER },
-  done: { label: "הושלם", dot: GREEN },
+  pending: { label: PACKAGE_STATUS_LABEL.pending, dot: GREY },
+  queue: { label: PACKAGE_STATUS_LABEL.queue, dot: AMBER },
+  test: { label: PACKAGE_STATUS_LABEL.test, dot: BLUE },
+  waitItems: { label: PACKAGE_STATUS_LABEL.waitItems, dot: AMBER },
+  readyClose: { label: PACKAGE_STATUS_LABEL.readyClose, dot: AMBER },
+  done: { label: PACKAGE_STATUS_LABEL.done, dot: GREEN },
 };
 
-export const LEGEND: { label: string; color: string }[] = [
-  { label: "טרם נפתח", color: GREY },
-  { label: "ממתין", color: AMBER },
-  { label: "בבדיקה", color: BLUE },
-  { label: "הושלם", color: GREEN },
-  { label: "חסר במארז", color: RED },
-];
-
-/** 15-digit id → its parts { head: "323 011126 0001", suffix: "00" } (customer
- *  code, date, the day's counter; lib/packages/ids.ts). The previous 16-digit
- *  id → { head: "1005 1509 2600 03", suffix: "00" }. A legacy id (shorter) has
- *  no suffix convention: head = the whole id, suffix = "". */
-export function fmtId(id: string | number | bigint): { head: string; suffix: string } {
-  const s = String(id);
-  if (s.length === 15) {
-    return { head: `${s.slice(0, 3)} ${s.slice(3, 9)} ${s.slice(9, 13)}`, suffix: s.slice(13) };
-  }
-  if (s.length === 16) {
-    return { head: s.slice(0, 14).replace(/(\d{4})(?=\d)/g, "$1 "), suffix: s.slice(14) };
-  }
-  return { head: s.replace(/(\d{4})(?=\d)/g, "$1 "), suffix: "" };
-}
-
-/** Compact form for chips and dense tables: the day's counter and the
- *  position, "…0001 00" (the previous 16-digit id: "…2600 03"). */
-export function shortId(id: string | number | bigint): string {
-  const s = String(id);
-  if (s.length === 15) return `…${s.slice(9, 13)} ${s.slice(13)}`;
-  if (s.length === 16) return `…${s.slice(10, 14)} ${s.slice(14)}`;
-  return s.length > 8 ? `…${s.slice(-8)}` : s;
-}
-
-/** Two-digit position: 1 → "01". */
-export function seq2(n: number | null | undefined): string {
-  return n == null ? "—" : String(n).padStart(2, "0");
-}
+/** The item-state legend, in the design's order. */
+export const LEGEND: { label: string; color: string }[] = Object.values(ITEM_STATES);
 
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -113,34 +56,3 @@ export function fmtDateTime(iso: string | null | undefined): string {
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${fmtDate(iso)} ${hh}:${mi}`;
 }
-
-/** Barcode payload — the id alone. Labels printed before also carried "-sourceId";
- *  parseBarcode still reads those by their id part. */
-export function barcodeOf(id: string | number | bigint): string {
-  return String(id);
-}
-
-/*
- * Buttons, fields, rows and dialogs are CSS classes in
- * src/app/packages/packages.css (.pkg-pill, .pkg-field, .pkg-row, …) — an
- * inline style cannot carry hover / press / focus / disabled — and the
- * dialogs sit in PackageDialog (ui/Dialog), which owns the stacking.
- *
- * `fieldInput` stays only for a field that cannot take the class: the 44px
- * frame of .pkg-field. No `outline: none` here, so such a field still shows
- * the browser's focus ring.
- */
-/** Keyboard for a card that acts like a checkbox / button but holds block
- *  content (role="checkbox" + tabIndex 0): Space and Enter press it, as on a
- *  native control. Keys from a control inside the card are left alone. */
-export function pressKeys(onPress: () => void) {
-  return (e: KeyboardEvent) => {
-    if (e.target !== e.currentTarget || (e.key !== " " && e.key !== "Enter")) return;
-    e.preventDefault();
-    onPress();
-  };
-}
-
-export const fieldInput: CSSProperties = {
-  width: "100%", height: 44, border: "1px solid var(--color-field-border)", borderRadius: "var(--r-field)", padding: "0 13px", fontSize: 14, background: "var(--color-canvas)", fontFamily: "inherit", color: INK,
-};

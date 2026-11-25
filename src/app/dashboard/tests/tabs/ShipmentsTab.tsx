@@ -18,20 +18,20 @@
 
 import * as React from "react";
 
-import DataCard, { IgnoredFiltersPill } from "@/app/components/dashboard/DataCard";
-import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
-import { ProgressCell } from "@/app/components/dashboard/LoadBar";
-import type { ShipmentWire } from "@/app/lib/dashboard/api-types";
+import DataCard, { IgnoredFiltersPill } from "../_components/DataCard";
+import DenseTable, { type Column } from "../_components/DenseTable";
+import { ProgressCell } from "../_components/LoadBar";
+import type { ShipmentView } from "@/app/lib/dashboard/contract";
 import {
   completionTone,
   describeIgnoredFilters,
   formatCount,
   formatPercent,
   formatShortDate,
-} from "@/app/lib/dashboard/format";
+} from "../_lib/format";
 import type { TabProps } from "./tabTypes";
 
-export function shipmentColumns(): Array<Column<ShipmentWire>> {
+export function shipmentColumns(): Array<Column<ShipmentView>> {
   return [
     {
       key: "code",
@@ -54,7 +54,7 @@ export function shipmentColumns(): Array<Column<ShipmentWire>> {
       header: "תאריך",
       numeric: true,
       secondary: true,
-      sortValue: (r) => new Date(r.shipmentDate).getTime() || null,
+      sortValue: (r) => (r.shipmentDate === null ? null : new Date(r.shipmentDate).getTime() || null),
       render: (r) => (
         <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
           {formatShortDate(r.shipmentDate)}
@@ -120,10 +120,10 @@ export function shipmentColumns(): Array<Column<ShipmentWire>> {
 }
 
 export default function ShipmentsTab({ api, data, openHistory }: TabProps) {
-  const shipments = data.get<ShipmentWire[]>("shipments");
+  const shipments = data.get("shipments");
   const rows = shipments.data ?? [];
   const ignored = describeIgnoredFilters(
-    shipments.meta.ignoredFilters ?? rows[0]?._new_ignoredFilters ?? null,
+    shipments.meta.ignoredFilters ?? rows[0]?.ignoredFilters ?? null,
   );
 
   return (

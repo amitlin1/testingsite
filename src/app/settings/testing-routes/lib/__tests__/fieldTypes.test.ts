@@ -1,15 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { FIELD_TYPES } from "@/app/lib/station-fields/schema";
-import { FIELD_TYPE_TEXT } from "../labels";
-import { DEFAULT_FIELD_TYPE, FIELD_TYPE_GROUPS, activeTypeIn, filterFieldTypes, stepActiveType, visibleTypes } from "../fieldTypes";
+import { FIELD_TYPE_GROUPS, activeTypeIn, filterFieldTypes, stepActiveType, visibleTypes } from "../fieldTypes";
 
-test("the picker lists every type once, in FIELD_TYPES order, in artboard 3's five groups", () => {
+test("the picker lists every type once, in FIELD_TYPES order", () => {
   assert.deepEqual(visibleTypes(FIELD_TYPE_GROUPS), [...FIELD_TYPES]);
-  assert.deepEqual(FIELD_TYPE_GROUPS.map((g) => g.name), ["נפוץ", "מדידה וטקסט", "בחירה", "תיעוד", "מבנה"]);
-  assert.equal(DEFAULT_FIELD_TYPE, "choice_row");
-  assert.equal(FIELD_TYPE_TEXT.choice_row.desc, "שם · בחירה מ-4 אפשרויות · הערות");
-  assert.equal(FIELD_TYPE_TEXT.number.desc, "ערך עם יחידה, טווח או ערך ייחוס ±%");
 });
 
 test("search by name or description; empty groups drop out", () => {

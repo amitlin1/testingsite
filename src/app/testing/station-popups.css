@@ -1,0 +1,87 @@
+/* The station popups (tests-popups/*) and the box-item "החזר" button: what an inline style
+   cannot say — hover (only on a fine pointer: station touchscreens would keep it stuck),
+   focus-visible, pressed. Imported by the components that use the classes, so a popup is styled
+   wherever it renders (the testing screen, the settings previews). Colours are tokens
+   (src/styles/tokens.css). */
+
+/* "חזרה לבדיקה הקודמת" — a pill on the card's top edge, beside the priority
+   ribbon's place: quiet (hairline on canvas) until hovered or focused. The
+   ::before widens its hit area to 32px without growing the pill. */
+.tst-step-back {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-70);
+  font: inherit;
+  font-size: var(--text-micro);
+  font-weight: 600;
+  border-radius: var(--r-pill);
+  padding: 2px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tst-step-back::before { content: ""; position: absolute; inset: -7px -2px; }
+.tst-step-back:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .tst-step-back:hover { border-color: var(--color-primary-border); color: var(--color-primary); background: var(--color-primary-tint); }
+}
+
+/* Reference-item scan field in the package wizards (referenceScan.tsx). The
+   edge follows focus (the .sh-input ring), not whether the field has text. */
+.sh-input.tst-ref-scan { height: 52px; border-radius: var(--r-md); font-size: var(--text-lead); font-variant-numeric: tabular-nums; letter-spacing: 1px; text-align: right; }
+
+/* --------------------------------------------------------- Station wizard -- */
+/* stationKit's StationShell, aligned to the package wizard shell
+   (PackageWizardShell / design/Package Stations.dc.html). */
+.tst-wiz-step {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+.tst-wiz-step[aria-current="step"] { background: var(--color-primary-soft); }
+.tst-wiz-step:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) {
+  .tst-wiz-step:not([aria-current="step"]):hover { background: color-mix(in srgb, var(--color-ink) 4%, transparent); }
+}
+
+/* Step chips (tablet / phone, where the rail is gone). */
+.tst-wiz-chip {
+  all: unset;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding-inline: 14px;
+  border-radius: var(--r-pill);
+  font-size: var(--text-small);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-48);
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.tst-wiz-chip[data-done] { background: var(--color-success-bg); color: var(--color-success-ink); }
+.tst-wiz-chip[aria-current="step"] { background: var(--color-primary-soft); color: var(--color-primary); }
+.tst-wiz-chip:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+
+.sh-btn.tst-wiz-btn { min-height: 44px; padding-inline: 22px; }
+
+/* VerdictCard's suggestion line ("מוצע: לא תקין — …"), 10px under the pair;
+   no room while it says nothing. SuggestionLine keeps its status region in
+   the page then, empty — never display:none, or the first suggestion would
+   not be announced. */
+.tst-verdict-suggest { margin-top: 10px; }
+.tst-verdict-suggest:empty,
+.tst-verdict-suggest:has(> [role="status"]:empty) { margin-top: 0; }

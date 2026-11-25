@@ -1,4 +1,5 @@
-import type { TransactionClient } from "@/app/lib/prisma";
+import type { TransactionClient } from "@/lib/db";
+import { itemRouteMissingText } from "./template-wire";
 
 /**
  * Route-shape rules of the package model — docs/packages/PLAN.md §4.
@@ -20,7 +21,6 @@ export type RouteShape = {
   steps: number[];
 };
 
-/** Any DB handle that can run the two reads below — the live client or a tx. */
 type Reader = Pick<TransactionClient, "testing_routes" | "test_stations_type">;
 
 export async function loadRouteShape(
@@ -73,7 +73,7 @@ export function checkItemRouteAgainstPackage(
   packageLevel: Set<number>,
   routeNumber: number,
 ): string | null {
-  if (!item) return `לסוג הפריט אין מסלול מספר ${routeNumber}`;
+  if (!item) return itemRouteMissingText(routeNumber);
   if (item.steps.length === 0) return "מסלול הפריט ריק";
   if (firstStep(item) !== firstStep(pkg)) return "מסלול הפריט חייב להתחיל באותה עמדת פתיחה כמו מסלול המארז";
   if (lastStep(item) !== lastStep(pkg)) return "מסלול הפריט חייב להסתיים באותה עמדת סגירה כמו מסלול המארז";

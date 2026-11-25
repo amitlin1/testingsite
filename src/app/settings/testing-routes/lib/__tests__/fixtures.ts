@@ -1,5 +1,11 @@
+import assert from "node:assert/strict";
 import type { Field, RouteFieldsConfig, StepConfig, Tone } from "@/app/lib/station-fields/schema";
+import type { Issue } from "@/app/lib/station-fields/validate";
 import type { ContextLineJson, FieldsContextJson, RouteFieldsJson, SharedKitJson } from "@/app/lib/station-fields/admin-types";
+import { cellKey } from "../cellGroups";
+import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "../draftModel";
+import { buildFieldsMap } from "../mapModel";
+import type { AnyMapCell, FieldsMapModel, MapCell } from "../mapModel";
 
 /**
  * Test data for the admin screen's models: the kit of artboard 1 ("מארז עמדת עבודה · מסלול 1") and
@@ -7,11 +13,11 @@ import type { ContextLineJson, FieldsContextJson, RouteFieldsJson, SharedKitJson
  * artboards' numbers. Station type ids are made up (11–15); the names are the repo's demo names.
  */
 
-export const OPEN = 11;   // פתיחת מארז — package level
-export const ELEC = 12;   // חשמל
-export const MECH = 13;   // מכניקה
-export const VISU = 14;   // בדיקה ויזואלית
-export const CLOSE = 15;  // סגירת מארז — package level
+export const OPEN = 11;   // the kit's first station — package level
+export const ELEC = 12;
+export const MECH = 13;
+export const VISU = 14;
+export const CLOSE = 15;  // the kit's last station — package level
 
 export const STATIONS: FieldsContextJson["stations"] = {
   [OPEN]: { label: "פתיחת מארז", package_level: true },
@@ -189,3 +195,22 @@ export function artboard11(): FieldsContextJson {
 
 /** A context through JSON — what the wire carries. */
 export const wire = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+
+/** The fields map of `ctx` as the screen draws it right after loading it: the draft store's working
+ *  copies and their issues (useFieldsMap), or the `issues` given. */
+export function mapFor(ctx: FieldsContextJson, opts: { setVersions?: Record<number, number>; issues?: Record<number, Issue[]> } = {}): FieldsMapModel {
+  const model = draftReducer(EMPTY_DRAFT_MODEL, { type: "load", context: ctx });
+  return buildFieldsMap({ context: ctx, configs: currentConfigs(model), issues: opts.issues ?? summarize(model).issuesByRoute, setVersions: opts.setVersions });
+}
+
+/** The cell at (row, column), or null. */
+export function getCell(model: FieldsMapModel, rowKey: string, columnKey: string): AnyMapCell | null {
+  return model.cells.get(cellKey(rowKey, columnKey)) ?? null;
+}
+
+/** The cell at (row, column), asserting it can hold fields. */
+export function cellAt(model: FieldsMapModel, rowKey: string, columnKey: string): MapCell {
+  const c = getCell(model, rowKey, columnKey);
+  assert.ok(c && !c.na, `expected a relevant cell at ${rowKey} × ${columnKey}`);
+  return c;
+}

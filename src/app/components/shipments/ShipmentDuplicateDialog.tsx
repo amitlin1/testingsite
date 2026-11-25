@@ -2,16 +2,8 @@
 import React from "react";
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Alert } from "@/components/ui";
 import { formatDate } from "@/app/lib/datetime";
-
-/** The shipment already in the system with the same number and customer —
- *  what the server's SHIPMENT_DUPLICATE refusal carries in `existing`. */
-export type DuplicateShipment = {
-    shipment_code: string;
-    customer_code: string | null;
-    shipment_date: string | null;
-    received_at?: string | null;
-    amount?: number | null;
-};
+import { ApiError } from "@/lib/api/client";
+import { SHIPMENT_DUPLICATE, type DuplicateShipment } from "@/app/lib/shipments/contract";
 
 /**
  * The same certificate (number + customer) was already entered. Usually a
@@ -64,8 +56,8 @@ export default function ShipmentDuplicateDialog({
 }
 
 /** The server's duplicate refusal, read off a failed save; null for any other. */
-export async function duplicateOf(res: Response): Promise<DuplicateShipment | null> {
-    if (res.status !== 409) return null;
-    const body = await res.clone().json().catch(() => null);
-    return body?.code === "SHIPMENT_DUPLICATE" && body.existing ? (body.existing as DuplicateShipment) : null;
+export function duplicateOf(error: unknown): DuplicateShipment | null {
+    if (!(error instanceof ApiError) || error.status !== 409) return null;
+    const { code, existing } = error.body;
+    return code === SHIPMENT_DUPLICATE && existing ? (existing as DuplicateShipment) : null;
 }

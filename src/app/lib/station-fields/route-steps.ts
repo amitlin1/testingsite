@@ -1,29 +1,33 @@
 import { Prisma } from "@prisma/client";
-import type { TransactionClient } from "@/app/lib/prisma";
+import type { TransactionClient } from "@/lib/db";
+import type { Actor } from "@/lib/auth/identity";
+import { HttpError } from "@/lib/http/errors";
+import { INT4_MAX, isDbId } from "@/lib/http/request";
+import { isRecord } from "@/lib/json-guards";
+import type { RouteListRow, StationTypeJson } from "./admin-types";
+import { loadRoute, storedConfig, writeDraft } from "./route-store";
+import { alignedStepUids } from "./schema";
 import type { RouteFieldsConfig, StepUid } from "./schema";
 import {
-  StepUidError,
   assignStepUids,
   inferUidsByOccurrence,
   newStepUid,
   pruneDraft,
   renameStationTypeInConfig,
 } from "./step-uids";
-import type { StationTypeInfo, StepUidErrorCode } from "./step-uids";
-import { ShapeError, parseRouteFieldsConfig } from "./validate";
 
 /**
  * SERVER ONLY. The routes API's reads and writes of testing_routes.route_steps / step_uids
  * (route-fields spec §3.1, §3.5), and the station-type id rename's pass over the drafts (§3.6).
  *
  * Plain functions over a Prisma client or transaction, so they run without a session; the route
- * handlers only add withAuth and turn a RouteStepsError into its HTTP status. The rules
+ * handlers only add withAuth and answer a thrown HttpError. The rules
  * themselves (uid assignment, inference, pruning, renaming) live in step-uids.ts.
  */
 
 type Db = Pick<TransactionClient, "$queryRaw" | "testing_routes">;
 
-/** Response texts. The first four are word for word what the handlers answered before. */
+/** Response texts. */
 const MESSAGES = {
   required: "Item Type and Route Number are required",
   exists: "מסלול עבור שילוב זה כבר קיים במערכת",
@@ -37,33 +41,11 @@ const MESSAGES = {
   unknownType: "route_steps starts with a station type that does not exist",
 } as const;
 
-/**
- * A request the routes API refuses: `status` is the HTTP status, `message` the body's `error`,
- * `code` set only for a step uid refusal (STEP_UID_UNKNOWN / STEP_UID_DUPLICATE, spec §3.5).
- */
-export class RouteStepsError extends Error {
-  readonly status: 400 | 404 | 409;
-  readonly code?: StepUidErrorCode;
-  constructor(status: 400 | 404 | 409, message: string, code?: StepUidErrorCode) {
-    super(message);
-    this.name = "RouteStepsError";
-    this.status = status;
-    this.code = code;
-  }
-  /** The JSON body to answer with: `{ error }` as these handlers always answered, plus `code`
-   *  when there is one. */
-  get body(): { error: string; code?: StepUidErrorCode } {
-    return this.code ? { error: this.message, code: this.code } : { error: this.message };
-  }
-}
-
-const isInt4 = (v: unknown): v is number =>
-  Number.isInteger(v) && (v as number) >= -2147483648 && (v as number) <= 2147483647;
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+/** Any int4 (station type ids in route_steps, filters): Postgres refuses a larger parameter. */
+const isInt4 = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= -INT4_MAX - 1 && (v as number) <= INT4_MAX;
 
 function parseRouteSteps(raw: unknown): number[] {
-  if (!Array.isArray(raw) || !raw.every(isInt4)) throw new RouteStepsError(400, MESSAGES.badSteps);
+  if (!Array.isArray(raw) || !raw.every(isInt4)) throw new HttpError(400, MESSAGES.badSteps);
   return [...raw];
 }
 
@@ -71,7 +53,7 @@ function parseRouteSteps(raw: unknown): number[] {
 function parseStepUids(raw: unknown, steps: number): (string | null)[] | null {
   if (raw === undefined || raw === null) return null;
   if (!Array.isArray(raw) || raw.length !== steps || !raw.every((u) => u === null || typeof u === "string")) {
-    throw new RouteStepsError(400, MESSAGES.badUids);
+    throw new HttpError(400, MESSAGES.badUids);
   }
   return [...raw];
 }
@@ -82,22 +64,6 @@ function configuredStepUids(raw: unknown): Set<string> {
 }
 
 // ---- GET /api/settings/testing-routes ------------------------------------------------------
-/** One route of the list. fields_draft itself is never part of it (it has its own endpoint). */
-export type RouteListRow = {
-  test_route_id: number;
-  item_type_id: number;
-  test_station_type_id: number;
-  route_number: number;
-  route_steps: number[];
-  /** Parallel to route_steps. A different length means a route without uids (a script inserted
-   *  it): readers treat every step as uid-less. */
-  step_uids: string[];
-  /** Latest published version; 0 = never published. */
-  fields_version: number;
-  draft_rev: number;
-  /** fields_draft IS NOT NULL — there are unpublished changes. */
-  has_draft: boolean;
-};
 
 export async function listRoutes(
   db: Pick<TransactionClient, "$queryRaw">,
@@ -106,7 +72,7 @@ export async function listRoutes(
   const itemTypeId = filters.itemTypeId ?? null;
   const routeNumber = filters.routeNumber ?? null;
   if ((itemTypeId !== null && !isInt4(itemTypeId)) || (routeNumber !== null && !isInt4(routeNumber))) {
-    throw new RouteStepsError(400, MESSAGES.badFilter);
+    throw new HttpError(400, MESSAGES.badFilter);
   }
   return db.$queryRaw<RouteListRow[]>`
     SELECT test_route_id, item_type_id, test_station_type_id, route_number,
@@ -150,7 +116,7 @@ export async function createRoute(db: Pick<TransactionClient, "testing_routes">,
   const itemTypeId = b.item_type_id;
   const routeNumber = b.route_number;
   if (!itemTypeId || routeNumber === undefined || routeNumber === null || !isInt4(itemTypeId) || !isInt4(routeNumber)) {
-    throw new RouteStepsError(400, MESSAGES.required);
+    throw new HttpError(400, MESSAGES.required);
   }
   const routeSteps = parseRouteSteps(b.route_steps || []);
 
@@ -158,7 +124,7 @@ export async function createRoute(db: Pick<TransactionClient, "testing_routes">,
     where: { item_type_id: itemTypeId, route_number: routeNumber },
     select: { test_route_id: true },
   });
-  if (existing) throw new RouteStepsError(409, MESSAGES.exists);
+  if (existing) throw new HttpError(409, MESSAGES.exists);
 
   let testStationTypeId: number | null = routeSteps.length > 0 ? routeSteps[0] : null;
   if (testStationTypeId === null) {
@@ -168,7 +134,7 @@ export async function createRoute(db: Pick<TransactionClient, "testing_routes">,
     });
     testStationTypeId = anyRoute?.test_station_type_id ?? null;
   }
-  if (!testStationTypeId) throw new RouteStepsError(400, MESSAGES.noFirstStep);
+  if (!testStationTypeId) throw new HttpError(400, MESSAGES.noFirstStep);
 
   const stepUids = assignStepUids([], routeSteps.map(() => null), new Set());
   try {
@@ -185,7 +151,7 @@ export async function createRoute(db: Pick<TransactionClient, "testing_routes">,
   } catch (e) {
     // Lost a race with an identical POST: the unique index testing_routes_type_number_uq refused it.
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      throw new RouteStepsError(409, MESSAGES.exists);
+      throw new HttpError(409, MESSAGES.exists);
     }
     throw e;
   }
@@ -212,19 +178,8 @@ export async function publishedStepUids(db: Pick<TransactionClient, "$queryRaw">
   return new Set(rows.map((r) => r.uid));
 }
 
-/** route_field_versions.config of the route's latest published version (testing_routes.fields_version),
- *  exactly as stored; null when it was never published. */
-async function latestPublishedConfig(db: Pick<TransactionClient, "$queryRaw">, routeId: number, version: number): Promise<unknown> {
-  if (!(version > 0)) return null;
-  const rows = await db.$queryRaw<{ config: unknown }[]>`
-    SELECT config FROM route_field_versions
-     WHERE test_route_id = ${routeId}::int AND version = ${version}::int
-  `;
-  return rows[0]?.config ?? null;
-}
-
 /** test_stations_type facts pruneDraft needs for the route's station types. CHAR(50): trimmed. */
-async function stationTypeInfo(db: Pick<TransactionClient, "$queryRaw">, typeIds: readonly number[]): Promise<Map<number, StationTypeInfo>> {
+async function stationTypeInfo(db: Pick<TransactionClient, "$queryRaw">, typeIds: readonly number[]): Promise<Map<number, StationTypeJson>> {
   const ids = [...new Set(typeIds)];
   if (ids.length === 0) return new Map();
   const rows = await db.$queryRaw<{ id: number; label: string; package_level: boolean }[]>`
@@ -263,10 +218,10 @@ function rebindRetypedSteps(
  *  fail on a draft or version it cannot read, and such a config is left exactly as it is. */
 function parseStored(raw: unknown, routeId: number, what: string): RouteFieldsConfig | null {
   try {
-    return parseRouteFieldsConfig(raw);
+    return storedConfig(raw, routeId, what);
   } catch (e) {
-    if (!(e instanceof ShapeError)) throw e;
-    console.warn(`testing route ${routeId}: the ${what} does not parse (${e.message}); left unpruned`);
+    if (!(e instanceof HttpError)) throw e;
+    console.warn(`${e.message}; left unpruned`);
     return null;
   }
 }
@@ -279,59 +234,41 @@ function parseStored(raw: unknown, routeId: number, what: string): RouteFieldsCo
  * the uid of the current step with the same station type and occurrence, so re-sending the same
  * steps keeps every uid.
  *
- * In ONE update: route_steps, step_uids, test_station_type_id = the first step's (kept when the
- * route is emptied), and — only when it changes — the draft. The draft (or, without one, the
+ * In one transaction: route_steps, step_uids, test_station_type_id = the first step's (kept when
+ * the route is emptied), and — only when it changes — the draft (route-store writeDraft). The draft (or, without one, the
  * latest published config) loses the configs of removed steps and gets each kept step's station
  * type / label from its new position; a published version is a base only when pruning changes
  * it. Published versions themselves are never touched.
  *
- * Run inside a transaction: the route row is locked FOR UPDATE first. `actor` = the session's
- * preferredUsername, stored as draft_updated_by when the draft changes.
+ * Run inside a transaction: the route row is locked FOR UPDATE first. `actor` stamps the draft
+ * when it changes.
  */
 export async function saveRouteSteps(
   tx: Db,
-  routeId: number,
+  routeId: number | null,
   body: unknown,
-  actor: string | null,
+  actor: Actor,
 ): Promise<SavedRoute> {
   const b = isRecord(body) ? body : {};
   const routeSteps = parseRouteSteps(b.route_steps);
   const sentUids = parseStepUids(b.step_uids, routeSteps.length);
-  if (!isInt4(routeId) || routeId < 1) throw new RouteStepsError(404, MESSAGES.notFound);
+  if (!isDbId(routeId)) throw new HttpError(404, MESSAGES.notFound);
 
-  const rows = await tx.$queryRaw<{
-    route_steps: number[] | null;
-    step_uids: string[] | null;
-    fields_draft: unknown;
-    fields_version: number;
-  }[]>`
-    SELECT route_steps, step_uids, fields_draft, fields_version
-      FROM testing_routes
-     WHERE test_route_id = ${routeId}::int
-       FOR UPDATE
-  `;
-  const cur = rows[0];
-  if (!cur) throw new RouteStepsError(404, MESSAGES.notFound);
-  const curSteps = cur.route_steps ?? [];
-  const curUids = cur.step_uids ?? [];
+  const cur = await loadRoute(tx, routeId, { lock: true });
+  if (!cur) throw new HttpError(404, MESSAGES.notFound);
+  const curSteps = cur.route_steps;
+  const curUids = cur.step_uids;
   // A route a script inserted (or edited) without step_uids has none that line up with its steps.
-  const current = curUids.length === curSteps.length ? curUids : [];
+  const current = alignedStepUids(cur);
   const incoming = sentUids ?? inferUidsByOccurrence(curSteps, curUids, routeSteps);
 
-  const latestPublished = await latestPublishedConfig(tx, routeId, cur.fields_version);
+  const latestPublished = cur.published_config ?? null;
   const draftUids = configuredStepUids(cur.fields_draft);
   // A new step never gets a uid some config still names: any published version's (spec §3.5
   // rule 3), the draft's, or a stale one left beside misaligned steps.
   const taken = new Set([...(await publishedStepUids(tx, routeId)), ...draftUids, ...curUids]);
 
-  let stepUids: StepUid[];
-  try {
-    stepUids = assignStepUids(current, incoming, taken);
-  } catch (e) {
-    if (e instanceof StepUidError) throw new RouteStepsError(400, e.message, e.code);
-    throw e;
-  }
-  stepUids = rebindRetypedSteps(stepUids, current, curSteps, routeSteps, taken);
+  const stepUids = rebindRetypedSteps(assignStepUids(current, incoming, taken), current, curSteps, routeSteps, taken);
   const kept = new Set(stepUids);
   const removed = current.filter((uid) => !kept.has(uid));
   const latestPublishedUids = configuredStepUids(latestPublished);
@@ -347,8 +284,9 @@ export async function saveRouteSteps(
     }
   }
 
+  let saved: CreatedRoute;
   try {
-    const saved = await tx.testing_routes.update({
+    saved = await tx.testing_routes.update({
       where: { test_route_id: routeId },
       data: {
         route_steps: routeSteps,
@@ -356,25 +294,18 @@ export async function saveRouteSteps(
         // The first station type, which this PUT used to leave stale. The column is NOT NULL, so an
         // emptied route keeps the one it had.
         ...(routeSteps.length > 0 ? { test_station_type_id: routeSteps[0] } : {}),
-        ...(nextDraft
-          ? {
-              fields_draft: nextDraft as unknown as Prisma.InputJsonValue,
-              draft_rev: { increment: 1 },
-              draft_updated_at: new Date(),
-              draft_updated_by: actor,
-            }
-          : {}),
       },
       select: ROUTE_SELECT,
     });
-    return { ...saved, removed_with_fields: removedWithFields };
   } catch (e) {
     // fk_testing_routes_test_station_type: route_steps[0] names no station type.
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2003") {
-      throw new RouteStepsError(400, MESSAGES.unknownType);
+      throw new HttpError(400, MESSAGES.unknownType);
     }
     throw e;
   }
+  if (nextDraft) await writeDraft(tx, routeId, nextDraft, actor);
+  return { ...saved, removed_with_fields: removedWithFields };
 }
 
 // ---- PUT /api/settings/test-stations-type/[id] (id change) -----------------------------------

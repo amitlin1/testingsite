@@ -19,9 +19,3 @@ export function errorCode(e: unknown): string | undefined {
   const code = field(e, "code");
   return typeof code === "string" ? code : undefined;
 }
-
-/** A Postgres error's `detail` (e.g. which key a unique violation hit). */
-export function errorDetail(e: unknown): string | undefined {
-  const detail = field(e, "detail");
-  return typeof detail === "string" ? detail : undefined;
-}

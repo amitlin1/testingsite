@@ -10,38 +10,38 @@
 //
 // THE INSTANT PROBED IS THE END OF THE SELECTED WINDOW. That is what finally
 // makes the date picker mean something here: "what did the floor look like at
-// the end of last Tuesday" is answerable. `_new_asOf` is stamped by the server
-// and shown, so a screenshot can be dated.
+// the end of last Tuesday" is answerable. `asOf` is stamped by the server and
+// shown, so a screenshot can be dated.
 //
-// Labels come from `metric_state.label_he` on the wire — never a hardcoded
-// status-names map — and `סטטוס לא ממופה` keeps its own amber slice.
+// The donut's labels come from `metric_state.label_he` on the wire, and
+// `unmapped` keeps its own amber slice. (The trend chart's legend has labels of
+// its own — StatusTrendChart.)
 
 import * as React from "react";
 
-import DataCard from "@/app/components/dashboard/DataCard";
+import DataCard from "../_components/DataCard";
 import { Skeleton } from "@/components/ui";
-import StatusDonut from "@/app/components/dashboard/charts/StatusDonut";
-import { stateColor } from "@/app/components/dashboard/charts/palette";
-import StatusTrendChart from "@/app/components/dashboard/charts/StatusTrendChart";
-import { ChartBody } from "@/app/components/dashboard/charts/chartConfig";
-import type { StatusHistoryWire, StatusWire } from "@/app/lib/dashboard/api-types";
-import { formatClock, formatCount, formatPercent } from "@/app/lib/dashboard/format";
-import { EmptyChart } from "./TimesTab";
+import EmptyChart from "../_components/EmptyChart";
+import StatusDonut from "../_components/charts/StatusDonut";
+import { stateColor } from "../_components/charts/palette";
+import StatusTrendChart from "../_components/charts/StatusTrendChart";
+import { ChartBody } from "../_components/charts/chartConfig";
+import { formatClock, formatCount, formatPercent } from "../_lib/format";
 import type { TabProps } from "./tabTypes";
 
-export const DONUT_NOTE =
+const DONUT_NOTE =
   "״הסתיים״ אינו פלח בעוגה — פריט שהסתיים נמדד כמצטבר של מסלולים שנסגרו, מטריקה נפרדת";
 
 export default function StatusTab({ data }: TabProps) {
-  const status = data.get<StatusWire[]>("status");
-  const history = data.get<StatusHistoryWire[]>("statusHistory");
+  const status = data.get("status");
+  const history = data.get("statusHistory");
 
   // Unknown is not zero: a skeleton until the endpoint answers, "—" if it failed.
   const statusPending = status.data === null && !status.error;
   const statusFailed = status.data === null && !!status.error;
   const slices = status.data ?? [];
   const total = slices.reduce((sum, slice) => sum + slice.count, 0);
-  const asOf = slices[0]?._new_asOf ?? null;
+  const asOf = slices[0]?.asOf ?? null;
 
   return (
     <div className="dash-bottom" style={{ flex: 1, minHeight: 0, display: "flex", gap: 10 }}>
@@ -81,7 +81,7 @@ export default function StatusTab({ data }: TabProps) {
             [0, 1, 2, 3].map((i) => <Skeleton key={i} variant="text" height={14} width="100%" />)}
           {slices.map((slice, index) => (
             <div
-              key={slice._new_stateKey}
+              key={slice.stateKey}
               style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-small)" }}
             >
               <span
@@ -89,7 +89,7 @@ export default function StatusTab({ data }: TabProps) {
                   width: 9,
                   height: 9,
                   borderRadius: 2,
-                  background: stateColor(slice._new_stateKey, index),
+                  background: stateColor(slice.stateKey, index),
                   flexShrink: 0,
                 }}
               />

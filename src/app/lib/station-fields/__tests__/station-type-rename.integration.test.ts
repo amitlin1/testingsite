@@ -24,7 +24,7 @@
 // truncates the same tables they do, and `node --test` runs files in parallel.
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import * as H from "../../metrics/__tests__/write-path-helpers";
+import * as H from "@/test-support/db-harness";
 import type { RouteFieldsConfig, StepConfig } from "../schema";
 
 /** A JSON answer as the route sends it, read by its keys. */
@@ -59,7 +59,7 @@ describe(
     let queue: QueueHandler;
     let stationFields: QueueHandler;
     let A: typeof import("../admin");
-    let prisma: (typeof import("../../prisma"))["prisma"];
+    let prisma: (typeof import("@/lib/db"))["prisma"];
 
     before(async () => {
       // MUST come first: it points DATABASE_URL at the scratch database before
@@ -69,7 +69,7 @@ describe(
       queue = (await import("../../../api/testing/items/route")).GET;
       stationFields = (await import("../../../api/testing/station-fields/route")).GET;
       A = await import("../admin");
-      prisma = (await import("../../prisma")).prisma;
+      prisma = (await import("@/lib/db")).prisma;
       await H.q(
         `INSERT INTO item_status (item_status_id, item_status_desc) VALUES ($1, $2)
          ON CONFLICT (item_status_id) DO NOTHING`,

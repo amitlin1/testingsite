@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
 import { withAuth } from "@/lib/auth/withAuth";
-import { actorFromSession, adminFieldsErrorResponse, parsePathId, readJsonObject } from "@/app/lib/station-fields/admin";
+import { errorResponse } from "@/lib/http/errors";
+import { actorFromSession } from "@/lib/auth/identity";
+import { parseDbId, readJsonObject } from "@/lib/http/request";
 import { forkRouteForKit } from "@/app/lib/station-fields/fork";
-import { FIELDS_EDIT_ROLES } from "@/app/lib/station-fields/roles";
+import { ACCESS } from "@/lib/auth/roles";
 
 export const runtime = "nodejs";
-
-type RouteCtx = { params: Promise<{ id: string }> };
 
 /**
  * POST /api/settings/testing-routes/[id]/fork — "צור מסלול נפרד למארז הזה" (spec §3.2.1,
@@ -15,12 +15,11 @@ type RouteCtx = { params: Promise<{ id: string }> };
  * (same steps, same step uids, its draft or published config as the new draft) that this kit's
  * template line now runs. Refusals: see fork.ts.
  */
-export const POST = withAuth(async (req, { session }, routeCtx) => {
+export const POST = withAuth<{ id: string }>(async (req, { session, params: { id } }) => {
   try {
-    const { id } = await (routeCtx as RouteCtx).params;
     const body = await readJsonObject(req);
-    return NextResponse.json(await forkRouteForKit(prisma, parsePathId(id), body, actorFromSession(session)), { status: 201 });
+    return NextResponse.json(await forkRouteForKit(prisma, parseDbId(id), body, actorFromSession(session)), { status: 201 });
   } catch (error) {
-    return adminFieldsErrorResponse(error, "Failed to fork the testing route");
+    return errorResponse(error, "Failed to fork the testing route");
   }
-}, { role: FIELDS_EDIT_ROLES });
+}, { role: ACCESS.fieldsEdit });

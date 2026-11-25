@@ -2,7 +2,7 @@
    "פרסום גרסה N" — the publish dialog (artboard 10, route-fields spec §5.11).
    Dialog maxWidth "sm" (600; the artboard draws 640 — spec §10.3). rf-pub-*
    classes only, tokens only (src/styles/tokens.css). The count tags reuse
-   .settings-count, the scope cards .pkg-choice (packages.css).
+   .settings-count, the scope cards .pkg-choice (src/components/ui/controls.css).
    ========================================================================= */
 
 /* ------------------------------------------------------------ head --- */

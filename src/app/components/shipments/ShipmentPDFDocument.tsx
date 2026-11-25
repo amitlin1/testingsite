@@ -1,28 +1,28 @@
 "use client";
 import React from 'react';
 import Barcode from 'react-barcode';
-import { Shipment } from '@/types';
+import { Shipment } from '@/app/lib/shipments/contract';
 import {
     FieldGrid,
     ReportPage,
     ReportSection,
     ReportTable,
     SignatureBlock,
-    REPORT_COLORS,
 } from '@/app/components/reports/ReportKit';
-import { formatReportDate } from '@/app/components/reports/reportTheme';
+import { REPORT_COLORS } from '@/app/components/reports/reportTheme';
+import { formatDocDate } from '@/app/lib/datetime';
 
 /** One outgoing certificate: the sends ShipmentHistoryPopup groups under one sent code. */
 export type SentGroup = {
     sent_shipment_code: string;
     sent_date: string;
     sending_worker_name: string;
-    items: { item_type_desc: string | null; makat: number | string | null; amount: number }[];
+    items: { item_type_desc: string | null; makat: string | null; amount: number }[];
     signature_path?: string | null;
 };
 
 /** A row of the certificate's table: a received line (quantity) or a sent one (amount). */
-type CertificateRow = { item_type_desc?: string | null; makat?: number | string | null; quantity?: number; amount?: number };
+type CertificateRow = { item_type_desc?: string | null; makat?: string | null; quantity?: number; amount?: number };
 
 /** What ShipmentTable / ShipmentHistoryPopup print: the shipment, and for a sent one, its group. */
 export type ShipmentPdfData = { shipment: Shipment; type: 'received' | 'sent'; historyGroup?: SentGroup };
@@ -37,7 +37,7 @@ export const ShipmentPDFDocument = React.forwardRef<HTMLDivElement, ShipmentPDFP
         const titleHe = isReceived ? 'תעודת קבלת משלוח' : 'תעודת משלוח';
         const titleEn = isReceived ? 'SHIPMENT RECEIPT CERTIFICATE' : 'SHIPMENT CERTIFICATE';
         const shipmentCode: string | undefined = isReceived ? shipment.shipment_code : historyGroup?.sent_shipment_code;
-        const date = formatReportDate(isReceived ? shipment.shipment_date : historyGroup?.sent_date);
+        const date = formatDocDate(isReceived ? shipment.shipment_date : historyGroup?.sent_date);
         const workerName: string | undefined = isReceived
             ? (shipment.recieving_worker_name ?? undefined)
             : historyGroup?.sending_worker_name;

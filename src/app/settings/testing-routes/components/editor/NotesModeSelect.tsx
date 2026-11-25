@@ -1,17 +1,13 @@
 "use client";
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
-import { NOTES_MODE_LABEL } from "@/app/lib/station-fields/schema";
+import { NOTES_MODE_LABEL } from "@/app/lib/station-fields/labels";
 import type { NotesMode } from "@/app/lib/station-fields/schema";
 import { EDITOR_TEXT, notesModeAria } from "../../lib/labels";
 import { ListboxPopover } from "./ListboxPopover";
 import type { ListboxOption } from "./ListboxPopover";
 
-/**
- * "הערות" of a field row (artboard 2, spec §5.5.2): a 38px button (aria-haspopup="listbox",
- * aria-label "הערות: {mode}") and its 196px listbox "מצב הערות" — אופציונלי / חובה בכשל / חובה / ללא,
- * in the artboard's order — with the footnote on "חובה בכשל".
- */
+/** "הערות" of a field row (artboard 2, spec §5.5.2): the notes mode, in a listbox. */
 
 /** The artboard script's `NM` order. */
 const ORDER: readonly NotesMode[] = ["optional", "required_on_fail", "required", "off"];
@@ -60,5 +56,3 @@ export function NotesModeSelect({ value, open, onOpenChange, onChange }: NotesMo
     </>
   );
 }
-
-export default NotesModeSelect;

@@ -1,5 +1,5 @@
 "use client";
-import React, { Suspense, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LayoutGrid } from "lucide-react";
 import SettingsToolbar from "../components/SettingsToolbar";
@@ -15,24 +15,10 @@ function TestStationsView() {
   const linkedStationId = Number(params.get("station")) || null;
 
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(linkedTypeId);
-  const [selectedTypeName, setSelectedTypeName] = useState<string>("");
-
-  // Memoized because StationTypesTable depends on it in the effect that
-  // resolves a deep-linked ?type= id to its name.
-  const handleTypeSelect = React.useCallback((id: number, name: string) => {
-    // id === 0 signals a cleared selection (e.g. the selected type was deleted)
-    if (!id) {
-      setSelectedTypeId(null);
-      setSelectedTypeName("");
-      return;
-    }
-    setSelectedTypeId(id);
-    setSelectedTypeName(name);
-  }, []);
 
   // The settings layout owns the frame (scroll, padding, 94% column).
   return (
-    <div dir="rtl">
+    <div>
       <SettingsToolbar
         title="עמדות בדיקה"
         subtitle="הגדרת סוגי העמדות והעמדות המשויכות אליהן."
@@ -41,12 +27,11 @@ function TestStationsView() {
       {/* master–detail grid: types (master) · stations (detail); one column
           on narrow screens (settings.css .stations-grid) */}
       <div className="stations-grid">
-        <StationTypesTable selectedId={selectedTypeId} onSelect={handleTypeSelect} />
+        <StationTypesTable selectedId={selectedTypeId} onSelect={setSelectedTypeId} />
 
         {selectedTypeId ? (
           <StationsTable
             typeId={selectedTypeId}
-            typeName={selectedTypeName}
             // Only honour ?station= while its parent type is the one the
             // link opened — once the user picks a different type by hand,
             // the stale highlight would filter the table to nothing.

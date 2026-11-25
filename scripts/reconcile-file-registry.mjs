@@ -19,6 +19,7 @@ import 'dotenv/config';
 import { Client as MinioClient } from 'minio';
 import pg from 'pg';
 
+// Same default as src/lib/storage/minio.ts.
 const BUCKET = process.env.MINIO_BUCKET || 'digitalfactory-files';
 
 function minio() {
@@ -61,6 +62,8 @@ async function main() {
   let inserted = 0;
   for (const obj of objects) {
     const fileName = obj.key.split('/').pop() || obj.key;
+    // The key layout is src/lib/storage/keys.ts (a .mjs cannot import it); this
+    // guess knows only the shipments/ prefix.
     const entityType = obj.key.startsWith('shipments/') ? 'shipment_signature' : 'file_manager';
     const res = await pool.query(
       `INSERT INTO file_objects

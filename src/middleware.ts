@@ -8,57 +8,32 @@
 // LOCATION: this MUST live at src/middleware.ts when the project uses a src/
 // dir — Next ignores a root-level middleware.ts then.
 //
-// RUNTIME: Edge (default). Do NOT add `export const runtime = "nodejs"` — Node
-// middleware needs an experimental flag on Next 15.x. Everything here is
-// Edge-safe: decode-jwt uses atob+TextDecoder (no Buffer), Auth.js v5 cookie
-// decryption uses Web Crypto, refresh uses fetch.
+// RUNTIME: Edge (the middleware default). Everything here is Edge-safe:
+// decode-jwt uses atob+TextDecoder (no Buffer), Auth.js v5 cookie decryption
+// uses Web Crypto, refresh uses fetch.
 
 import type { NextRequest, NextFetchEvent } from "next/server";
 import { NextResponse } from "next/server";
 import { auth } from "@/../auth";
-import { resolveAccess } from "@/lib/routes";
-import { normalizeBasePath } from "@/lib/base-path";
-import { authDebug, authStartupBanner } from "@/lib/debug";
+import { DEV_AUTH_BYPASS } from "@/lib/auth/current-session";
+import { isDataRequest, resolveAccess } from "@/lib/routes";
+import { SERVER_BASE_PATH, loginUrl, noAuthUrl, stripBasePath } from "@/lib/base-path";
+import { forbidden, unauthorized } from "@/lib/auth/deny";
+import {
+  forwardRotatedSessionCookie,
+  isLiveSession,
+  isSessionCookieName,
+  parseCookiePair,
+} from "@/lib/auth/session";
+import { authDebug, authStartupBanner } from "@/lib/auth/debug";
 
-// basePath the app is mounted under. `pathname` from NextRequest normally
-// EXCLUDES it (Next strips automatically), but we need it to build absolute
-// redirect URLs and to defensively strip it (see pathWithoutBase). Leave
-// NEXT_BASE_PATH unset for a root mount.
-const BASE_PATH = normalizeBasePath(process.env.NEXT_BASE_PATH);
-
+// SERVER_BASE_PATH is the basePath the app is mounted under (NEXT_BASE_PATH;
+// unset for a root mount). NextRequest's `pathname` normally EXCLUDES it, but
+// the redirects below need it to build absolute URLs.
 authStartupBanner("middleware", {
   NEXT_BASE_PATH_ENV: process.env.NEXT_BASE_PATH ?? null,
-  BASE_PATH_RESOLVED: BASE_PATH,
+  BASE_PATH_RESOLVED: SERVER_BASE_PATH,
 });
-
-// Defensive basePath stripping. Some reverse-proxy deployments deliver the
-// pathname WITH the prefix and an empty nextUrl.basePath; if we don't strip it
-// ourselves, resolveAccess sees "/myapp/dashboard" not "/dashboard", /api/
-// detection misfires, and login callbackUrls double the prefix. Idempotent.
-function pathWithoutBase(pathname: string): string {
-  if (!BASE_PATH) return pathname;
-  if (pathname === BASE_PATH) return "/";
-  if (pathname.startsWith(BASE_PATH + "/")) return pathname.slice(BASE_PATH.length);
-  return pathname;
-}
-
-function isApiOrDataRequest(req: NextRequest): boolean {
-  // Distinguish "the user is navigating" (HTML or an RSC client navigation)
-  // from "an XHR/API fetch" — the response shape differs (redirect vs 401).
-  if (pathWithoutBase(req.nextUrl.pathname).startsWith("/api/")) return true;
-
-  // Client-side <Link>/router navigations send an RSC fetch carrying the `rsc`
-  // header but NOT sec-fetch-mode:navigate and NOT Accept:text/html. Treat them
-  // as navigations so they get a proper redirect (which the App Router turns
-  // into a hard navigation) — a JSON 401 would freeze the UI.
-  if (req.headers.has("rsc")) return false;
-
-  const accept = req.headers.get("accept") ?? "";
-  const fetchMode = req.headers.get("sec-fetch-mode") ?? "";
-  if (fetchMode === "navigate") return false;
-  if (accept.includes("text/html")) return false;
-  return true;
-}
 
 function isServerAction(req: NextRequest): boolean {
   // A Server Action invoked from a client component is a POST carrying the
@@ -70,14 +45,11 @@ function isServerAction(req: NextRequest): boolean {
   return req.method === "POST" && req.headers.has("next-action");
 }
 
-function buildLoginRedirect(req: NextRequest): NextResponse {
+function buildLoginRedirect(req: NextRequest, pathname: string): NextResponse {
   // Redirect to the server-side /login initiator, NOT /api/auth/signin/keycloak
   // (a GET there is unsupported in Auth.js v5 — see app/login/route.ts).
-  const cleanPath = pathWithoutBase(req.nextUrl.pathname);
-  const callbackTarget = BASE_PATH + cleanPath + req.nextUrl.search;
-  const loginUrl = new URL(`${BASE_PATH}/login`, req.url);
-  loginUrl.searchParams.set("callbackUrl", callbackTarget);
-  return NextResponse.redirect(loginUrl);
+  const callbackTarget = SERVER_BASE_PATH + pathname + req.nextUrl.search;
+  return NextResponse.redirect(new URL(loginUrl(callbackTarget), req.url));
 }
 
 // ---- Layer-A cooperation: forward the rotated session cookie ----
@@ -90,45 +62,8 @@ function buildLoginRedirect(req: NextRequest): NextResponse {
 // where a session cookie was rotated, rewrite the downstream request's `cookie`
 // header to carry the NEW cookie — exactly one refresh per expiry boundary.
 //
-// The cookie can be CHUNKED (authjs.session-token.0/.1/…); the family must be
-// replaced atomically. __Secure- variants handled too.
-const SESSION_COOKIE_BASES = [
-  "authjs.session-token",
-  "__Secure-authjs.session-token",
-];
-
-function isSessionCookieName(name: string): boolean {
-  return SESSION_COOKIE_BASES.some((base) => name === base || name.startsWith(base + "."));
-}
-
-function parseCookiePair(setCookie: string): { name: string; value: string } | null {
-  const head = setCookie.split(";", 1)[0] ?? "";
-  const eq = head.indexOf("=");
-  if (eq === -1) return null;
-  return { name: head.slice(0, eq).trim(), value: head.slice(eq + 1).trim() };
-}
-
-function forwardRotatedSessionCookie(
-  originalCookieHeader: string,
-  rotatedSetCookies: string[],
-): string {
-  const kept = originalCookieHeader
-    .split(";")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .filter((kv) => {
-      const eq = kv.indexOf("=");
-      const name = (eq === -1 ? kv : kv.slice(0, eq)).trim();
-      return !isSessionCookieName(name);
-    });
-  for (const sc of rotatedSetCookies) {
-    const pair = parseCookiePair(sc);
-    if (pair && isSessionCookieName(pair.name) && pair.value) {
-      kept.push(`${pair.name}=${pair.value}`);
-    }
-  }
-  return kept.join("; ");
-}
+// The cookie can be CHUNKED (authjs.session-token.0/.1/…); the family is
+// replaced atomically (forwardRotatedSessionCookie, lib/auth/session.ts).
 
 // The session/routing decision. Kept as the next-auth auth() wrapper so it gets
 // req.auth (and refreshes Layer-A on the response). The default export wraps THIS
@@ -136,7 +71,13 @@ function forwardRotatedSessionCookie(
 const handleSession = auth((req) => {
   const session = req.auth;
   const roles: string[] | null = session?.roles ?? null;
-  const pathname = pathWithoutBase(req.nextUrl.pathname);
+  // Defensive basePath stripping. Some reverse-proxy deployments deliver the
+  // pathname WITH the prefix and an empty nextUrl.basePath; if we don't strip it
+  // ourselves, resolveAccess sees "/myapp/dashboard" not "/dashboard", /api/
+  // detection misfires, and login callbackUrls double the prefix.
+  const pathname = stripBasePath(req.nextUrl.pathname);
+  // "The user is navigating" (redirect) vs "an XHR/API fetch" (JSON 401/403).
+  const dataRequest = isDataRequest(pathname, req.headers);
 
   authDebug("middleware", "entered", {
     rawPathname: req.nextUrl.pathname,
@@ -146,13 +87,9 @@ const handleSession = auth((req) => {
     rolesCount: roles?.length ?? null,
   });
 
-  // Local-dev bypass. When IS_DEV=1 there is no Keycloak, so the auth checks
-  // below would redirect every page to /login → signIn → hard failure. Bypass
-  // UNCONDITIONALLY in dev. Hard-gated on IS_DEV — empty in prod, so this cannot
-  // bypass auth there. NOTE: we run WITHOUT IS_DEV locally (we DO have a local
-  // Keycloak), so the real flow is exercised in dev; set IS_DEV=1 only if you
-  // want to work on non-auth pages without logging in.
-  if (process.env.IS_DEV === "1") {
+  // Local dev without Keycloak (IS_DEV=1, never in a production build): every request is the
+  // local user (current-session.ts), so there is nothing to check here.
+  if (DEV_AUTH_BYPASS) {
     return NextResponse.next();
   }
 
@@ -176,33 +113,19 @@ const handleSession = auth((req) => {
 
   // Non-public route with a session whose silent refresh failed terminally →
   // stale identity, force re-login.
-  if (session?.error === "RefreshAccessTokenError") {
-    if (isApiOrDataRequest(req)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    return buildLoginRedirect(req);
+  if (session && !isLiveSession(session)) {
+    return dataRequest ? unauthorized() : buildLoginRedirect(req, pathname);
   }
 
   switch (verdict.kind) {
     case "allowed":
       return NextResponse.next();
-    case "needs-auth": {
-      if (isApiOrDataRequest(req)) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      return buildLoginRedirect(req);
-    }
-    case "forbidden": {
-      if (isApiOrDataRequest(req)) {
-        return NextResponse.json(
-          { error: "Forbidden", required: verdict.required },
-          { status: 403 },
-        );
-      }
-      const noAuthUrl = new URL(`${BASE_PATH}/no-auth`, req.url);
-      noAuthUrl.searchParams.set("from", pathname);
-      return NextResponse.redirect(noAuthUrl);
-    }
+    case "needs-auth":
+      return dataRequest ? unauthorized() : buildLoginRedirect(req, pathname);
+    case "forbidden":
+      return dataRequest
+        ? forbidden(verdict.required)
+        : NextResponse.redirect(new URL(noAuthUrl(pathname), req.url));
   }
 });
 
@@ -247,8 +170,8 @@ export default async function middleware(
 //
 //   GET /api/items/1.  →  still matches the [id] route (parseInt("1.") === 1),
 //   but the pathname contains a dot, so middleware never ran and the handler —
-//   which has no guard of its own — served the data to an anonymous caller.
-//   Only ~20 of the ~100 /api routes self-guard, so this reached most of them.
+//   which had no guard of its own — served the data to an anonymous caller.
+//   Many /api routes still rely on this middleware alone.
 //
 // So: keep the extension skip for PAGES and static assets (an asset request must
 // not be redirected to /login), and match EVERY /api route unconditionally.
@@ -258,7 +181,8 @@ export default async function middleware(
 //
 // NOTE: matchers see the pathname with basePath already stripped. In the
 // non-standard setup where a proxy does NOT strip it, /<base>/api/... is caught
-// by the first pattern instead (it isn't "api/"-prefixed) — see pathWithoutBase.
+// by the first pattern instead (it isn't "api/"-prefixed) — see the defensive
+// basePath stripping in handleSession.
 export const config = {
   matcher: [
     // Pages + assets: skip Auth.js internals, Next build output, and anything

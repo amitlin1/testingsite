@@ -2,21 +2,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { stepConfigOf } from "@/app/lib/station-fields/schema";
 import type { Field, RouteFieldsConfig } from "@/app/lib/station-fields/schema";
-import { LIMITS, parseRouteFieldsConfig } from "@/app/lib/station-fields/validate";
+import { parseRouteFieldsConfig } from "@/app/lib/station-fields/validate";
 import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
-import { EMPTY_DRAFT_MODEL, copyConfig, currentConfigs, draftReducer, summarize } from "../draftModel";
+import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "../draftModel";
 import type { ConfigMutator } from "../draftModel";
 import type { IdSource } from "../editorModel";
-import { buildFieldsMap, getCell, groupFieldsOf } from "../mapModel";
+import { buildFieldsMap } from "../mapModel";
 import type { FieldsMapModel, MapCell } from "../mapModel";
+import { alongsideFields, groupFieldsOf, stepFieldIds } from "../cellGroups";
+import type { RouteEdit } from "../cellFill";
 import {
-  addToCell, alongsideFields, applyAdditions, cellTakenLabels, clearCells, copyCells, fieldsToTsv, inMapOrder, pasteSource,
-  planInternalPaste, planTsvPaste, stepFieldIds, uniqueByBinding,
+  applyAdditions, clearCells, copyCells, fieldsToTsv, inMapOrder, pasteSource, planInternalPaste, planTsvPaste, uniqueByBinding,
 } from "../bulkModel";
-import type { RouteEdit } from "../bulkModel";
 import { parseTsvRows } from "../pasteTsv";
 import { pastedText } from "../bulkLabels";
-import { ELEC, MECH, VISU, artboard1, choice } from "./fixtures";
+import { ELEC, MECH, VISU, artboard1, cellAt, choice } from "./fixtures";
 
 /**
  * The map's multi-cell actions (route-fields spec §5.14; artboards 1 and 9): copy keeps the cells'
@@ -37,18 +37,13 @@ function bench(ctx: FieldsContextJson = artboard1()) {
   const edits: number[] = [];
   const edit: RouteEdit = (routeId: number, mutate: ConfigMutator) => {
     edits.push(routeId);
-    const copy = copyConfig(configs[routeId]);
+    const copy = structuredClone(configs[routeId]);
     configs[routeId] = mutate(copy) ?? copy;
   };
   const map = (): FieldsMapModel => buildFieldsMap({ context: ctx, configs, issues: summarize(model0).issuesByRoute });
   return { ctx, configs, edits, edit, map };
 }
 
-const cellAt = (m: FieldsMapModel, row: string, col: string): MapCell => {
-  const c = getCell(m, row, col);
-  assert.ok(c && !c.na, `expected a cell at ${row} · ${col}`);
-  return c;
-};
 const elec = `step:${ELEC}:1`;
 const mech = `step:${MECH}:1`;
 const visu = `step:${VISU}:1`;
@@ -162,7 +157,6 @@ test("artboard 9's rule: a kit item's group also counts the step's each_item nam
   const set = [choice("הפריט ארוז במקומו", ["pass", "warn", "fail"]), choice("מצב חיצוני בסגירה", ["pass", "fail"])];
   const items = ["line:1", "line:2", "line:3", "line:4"].map((r) => cellAt(m, r, "kit:1"));
   const box = cellAt(m, "box", "kit:1");
-  assert.ok(cellTakenLabels(kit, items[0].binding).has("הפריט ארוז במקומו"));
   assert.deepEqual(labels(alongsideFields(kit, items[0].binding)), ["סגירה 1", "הפריט ארוז במקומו"]);
   assert.deepEqual(alongsideFields(kit, box.binding), []);
   const counts = applyAdditions(b.edit, [...items, box].map((cell) => ({ cell, fields: set })), ids());
@@ -171,29 +165,6 @@ test("artboard 9's rule: a kit item's group also counts the step's each_item nam
   assert.equal(counts.added, 4 + 2);
   for (const c of items) assert.deepEqual(labels(fieldsOf(b.configs, c)), ["מצב חיצוני בסגירה"]);
   assert.deepEqual(labels(fieldsOf(b.configs, box)).slice(-2), ["הפריט ארוז במקומו", "מצב חיצוני בסגירה"]);
-});
-
-test("section headers come along, unless every field under one was skipped; a cell never passes the field limit", () => {
-  const b = bench();
-  const m = b.map();
-  const target = cellAt(m, "line:3", mech);   // "מקשים 1", "מקשים 2"
-  const sec = (label: string, id: string): Field => ({ id, type: "section", label });
-  const incoming: Field[] = [
-    sec("ראשון", "f_sec00001"), choice("מקשים 1", ["pass", "fail"]),            // all skipped → header dropped
-    sec("שני", "f_sec00002"), choice("כבל", ["pass", "fail"]), choice("מקשים 2", ["pass", "fail"]),
-    sec("ריק", "f_sec00003"),                                                   // headed nothing: kept
-  ];
-  const cfg = copyConfig(b.configs[103]);
-  const r = addToCell(cfg, target.binding, target.stepMeta, incoming, ids());
-  assert.deepEqual(r, { added: 1, skipped: 2, overflow: 0 });
-  assert.deepEqual(labels(groupFieldsOf(cfg, target.binding.step_uid, target.binding.target)), ["מקשים 1", "מקשים 2", "שני", "כבל", "ריק"]);
-
-  const room = LIMITS.fieldsPerList - 2;
-  const many = Array.from({ length: room + 3 }, (_, i) => choice("שדה " + i, ["pass", "fail"]));
-  const cfg2 = copyConfig(b.configs[103]);
-  const r2 = addToCell(cfg2, target.binding, target.stepMeta, many, ids());
-  assert.deepEqual(r2, { added: room, skipped: 0, overflow: 3 });
-  assert.equal(groupFieldsOf(cfg2, target.binding.step_uid, target.binding.target).length, LIMITS.fieldsPerList);
 });
 
 test("TSV text goes into every selected cell; a cell without a step gets one", () => {

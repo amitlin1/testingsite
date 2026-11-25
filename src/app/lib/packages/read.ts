@@ -1,120 +1,21 @@
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
-import { computePackageGate } from "./readiness";
+import { ItemStatus } from "@/lib/item-status";
+import {
+  ITEM_STATE_LABEL, PACKAGE_STATUS_LABEL, packageMatches,
+  type PackageItemView, type PackageStatusKey, type PackageTimelineEntry, type PackageView,
+} from "./contract";
+import { arrivedAtClosing, atGateStep, blocksGate, decisionsOf, itemState, itemWhereText, packageStatus } from "./rules";
 
 /**
  * Read side of the package model — what the packages list, the package page,
  * the queue cards and the item dialog show. Everything is derived from the
  * operational tables (items / item_routes / item_route_history /
- * test_results); nothing here writes.
- *
- * Vocabulary (design/Packages.dc.html):
- *   item state   new (טרם נפתח) · queue (ממתין) · test (בבדיקה) · done (הושלם) · missing (חסר במארז)
- *   box status   pending (ממתין לקליטה) · queue (ממתין לפתיחה) · test (בבדיקה) ·
- *                waitItems (ממתין לפריטי המארז) · readyClose (ממתין לסגירה) · done (הושלם)
+ * test_results); nothing here writes. The shapes it answers with are the
+ * client-safe contract (./contract.ts).
  *
  * A pending box is minted with its shipment and has no route yet (boxes.ts).
  */
-
-export type PackageItemState = "new" | "queue" | "test" | "done" | "missing";
-export type PackageStatusKey = "pending" | "queue" | "test" | "waitItems" | "readyClose" | "done";
-
-export const PACKAGE_STATUS_LABEL: Record<PackageStatusKey, string> = {
-  pending: "ממתין לקליטה",
-  queue: "ממתין לפתיחה",
-  test: "בבדיקה",
-  waitItems: "ממתין לפריטי המארז",
-  readyClose: "ממתין לסגירה",
-  done: "הושלם",
-};
-
-export const ITEM_STATE_LABEL: Record<PackageItemState, string> = {
-  new: "טרם נפתח",
-  queue: "ממתין",
-  test: "בבדיקה",
-  done: "הושלם",
-  missing: "חסר במארז",
-};
-
-export type PackageItemView = {
-  item_id: string;
-  package_seq: number | null;
-  item_type_id: number;
-  item_type_desc: string;
-  serial_no: string | null;
-  makat: string | null;
-  model: string | null;
-  manufacturer_name: string | null;
-  manufacturer_no: string | null;
-  current_status: number | null;
-  current_route_step: number | null;
-  route_length: number;
-  /** Station type of the item's current route step ("כיול RF"), raw. */
-  step_desc: string | null;
-  is_finished: boolean;
-  state: PackageItemState;
-  state_label: string;
-  /** Where the item is right now, in words: a station, "ממתין ל<type>", "—". */
-  station_name: string | null;
-  /** True when the item is at the package's closing step (waiting or in test). */
-  arrived_at_closing: boolean;
-  /** The station type of the step before the current one — where "חזרה לבדיקה
-   *  הקודמת" sends the item; null at step 1. */
-  prev_step_desc: string | null;
-  /** That step is package-level (the box's opening): an item can't go back to it. */
-  prev_step_package_level: boolean;
-  /** Closing decision recorded on the box for this item, when any. */
-  pack_decision: "packed" | "packed_anyway" | "missing" | null;
-  pack_note: string | null;
-};
-
-export type PackageView = {
-  item_id: string;
-  item_type_id: number;
-  item_type_desc: string;
-  customer_id: number;
-  customer_code: string | null;
-  customer_name: string | null;
-  shipment_id: number;
-  shipment_code: string | null;
-  makat: string | null;
-  model: string | null;
-  manufacturer_name: string | null;
-  manufacturer_no: string | null;
-  route_number: number | null;
-  current_status: number | null;
-  current_route_step: number | null;
-  /** Station type of the box's current step (the queue it belongs to). */
-  current_step_type_id: number | null;
-  /** Station type of the box's current step, in words. */
-  current_step_desc: string | null;
-  /** The station the box is being worked at right now, when in test. */
-  station_name: string | null;
-  route_length: number;
-  is_finished: boolean;
-  /** The box left with its shipment (shipments.is_sent): history only. */
-  shipment_is_sent: boolean;
-  shipment_sent_at: string | null;
-  created_at: string | null;
-  opened_at: string | null;
-  closed_at: string | null;
-  status: PackageStatusKey;
-  status_label: string;
-  items: PackageItemView[];
-  finished_count: number;
-  /** Items that keep the box out of the closing queue, with where they are. */
-  blocked_by: { item_id: string; package_seq: number | null; item_type_desc: string; station_name: string | null }[];
-  template_snapshot: unknown;
-  /** The box label scanned at the opening station (its step-1 result); the
-   *  closing wizard starts from it. Null until opened. */
-  opening_sku: string | null;
-  /** The shipment line the box was minted for (items.shipment_item_id), and
-   *  that line's certificate row: its number and serial. A line typed by hand
-   *  has neither; a box from before boxes were linked has no line. */
-  shipment_item_id: number | null;
-  cert_row_no: string | null;
-  cert_serial_no: string | null;
-};
 
 export type PackageListFilters = {
   shipmentId?: number | null;
@@ -146,6 +47,7 @@ type PkgRow = {
   current_route_step: number | null;
   current_step_type_id: number | null;
   current_step_desc: string | null;
+  current_step_package_level: boolean | null;
   station_name: string | null;
   route_length: number | null;
   is_finished: boolean | null;
@@ -187,46 +89,6 @@ type MemberRow = {
   prev_step_package_level: boolean | null;
 };
 
-type Decision = { item_id: string; decision: "packed" | "packed_anyway" | "missing"; note?: string | null };
-
-function decisionsOf(details: unknown): Decision[] {
-  if (!details || typeof details !== "object") return [];
-  const d = (details as { decisions?: unknown }).decisions;
-  if (!Array.isArray(d)) return [];
-  return d
-    .filter((x) => x && typeof x === "object" && "item_id" in x && "decision" in x)
-    .map((x) => ({ item_id: String((x as Decision).item_id), decision: (x as Decision).decision, note: (x as Decision).note ?? null }));
-}
-
-function itemState(m: MemberRow, pkg: PkgRow, decision: Decision | undefined): PackageItemState {
-  if (decision?.decision === "missing") return "missing";
-  if (m.is_finished || m.current_status === 3) return "done";
-  if (m.current_status === 1 || m.current_status === 5) return "test";
-  const boxNotOpened = (pkg.current_route_step ?? 1) <= 1 && !pkg.is_finished;
-  if (boxNotOpened && (m.current_route_step ?? 1) <= 1) return "new";
-  return "queue";
-}
-
-function stationText(m: MemberRow): string | null {
-  if (m.is_finished || m.current_status === 3) return null;
-  if ((m.current_status === 1 || m.current_status === 5) && m.station_name) return m.station_name.trim();
-  if (m.current_status === 4) return "ממתין למחקר";
-  if (m.step_type_desc) return `ממתין ל${m.step_type_desc.trim()}`;
-  return null;
-}
-
-function packageStatus(pkg: PkgRow, blocked: number): PackageStatusKey {
-  if (!pkg.routed) return "pending";
-  if (pkg.is_finished || pkg.current_status === 3) return "done";
-  if (pkg.current_status === 1 || pkg.current_status === 5) return "test";
-  if (pkg.current_status === 6) return "waitItems";
-  const step = pkg.current_route_step ?? 1;
-  if (step <= 1) return "queue";
-  // Queued at a later step: the closing queue, unless something still blocks
-  // (a race between the gate and this read — report what the items say).
-  return blocked > 0 ? "waitItems" : "readyClose";
-}
-
 const iso = (d: Date | null | undefined) => (d ? normalizeToUtcIso(d) : null);
 
 export async function loadPackages(filters: PackageListFilters = {}): Promise<PackageView[]> {
@@ -238,7 +100,7 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
            i.makat, TRIM(i.model) AS model, TRIM(i.manufacturer_name) AS manufacturer_name, i.manufacturer_no,
            ir.route_number, ir.current_status, ir.current_route_step,
            tr.route_steps[ir.current_route_step] AS current_step_type_id,
-           TRIM(pstt.test_type_desc) AS current_step_desc,
+           TRIM(pstt.test_type_desc) AS current_step_desc, pstt.package_level AS current_step_package_level,
            TRIM(pts.test_station_desc) AS station_name,
            COALESCE(array_length(tr.route_steps, 1), 0) AS route_length,
            sh.is_sent AS shipment_is_sent, sh.shipment_sent_date,
@@ -313,11 +175,6 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
     const items: PackageItemView[] = rows.map((m) => {
       const decision = decisionOf(m.item_id);
       const state = itemState(m, p, decision);
-      const atClosing =
-        !m.is_finished && m.current_status !== 3 &&
-        m.step_type_id != null && m.step_type_id === m.last_step_type_id &&
-        (m.current_route_step ?? 0) > 1 &&
-        (m.current_status === 1 || m.current_status === 2);
       return {
         item_id: m.item_id.toString(),
         package_seq: m.package_seq,
@@ -335,8 +192,8 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
         is_finished: m.is_finished === true,
         state,
         state_label: ITEM_STATE_LABEL[state],
-        station_name: stationText(m),
-        arrived_at_closing: atClosing,
+        station_name: itemWhereText(m),
+        arrived_at_closing: arrivedAtClosing(m),
         prev_step_desc: m.prev_step_desc || null,
         prev_step_package_level: m.prev_step_package_level === true,
         pack_decision: decision?.decision ?? null,
@@ -344,17 +201,16 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       };
     });
 
-    // Blockers: unfinished items not at the box's current package-level step.
-    // computePackageGate is the same rule the write path uses.
-    let blocked: PackageView["blocked_by"] = [];
-    const step = p.current_route_step ?? 1;
-    if (!p.is_finished && p.current_status !== 3 && step > 1) {
-      const gate = await computePackageGate(prisma, p.item_id);
-      const blockedIds = new Set(gate.blockingItemIds.map((b) => b.toString()));
-      blocked = items
-        .filter((it) => blockedIds.has(it.item_id))
-        .map((it) => ({ item_id: it.item_id, package_seq: it.package_seq, item_type_desc: it.item_type_desc, station_name: it.station_name }));
-    }
+    // Blockers: the members that keep the box out of the closing queue at its
+    // gate — the rule the write path uses (readiness.ts), over the members
+    // already loaded. Read and gate can race; packageStatus reports what the
+    // items say.
+    const gateType = atGateStep(p, p.current_step_package_level) ? p.current_step_type_id : null;
+    const blocked: PackageView["blocked_by"] = gateType == null || p.current_status === ItemStatus.Done
+      ? []
+      : rows.flatMap((m, i) => blocksGate(m, gateType)
+        ? [{ item_id: items[i].item_id, package_seq: items[i].package_seq, item_type_desc: items[i].item_type_desc, station_name: items[i].station_name }]
+        : []);
 
     const status = packageStatus(p, blocked.length);
     views.push({
@@ -398,17 +254,8 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
 
   let out = views;
   if (filters.status) out = out.filter((v) => v.status === filters.status);
-  const q = filters.q?.trim().toLowerCase();
-  if (q) {
-    out = out.filter((v) =>
-      v.item_id.includes(q) ||
-      v.item_type_desc.toLowerCase().includes(q) ||
-      (v.makat ?? "").toLowerCase().includes(q) ||
-      (v.shipment_code ?? "").toLowerCase().includes(q) ||
-      (v.customer_name ?? "").toLowerCase().includes(q) ||
-      v.items.some((it) => it.item_id.includes(q) || (it.serial_no ?? "").toLowerCase().includes(q) || (it.makat ?? "").toLowerCase().includes(q)),
-    );
-  }
+  const q = filters.q?.trim();
+  if (q) out = out.filter((v) => packageMatches(v, q));
   return out;
 }
 
@@ -417,21 +264,11 @@ export async function loadPackage(packageId: bigint): Promise<PackageView | null
   return v ?? null;
 }
 
-/** The package an item belongs to, as the item dialog / queue card show it. */
-export async function loadPackageOfItem(itemId: bigint): Promise<PackageView | null> {
-  const row = await prisma.items.findUnique({ where: { item_id: itemId }, select: { package_id: true } });
-  if (!row?.package_id) return null;
-  return loadPackage(row.package_id);
+/** The box a row belongs to: its own for a box, its box's for an item
+ *  inside one, none for a legacy loose item. */
+export function boxIdOf(row: { item_id: bigint; package_id: bigint | null; is_package: boolean }): bigint | null {
+  return row.package_id ?? (row.is_package ? row.item_id : null);
 }
-
-export type PackageTimelineEntry = {
-  key: "intake" | "open" | "close";
-  title: string;
-  at: string | null;
-  worker_id: number | null;
-  state: "done" | "pending" | "blocked" | "queued";
-  note: string | null;
-};
 
 /** The package-level milestones of the box (design: "ציר זמן של המארז"). */
 export async function loadPackageTimeline(v: PackageView): Promise<PackageTimelineEntry[]> {

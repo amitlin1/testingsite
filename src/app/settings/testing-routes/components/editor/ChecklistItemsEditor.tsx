@@ -1,6 +1,5 @@
 "use client";
 import * as React from "react";
-import { X } from "lucide-react";
 import type { ChecklistField, ChecklistItem, ChecklistItemId } from "@/app/lib/station-fields/schema";
 import { LIMITS } from "@/app/lib/station-fields/validate";
 import {
@@ -8,15 +7,15 @@ import {
 } from "../../lib/labels";
 import { addChecklistItem, canAddChecklistItem, removeChecklistItem, renameChecklistItem } from "../../lib/editorModel";
 import type { EditorPopover } from "../../lib/editorModel";
+import { ChipView, chipInputWidth } from "./OptionChip";
 
 /**
- * The boxes of a checklist row (spec §5.5.2: "checklist: items[]"; no artboard draws them): one chip
- * per box in the options column, drawn like the option chips of artboard 2 without a tone. A press
- * renames the box in place — Enter or Escape end it and give the chip its focus back, leaving the
- * input ends it too; × removes the box; the dashed input after the chips adds one on Enter (an id of
- * its own, newChecklistItemId). Every word is undrawn (labels.ts FIELD_SETTINGS_UNDRAWN_TEXT).
+ * The boxes of a checklist row (spec §5.5.2: "checklist: items[]"; no artboard draws them): a chip per
+ * box, like the option chips without a tone. A press renames the box in place — Enter or Escape end it
+ * and give the chip its focus back, leaving the input ends it too; the input after the chips adds one
+ * on Enter. Every word is undrawn.
  *
- * A box in rename is the editor's one open popover (EditorPopover "checkItem"), so opening anything
+ * A box in rename is the list's one open popover (EditorPopover "checkItem"), so opening anything
  * else ends it. What blocks a publish — no box at all, a box without a name — is the lint's, shown
  * under the row with the field's other errors.
  */
@@ -91,9 +90,6 @@ type ChecklistItemChipProps = {
   onRemove: () => void;
 };
 
-/** The rename input grows with the name, as the option chip's does (artboard 2 `inW`). */
-const inputWidth = (label: string) => Math.max(36, Math.round(label.length * 7.4) + 6);
-
 function ChecklistItemChip({ item, editing, onEdit, onClose, onRename, onRemove }: ChecklistItemChipProps) {
   const chipRef = React.useRef<HTMLButtonElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -122,21 +118,14 @@ function ChecklistItemChip({ item, editing, onEdit, onClose, onRename, onRemove 
 
   if (!editing) {
     return (
-      <span className="sfe-chip">
-        <button
-          ref={chipRef}
-          type="button"
-          className="sfe-chip__btn"
-          aria-label={checklistItemEditLabel(item.label)}
-          data-empty={item.label.trim() === "" || undefined}
-          onClick={onEdit}
-        >
-          <span className="sfe-chip__label">{item.label}</span>
-        </button>
-        <button type="button" className="sfe-chip__x" aria-label={checklistItemRemoveLabel(item.label)} onClick={onRemove}>
-          <X size={12} strokeWidth={1.75} aria-hidden />
-        </button>
-      </span>
+      <ChipView
+        buttonRef={chipRef}
+        label={item.label}
+        editLabel={checklistItemEditLabel(item.label)}
+        removeLabel={checklistItemRemoveLabel(item.label)}
+        onEdit={onEdit}
+        onRemove={onRemove}
+      />
     );
   }
 
@@ -150,7 +139,7 @@ function ChecklistItemChip({ item, editing, onEdit, onClose, onRename, onRemove 
           dir="auto"
           value={item.label}
           maxLength={LIMITS.checklistLabel}
-          style={{ width: inputWidth(item.label) }}
+          style={{ width: chipInputWidth(item.label) }}
           onChange={(e) => onRename(e.target.value)}
           onKeyDown={(e) => {
             if ((e.key === "Enter" && !e.nativeEvent.isComposing) || e.key === "Escape") {
@@ -164,5 +153,3 @@ function ChecklistItemChip({ item, editing, onEdit, onClose, onRename, onRemove 
     </span>
   );
 }
-
-export default ChecklistItemsEditor;

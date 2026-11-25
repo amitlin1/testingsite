@@ -1,9 +1,12 @@
 "use client";
 import * as React from "react";
+import { INK, MUTED, PARCHMENT, RED } from "@/components/ui/colors";
 import { Button } from "@/components/ui";
-import { apiFetch } from "@/lib/api/client";
+import { sendJson } from "@/lib/api/client";
+import { FRIDAY } from "@/lib/time/civil";
 import {
   WEEKDAY_LABELS,
+  OVERRIDE_LABELS,
   ERR_END_BEFORE_START,
   ERR_HALF_DAY_MAX,
   type IsraeliHolidayCategory,
@@ -12,14 +15,24 @@ import {
   type WeekdayDefault,
   type WorkdayOverride,
 } from "@/lib/workHours/types";
-import { isEndBeforeStart, netMinutes, toMinutes } from "@/lib/workHours/time";
+import {
+  DEFAULT_BREAK_END,
+  DEFAULT_BREAK_START,
+  DEFAULT_END,
+  DEFAULT_START,
+  HALF_DAY_END,
+  HALF_DAY_START,
+  exceedsHalfDayCap,
+  isEndBeforeStart,
+  netMinutes,
+} from "@/lib/workHours/time";
 import { DialogShell, Chip, TimeField, NetRow } from "./fields";
-import { DANGER, MUTED, SOFT, INK } from "./ui";
 
 /** The read-only explanation box of a locked / holiday-managed day. */
-const infoBox: React.CSSProperties = { background: SOFT, borderRadius: "var(--r-md)", padding: "14px 16px", fontSize: "var(--text-body-sm)", color: INK, lineHeight: 1.6 };
+const infoBox: React.CSSProperties = { background: PARCHMENT, borderRadius: "var(--r-md)", padding: "14px 16px", fontSize: "var(--text-body-sm)", color: INK, lineHeight: 1.6 };
 
-const HALF_CAP = toMinutes("12:00");
+/** The end a new short day (שעות מקוצרות / יום קצר) starts from. */
+const SHORT_DAY_END = "13:00";
 type Selection = "default" | OverrideKind;
 
 function ddmmyyyy(iso: string): string {
@@ -51,7 +64,7 @@ export default function DayEditorDialog({
   // Underlying nature of the date, independent of any override that masks it.
   const underlyingEve = israeliCategory === "eve";
   const underlyingHalf = israeliCategory === "half_day";
-  const underlyingFriday = day.weekday === 5 && !underlyingEve;
+  const underlyingFriday = day.weekday === FRIDAY && !underlyingEve;
 
   const kinds: Selection[] = underlyingEve
     ? ["default", "eve_work"]
@@ -62,10 +75,10 @@ export default function DayEditorDialog({
         : ["default", "vacation", "short_hours", "short_day"];
 
   const [sel, setSel] = React.useState<Selection>(override?.kind ?? "default");
-  const [start, setStart] = React.useState("07:00");
-  const [end, setEnd] = React.useState("15:35");
-  const [bStart, setBStart] = React.useState("12:00");
-  const [bEnd, setBEnd] = React.useState("13:00");
+  const [start, setStart] = React.useState(DEFAULT_START);
+  const [end, setEnd] = React.useState(DEFAULT_END);
+  const [bStart, setBStart] = React.useState(DEFAULT_BREAK_START);
+  const [bEnd, setBEnd] = React.useState(DEFAULT_BREAK_END);
   const [saving, setSaving] = React.useState(false);
 
   // Seeded from the override whenever the dialog opens or what it edits
@@ -76,10 +89,10 @@ export default function DayEditorDialog({
     setSeededFor(seedInputs);
     if (open) {
       setSel(override?.kind ?? "default");
-      setStart(override?.start ?? "07:00");
-      setEnd(override?.end ?? (underlyingEve || underlyingFriday ? "12:00" : "13:00"));
-      setBStart(override?.breakStart ?? "12:00");
-      setBEnd(override?.breakEnd ?? "13:00");
+      setStart(override?.start ?? DEFAULT_START);
+      setEnd(override?.end ?? (underlyingEve || underlyingFriday ? HALF_DAY_END : SHORT_DAY_END));
+      setBStart(override?.breakStart ?? DEFAULT_BREAK_START);
+      setBEnd(override?.breakEnd ?? DEFAULT_BREAK_END);
     }
   }
 
@@ -87,14 +100,15 @@ export default function DayEditorDialog({
   const halfKind = sel === "friday_work" || sel === "eve_work";
   const noBreak = halfKind; // half days have no break
   const endErr = needsHours && isEndBeforeStart(start, end);
-  const capErr = needsHours && halfKind && toMinutes(end) > HALF_CAP;
+  const capErr = needsHours && halfKind && exceedsHalfDayCap(end);
   const canSave = sel === "default" || sel === "vacation" || (!!start && !!end && !endErr && !capErr);
 
-  // net preview for the current selection
   const wdNet = weekdayDefault.isWorking
     ? netMinutes(weekdayDefault.start, weekdayDefault.end, weekdayDefault.breakStart, weekdayDefault.breakEnd)
     : 0;
-  const defaultNet = underlyingHalf ? 300 : underlyingEve || underlyingFriday ? 0 : override ? wdNet : day.netMinutes;
+  const defaultNet = underlyingHalf
+    ? netMinutes(HALF_DAY_START, HALF_DAY_END, null, null)
+    : underlyingEve || underlyingFriday ? 0 : override ? wdNet : day.netMinutes;
   const net =
     sel === "default" ? defaultNet : sel === "vacation" ? 0 : netMinutes(start, end, noBreak ? null : bStart, noBreak ? null : bEnd);
 
@@ -104,13 +118,7 @@ export default function DayEditorDialog({
       if (underlyingHalf) return "חצי יום (רגיל)";
       return "רגיל";
     }
-    return {
-      vacation: "יום חופש",
-      short_hours: "שעות מקוצרות",
-      short_day: "יום קצר",
-      friday_work: "עבודה בשישי",
-      eve_work: "עבודה בערב חג",
-    }[k];
+    return OVERRIDE_LABELS[k];
   };
 
   // `selection` is a PARAMETER, not read from state: the "אפס לברירת מחדל"
@@ -121,10 +129,8 @@ export default function DayEditorDialog({
     setSaving(true);
     try {
       if (selection === "default") {
-        // Reset to default = remove any override for this date.
         if (override) {
-          const res = await apiFetch(`/api/settings/work-hours/overrides/${override.id}`, { method: "DELETE" });
-          if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "האיפוס נכשל");
+          await sendJson(`/api/settings/work-hours/overrides/${override.id}`, "DELETE", undefined, "האיפוס נכשל");
         }
       } else {
         const payload =
@@ -138,12 +144,7 @@ export default function DayEditorDialog({
                 breakStart: noBreak ? null : bStart,
                 breakEnd: noBreak ? null : bEnd,
               };
-        const res = await apiFetch(`/api/settings/work-hours/overrides`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "השמירה נכשלה");
+        await sendJson(`/api/settings/work-hours/overrides`, "POST", payload, "השמירה נכשלה");
       }
       onSaved(selection === "default" && override ? "היום אופס לברירת מחדל" : "היום עודכן בהצלחה");
     } catch (e) {
@@ -205,11 +206,11 @@ export default function DayEditorDialog({
       title={title}
       subtitle={
         underlyingEve
-          ? `${day.label ?? "ערב חג"} — לא עובדים כברירת מחדל, ניתן לפתוח חצי יום עד 12:00.`
+          ? `${day.label ?? "ערב חג"} — לא עובדים כברירת מחדל, ניתן לפתוח חצי יום עד ${HALF_DAY_END}.`
           : underlyingFriday
-            ? "שישי אינו יום עבודה. ניתן לפתוח חצי יום עד 12:00."
+            ? `שישי אינו יום עבודה. ניתן לפתוח חצי יום עד ${HALF_DAY_END}.`
             : underlyingHalf
-              ? `${day.label ?? ""} — חצי יום עבודה (07:00–12:00) כברירת מחדל.`
+              ? `${day.label ?? ""} — חצי יום עבודה (${HALF_DAY_START}–${HALF_DAY_END}) כברירת מחדל.`
               : "בחר סוג יום להזנת חריגה, או השאר 'רגיל' כדי לעקוב אחר ברירת המחדל."
       }
       footer={
@@ -248,12 +249,12 @@ export default function DayEditorDialog({
             {!noBreak && <TimeField label="סיום הפסקה" value={bEnd} onChange={setBEnd} />}
           </div>
           {(endErr || capErr) && (
-            <div role="alert" style={{ color: DANGER, fontSize: "var(--text-fine)", marginTop: 8 }}>
+            <div role="alert" style={{ color: RED, fontSize: "var(--text-fine)", marginTop: 8 }}>
               {endErr ? ERR_END_BEFORE_START : ERR_HALF_DAY_MAX}
             </div>
           )}
           {halfKind && !endErr && !capErr && (
-            <div style={{ color: MUTED, fontSize: "var(--text-fine)", marginTop: 8 }}>ניתן לעבוד עד השעה 12:00.</div>
+            <div style={{ color: MUTED, fontSize: "var(--text-fine)", marginTop: 8 }}>ניתן לעבוד עד השעה {HALF_DAY_END}.</div>
           )}
         </>
       )}

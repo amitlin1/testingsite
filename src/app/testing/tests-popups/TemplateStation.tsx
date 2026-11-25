@@ -1,26 +1,25 @@
 "use client";
 import * as React from "react";
 import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from "@/components/ui";
-import type { StationTestDialogProps, TestResultData } from "../../../types";
+import type { PackageView } from "@/app/lib/packages/contract";
+import type { TestResultData } from "@/app/lib/testing/contract";
+import type { StationPopupProps } from "./props";
 import { apiFetch } from "@/lib/api/client";
-import { uploadItemFiles } from "@/lib/api/direct-upload";
 import { SUGGEST_PREFIX } from "@/app/lib/station-fields/labels";
 import { fillVariables, skuScanOf } from "@/app/lib/popup-templates/schema";
 import type { PackageRole, PhotoComponent, PopupTemplateJson, TemplateComponent, WeightComponent } from "@/app/lib/popup-templates/schema";
 import { COMPONENT_NAME, TEMPLATE_DEFAULTS } from "@/app/lib/popup-templates/labels";
-import {
-  BAD, HAIR, INK, MUTED, OK, type RefImg, type ShellPhase,
-  PhotoSection, PhotoUploader, SkuScreen, StationShell, SystemNote, VerdictCard, lookupRU, useShotDiscard,
-} from "./stationKit";
+import { GREEN, HAIR, INK, MUTED, RED } from "@/components/ui/colors";
+import { type ShellPhase, PhotoSection, SkuScreen, StationShell, SystemNote, VerdictCard } from "./stationKit";
 import { FieldsBlock, FieldsBlockFallback } from "../fields/FieldsBlock";
-import type { UploadFieldPhoto } from "../fields/FieldRow";
+import { PhotoUploader, type RefImg } from "../fields/PhotoUploader";
 import { SuggestionLine } from "../fields/SuggestionLine";
-import { fieldsErrorText, shouldReloadFields } from "../fields/errors";
 import { VARIANT_SPEC, stationBlockTitle } from "../fields/fieldsBlockModel";
-import { useFieldsState } from "../fields/useFieldsState";
-import { useStationFields } from "../fields/useStationFields";
-import TemplatePackageOpening from "./TemplatePackageOpening";
-import TemplatePackageClosing from "./TemplatePackageClosing";
+import { lookupItemReference } from "./reference";
+import { useShotUpload } from "./shots";
+import { NO_WORKER_TEXT, useStepFields } from "./stepFields";
+import TemplatePackageOpening from "./opening/TemplatePackageOpening";
+import TemplatePackageClosing from "./closing/TemplatePackageClosing";
 import {
   type TemplateRunState, buildTemplateDetails, emptyRunState, finishBlocker, routeFieldsSlot, stepBlocker, weightOutcome,
 } from "./templateModel";
@@ -35,25 +34,25 @@ import {
  * TemplateStation fetches the template when it opens. A type whose template is gone meanwhile (404)
  * opens `fallback` — the popup the code gives the type — so the worker is never stuck.
  *
- * A box at a package-level station comes with `packageRole`, its place on the route (PLAN.md §5.1,
- * decision 1): a package template of that role runs it (TemplatePackageOpening /
+ * A box at a package-level station comes with `box`: the box and its place on the route (PLAN.md
+ * §5.1, decision 1). A package template of that role runs it (TemplatePackageOpening /
  * TemplatePackageClosing); a template of the other role opens the wizard, its `fallback`.
  */
-export default function TemplateStation(props: StationTestDialogProps & {
-  fallback: React.ComponentType<StationTestDialogProps>;
-  packageRole?: PackageRole;
+export default function TemplateStation(props: StationPopupProps & {
+  /** The popup the code gives the type, ready to show. */
+  fallback: React.ReactElement;
+  box?: { role: PackageRole; pkg: PackageView };
 }) {
-  const { open, onClose, station, fallback: Fallback, packageRole, ...rest } = props;
+  const { onClose, station, fallback, box, ...rest } = props;
   const typeId = station.test_station_type_id;
   const [attempt, setAttempt] = React.useState(0);
   // The answer is kept with the request it answers: a new request (another type, a retry) reads as
   // loading until its own answer lands — no state reset inside the effect.
-  const key = open ? `${typeId}:${attempt}` : "";
+  const key = `${typeId}:${attempt}`;
   const [answer, setAnswer] = React.useState<{ key: string; load: TemplateLoad } | null>(null);
   const load: TemplateLoad = answer?.key === key ? answer.load : { status: "loading" };
 
   React.useEffect(() => {
-    if (!key) return;
     let cancelled = false;
     const settle = (l: TemplateLoad) => { if (!cancelled) setAnswer({ key, load: l }); };
     apiFetch(`/api/settings/popup-templates/${typeId}`)
@@ -62,21 +61,20 @@ export default function TemplateStation(props: StationTestDialogProps & {
         if (!res.ok) throw new Error(String(res.status));
         settle({ status: "ready", tpl: (await res.json()) as PopupTemplateJson });
       })
-      .catch(() => settle({ status: "error" }));
+      .catch((e) => { console.error("popup template failed to load", e); settle({ status: "error" }); });
     return () => { cancelled = true; };
   }, [key, typeId]);
 
-  const fallback = <Fallback open={open} onClose={onClose} station={station} {...rest} />;
   if (load.status === "none") return fallback;
   if (load.status === "ready") {
     const tpl = load.tpl;
-    if (packageRole == null) return tpl.base === "item" ? <TemplatePopup key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={tpl} /> : fallback;
-    if (tpl.base !== "package" || tpl.config.role !== packageRole) return fallback;
-    const PackagePopup = packageRole === "opening" ? TemplatePackageOpening : TemplatePackageClosing;
-    return <PackagePopup key={rest.item.item_id} open={open} onClose={onClose} station={station} {...rest} template={tpl} />;
+    if (box == null) return tpl.base === "item" ? <TemplatePopup onClose={onClose} station={station} {...rest} template={tpl} /> : fallback;
+    if (tpl.base !== "package" || tpl.config.role !== box.role) return fallback;
+    const PackagePopup = box.role === "opening" ? TemplatePackageOpening : TemplatePackageClosing;
+    return <PackagePopup onClose={onClose} station={station} {...rest} template={tpl} pkg={box.pkg} />;
   }
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle onClose={onClose}>{station.test_station_desc}</DialogTitle>
       <DialogContent>
         {load.status === "loading" ? (
@@ -104,14 +102,17 @@ type TemplateLoad = { status: "loading" } | { status: "ready"; tpl: PopupTemplat
  *  `preview` loads no route fields (a placeholder stands where they go) and keeps shots on screen
  *  without storing them; finishing calls onSubmit, which the preview makes a no-op. */
 export function TemplatePopup({
-  open, onClose, item, station, stationTypeName, workerId, workerName, onSubmit, template, preview = false,
-}: StationTestDialogProps & { template: PopupTemplateJson; preview?: boolean }) {
+  onClose, item, station, stationTypeName, workerId, workerName, onSubmit, template, preview = false,
+}: StationPopupProps & {
+  template: PopupTemplateJson;
+  preview?: boolean;
+}) {
   const cfg = template.config;
   const kind = stationTypeName?.trim() || "";
   const sku = skuScanOf(cfg);
-  // Mounted per opening (the page renders a popup only while it is open, keyed by the item), so
-  // the first state IS the fresh one: the SKU carries on from the station before
-  // (ItemRow.last_sku) when the template says so.
+  // Mounted per opening (StationPopupProps), so the first state IS the fresh one: the SKU carries
+  // on from the station before
+  // (QueueRow.last_sku) when the template says so.
   const [phaseIdx, setPhaseIdx] = React.useState(0);
   const [state, setState] = React.useState<TemplateRunState>(() => emptyRunState(sku?.carry_last ? item.last_sku ?? "" : ""));
   const [refImages, setRefImages] = React.useState<RefImg[]>([]);
@@ -121,11 +122,9 @@ export function TemplatePopup({
   const [submitting, setSubmitting] = React.useState(false);
 
   // ---- the route's station fields of this step (route-fields spec §4.2–§4.3) ----
-  const sf = useStationFields(item.item_id, open && !preview, station.test_station_id);
-  const ready = sf.status === "ready" && sf.mode === "item" ? sf : null;
-  const fx = useFieldsState(ready ? ready.fields : []);
-  const hasFields = ready != null && fx.defsCount > 0;
-  const fieldsBlocking = !preview && (sf.status === "loading" || sf.status === "error" || (hasFields && fx.blocking(ready.gate)));
+  const stepFields = useStepFields({ itemId: item.item_id, stationId: station.test_station_id, stationTypeId: station.test_station_type_id, workerId, enabled: !preview });
+  const { fx, cfg: fieldsCfg } = stepFields;
+  const fieldsBlocking = !preview && stepFields.blocking;
   const slot = routeFieldsSlot(cfg);
 
   const vars = { station: kind, sku: state.sku, model: item.model, serial: item.serial_no };
@@ -137,10 +136,11 @@ export function TemplatePopup({
     if (!sku?.lookup_reference || !scanned || lookedUpFor === scanned) return;
     setBusy(true);
     try {
-      const ru = await lookupRU(scanned, item.item_type_id, station.test_station_type_id);
+      const ru = await lookupItemReference(scanned, item.item_type_id, station.test_station_type_id);
       setState((s) => ({ ...s, hasRU: ru.hasRU, refWeight: ru.refWeight }));
       setRefImages(ru.images);
-    } catch {
+    } catch (e) {
+      console.error("reference lookup failed", e);
       setState((s) => ({ ...s, hasRU: false, refWeight: null }));
       setRefImages([]);
     } finally {
@@ -150,31 +150,22 @@ export function TemplatePopup({
   }, [sku, state.sku, lookedUpFor, item.item_type_id, station.test_station_type_id]);
 
   // ---- photos: each component's shots go to storage tagged with its own group ----
-  const { discard, landed } = useShotDiscard(workerId);
+  const shots = useShotUpload(workerId, station.test_station_type_id);
   const pickPhoto = (c: PhotoComponent, file: File) => {
-    const previewUrl = URL.createObjectURL(file);
-    const patch = (fn: (shots: TemplateRunState["photos"][string]) => TemplateRunState["photos"][string]) =>
+    const patch = (fn: (list: TemplateRunState["photos"][string]) => TemplateRunState["photos"][string]) =>
       setState((s) => ({ ...s, photos: { ...s.photos, [c.id]: fn(s.photos[c.id] ?? []) } }));
-    if (preview) { patch((shots) => [...shots, { previewUrl, objectKey: "preview" }]); return; }
-    patch((shots) => [...shots, { previewUrl, uploading: true }]);
-    uploadItemFiles(item.item_id, [file], { workerId, stationTypeId: station.test_station_type_id, photoType: c.photo_code })
-      .then(([result]) => result?.objectKey ?? null, () => null)
-      .then((key) => {
-        if (landed(item.item_id, previewUrl, key)) return;
-        patch((shots) => shots.map((x) => (x.previewUrl === previewUrl ? { ...x, objectKey: key ?? undefined, uploading: false, failed: key == null } : x)));
-      });
+    if (preview) {
+      const previewUrl = URL.createObjectURL(file);
+      patch((list) => [...list, { previewUrl, objectKey: "preview" }]);
+      return;
+    }
+    shots.pick(item.item_id, file, c.photo_code, patch);
   };
   const removePhoto = (c: PhotoComponent, idx: number) => {
-    if (!preview) discard(item.item_id, (state.photos[c.id] ?? [])[idx]);
+    if (!preview) shots.remove(item.item_id, (state.photos[c.id] ?? [])[idx]);
     setState((s) => ({ ...s, photos: { ...s.photos, [c.id]: (s.photos[c.id] ?? []).filter((_, i) => i !== idx) } }));
   };
-  const uploadFieldPhoto = React.useCallback<UploadFieldPhoto>(
-    (file, photoType) => uploadItemFiles(item.item_id, [file], { workerId, stationTypeId: station.test_station_type_id, photoType })
-      .then(([result]) => result?.objectKey ?? null, () => null),
-    [item.item_id, workerId, station.test_station_type_id],
-  );
 
-  // ---- navigation ----
   const phases: ShellPhase[] = cfg.steps.map((st) => ({ key: st.id, title: fill(st.title), desc: fill(st.desc) }));
   const blockerOf = (i: number) => stepBlocker(cfg.steps[i], state, kind, fieldsBlocking && slot?.stepIndex === i);
   const go = async (to: number) => {
@@ -194,7 +185,7 @@ export function TemplatePopup({
   const finishBlocked = finishBlocker(cfg, state, kind, fieldsBlocking);
 
   const onFinish = async () => {
-    if (workerId == null) { setError("יש לבחור עובד בכותרת מסך הבדיקות"); return; }
+    if (workerId == null) { setError(NO_WORKER_TEXT); return; }
     if (finishBlocked) { setError(finishBlocked); return; }
     setSubmitting(true); setError(null);
     try {
@@ -203,30 +194,28 @@ export function TemplatePopup({
         Details: {
           ...buildTemplateDetails(cfg, { stationTypeId: station.test_station_type_id, version: template.version, station: kind }, state),
           // Station fields: schema + fields, and the verdict extended with suggested / overridden.
-          ...(hasFields ? fx.toBlock(ready.schema, { ok: state.verdict.ok, note: state.verdict.note }) : {}),
+          ...(fieldsCfg ? fx.toBlock(fieldsCfg.schema, { ok: state.verdict.ok, note: state.verdict.note }) : {}),
         },
       };
       await onSubmit(data);
       onClose();
     } catch (e) {
-      setError(fieldsErrorText(e, "שגיאה בשמירת הבדיקה"));
-      if (shouldReloadFields(e)) sf.reload();
+      setError(stepFields.saveErrorText(e, "שגיאה בשמירת הבדיקה"));
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ---- the body of the current step ----
   const step = cfg.steps[phaseIdx];
   const fieldsHere = slot?.stepIndex === phaseIdx;
   const fieldsBlock = preview ? (
     <Box key="route-fields" sx={{ border: `1.5px dashed ${HAIR}`, borderRadius: "var(--r-card)", p: "18px 20px", color: MUTED, fontSize: "var(--text-body-sm)" }}>
       כאן יופיעו שדות הבדיקה של העמדה. הם מוגדרים בעמוד מסלולי בדיקה, לכל מסלול בנפרד.
     </Box>
-  ) : hasFields ? (
-    <FieldsBlock key="route-fields" variant="station" title={stationBlockTitle(kind)} groups={[{ fields: ready.fields }]} fx={fx} uploadPhoto={uploadFieldPhoto} />
+  ) : fieldsCfg ? (
+    <FieldsBlock key="route-fields" variant="station" title={stationBlockTitle(kind)} groups={[{ fields: fieldsCfg.fields }]} fx={fx} uploadPhoto={stepFields.uploadFieldPhoto} />
   ) : (
-    <FieldsBlockFallback key="route-fields" sf={sf} />
+    <FieldsBlockFallback key="route-fields" sf={stepFields.sf} />
   );
   // The "no reference" warning heads a step whose components lean on the reference.
   const leansOnReference = step.components.some((c) => (c.kind === "photo" && c.show_reference) || c.kind === "weight");
@@ -254,8 +243,8 @@ export function TemplatePopup({
             <VerdictCard ok={state.verdict.ok} note={state.verdict.note} question={fill(c.question)}
               onOk={(v) => setState((s) => ({ ...s, verdict: { ...s.verdict, ok: v } }))}
               onNote={(v) => setState((s) => ({ ...s, verdict: { ...s.verdict, note: v } }))}
-              suggestion={hasFields ? <SuggestionLine fails={fx.ev.fails} defs={ready.fields} prefix={SUGGEST_PREFIX} decided={state.verdict.ok} /> : undefined}
-              noteMax={hasFields ? c.note_max : undefined} noteLook={VARIANT_SPEC.station.noteLook} />
+              suggestion={fieldsCfg ? <SuggestionLine fails={fx.ev.fails} defs={fieldsCfg.fields} prefix={SUGGEST_PREFIX} decided={state.verdict.ok} /> : undefined}
+              noteMax={fieldsCfg ? c.note_max : undefined} noteLook={VARIANT_SPEC.station.noteLook} />
           </React.Fragment>
         );
       default:
@@ -267,7 +256,7 @@ export function TemplatePopup({
 
   return (
     <StationShell
-      open={open} onClose={onClose} item={item} workerId={workerId} workerName={workerName}
+      onClose={onClose} item={item} workerId={workerId} workerName={workerName}
       contextLabel={kind || station.test_station_desc} stationName={station.test_station_desc} phases={phases} currentIndex={phaseIdx}
       onStep={onStep} onBack={onBack} error={error} onClearError={() => setError(null)}
       busy={busy} submitting={submitting}
@@ -303,7 +292,7 @@ function WeightBlock({ c, refWeight, value, onChange }: {
         {refWeight != null ? `משקל ייחוס: ${refWeight} גר׳ · סטייה מותרת ±${c.tolerance_pct}%` : "אין משקל ייחוס לפריט הזה"}
       </Typography>
       {w.diffPct != null && (
-        <Typography role="status" sx={{ fontSize: "var(--text-body-sm)", fontWeight: 600, color: w.pass ? OK : BAD, fontVariantNumeric: "tabular-nums" }}>
+        <Typography role="status" sx={{ fontSize: "var(--text-body-sm)", fontWeight: 600, color: w.pass ? GREEN : RED, fontVariantNumeric: "tabular-nums" }}>
           סטייה {w.diffPct.toFixed(1)}% · {w.pass ? "בטווח" : "מחוץ לטווח"}
         </Typography>
       )}

@@ -1,11 +1,12 @@
 // Route protection map — single source of truth for the middleware.
 //
-// Pattern matching is prefix-only (startsWith). Pages can import these to mirror
-// the same decision (e.g. a "you need role X" empty state).
+// A ROLE_PROTECTED entry matches its path and every path under it; a public
+// route says for itself whether it opens the paths under it. Pages and menus
+// import these to mirror the same decision (canSeeInNav, the users page's role
+// panel).
 
 import type { AppRole } from "@/lib/auth/roles";
-import { hasAnyRole } from "@/lib/auth/roles";
-import { INTAKE_ROLES } from "@/app/lib/packages/roles";
+import { ACCESS, hasAnyRole } from "@/lib/auth/roles";
 
 // Routes that don't require a session. /login and /no-auth MUST stay here, or
 // the middleware redirects them to themselves — an infinite loop.
@@ -16,85 +17,89 @@ import { INTAKE_ROLES } from "@/app/lib/packages/roles";
 //   - /api/cron                → cronSecretGuard() (CRON_SECRET shared secret;
 //                                CLOSED with 503 when the variable is unset)
 //   - /api/onlyoffice/callback → verifies the OnlyOffice-signed JWT internally
-//   - /api/files/download      → fetched by the (cookieless) OnlyOffice doc server
-// NOTE (pending hardening, tracked separately): /api/files/download has no auth
-// of its own yet — browser file access is not gated. Adding a signed-URL / role
-// check there is the "file-route security posture" follow-up.
-export const PUBLIC_ROUTES: readonly string[] = [
-  "/no-auth",
-  "/login",
-  "/auth-error", // self-healing Auth.js error handler (must bypass the auth gate)
+//   - /api/files/download      → fetched by the (cookieless) OnlyOffice doc server;
+//                                the route itself takes a signed token or an app
+//                                session (hasAppSession)
+// Those three open every path under them (`under: true`); every other entry is
+// exactly its own path, so a route added beside one (/api/health/jobs) is gated
+// like any other.
+export const PUBLIC_ROUTES: ReadonlyArray<{ path: string; under?: true }> = [
+  { path: "/no-auth" },
+  { path: "/login" },
+  { path: "/auth-error" }, // self-healing Auth.js error handler (must bypass the auth gate)
   // Container liveness probe. MUST stay public: the docker healthcheck and the
   // nginx upstream have no session cookie, and a gated probe answers 401 →
   // container marked unhealthy → nginx never starts. Leaks nothing (status +
   // uptime only, no DB/Keycloak access).
-  "/api/health",
+  { path: "/api/health" },
+  // The metrics-schema version, read server-to-server with no session (plan §8
+  // stage 2 / §10.2). Leaks only a schema number.
+  { path: "/api/health/schema" },
   // RP-initiated logout initiator. MUST stay public: the caller has already
   // cleared its local session with signOut() before landing here, so a gated
   // route would bounce it to /login and leave the Keycloak SSO cookie alive.
   // Builds a redirect URL only — no DB, no secrets.
-  "/api/logout",
-  "/api/cron",
-  "/api/onlyoffice/callback",
-  "/api/files/download",
+  { path: "/api/logout" },
+  { path: "/api/cron", under: true },
+  { path: "/api/onlyoffice/callback", under: true },
+  { path: "/api/files/download", under: true },
 ];
 
-// Path-prefix → required roles (ANY grants access). First match wins; list
-// longest/most-specific prefixes first when they overlap. Routes NOT listed here
-// are allowed for ANY authenticated user. Anything gated by DB state rather than
-// a Keycloak role should NOT live here — let any authed user through the
-// middleware and gate inside the page/action instead.
-//
-// Per-role page access. First match wins, so MORE-SPECIFIC prefixes come first.
-// Routes NOT listed here are open to ANY authenticated user (currently: "/" =
-// reports/items, "/items", "/packages").
+const isPublic = (pathname: string): boolean =>
+  PUBLIC_ROUTES.some((r) => pathname === r.path || (r.under === true && pathname.startsWith(r.path + "/")));
+
+// Path-prefix → required roles (ANY grants access). First match wins, so the
+// more specific prefixes come first where they overlap. Routes NOT listed here
+// are open to ANY authenticated user (currently "/", "/items", "/packages").
+// Anything gated by DB state rather than a Keycloak role should NOT live here —
+// let any authed user through the middleware and gate inside the page/action.
 export const ROLE_PROTECTED: ReadonlyArray<{
   prefix: string;
   any: readonly AppRole[];
 }> = [
   // User-management API — manager only (defense-in-depth; the handlers also
   // self-gate with withAuth). Listed first so it matches before anything else.
-  { prefix: "/api/users", any: ["manager"] },
+  { prefix: "/api/users", any: ACCESS.usersAdmin },
   // Dashboard/analytics API — manager only, mirroring the /dashboard page rule
   // below. Until 2026-08 these 21 endpoints were reachable by ANY authenticated
   // session (the gate was on /dashboard only), exposing all customer analytics
   // to tester/storekeeper roles. Handlers also self-gate with withAuth.
-  { prefix: "/api/dashboard", any: ["manager"] },
+  { prefix: "/api/dashboard", any: ACCESS.dashboard },
   // Testing API — the same roles as the /testing page below. Without it a
   // storekeeper, kept off the page, could still start a test or post a result
   // by calling these directly. Every caller is the testing page and its
   // wizards (plus the manager-only dashboard's station list).
-  { prefix: "/api/testing", any: ["manager", "tester"] },
-  // Box intake from its shipment — the shipments screen's roles (INTAKE_ROLES).
+  { prefix: "/api/testing", any: ACCESS.testing },
+  // Box intake from its shipment — the shipments screen's roles.
   // Its undo, /api/packages/<id>/intake, can't be matched by prefix; both
   // handlers self-gate with withAuth.
-  { prefix: "/api/packages/intake", any: INTAKE_ROLES },
+  { prefix: "/api/packages/intake", any: ACCESS.intake },
   // Work-hours API — admin + timekeeper (משאן). Handlers also self-gate with withAuth.
-  { prefix: "/api/settings/work-hours", any: ["manager", "mashan"] },
+  { prefix: "/api/settings/work-hours", any: ACCESS.workHours },
   // Sources — not the tester's. Only the sources settings page reads this API.
-  { prefix: "/api/settings/sources", any: ["manager", "storekeeper"] },
+  { prefix: "/api/settings/sources", any: ACCESS.sourcesSettings },
   // Settings pages — one rule per page, each naming who may open it. Pages
   // only: the intake and the queues still read routes / stations / statuses
   // through /api/settings/* (see the role plan).
-  { prefix: "/settings/users", any: ["manager"] }, // user management — manager only
-  { prefix: "/settings/customers", any: ["manager", "storekeeper"] },
-  { prefix: "/settings/item-types", any: ["manager", "tester", "storekeeper"] },
-  { prefix: "/settings/packages", any: ["manager", "tester"] },
-  { prefix: "/settings/sources", any: ["manager", "storekeeper"] },
-  { prefix: "/settings/item-status", any: ["manager", "tester"] },
-  { prefix: "/settings/test-station-status", any: ["manager", "tester"] },
-  { prefix: "/settings/test-stations", any: ["manager", "tester"] },
-  { prefix: "/settings/testing-routes", any: ["manager", "tester"] },
-  { prefix: "/settings/popup-templates", any: ["manager", "tester"] },
-  { prefix: "/settings/reference-items", any: ["manager", "tester", "storekeeper"] },
-  { prefix: "/settings/work-hours", any: ["manager", "mashan"] }, // admin + timekeeper (משאן)
+  { prefix: "/settings/users", any: ACCESS.usersAdmin },
+  { prefix: "/settings/customers", any: ACCESS.customersSettings },
+  { prefix: "/settings/item-types", any: ACCESS.itemTypesSettings },
+  { prefix: "/settings/packages", any: ACCESS.packagesSettings },
+  { prefix: "/settings/sources", any: ACCESS.sourcesSettings },
+  { prefix: "/settings/item-status", any: ACCESS.itemStatusSettings },
+  { prefix: "/settings/test-station-status", any: ACCESS.testStationStatusSettings },
+  { prefix: "/settings/test-stations", any: ACCESS.testStationsSettings },
+  { prefix: "/settings/testing-routes", any: ACCESS.fieldsEdit },
+  { prefix: "/settings/popup-templates", any: ACCESS.popupTemplatesSettings },
+  { prefix: "/settings/reference-items", any: ACCESS.referenceItemsSettings },
+  { prefix: "/settings/work-hours", any: ACCESS.workHours },
   // Any settings page not listed above — manager only until it gets its own rule.
-  { prefix: "/settings", any: ["manager"] },
+  { prefix: "/settings", any: ACCESS.otherSettings },
   // Main sections — each role reaches its own area.
-  { prefix: "/testing", any: ["manager", "tester"] }, // testing — not storekeeper
-  { prefix: "/shipments", any: ["manager", "storekeeper"] }, // shipments — not tester
-  { prefix: "/dashboard", any: ["manager"] }, // analytics dashboard — manager only
-  { prefix: "/files", any: ["manager", "tester", "mashan"] }, // file management — not the storekeeper
+  { prefix: "/testing", any: ACCESS.testing },
+  { prefix: "/shipments", any: ACCESS.shipments },
+  { prefix: "/dashboard", any: ACCESS.dashboard },
+  { prefix: "/files", any: ACCESS.files },
   // "/" and "/packages" (מארזים ופריטים) stay open to any authenticated user.
 ];
 
@@ -105,11 +110,23 @@ export type AccessVerdict =
   | { kind: "forbidden"; required: readonly AppRole[] };
 
 /**
- * Resolve access for a (pathname, roles) pair. Used by middleware AND by server
- * components that mirror the same decision.
+ * A data request (XHR / API fetch: answer JSON 401/403), not a navigation (answer a redirect).
  * @param pathname Already normalized — basePath stripped.
- * @param roles    The user's roles. Pass null for anonymous (no session).
  */
+export function isDataRequest(pathname: string, headers: Headers): boolean {
+  if (pathname.startsWith("/api/")) return true;
+
+  // Client-side <Link>/router navigations send an RSC fetch carrying the `rsc`
+  // header but NOT sec-fetch-mode:navigate and NOT Accept:text/html. Treat them
+  // as navigations so they get a proper redirect (which the App Router turns
+  // into a hard navigation) — a JSON 401 would freeze the UI.
+  if (headers.has("rsc")) return false;
+
+  if ((headers.get("sec-fetch-mode") ?? "") === "navigate") return false;
+  if ((headers.get("accept") ?? "").includes("text/html")) return false;
+  return true;
+}
+
 /**
  * Should this route appear in a NAVIGATION menu for these roles?
  *
@@ -131,15 +148,17 @@ export function canSeeInNav(pathname: string, roles: string[] | null): boolean {
   return resolveAccess(pathname, roles ?? []).kind !== "forbidden";
 }
 
+/**
+ * Resolve access for a (pathname, roles) pair. Used by middleware AND by the
+ * screens that mirror the same decision.
+ * @param pathname Already normalized — basePath stripped.
+ * @param roles    The user's roles. Pass null for anonymous (no session).
+ */
 export function resolveAccess(
   pathname: string,
   roles: string[] | null,
 ): AccessVerdict {
-  if (
-    PUBLIC_ROUTES.some((p) => pathname === p || pathname.startsWith(p + "/"))
-  ) {
-    return { kind: "public" };
-  }
+  if (isPublic(pathname)) return { kind: "public" };
   if (!roles) return { kind: "needs-auth" };
 
   for (const rule of ROLE_PROTECTED) {

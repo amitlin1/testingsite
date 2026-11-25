@@ -36,6 +36,34 @@ export const TEMPLATE_ID_PATTERNS = {
   checkItem: /^i_[a-z0-9]{8}$/,
 } as const;
 
+/** A popup template component's id ("k_…", templates.ts newComponentId) — how a saved result's
+ *  components are told from its station fields. */
+export const isTemplateComponentId = (id: string): boolean => TEMPLATE_ID_PATTERNS.component.test(id);
+
+/** 409 code of a save made over someone else's newer version (store.ts; the editor shows the conflict). */
+export const TEMPLATE_CONFLICT = "TEMPLATE_CONFLICT";
+
+/** Hard limits of the shape check; the content rules are stricter (6 steps, 8 photo components). */
+export const TEMPLATE_LIMITS = {
+  configJson: 64_000,
+  steps: 12,
+  componentsPerStep: 20,
+  stepTitle: 60,
+  stepDesc: 200,
+  message: 500,
+  question: 80,
+  photoTitle: 60,
+  finishLabel: 40,
+  photoMin: 20,
+  checklistItems: 20,
+  checklistTitle: 60,
+  checklistLabel: 120,
+  notesLabel: 60,
+  /** Content rules. */
+  maxSteps: 6,
+  maxPhotos: 8,
+} as const;
+
 // ---- components ---------------------------------------------------------------
 export const COMPONENT_KINDS = [
   "sku_scan", "message", "photo", "weight", "route_fields", "verdict",
@@ -43,18 +71,28 @@ export const COMPONENT_KINDS = [
 ] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
 
-/** What each place of a template may hold (PLAN.md §3.2, §5.2). The package base's system parts
- *  (contents / items / labels in an opening, arrival / report_sign in a closing) are the wizards'
- *  own steps. */
+const ITEM_KINDS = ["message", "photo", "weight", "route_fields", "sku_scan", "verdict"] as const satisfies readonly ComponentKind[];
+
+/** What each place of a template may hold (PLAN.md §3.2, §5.2), in the order the editor's
+ *  "הוסף רכיב" menu lists them. The package base's system parts (contents / items / labels in an
+ *  opening, arrival / report_sign in a closing) are the wizards' own steps. */
 export const KINDS_ALLOWED = {
-  item: ["sku_scan", "message", "photo", "weight", "route_fields", "verdict"],
-  opening: ["sku_scan", "message", "photo", "route_fields", "verdict", "checklist", "notes", "contents", "items", "labels"],
-  closing: ["sku_scan", "message", "photo", "route_fields", "verdict", "checklist", "notes", "arrival", "report_sign"],
-  item_flow: ["sku_scan", "message", "photo", "weight", "route_fields", "verdict"],
+  item: ITEM_KINDS,
+  opening: ["message", "photo", "route_fields", "sku_scan", "verdict", "checklist", "notes", "labels", "contents", "items"],
+  closing: ["message", "photo", "route_fields", "sku_scan", "verdict", "checklist", "notes", "arrival", "report_sign"],
+  /** A package template's per-item flow: an item's popup. */
+  item_flow: ITEM_KINDS,
 } as const satisfies Record<string, readonly ComponentKind[]>;
 
 /** The package base's system parts: each alone in its step, in this order. */
 export const SYSTEM_KINDS = ["contents", "items", "labels", "arrival", "report_sign"] as const satisfies readonly ComponentKind[];
+
+/** The system parts a package template of each role must have; the others (the labels, the report
+ *  signing) are optional. */
+export const MANDATORY_SYSTEM_KINDS = {
+  opening: ["contents", "items"],
+  closing: ["arrival"],
+} as const satisfies Record<PackageRole, readonly (typeof SYSTEM_KINDS)[number][]>;
 
 interface ComponentBase { id: ComponentId }
 
@@ -62,7 +100,7 @@ interface ComponentBase { id: ComponentId }
 export interface SkuScanComponent extends ComponentBase {
   kind: "sku_scan";
   required: boolean;
-  /** Start from the SKU the previous station saved (ItemRow.last_sku). */
+  /** Start from the SKU the previous station saved (QueueRow.last_sku). */
   carry_last: boolean;
   /** Look the SKU up among the item type's reference items (images, weight). */
   lookup_reference: boolean;
@@ -154,6 +192,16 @@ export interface PopupTemplateConfig {
   item_flow?: TemplateStep[];
 }
 
+/** GET /api/settings/popup-templates: which station types have a template — never the configs. */
+export interface TemplateSummaryJson {
+  station_type_id: number;
+  base: TemplateBase;
+  version: number;
+  role: PackageRole | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
 /** A template as the API answers it. */
 export interface PopupTemplateJson {
   station_type_id: number;
@@ -213,9 +261,4 @@ export function skuScanOf(cfg: PopupTemplateConfig): SkuScanComponent | null {
 export function reportSignStepOf(cfg: PopupTemplateConfig): TemplateStep | null {
   const last = cfg.steps[cfg.steps.length - 1];
   return cfg.role === "closing" && last?.components.length === 1 && last.components[0].kind === "report_sign" ? last : null;
-}
-
-/** The photo codes the template's photo components write — one photo_types row each. */
-export function photoCodesOf(cfg: PopupTemplateConfig): string[] {
-  return allComponentsOf(cfg).flatMap((c) => (c.kind === "photo" ? [c.photo_code] : []));
 }

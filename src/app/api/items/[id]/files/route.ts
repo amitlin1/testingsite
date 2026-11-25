@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import { prisma } from "@/lib/db";
 import { removeObject } from '@/lib/storage';
 import { markFileObjectDeleted } from '@/lib/file-registry';
-import { keyBelongsToItem } from '@/lib/directUpload/shared';
+import type { FileTags, ItemFile } from '@/lib/storage/contract';
+import { ItemKeys } from '@/lib/storage/keys';
+import { parseItemId } from '@/lib/http/request';
+import { errorResponse } from '@/lib/http/errors';
 
 export const runtime = 'nodejs';
 
@@ -33,7 +36,10 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const itemId = BigInt(id);
+    const itemId = parseItemId(id);
+    if (itemId == null) {
+      return NextResponse.json({ error: 'מזהה פריט לא תקין' }, { status: 400 });
+    }
     if (!(await ensureItemExists(itemId))) {
       return NextResponse.json({ error: 'הפריט לא נמצא' }, { status: 404 });
     }
@@ -60,12 +66,8 @@ export async function GET(
       orderBy: { created_at: 'desc' },
     });
 
-    let files = rows.map((r) => {
-      const meta = (r.metadata ?? {}) as {
-        stationTypeId?: number | null;
-        isGlobal?: boolean;
-        photoType?: string | null;
-      };
+    let files = rows.map((r): ItemFile => {
+      const meta = (r.metadata ?? {}) as Partial<FileTags>;
       return {
         objectKey: r.object_key,
         fileName: r.file_name,
@@ -95,8 +97,7 @@ export async function GET(
 
     return NextResponse.json({ files });
   } catch (error) {
-    console.error('List item files error:', error);
-    return NextResponse.json({ error: 'שגיאה בטעינת קבצים' }, { status: 500 });
+    return errorResponse(error, 'שגיאה בטעינת קבצים');
   }
 }
 
@@ -112,7 +113,7 @@ export async function DELETE(
     if (!key) {
       return NextResponse.json({ error: 'נדרש מפתח קובץ' }, { status: 400 });
     }
-    if (!keyBelongsToItem(key, id)) {
+    if (!ItemKeys.belongs(key, id)) {
       return NextResponse.json({ error: 'מפתח קובץ לא תקין' }, { status: 400 });
     }
 
@@ -121,7 +122,6 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('Item file delete error:', error);
-    return NextResponse.json({ error: 'שגיאה במחיקת קובץ' }, { status: 500 });
+    return errorResponse(error, 'שגיאה במחיקת קובץ');
   }
 }

@@ -1,12 +1,9 @@
-import { numberInRange } from "@/app/lib/station-fields/evaluate";
 import type { NumberField } from "@/app/lib/station-fields/schema";
-import { RANGE_WORD, numberRangeForm, type RangeSegment } from "@/app/testing/fields/labels";
-import { UNDRAWN_TEXT, FIELD_TYPE_TEXT, NUMBER_PREVIEW_TEXT, NUMBER_SUMMARY_TEXT } from "./labels";
+import { UNDRAWN_TEXT, FIELD_TYPE_TEXT, NUMBER_SUMMARY_TEXT } from "./labels";
 
 /**
- * A number field's settings as the admin types and reads them (artboard 3, spec §5.6): parsing
- * what is typed into the settings, the summary on the row's button, and the live preview's line.
- * Pure — NumberFieldSettings.tsx and the editor's preview draw what this returns.
+ * A number field's settings as the admin types and reads them (artboard 3, spec §5.6): parsing what
+ * is typed into the settings, and the summary on the row's button. Pure.
  */
 
 const DASH = "–";   // U+2013, artboard 3 `rangeShort`
@@ -53,14 +50,6 @@ export function withUnit(field: NumberField, unit: string): NumberField {
   return next;
 }
 
-/** The field with its help text as typed; blank text removes it (an empty help is never stored). */
-export function withHelp(field: NumberField, help: string): NumberField {
-  const next: NumberField = { ...field };
-  if (help.trim() === "") delete next.help;
-  else next.help = help;
-  return next;
-}
-
 /** Minimum above maximum — one half of the lint's NUMBER_RANGE error (validate.ts). */
 export function numberRangeInverted(field: Pick<NumberField, "min" | "max">): boolean {
   return field.min != null && field.max != null && field.min > field.max;
@@ -83,8 +72,8 @@ export function numberRangeShort(field: Pick<NumberField, "min" | "max" | "ref" 
   return NUMBER_SUMMARY_TEXT.noRange;
 }
 
-/** The summary button's parts (artboard 3): "יחידה {unit}" (null without a unit), the short range,
- *  and the type's name "מספר" (drawn 12px muted). */
+/** The summary button's parts (artboard 3): the unit (null without one), the short range, and the
+ *  type's name. */
 export function numberSummaryParts(field: NumberField): { unit: string | null; range: string; type: string } {
   const unit = field.unit?.trim() ? field.unit.trim() : null;
   return { unit, range: numberRangeShort(field), type: FIELD_TYPE_TEXT.number.name };
@@ -95,37 +84,4 @@ export function numberSummaryParts(field: NumberField): { unit: string | null; r
 export function numberSummaryText(field: NumberField): string {
   const p = numberSummaryParts(field);
   return [...(p.unit != null ? [NUMBER_SUMMARY_TEXT.unitLead + p.unit] : []), p.range, p.type].join(SEP);
-}
-
-// ---- the live preview's line ---------------------------------------------------------------------
-export type NumberPreviewMessage = {
-  /** none: the field defines no range; idle: nothing typed in the preview yet; in / out: the
-   *  preview's value against the range (numberInRange, inclusive). */
-  state: "none" | "idle" | "in" | "out";
-  /** The line, its numbers-with-unit as `ltr` runs ("עד <0.1 Ω>"). */
-  segments: RangeSegment[];
-  text: string;
-  /** success → --color-success-ink, danger → --color-destructive, muted → --color-ink-muted-48. */
-  tone: "success" | "danger" | "muted";
-};
-
-/**
- * The line under the number field in the editor's live preview (artboard 3 `rangeMsg`, spec §5.6):
- * "בטווח · {range}" (green); "מחוץ לטווח · {range} · יסומן לא תקין" — without the tail when
- * out_of_range_fail is off — (red); "ללא טווח מוגדר". The range is the worker's own form
- * (numberRangeForm: "עד {max} Ω" / "מעל {min} Ω" / "{min}–{max} Ω", then the reference ± tolerance).
- * Before a value is typed the worker's idle wording shows: "טווח מותר · {range}".
- */
-export function numberPreviewMessage(field: NumberField, value: number | null): NumberPreviewMessage {
-  const range = numberRangeForm(field);
-  if (range === null) return finish("none", [{ text: NUMBER_PREVIEW_TEXT.noRange }], "muted");
-  const inRange = numberInRange(field, value);
-  if (inRange === null) return finish("idle", [{ text: RANGE_WORD.idle + SEP }, ...range], "muted");
-  if (inRange) return finish("in", [{ text: NUMBER_PREVIEW_TEXT.inRange + SEP }, ...range], "success");
-  const tail: RangeSegment[] = field.out_of_range_fail ? [{ text: SEP + NUMBER_PREVIEW_TEXT.markedFail }] : [];
-  return finish("out", [{ text: NUMBER_PREVIEW_TEXT.outOfRange + SEP }, ...range, ...tail], "danger");
-}
-
-function finish(state: NumberPreviewMessage["state"], segments: RangeSegment[], tone: NumberPreviewMessage["tone"]): NumberPreviewMessage {
-  return { state, segments, text: segments.map((s) => s.text).join(""), tone };
 }

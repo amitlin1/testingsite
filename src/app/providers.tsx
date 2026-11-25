@@ -1,6 +1,6 @@
 "use client";
 
-// Client-side providers boundary. PORTABLE.
+// Client-side providers boundary.
 //
 // PITFALL: do NOT pass a `session` prop to <SessionProvider>. In v5, passing it
 // prevents the refreshed token from persisting and re-runs the refresh effect on
@@ -11,33 +11,23 @@
 // 404s through the reverse proxy. (Root mount → BASE_PATH is "".)
 //
 // PROACTIVE TIMER REFRESH (refetchInterval): the primary defence so a user
-// sitting idle never reaches an expired token. Every SESSION_REFETCH_SECONDS the
-// provider polls /api/auth/session, which re-runs the jwt callback and refreshes
-// the access token while it is still valid. Set this ~1 min UNDER the access-
-// token lifetime so each poll lands inside the jwt callback's refresh window.
-// Our realm's access token lifetime is 15 min (900s), so 840s = 14 min.
+// sitting idle never reaches an expired token. Every SESSION_REFETCH_SECONDS
+// (lib/auth/timing.ts: the realm's 900s access-token lifetime less the refresh
+// leeway, 840s) the provider polls /api/auth/session, which re-runs the jwt
+// callback and refreshes the access token while it is still valid.
 // It is also what surfaces session.error to the shell's idle-tab redirect effect.
 
 import * as React from "react";
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BASE_PATH } from "@/lib/base-path";
+import { SESSION_REFETCH_SECONDS } from "@/lib/auth/timing";
 import { TooltipProvider } from "@/components/ui/Tooltip";
+import { Toaster } from "@/components/ui/Toast";
 
-const SESSION_REFETCH_SECONDS = 14 * 60; // 840s — accessTokenTTL(900s) - ~60s
 const AUTH_BASE = `${BASE_PATH}/api/auth`;
 
-// Dev-mode flag delivered from the SERVER at runtime (root layout reads
-// process.env.IS_DEV). Deliberately NOT NEXT_PUBLIC_IS_DEV (that would bake in
-// at build time); through this context it's a pure runtime switch.
-const DevModeContext = React.createContext(false);
-
-/** Client hook — true when the server is running with IS_DEV=1. */
-export function useIsDev(): boolean {
-  return React.useContext(DevModeContext);
-}
-
-// React Query: the list screens (packages, testing) read through it so a filter
+// React Query: the list screens (packages, testing, settings) read through it so a filter
 // change, a refocus or a mutation refreshes the data without a full reload.
 // One client per browser tab, created lazily so SSR never shares it.
 function makeQueryClient() {
@@ -48,20 +38,15 @@ function makeQueryClient() {
   });
 }
 
-export function Providers({
-  children,
-  isDev = false,
-}: {
-  children: React.ReactNode;
-  isDev?: boolean;
-}) {
+export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = React.useState(makeQueryClient);
   return (
     <SessionProvider basePath={AUTH_BASE} refetchInterval={SESSION_REFETCH_SECONDS}>
       <QueryClientProvider client={queryClient}>
-        <DevModeContext.Provider value={isDev}>
-          <TooltipProvider>{children}</TooltipProvider>
-        </DevModeContext.Provider>
+        <TooltipProvider>
+          {children}
+          <Toaster />
+        </TooltipProvider>
       </QueryClientProvider>
     </SessionProvider>
   );

@@ -9,21 +9,10 @@
 // /usr/bin/chromium installed in the Dockerfile runner stage). Server-only.
 
 import puppeteer, { type Browser } from "puppeteer-core";
+import { escapeHtml } from "@/lib/html-escape";
 import { getFontFaceCss } from "./html";
-import { FONT_STACK, type ReportFont } from "./fonts";
-
-export type PageLine = { text: string; align: "right" | "center" | "left"; bold?: boolean };
-
-export interface RenderPdfOptions {
-  /** Lines printed at the top of EVERY page (the classification marking). */
-  headerLines?: PageLine[];
-  /** Lines printed at the bottom of every page, top to bottom, each with its
-   *  own alignment. `{page}` / `{pages}` become the live page number / total. */
-  footerLines?: PageLine[];
-  /** The document font — Chromium's header/footer render in their own context,
-   *  without the page's @font-face, so the font is inlined there too. */
-  font?: ReportFont;
-}
+import { PAGE, type PageLine } from "./document";
+import { DEFAULT_FONT, REPORT_FONTS, type ReportFont } from "./fonts";
 
 const globalForPdf = globalThis as unknown as {
   __pdfBrowser?: Promise<Browser>;
@@ -57,13 +46,7 @@ async function getBrowser(): Promise<Browser> {
         throw e;
       });
   }
-  const browser = await globalForPdf.__pdfBrowser;
-  // If a prior browser died, relaunch.
-  if (!browser.connected) {
-    globalForPdf.__pdfBrowser = undefined;
-    return getBrowser();
-  }
-  return browser;
+  return globalForPdf.__pdfBrowser;
 }
 
 /** Close the shared browser (test suites and scripts — the server keeps it). */
@@ -73,8 +56,8 @@ export async function closeBrowser(): Promise<void> {
   if (pending) await (await pending.catch(() => null))?.close().catch(() => {});
 }
 
-// Open a page, retrying once if the pooled browser turned out to be dead
-// ("Connection closed" / "Target closed") — hardens against a stale singleton.
+// Open a page; when the pooled browser turned out to be dead ("Connection
+// closed" / "Target closed"), launch a new one and retry once.
 async function newPage() {
   try {
     return await (await getBrowser()).newPage();
@@ -84,13 +67,19 @@ async function newPage() {
   }
 }
 
-function escapeHtml(t: string): string {
-  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+const { top, side } = PAGE.marginMm;
 
 export async function renderPdf(
   html: string,
-  opts: RenderPdfOptions = {},
+  opts: {
+    /** Lines printed at the top of EVERY page (the classification marking). */
+    headerLines?: PageLine[];
+    /** Lines printed at the bottom of every page, top to bottom, each with its own alignment. */
+    footerLines?: PageLine[];
+    /** The document font — Chromium's header/footer render in their own context,
+     *  without the page's @font-face, so the font is inlined there too. */
+    font?: ReportFont;
+  } = {},
 ): Promise<Buffer> {
   const page = await newPage();
   try {
@@ -111,18 +100,23 @@ export async function renderPdf(
             return `<div style="width:100%;text-align:${l.align};${l.bold ? "font-weight:700;font-size:11px;letter-spacing:.5px;color:#000;" : ""}">${inner}</div>`;
           })
           .join("");
-      const font = opts.font ?? "david";
+      const font = opts.font ?? DEFAULT_FONT;
       const box = (inner: string) =>
         `<style>${getFontFaceCss(font)}</style>` +
-        `<div style="width:100%;font-family:${FONT_STACK[font].replace(/"/g, "'")};font-size:9px;` +
-        `line-height:1.4;direction:rtl;color:#333;padding:0 16mm;">${inner}</div>`;
+        `<div style="width:100%;font-family:${REPORT_FONTS[font].stack.replace(/"/g, "'")};font-size:9px;` +
+        `line-height:1.4;direction:rtl;color:#333;padding:0 ${side}mm;">${inner}</div>`;
       const pdf = await page.pdf({
         format: "A4",
         printBackground: true,
         displayHeaderFooter: true,
         headerTemplate: header.length > 0 ? box(lines(header)) : "<div></div>",
         footerTemplate: footer.length > 0 ? box(lines(footer)) : "<div></div>",
-        margin: { top: header.length > 0 ? "16mm" : "14mm", right: "16mm", bottom: "18mm", left: "16mm" },
+        margin: {
+          top: `${header.length > 0 ? PAGE.linesMarginMm.top : top}mm`,
+          right: `${side}mm`,
+          bottom: `${PAGE.linesMarginMm.bottom}mm`,
+          left: `${side}mm`,
+        },
       });
       return Buffer.from(pdf);
     }
@@ -178,23 +172,6 @@ export async function shrinkPhotoForPdf(dataUrl: string): Promise<string> {
       (fn, src, max, quality) => (fn as unknown as (s: string, m: number, q: number) => Promise<string>)(src, max, quality),
       shrink, dataUrl, PDF_PHOTO_MAX_PX, PDF_PHOTO_QUALITY,
     )) as string;
-  } finally {
-    await page.close().catch(() => {});
-  }
-}
-
-/** Optional: full-page PNG screenshot of the rendered HTML (used for visual
- *  verification of fidelity; not used in the production PDF path). */
-export async function renderScreenshot(
-  html: string,
-  widthPx = 794, // ~A4 width at 96dpi
-): Promise<Buffer> {
-  const page = await newPage();
-  try {
-    await page.setViewport({ width: widthPx, height: 1123, deviceScaleFactor: 2 });
-    await page.setContent(html, { waitUntil: "load" });
-    const shot = await page.screenshot({ fullPage: true, type: "png" });
-    return Buffer.from(shot);
   } finally {
     await page.close().catch(() => {});
   }

@@ -25,6 +25,7 @@
  * the truth about membership — the suffix is a human-readable convention for
  * labels and screens.
  */
+import { parseItemId } from "@/lib/http/request";
 
 export const CUSTOMER_CODE_DIGITS = 3;
 export const ID_TOTAL_DIGITS = CUSTOMER_CODE_DIGITS + 12;
@@ -56,17 +57,13 @@ export function localDateParts(now: Date = new Date()): IdDateParts {
 
 const CUSTOMER_CODE_RE = new RegExp(`^[1-9]\\d{${CUSTOMER_CODE_DIGITS - 1}}$`);
 
-/** The customer's code as it goes into an id, or null when it cannot:
- *  exactly CUSTOMER_CODE_DIGITS digits, the first not 0. */
 export function idCustomerCode(code: string | null | undefined): string | null {
   const s = (code ?? "").trim();
   return CUSTOMER_CODE_RE.test(s) ? s : null;
 }
 
-/** Why a customer code cannot go into an id — the words every refusal uses. */
 export const CUSTOMER_CODE_RULE = `קוד לקוח חייב להיות מספר בן ${CUSTOMER_CODE_DIGITS} ספרות שלא מתחיל ב-0`;
 
-/** The prefix (all but the position) shared by a package and every item inside it. */
 export function packageIdBase(customerCode: string, datePart: string, counter: number): string {
   const code = idCustomerCode(customerCode);
   if (code == null) {
@@ -101,21 +98,10 @@ export function isNewFormatId(id: bigint | number | string): boolean {
     || (s.length === PREV_ID_TOTAL_DIGITS && s.startsWith(PREV_ID_LEADING_DIGIT));
 }
 
-/** The shared prefix of a new-format id (everything but the position). */
 export function baseOfId(id: bigint | number | string): string {
   const s = String(id);
   if (!isNewFormatId(s)) throw new RangeError(`${s} is not a new-format id`);
   return s.slice(0, -2);
-}
-
-/** Display helper ONLY — the truth is items.package_id. */
-export function displayPackageIdOf(id: bigint | number | string): bigint | null {
-  return isNewFormatId(id) ? packageIdFromBase(baseOfId(id)) : null;
-}
-
-/** Display helper ONLY. 0 for a package, 1..99 for an item, null for legacy. */
-export function displaySeqOf(id: bigint | number | string): number | null {
-  return isNewFormatId(id) ? Number(String(id).slice(-2)) : null;
 }
 
 /**
@@ -130,4 +116,79 @@ export function mintOrderKey(id: bigint | number | string): string {
   if (!isNewFormatId(s)) return `0${s.padStart(PREV_ID_TOTAL_DIGITS, "0")}`;
   const tail = s.slice(-12);
   return `1${tail.slice(4, 6)}${tail.slice(2, 4)}${tail.slice(0, 2)}${tail.slice(6, 10)}`;
+}
+
+/*
+ * The display half: how an id is written on screens and labels, and how a
+ * scanned label is read back. Client-safe (its one import is pure).
+ */
+
+const POSITION_DIGITS = 2;
+const groupsOf4 = (s: string) => s.replace(/(\d{4})(?=\d)/g, "$1 ");
+
+/** An id for the eye: the shared head and the position apart, so the box's
+ *  "00" and an item's "01".. stand out. Today's id → { head: "323 011126
+ *  0001", suffix: "00" } (customer code, date, the day's counter); the
+ *  previous 16-digit id → { head: "1005 1509 2600 03", suffix: "00" }. A
+ *  legacy id has no position: head = the whole id, suffix = "". */
+export function formatId(id: string | number | bigint): { head: string; suffix: string } {
+  const s = String(id);
+  if (s.length === ID_TOTAL_DIGITS) {
+    const date = CUSTOMER_CODE_DIGITS + 6;
+    return { head: `${s.slice(0, CUSTOMER_CODE_DIGITS)} ${s.slice(CUSTOMER_CODE_DIGITS, date)} ${s.slice(date, -POSITION_DIGITS)}`, suffix: s.slice(-POSITION_DIGITS) };
+  }
+  if (s.length === PREV_ID_TOTAL_DIGITS) {
+    return { head: groupsOf4(s.slice(0, -POSITION_DIGITS)), suffix: s.slice(-POSITION_DIGITS) };
+  }
+  return { head: groupsOf4(s), suffix: "" };
+}
+
+/** formatId as one line of text: "323 011126 0001 00". */
+export function formatIdText(id: string | number | bigint): string {
+  const { head, suffix } = formatId(id);
+  return `${head} ${suffix}`.trim();
+}
+
+/** A position inside the box, two digits: 1 → "01"; none → "—". */
+export function seq2(n: number | null | undefined): string {
+  return n == null ? "—" : String(n).padStart(POSITION_DIGITS, "0");
+}
+
+/** A label's barcode payload: the id alone. Labels printed before also
+ *  carried "-sourceId"; idOfLabel still reads those by their id part. */
+export function barcodeOf(id: string | number | bigint): string {
+  return String(id);
+}
+
+/** The id a label (or a URL segment carrying one) names — "<id>" or "<id>-<source>", the id read
+ *  as text so no digit is lost past 2^53 — or null when it names none. */
+export function idOfLabel(label: string): bigint | null {
+  const m = /^(\d{1,19})(?:-\d*)?$/.exec(label);
+  return m ? parseItemId(m[1]) : null;
+}
+
+/** A label's id part as typed: "<id>-<source>" → "<id>", anything else as it is. Text, not a
+ *  number: a 16-digit id is past Number's exact range. */
+export const labelIdText = (label: string): string => label.split("-")[0];
+
+/** A label printed with its source: "<id>-<source>", both numbers. */
+export const isSourcedLabel = (text: string): boolean => /^\d+-\d+$/.test(text);
+
+/** The id part of a scanned label ("<id>" or "<id>-<source>"), or null when
+ *  the text does not look like a label at all. */
+export function scannedLabelId(raw: string): string | null {
+  const m = raw.trim().match(/^(\d{6,})(?:-\d+)?$/);
+  return m ? m[1] : null;
+}
+
+const NEW_FORMAT_LABEL = new RegExp(`^\\d{${ID_TOTAL_DIGITS},${PREV_ID_TOTAL_DIGITS}}(-\\d+)?$`);
+const BOX_POSITION = String(PACKAGE_SEQ).padStart(POSITION_DIGITS, "0");
+
+/** A scanned label read for intake: "box" (an id of either width at the
+ *  package position), "item" (an id of either width at an item's position),
+ *  or null (not a box-format label). */
+export function boxLabelKind(raw: string): "box" | "item" | null {
+  const s = raw.trim();
+  if (!NEW_FORMAT_LABEL.test(s)) return null;
+  return s.split("-")[0].endsWith(BOX_POSITION) ? "box" : "item";
 }

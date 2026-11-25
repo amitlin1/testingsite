@@ -10,19 +10,18 @@
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { createRequire } from "node:module";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import path from "node:path";
 import type { AppRole } from "@/lib/auth/roles";
 import type { item_reports } from "@prisma/client";
 import type { Data } from "@measured/puck";
-import type { RootProps } from "../puck-config";
+import type { RootProps } from "../document";
 import { NextRequest } from "next/server";
-import * as H from "../../metrics/__tests__/write-path-helpers";
+import * as H from "@/test-support/db-harness";
 import type { Field, RouteFieldsConfig, StepConfig } from "../../station-fields/schema";
 import type { ReportStepRef, ReportVar } from "../types";
-import type { ReportStatus } from "../generate";
+import type { ReportStatusResponse } from "../contract";
+import { stubSession } from "@/lib/auth/testing";
 
 const CHROMIUM = process.env.PUPPETEER_EXECUTABLE_PATH ?? "";
 const SKIP = !H.TEST_DATABASE_URL
@@ -98,16 +97,6 @@ const signedInOther = (...roles: AppRole[]) => ({
   user: { preferredUsername: "report-approver", displayName: "דנה לוי", name: "report-approver", employeeNumber: "9002" },
   roles,
 });
-function stubAuth(): void {
-  const req = createRequire(path.resolve(process.cwd(), "package.json"));
-  const authPath = req.resolve("./auth.ts");
-  const CjsModule = req("node:module") as typeof import("node:module");
-  const stub = new CjsModule(authPath);
-  stub.filename = authPath;
-  stub.loaded = true;
-  stub.exports = { auth: async () => session, handlers: {}, signIn: () => {}, signOut: () => {} };
-  req.cache[authPath] = stub;
-}
 
 // ---------------------------------------------------------------------------
 // Fixture: a plain item type whose route is [FUNC, FUNC] with fields at both steps; the kit
@@ -156,13 +145,27 @@ function template(opts: { signature: boolean; closing?: boolean; marker?: string
   };
 }
 
+/** A full-page PNG of some HTML, from its own Chromium (the test photo). */
+async function screenshot(html: string, widthPx: number): Promise<Buffer> {
+  const puppeteer = (await import("puppeteer-core")).default;
+  const browser = await puppeteer.launch({ executablePath: CHROMIUM, headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: widthPx, height: 1123, deviceScaleFactor: 2 });
+    await page.setContent(html, { waitUntil: "load" });
+    return Buffer.from(await page.screenshot({ fullPage: true, type: "png" }));
+  } finally {
+    await browser.close();
+  }
+}
+
 /** 1x1 transparent PNG. */
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 describe("item PDF reports — template, draft, freeze at finish, signature, reopen, handlers", { skip: SKIP }, () => {
   let s3: http.Server;
   let A: typeof import("../../station-fields/admin");
-  let G: typeof import("../generate");
+  let G: typeof import("../lifecycle");
   let api: {
     report: typeof import("../../../api/item-reports/[itemId]/route");
     status: typeof import("../../../api/item-reports/[itemId]/status/route");
@@ -175,15 +178,15 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
 
   before(async () => {
     s3 = await startFakeS3();
-    // lib/minio.ts reads these when it is first imported — before H.setup() imports any route.
+    // lib/storage/minio.ts reads these when it is first imported — before H.setup() imports any route.
     process.env.MINIO_ENDPOINT = `http://127.0.0.1:${(s3.address() as AddressInfo).port}`;
     process.env.MINIO_ROOT_USER = "suite";
     process.env.MINIO_ROOT_PASSWORD = "suite-secret";
     process.env.MINIO_VERSIONING = "false";
-    stubAuth();
+    stubSession(() => session);
     await H.setup();
     A = await import("../../station-fields/admin");
-    G = await import("../generate");
+    G = await import("../lifecycle");
     api = {
       report: await import("../../../api/item-reports/[itemId]/route"),
       status: await import("../../../api/item-reports/[itemId]/status/route"),
@@ -245,12 +248,12 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
   };
   /** templates GET (a route's or the general one): what the editor opens with. */
   type Catalog = { template: Data | null; steps: ReportStepRef[]; vars: ReportVar[]; updated_by_name: string | null; routes?: number };
-  /** A route handler as withAuth exports it. */
-  type Handler = (req: NextRequest, routeCtx?: unknown) => Promise<Response>;
+  /** A route handler as Next calls it. */
+  type Handler = (req: NextRequest, routeCtx?: { params: Promise<Record<string, string>> }) => Promise<Response>;
   /** Calls a handler; the body is its JSON, a PDF's bytes or the text — `B` names which the caller reads. */
   type Init = ConstructorParameters<typeof NextRequest>[1];
-  async function call<B = ReportApiJson>(handler: Handler, url: string, init: Init = {}, params?: Record<string, string>) {
-    const res = await handler(new NextRequest(`http://localhost${url}`, init), params ? { params: Promise.resolve(params) } : undefined);
+  async function call<B = ReportApiJson>(handler: unknown, url: string, init: Init = {}, params?: Record<string, string>) {
+    const res = await (handler as Handler)(new NextRequest(`http://localhost${url}`, init), params ? { params: Promise.resolve(params) } : undefined);
     const type = res.headers.get("content-type") ?? "";
     const body: unknown = type.includes("json") ? await res.json() : type.includes("pdf") ? Buffer.from(await res.arrayBuffer()) : await res.text();
     return { status: res.status, headers: res.headers, body: body as B };
@@ -296,6 +299,15 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     }
     assert.fail(`item ${itemId}: no frozen report after 15s`);
   }
+  // The registry row is written fire-and-forget after the freeze, so it can land after storage_key does.
+  async function waitForRegistered(objectKey: string) {
+    for (let i = 0; i < 50; i++) {
+      const rows = await H.q("SELECT entity_type, entity_id FROM file_objects WHERE object_key = $1", [objectKey]);
+      if (rows.length) return rows;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return [];
+  }
   async function getPdf(itemId: number) {
     session = signedIn("storekeeper");
     return call<Buffer>(api.report.GET, `/api/item-reports/${itemId}`, {}, { itemId: String(itemId) });
@@ -306,7 +318,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
   }
   async function status(itemId: number, as: unknown = signedIn("tester")) {
     session = as;
-    return (await call<ReportStatus & { canSign: boolean; canSignClosing: boolean }>(api.status.GET, `/api/item-reports/${itemId}/status`, {}, { itemId: String(itemId) })).body;
+    return (await call<ReportStatusResponse>(api.status.GET, `/api/item-reports/${itemId}/status`, {}, { itemId: String(itemId) })).body;
   }
   /** The final signature (the item page); only a manager may give it. */
   async function sign(itemId: number, roles: AppRole[] = ["manager"], as = signedIn) {
@@ -454,13 +466,13 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
   });
 
   it("a big photo goes into the report small (JPEG, ≤ PDF_PHOTO_MAX_PX), a small one as it is; MinIO keeps the original", async () => {
-    const { renderScreenshot, PDF_PHOTO_MAX_PX } = await import("../render");
+    const { PDF_PHOTO_MAX_PX } = await import("../render");
     // A camera-sized shot: 3000 px wide noise (it does not compress), a few MB as PNG.
     const noise = `<canvas id="c" width="1500" height="1123"></canvas><script>
       const c = document.getElementById("c"), g = c.getContext("2d"), d = g.createImageData(1500, 1123);
       for (let i = 0; i < d.data.length; i++) d.data[i] = (Math.random() * 256) | 0;
       g.putImageData(d, 0, 0);</script>`;
-    const big = await renderScreenshot(`<html><body style="margin:0">${noise}</body></html>`, 1500);
+    const big = await screenshot(`<html><body style="margin:0">${noise}</body></html>`, 1500);
     assert.ok(big.length > 1024 * 1024, `the test photo is big (${big.length} bytes)`);
     const tiny = Buffer.from(PNG.split(",")[1]!, "base64");
     objects.set("digitalfactory-files/items/8203/big.png", { body: big, type: "image/png" });
@@ -777,8 +789,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     assert.equal(row.storage_key, "reports/items/8003/v1.pdf");
     const blob = stored(row.storage_key);
     assert.ok(blob && blob.subarray(0, 5).toString() === "%PDF-");
-    const registered = await H.q("SELECT entity_type, entity_id FROM file_objects WHERE object_key = $1", [row.storage_key]);
-    assert.deepEqual(registered, [{ entity_type: "item_report", entity_id: "8003" }]);
+    assert.deepEqual(await waitForRegistered(row.storage_key), [{ entity_type: "item_report", entity_id: "8003" }]);
 
     const first = await getPdf(8003);
     assert.equal(first.headers.get("x-report-final"), "1");

@@ -3,8 +3,8 @@ import * as React from "react";
 import { createPortal, flushSync } from "react-dom";
 import { CircleAlert, CircleCheck, GripVertical, Info, Link2, ListPlus, Plus, Search, X } from "lucide-react";
 import { AnchoredPopover, Button, IconButton, Skeleton, cn } from "@/components/ui";
-import { TONE_WORD } from "@/app/lib/station-fields/schema";
-import type { ChoiceOption, ChoiceRowField, MultiChoiceField } from "@/app/lib/station-fields/schema";
+import { TONE_WORD } from "@/app/lib/station-fields/labels";
+import type { ChoiceOption } from "@/app/lib/station-fields/schema";
 import type { OptionListJson } from "@/app/lib/station-fields/admin-types";
 import { newOptionId } from "@/app/lib/station-fields/step-uids";
 import { LIMITS, optionListLine } from "@/app/lib/station-fields/validate";
@@ -17,37 +17,38 @@ import {
   saveAsVersionText, sharedImpactText, sharedListRowLabel, willLinkHelpText,
 } from "../../lib/libraryLabels";
 import {
-  addOption, applyLocalOptions, canAddOption, cycleOptionTone, moveOption, nextTone, optionKey, removeOption,
-  renameOption,
-} from "../../lib/optionsModel";
-import { findDefaultCheckList, linkToList, listDraftChanged, matchesName, sameOptions } from "../../lib/libraryModel";
+  appendOption, canAddOption, cycleToneAt, findDefaultCheckList, linkToList, moveOption, nextTone, optionKey, removeOptionAt,
+  renameOptionAt, sameOptions, withOptions,
+} from "../../lib/optionFields";
+import type { OptionField } from "../../lib/optionFields";
+import { listDraftChanged, matchesName } from "../../lib/libraryModel";
 import type { LibraryWriteError, LinkedPlace, ListDraft } from "../../lib/libraryModel";
 import { useDraftStore } from "../../lib/draftStore";
-import { createOptionList, reachLinkedFields, saveOptionList, useOptionLists } from "../../lib/useLibrary";
+import { createOptionList, reachLinkedFields, saveOptionList } from "../../lib/libraryWrites";
+import { useOptionLists } from "../../lib/resources";
+import { useReorderDrag } from "./useReorderDrag";
 import "./editor-popovers.css";
 
 /**
- * "אפשרויות · {field}" — the options of a choice field (artboard 4, spec §5.7): a 560 × 600 popover
- * against the row's "רשימה: …" link, the editor dimmed behind it (the app's scrim, 40%).
+ * "אפשרויות · {field}" — the options of a choice field (artboard 4, spec §5.7), against the row's
+ * "רשימה: …" link, the editor dimmed behind it.
  *
- * Two sources, "רשימה משותפת" | "רק לשדה הזה" (the segmented control):
- *   shared  the lists column (inline-start, 200px, parchment: search "חיפוש רשימה…", "רשימות משותפות" ·
- *           "שדות", 40px rows with the linked list's Link2, "אין רשימות תואמות", "+ רשימה חדשה"), and on
- *           the other side "שם הרשימה" with its help, the chosen list's options, and the impact note.
- *           The popover opens here when the field is linked (list_ref), on that list.
+ * Two sources (the segmented control):
+ *   shared  the shared lists, and the chosen list's name, options and impact note. The popover opens
+ *           here when the field is linked (list_ref), on that list.
  *   local   the field's own options; switching to it copies the chosen list's options (artboard 4
  *           `goLocal`) and the note names the list they came from.
- * Both edit options the same way — reorder (drag the handle, or Alt+↑/↓), quick keys 1–4, the tone
- * button cycling תקין ← אזהרה ← כשל ← ניטרלי, rename, remove, add (Enter or "הוסף"; a new option is
- * neutral) — under artboard 4's validation line (validate.ts optionListLine). Every edit is a working
- * copy; "ביטול", ×, Escape and a press outside drop it. Focus goes back to the anchor when it closes.
+ * Both edit options the same way — reorder (drag the handle, or Alt+↑/↓), the tone button cycling,
+ * rename, remove, add — under artboard 4's validation line (validate.ts optionListLine). Every edit is
+ * a working copy; "ביטול", ×, Escape and a press outside drop it. Focus goes back to the anchor when it
+ * closes.
  *
  * "החל על השדה":
- *   local   the field with these options and WITHOUT list_ref (applyLocalOptions).
+ *   local   the field with these options and WITHOUT list_ref (optionFields.withOptions).
  *   shared  a list whose name or options changed is saved first — PUT …/option-lists/[id] (a new
  *           version; 409 VERSION_CONFLICT → "טען מחדש"), or POST for a new list — then the field is
  *           linked (list_ref {id, ver} and a copy of the options), then the list's other linked fields
- *           take the new version in their drafts (useLibrary.reachLinkedFields: the screen's own routes
+ *           take the new version in their drafts (libraryWrites.reachLinkedFields: the screen's own routes
  *           locally, the rest through POST …/propagate), so the map marks them "שינוי שלא פורסם".
  * "שמור כרשימה חדשה…" starts a new list from the options on screen: name it, then "החל על השדה".
  *
@@ -60,8 +61,6 @@ import "./editor-popovers.css";
 
 /** The popover body's id — the anchor's aria-controls (artboard 4: `opt-pop`). */
 export const OPTION_LIST_POPOVER_ID = "rf-option-list";
-
-type ChoiceField = ChoiceRowField | MultiChoiceField;
 
 /** Where the options come from (artboard 4's segmented control). */
 type OptionsSource = "shared" | "local";
@@ -78,12 +77,12 @@ type BaseProps = {
 };
 
 type FieldModeProps = {
-  field: ChoiceField;
+  field: OptionField;
   /** "{station}" and "{item}" of "אפשרויות מקומיות · {station} · {item}" — the editor's column and row
    *  (in a field set: the set's name, and ""). */
   stationLabel: string;
   rowLabel: string;
-  onApply(next: ChoiceField): void;
+  onApply(next: OptionField): void;
   library?: undefined;
 };
 
@@ -157,8 +156,6 @@ export function OptionListPopover(props: OptionListPopoverProps) {
   );
 }
 
-type DragState = { from: number; over: number | null; place: "before" | "after" };
-
 /** The drag payload's type: an option id, private to this list. */
 const OPTION_DRAG_TYPE = "application/x-rf-option";
 
@@ -182,12 +179,12 @@ function OptionListBody({
 }: {
   titleId: string;
   firstFocusRef: React.RefObject<HTMLInputElement | null>;
-  field: ChoiceField | null;
+  field: OptionField | null;
   stationLabel: string;
   rowLabel: string;
   library: LibraryModeProps["library"] | null;
   onClose: () => void;
-  onApply: (next: ChoiceField) => void;
+  onApply: (next: OptionField) => void;
   onSaved: (listId: number) => void;
 }) {
   const store = useDraftStore();
@@ -212,7 +209,6 @@ function OptionListBody({
   const [addText, setAddText] = React.useState("");
   /** The row whose handle is pressed: only that row is draggable, so text in the inputs stays selectable. */
   const [armed, setArmed] = React.useState<number | null>(null);
-  const [drag, setDrag] = React.useState<DragState | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<PopoverError | null>(null);
   /** The list's name was left empty (blur, or "החל" pressed): only then is it marked. */
@@ -279,7 +275,7 @@ function OptionListBody({
 
   // ---- option edits -------------------------------------------------------------------------------
   const add = () => {
-    const next = addOption(shown, addText, () => newOptionId());
+    const next = appendOption(shown, addText, () => newOptionId());
     if (next.length === shown.length) return;
     setShown(next);
     setAddText("");
@@ -288,7 +284,7 @@ function OptionListBody({
   const remove = (index: number) => {
     // Focus moves to the × of the option that takes its place, else the one before, else the add field.
     const neighbour = shown[index + 1] ?? shown[index - 1];
-    setShown(removeOption(shown, index));
+    setShown(removeOptionAt(shown, index));
     const el = neighbour ? removeRefs.current.get(neighbour.id) : null;
     (el ?? addRef.current)?.focus();
   };
@@ -304,18 +300,14 @@ function OptionListBody({
     focused.focus();
   };
 
+  const reorder = useReorderDrag<number>(({ from, to, after }) => {
+    let dest = after ? to + 1 : to;
+    if (from < dest) dest -= 1;
+    setShown(moveOption(shown, from, dest));
+  });
   const endDrag = () => {
-    setDrag(null);
+    reorder.end();
     setArmed(null);
-  };
-
-  const dropAt = (index: number) => {
-    if (!drag) return;
-    const place = drag.over === index ? drag.place : "before";
-    let to = place === "before" ? index : index + 1;
-    if (drag.from < to) to -= 1;
-    setShown(moveOption(shown, drag.from, to));
-    endDrag();
   };
 
   // ---- apply --------------------------------------------------------------------------------------
@@ -345,7 +337,7 @@ function OptionListBody({
     if (nameMissing) setNameTouched(true);
     if (!canApply) return;
     if (source === "local") {
-      if (field) onApply(applyLocalOptions(field, local ?? []));
+      if (field) onApply(withOptions(field, local ?? []));
       onClose();
       return;
     }
@@ -535,7 +527,7 @@ function OptionListBody({
                 }}
                 className={cn("sh-input rf-olp__name-input", nameMissing && nameTouched && "sh-input--error")}
                 autoComplete="off"
-                maxLength={100}
+                maxLength={LIMITS.libraryName}
                 value={selDraft.name}
                 aria-invalid={(nameMissing && nameTouched) || undefined}
                 onBlur={() => setNameTouched(true)}
@@ -580,8 +572,8 @@ function OptionListBody({
                       aria-label={optionRowLabel(i, o.label, o.tone)}
                       className="rf-olp__row"
                       draggable={armed === i}
-                      data-dragging={drag?.from === i || undefined}
-                      data-drop={drag && drag.over === i && drag.from !== i ? drag.place : undefined}
+                      data-dragging={reorder.dragging(i) || undefined}
+                      data-drop={reorder.dropAt(i) ?? undefined}
                       onKeyDown={onRowKeyDown(i)}
                       onDragStart={(e) => {
                         if (armed !== i) {
@@ -591,26 +583,9 @@ function OptionListBody({
                         e.dataTransfer.effectAllowed = "move";
                         // Some data is required to start a drag (Firefox); not text, so no input accepts it.
                         e.dataTransfer.setData(OPTION_DRAG_TYPE, o.id);
-                        setDrag({ from: i, over: null, place: "before" });
+                        reorder.start(i);
                       }}
-                      // The row is the drop target wherever the pointer enters it (HTML drag and drop):
-                      // without this a drop on its handle or tone button — the column the handle is
-                      // dragged down — falls through to the page and nothing moves.
-                      onDragEnter={(e) => {
-                        if (drag) e.preventDefault();
-                      }}
-                      onDragOver={(e) => {
-                        if (!drag) return;
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "move";
-                        const box = e.currentTarget.getBoundingClientRect();
-                        const place = e.clientY < box.top + box.height / 2 ? "before" : "after";
-                        if (drag.over !== i || drag.place !== place) setDrag({ ...drag, over: i, place });
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        dropAt(i);
-                      }}
+                      {...reorder.targetProps(i)}
                       onDragEnd={endDrag}
                     >
                       <button
@@ -618,11 +593,11 @@ function OptionListBody({
                         className="rf-olp__drag"
                         aria-label={optionDragLabel(o.label)}
                         onPointerDown={() => setArmed(i)}
-                        onPointerUp={() => { if (!drag) setArmed(null); }}
+                        onPointerUp={() => { if (!reorder.active) setArmed(null); }}
                       >
                         <GripVertical size={16} strokeWidth={1.75} aria-hidden />
                       </button>
-                      <span className={cn("rf-olp__key", key == null && "rf-olp__key--none")} title={optionKeyTitle(i)} dir="ltr">
+                      <span className={cn("rf-olp__key", key == null && "rf-olp__key--none")} title={optionKeyTitle(key)} dir="ltr">
                         {key ?? OPTION_LIST_TEXT.noKey}
                       </span>
                       <button
@@ -630,7 +605,7 @@ function OptionListBody({
                         className="rf-olp__tone"
                         title={OPTION_LIST_TEXT.toneTitle}
                         aria-label={toneButtonLabel(o.tone, nextTone(o.tone))}
-                        onClick={() => setShown(cycleOptionTone(shown, i))}
+                        onClick={() => setShown(cycleToneAt(shown, i))}
                       >
                         <span className="rf-olp__dot" data-tone={o.tone} />
                       </button>
@@ -643,7 +618,7 @@ function OptionListBody({
                         autoComplete="off"
                         value={o.label}
                         maxLength={LIMITS.optionLabel}
-                        onChange={(e) => setShown(renameOption(shown, i, e.target.value))}
+                        onChange={(e) => setShown(renameOptionAt(shown, i, e.target.value))}
                       />
                       <span className="rf-olp__word">{TONE_WORD[o.tone]}</span>
                       <IconButton
@@ -742,5 +717,3 @@ function OptionListBody({
     </div>
   );
 }
-
-export default OptionListPopover;

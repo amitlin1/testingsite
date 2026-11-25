@@ -1,8 +1,10 @@
-import { TransactionClient } from "@/app/lib/prisma";
+import { TransactionClient } from "@/lib/db";
 import { normalizeToUtcIso } from "@/app/lib/datetime";
-import { parseItemQr, sameShipmentNumber } from "@/app/lib/itemQrParser";
-import { PackageError } from "@/app/lib/packages/errors";
-import { lineDetails } from "@/app/lib/packages/shipment-types";
+import { ITEM_QR_PREFIX, parseItemQr, sameShipmentNumber } from "@/app/lib/itemQrParser";
+import { HttpError } from "@/lib/http/errors";
+import { dropLineBoxes } from "@/app/lib/packages/boxes";
+import { SHIPMENT_DUPLICATE, certificateNumber, duplicateKey, type DuplicateShipment } from "./contract";
+import { lineDetails } from "./line-details";
 
 /**
  * The shipment's declared lines on the server: what the forms send, checked
@@ -15,10 +17,6 @@ import { lineDetails } from "@/app/lib/packages/shipment-types";
 /** The most boxes one shipment may declare: past it a typo is likelier than
  *  a shipment, and minting stays well inside one transaction's time. */
 export const MAX_SHIPMENT_BOXES = 2000;
-
-/** Interactive-transaction limits for a shipment save (the default 5s ran
- *  out at about 650 boxes). */
-export const SHIPMENT_TX = { maxWait: 5_000, timeout: 30_000 } as const;
 
 export type ShipmentLineInput = {
   /** The saved line this one is (shipment_items.id), or null for a new line. */
@@ -44,24 +42,24 @@ export function readShipmentLines(raw: unknown, shipmentCode: string): ShipmentL
     const n = i + 1;
     const itemTypeId = Number(l.item_type_id);
     if (!Number.isInteger(itemTypeId) || itemTypeId < 1) {
-      throw new PackageError("SHIPMENT_LINE_TYPE", `שורה ${n}: חסר סוג מארז`, 400);
+      throw new HttpError(400, `שורה ${n}: חסר סוג מארז`, { code: "SHIPMENT_LINE_TYPE" });
     }
     const quantity = Number(l.quantity);
     if (!Number.isInteger(quantity) || quantity < 1) {
-      throw new PackageError("SHIPMENT_LINE_QUANTITY", `שורה ${n}: הכמות חייבת להיות מספר שלם, לפחות 1`, 400);
+      throw new HttpError(400, `שורה ${n}: הכמות חייבת להיות מספר שלם, לפחות 1`, { code: "SHIPMENT_LINE_QUANTITY" });
     }
     const details = lineDetails(l);
     if (details.cert_row_raw) {
       if (rows.has(details.cert_row_raw)) {
-        throw new PackageError("SHIPMENT_LINE_TWICE", `שורה ${n}: אותה שורה מהתעודה כבר מופיעה במשלוח`, 400);
+        throw new HttpError(400, `שורה ${n}: אותה שורה מהתעודה כבר מופיעה במשלוח`, { code: "SHIPMENT_LINE_TWICE" });
       }
       rows.add(details.cert_row_raw);
-      const row = parseItemQr(`2^${details.cert_row_raw}`)?.[0];
+      const row = parseItemQr(`${ITEM_QR_PREFIX}${details.cert_row_raw}`)?.[0];
       if (row?.shipmentNumber && !sameShipmentNumber(row.shipmentNumber, shipmentCode)) {
-        throw new PackageError(
-          "CERT_ROW_OTHER_SHIPMENT",
-          `שורה ${n}: השורה מהתעודה שייכת למשלוח ${row.shipmentNumber}, לא למשלוח ${shipmentCode.trim()}`,
+        throw new HttpError(
           400,
+          `שורה ${n}: השורה מהתעודה שייכת למשלוח ${row.shipmentNumber}, לא למשלוח ${shipmentCode.trim()}`,
+          { code: "CERT_ROW_OTHER_SHIPMENT" },
         );
       }
     }
@@ -70,7 +68,7 @@ export function readShipmentLines(raw: unknown, shipmentCode: string): ShipmentL
   }
   const total = out.reduce((sum, l) => sum + l.quantity, 0);
   if (total > MAX_SHIPMENT_BOXES) {
-    throw new PackageError("SHIPMENT_TOO_BIG", `משלוח יכול להצהיר על עד ${MAX_SHIPMENT_BOXES} מארזים (הוצהרו ${total})`, 400);
+    throw new HttpError(400, `משלוח יכול להצהיר על עד ${MAX_SHIPMENT_BOXES} מארזים (הוצהרו ${total})`, { code: "SHIPMENT_TOO_BIG" });
   }
   return out;
 }
@@ -128,38 +126,14 @@ export async function saveShipmentLines(tx: TransactionClient, shipmentId: numbe
   const kept = new Set(matched.filter((id): id is number => id != null));
   const gone = saved.map((s) => s.id).filter((id) => !kept.has(id));
   if (gone.length === 0) return [];
-  // Lock, then read fresh: an intake of one of these boxes that got there
-  // first is seen as taken in.
-  await tx.$queryRaw`SELECT item_id FROM items WHERE shipment_item_id = ANY(${gone}::int[]) FOR UPDATE`;
-  const boxes = await tx.$queryRaw<{ item_id: bigint; routed: boolean; item_type_desc: string }[]>`
-    SELECT i.item_id, (ir.item_id IS NOT NULL) AS routed, TRIM(t.item_type_desc) AS item_type_desc
-    FROM items i
-    JOIN item_types t ON t.item_type_id = i.item_type_id
-    LEFT JOIN item_routes ir ON ir.item_id = i.item_id
-    WHERE i.shipment_item_id = ANY(${gone}::int[]) AND i.package_id IS NULL
-  `;
-  const taken = boxes.find((b) => b.routed);
-  if (taken) {
-    throw new PackageError("SHIPMENT_LINE_TAKEN_IN", `אי אפשר להסיר את השורה של ${taken.item_type_desc}: כבר נקלטו ממנה מארזים`, 409);
-  }
-  if (boxes.length > 0) await tx.items.deleteMany({ where: { item_id: { in: boxes.map((b) => b.item_id) } } });
+  const removed = await dropLineBoxes(tx, gone);
   await tx.shipment_items.deleteMany({ where: { id: { in: gone } } });
-  return boxes.map((b) => String(b.item_id));
+  return removed;
 }
 
-/** The shipment a duplicate repeats, as the forms show it (ShipmentDuplicateDialog). */
-export type DuplicateShipment = {
-  id: number;
-  shipment_code: string;
-  customer_code: string | null;
-  shipment_date: string | null;
-  received_at: string | null;
-  amount: number;
-};
-
 /**
- * The shipment already in the system with this certificate — the same
- * number (trimmed, case-blind) and the same customer — other than `exceptId`.
+ * The shipment already in the system with this certificate (contract.ts
+ * duplicateKey) other than `exceptId`.
  * A transaction-scoped advisory lock on the pair comes first, so two saves
  * of one certificate at the same moment cannot both pass the check.
  */
@@ -169,8 +143,8 @@ export async function findDuplicateShipment(
   customerId: number,
   exceptId: number | null = null,
 ): Promise<DuplicateShipment | null> {
-  const code = shipmentCode.trim().toUpperCase();
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`shipment:${code}:${customerId}`}))`;
+  const code = certificateNumber(shipmentCode);
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`shipment:${duplicateKey(shipmentCode, customerId)}`}))`;
   const rows = await tx.$queryRaw<{ id: number; shipment_code: string; customer_code: string | null; shipment_date: Date | null; received_at: Date | null; amount: number }[]>`
     SELECT s.id, TRIM(s.shipment_code) AS shipment_code, TRIM(c.customer_code) AS customer_code,
            s.shipment_date, s.received_at, s.amount
@@ -187,12 +161,9 @@ export async function findDuplicateShipment(
 }
 
 /** The refusal of a save that repeats a certificate; the form offers to enter it anyway (allow_duplicate). */
-export function duplicateShipmentError(d: DuplicateShipment): PackageError {
-  return new PackageError(
-    "SHIPMENT_DUPLICATE",
-    `משלוח ${d.shipment_code} של לקוח ${d.customer_code ?? ""} כבר קיים במערכת`,
-    409,
-    undefined,
-    { existing: d },
-  );
+export function duplicateShipmentError(d: DuplicateShipment): HttpError {
+  return new HttpError(409, `משלוח ${d.shipment_code} של לקוח ${d.customer_code ?? ""} כבר קיים במערכת`, {
+    code: SHIPMENT_DUPLICATE,
+    extra: { existing: d },
+  });
 }

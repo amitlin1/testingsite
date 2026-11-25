@@ -5,7 +5,7 @@
 > [ITEM_REPORTS.md](ITEM_REPORTS.md). This kit remains for the shipment
 > certificates.
 
-Every printed document (תעודות, דוחות) is built from the kit in
+The shipment documents (תעודות) are built from the kit in
 `src/app/components/reports/`. Design reference (canvas):
 https://claude.ai/artifact/PSd4Grmi3YkKawD6H55fxj
 
@@ -13,10 +13,9 @@ https://claude.ai/artifact/PSd4Grmi3YkKawD6H55fxj
 
 | File | Role |
 | --- | --- |
-| `reportTheme.ts` | Colors (from the emblems), fonts, logo paths, org line, classification, date format |
-| `ReportKit.tsx` | `ReportPage`, `ReportSection`, `FieldGrid`, `ReportTable`, `StatusChip`, `SignatureBlock`, `EmblemStrip` |
-| `testDetails.ts` | Reads `test_results.details` into report fields |
-| `TestResultsReportDocument.tsx` | דוח תוצאות בדיקה |
+| `reportTheme.ts` | Colors (from the emblems), fonts, logo paths, org line, classification |
+| `ReportKit.tsx` | `ReportPage`, `ReportSection`, `FieldGrid`, `ReportTable`, `SignatureBlock`, `EmblemStrip` |
+| `src/app/lib/datetime.ts` | The date format (`formatDocDate`) |
 | `../shipments/ShipmentPDFDocument.tsx` | תעודת משלוח / קבלת משלוח |
 | `public/report-logos/` | The four emblems (copied from SIDECAR's `assets/`) |
 
@@ -59,19 +58,8 @@ Print it with `useReactToPrint({ contentRef })`, as `ShipmentTable` does.
 
 ## Per-test fields (`test_results.details`)
 
-Stations should write:
-
-```json
-{ "fields": [
-  { "label": "מתח כניסה", "type": "number", "value": 27.9, "unit": "V", "min": 26, "max": 30 },
-  { "label": "שלמות מארז", "type": "boolean", "value": true, "expected": true },
-  { "label": "מצב מערכת", "type": "choice", "value": "תקין", "expected": "תקין" },
-  { "label": "גרסת תוכנה", "type": "text", "value": "1.4.2" }
-] }
-```
-
-- `number` — pass when inside `min`/`max` (inclusive); out of range prints red "✕ חריגה".
-- `boolean` / `choice` — pass when `value` equals `expected`.
-- `text` — shown without a verdict.
-- `passed: true|false` on a field overrides the computed verdict.
-- A legacy flat object (`{ "key": value }`) is still shown, as text fields.
+Stations save their values through the station fields and popup templates; the
+item report (ITEM_REPORTS.md) prints them. A legacy `fields` array of
+`{ label, value, unit?, passed? }` is still printed by the item report as
+label / value rows (`passed` sets the verdict) — `rowFields` in
+`src/app/lib/item-report/variables.ts`.

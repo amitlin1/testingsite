@@ -18,45 +18,30 @@
 
 import * as React from "react";
 
-import { Skeleton } from "@/components/ui";
-import DataCard, { Legend } from "@/app/components/dashboard/DataCard";
-import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
-import Segmented from "@/app/components/dashboard/Segmented";
-import { ChartBody } from "@/app/components/dashboard/charts/chartConfig";
-import TimesLineChart, { TIMES_LEGEND } from "@/app/components/dashboard/charts/TimesLineChart";
-import type { AverageTimesWire, StationWire } from "@/app/lib/dashboard/api-types";
-import { formatCount, formatMinutes, isNil, waitAverageTone } from "@/app/lib/dashboard/format";
-import type { AverageTimesPeriod } from "@/types/dashboard";
+import DataCard, { Legend } from "../_components/DataCard";
+import DenseTable, { type Column } from "../_components/DenseTable";
+import EmptyChart from "../_components/EmptyChart";
+import Segmented from "../_components/Segmented";
+import { ChartBody } from "../_components/charts/chartConfig";
+import TimesLineChart, { TIMES_LEGEND } from "../_components/charts/TimesLineChart";
+import type { StationView } from "@/app/lib/dashboard/contract";
+import { formatCount, formatMinutes, isNil, toneText, waitAverageTone } from "../_lib/format";
+import { AVERAGE_TIMES_PERIODS, type AverageTimesPeriod } from "../_lib/state";
 import type { TabProps } from "./tabTypes";
 
-const PERIODS: Array<{ value: AverageTimesPeriod; label: string }> = [
-  { value: "daily", label: "יומי" },
-  { value: "monthly", label: "חודשי" },
-  { value: "quarterly", label: "רבעוני" },
-];
+const PERIOD_LABEL: Record<AverageTimesPeriod, string> = {
+  daily: "יומי",
+  monthly: "חודשי",
+  quarterly: "רבעוני",
+};
 
-export const CLOCK_NOTE = "שעון ברוטו = מה שהלקוח חווה · שעון נטו = הזמן בשעות העבודה";
-
-/**
- * The waiting population's size per station type. by-station reports the type's
- * total wait hours and its average, and both come from the SAME filtered rows
- * (one FILTER clause governs count, avg and sum in Q4), so `n = total / average`
- * is exact arithmetic rather than an estimate. It is derived here only because
- * the route does not serialise the count itself — a `_new_typeWaitRecordCount`
- * field would make this a read instead of a division.
- */
-export function waitRecordCount(row: StationWire): number | null {
-  const hours = row._new_typeWaitWallHours;
-  const avg = row._new_typeWaitAvgWallMinutes;
-  if (isNil(hours) || isNil(avg) || avg <= 0) return null;
-  return Math.round((hours * 60) / avg);
-}
+const CLOCK_NOTE = "שעון ברוטו = מה שהלקוח חווה · שעון נטו = הזמן בשעות העבודה";
 
 export default function TimesTab({ api, data }: TabProps) {
-  const times = data.get<AverageTimesWire[]>("times");
-  const stations = data.get<StationWire[]>("stationsLive");
+  const times = data.get("times");
+  const stations = data.get("stationsLive");
 
-  const columns: Array<Column<StationWire>> = [
+  const columns: Array<Column<StationView>> = [
     {
       key: "name",
       header: "עמדה",
@@ -67,10 +52,10 @@ export default function TimesTab({ api, data }: TabProps) {
       key: "waitWall",
       header: "המתנה · ברוטו",
       numeric: true,
-      sortValue: (r) => r._new_typeWaitAvgWallMinutes,
+      sortValue: (r) => r.typeWaitAvgWallMinutes,
       render: (r) => (
-        <span style={{ fontWeight: 600, color: waitAverageTone(r._new_typeWaitAvgWallMinutes) }}>
-          {formatMinutes(r._new_typeWaitAvgWallMinutes)}
+        <span style={{ fontWeight: 600, color: toneText(waitAverageTone(r.typeWaitAvgWallMinutes)) }}>
+          {formatMinutes(r.typeWaitAvgWallMinutes)}
         </span>
       ),
     },
@@ -78,10 +63,10 @@ export default function TimesTab({ api, data }: TabProps) {
       key: "waitWork",
       header: "המתנה · נטו",
       numeric: true,
-      sortValue: (r) => r._new_typeWaitAvgWorkMinutes,
+      sortValue: (r) => r.typeWaitAvgWorkMinutes,
       render: (r) => (
         <span style={{ color: "var(--color-ink-muted-48)" }}>
-          {formatMinutes(r._new_typeWaitAvgWorkMinutes)}
+          {formatMinutes(r.typeWaitAvgWorkMinutes)}
         </span>
       ),
     },
@@ -89,17 +74,17 @@ export default function TimesTab({ api, data }: TabProps) {
       key: "busyWall",
       header: "ביצוע · ברוטו",
       numeric: true,
-      sortValue: (r) => r._new_avgBusyWallMinutes,
-      render: (r) => formatMinutes(r._new_avgBusyWallMinutes),
+      sortValue: (r) => r.avgBusyWallMinutes,
+      render: (r) => formatMinutes(r.avgBusyWallMinutes),
     },
     {
       key: "busyWork",
       header: "ביצוע · נטו",
       numeric: true,
-      sortValue: (r) => r._new_avgBusyWorkMinutes,
+      sortValue: (r) => r.avgBusyWorkMinutes,
       render: (r) => (
         <span style={{ color: "var(--color-ink-muted-48)" }}>
-          {formatMinutes(r._new_avgBusyWorkMinutes)}
+          {formatMinutes(r.avgBusyWorkMinutes)}
         </span>
       ),
     },
@@ -110,22 +95,22 @@ export default function TimesTab({ api, data }: TabProps) {
       secondary: true,
       // Wall minus work — "how much of the delay was the calendar" (§16.1).
       sortValue: (r) =>
-        isNil(r._new_avgBusyWallMinutes) || isNil(r._new_avgBusyWorkMinutes)
+        isNil(r.avgBusyWallMinutes) || isNil(r.avgBusyWorkMinutes)
           ? null
-          : r._new_avgBusyWallMinutes - r._new_avgBusyWorkMinutes,
+          : r.avgBusyWallMinutes - r.avgBusyWorkMinutes,
       render: (r) =>
-        isNil(r._new_avgBusyWallMinutes) || isNil(r._new_avgBusyWorkMinutes)
+        isNil(r.avgBusyWallMinutes) || isNil(r.avgBusyWorkMinutes)
           ? formatMinutes(null)
-          : formatMinutes(r._new_avgBusyWallMinutes - r._new_avgBusyWorkMinutes),
+          : formatMinutes(r.avgBusyWallMinutes - r.avgBusyWorkMinutes),
     },
     {
       key: "n",
       header: "רשומות · ביצוע",
       numeric: true,
-      sortValue: (r) => r._new_durationRecordCount,
+      sortValue: (r) => r.durationRecordCount,
       render: (r) => (
         <span style={{ color: "var(--color-ink-muted-48)" }}>
-          {formatCount(r._new_durationRecordCount)}
+          {formatCount(r.durationRecordCount)}
         </span>
       ),
     },
@@ -133,9 +118,9 @@ export default function TimesTab({ api, data }: TabProps) {
       key: "nWait",
       header: "רשומות · המתנה",
       numeric: true,
-      sortValue: (r) => waitRecordCount(r),
+      sortValue: (r) => r.typeWaitRecordCount,
       render: (r) => (
-        <span style={{ color: "var(--color-ink-muted-48)" }}>{formatCount(waitRecordCount(r))}</span>
+        <span style={{ color: "var(--color-ink-muted-48)" }}>{formatCount(r.typeWaitRecordCount)}</span>
       ),
     },
   ];
@@ -149,9 +134,12 @@ export default function TimesTab({ api, data }: TabProps) {
           <>
             <Legend items={TIMES_LEGEND} />
             <Segmented
-              options={PERIODS.map((p) => ({ value: p.value, label: p.label }))}
+              options={AVERAGE_TIMES_PERIODS.map((period) => ({ value: period, label: PERIOD_LABEL[period] }))}
               value={api.state.period}
-              onChange={(value) => api.setPeriod(value as AverageTimesPeriod)}
+              onChange={(value) => {
+                const period = AVERAGE_TIMES_PERIODS.find((p) => p === value);
+                if (period) api.setPeriod(period);
+              }}
               padding="4px 14px"
               ariaLabel="רזולוציית הגרף"
             />
@@ -198,33 +186,6 @@ export default function TimesTab({ api, data }: TabProps) {
           empty={{ text: "אין עמדות שמתאימות למסננים האלה." }}
         />
       </DataCard>
-    </div>
-  );
-}
-
-/**
- * What a chart body shows when it has no series to draw. Three different
- * things, never confused: still loading (a skeleton at the chart's size, not a
- * "טוען" line), failed (the card's error band above carries the reason and the
- * retry; the body only says nothing was drawn), and a real empty window.
- */
-export function EmptyChart({ loading, failed = false }: { loading: boolean; failed?: boolean }) {
-  if (loading) {
-    return <Skeleton variant="rounded" width="100%" height="100%" style={{ minHeight: 120 }} />;
-  }
-  return (
-    <div
-      style={{
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "var(--text-small)",
-        color: "var(--color-ink-muted-48)",
-        direction: "rtl",
-      }}
-    >
-      {failed ? "הגרף לא נטען." : "לא נסגר דבר בטווח שנבחר, ולכן אין דליים להציג."}
     </div>
   );
 }

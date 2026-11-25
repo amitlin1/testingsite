@@ -2,7 +2,6 @@
 import React, { forwardRef } from "react";
 import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
-import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 
 export interface TableContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   component?: React.ElementType;
@@ -68,16 +67,6 @@ export const TableBody = forwardRef<HTMLTableSectionElement, React.HTMLAttribute
   },
 );
 
-export const TableFooter = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement> & { sx?: SxInput }>(
-  function TableFooter({ sx, style, children, ...rest }, ref) {
-    return (
-      <TableSectionCtx.Provider value="foot">
-        <tfoot ref={ref} style={{ ...sxToStyle(sx), ...style }} {...rest}>{children}</tfoot>
-      </TableSectionCtx.Provider>
-    );
-  },
-);
-
 export interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
   selected?: boolean;
   sx?: SxInput;
@@ -131,26 +120,3 @@ export const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(functi
     </Component>
   );
 });
-
-export interface TableSortLabelProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  active?: boolean;
-  direction?: "asc" | "desc";
-  sx?: SxInput;
-}
-/** A real button (keyboard + focus), with a drawn chevron. Put the direction on
- *  the header cell too (`<TableCell sortDirection>` → aria-sort). */
-export function TableSortLabel({ active, direction = "asc", sx, style, children, ...rest }: TableSortLabelProps) {
-  const Icon = !active ? ChevronsUpDown : direction === "asc" ? ChevronUp : ChevronDown;
-  return (
-    <button
-      type="button"
-      className="sh-sort-label"
-      data-active={active || undefined}
-      style={{ ...sxToStyle(sx), ...style }}
-      {...rest}
-    >
-      {children}
-      <Icon size={13} strokeWidth={2} aria-hidden style={{ opacity: active ? 1 : 0.45, flexShrink: 0 }} />
-    </button>
-  );
-}

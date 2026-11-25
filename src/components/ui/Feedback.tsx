@@ -3,16 +3,18 @@ import React, { forwardRef, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Info, CheckCircle2, AlertTriangle, XCircle, X } from "lucide-react";
 import { sxToStyle, type SxInput } from "./sx";
+import { TONE } from "./tones";
 
 type Severity = "info" | "success" | "warning" | "error";
 
-// A tinted band per severity: the icon carries the colour, the text stays ink.
+// A tinted band per severity: the icon carries the tone's ink, the text stays ink.
 // (No coloured side stripe — the tint and the icon already say the severity.)
-const SEVERITY: Record<Severity, { color: string; bg: string; border: string; role: "alert" | "status"; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }> }> = {
-  info: { color: "var(--color-primary)", bg: "var(--color-primary-tint)", border: "var(--color-primary-border)", role: "status", Icon: Info },
-  success: { color: "var(--color-success-ink)", bg: "var(--color-success-bg)", border: "color-mix(in srgb, var(--color-success-ink) 22%, transparent)", role: "status", Icon: CheckCircle2 },
-  warning: { color: "var(--color-warning-ink)", bg: "var(--color-warning-bg)", border: "var(--color-warning-border)", role: "alert", Icon: AlertTriangle },
-  error: { color: "var(--color-destructive)", bg: "var(--color-danger-bg)", border: "color-mix(in srgb, var(--color-destructive) 22%, transparent)", role: "alert", Icon: XCircle },
+// The info band is a lighter tint than the tone's soft surface.
+const SEVERITY: Record<Severity, { bg: string; border: string; role: "alert" | "status"; Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }> }> = {
+  info: { bg: "var(--color-primary-tint)", border: "var(--color-primary-border)", role: "status", Icon: Info },
+  success: { bg: TONE.success.bg, border: "color-mix(in srgb, var(--color-success-ink) 22%, transparent)", role: "status", Icon: CheckCircle2 },
+  warning: { bg: TONE.warning.bg, border: "var(--color-warning-border)", role: "alert", Icon: AlertTriangle },
+  error: { bg: TONE.error.bg, border: "color-mix(in srgb, var(--color-destructive) 22%, transparent)", role: "alert", Icon: XCircle },
 };
 
 export interface AlertProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
@@ -27,7 +29,8 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(function Alert(
   { severity = "info", icon, onClose, action, sx, style, className, children, ...rest },
   ref,
 ) {
-  const { color, bg, border, role, Icon } = SEVERITY[severity];
+  const { bg, border, role, Icon } = SEVERITY[severity];
+  const color = TONE[severity].ink;
   return (
     <div
       ref={ref}
@@ -64,14 +67,6 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(function Alert(
     </div>
   );
 });
-
-export function AlertTitle({ children, style, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div style={{ fontWeight: 600, marginBottom: 2, ...style }} {...rest}>
-      {children}
-    </div>
-  );
-}
 
 /* ------------------------------------------------------------ Snackbar --- */
 export interface SnackbarProps {

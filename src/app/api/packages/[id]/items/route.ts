@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
-import { metricsSchemaGate } from "@/app/lib/metrics/schema-gate";
-import { parseBarcode } from "@/app/lib/barcode-parser";
-import { addPackageItem, PackageItemInput } from "@/app/lib/packages/create-package";
-import { packageErrorResponse } from "@/app/lib/packages/errors";
-import { assertSerialsFree } from "@/app/lib/packages/serials";
+import { prisma } from "@/lib/db";
+import { addItemToPackage } from "@/app/lib/packages/create-package";
+import { ledgerWrite } from "@/app/lib/metrics/ledger/schema-gate";
+import { packageIdParam } from "@/app/lib/packages/http";
+import { readItemInput } from "@/app/lib/packages/input";
 
 export const runtime = "nodejs";
 
@@ -12,54 +11,17 @@ export const runtime = "nodejs";
  * POST /api/packages/[id]/items — add one item to a package that is still at
  * its opening station (the intake wizard's "add missing item" path). Customer
  * and shipment come from the package; the item gets the next position and its
- * own route. Replaces POST /api/testing/accessory.
+ * own route (create-package.ts addItemToPackage).
  *
  * Body: { itemType, serialNumber, makat, model, manufacturer, manufacturerNo?, routeNumber? }
  * Answers 201 { ok, itemId, packageSeq }.
  */
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const schemaDenied = await metricsSchemaGate();
-  if (schemaDenied) return schemaDenied;
-
-  try {
-    const { id } = await params;
-    let packageId: bigint;
-    try {
-      packageId = BigInt(parseBarcode(id).itemId);
-    } catch {
-      return NextResponse.json({ error: "מזהה מארז לא תקין" }, { status: 400 });
-    }
-
-    const body = await req.json();
-    const itemType = Number(body.itemType);
-    const serialNumber = body.serialNumber == null ? "" : String(body.serialNumber).trim();
-    const makat = body.makat == null ? "" : String(body.makat).trim();
-    const model = body.model == null ? "" : String(body.model).trim();
-    const manufacturer = body.manufacturer == null ? "" : String(body.manufacturer).trim();
-    // Makat, model and manufacturer are optional (the certificate may not have them).
-    if (!Number.isFinite(itemType) || !serialNumber) {
-      return NextResponse.json({ error: "יש למלא סוג ומספר סריאלי" }, { status: 400 });
-    }
-
-    const item: PackageItemInput = {
-      itemType,
-      serialNumber,
-      makat,
-      model,
-      manufacturer,
-      manufacturerNo: body.manufacturerNo == null ? null : String(body.manufacturerNo).trim(),
-      routeNumber: body.routeNumber == null || body.routeNumber === "" ? null : Number(body.routeNumber),
-    };
-
-    const added = await prisma.$transaction(async (tx) => {
-      // Same serial rule as the intake. A missing package falls through to
-      // addPackageItem, which explains it.
-      const pkg = await tx.items.findUnique({ where: { item_id: packageId }, select: { shipment_id: true } });
-      if (pkg) await assertSerialsFree(tx, pkg.shipment_id, [item]);
-      return addPackageItem(tx, packageId, item);
-    });
+export function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  return ledgerWrite("הוספת הפריט למארז נכשלה", async () => {
+    const packageId = packageIdParam((await params).id);
+    const item = readItemInput(await req.json());
+    if (!item) return NextResponse.json({ error: "יש למלא סוג ומספר סריאלי" }, { status: 400 });
+    const added = await prisma.$transaction((tx) => addItemToPackage(tx, packageId, item));
     return NextResponse.json({ ok: true, ...added }, { status: 201 });
-  } catch (error) {
-    return packageErrorResponse(error, "הוספת הפריט למארז נכשלה");
-  }
+  });
 }

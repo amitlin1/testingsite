@@ -1,42 +1,37 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import {
   Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, SearchInput, Snackbar, Alert, Switch, FormControlLabel,
-  ConfirmDialog, Tag,
+  TextField, SearchInput, Alert, Switch, FormControlLabel,
+  ConfirmDialog, Tag, SearchableCombobox,
 } from "@/components/ui";
-import SearchableCombobox from "@/app/components/common/SearchableCombobox";
 import DataTable, { StatusPill, RowActions, IconAction, type Column as DTColumn } from "@/components/DataTable";
 import { Plus, Pencil, Trash2 } from "lucide-react";
-import { TestStation, TestStationStatus } from "@/types";
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, getArray, sendJson } from "@/lib/api/client";
+import { useListQuery } from "@/lib/hooks/useListQuery";
+import type { StationStatusRow, TestStationRow as TestStation } from "@/app/lib/lookups/contract";
+import { StationStatus } from "@/lib/item-status";
+import { useInvalidateLookup } from "@/app/components/lookups";
+import { useSettingsToast } from "../components/useSettingsToast";
+import { useStationTypeRows } from "./stationTypeRows";
 
 interface StationsTableProps {
   typeId: number;
-  typeName: string;
   /** Station deep-linked from the command palette (?station=) — highlighted once loaded. */
   highlightStationId?: number | null;
 }
 
-/** The type's stations, or null when they could not be read. */
-async function readStations(typeId: number): Promise<TestStation[] | null> {
-  try {
-    const res = await apiFetch(`/api/settings/test-stations?typeId=${typeId}`);
-    if (!res.ok) throw new Error("Failed to fetch");
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    console.error(err);
-    return null;
-  }
-}
+const API_URL = "/api/settings/test-stations";
+const STATUSES_URL = "/api/settings/test-station-status";
 
-export default function StationsTable({ typeId, typeName, highlightStationId }: StationsTableProps) {
-  const [rows, setRows] = useState<TestStation[]>([]);
-  const [statuses, setStatuses] = useState<TestStationStatus[]>([]);
-  const [loading, setLoading] = useState(true);
-  // A failed load is not "no stations": it gets its own band and a retry.
-  const [loadError, setLoadError] = useState(false);
+export default function StationsTable({ typeId, highlightStationId }: StationsTableProps) {
+  const typeName = useStationTypeRows().rows.find((t) => t.test_station_type_id === typeId)?.test_type_desc ?? "";
+  const stationsUrl = `${API_URL}?typeId=${typeId}`;
+  const { rows, loading, failed: loadError, reload, update } = useListQuery<TestStation>(
+    [stationsUrl],
+    () => getArray<TestStation>(stationsUrl),
+  );
+  const { rows: statuses } = useListQuery<StationStatusRow>([STATUSES_URL], () => getArray<StationStatusRow>(STATUSES_URL));
   const [searchTerm, setSearchTerm] = useState("");
 
   const [openDialog, setOpenDialog] = useState(false);
@@ -49,42 +44,8 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
   const [rowToDelete, setRowToDelete] = useState<TestStation | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false, message: "", severity: "success",
-  });
-
-  const apiUrl = "/api/settings/test-stations";
-
-  useEffect(() => {
-    apiFetch("/api/settings/test-station-status")
-      .then((res) => res.json())
-      .then((data) => setStatuses(data))
-      .catch((err) => console.error("Failed to load statuses", err));
-  }, []);
-
-  const applyRows = useCallback((list: TestStation[] | null) => {
-    if (list) setRows(list);
-    else setLoadError(true);
-    setLoading(false);
-  }, []);
-
-  const fetchData = useCallback(async () => {
-    if (!typeId) return;
-    setLoading(true);
-    setLoadError(false);
-    applyRows(await readStations(typeId));
-  }, [typeId, applyRows]);
-
-  // Another type starts its load during render; the effect only reads, and
-  // applies the reply. (`loading` starts true for the first one.)
-  const [loadingTypeId, setLoadingTypeId] = useState(typeId);
-  if (loadingTypeId !== typeId) {
-    setLoadingTypeId(typeId);
-    if (typeId) { setLoading(true); setLoadError(false); }
-  }
-  useEffect(() => {
-    if (typeId) readStations(typeId).then(applyRows);
-  }, [typeId, applyRows]);
+  const notify = useSettingsToast({ dismissible: false });
+  const invalidateLookup = useInvalidateLookup();
 
   // Arriving from the command palette's ?station=<id> deep link: once the rows
   // are in, pre-fill the search box with that station's description so the user
@@ -96,13 +57,13 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
     const match = rows.find((r) => r.test_station_id === highlightStationId);
     if (match) {
       setSeededFor(highlightStationId);
-      setSearchTerm(match.test_station_desc.trim());
+      setSearchTerm(match.test_station_desc);
     }
   }
 
   const handleAdd = () => {
     setEditingRow(null);
-    setFormData({ test_station_type_id: typeId, status: 1, is_research: false });
+    setFormData({ test_station_type_id: typeId, status: StationStatus.Active, is_research: false });
     setDescError("");
     setOpenDialog(true);
   };
@@ -116,20 +77,19 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
     setSaveLoading(true);
     try {
       const method = editingRow ? "PUT" : "POST";
-      const url = editingRow ? `${apiUrl}/${editingRow.test_station_id}` : apiUrl;
-      const res = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
-      if (!res.ok) throw new Error("שמירת העמדה נכשלה");
-      const savedRow = await res.json();
+      const url = editingRow ? `${API_URL}/${editingRow.test_station_id}` : API_URL;
+      const savedRow = await sendJson<TestStation>(url, method, formData);
       if (editingRow && savedRow) {
-        setRows(rows.map((r) => (r.test_station_id === savedRow.test_station_id ? savedRow : r)));
+        update((list) => list.map((r) => (r.test_station_id === savedRow.test_station_id ? savedRow : r)));
       } else if (savedRow) {
-        setRows([...rows, savedRow]);
+        update((list) => [...list, savedRow]);
       }
+      invalidateLookup("stations");
       setOpenDialog(false);
-      setSnackbar({ open: true, message: "העמדה נשמרה", severity: "success" });
+      notify("העמדה נשמרה", "success");
     } catch (err) {
       console.error(err);
-      setSnackbar({ open: true, message: "שמירת העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.", severity: "error" });
+      notify("שמירת העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.", "error");
     } finally {
       setSaveLoading(false);
     }
@@ -139,16 +99,19 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
     if (!rowToDelete) return;
     setDeleting(true);
     try {
-      const res = await apiFetch(`${apiUrl}/${rowToDelete.test_station_id}`, { method: "DELETE" });
-      if (!res.ok) {
-        if (res.status === 409) throw new Error("לא ניתן למחוק כי העמדה בשימוש. שחרר אותה מבדיקות ומסלולים קודם.");
-        throw new Error("מחיקת העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב.");
-      }
-      setRows(rows.filter((r) => r.test_station_id !== rowToDelete.test_station_id));
-      setSnackbar({ open: true, message: "העמדה נמחקה", severity: "success" });
+      await sendJson(`${API_URL}/${rowToDelete.test_station_id}`, "DELETE");
+      update((list) => list.filter((r) => r.test_station_id !== rowToDelete.test_station_id));
+      invalidateLookup("stations");
+      notify("העמדה נמחקה", "success");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "מחיקת העמדה נכשלה. נסה שוב.";
-      setSnackbar({ open: true, message, severity: "error" });
+      // A 409 is the server's refusal: the station is still in use.
+      const message =
+        err instanceof ApiError
+          ? err.status === 409
+            ? err.message
+            : "מחיקת העמדה נכשלה. בדוק את החיבור לשרת ונסה שוב."
+          : "מחיקת העמדה נכשלה. נסה שוב.";
+      notify(message, "error");
     } finally {
       setDeleting(false);
       setRowToDelete(null);
@@ -163,7 +126,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
       key: "status", header: "סטטוס",
       cell: (r) => {
         const d = statuses.find((s) => s.test_station_status_id === r.status)?.test_station_status_desc || String(r.status);
-        return <StatusPill label={d} active={r.status === 1} />;
+        return <StatusPill label={d} tone={r.status === StationStatus.Active ? "active" : "neutral"} />;
       },
     },
     {
@@ -184,7 +147,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
   ];
 
   return (
-    <div dir="rtl" className="settings-card">
+    <div className="settings-card">
       {/* card header — the compact add pill of Settings.dc.html */}
       <div className="settings-card__head" style={{ paddingInline: 18 }}>
         <span className="settings-card__title">עמדות · {typeName}</span>
@@ -209,7 +172,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
       {loadError ? (
         <div className="settings-error">
           <Alert severity="error">טעינת העמדות נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
-          <Button variant="outlined" color="inherit" size="small" onClick={fetchData}>נסה שוב</Button>
+          <Button variant="outlined" color="inherit" size="small" onClick={() => reload()}>נסה שוב</Button>
         </div>
       ) : (
         <DataTable
@@ -248,7 +211,7 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
               error={!!descError}
               helperText={descError}
             />
-            <SearchableCombobox<TestStationStatus>
+            <SearchableCombobox<StationStatusRow>
               options={statuses}
               value={statuses.find((s) => s.test_station_status_id === formData.status) ?? null}
               onChange={(v) => { if (v) setFormData({ ...formData, status: Number(v.test_station_status_id) }); }}
@@ -271,7 +234,6 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
       </Dialog>
 
       <ConfirmDialog
-        draggable={false}
         open={rowToDelete != null}
         title="מחיקת עמדה"
         message={rowToDelete ? `למחוק את העמדה "${rowToDelete.test_station_desc}"? פעולה זו אינה ניתנת לביטול.` : ""}
@@ -281,10 +243,6 @@ export default function StationsTable({ typeId, typeName, highlightStationId }: 
         onConfirm={handleDeleteConfirm}
         onCancel={() => setRowToDelete(null)}
       />
-
-      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
-      </Snackbar>
     </div>
   );
 }

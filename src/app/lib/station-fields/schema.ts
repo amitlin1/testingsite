@@ -15,16 +15,12 @@
 // ---- primitives -------------------------------------------------------------
 export const TONES = ["pass", "warn", "fail", "neutral"] as const;
 export type Tone = (typeof TONES)[number];
-/** Dot colours — the ONLY non-token colours allowed (decision 10). Always dot + word.
- *  In CSS use the --rf-tone-* tokens (spec §0.3); this map is for the pure module / tests only. */
-export const TONE_DOT: Record<Tone, string> = { pass: "#1f8a5b", warn: "#d97706", fail: "#bf3535", neutral: "#9a9aa0" };
-/** Words as in StationFieldEditor.dc.html ("סוג האפשרות"). */
-export const TONE_WORD: Record<Tone, string> = { pass: "תקין", warn: "אזהרה", fail: "כשל", neutral: "ניטרלי" };
 
 export const NOTES_MODES = ["off", "optional", "required_on_fail", "required"] as const;
 export type NotesMode = (typeof NOTES_MODES)[number];
-/** Admin labels — StationFieldEditor.dc.html script. Listbox order: optional, required_on_fail, required, off. */
-export const NOTES_MODE_LABEL: Record<NotesMode, string> = { optional: "אופציונלי", required_on_fail: "חובה בכשל", required: "חובה", off: "ללא" };
+
+/** How many options a choice field should have (the editor's lint warns outside it). */
+export const OPTION_COUNT = { min: 2, max: 6 } as const;
 
 /** "אורך מרבי" choices (NotesField.dc.html / StationFieldEditor.dc.html): 500 / 1000 / 2000, default 1000. */
 export const NOTE_MAX_CHOICES = [500, 1000, 2000] as const;
@@ -97,7 +93,7 @@ export interface PhotoField extends FieldBase {
 
 /** The photo group a photo field owns (photo_types.code, ≤ 50): one per route, step and field, so
  *  a forked route's copy of a field gets a group of its own. Never shown — the group's name is
- *  "{station type} · {field label}" (admin.ts syncFieldPhotoGroups). */
+ *  "{station type} · {field label}" (photo-groups.ts). */
 export function fieldPhotoCode(routeId: number, stepUid: StepUid, fieldId: FieldId): string {
   return `r${routeId}.${stepUid}.${fieldId}`;
 }
@@ -154,7 +150,40 @@ export function stepConfigOf(cfg: RouteFieldsConfig, uid: string): StepConfig | 
   return Object.prototype.hasOwnProperty.call(cfg.steps, uid) ? cfg.steps[uid] : undefined;
 }
 
+// ---- step positions (testing_routes.route_steps / step_uids) -------------------------
+/** A route's steps and their uids: parallel arrays. Of different lengths (a route a script wrote
+ *  without uids) they have no usable positions — every question below answers "none". */
+type StepsAndUids = { route_steps?: readonly number[] | null; step_uids?: readonly string[] | null };
+
+/** The route's step uids when they line up with its steps, else none. */
+export function alignedStepUids(route: StepsAndUids): readonly StepUid[] {
+  const uids = route.step_uids ?? [];
+  return uids.length === (route.route_steps ?? []).length ? uids : [];
+}
+
+/** A step uid's 0-based position on the route; -1 when the route does not have it. */
+export const stepIndexOf = (route: StepsAndUids, uid: string): number => alignedStepUids(route).indexOf(uid);
+
+/** The uid of a 1-based step; null when the step is out of range. */
+export function stepUidAt(route: StepsAndUids, step: number): StepUid | null {
+  const uids = alignedStepUids(route);
+  if (!Number.isSafeInteger(step) || step < 1 || step > uids.length) return null;
+  return uids[step - 1] || null;
+}
+
 // ---- the saved result (test_results.details) ----------------------------------
+/** POST /api/testing/results' refusals of the submitted Details (body.code). */
+export type FieldsSubmissionCode =
+  | "FIELDS_SCHEMA_MISMATCH"   // 409 — the popup was built from another config: reload it
+  | "FIELDS_INVALID"           // 400 — a value that does not fit its field (a client bug)
+  | "NOTE_TOO_LONG"            // 400 — a note over its note_max, whatever the gate says
+  | "FIELDS_INCOMPLETE"        // 422 — the finish gate: required fields or notes missing
+  | "DETAILS_TOO_LARGE";       // 413
+
+/** A field the finish gate is waiting for (FIELDS_INCOMPLETE's body.missing). item_id: a
+ *  close-wizard decision's item. */
+export type MissingField = { field_id: FieldId; reason: "required" | "note"; item_id?: string };
+
 /** Added next to the keys every popup already writes, only when the step had a published config. */
 export interface FieldsSchemaRef {
   route_id: number;              // testing_routes.test_route_id whose version was used
@@ -221,6 +250,3 @@ export type StationFieldsResponse =
       box: Field[];
       items: KitItemFields[];                            // every item of the kit, by package_seq
       gate: boolean };
-
-// Issue lives in validate.ts (its one home); re-exported for type-only consumers.
-export type { Issue, IssueCode, IssueLevel } from "./validate";

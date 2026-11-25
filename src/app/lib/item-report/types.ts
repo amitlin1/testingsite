@@ -9,6 +9,8 @@
  * Pure module — no prisma / next / React.
  */
 
+import { PASS_FAIL_WORD } from "@/app/lib/station-fields/labels";
+
 /** A variable the template can place ({{name}} / a chip in the rich text). */
 export interface ReportVar {
   /** "item.serial_no", "step.<uid>.worker", "field.<uid>.<fieldId>", … */
@@ -20,7 +22,7 @@ export interface ReportVar {
 }
 
 /** A field of a station step, as the step-bound blocks list it. */
-export interface ReportFieldRef {
+interface ReportFieldRef {
   id: string;
   label: string;
   /** station-fields FieldType ("number", "photo", …) or "legacy". */
@@ -39,6 +41,10 @@ export interface ReportStepRef {
 }
 
 export type ReportTone = "pass" | "warn" | "fail" | "neutral";
+
+/** A field's tone as the report words it ("" for neutral) — unlike the editor's tone names
+ *  (station-fields TONE_WORD); a verdict is worded with the station fields' PASS_FAIL_WORD. */
+export const REPORT_TONE_WORD: Record<ReportTone, string> = { ...PASS_FAIL_WORD, warn: "אזהרה", neutral: "" };
 
 /** One filled field of a step, ready to print. */
 export interface ReportFieldResult {
@@ -72,6 +78,31 @@ export interface ReportStepResult {
   result: number | null;
   comments: string;
   fields: ReportFieldResult[];
+}
+
+/**
+ * A cell of a Signature block. The block is a single row of cells the author
+ * orders freely: the drawn signature, any of the signer's auto-filled identity
+ * fields, or free text. The signer is whoever the block's `bind` points at:
+ * "closing" = who signed at the kit's closing; "final" = the approver whose
+ * signature locks the finished report; "step:<uid>" = the worker who ran that
+ * station (no drawn signature — workers don't draw one at the station).
+ */
+export interface SignCell {
+  /** "signature" | "text" | a signer attribute (fullName / number / date / station / role). */
+  kind: string;
+  /** Caption under the cell (e.g. "(תאריך)"). */
+  label?: string;
+  /** Text for kind==="text" — supports {{name}} tokens + inline markdown. For kind==="role", what
+   *  a signature without a kept role prints (one given before roles were kept), e.g. "בודק". */
+  text?: string;
+  /** Relative width within the row (flex-grow). Default 1 = equal cells. */
+  weight?: number;
+}
+
+/** A Signature block's cells; one saved with none prints a single signature cell (older templates). */
+export function signCellsOf(cells: unknown): SignCell[] {
+  return Array.isArray(cells) && cells.length > 0 ? (cells as SignCell[]) : [{ kind: "signature", label: "חתימה" }];
 }
 
 /** The signer of a Signature block's bind (resolved identity + date). */

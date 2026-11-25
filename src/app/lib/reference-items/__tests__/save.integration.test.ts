@@ -1,0 +1,178 @@
+// Package references (spec: ייחוס מארז) through the real save / delete code and the real
+// GET + reference-lookup handlers: a package reference holds one member per content line,
+// members are edited only through it, never listed on their own (an item's SKU with no
+// regular reference item is looked up among them), and leave with it. No images here (an empty upload list never reaches the object store).
+//
+// Runs ONLY when TEST_DATABASE_URL points at a throwaway, fully migrated database:
+//   TEST_DATABASE_URL=postgresql://…/scratch node --import tsx --test src/app/lib/reference-items/__tests__/save.integration.test.ts
+import { after, before, describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { Pool } from "pg";
+import { HttpError } from "@/lib/http/errors";
+import { LEDGER_TRUNCATE_LOCK } from "@/test-support/ledger-lock";
+
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
+const SKIP = TEST_DATABASE_URL ? false : "TEST_DATABASE_URL is not set — reference-items save suite skipped";
+
+describe("package references", { skip: SKIP }, () => {
+  let pool: Pool;
+  let lock: import("pg").PoolClient | null = null;
+  let save: typeof import("../save");
+  let list: typeof import("@/app/api/settings/reference-items/route");
+  let lookup: typeof import("@/app/api/testing/reference-lookup/route");
+  const tag = `t${Date.now() % 1_000_000}`;
+  const types = { box: 0, otherBox: 0, pc: 0, mouse: 0, kb: 0 };
+
+  const fields = (sku: string, extra: Record<string, unknown> = {}) => ({
+    manufacturer_sku: sku, manufacturer: "HP", name: `שם ${sku}`, reference_weight: "500", notes: "", images: [], ...extra,
+  });
+  const rows = async (where: string, args: unknown[]) =>
+    (await pool.query(`SELECT reference_item_id, item_type_id, manufacturer_sku, parent_reference_id FROM reference_items WHERE ${where} ORDER BY reference_item_id`, args)).rows;
+  const rejects = (p: Promise<unknown>, re: RegExp) => assert.rejects(p, (e: unknown) => e instanceof HttpError && re.test(e.message));
+
+  before(async () => {
+    // The app's Prisma client reads DATABASE_URL when first imported.
+    process.env.DATABASE_URL = TEST_DATABASE_URL;
+    pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    lock = await pool.connect();
+    await lock.query("SELECT pg_advisory_lock($1)", [LEDGER_TRUNCATE_LOCK]);
+    // The shared harness re-seeds item_types with explicit ids after a RESTART IDENTITY truncate,
+    // which leaves the id sequence behind them.
+    await pool.query(`SELECT setval(pg_get_serial_sequence('item_types', 'item_type_id'), (SELECT COALESCE(MAX(item_type_id), 0) + 1 FROM item_types), false)`);
+    const mk = async (desc: string, isPackage: boolean) =>
+      (await pool.query(`INSERT INTO item_types (item_type_desc, is_package) VALUES ($1, $2) RETURNING item_type_id`, [`${desc} ${tag}`, isPackage])).rows[0].item_type_id as number;
+    types.box = await mk("מארז", true);
+    types.otherBox = await mk("מארז אחר", true);
+    types.pc = await mk("מחשב", false);
+    types.mouse = await mk("עכבר", false);
+    types.kb = await mk("מקלדת", false);
+    save = await import("../save");
+    list = await import("@/app/api/settings/reference-items/route");
+    lookup = await import("@/app/api/testing/reference-lookup/route");
+  });
+
+  after(async () => {
+    if (!pool) return;
+    const ids = Object.values(types).filter(Boolean);
+    await pool.query(`DELETE FROM reference_items WHERE item_type_id = ANY($1::int[]) AND parent_reference_id IS NOT NULL`, [ids]);
+    await pool.query(`DELETE FROM reference_items WHERE item_type_id = ANY($1::int[])`, [ids]);
+    await pool.query(`DELETE FROM item_types WHERE item_type_id = ANY($1::int[])`, [ids]);
+    if (lock) {
+      await lock.query("SELECT pg_advisory_unlock($1)", [LEDGER_TRUNCATE_LOCK]);
+      lock.release();
+    }
+    await pool.end();
+  });
+
+  let boxId = 0;
+
+  it("creates the box and one member per line, the members pointing at it", async () => {
+    boxId = await save.saveReferenceItem(null, {
+      item_type_id: types.box, ...fields(`BOX-${tag}`),
+      members: [{ item_type_id: types.pc, ...fields(`PC-${tag}`) }, { item_type_id: types.mouse, ...fields(`MS-${tag}`) }],
+    });
+    const members = await rows("parent_reference_id = $1", [boxId]);
+    assert.deepEqual(members.map((m) => m.item_type_id), [types.pc, types.mouse]);
+    const [box] = await rows("reference_item_id = $1", [boxId]);
+    assert.equal(box.parent_reference_id, null);
+  });
+
+  it("lists the package reference with its members, and never a member on its own", async () => {
+    const boxes = await (await list.GET(new Request(`http://t/api/settings/reference-items?itemTypeId=${types.box}`))).json();
+    assert.equal(boxes.length, 1);
+    assert.deepEqual(boxes[0].members.map((m: { manufacturer_sku: string }) => m.manufacturer_sku), [`PC-${tag}`, `MS-${tag}`]);
+    const pcs = await (await list.GET(new Request(`http://t/api/settings/reference-items?itemTypeId=${types.pc}`))).json();
+    assert.deepEqual(pcs, [], "a member is not a regular reference item of its type");
+  });
+
+  it("the box label's lookup brings the members; a member's SKU finds the member, a regular item first", async () => {
+    const look = async (sku: string, typeId: number) =>
+      (await (await lookup.GET(new Request(`http://t/api/testing/reference-lookup?sku=${sku}&itemTypeId=${typeId}`))).json());
+    const found = await look(`BOX-${tag}`, types.box);
+    assert.equal(found.hasRU, true);
+    assert.deepEqual(found.packageMembers.map((m: { item_type_id: number; referenceItem: { manufacturer_sku: string } }) => [m.item_type_id, m.referenceItem.manufacturer_sku]),
+      [[types.pc, `PC-${tag}`], [types.mouse, `MS-${tag}`]]);
+
+    // At a regular station the item's SKU finds the box's member, as a plain reference item.
+    const member = await look(`PC-${tag}`, types.pc);
+    assert.equal(member.hasRU, true);
+    assert.equal(member.referenceItem.parent_reference_id, boxId);
+    assert.equal(member.referenceWeight, "500");
+    assert.deepEqual(member.packageMembers, []);
+    assert.equal((await look(`PC-${tag}`, types.mouse)).hasRU, false, "only among members of that type");
+
+    // An older regular reference item of the same SKU is answered instead.
+    const regId = await save.saveReferenceItem(null, { item_type_id: types.pc, ...fields(`PC-${tag}`, { reference_weight: "700" }) });
+    const regular = await look(`PC-${tag}`, types.pc);
+    assert.equal(regular.referenceItem.reference_item_id, regId);
+    assert.equal(regular.referenceWeight, "700");
+    await save.deleteReferenceItem(regId);
+  });
+
+  it("an edit updates a kept member, drops the one left out, adds a new one — in one save", async () => {
+    const [pc] = await rows("parent_reference_id = $1 AND item_type_id = $2", [boxId, types.pc]);
+    const [mouse] = await rows("parent_reference_id = $1 AND item_type_id = $2", [boxId, types.mouse]);
+    await save.saveReferenceItem(boxId, {
+      item_type_id: types.box, ...fields(`BOX-${tag}`),
+      members: [{ item_type_id: types.pc, reference_item_id: pc.reference_item_id, ...fields(`PC2-${tag}`) }, { item_type_id: types.kb, ...fields(`KB-${tag}`) }],
+    });
+    const members = await rows("parent_reference_id = $1", [boxId]);
+    assert.deepEqual(members.map((m) => [m.item_type_id, m.manufacturer_sku]), [[types.pc, `PC2-${tag}`], [types.kb, `KB-${tag}`]]);
+    assert.equal(members[0].reference_item_id, pc.reference_item_id, "the kept member is the same row");
+    assert.deepEqual(await rows("reference_item_id = $1", [mouse.reference_item_id]), [], "the member left out is gone");
+  });
+
+  it("without `members` the members stay as they are", async () => {
+    await save.saveReferenceItem(boxId, { item_type_id: types.box, ...fields(`BOX-${tag}`, { name: "שם חדש" }) });
+    assert.equal((await rows("parent_reference_id = $1", [boxId])).length, 2);
+  });
+
+  it("refuses what the spec rules out, before writing anything", async () => {
+    const [pc] = await rows("parent_reference_id = $1 AND item_type_id = $2", [boxId, types.pc]);
+    await rejects(save.saveReferenceItem(boxId, { item_type_id: types.box, ...fields(`BOX-${tag}`), members: [{ item_type_id: types.otherBox, ...fields("X") }] }), /סוג מארז/);
+    await rejects(save.saveReferenceItem(boxId, { item_type_id: types.box, ...fields(`BOX-${tag}`), members: [{ item_type_id: types.pc, ...fields("A") }, { item_type_id: types.pc, ...fields("B") }] }), /שני פריטי ייחוס/);
+    await rejects(save.saveReferenceItem(null, { item_type_id: types.pc, ...fields("R"), members: [{ item_type_id: types.mouse, ...fields("M") }] }), /רק לייחוס של סוג מארז/);
+    await rejects(save.saveReferenceItem(boxId, { item_type_id: types.pc, ...fields(`BOX-${tag}`) }), /לא ניתן לשנות/);
+    await rejects(save.saveReferenceItem(pc.reference_item_id, { item_type_id: types.pc, ...fields("P") }), /מתוך ייחוס המארז/);
+    await rejects(save.saveReferenceItem(boxId, { item_type_id: types.box, ...fields(`BOX-${tag}`, { reference_weight: "0.5kg" }) }), /בגרמים/);
+    await rejects(save.saveReferenceItem(boxId, { item_type_id: types.box, ...fields(`BOX-${tag}`), members: [{ item_type_id: types.mouse, ...fields("", { manufacturer_sku: "" }) }] }), /עכבר.*מק״ט/);
+    await rejects(save.deleteReferenceItem(pc.reference_item_id), /מתוך ייחוס המארז/);
+    const members = await rows("parent_reference_id = $1", [boxId]);
+    assert.deepEqual(members.map((m) => m.manufacturer_sku), [`PC2-${tag}`, `KB-${tag}`], "nothing was written");
+  });
+
+  it("a regular item still saves as before, its weight a number of grams", async () => {
+    const id = await save.saveReferenceItem(null, { item_type_id: types.mouse, ...fields(`REG-${tag}`, { reference_weight: " 90 " }) });
+    const { rows: [r] } = await pool.query(`SELECT reference_weight, parent_reference_id FROM reference_items WHERE reference_item_id = $1`, [id]);
+    assert.deepEqual(r, { reference_weight: "90", parent_reference_id: null });
+  });
+
+  it("reference images go by station: an unassigned image given its station is shown there, at that station only", async () => {
+    const { rows: st } = await pool.query(`SELECT test_station_type_id AS id FROM test_stations_type ORDER BY 1 LIMIT 2`);
+    const [a, b] = st.map((r) => r.id as number);
+    const id = await save.saveReferenceItem(null, { item_type_id: types.mouse, ...fields(`IMG-${tag}`) });
+    // As an older upload left it: a photo group, no station.
+    const { rows: [img] } = await pool.query(
+      `INSERT INTO reference_item_images (reference_item_id, bucket, object_key, file_name, photo_type_id)
+       VALUES ($1, 'ru', $2, 'a.png', (SELECT MIN(photo_type_id) FROM photo_types)) RETURNING reference_item_image_id AS id`,
+      [id, `reference-items/${tag}/a.png`]);
+    const look = async () => (await (await lookup.GET(new Request(`http://t/api/testing/reference-lookup?sku=IMG-${tag}&itemTypeId=${types.mouse}`))).json());
+    assert.deepEqual((await look()).imagesByStation, {}, "unassigned: shown at no station");
+
+    await rejects(save.saveReferenceItem(id, { item_type_id: types.mouse, ...fields(`IMG-${tag}`), imageStations: { [img.id]: 2_000_000_000 } }), /סוג עמדה לא מוכר/);
+    await save.saveReferenceItem(id, { item_type_id: types.mouse, ...fields(`IMG-${tag}`), imageStations: { [img.id]: a } });
+    const at = (await look()).imagesByStation;
+    assert.deepEqual(Object.keys(at), [String(a)]);
+    assert.equal(at[String(a)][0].id, img.id);
+    assert.equal(at[String(b)], undefined);
+    const { rows: [row] } = await pool.query(`SELECT test_station_type_id, photo_type_id IS NOT NULL AS kept_group FROM reference_item_images WHERE reference_item_image_id = $1`, [img.id]);
+    assert.deepEqual(row, { test_station_type_id: a, kept_group: true }, "the group it was uploaded to stays as it was");
+    await pool.query(`DELETE FROM reference_items WHERE reference_item_id = $1`, [id]);
+  });
+
+  it("deleting the package reference takes its members", async () => {
+    const memberIds = (await rows("parent_reference_id = $1", [boxId])).map((m) => m.reference_item_id);
+    await save.deleteReferenceItem(boxId);
+    assert.deepEqual(await rows("reference_item_id = ANY($1::int[])", [[boxId, ...memberIds]]), []);
+  });
+});

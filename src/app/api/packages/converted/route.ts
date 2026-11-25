@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
+import { legacyIdMapShape } from "@/app/lib/legacy-id-map";
 import { loadPackages } from "@/app/lib/packages/read";
 
 export const runtime = "nodejs";
@@ -7,8 +8,8 @@ export const runtime = "nodejs";
 /**
  * The boxes the production upgrade made out of legacy items
  * (scripts/prod-package-model). Their physical labels still carry the old
- * item ids until new ones are printed; the map lives in `legacy_id_map`,
- * which exists only where the upgrade ran (docs/PRISMA_UNMANAGED_OBJECTS.md).
+ * item ids until new ones are printed; the map is `legacy_id_map`
+ * (lib/legacy-id-map.ts).
  *
  *   GET  /api/packages/converted
  *        { packages: PackageView[], legacy: [{ legacy_id, new_id, package_id }] }
@@ -20,21 +21,9 @@ export const runtime = "nodejs";
  */
 type LegacyRow = { legacy_id: bigint | number; new_id: bigint | number; package_id: bigint | number | null };
 
-/** Whether the map exists, and whether it has the `relabeled_at` column (a
- *  database upgraded with the first version of the one-shot has the table
- *  without it; the rebuilt one-shot adds it idempotently). */
-async function mapShape(): Promise<{ exists: boolean; hasRelabeled: boolean }> {
-  const probe = await prisma.$queryRaw<{ ok: boolean; col: boolean }[]>`
-    SELECT to_regclass('public.legacy_id_map') IS NOT NULL AS ok,
-           EXISTS (SELECT 1 FROM information_schema.columns
-                   WHERE table_schema = 'public' AND table_name = 'legacy_id_map' AND column_name = 'relabeled_at') AS col
-  `;
-  return { exists: !!probe[0]?.ok, hasRelabeled: !!probe[0]?.col };
-}
-
 export async function GET() {
   try {
-    const shape = await mapShape();
+    const shape = await legacyIdMapShape();
     if (!shape.exists) return NextResponse.json({ packages: [], legacy: [] });
     // Without the column nothing can be marked, so every converted box is listed.
     const rows = shape.hasRelabeled
@@ -68,10 +57,11 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const raw: unknown = body?.packageIds;
-    // Package ids are 16 digits; 18 keeps every value inside int8.
+    // Converted boxes carry the 16-digit ids of their day (lib/packages/ids.ts);
+    // 18 keeps every value inside int8.
     const packageIds = Array.isArray(raw) ? raw.map((v) => String(v)).filter((v) => /^\d{1,18}$/.test(v)) : [];
     if (packageIds.length === 0) return NextResponse.json({ error: "packageIds is required" }, { status: 400 });
-    const shape = await mapShape();
+    const shape = await legacyIdMapShape();
     if (!shape.exists) return NextResponse.json({ ok: true, updated: 0 });
     if (!shape.hasRelabeled) {
       return NextResponse.json({ error: "לטבלת legacy_id_map חסרה העמודה relabeled_at — הרץ: ALTER TABLE legacy_id_map ADD COLUMN relabeled_at timestamptz" }, { status: 409 });

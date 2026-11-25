@@ -1,9 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { FieldsContextJson } from "@/app/lib/station-fields/admin-types";
-import { buildFieldsMap, columnNavKey, mapNavGrid } from "../../../lib/mapModel";
-import { EMPTY_DRAFT_MODEL, currentConfigs, draftReducer, summarize } from "../../../lib/draftModel";
-import { ELEC, MECH, VISU, artboard1 } from "../../../lib/__tests__/fixtures";
+import { columnNavKey, mapNavGrid } from "../../../lib/mapModel";
+import { ELEC, MECH, VISU, artboard1, mapFor } from "../../../lib/__tests__/fixtures";
 import { firstNavKey, navPosition, navTarget } from "../useGridNavigation";
 import type { NavGrid } from "../useGridNavigation";
 
@@ -13,10 +11,8 @@ import type { NavGrid } from "../useGridNavigation";
  */
 
 function artboard1Grid(): NavGrid {
-  const ctx: FieldsContextJson = artboard1();
-  const model = draftReducer(EMPTY_DRAFT_MODEL, { type: "load", context: ctx });
-  const m = buildFieldsMap({ context: ctx, configs: currentConfigs(model), issues: summarize(model).issuesByRoute });
-  return mapNavGrid(m.columns, m.rows);
+  const m = mapFor(artboard1());
+  return mapNavGrid(m.columns, m.rows).grid;
 }
 
 const RTL = { rtl: true, bodyStart: 1 };

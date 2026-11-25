@@ -2,7 +2,8 @@
 import React, { forwardRef } from "react";
 import * as RSelect from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
-import { cn, omit } from "./utils";
+import { omit } from "@/lib/omit";
+import { cn } from "./utils";
 import { sxToStyle, type SxInput } from "./sx";
 
 /** Radix forbids an empty-string item value; MUI uses "" freely. Bridge it. */
@@ -141,40 +142,5 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
     </RSelect.Root>
   );
 });
-
-/* --------------------------------------------------- FormControl/Label --- */
-export interface FormControlProps extends React.HTMLAttributes<HTMLDivElement> {
-  fullWidth?: boolean;
-  sx?: SxInput;
-  component?: React.ElementType;
-}
-
-export const FormControl = forwardRef<HTMLDivElement, FormControlProps>(function FormControl(
-  { fullWidth, sx, style, children, ...rest },
-  ref,
-) {
-  return (
-    <div
-      ref={ref}
-      style={{ display: "inline-flex", flexDirection: "column", width: fullWidth ? "100%" : undefined, ...sxToStyle(sx), ...style }}
-      {...rest}
-    >
-      {children}
-    </div>
-  );
-});
-
-export interface InputLabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
-  error?: boolean;
-  sx?: SxInput;
-}
-
-export function InputLabel({ error, sx, style, className, children, ...rest }: InputLabelProps) {
-  return (
-    <label className={cn("sh-field-label", error && "sh-field-label--error", className)} style={{ ...sxToStyle(sx), ...style }} {...rest}>
-      {children}
-    </label>
-  );
-}
 
 export default Select;

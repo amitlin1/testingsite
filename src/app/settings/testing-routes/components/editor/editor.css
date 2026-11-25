@@ -13,8 +13,6 @@
   min-width: 0;
 }
 
-.sfe-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-
 /* Shared focus ring of the editor's bare buttons and inputs (artboard 2 `:focus-visible`). */
 .sfe button:focus-visible,
 .sfe-table button:focus-visible,
@@ -401,7 +399,7 @@
   .sfe-more:hover, .sfe-grip:hover { background: var(--color-canvas-parchment); color: var(--color-ink); }
 }
 
-/* Name: .stp-input 38px; the number / pass-fail tile at inline-start. */
+/* Name: .set-input 38px; the number / pass-fail tile at inline-start. */
 .sfe-name { display: flex; flex-direction: column; gap: var(--space-xxs); min-width: 0; }
 .sfe-name__box { position: relative; display: flex; align-items: center; }
 .sfe-name__tile {
@@ -416,10 +414,10 @@
   align-items: center;
   justify-content: center;
 }
-.stp-input.sfe-name__input { padding-inline: 10px; }
-.stp-input.sfe-name__input--tiled { padding-inline-start: 36px; }
+.set-input.sfe-name__input { padding-inline: 10px; }
+.set-input.sfe-name__input--tiled { padding-inline-start: 36px; }
 /* A new row: blue edge and halo even before it takes focus (artboard 2 `fresh`). */
-.stp-input.sfe-name__input--fresh {
+.set-input.sfe-name__input--fresh {
   border-color: var(--color-primary-focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
 }
@@ -690,7 +688,7 @@
   font-size: var(--text-small);
   color: var(--color-ink-muted-70);
 }
-.stp-input.sfe-photo__min { width: 56px; flex: none; direction: ltr; unicode-bidi: isolate; }
+.set-input.sfe-photo__min { width: 56px; flex: none; direction: ltr; unicode-bidi: isolate; }
 
 /* ---------------------------------------------------- notes column --- */
 .sfe-notes { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

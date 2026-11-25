@@ -3,30 +3,28 @@
 // §8.8 — performance by customer.
 //
 // THE COLUMN IS `השלמה`, NOT `אחוז הצלחה`. `successPercentage` is
-// finished_runs / routed_runs — completion. Real pass/fail success is a
-// different metric that is not on this screen at all, and the field keeps its
-// old name only because the wire contract has not been renamed yet. The label
-// must not repeat the lie.
+// finished_runs / routed_runs — completion, under a legacy wire name. Real
+// pass/fail success is a different metric that is not on this screen at all,
+// so the label must not say success.
 //
-// `במסלול %` used to be locked at 100 because a LEFT JOIN had decayed into an
-// INNER. It is real coverage now: a value under 100 is information, not a bug.
+// `במסלול` is real coverage: a value under 100 is information, not a bug.
 //
 // EVERY CUSTOMER IS RETURNED, including all-zero rows, and they are not
 // filtered out here. A customer with nothing routed reads as an em dash in both
 // ratios — "0%" would be a claim about work never asked for.
 //
-// The date picker filters the `_new_window*` half only: the Q7 half (routed,
+// The date picker filters the `window*` fields only: the Q7 half (routed,
 // finished, live counts) is a state query with no window by design, which is
 // why the trend column compares the WINDOW's steps and not the standing totals.
 
 import * as React from "react";
 
-import DataCard, { IgnoredFiltersPill } from "@/app/components/dashboard/DataCard";
-import DenseTable, { type Column } from "@/app/components/dashboard/DenseTable";
-import { ProgressCell } from "@/app/components/dashboard/LoadBar";
-import TrendCell from "@/app/components/dashboard/TrendCell";
-import TwinDuration from "@/app/components/dashboard/TwinDuration";
-import type { CustomerWire } from "@/app/lib/dashboard/api-types";
+import DataCard, { IgnoredFiltersPill } from "../_components/DataCard";
+import DenseTable, { type Column } from "../_components/DenseTable";
+import { ProgressCell } from "../_components/LoadBar";
+import TrendCell from "../_components/TrendCell";
+import TwinDuration from "../_components/TwinDuration";
+import type { CustomerView } from "@/app/lib/dashboard/contract";
 import {
   EM_DASH,
   completionTone,
@@ -34,19 +32,20 @@ import {
   formatCount,
   formatMinutes,
   formatPercent,
-} from "@/app/lib/dashboard/format";
+  workTwin,
+} from "../_lib/format";
 import type { TabProps } from "./tabTypes";
 
 export default function CustomersTab({ api, data, openHistory }: TabProps) {
-  const customers = data.get<CustomerWire[]>("customers");
-  const prev = data.get<CustomerWire[]>("customersPrev");
+  const customers = data.get("customers");
+  const prev = data.get("customersPrev");
   const ignored = describeIgnoredFilters(customers.meta.ignoredFilters);
   const prevById = React.useMemo(
     () => new Map((prev.data ?? []).map((r) => [r.customerId, r])),
     [prev.data],
   );
 
-  const columns: Array<Column<CustomerWire>> = [
+  const columns: Array<Column<CustomerView>> = [
     {
       key: "name",
       header: "לקוח",
@@ -113,7 +112,7 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
       render: (r) => (
         <TwinDuration
           value={formatMinutes(r.averageTimeMinutes)}
-          twin={r.averageTimeMinutes === null ? null : `נטו ${formatMinutes(r._new_averageTimeWorkMinutes)}`}
+          twin={workTwin(r.averageTimeMinutes, r.averageTimeWorkMinutes)}
         />
       ),
     },
@@ -123,8 +122,8 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
       numeric: true,
       render: (r) => (
         <TrendCell
-          current={r._new_windowStepsProcessed}
-          previous={prevById.get(r.customerId)?._new_windowStepsProcessed}
+          current={r.windowStepsProcessed}
+          previous={prevById.get(r.customerId)?.windowStepsProcessed}
           pending={prev.loading || prev.data == null}
         />
       ),

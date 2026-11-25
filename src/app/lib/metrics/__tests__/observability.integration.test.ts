@@ -10,19 +10,15 @@
 // concurrent write-path run (which does produce real `release-stale-tests` rows)
 // cannot be mistaken for this suite's own.
 //
-// Two gates, two reasons:
-//   TEST_DATABASE_URL — the job_run/runJob half, against a throwaway database.
-//   TEST_APP_URL + AUTH_SECRET — the /api/health/jobs half. That route's gate is
-//     withAuth INSIDE the handler, and withAuth calls Auth.js's auth(), which
-//     reads the request scope through next/headers. There is no request scope in
-//     a bare node:test process, so the only honest way to prove 401/403/200 is
-//     over HTTP against a running server with a real, minted session cookie.
-// Without them the describe blocks skip and plain `npm test` stays green.
+// Both halves run against a throwaway database (TEST_DATABASE_URL); without it
+// they skip and plain `npm test` stays green. The /api/health/jobs half runs the
+// route in-process with a stubbed session (src/lib/auth/testing.ts).
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool, types } from "pg";
-import { encode } from "next-auth/jwt";
+import { stubSession } from "@/lib/auth/testing";
+import { LEDGER_TRUNCATE_LOCK } from "@/test-support/ledger-lock";
 
 // pg hands bigint (20) and numeric (1700) back as strings by default; every
 // value this suite asserts on fits a JS number.
@@ -30,19 +26,11 @@ types.setTypeParser(20, (v) => Number(v));
 types.setTypeParser(1700, (v) => Number(v));
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
-const TEST_APP_URL = (process.env.TEST_APP_URL ?? "").replace(/\/$/, "");
-const AUTH_SECRET = process.env.AUTH_SECRET ?? "";
 
 function dbSkipReason(): string | false {
   return TEST_DATABASE_URL
     ? false
     : "TEST_DATABASE_URL is not set — stage-5 observability integration suite skipped";
-}
-
-function httpSkipReason(): string | false {
-  if (!TEST_APP_URL) return "TEST_APP_URL is not set — /api/health/jobs auth suite skipped";
-  if (!AUTH_SECRET) return "AUTH_SECRET is not set — cannot mint a session cookie, auth suite skipped";
-  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,9 +39,8 @@ function httpSkipReason(): string | false {
 
 describe("stage 5 — runJob and the job_run audit surface", { skip: dbSkipReason() }, () => {
   let pool: Pool;
-  let jobRun: typeof import("../jobRun");
+  let jobRun: typeof import("../../jobs/jobRun");
   let selfcheckRoute: { POST: (req: Request) => Promise<Response> };
-  let prisma: { $disconnect: () => Promise<void> };
 
   type JobRunRow = {
     job_run_id: number;
@@ -77,30 +64,23 @@ describe("stage 5 — runJob and the job_run audit surface", { skip: dbSkipReaso
     return res.rows;
   }
 
-  /** The lock read-path/write-path hold for the life of their files while they
-   *  truncate the ledger — and, in read-path's case, work_calendar_version.
-   *  Same number on purpose. */
-  const LEDGER_TRUNCATE_LOCK = 526050825;
-
   /** A job name no other run — or other suite — can collide with. */
   function uniqueJob(prefix: string): string {
     return `${prefix}-${randomUUID()}`;
   }
 
   before(async () => {
-    // MUST precede the dynamic imports: src/app/lib/prisma.ts builds its Pool
+    // MUST precede the dynamic imports: src/lib/db.ts builds its Pool
     // from process.env.DATABASE_URL at module-evaluation time.
     process.env.DATABASE_URL = TEST_DATABASE_URL;
     process.env.CRON_SECRET = process.env.CRON_SECRET || "integration-suite-secret";
 
     pool = new Pool({ connectionString: TEST_DATABASE_URL });
-    jobRun = await import("../jobRun");
+    jobRun = await import("../../jobs/jobRun");
     selfcheckRoute = await import("../../../api/cron/metrics-selfcheck/route");
-    prisma = (await import("../../prisma")).prisma as unknown as typeof prisma;
   });
 
   after(async () => {
-    await prisma.$disconnect();
     await pool.end();
   });
 
@@ -266,7 +246,7 @@ describe("stage 5 — runJob and the job_run audit surface", { skip: dbSkipReaso
   });
 
   /** The always-open calendar the ledger suites use, seeded through THIS suite's
-   *  own pool. Deliberately not imported from write-path-helpers: that copy
+   *  own pool. Deliberately not imported from test-support/db-harness: that copy
    *  closes over a pool only its setup() initialises, and this suite builds its
    *  own connection on purpose (see the file header). */
   async function ensureWorkCalendar(): Promise<void> {
@@ -333,57 +313,39 @@ describe("stage 5 — runJob and the job_run audit surface", { skip: dbSkipReaso
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/health/jobs — the self-gating the middleware cannot do
+// GET /api/health/jobs — manager-only, gated by its handler's withAuth
 // ---------------------------------------------------------------------------
 
-describe("stage 5 — GET /api/health/jobs is self-gated", { skip: httpSkipReason() }, () => {
-  /**
-   * A session cookie Auth.js will accept: the jwt callback returns the token
-   * untouched while expires_at is comfortably in the future, so no Keycloak
-   * round-trip happens and `roles` lands on the session as-is.
-   */
-  async function cookieFor(roles: string[]): Promise<string> {
-    const jwt = await encode({
-      token: {
-        sub: "health-jobs-suite",
-        name: "Health Jobs Suite",
-        email: "suite@example.com",
-        preferred_username: "suite",
-        roles,
-        expires_at: Date.now() + 3_600_000,
-        refresh_expires_at: Date.now() + 7_200_000,
-      },
-      secret: AUTH_SECRET,
-      salt: "authjs.session-token",
-      maxAge: 3600,
-    });
-    return `authjs.session-token=${jwt}`;
-  }
+describe("stage 5 — GET /api/health/jobs answers managers only", { skip: dbSkipReason() }, () => {
+  let session: unknown = null;
+  const signedIn = (...roles: string[]) => ({ user: { preferredUsername: "suite", name: "Health Jobs Suite" }, roles });
+  let jobsRoute: { GET: (req: Request) => Promise<Response> };
+  let schemaRoute: { GET: () => Promise<Response> };
 
-  function get(path: string, cookie?: string): Promise<Response> {
-    return fetch(`${TEST_APP_URL}${path}`, {
-      headers: cookie ? { cookie } : {},
-      redirect: "manual",
-    });
-  }
-
-  it("answers 401 with no session", async () => {
-    const res = await get("/api/health/jobs");
-    assert.equal(res.status, 401);
+  before(async () => {
+    process.env.DATABASE_URL = TEST_DATABASE_URL;
+    stubSession(() => session);
+    jobsRoute = (await import("../../../api/health/jobs/route")) as unknown as typeof jobsRoute;
+    schemaRoute = (await import("../../../api/health/schema/route")) as unknown as typeof schemaRoute;
   });
 
-  it("answers 403 for an authenticated non-manager", async () => {
-    // THE DECISIVE CASE. `/api/health` is a PUBLIC_ROUTES prefix and
-    // resolveAccess checks PUBLIC_ROUTES before ROLE_PROTECTED, so the
-    // middleware waves this request through with its valid session. A 403 can
-    // therefore only have come from the withAuth inside the handler.
-    const res = await get("/api/health/jobs", await cookieFor(["tester"]));
+  const getJobs = () => jobsRoute.GET(new Request("http://localhost/api/health/jobs"));
+
+  it("answers 401 with no session", async () => {
+    session = null;
+    assert.equal((await getJobs()).status, 401);
+  });
+
+  it("answers 403 for an authenticated non-manager, naming the role it requires", async () => {
+    session = signedIn("tester");
+    const res = await getJobs();
     assert.equal(res.status, 403);
     assert.deepEqual((await res.json()).required, ["manager"]);
   });
 
   it("answers 200 with the job list and the full selfcheck for a manager", async () => {
-    const res = await get("/api/health/jobs", await cookieFor(["manager"]));
+    session = signedIn("manager");
+    const res = await getJobs();
     assert.equal(res.status, 200);
     const body = await res.json();
 
@@ -401,9 +363,15 @@ describe("stage 5 — GET /api/health/jobs is self-gated", { skip: httpSkipReaso
     assert.ok(Array.isArray(body.reasons));
   });
 
-  it("leaves /api/health/schema public — 4-verify.ps1 has no session", async () => {
-    const res = await get("/api/health/schema");
+  it("answers /api/health/schema without a session — a server-to-server caller has none", async () => {
+    session = null;
+    const res = await schemaRoute.GET();
     assert.equal(res.status, 200);
     assert.equal(typeof (await res.json()).version, "number");
   });
+});
+
+// One disconnect for both halves: the shared client must outlive the first.
+after(async () => {
+  if (TEST_DATABASE_URL) await (await import("@/lib/db")).prisma.$disconnect();
 });

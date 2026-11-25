@@ -8,13 +8,9 @@ import type { LucideIcon } from "lucide-react";
 import { Checkbox, FormControlLabel, IconButton, MenuItem, Select, TextField } from "@/components/ui";
 import { NOTE_MAX_CHOICES } from "@/app/lib/station-fields/schema";
 import type { NoteMax } from "@/app/lib/station-fields/schema";
-import { TEMPLATE_VARIABLES } from "@/app/lib/popup-templates/schema";
-import type {
-  ChecklistComponent, ComponentKind, MessageComponent, NotesComponent, PhotoComponent, PopupTemplateConfig, SkuScanComponent, TemplateComponent,
-  VerdictComponent, WeightComponent,
-} from "@/app/lib/popup-templates/schema";
+import { TEMPLATE_LIMITS, TEMPLATE_VARIABLES } from "@/app/lib/popup-templates/schema";
+import type { ComponentKind, PopupTemplateConfig, TemplateComponent } from "@/app/lib/popup-templates/schema";
 import { COMPONENT_NAME } from "@/app/lib/popup-templates/labels";
-import { TEMPLATE_LIMITS } from "@/app/lib/popup-templates/validate";
 import type { TemplateIssue } from "@/app/lib/popup-templates/validate";
 import {
   addChecklistRow, addComponent, addReportSignStep, addStep, canAddKind, canAddReportSign, canMoveStep, holdsReportSign, isLockedStep, isOptionalPart,
@@ -199,100 +195,93 @@ function ComponentSettings({ c, onPatch }: { c: TemplateComponent; onPatch: (pat
   );
   switch (c.kind) {
     case "sku_scan": {
-      const s = c as SkuScanComponent;
       return (
         <div className="pt-set">
-          {check(T.required, s.required, "required")}
-          {check(T.carryLast, s.carry_last, "carry_last")}
-          {check(T.lookupReference, s.lookup_reference, "lookup_reference")}
+          {check(T.required, c.required, "required")}
+          {check(T.carryLast, c.carry_last, "carry_last")}
+          {check(T.lookupReference, c.lookup_reference, "lookup_reference")}
         </div>
       );
     }
     case "message": {
-      const m = c as MessageComponent;
       return (
         <div className="pt-set">
-          <TextField label={T.messageText} value={m.text} multiline rows={3} fullWidth
+          <TextField label={T.messageText} value={c.text} multiline rows={3} fullWidth
             onChange={(e) => onPatch({ text: e.target.value })} inputProps={{ maxLength: TEMPLATE_LIMITS.message }} />
           <VariablesHint />
         </div>
       );
     }
     case "photo": {
-      const p = c as PhotoComponent;
       return (
         <div className="pt-set">
           <div className="pt-set__row">
-            <TextField label={T.photoTitle} value={p.title} size="small" onChange={(e) => onPatch({ title: e.target.value })}
+            <TextField label={T.photoTitle} value={c.title} size="small" onChange={(e) => onPatch({ title: e.target.value })}
               inputProps={{ maxLength: TEMPLATE_LIMITS.photoTitle }} />
-            <TextField label={T.photoMin} value={String(p.min)} size="small" helperText={T.photoMinHelp} sx={{ maxWidth: 160 }}
+            <TextField label={T.photoMin} value={String(c.min)} size="small" helperText={T.photoMinHelp} sx={{ maxWidth: 160 }}
               onChange={(e) => { const n = Number(e.target.value.replace(/\D/g, "") || 0); onPatch({ min: Math.min(n, TEMPLATE_LIMITS.photoMin) }); }}
               inputProps={{ inputMode: "numeric", dir: "ltr", style: { textAlign: "right" } }} />
           </div>
-          {check(T.showReference, p.show_reference, "show_reference")}
+          {check(T.showReference, c.show_reference, "show_reference")}
           <p className="pt-set__note"><Info size={14} strokeWidth={1.9} aria-hidden />{T.photoGroup}</p>
         </div>
       );
     }
     case "weight": {
-      const w = c as WeightComponent;
       return (
         <div className="pt-set">
-          <TextField label={T.tolerance} value={String(w.tolerance_pct)} size="small" sx={{ maxWidth: 200 }}
+          <TextField label={T.tolerance} value={String(c.tolerance_pct)} size="small" sx={{ maxWidth: 200 }}
             onChange={(e) => { const n = Number(e.target.value); if (Number.isFinite(n)) onPatch({ tolerance_pct: n }); }}
             inputProps={{ inputMode: "decimal", dir: "ltr", style: { textAlign: "right" } }} />
-          {check(T.required, w.required, "required")}
+          {check(T.required, c.required, "required")}
         </div>
       );
     }
     case "route_fields":
       return <p className="pt-set__note"><Info size={14} strokeWidth={1.9} aria-hidden />{T.routeFields}</p>;
     case "checklist": {
-      const l = c as ChecklistComponent;
       return (
         <div className="pt-set">
-          <TextField label={T.checklistTitle} value={l.title} size="small" sx={{ maxWidth: 360 }} onChange={(e) => onPatch({ title: e.target.value })}
+          <TextField label={T.checklistTitle} value={c.title} size="small" sx={{ maxWidth: 360 }} onChange={(e) => onPatch({ title: e.target.value })}
             inputProps={{ maxLength: TEMPLATE_LIMITS.checklistTitle }} />
           <ol className="pt-rows">
-            {l.items.map((row, n) => (
+            {c.items.map((row, n) => (
               <li key={row.id} className="pt-row">
                 <TextField label={T.checklistRow(n + 1)} value={row.label} size="small"
-                  onChange={(e) => onPatch({ items: setChecklistRow(l.items, row.id, e.target.value) })} inputProps={{ maxLength: TEMPLATE_LIMITS.checklistLabel }} />
-                <IconButton size="small" className="route-step__btn route-step__btn--danger" title={T.removeRow(n + 1)} disabled={l.items.length === 1}
-                  onClick={() => onPatch({ items: removeChecklistRow(l.items, row.id) })}><Trash2 size={15} strokeWidth={1.9} aria-hidden /></IconButton>
+                  onChange={(e) => onPatch({ items: setChecklistRow(c.items, row.id, e.target.value) })} inputProps={{ maxLength: TEMPLATE_LIMITS.checklistLabel }} />
+                <IconButton size="small" className="route-step__btn route-step__btn--danger" title={T.removeRow(n + 1)} disabled={c.items.length === 1}
+                  onClick={() => onPatch({ items: removeChecklistRow(c.items, row.id) })}><Trash2 size={15} strokeWidth={1.9} aria-hidden /></IconButton>
               </li>
             ))}
           </ol>
-          <button type="button" className="pt-add__btn pt-rows__add" disabled={l.items.length >= TEMPLATE_LIMITS.checklistItems}
-            onClick={() => onPatch({ items: addChecklistRow(l.items) })}>+ {T.addRow}</button>
+          <button type="button" className="pt-add__btn pt-rows__add" disabled={c.items.length >= TEMPLATE_LIMITS.checklistItems}
+            onClick={() => onPatch({ items: addChecklistRow(c.items) })}>+ {T.addRow}</button>
         </div>
       );
     }
     case "notes": {
-      const n = c as NotesComponent;
       return (
         <div className="pt-set">
-          <TextField label={T.notesLabel} value={n.label} size="small" sx={{ maxWidth: 360 }} onChange={(e) => onPatch({ label: e.target.value })}
+          <TextField label={T.notesLabel} value={c.label} size="small" sx={{ maxWidth: 360 }} onChange={(e) => onPatch({ label: e.target.value })}
             inputProps={{ maxLength: TEMPLATE_LIMITS.notesLabel }} />
         </div>
       );
     }
-    default:
-      // The package wizards' own parts: their settings are the wizards'.
-      return null;
     case "verdict": {
-      const v = c as VerdictComponent;
       return (
         <div className="pt-set">
           <div className="pt-set__row">
-            <TextField label={T.question} value={v.question} size="small" onChange={(e) => onPatch({ question: e.target.value })}
+            <TextField label={T.question} value={c.question} size="small" onChange={(e) => onPatch({ question: e.target.value })}
               inputProps={{ maxLength: TEMPLATE_LIMITS.question }} />
-            <Select label={T.noteMax} value={v.note_max} size="small" onChange={(e) => onPatch({ note_max: Number(e.target.value) as NoteMax })} sx={{ minWidth: 200 }}>
+            <Select label={T.noteMax} value={c.note_max} size="small" onChange={(e) => onPatch({ note_max: Number(e.target.value) as NoteMax })} sx={{ minWidth: 200 }}>
               {NOTE_MAX_CHOICES.map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
             </Select>
           </div>
         </div>
       );
     }
+    default:
+      // The package wizards' own parts: their settings are the wizards'.
+      return null;
   }
 }

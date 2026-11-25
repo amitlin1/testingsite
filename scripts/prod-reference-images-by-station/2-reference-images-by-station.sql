@@ -48,7 +48,7 @@ $check$;
 -- photo has a group of its own — was shown nowhere. Now the station type is
 -- the reference set: the page lists the stations of the item's route and an
 -- image is uploaded to a station; every station shows the images of its own
--- type (src/lib/reference-items.ts images_by_station).
+-- type (src/app/lib/reference-items/server.ts images_by_station).
 --
 -- reference_item_images.test_station_type_id: the station type. NULL = not
 -- assigned: the page lists it under "לא משויכות לעמדה" with a station to

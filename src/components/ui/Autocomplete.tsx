@@ -5,7 +5,7 @@ import { DismissableLayerBranch } from "@radix-ui/react-dismissable-layer";
 import { X, ChevronDown } from "lucide-react";
 import { CircularProgress } from "./Progress";
 import { sxToStyle, type SxInput } from "./sx";
-import { omit } from "./utils";
+import { omit } from "@/lib/omit";
 
 /* =============================================================================
    Autocomplete — Shifthouse (final)

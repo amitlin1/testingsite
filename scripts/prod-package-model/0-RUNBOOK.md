@@ -20,7 +20,7 @@ SELECT to_regclass('public.package_contents');             -- צריך להחז�
 **לא נחוץ כאן** — הוא נועד ל-DB ששודרג למארזים *לפני* שהעמודה בוטלה.
 
 **הסדר: קודם ה-DB, אחר כך האפליקציה.** ה-image החדש דורש גרסת סכימה 3
-(`REQUIRED_METRICS_SCHEMA_VERSION` ב-`src/app/lib/metrics/schema-gate.ts`), ומול
+(`REQUIRED_METRICS_SCHEMA_VERSION` ב-`src/app/lib/metrics/ledger/schema-gate.ts`), ומול
 DB בגרסה 2 הוא מסרב לכתוב ומחזיר 503 מסודר. זאת רשת ביטחון, לא תוכנית.
 
 | קובץ | מתי |

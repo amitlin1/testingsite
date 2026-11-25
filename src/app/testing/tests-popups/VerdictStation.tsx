@@ -1,29 +1,25 @@
 "use client";
 import * as React from "react";
 import { Stack } from "@/components/ui";
-import type { StationTestDialogProps, TestResultData } from "../../../types";
-import { uploadItemFiles } from "@/lib/api/direct-upload";
+import type { TestResultData } from "@/app/lib/testing/contract";
+import { TEMPLATE_DEFAULTS } from "@/app/lib/popup-templates/labels";
 import { SUGGEST_PREFIX } from "@/app/lib/station-fields/labels";
 import { NOTE_MAX_DEFAULT } from "@/app/lib/station-fields/schema";
-import {
-  type Photos, emptyPhotos, SkuScreen, SystemNote, VerdictCard,
-  StationShell, type ShellPhase, SKU_TITLE, SKU_DESC,
-} from "./stationKit";
 import { FieldsBlock, FieldsBlockFallback } from "../fields/FieldsBlock";
-import type { UploadFieldPhoto } from "../fields/FieldRow";
 import { SuggestionLine } from "../fields/SuggestionLine";
-import { fieldsErrorText, shouldReloadFields } from "../fields/errors";
 import { VARIANT_SPEC, stationBlockTitle } from "../fields/fieldsBlockModel";
-import { useFieldsState } from "../fields/useFieldsState";
-import { useStationFields } from "../fields/useStationFields";
+import { SkuScreen, SystemNote, VerdictCard, StationShell, type ShellPhase } from "./stationKit";
+import { emptyVerdict, type Verdict } from "./shots";
+import { NO_WORKER_TEXT, useStepFields } from "./stepFields";
+import type { StationPopupProps } from "./props";
+import { stationCheckTitle, stationFinishLabel } from "./stationTexts";
 
 /**
  * Generic two-screen test station: manufacturer-SKU scan → instruction message +
  * verdict. No photo capture: the worker scans the SKU, the system shows the
  * instruction (with that SKU spliced in), and records a pass/fail verdict +
  * notes. Its titles come from the station type's name in the DB
- * (`stationTypeName`), so no station name lives in the code. Shares the intake
- * wizard's chrome via StationShell.
+ * (`stationTypeName`), so no station name lives in the code.
  *
  * Station fields (route-fields spec §4.11.1, artboard 12): when the item's route
  * publishes fields for this step, the verdict step gets one block of them between
@@ -32,46 +28,23 @@ import { useStationFields } from "../fields/useStationFields";
  * exactly today's.
  */
 export default function VerdictStation({
-  open, onClose, item, station, stationTypeName, workerId, workerName, onSubmit,
-}: StationTestDialogProps) {
+  onClose, item, station, stationTypeName, workerId, workerName, onSubmit,
+}: StationPopupProps) {
   const kind = stationTypeName?.trim() || null;
   const [phaseIdx, setPhaseIdx] = React.useState(0); // 0 = sku, 1 = verdict
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
-  const [skuScan, setSkuScan] = React.useState("");
-  const [verdict, setVerdict] = React.useState<Photos>(emptyPhotos()); // reuse ok/note (photos unused)
+  // The SKU carries on from the station before (QueueRow.last_sku).
+  const [skuScan, setSkuScan] = React.useState(item.last_sku ?? "");
+  const [verdict, setVerdict] = React.useState<Verdict>(emptyVerdict);
 
-  // ---- station fields of this step (spec §4.2–§4.3) ----
-  const sf = useStationFields(item.item_id, open, station.test_station_id);
-  const ready = sf.status === "ready" && sf.mode === "item" ? sf : null;
-  const fx = useFieldsState(ready ? ready.fields : []);
-  const hasFields = ready != null && fx.defsCount > 0;
-  // Finishing waits for the answer (loading / error), then for the fields themselves.
-  const fieldsGate = sf.status === "loading" || sf.status === "error" || (hasFields && fx.blocking(ready.gate));
-  const { reset: resetFields } = fx;
-
-  // Reset during render when the dialog opens or the item changes.
-  const [openedFor, setOpenedFor] = React.useState<{ open: boolean; item: typeof item } | null>(null);
-  if (!openedFor || openedFor.open !== open || openedFor.item !== item) {
-    setOpenedFor({ open, item });
-    if (open) {
-      // The SKU carries on from the station before (ItemRow.last_sku).
-      setPhaseIdx(0); setError(null); setSkuScan(item.last_sku ?? ""); setVerdict(emptyPhotos()); resetFields();
-    }
-  }
-
-  // A photo field's shot goes straight to storage like any station photo, tagged
-  // with the field's photo type; null = it never got there (the shot reads failed).
-  const uploadFieldPhoto = React.useCallback<UploadFieldPhoto>(
-    (file, photoType) => uploadItemFiles(item.item_id, [file], { workerId, stationTypeId: station.test_station_type_id, photoType })
-      .then(([result]) => result?.objectKey ?? null, () => null),
-    [item.item_id, workerId, station.test_station_type_id],
-  );
+  const step = useStepFields({ itemId: item.item_id, stationId: station.test_station_id, stationTypeId: station.test_station_type_id, workerId });
+  const { fx, cfg } = step;
 
   const phases: ShellPhase[] = [
-    { key: "sku", title: SKU_TITLE, desc: SKU_DESC },
-    { key: "verdict", title: kind ? `בדיקת ${kind}` : "בדיקת הפריט", desc: "בצע את הבדיקה לפי ההנחיה ואשר את תקינות הפריט." },
+    { key: "sku", title: TEMPLATE_DEFAULTS.skuStepTitle, desc: TEMPLATE_DEFAULTS.skuStepDesc },
+    { key: "verdict", title: stationCheckTitle(kind), desc: "בצע את הבדיקה לפי ההנחיה ואשר את תקינות הפריט." },
   ];
 
   const onNext = () => { setError(null); setPhaseIdx(1); };
@@ -79,10 +52,10 @@ export default function VerdictStation({
   const onStep = (i: number) => { setError(null); setPhaseIdx(i); };
 
   const pass = verdict.ok === "pass";
-  const canFinish = skuScan.trim().length > 0 && verdict.ok !== "" && !fieldsGate;
+  const canFinish = skuScan.trim().length > 0 && verdict.ok !== "" && !step.blocking;
 
   const onFinish = async () => {
-    if (workerId == null) { setError("יש לבחור עובד בכותרת מסך הבדיקות"); return; }
+    if (workerId == null) { setError(NO_WORKER_TEXT); return; }
     if (!canFinish) { setError("לא ניתן לסיים — יש להשלים את כל שלבי הבדיקה"); return; }
     setSubmitting(true); setError(null);
     try {
@@ -95,46 +68,42 @@ export default function VerdictStation({
           verdict: { ok: verdict.ok, note: verdict.note },
           // Station fields: schema + fields, and this same verdict extended with
           // suggested / overridden — every key above stays (spec §4.0 rule 5).
-          ...(hasFields ? fx.toBlock(ready.schema, { ok: verdict.ok, note: verdict.note }) : {}),
+          ...(cfg ? fx.toBlock(cfg.schema, { ok: verdict.ok, note: verdict.note }) : {}),
         },
       };
       await onSubmit(data);
       onClose();
     } catch (e) {
-      setError(fieldsErrorText(e, "שגיאה בשמירת הבדיקה"));
-      // 409: the route's fields changed while the popup was open. Load them
-      // again, whatever the last answer was; the drafts stay, by FieldId.
-      if (shouldReloadFields(e)) sf.reload();
+      setError(step.saveErrorText(e, "שגיאה בשמירת הבדיקה"));
     } finally { setSubmitting(false); }
   };
 
   return (
     <StationShell
-      open={open} onClose={onClose} item={item} workerId={workerId} workerName={workerName}
+      onClose={onClose} item={item} workerId={workerId} workerName={workerName}
       contextLabel={kind ?? station.test_station_desc} stationName={station.test_station_desc} phases={phases} currentIndex={phaseIdx}
       onStep={onStep} onBack={onBack} error={error} onClearError={() => setError(null)}
       busy={false} submitting={submitting}
       canNext={skuScan.trim().length > 0} onNext={onNext}
-      canFinish={canFinish} onFinish={onFinish} finishLabel={kind ? `סיום בדיקת ${kind}` : "סיום בדיקה"}
+      canFinish={canFinish} onFinish={onFinish} finishLabel={stationFinishLabel(kind)}
     >
       {phaseIdx === 0 ? (
         <SkuScreen value={skuScan} onChange={setSkuScan} prev={item.last_sku} serial={item.serial_no} />
       ) : (
         <Stack spacing={3}>
-          {/* System instruction with the scanned SKU spliced in. */}
           <SystemNote>{`נא לבצע את הבדיקה עפ״י מק״ט ${skuScan.trim() || "—"}`}</SystemNote>
           {/* The step's station fields — or, until they arrive, their stand-in (nothing without a config). */}
-          {hasFields ? (
-            <FieldsBlock variant="station" title={stationBlockTitle(kind)} groups={[{ fields: ready.fields }]} fx={fx}
-              uploadPhoto={uploadFieldPhoto} />
+          {cfg ? (
+            <FieldsBlock variant="station" title={stationBlockTitle(kind)} groups={[{ fields: cfg.fields }]} fx={fx}
+              uploadPhoto={step.uploadFieldPhoto} />
           ) : (
-            <FieldsBlockFallback sf={sf} />
+            <FieldsBlockFallback sf={step.sf} />
           )}
           <VerdictCard ok={verdict.ok} note={verdict.note}
             onOk={(v) => setVerdict((pk) => ({ ...pk, ok: v }))}
             onNote={(v) => setVerdict((pk) => ({ ...pk, note: v }))}
-            suggestion={hasFields ? <SuggestionLine fails={fx.ev.fails} defs={ready.fields} prefix={SUGGEST_PREFIX} decided={verdict.ok} /> : undefined}
-            noteMax={hasFields ? NOTE_MAX_DEFAULT : undefined} noteLook={VARIANT_SPEC.station.noteLook} />
+            suggestion={cfg ? <SuggestionLine fails={fx.ev.fails} defs={cfg.fields} prefix={SUGGEST_PREFIX} decided={verdict.ok} /> : undefined}
+            noteMax={cfg ? NOTE_MAX_DEFAULT : undefined} noteLook={VARIANT_SPEC.station.noteLook} />
         </Stack>
       )}
     </StationShell>

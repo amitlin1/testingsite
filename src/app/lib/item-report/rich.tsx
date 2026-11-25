@@ -11,6 +11,7 @@
 // must only run in the browser (the RichTextField editor).
 
 import * as React from "react";
+import { escapeHtml } from "@/lib/html-escape";
 
 export type TextRun = {
   text: string;
@@ -24,11 +25,16 @@ export type VarRun = { v: string }; // form field name
 export type RichRun = TextRun | VarRun;
 export type RichValue = RichRun[];
 
-export function isVarRun(r: RichRun): r is VarRun {
+function isVarRun(r: RichRun): r is VarRun {
   return (r as VarRun).v !== undefined;
 }
 export function isRichValue(v: unknown): v is RichValue {
   return Array.isArray(v);
+}
+
+/** A variable's value as a fill-in field: the value on an underline, or the bare line when empty. */
+export function FillValue({ value }: { value: string | undefined }) {
+  return <span className="pdf-fill">{value != null && value !== "" ? <bdi>{value}</bdi> : null}</span>;
 }
 
 /** Render a rich model to React (server-safe). Variable runs resolve against
@@ -38,15 +44,7 @@ export function renderRichModel(
   values: Record<string, string>,
 ): React.ReactNode[] {
   return runs.map((r, i) => {
-    if (isVarRun(r)) {
-      // A variable always renders as a fill-in field (value on an underline).
-      const val = values[r.v];
-      return (
-        <span key={i} className="pdf-fill">
-          {val != null && val !== "" ? <bdi>{val}</bdi> : null}
-        </span>
-      );
-    }
+    if (isVarRun(r)) return <FillValue key={i} value={values[r.v]} />;
     const style: React.CSSProperties = {
       fontWeight: r.b ? 700 : undefined,
       fontStyle: r.i ? "italic" : undefined,
@@ -64,13 +62,6 @@ export function renderRichModel(
   });
 }
 
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 /** Model → HTML, to initialize the contenteditable. `labels` maps a field
  *  name to the chip caption shown in the editor. */
 export function runsToHtml(runs: RichValue, labels: Record<string, string>): string {
@@ -79,9 +70,9 @@ export function runsToHtml(runs: RichValue, labels: Record<string, string>): str
     .map((r) => {
       if (isVarRun(r)) {
         const cap = labels[r.v] ?? r.v;
-        return `<span data-var="${esc(r.v)}" contenteditable="false" class="rte-chip">${esc(cap)}</span>`;
+        return `<span data-var="${escapeHtml(r.v)}" contenteditable="false" class="rte-chip">${escapeHtml(cap)}</span>`;
       }
-      let t = esc(r.text).replace(/\n/g, "<br>");
+      let t = escapeHtml(r.text).replace(/\n/g, "<br>");
       if (r.size) t = `<span style="font-size:${r.size}">${t}</span>`;
       if (r.u) t = `<u>${t}</u>`;
       if (r.i) t = `<em>${t}</em>`;

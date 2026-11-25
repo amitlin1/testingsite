@@ -1,16 +1,18 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "@/lib/db";
 import { withAuth } from "@/lib/auth/withAuth";
-import { SCHEDULED_JOBS, type JobStatus } from "@/app/lib/metrics/jobRun";
+import { ACCESS } from "@/lib/auth/roles";
+import { errorResponse } from "@/lib/http/errors";
+import { SCHEDULED_JOBS } from "@/app/lib/jobs/jobRun";
 import {
   evaluateHealth,
-  runSelfcheck,
+  isStale,
   type JobHealthRow,
+  type JobStatus,
   type JobsHealthPayload,
-} from "@/app/lib/metrics/selfcheck";
-import { errorMessage } from "@/lib/errors";
+} from "@/app/lib/jobs/health";
+import { runSelfcheck } from "@/app/lib/metrics/ledger/selfcheck";
 
-export const runtime = "nodejs";
+const NO_STORE = { "Cache-Control": "no-store" };
 // Never cached — a cached payload would keep reporting a job healthy after it
 // stopped running, which is the one thing this endpoint exists to notice.
 export const dynamic = "force-dynamic";
@@ -29,18 +31,10 @@ interface JobRunRow {
  * GET /api/health/jobs — the §10.2 observation surface: the last successful run
  * of every scheduled job, plus the full metrics_selfcheck().
  *
- * SELF-GATED, and it has to be. This route sits under the `/api/health` prefix,
- * which is in PUBLIC_ROUTES (the docker healthcheck and the nginx upstream have
- * no session cookie, and a gated liveness probe answers 401 → container marked
- * unhealthy → nginx never starts). resolveAccess checks PUBLIC_ROUTES BEFORE
- * ROLE_PROTECTED and prefix-matches, so `/api/health/jobs` is public to the
- * middleware no matter what is added to ROLE_PROTECTED — the only gate that can
- * work here is this withAuth in the handler. Its sibling
- * `/api/health/schema` stays public deliberately: 4-verify.ps1 calls it
- * server-to-server with no session, and it leaks only a schema number.
- *
- * Manager-only, matching `/api/dashboard`: the payload names customers' items by
- * count and exposes the ledger's size and internal consistency.
+ * Manager-only (ACCESS.healthJobs, this handler's withAuth), matching
+ * `/api/dashboard`: the payload names customers' items by count and exposes the
+ * ledger's size and internal consistency. Unlike its siblings `/api/health` and
+ * `/api/health/schema`, which are public (src/lib/routes.ts), it needs a session.
  */
 export const GET = withAuth(
   async () => {
@@ -92,9 +86,7 @@ export const GET = withAuth(
           lastRunStatus: row?.last_run_status ?? null,
           lastErrorText: row?.last_error_text ?? null,
           lastSuccessRows: row?.last_success_rows == null ? null : Number(row.last_success_rows),
-          // §10.2: now() - last_success > interval × 2. Never-succeeded is the
-          // worse case, not an exemption from the rule.
-          stale: secondsSinceSuccess === null || secondsSinceSuccess > job.intervalSeconds * 2,
+          stale: isStale(job.intervalSeconds, secondsSinceSuccess),
         };
       });
 
@@ -108,16 +100,14 @@ export const GET = withAuth(
         jobs,
         checks,
       };
-      return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
+      return Response.json(payload, { headers: NO_STORE });
     } catch (error) {
       // Unlike /api/health (pure liveness), this one MUST touch Postgres — an
       // unreachable DB is a 500, not a masked healthy 200.
-      console.error("Error reading job health:", error);
-      return NextResponse.json(
-        { error: "Failed to read job health", message: errorMessage(error) || "Unknown error" },
-        { status: 500, headers: { "Cache-Control": "no-store" } }
-      );
+      const res = errorResponse(error, "Failed to read job health");
+      res.headers.set("Cache-Control", "no-store");
+      return res;
     }
   },
-  { role: "manager" },
+  { role: ACCESS.healthJobs },
 );

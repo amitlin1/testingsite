@@ -1,13 +1,25 @@
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
-import type { TransactionClient } from "@/app/lib/prisma";
-import { AdminFieldsError } from "./admin";
-import type { Actor } from "./admin";
-import type { FieldSetSavedJson, LibraryUseJson, OptionListSavedJson, PropagateResultJson } from "./admin-types";
-import { ID_PATTERNS, targetKey } from "./schema";
-import type { ChoiceOption, Field, GroupTarget, InputField, RouteFieldsConfig, StepConfig, StepUid, VersionRef } from "./schema";
+import type { TransactionClient } from "@/lib/db";
+import type { Actor } from "@/lib/auth/identity";
+import { HttpError } from "@/lib/http/errors";
+import { isDbId } from "@/lib/http/request";
+import { isRecord, jsonEqual } from "@/lib/json-guards";
+import { mintFree } from "@/lib/random-id";
+import { IN_USE } from "./admin-types";
+import type {
+  FieldSetJson, FieldSetSavedJson, LibraryUseJson, OptionListJson, OptionListSavedJson, PropagateResultJson,
+} from "./admin-types";
+import { fromSetOf, listRefOf } from "./diff";
+import { BOX_ROW_TITLE, EACH_ITEM_ROW_TITLE } from "./labels";
+import {
+  STATION_FIELDS_READ_TX, STATION_FIELDS_TX, loadRoute, readDraft, readPublished, selectRoutes, writeDraft,
+} from "./route-store";
+import type { RouteRow } from "./route-store";
+import { ID_PATTERNS, stepIndexOf, targetKey } from "./schema";
+import type { ChoiceOption, Field, GroupTarget, InputField, RouteFieldsConfig, StepConfig, StepUid } from "./schema";
 import { newFieldId } from "./step-uids";
-import { ShapeError, parseFieldList, parseOptionList, parseRouteFieldsConfig } from "./validate";
+import { LIMITS, ShapeError, parseFieldList, parseOptionList, parseRouteFieldsConfig, shapeOr400 } from "./validate";
 
 /**
  * Station fields — the libraries (route-fields spec §3.2 option-lists / field-sets rows, §5.7
@@ -17,8 +29,8 @@ import { ShapeError, parseFieldList, parseOptionList, parseRouteFieldsConfig } f
  * version they copied until propagate offers them the new one.
  *
  * SERVER ONLY (prisma). The handlers under /api/settings/option-lists and /api/settings/field-sets
- * are thin, as admin.ts's are: path, body, actor, and adminFieldsErrorResponse. The views are the
- * wire shapes of admin-types.ts before JSON (Dates where the wire has ISO strings).
+ * are thin, as admin.ts's are: path, body, actor, and errorResponse. They answer the wire shapes
+ * of admin-types.ts.
  *
  * Usage is computed at read time (spec §3.2 "ספירת שימוש"), over every route's fields_draft AND its
  * latest published version. A place is, for an option list, a linked field (route, step uid, field
@@ -29,7 +41,7 @@ import { ShapeError, parseFieldList, parseOptionList, parseRouteFieldsConfig } f
  * config when it has no draft, and the result is saved as the draft (draft_rev + 1). A published
  * version is never touched — every change still goes out through publish.
  *
- * Error contract — AdminFieldsError, answered as { error: message, code, ...extra }:
+ * Error contract — HttpError, answered as { error: message, code, ...extra }:
  *   400 INVALID_ID · INVALID_BODY (not an object, base_version, targets) · NAME_INVALID (name not a
  *       non-blank string of at most 100 characters once trimmed) · SHAPE_INVALID {path} (options /
  *       fields, validate.ts)
@@ -52,60 +64,16 @@ import { ShapeError, parseFieldList, parseOptionList, parseRouteFieldsConfig } f
 /** Any handle that can read: the client or a transaction. */
 type Db = TransactionClient;
 
-export type LibraryKind = "list" | "set";
-
-/** GET /api/settings/option-lists — one row (OptionListJson before JSON). */
-export type OptionListView = {
-  id: number;
-  name: string;
-  options: ChoiceOption[];
-  version: number;
-  updated_at: Date;
-  updated_by: string | null;
-  /** "בשימוש ב-{fields} שדות[ ב-{routes} מסלולים]". */
-  usage: { fields: number; routes: number };
-};
-
-/** GET /api/settings/field-sets — one row (FieldSetJson before JSON). */
-export type FieldSetView = {
-  id: number;
-  name: string;
-  fields: Field[];
-  version: number;
-  created_at: Date;
-  updated_at: Date;
-  updated_by: string | null;
-  /** "בשימוש ב-{cells} תאים"; outdated = cells holding an older version. */
-  usage: { cells: number; outdated: number };
-};
-
-/** One place a library row is used (GET …/[id]/usage). */
-export type LibraryUse = LibraryUseJson;
+type LibraryKind = "list" | "set";
 
 /** A linked field: what PUT option-lists answers as `linked`, and what propagate's targets name.
  *  For a field set, the target's field_id picks the cell (step group) holding that field. */
-export type LinkTarget = { route_id: number; step_uid: StepUid; field_id: string };
+type LinkTarget = { route_id: number; step_uid: StepUid; field_id: string };
 
-/** Bodies as they arrive; every member is checked here (400 when wrong). */
-export type OptionListInput = { name?: unknown; options?: unknown; base_version?: unknown };
-export type FieldSetInput = { name?: unknown; fields?: unknown; base_version?: unknown };
-export type PropagateInput = { targets?: unknown };
-
-/** option_lists.name / field_sets.name are VARCHAR(100). */
-export const LIBRARY_NAME_MAX = 100;
+const LIBRARY_NAME_MAX = LIMITS.libraryName;
 
 /** More targets than any library is linked to — a guard on the size of one request. */
 const MAX_TARGETS = 1000;
-
-/** The same bounds as admin.ts's transactions: propagate may wait on a publish holding a route. */
-const TX_OPTIONS = { maxWait: 5_000, timeout: 30_000 } as const;
-/** Reads: the rows and the routes they are counted over from one snapshot. */
-const READ_TX = { ...TX_OPTIONS, isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead } as const;
-
-/** Artboard 8's usage chips name the row of a package-level cell as the fields map does
- *  (artboard 1): "… › הקופסה", "… › כל פריט במארז". */
-const BOX_ROW_LABEL = "הקופסה";
-const EACH_ITEM_ROW_LABEL = "כל פריט במארז";
 
 /** jsonb_path_exists filters (spec §3.2): a route config's fields linked to the row `$id`, and (for
  *  an option list's DELETE) a field set's fields linked to it. */
@@ -121,51 +89,37 @@ const KIND: Record<LibraryKind, { what: string; notFound: string; invalid: strin
 };
 
 // ---- request helpers ----------------------------------------------------------------------------
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-/** Ids and versions are int4 columns: a larger number can name no row, and Postgres would refuse
- *  it as a parameter (a 500) rather than find nothing. */
-const INT4_MAX = 2147483647;
-const isId = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 1 && (v as number) <= INT4_MAX;
-
-function badBody(message: string): AdminFieldsError {
-  return new AdminFieldsError(400, "INVALID_BODY", message);
+function badBody(message: string): HttpError {
+  return new HttpError(400, message, { code: "INVALID_BODY" });
 }
 
-function requireId(v: number, kind: LibraryKind): void {
-  if (!isId(v)) throw new AdminFieldsError(400, "INVALID_ID", `${KIND[kind].what} id must be a positive integer`);
+/** A path id (parseDbId: null when it cannot name a row). */
+function requireId(v: number | null, kind: LibraryKind): number {
+  if (!isDbId(v)) throw new HttpError(400, `${KIND[kind].what} id must be a positive integer`, { code: "INVALID_ID" });
+  return v;
 }
 
-function notFound(kind: LibraryKind, id: number): AdminFieldsError {
-  return new AdminFieldsError(404, KIND[kind].notFound, `${KIND[kind].what} ${id} not found`, { id });
+function notFound(kind: LibraryKind, id: number): HttpError {
+  return new HttpError(404, `${KIND[kind].what} ${id} not found`, { code: KIND[kind].notFound, extra: { id } });
 }
 
 /** "שם הרשימה" / the set's name: stored trimmed. */
 function nameOf(raw: unknown): string {
   const name = typeof raw === "string" ? raw.trim() : "";
   if (!name || name.length > LIBRARY_NAME_MAX) {
-    throw new AdminFieldsError(400, "NAME_INVALID", `name must be a non-blank string of at most ${LIBRARY_NAME_MAX} characters`);
+    throw new HttpError(400, `name must be a non-blank string of at most ${LIBRARY_NAME_MAX} characters`, { code: "NAME_INVALID" });
   }
   return name;
 }
 
-/** A structural parse of the body (validate.ts): its ShapeError is a 400 with the path. */
-function shapeOf<T>(parse: () => T): T {
-  try {
-    return parse();
-  } catch (e) {
-    if (e instanceof ShapeError) throw new AdminFieldsError(400, e.code, e.message, { path: e.path });
-    throw e;
-  }
-}
-
 function optionsOf(raw: unknown): ChoiceOption[] {
-  return shapeOf(() => parseOptionList(raw, "$.options"));
+  return shapeOr400(() => parseOptionList(raw, "$.options"));
 }
 
 /** A set's fields as stored: the same checks as a cell's (ids unique in the list), minus any
  *  from_set — a template is not linked to a template; a cell's link is added when it copies. */
 function setFieldsOf(raw: unknown): Field[] {
-  return shapeOf(() => parseFieldList(raw, "$.fields")).map((f) => {
+  return shapeOr400(() => parseFieldList(raw, "$.fields")).map((f) => {
     if (f.type === "section" || !f.from_set) return f;
     const copy = { ...f };
     delete copy.from_set;
@@ -174,7 +128,7 @@ function setFieldsOf(raw: unknown): Field[] {
 }
 
 function baseVersionOf(raw: unknown): number {
-  if (!isId(raw)) throw badBody("base_version must be the version the edit started from");
+  if (!isDbId(raw)) throw badBody("base_version must be the version the edit started from");
   return raw;
 }
 
@@ -186,7 +140,7 @@ function targetsOf(raw: unknown): LinkTarget[] | null {
   }
   return raw.map((t: unknown, i) => {
     const ok = isRecord(t)
-      && isId(t.route_id)
+      && isDbId(t.route_id)
       && typeof t.step_uid === "string" && ID_PATTERNS.step.test(t.step_uid)
       && typeof t.field_id === "string" && ID_PATTERNS.field.test(t.field_id);
     if (!ok) throw badBody(`targets[${i}] must be {route_id, step_uid, field_id}`);
@@ -227,7 +181,7 @@ function storedPayload<T>(kind: LibraryKind, row: LibRow, parse: (raw: unknown) 
     return parse(row.payload);
   } catch (e) {
     if (e instanceof ShapeError) {
-      throw new AdminFieldsError(500, KIND[kind].invalid, `${KIND[kind].what} ${row.id}: the stored row does not parse (${e.message})`, { id: row.id });
+      throw new HttpError(500, `${KIND[kind].what} ${row.id}: the stored row does not parse (${e.message})`, { code: KIND[kind].invalid, extra: { id: row.id } });
     }
     throw e;
   }
@@ -236,57 +190,9 @@ const storedOptions = (row: LibRow) => storedPayload("list", row, (raw) => parse
 const storedSetFields = (row: LibRow) => storedPayload("set", row, (raw) => parseFieldList(raw));
 
 // ---- routes and the places that use a row ---------------------------------------------------------
-type RouteRow = {
-  test_route_id: number;
-  item_type_id: number;
-  item_type_desc: string;
-  is_package: boolean;
-  route_steps: number[];
-  /** Parallel to route_steps; a different length means the route has no usable positions. */
-  step_uids: string[];
-  fields_draft: unknown;
-  fields_version: number;
-  /** The config of fields_version (null when 0, or when the version row is missing). */
-  published_config: unknown;
-  has_version: boolean;
-};
-
 type RouteConfigs = { route: RouteRow; draft: RouteFieldsConfig | null; published: RouteFieldsConfig | null };
 
-const ROUTE_SELECT = Prisma.sql`
-  SELECT tr.test_route_id, tr.item_type_id, TRIM(t.item_type_desc) AS item_type_desc, t.is_package,
-         COALESCE(tr.route_steps, '{}') AS route_steps,
-         COALESCE(tr.step_uids, '{}') AS step_uids,
-         tr.fields_draft, tr.fields_version,
-         v.config AS published_config, (v.id IS NOT NULL) AS has_version
-    FROM testing_routes tr
-    JOIN item_types t ON t.item_type_id = tr.item_type_id
-    LEFT JOIN route_field_versions v ON v.test_route_id = tr.test_route_id AND v.version = tr.fields_version`;
-
-/** A route config read back from the database: it was stored parsed, so a failure is a real 500,
- *  never "not used". */
-function storedConfig(raw: unknown, routeId: number, what: string): RouteFieldsConfig {
-  try {
-    return parseRouteFieldsConfig(raw);
-  } catch (e) {
-    if (e instanceof ShapeError) {
-      throw new AdminFieldsError(500, "CONFIG_INVALID", `Route ${routeId}: the stored ${what} does not parse (${e.message})`, { route_id: routeId });
-    }
-    throw e;
-  }
-}
-
-function readConfigs(route: RouteRow): RouteConfigs {
-  const id = route.test_route_id;
-  if (route.fields_version > 0 && !route.has_version) {
-    throw new AdminFieldsError(500, "VERSION_MISSING", `Route ${id} points at version ${route.fields_version}, which does not exist`, { route_id: id });
-  }
-  return {
-    route,
-    draft: route.fields_draft == null ? null : storedConfig(route.fields_draft, id, "draft"),
-    published: route.fields_version > 0 ? storedConfig(route.published_config, id, `version ${route.fields_version}`) : null,
-  };
-}
+const readConfigs = (route: RouteRow): RouteConfigs => ({ route, draft: readDraft(route), published: readPublished(route) });
 
 /** jsonb_path_exists(column, the kind's path, {id}) — silent, so a malformed config is "no match"
  *  here rather than an error (the full list read still parses every config). */
@@ -303,24 +209,15 @@ async function loadRouteConfigs(db: Db, linkedTo: { kind: LibraryKind; id: numbe
   const filter = linkedTo
     ? Prisma.sql`AND (${linkedIn(Prisma.sql`tr.fields_draft`, linkedTo.kind, linkedTo.id)} OR ${linkedIn(Prisma.sql`v.config`, linkedTo.kind, linkedTo.id)})`
     : Prisma.empty;
-  const rows = await db.$queryRaw<RouteRow[]>`${ROUTE_SELECT}
-     WHERE (tr.fields_draft IS NOT NULL OR tr.fields_version > 0)
-     ${filter}
-     ORDER BY tr.test_route_id`;
+  const rows = await selectRoutes(db, Prisma.sql`(tr.fields_draft IS NOT NULL OR tr.fields_version > 0) ${filter}`);
   return rows.map(readConfigs);
 }
 
 /** One route, locked (FOR UPDATE of the testing_routes row only), read after the lock. */
 async function lockRouteConfigs(tx: Db, routeId: number): Promise<RouteConfigs | null> {
-  const rows = await tx.$queryRaw<RouteRow[]>`${ROUTE_SELECT}
-     WHERE tr.test_route_id = ${routeId}
-     FOR UPDATE OF tr`;
-  return rows[0] ? readConfigs(rows[0]) : null;
+  const row = await loadRoute(tx, routeId, { lock: true });
+  return row ? readConfigs(row) : null;
 }
-
-const fromSetOf = (f: Field): VersionRef | undefined => (f.type === "section" ? undefined : f.from_set);
-const listRefOf = (f: Field): VersionRef | undefined =>
-  (f.type === "choice_row" || f.type === "multi_choice" ? f.list_ref : undefined);
 
 /** A link inside one config: which row, where, and the version it holds. */
 type Ref = {
@@ -370,7 +267,7 @@ type Place = Ref & { route: RouteRow; in: "draft" | "published"; stepPos: number
 
 /** The step's position in the live route; a step the route does not have sorts last. */
 function stepPosition(route: RouteRow, uid: string): number {
-  const i = route.step_uids.length === route.route_steps.length ? route.step_uids.indexOf(uid) : -1;
+  const i = stepIndexOf(route, uid);
   return i >= 0 ? i : Number.MAX_SAFE_INTEGER;
 }
 
@@ -414,11 +311,11 @@ async function placesOf(db: Db, kind: LibraryKind, id: number): Promise<Place[]>
   return placesByRow(await loadRouteConfigs(db, { kind, id }), kind).get(id) ?? [];
 }
 
-function listUsage(places: readonly Place[]): OptionListView["usage"] {
+function listUsage(places: readonly Place[]): OptionListJson["usage"] {
   return { fields: places.length, routes: new Set(places.map((p) => p.route.test_route_id)).size };
 }
 
-function setUsage(places: readonly Place[], version: number): FieldSetView["usage"] {
+function setUsage(places: readonly Place[], version: number): FieldSetJson["usage"] {
   return { cells: places.length, outdated: places.filter((p) => p.ver < version).length };
 }
 
@@ -428,7 +325,7 @@ function setUsage(places: readonly Place[], version: number): FieldSetView["usag
  * step's station type (the config's informational station_label when the step left the route);
  * the row is the item route's type, or "הקופסה" / "כל פריט במארז" / the item type of a kit cell.
  */
-async function describePlaces(db: Db, places: readonly Place[]): Promise<LibraryUse[]> {
+async function describePlaces(db: Db, places: readonly Place[]): Promise<LibraryUseJson[]> {
   if (places.length === 0) return [];
   const stationRows = await db.$queryRaw<{ id: number; label: string }[]>`
     SELECT test_station_type_id AS id, TRIM(test_type_desc) AS label FROM test_stations_type`;
@@ -444,8 +341,8 @@ async function describePlaces(db: Db, places: readonly Place[]): Promise<Library
     const stationLabel = (pos >= 0 ? stations.get(route.route_steps[pos]) : undefined) ?? p.step.station_label;
     const t = p.target;
     const itemLabel = t === "item" ? route.item_type_desc
-      : t === "box" ? BOX_ROW_LABEL
-        : t === "each_item" ? EACH_ITEM_ROW_LABEL
+      : t === "box" ? BOX_ROW_TITLE
+        : t === "each_item" ? EACH_ITEM_ROW_TITLE
           : itemTypes.get(t.item_type_id) ?? String(t.item_type_id);
     return {
       route_id: route.test_route_id,
@@ -462,61 +359,55 @@ async function describePlaces(db: Db, places: readonly Place[]): Promise<Library
 }
 
 // ---- views --------------------------------------------------------------------------------------
-function listView(row: LibRow, options: ChoiceOption[], places: readonly Place[]): OptionListView {
+function listView(row: LibRow, options: ChoiceOption[], places: readonly Place[]): OptionListJson {
   return {
     id: row.id,
     name: row.name,
     options,
     version: row.version,
-    updated_at: row.updated_at,
+    updated_at: row.updated_at.toISOString(),
     updated_by: row.updated_by,
     usage: listUsage(places),
   };
 }
 
-function setView(row: LibRow, fields: Field[], places: readonly Place[]): FieldSetView {
+function setView(row: LibRow, fields: Field[], places: readonly Place[]): FieldSetJson {
   return {
     id: row.id,
     name: row.name,
     fields,
     version: row.version,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
     updated_by: row.updated_by,
     usage: setUsage(places, row.version),
   };
 }
 
-function conflict(kind: LibraryKind, row: LibRow, baseVersion: number, current: OptionListView | FieldSetView): AdminFieldsError {
-  return new AdminFieldsError(409, "VERSION_CONFLICT", `${KIND[kind].what} ${row.id} is at version ${row.version}, not ${baseVersion}`, { current });
+function conflict(kind: LibraryKind, row: LibRow, baseVersion: number, current: OptionListJson | FieldSetJson): HttpError {
+  return new HttpError(409, `${KIND[kind].what} ${row.id} is at version ${row.version}, not ${baseVersion}`, { code: "VERSION_CONFLICT", extra: { current } });
 }
 
 // ---- propagate (drafts only) ----------------------------------------------------------------------
 /** Rewrites one route's config for a propagate; null when nothing in it changes. */
 type Rewrite = (cfg: RouteFieldsConfig, routeId: number) => RouteFieldsConfig | null;
 
-/** Saves a propagated config as the route's draft, exactly as an autosave would store it (the
- *  sanitized parse; draft_rev + 1). A config the parse refuses is a 422 and nothing is written. */
-async function writeDraft(tx: Db, routeId: number, next: RouteFieldsConfig, actor: Actor): Promise<void> {
+/** Saves a propagated config as the route's draft, as an autosave does (the sanitized parse;
+ *  draft_rev + 1). A config the parse refuses is a 422 and nothing is written. */
+async function savePropagated(tx: Db, routeId: number, next: RouteFieldsConfig, actor: Actor): Promise<void> {
   let config: RouteFieldsConfig;
   try {
     config = parseRouteFieldsConfig(next);
   } catch (e) {
     if (e instanceof ShapeError) {
-      throw new AdminFieldsError(422, "PROPAGATE_INVALID", `Route ${routeId}: the updated draft would not be a valid config (${e.message})`, {
+      throw new HttpError(422, `Route ${routeId}: the updated draft would not be a valid config (${e.message})`, { code: "PROPAGATE_INVALID", extra: {
         route_id: routeId,
         path: e.path,
-      });
+      } });
     }
     throw e;
   }
-  await tx.$executeRaw`
-    UPDATE testing_routes
-       SET fields_draft = ${JSON.stringify(config)}::jsonb,
-           draft_rev = draft_rev + 1,
-           draft_updated_at = now(),
-           draft_updated_by = ${actor.username || null}
-     WHERE test_route_id = ${routeId}`;
+  await writeDraft(tx, routeId, config, actor);
 }
 
 /**
@@ -528,12 +419,12 @@ async function writeDraft(tx: Db, routeId: number, next: RouteFieldsConfig, acto
 async function propagateRow(
   db: PrismaClient,
   kind: LibraryKind,
-  id: number,
-  input: PropagateInput,
+  rawId: number | null,
+  input: unknown,
   actor: Actor,
   rewriter: (row: LibRow, targets: LinkTarget[] | null) => Rewrite,
 ): Promise<PropagateResultJson> {
-  requireId(id, kind);
+  const id = requireId(rawId, kind);
   if (!isRecord(input)) throw badBody("Body must be {targets?}");
   const targets = targetsOf(input.targets);
   return db.$transaction(async (tx) => {
@@ -549,14 +440,12 @@ async function propagateRow(
       if (!base) continue;
       const next = rewrite(base, routeId);
       if (!next) continue;
-      await writeDraft(tx, routeId, next, actor);
+      await savePropagated(tx, routeId, next, actor);
       updated += 1;
     }
     return { updated_drafts: updated };
-  }, TX_OPTIONS);
+  }, STATION_FIELDS_TX);
 }
-
-const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /**
  * Option list: every linked field (or each targeted one) gets the list's current options — option
@@ -579,7 +468,7 @@ function relinkListFields(
             if (f.type !== "choice_row" && f.type !== "multi_choice") return f;
             const ref = f.list_ref;
             if (!ref || ref.id !== list.id || !wanted(routeId, uid, f.id)) return f;
-            if (ref.ver === list.version && sameJson(f.options, list.options)) return f;
+            if (ref.ver === list.version && jsonEqual(f.options, list.options)) return f;
             changed = true;
             return { ...f, options: list.options.map((o) => ({ ...o })), list_ref: { id: list.id, ver: list.version } };
           }),
@@ -588,15 +477,6 @@ function relinkListFields(
     }
     return changed ? { schema: 1, steps } : null;
   };
-}
-
-/** A field id in none of `taken` (ids are unique per step, across its groups). */
-function freshFieldId(taken: ReadonlySet<string>): string {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const id = newFieldId();
-    if (!taken.has(id)) return id;
-  }
-  throw new Error("could not mint a free field id");
 }
 
 /**
@@ -625,7 +505,7 @@ function relinkSetCells(
         if (held.length === 0 || Math.min(...held) >= set.version || !wanted(routeId, uid, g.fields.map((f) => f.id))) return g;
         changed = true;
         const fresh = template.map((f): Field => {
-          const id = freshFieldId(taken);
+          const id = mintFree(() => newFieldId(), taken, "field id");
           taken.add(id);
           return { ...(JSON.parse(JSON.stringify(f)) as InputField), id, from_set: { id: set.id, ver: set.version } };
         });
@@ -648,7 +528,7 @@ function relinkSetCells(
 
 // ---- option lists -----------------------------------------------------------------------------------
 /** GET /api/settings/option-lists — every non-archived list (ascending id), with its usage. */
-export async function listOptionLists(db: PrismaClient): Promise<OptionListView[]> {
+export async function listOptionLists(db: PrismaClient): Promise<OptionListJson[]> {
   return db.$transaction(async (tx) => {
     const rows = await tx.option_lists.findMany({ where: { archived: false }, orderBy: { id: "asc" } });
     if (rows.length === 0) return [];
@@ -657,16 +537,16 @@ export async function listOptionLists(db: PrismaClient): Promise<OptionListView[
       const row: LibRow = { ...r, payload: r.options };
       return listView(row, storedOptions(row), places.get(r.id) ?? []);
     });
-  }, READ_TX);
+  }, STATION_FIELDS_READ_TX);
 }
 
 /** POST /api/settings/option-lists — { name, options } → the new list, version 1. */
-export async function createOptionList(db: Db, input: OptionListInput, actor: Actor): Promise<OptionListView> {
+export async function createOptionList(db: Db, input: unknown, actor: Actor): Promise<OptionListJson> {
   if (!isRecord(input)) throw badBody("Body must be {name, options}");
   const name = nameOf(input.name);
   const options = optionsOf(input.options);
   const r = await db.option_lists.create({
-    data: { name, options: options as unknown as Prisma.InputJsonValue, updated_by: actor.username || null },
+    data: { name, options: options as unknown as Prisma.InputJsonValue, updated_by: actor.username },
   });
   return listView({ ...r, payload: r.options }, options, []);
 }
@@ -676,8 +556,8 @@ export async function createOptionList(db: Db, input: OptionListInput, actor: Ac
  * list becomes version + 1; `linked` = every place linked to it (any version), for the propagate
  * that offers them the new options (spec §5.7 "החל על השדה").
  */
-export async function updateOptionList(db: PrismaClient, id: number, input: OptionListInput, actor: Actor): Promise<OptionListSavedJson> {
-  requireId(id, "list");
+export async function updateOptionList(db: PrismaClient, rawId: number | null, input: unknown, actor: Actor): Promise<OptionListSavedJson> {
+  const id = requireId(rawId, "list");
   if (!isRecord(input)) throw badBody("Body must be {name, options, base_version}");
   const name = nameOf(input.name);
   const options = optionsOf(input.options);
@@ -693,21 +573,21 @@ export async function updateOptionList(db: PrismaClient, id: number, input: Opti
              options = ${JSON.stringify(options)}::jsonb,
              version = version + 1,
              updated_at = now(),
-             updated_by = ${actor.username || null}
+             updated_by = ${actor.username}
        WHERE id = ${id}
       RETURNING version`;
     const linked = (await placesOf(tx, "list", id)).map((p) => ({ route_id: p.route.test_route_id, step_uid: p.step.uid, field_id: p.field_id }));
     return { version: saved.version, linked };
-  }, TX_OPTIONS);
+  }, STATION_FIELDS_TX);
 }
 
 /** GET /api/settings/option-lists/[id]/usage — every linked field, with its chip labels. */
-export async function optionListUsage(db: PrismaClient, id: number): Promise<LibraryUse[]> {
-  requireId(id, "list");
+export async function optionListUsage(db: PrismaClient, rawId: number | null): Promise<LibraryUseJson[]> {
+  const id = requireId(rawId, "list");
   return db.$transaction(async (tx) => {
     await loadRow(tx, "list", id, null);
     return describePlaces(tx, await placesOf(tx, "list", id));
-  }, READ_TX);
+  }, STATION_FIELDS_READ_TX);
 }
 
 /**
@@ -715,7 +595,7 @@ export async function optionListUsage(db: PrismaClient, id: number): Promise<Lib
  * fields (all, or the targets) take the list's current options in their routes' DRAFTS (artboard
  * 4: "…יחול על N שדות … לאחר פרסום").
  */
-export async function propagateOptionList(db: PrismaClient, id: number, input: PropagateInput, actor: Actor): Promise<PropagateResultJson> {
+export async function propagateOptionList(db: PrismaClient, id: number | null, input: unknown, actor: Actor): Promise<PropagateResultJson> {
   return propagateRow(db, "list", id, input, actor, (row, targets) =>
     relinkListFields(
       { id: row.id, version: row.version, options: storedOptions(row) },
@@ -728,8 +608,8 @@ export async function propagateOptionList(db: PrismaClient, id: number, input: P
  * DELETE /api/settings/option-lists/[id] — archived = true, unless a draft or a published version
  * links a field to it, or a (non-archived) field set's field does: 409 IN_USE.
  */
-export async function deleteOptionList(db: PrismaClient, id: number, actor: Actor): Promise<{ id: number; archived: true }> {
-  requireId(id, "list");
+export async function deleteOptionList(db: PrismaClient, rawId: number | null, actor: Actor): Promise<{ id: number; archived: true }> {
+  const id = requireId(rawId, "list");
   return db.$transaction(async (tx) => {
     await loadRow(tx, "list", id, "update");
     const places = await placesOf(tx, "list", id);
@@ -740,17 +620,17 @@ export async function deleteOptionList(db: PrismaClient, id: number, actor: Acto
          AND COALESCE(jsonb_path_exists(fields, ${SET_FIELDS_LIST_PATH}::jsonpath, jsonb_build_object('id', ${id}::int), true), false)
        ORDER BY id`;
     if (places.length > 0 || sets.length > 0) {
-      throw new AdminFieldsError(409, "IN_USE", `Option list ${id} is in use`, { usage: listUsage(places), field_sets: sets });
+      throw new HttpError(409, `Option list ${id} is in use`, { code: IN_USE, extra: { usage: listUsage(places), field_sets: sets } });
     }
     await tx.$executeRaw`
-      UPDATE option_lists SET archived = true, updated_at = now(), updated_by = ${actor.username || null} WHERE id = ${id}`;
+      UPDATE option_lists SET archived = true, updated_at = now(), updated_by = ${actor.username} WHERE id = ${id}`;
     return { id, archived: true as const };
-  }, TX_OPTIONS);
+  }, STATION_FIELDS_TX);
 }
 
 // ---- field sets ---------------------------------------------------------------------------------------
 /** GET /api/settings/field-sets — every non-archived set (ascending id), with its usage. */
-export async function listFieldSets(db: PrismaClient): Promise<FieldSetView[]> {
+export async function listFieldSets(db: PrismaClient): Promise<FieldSetJson[]> {
   return db.$transaction(async (tx) => {
     const rows = await tx.field_sets.findMany({ where: { archived: false }, orderBy: { id: "asc" } });
     if (rows.length === 0) return [];
@@ -759,16 +639,16 @@ export async function listFieldSets(db: PrismaClient): Promise<FieldSetView[]> {
       const row: LibRow = { ...r, payload: r.fields };
       return setView(row, storedSetFields(row), places.get(r.id) ?? []);
     });
-  }, READ_TX);
+  }, STATION_FIELDS_READ_TX);
 }
 
 /** POST /api/settings/field-sets — { name, fields } → the new set, version 1. */
-export async function createFieldSet(db: Db, input: FieldSetInput, actor: Actor): Promise<FieldSetView> {
+export async function createFieldSet(db: Db, input: unknown, actor: Actor): Promise<FieldSetJson> {
   if (!isRecord(input)) throw badBody("Body must be {name, fields}");
   const name = nameOf(input.name);
   const fields = setFieldsOf(input.fields);
   const r = await db.field_sets.create({
-    data: { name, fields: fields as unknown as Prisma.InputJsonValue, updated_by: actor.username || null },
+    data: { name, fields: fields as unknown as Prisma.InputJsonValue, updated_by: actor.username },
   });
   return setView({ ...r, payload: r.fields }, fields, []);
 }
@@ -778,8 +658,8 @@ export async function createFieldSet(db: Db, input: FieldSetInput, actor: Actor)
  * base_version } → { version }. The linked cells keep the version they copied (the map marks them
  * "הערכה עודכנה") until propagate.
  */
-export async function updateFieldSet(db: PrismaClient, id: number, input: FieldSetInput, actor: Actor): Promise<FieldSetSavedJson> {
-  requireId(id, "set");
+export async function updateFieldSet(db: PrismaClient, rawId: number | null, input: unknown, actor: Actor): Promise<FieldSetSavedJson> {
+  const id = requireId(rawId, "set");
   if (!isRecord(input)) throw badBody("Body must be {name, fields, base_version}");
   const name = nameOf(input.name);
   const fields = setFieldsOf(input.fields);
@@ -795,21 +675,21 @@ export async function updateFieldSet(db: PrismaClient, id: number, input: FieldS
              fields = ${JSON.stringify(fields)}::jsonb,
              version = version + 1,
              updated_at = now(),
-             updated_by = ${actor.username || null}
+             updated_by = ${actor.username}
        WHERE id = ${id}
       RETURNING version`;
     return { version: saved.version };
-  }, TX_OPTIONS);
+  }, STATION_FIELDS_TX);
 }
 
 /** GET /api/settings/field-sets/[id]/usage — every cell holding the set's fields ("בשימוש ב-9
  *  תאים"; a cell with ver below the set's version is one of "N תאים משתמשים בגרסה קודמת"). */
-export async function fieldSetUsage(db: PrismaClient, id: number): Promise<LibraryUse[]> {
-  requireId(id, "set");
+export async function fieldSetUsage(db: PrismaClient, rawId: number | null): Promise<LibraryUseJson[]> {
+  const id = requireId(rawId, "set");
   return db.$transaction(async (tx) => {
     await loadRow(tx, "set", id, null);
     return describePlaces(tx, await placesOf(tx, "set", id));
-  }, READ_TX);
+  }, STATION_FIELDS_READ_TX);
 }
 
 /**
@@ -817,7 +697,7 @@ export async function fieldSetUsage(db: PrismaClient, id: number): Promise<Libra
  * { updated_drafts }. The outdated cells (all, or those holding a target's field) take the set's
  * current fields in their routes' DRAFTS ("שום תא לא משתנה בלי פרסום").
  */
-export async function propagateFieldSet(db: PrismaClient, id: number, input: PropagateInput, actor: Actor): Promise<PropagateResultJson> {
+export async function propagateFieldSet(db: PrismaClient, id: number | null, input: unknown, actor: Actor): Promise<PropagateResultJson> {
   return propagateRow(db, "set", id, input, actor, (row, targets) =>
     relinkSetCells(
       { id: row.id, version: row.version, fields: storedSetFields(row) },
@@ -828,16 +708,16 @@ export async function propagateFieldSet(db: PrismaClient, id: number, input: Pro
 
 /** DELETE /api/settings/field-sets/[id] — archived = true, unless a draft or a published version
  *  holds its fields: 409 IN_USE. */
-export async function deleteFieldSet(db: PrismaClient, id: number, actor: Actor): Promise<{ id: number; archived: true }> {
-  requireId(id, "set");
+export async function deleteFieldSet(db: PrismaClient, rawId: number | null, actor: Actor): Promise<{ id: number; archived: true }> {
+  const id = requireId(rawId, "set");
   return db.$transaction(async (tx) => {
     const row = await loadRow(tx, "set", id, "update");
     const places = await placesOf(tx, "set", id);
     if (places.length > 0) {
-      throw new AdminFieldsError(409, "IN_USE", `Field set ${id} is in use`, { usage: setUsage(places, row.version) });
+      throw new HttpError(409, `Field set ${id} is in use`, { code: IN_USE, extra: { usage: setUsage(places, row.version) } });
     }
     await tx.$executeRaw`
-      UPDATE field_sets SET archived = true, updated_at = now(), updated_by = ${actor.username || null} WHERE id = ${id}`;
+      UPDATE field_sets SET archived = true, updated_at = now(), updated_by = ${actor.username} WHERE id = ${id}`;
     return { id, archived: true as const };
-  }, TX_OPTIONS);
+  }, STATION_FIELDS_TX);
 }

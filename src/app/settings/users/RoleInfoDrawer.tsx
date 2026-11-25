@@ -9,21 +9,19 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { Check, Lock, X } from "lucide-react";
-import type { AppRole } from "@/lib/auth/roles";
-import { ALL_ROLES, ROLE_DESCRIPTION, summarizeRole } from "./roleCapabilities";
+import { APP_ROLES, ROLE_LABEL, type AppRole } from "@/lib/auth/roles";
+import { ROLE_DESCRIPTION, ROLE_DOT, summarizeRole } from "./roleCapabilities";
 
 export type RoleInfoDrawerProps = {
   /** The role on show; null = closed. */
   role: AppRole | null;
   onRoleChange: (role: AppRole) => void;
   onClose: () => void;
-  labels: Record<AppRole, string>;
-  dots: Record<AppRole, string>;
   /** Full names of the users per role (the page's loaded list). */
   people: Record<AppRole, string[]>;
 };
 
-export default function RoleInfoDrawer({ role, onRoleChange, onClose, labels, dots, people }: RoleInfoDrawerProps) {
+export default function RoleInfoDrawer({ role, onRoleChange, onClose, people }: RoleInfoDrawerProps) {
   const titleId = React.useId();
   const panelRef = React.useRef<HTMLElement | null>(null);
   const closeRef = React.useRef<HTMLButtonElement | null>(null);
@@ -61,7 +59,7 @@ export default function RoleInfoDrawer({ role, onRoleChange, onClose, labels, do
   return createPortal(
     <div className="role-drawer" onKeyDown={onKeyDown}>
       <div className="role-drawer__scrim" onClick={onClose} aria-hidden />
-      <aside ref={panelRef} className="role-drawer__panel" dir="rtl" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <aside ref={panelRef} className="role-drawer__panel" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="role-drawer__head">
           <div className="role-drawer__bar">
             <span className="role-drawer__eyebrow">הרשאות לפי תפקיד</span>
@@ -71,7 +69,7 @@ export default function RoleInfoDrawer({ role, onRoleChange, onClose, labels, do
           </div>
 
           <div className="role-drawer__tabs" role="tablist" aria-label="תפקיד">
-            {ALL_ROLES.map((r) => (
+            {APP_ROLES.map((r) => (
               <button
                 key={r}
                 type="button"
@@ -80,15 +78,15 @@ export default function RoleInfoDrawer({ role, onRoleChange, onClose, labels, do
                 className="role-drawer__tab"
                 onClick={() => onRoleChange(r)}
               >
-                {labels[r]}
+                {ROLE_LABEL[r]}
               </button>
             ))}
           </div>
 
           <div>
             <h2 id={titleId} className="role-drawer__title">
-              <span className="role-dot role-drawer__dot" style={{ background: dots[role] }} aria-hidden />
-              {labels[role]}
+              <span className="role-dot role-drawer__dot" style={{ background: ROLE_DOT[role] }} aria-hidden />
+              {ROLE_LABEL[role]}
             </h2>
             <p className="role-drawer__desc">{ROLE_DESCRIPTION[role]}</p>
           </div>

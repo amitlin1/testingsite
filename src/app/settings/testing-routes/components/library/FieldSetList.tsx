@@ -3,7 +3,7 @@ import * as React from "react";
 import { ChevronLeft, Info, Plus, Search } from "lucide-react";
 import { Button, Skeleton, Tag, cn } from "@/components/ui";
 import type { FieldSetJson, OptionListJson } from "@/app/lib/station-fields/admin-types";
-import type { ResourceState } from "../../lib/useLibrary";
+import type { ResourceState } from "../../lib/resources";
 import type { LibraryTab } from "../../lib/routeQuery";
 import { filterByName, setCounts } from "../../lib/libraryModel";
 import {
@@ -11,19 +11,9 @@ import {
 } from "../../lib/libraryLabels";
 
 /**
- * The library's list pane (artboard 8, spec §5.9 "חלונית הרשימה"), <section aria-label="ספריית ערכות
- * ורשימות">:
- *   - the segmented control (role="group" aria-label="תוכן הספרייה"): "ערכות שדות · {n}" |
- *     "רשימות אפשרויות · {n}";
- *   - h2 "ערכות שדות" / "רשימות אפשרויות" with outlined small "+ ערכה חדשה" / "+ רשימה חדשה";
- *   - the 40px pill search "חיפוש ערכה…" / "חיפוש רשימה…";
- *   - role="list" rows, 56px (the .stz-row pattern, aria-current on the open one): a set — its name
- *     (14/600), "{N} שדות · בשימוש ב-{n} תאים", Tag "לא בשימוש", the orange dot "שינויים שלא נשמרו";
- *     a list — its name, "{n} אפשרויות · בשימוש ב-{m} שדות" and its tone dots;
- *   - "אין תוצאות" + "אין ערכה בשם הזה. אפשר ליצור ערכה חדשה." / "אין רשימה בשם הזה." when no row is
- *     left (artboard 8 `noResults`: whenever the rows are empty);
- *   - the pearl footer with the tab's one-line explanation.
- * A load that failed is never an empty library: undrawn text and "נסה שוב".
+ * The library's list pane (artboard 8, spec §5.9 "חלונית הרשימה"): the sets or the lists, searched by
+ * name; "no results" whenever the rows are empty (artboard 8 `noResults`). A load that failed is never
+ * an empty library: undrawn text and "נסה שוב".
  */
 
 export type FieldSetListProps = {
@@ -105,7 +95,7 @@ export function FieldSetList({
         </div>
         {createError && <span role="alert" className="rf-lib-error">{createError}</span>}
         <div className="rf-lib-search">
-          <label htmlFor={searchId} className="sfe-sr">{placeholder}</label>
+          <label htmlFor={searchId} className="sh-visually-hidden">{placeholder}</label>
           <Search size={18} strokeWidth={1.75} className="rf-lib-search__icon" aria-hidden />
           <input
             id={searchId}
@@ -150,7 +140,7 @@ export function FieldSetList({
                   <div role="listitem" key={s.id}>
                     <button
                       type="button"
-                      className="stz-row rf-lib-row"
+                      className="set-row rf-lib-row"
                       data-selected={on || undefined}
                       aria-current={on ? "true" : undefined}
                       onClick={() => onSelect(s.id)}
@@ -172,7 +162,7 @@ export function FieldSetList({
                   <div role="listitem" key={l.id}>
                     <button
                       type="button"
-                      className="stz-row rf-lib-row"
+                      className="set-row rf-lib-row"
                       data-selected={on || undefined}
                       aria-current={on ? "true" : undefined}
                       onClick={() => onSelect(l.id)}
@@ -206,5 +196,3 @@ export function FieldSetList({
     </section>
   );
 }
-
-export default FieldSetList;

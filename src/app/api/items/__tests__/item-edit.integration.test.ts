@@ -6,7 +6,7 @@
 // Runs ONLY when TEST_DATABASE_URL points at a throwaway database (the write-path harness).
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import * as H from "../../../lib/metrics/__tests__/write-path-helpers";
+import * as H from "@/test-support/db-harness";
 
 const BLANK = { makat: "", model: "", manufacturer: "", manufacturerNo: "" };
 
@@ -42,6 +42,9 @@ describe(
       assert.deepEqual(await details(7101), { makat: "", model: "", manufacturer_name: "", manufacturer_no: "", serial_no: "SN-7101" });
       const got = await read("7101");
       assert.equal(got.status, 200);
+      const { item } = await got.json();
+      assert.equal(item?.item_id, 7101);
+      assert.equal(item?.serial_no, "SN-7101");
     });
 
     it("a plain item: the optional details not sent at all — saves", async () => {
@@ -97,7 +100,9 @@ describe(
       }
       // "itemId-sourceId" (the barcode format) still reads.
       await H.seedItem({ itemId: 7105 });
-      assert.equal((await read("7105-2")).status, 200);
+      const viaLabel = await read("7105-2");
+      assert.equal(viaLabel.status, 200);
+      assert.equal((await viaLabel.json()).item?.item_id, 7105);
     });
   },
 );

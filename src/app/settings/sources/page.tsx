@@ -17,6 +17,7 @@ export default function SourcesPage() {
       title="ניהול מקורות"
       subtitle="מקורות המשלוחים הנכנסים למערכת."
       countLabel="מקורות"
+      lookup="sources"
     />
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-// §5 / §14 — the one page the eight old dashboard pages became.
+// §5 / §14 — the whole dashboard, one page.
 //
 // It owns three things and delegates everything else: the shared state, the
 // shared fetch, and the history overlay. The app shell's rail and top bar are
@@ -18,28 +18,17 @@ import * as React from "react";
 
 import { useMediaQuery } from "@/components/ui";
 import { FilterList } from "@/components/ui/icons";
-import DashboardHeader from "@/app/components/dashboard/DashboardHeader";
-import DashboardSidebar, { NAV_ITEMS } from "@/app/components/dashboard/DashboardSidebar";
-import HistoryOverlay, { type HistoryTarget } from "@/app/components/dashboard/HistoryOverlay";
-import TopStatsBar from "@/app/components/dashboard/TopStatsBar";
-import type {
-  CustomerWire,
-  ItemTypeWire,
-  KpisWire,
-  ShipmentWire,
-  SlowItemWire,
-  StationWire,
-  StatusWire,
-} from "@/app/lib/dashboard/api-types";
-import { formatClock, formatDayTick, formatLongDate } from "@/app/lib/dashboard/format";
-import { activeChips, rangeIsComplete, useDashboardData } from "@/app/lib/hooks/useDashboardData";
-import { useDashboardOptions } from "@/app/lib/hooks/useDashboardOptions";
-import {
-  useDashboardState,
-  type DashboardState,
-  type TabKey,
-} from "@/app/lib/hooks/useDashboardState";
-import type { DashboardFilters } from "@/types/dashboard";
+import { AmberNotice, CappedPeriodNotice } from "./_components/AmberNotice";
+import DashboardHeader from "./_components/DashboardHeader";
+import DashboardSidebar, { NAV_ITEMS } from "./_components/DashboardSidebar";
+import HistoryOverlay, { type HistoryTarget } from "./_components/HistoryOverlay";
+import TopStatsBar from "./_components/TopStatsBar";
+import { STUCK_HOURS, formatClock, formatLongDate } from "./_lib/format";
+import { EMPTY_FILTERS, activeChips, type FilterKey } from "./_lib/filters";
+import type { DashboardState, TabKey } from "./_lib/state";
+import { rangeIsComplete, useDashboardData } from "./_lib/useDashboardData";
+import { useDashboardOptions } from "./_lib/useDashboardOptions";
+import { useDashboardState } from "./_lib/useDashboardState";
 
 import CustomersTab from "./tabs/CustomersTab";
 import ItemTypesTab from "./tabs/ItemTypesTab";
@@ -64,7 +53,8 @@ const TAB_COMPONENTS: Record<TabKey, React.ComponentType<React.ComponentProps<ty
   types: ItemTypesTab,
 };
 
-const DRAWER_QUERY = "(max-width: 1099px)";
+/** dashboard.css hides the rail at the same width. */
+const DRAWER_QUERY = "(max-width: 1100px)";
 
 export default function DashboardShell({ initial }: { initial?: Partial<DashboardState> }) {
   const api = useDashboardState(initial);
@@ -87,21 +77,21 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
   const drawerRef = React.useRef<HTMLDivElement>(null);
   useDrawerFocus(drawerOpen, drawerRef, () => setDrawerOpen(false));
 
-  const kpis = data.get<KpisWire>("kpis");
-  const stations = data.get<StationWire[]>("stationsLive");
-  const slow = data.get<SlowItemWire[]>("slow");
-  const shipments = data.get<ShipmentWire[]>("shipments");
-  const customers = data.get<CustomerWire[]>("customers");
-  const types = data.get<ItemTypeWire[]>("types");
-  const status = data.get<StatusWire[]>("status");
+  const kpis = data.get("kpis");
+  const stations = data.get("stationsLive");
+  const slow = data.get("slow");
+  const shipments = data.get("shipments");
+  const customers = data.get("customers");
+  const types = data.get("types");
+  const status = data.get("status");
 
   // §7's fifth cell and the nav badge count the same thing: rows in the page
-  // the server returned whose WALL wait has passed 48 hours.
+  // the server returned whose WALL wait has passed STUCK_HOURS.
   const stuckCount = React.useMemo(
     () =>
       slow.data === null
         ? null
-        : slow.data.filter((row) => passesThreshold(row, 48)).length,
+        : slow.data.filter((row) => passesThreshold(row, STUCK_HOURS)).length,
     [slow.data],
   );
 
@@ -109,12 +99,10 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
     () =>
       activeChips(api.state.filters, {
         customer: options.customers.find((c) => c.id === api.state.filters.customerId)?.name,
-        shipment: findName(options.shipments, api.state.filters.shipmentId),
-        itemType: options.itemTypes.find((t) => Number(t.id) === api.state.filters.itemTypeId)?.name,
-        station: options.stations.find((s) => Number(s.id) === api.state.filters.testStationId)?.name,
-        stationType: options.stationTypes.find(
-          (s) => Number(s.id) === api.state.filters.testStationTypeId,
-        )?.name,
+        shipment: options.shipments.find((s) => s.id === api.state.filters.shipmentId)?.shipment_code,
+        itemType: options.itemTypes.find((t) => t.id === api.state.filters.itemTypeId)?.name,
+        station: options.stations.find((s) => s.id === api.state.filters.testStationId)?.name,
+        stationType: options.stationTypes.find((s) => s.id === api.state.filters.testStationTypeId)?.name,
       }),
     [api.state.filters, options],
   );
@@ -125,7 +113,7 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
     customers: customers.data?.length ?? null,
     types: types.data?.length ?? null,
     activeItems: status.data ? status.data.reduce((sum, s) => sum + s.count, 0) : null,
-    asOf: status.data?.[0]?._new_asOf ?? null,
+    asOf: status.data?.[0]?.asOf ?? null,
   });
 
   // §16.3 — when the server narrowed the window, the window it actually served
@@ -134,12 +122,7 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
 
   const Tab = TAB_COMPONENTS[api.state.tab];
 
-  const removeChip = (key: keyof DashboardFilters) => {
-    if (key === "showAllHistory") api.setFilter("showAllHistory", false);
-    else if (key === "status") api.setFilter("status", "all");
-    else if (key === "itemSerial" || key === "workerId") api.setFilter(key, null);
-    else api.setFilter(key as "customerId", null);
-  };
+  const removeChip = (key: FilterKey) => api.setFilter(key, EMPTY_FILTERS[key]);
 
   return (
     <div className="dash-root" dir="rtl">
@@ -165,39 +148,14 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
         </div>
 
         {!rangeIsComplete(api.state) && (
-          <div
-            style={{
-              flexShrink: 0,
-              fontSize: "var(--text-fine)",
-              color: "var(--dash-amber-ink)",
-              background: "var(--dash-amber-tint)",
-              border: "1px solid var(--dash-amber-hairline)",
-              borderRadius: "var(--r-sm)",
-              padding: "5px 12px",
-            }}
-          >
-            בחר תאריך התחלה ותאריך סיום · עד אז הנתונים אינם מתעדכנים
-          </div>
+          <AmberNotice>בחר תאריך התחלה ותאריך סיום · עד אז הנתונים אינם מתעדכנים</AmberNotice>
         )}
 
         {capped && (
-          <div
-            style={{
-              flexShrink: 0,
-              fontSize: "var(--text-fine)",
-              color: "var(--dash-amber-ink)",
-              background: "var(--dash-amber-tint)",
-              border: "1px solid var(--dash-amber-hairline)",
-              borderRadius: "var(--r-sm)",
-              padding: "5px 12px",
-            }}
-          >
-            התקופה קוצרה על ידי השרת · הוצג {formatDayTick(capped.periodFrom ?? "")} –{" "}
-            {formatDayTick(capped.periodTo ?? "")} במקום הטווח שהתבקש
-          </div>
+          <CappedPeriodNotice lead="התקופה קוצרה על ידי השרת" from={capped.periodFrom} to={capped.periodTo} />
         )}
 
-        {/* Below 1100px the rail is gone and the tabs become a scrollable pill
+        {/* At 1100px and below the rail is gone and the tabs become a scrollable pill
             row with the filters behind one button. */}
         <MobileNav
           tab={api.state.tab}
@@ -211,7 +169,7 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
           stations={stations.data}
           stuckCount={stuckCount}
           loading={kpis.loading}
-          onShowStuck={() => api.drillTo("slow", {}, { stuckHours: 48 })}
+          onShowStuck={() => api.drillTo("slow", {}, { stuckHours: STUCK_HOURS })}
         />
 
         <Tab api={api} data={data} openHistory={setHistory} />
@@ -276,14 +234,6 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
 
 // ---------------------------------------------------------------------------
 
-function findName(raw: unknown[], id: number | null): string | undefined {
-  if (id === null) return undefined;
-  const match = (raw as Array<Record<string, unknown>>).find(
-    (s) => Number(s.id ?? s.shipment_id) === id,
-  );
-  return match ? String(match.shipment_code ?? match.shipmentCode ?? id) : undefined;
-}
-
 interface MetaCounts {
   stations: number | null;
   shipments: number | null;
@@ -346,11 +296,11 @@ function tabMeta(state: DashboardState, counts: MetaCounts): { title: string; su
 }
 
 /**
- * The ≤1099px tab row. The active pill is brought into view with `scrollBy`
+ * The ≤1100px tab row. The active pill is brought into view with `scrollBy`
  * on a delta measured with getBoundingClientRect — never `scrollIntoView`,
- * which scrolls every scrollable ancestor and would drag the page itself. (The
- * old `scrollLeft = offsetLeft − …` arithmetic assumed LTR: in this RTL
- * scroller `scrollLeft` runs from 0 down to negatives, so it never moved.)
+ * which scrolls every scrollable ancestor and would drag the page itself — and
+ * never `scrollLeft` arithmetic, which assumes LTR: in this RTL scroller
+ * `scrollLeft` runs from 0 down to negatives.
  */
 function MobileNav({
   tab,

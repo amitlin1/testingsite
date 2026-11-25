@@ -5,7 +5,9 @@ import { Button, IconButton } from "@/components/ui";
 import { Close as CloseIcon } from "@/components/ui/icons";
 import { CloudUploadOutlined as CloudUploadOutlinedIcon } from "@/components/ui/icons";
 import { Star as StarIcon } from "@/components/ui/icons";
-import type { FormImage, ReferenceStation, StationsFor } from "./referenceForm";
+import { MAX_IMAGE_SIZE_MB } from "@/app/lib/reference-items/wire";
+import type { ReferenceStation } from "@/app/lib/reference-items/stations";
+import type { FormImage, StationsFor } from "./referenceForm";
 import Image from "next/image";
 
 /**
@@ -16,7 +18,7 @@ import Image from "next/image";
  * with its images, a drop target and "הוספת תמונות". Below them, images on a station that left
  * the route, and the images not assigned to a station (uploaded before reference images went by
  * station, to a group no single station showed) — each with the station to move it to, so nothing
- * has to be uploaded again. States (hover / focus / drag) live in settings.css (.ri-*).
+ * has to be uploaded again. States (hover / focus / drag) live in reference-items.css (.ri-*).
  */
 
 export default function ReferenceImagesField({ idPrefix, stations, images, primaryKey, onAddFiles, onStation, onRemove, onPrimary }: {
@@ -124,7 +126,7 @@ function StationSection({ idPrefix, station, index, images, thumb, onAddFiles, n
         <div role="button" tabIndex={0} className="ri-station__drop" onClick={() => fileRef.current?.click()}
           aria-label={`הוספת תמונות ייחוס ל${station.name}: גרור תמונות לכאן או לחץ לבחירה`}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileRef.current?.click(); } }}>
-          גרור תמונות לכאן, או <span className="ri-station__drop-link">לחץ לבחירה</span> · PNG או JPG · עד 50MB לתמונה
+          גרור תמונות לכאן, או <span className="ri-station__drop-link">לחץ לבחירה</span> · PNG או JPG · עד {MAX_IMAGE_SIZE_MB}MB לתמונה
         </div>
       )}
       {add && (

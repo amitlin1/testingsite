@@ -1,6 +1,6 @@
-"use client";
 import SettingsSubNav from "./components/SettingsSubNav";
 import "./settings.css";
+import "./components/settings-header.css";
 
 /**
  * Settings section wrapper.
@@ -21,7 +21,7 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", direction: "rtl" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <SettingsSubNav />
       {/* min-height:0 lets the frame shrink instead of pushing the sub-nav
           out; the sub-nav stays full-bleed above it. */}

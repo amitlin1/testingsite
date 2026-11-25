@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Skeleton } from "@/components/ui";
-import { TONE_DOT, type StatusTone } from "@/app/lib/status-tones";
+import { TONE_DOT, type StatusTone } from "@/lib/item-status";
 
 /* =========================================================================
    DataTable — THE standard table for the app (Shifthouse look).
@@ -19,7 +19,7 @@ import { TONE_DOT, type StatusTone } from "@/app/lib/status-tones";
        columns={[
          { key: "name",   header: "שם",    cell: (r) => r.name, bold: true, nowrap: true },
          { key: "qty",    header: "כמות",  cell: (r) => r.qty, nums: true, align: "center" },
-         { key: "status", header: "סטטוס", cell: (r) => <StatusPill label={r.status} active={r.isActive} /> },
+         { key: "status", header: "סטטוס", cell: (r) => <StatusPill label={r.status} tone={toneOfStatus(r.statusId)} /> },
          { key: "prog",   header: "התקדמות", width: 180, cell: (r) => <ProgressCell pct={p} text={t} /> },
          { key: "act",    header: "פעולות", align: "center", width: 120,
            cell: (r) => <RowActions><IconAction title="ערוך" onClick={() => edit(r)}><Pencil size={16}/></IconAction></RowActions> },
@@ -27,7 +27,7 @@ import { TONE_DOT, type StatusTone } from "@/app/lib/status-tones";
      />
 
    Cell helpers exported here — use them so status/progress/actions look uniform:
-     • <StatusPill label active/>       — neutral pill, blue dot = active, grey = other. Never green/orange.
+     • <StatusPill label tone/>         — neutral pill, the status shown by its dot (item-status tones).
      • <ProgressCell pct text/>         — single-blue bar; completion = full fill.
      • <RowActions><IconAction/></...>  — flat icon buttons for an actions column.
    ========================================================================= */
@@ -40,7 +40,7 @@ export type Column<T> = {
   width?: number;
   bold?: boolean;
   muted?: boolean;
-  nums?: boolean;      // tabular-nums
+  nums?: boolean;
   nowrap?: boolean;
 };
 
@@ -143,10 +143,9 @@ export default function DataTable<T>({
 }
 
 /* Neutral status pill: ink text, the status shown by its dot. Pass `tone`
-   (toneOfStatus) so every screen colours a status the same way; `active`
-   is the older blue-or-grey switch. */
-export function StatusPill({ label, active = false, tone }: { label: React.ReactNode; active?: boolean; tone?: StatusTone }) {
-  const dot = tone ? TONE_DOT[tone] : active ? "var(--color-primary)" : "var(--color-ink-muted-48)";
+   (toneOfStatus) so every screen colours a status the same way. */
+export function StatusPill({ label, tone = "neutral" }: { label: React.ReactNode; tone?: StatusTone }) {
+  const dot = TONE_DOT[tone];
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--color-ink)", background: "var(--color-canvas-parchment)", border: "1px solid var(--color-hairline)", borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap" }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }} />
@@ -170,8 +169,6 @@ export function ProgressCell({ pct, text }: { pct: number | null; text: string }
   );
 }
 
-/* Row action buttons (edit / delete …) — flat icon buttons matching the app.
-   Pass lucide icons. Use inside an align:"center" actions column. */
 export function RowActions({ children }: { children: React.ReactNode }) {
   return <div style={{ display: "inline-flex", alignItems: "center", gap: 4, justifyContent: "center" }}>{children}</div>;
 }

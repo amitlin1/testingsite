@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/prisma';
+import { prisma } from "@/lib/db";
+import { errorResponse } from "@/lib/http/errors";
 import { parsePopupTemplateConfig } from '@/app/lib/popup-templates/validate';
 import type { PopupTemplateConfig } from '@/app/lib/popup-templates/schema';
-import { referenceStationsOf } from '@/lib/reference-stations';
+import { referenceStationsOf } from '@/app/lib/reference-items/stations';
 
 export const runtime = 'nodejs';
 
 /**
  * GET /api/settings/reference-items/stations — the stations the reference-items page uploads to
- * (src/lib/reference-stations.ts): every station type's name, and per item type the station types
+ * (app/lib/reference-items/stations.ts): every station type's name, and per item type the station types
  * of its routes that show reference images, in route order. A real error answers 500, never an
  * empty answer: the page then says so instead of offering no station.
  */
@@ -36,7 +37,6 @@ export async function GET() {
       templates: configs,
     }));
   } catch (error) {
-    console.error('Error fetching reference stations:', error);
-    return NextResponse.json({ error: 'Failed to fetch reference stations' }, { status: 500 });
+    return errorResponse(error, 'Failed to fetch reference stations');
   }
 }

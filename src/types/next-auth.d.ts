@@ -1,9 +1,8 @@
-// Auth.js v5 module augmentation. TEMPLATE — the refresh/role fields are
-// portable; add app-specific session.user fields where marked.
-//
-// Import it once (e.g. in auth.ts) to pick up these types app-wide.
+// Auth.js v5 module augmentation: the session and JWT fields auth.ts sets. Ambient
+// (tsconfig includes it), so it is imported nowhere.
 
 import type { DefaultSession } from "next-auth";
+import type { TERMINAL_SESSION_ERROR } from "@/lib/auth/session";
 
 declare module "next-auth" {
   interface Session {
@@ -13,8 +12,6 @@ declare module "next-auth" {
       displayName?: string;
       /** מספר עובד — Keycloak custom attribute, projected in auth.ts. */
       employeeNumber?: string | null;
-      // >>> APP-SPECIFIC: add custom user fields you project in the session
-      // callback (e.g. a local id, rank, title).
     } & DefaultSession["user"];
     /** Merged realm + client roles. */
     roles: string[];
@@ -24,7 +21,7 @@ declare module "next-auth" {
     idToken?: string;
     /** Set to "RefreshAccessTokenError" when silent refresh terminally failed.
      *  Consumers redirect to login on this. DO NOT remove. */
-    error?: "RefreshAccessTokenError";
+    error?: typeof TERMINAL_SESSION_ERROR;
   }
 }
 
@@ -46,12 +43,10 @@ declare module "@auth/core/jwt" {
     preferred_username?: string;
     profile?: {
       display_name?: string;
-      rank?: string;
-      title?: string;
     };
     name?: string;
     email?: string;
     employee_number?: string;
-    error?: "RefreshAccessTokenError";
+    error?: typeof TERMINAL_SESSION_ERROR;
   }
 }

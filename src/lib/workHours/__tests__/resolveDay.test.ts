@@ -4,12 +4,11 @@ import { resolveDay, resolveRange, type ResolveDayInput } from "../resolveDay";
 import type {
   DepartmentHoliday,
   IsraeliHolidayInfo,
-  Weekday,
   WeekdayDefault,
   WorkdayOverride,
   WorkHoursContext,
 } from "../types";
-import { weekdayOf } from "../time";
+import { weekdayOf, type Weekday } from "@/lib/time/civil";
 
 const WORK = { start: "07:00", end: "15:35", breakStart: "12:00", breakEnd: "13:00" };
 function seededDefaults(): WeekdayDefault[] {
@@ -180,6 +179,16 @@ test("precedence: override beats the national half-day default", () => {
   );
   assert.equal(r.category, "vacation");
   assert.equal(r.isWorking, false);
+});
+
+test("resolveRange gives a weekday with no stored row the default template", () => {
+  const days = resolveRange("2026-09-13", "2026-09-19", { defaults: [], overrides: [], holidays: [], israeli: [] });
+  const byDate = Object.fromEntries(days.map((d) => [d.date, d]));
+  assert.equal(byDate["2026-09-13"].netMinutes, 455); // Sunday
+  assert.equal(byDate["2026-09-13"].breakStart, "12:00");
+  assert.equal(byDate["2026-09-17"].netMinutes, 455); // Thursday
+  assert.equal(byDate["2026-09-18"].category, "friday");
+  assert.equal(byDate["2026-09-19"].category, "shabbat");
 });
 
 test("resolveRange integrates all layers over a window", () => {
