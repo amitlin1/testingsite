@@ -2,7 +2,7 @@ import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TestStation } from "@/app/lib/testing/contract";
 import { useStations } from "@/app/components/lookups";
-import { loadBlockedPackages, loadCompletedSince, loadQueue, loadStationTypes } from "../api";
+import { loadBlockedPackages, loadCompletedSince, loadQueue, loadShipmentProgress, loadStationTypes } from "../api";
 
 /** The station queue could not be loaded (network / server). */
 const QUEUE_LOAD_FAILED = "לא ניתן לטעון את התור של העמדה. בדוק את החיבור ונסה שוב.";
@@ -52,6 +52,23 @@ export function useStationQueue(stationId: number | null) {
     },
   });
 
+  // The tree's "N/M סיימו כאן" per shipment: asked for the shipments the queue holds now (sorted,
+  // so the same set is the same query).
+  const shipmentIds = React.useMemo(
+    () => [...new Set(items.map((it) => it.shipment_id).filter((id): id is number => id != null))].sort((a, b) => a - b),
+    [items],
+  );
+  const progressQ = useQuery({
+    queryKey: ["testing", "shipment-progress", stationId, shipmentIds.join(",")],
+    enabled: stationId != null && shipmentIds.length > 0,
+    queryFn: () => loadShipmentProgress(stationId!, shipmentIds),
+    staleTime: 15_000,
+  });
+  const shipmentProgress = React.useMemo(
+    () => new Map((progressQ.data ?? []).map((p) => [p.shipmentId, p])),
+    [progressQ.data],
+  );
+
   const blockedQ = useQuery({
     queryKey: ["testing", "blocked", stationId],
     enabled: stationId != null && packageLevel,
@@ -60,7 +77,7 @@ export function useStationQueue(stationId: number | null) {
 
   const refresh = React.useCallback(() => {
     if (stationId == null) return;
-    for (const k of ["items", "completed-today", "blocked"]) queryClient.invalidateQueries({ queryKey: ["testing", k, stationId] });
+    for (const k of ["items", "completed-today", "blocked", "shipment-progress"]) queryClient.invalidateQueries({ queryKey: ["testing", k, stationId] });
   }, [queryClient, stationId]);
 
   return {
@@ -80,6 +97,9 @@ export function useStationQueue(stationId: number | null) {
     stale: stationId != null && (itemsQ.isPending || (station == null && allStationsQ.isPending)),
     completedToday: completedQ.data ?? null,
     blockedPackages: packageLevel ? blockedQ.data ?? [] : [],
+    /** By shipment id; a shipment missing from it (not answered yet, or the call failed) shows no
+     *  progress rather than a made-up one. */
+    shipmentProgress,
     refresh,
   };
 }

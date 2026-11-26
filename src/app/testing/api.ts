@@ -7,6 +7,7 @@ import type {
   QueueRow,
   ResultAnswer,
   ResultBody,
+  ShipmentProgress,
   StationHistoryRow,
   StartReleaseBody,
   StepBackAnswer,
@@ -64,6 +65,9 @@ export const loadStationTypes = () => getArray<TestStationType>("/api/testing/st
 export const loadQueue = (stationId: number) => getArray<QueueRow>(`/api/testing/items?stationId=${stationId}`);
 export const loadBlockedPackages = (stationId: number) => getArray<PackageView>(`/api/testing/blocked-packages?stationId=${stationId}`);
 export const loadStationHistory = (stationId: number) => getArray<StationHistoryRow>(`/api/testing/station-history?stationId=${stationId}`);
+/** Per shipment of the queue: how many of its rows pass this station, and how many are past it. */
+export const loadShipmentProgress = (stationId: number, shipmentIds: readonly number[]) =>
+  getArray<ShipmentProgress>(`/api/testing/shipment-progress?stationId=${stationId}&shipmentIds=${shipmentIds.join(",")}`);
 
 /** Results at the station since `since`. */
 export async function loadCompletedSince(stationId: number, since: Date): Promise<number> {

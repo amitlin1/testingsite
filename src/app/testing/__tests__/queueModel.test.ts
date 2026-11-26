@@ -6,7 +6,7 @@ import type { PackageItemView, PackageView } from "@/app/lib/packages/contract";
 import type { QueueRow, TestStationType } from "@/app/lib/testing/contract";
 import { ItemStatus } from "@/lib/item-status";
 import {
-  afterResultStepBack, boxItemStepBack, filterQueue, optionsOf, orderQueue, queueItemStepBack, queueRowOfCode, queueSummary,
+  afterResultStepBack, boxItemStepBack, filterQueue, orderQueue, queueItemStepBack, queueRowOfCode, queueSummary,
 } from "../queue/queueModel";
 
 const row = (id: number, over: Partial<QueueRow> = {}): QueueRow => ({
@@ -82,16 +82,6 @@ test("a code typed in the search names a queue row by its id (a label's id part)
   assert.equal(queueRowOfCode(items, "1111-3")?.item_id, 1111);
   assert.equal(queueRowOfCode(items, "S-9")?.item_id, 2222);
   assert.equal(queueRowOfCode(items, "S-"), undefined);
-});
-
-test("filter options: distinct, by label, and a selected value that left the queue stays", () => {
-  const items = [row(1, { customer_id: 7, customer_name: "בית" }), row(2, { customer_id: 8, customer_name: "אלף" }), row(3, { customer_id: 7 })];
-  const opts = optionsOf(items, (it) => it.customer_id, (it) => it.customer_name, "99");
-  assert.deepEqual(opts, [
-    { value: "99", label: "99 · לא בתור" },
-    { value: "8", label: "אלף" },
-    { value: "7", label: "בית" },
-  ]);
 });
 
 test("step back: a waiting item past step 1 goes back to its previous item-level type, for a manager", () => {

@@ -5,9 +5,9 @@ import { ItemStatus, isInTestStatus, isWaitingStatus } from "@/lib/item-status";
 import { isSourcedLabel, labelIdText } from "@/app/lib/packages/ids";
 
 /**
- * The station queue as the screen shows it: which rows the search and the three filters keep, in
- * what order, which one wears the "longest waiting" ribbon, the summary counts, and which rows
- * offer "חזרה לבדיקה הקודמת". Pure.
+ * The station queue as the screen shows it: which rows the search keeps, in what order, the
+ * summary counts, and which rows offer "חזרה לבדיקה הקודמת". Pure. The tree around them is
+ * treeModel.ts.
  */
 
 /** Every filter of the queue (all in the URL): empty = everything. */
@@ -77,20 +77,6 @@ export function queueSummary(items: readonly QueueRow[]) {
 export function queueRowOfCode(items: readonly QueueRow[], code: string): QueueRow | undefined {
   const id = labelIdText(code);
   return items.find((it) => String(it.item_id) === id || (it.serial_no ?? "") === code);
-}
-
-export type FilterOption = { value: string; label: string };
-
-/** Distinct options from the queue on screen, keeping a selected value that left it. */
-export function optionsOf(items: readonly QueueRow[], key: (it: QueueRow) => number | null | undefined, label: (it: QueueRow) => string | null | undefined, selected: string): FilterOption[] {
-  const map = new Map<string, string>();
-  for (const it of items) {
-    const k = key(it);
-    if (k == null) continue;
-    if (!map.has(String(k))) map.set(String(k), (label(it) ?? "").trim() || String(k));
-  }
-  if (selected && !map.has(selected)) map.set(selected, `${selected} · לא בתור`);
-  return [...map.entries()].map(([value, l]) => ({ value, label: l })).sort((a, b) => a.label.localeCompare(b.label, "he"));
 }
 
 // ---- "חזרה לבדיקה הקודמת" (api/testing/step-back) -------------------------------------------

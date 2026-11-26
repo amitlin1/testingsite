@@ -38,6 +38,7 @@ type QueueDbRow = {
   package_seq: number | null;
   parent_serial_no: string | null;
   last_sku: string | null;
+  in_test_worker_name: string | null;
   has_children: boolean;
   /** json_agg: the item's box mates (or its own members); ids as JSON numbers. */
   connected_items: { item_id: number; serial_no: string | null }[] | null;
@@ -103,6 +104,14 @@ export async function listQueue(stationId: number): Promise<QueueAnswerRow[]> {
             ORDER BY tr.created_at DESC, tr.test_result_id DESC
             LIMIT 1
         ) AS "last_sku",
+        -- Who started the test now running: the ledger's latest test_started event of the item.
+        CASE WHEN t1.current_status IN (${ItemStatus.InTest}, ${ItemStatus.InResearch}) THEN (
+            SELECT NULLIF(TRIM(e.worker_name), '')
+            FROM item_state_event e
+            WHERE e.item_id = i.item_id AND e.reason = 'test_started'
+            ORDER BY e.occurred_at DESC, e.seq DESC, e.event_id DESC
+            LIMIT 1
+        ) END AS "in_test_worker_name",
         (EXISTS (SELECT 1 FROM items child WHERE child.package_id = i.item_id)) AS "has_children",
         (
             SELECT json_agg(json_build_object(

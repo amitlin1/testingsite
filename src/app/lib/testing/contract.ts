@@ -67,6 +67,22 @@ export type QueueRow = {
   /** The manufacturer SKU the item was last scanned with at a station (its reference item's) —
    *  the next station's SKU scan starts from it. */
   last_sku?: string | null;
+  /** Who started the test now running (the ledger's test_started event); null while waiting. */
+  in_test_worker_name?: string | null;
+};
+
+/** One row of GET /api/testing/shipment-progress: a shipment's items that pass this station's
+ *  type (the station's level: boxes at an opening / closing station, items elsewhere), and how
+ *  many of them are already past it. */
+export type ShipmentProgress = {
+  shipmentId: number;
+  shipmentCode: string | null;
+  /** When the shipment was entered (received_at, else its certificate date); UTC ISO. */
+  receivedAt: string | null;
+  /** Rows of the shipment whose route has a step of this station's type. */
+  total: number;
+  /** Of those: the route finished, or the current step is past the last step of this type. */
+  done: number;
 };
 
 /** GET /api/testing/completed-today. */

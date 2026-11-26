@@ -1,103 +1,176 @@
-/* /testing — the testing station screen (src/app/testing/page.tsx): the queue, the context dock
-   (./TestingDock) and the scan dialog. Imported once, from page.tsx. The station
-   popups bring their own rules (station-popups.css).
+/* /testing — the testing station screen (src/app/testing/page.tsx): the top bar (./StationBar),
+   the queue tree (./queue/QueueTree), the open node's rows (./queue/ItemRow) and the scanned item
+   (./queue/ScannedItem). Design: the canvas "מסך בדיקה — עיצוב מחדש כעץ". Imported once, from
+   page.tsx. The station popups bring their own rules (station-popups.css).
 
    What lives here is what an inline style cannot say: hover (only on a fine
    pointer — station touchscreens would keep it stuck), focus-visible, pressed,
-   the dock panel's open/close, and the small-screen collapses. A rule that a
+   selected and open states, and the small-screen collapses. A rule that a
    breakpoint or a state overrides must not ALSO be set inline on the element
    (an inline style always wins). Colours are tokens (src/styles/tokens.css). */
 
 /* ------------------------------------------------------------ Page frame -- */
-/* One width for the dock rows and the board (the artboard's 1280), so their
-   edges line up at every window size. */
-.tst-frame { box-sizing: border-box; width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: var(--space-lg); }
+/* One width for the bar and the board, so their edges line up at every window size. */
+.tst-frame { box-sizing: border-box; width: 100%; max-width: 1440px; margin-inline: auto; padding-inline: var(--space-lg); }
 
-@media (max-width: 599px) {
-  .tst-hide-sm { display: none; }
-}
+.tst-num { font-variant-numeric: tabular-nums; }
 
-/* ------------------------------------------------------------------ Dock -- */
-.tst-dock { position: sticky; top: 0; z-index: 30; }
-.tst-dock-strip {
-  background: color-mix(in srgb, var(--color-canvas-parchment) 90%, transparent);
-  -webkit-backdrop-filter: var(--blur-frosted);
-  backdrop-filter: var(--blur-frosted);
-  border-bottom: 1px solid var(--color-hairline-rgba);
-  cursor: pointer;
+/* Quiet utility button (החלפה, היסטוריה, כל המשלוח): 44px, hairline-strong edge. */
+.tst-btn-quiet {
+  box-sizing: border-box; height: 44px; padding: 0 14px; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 8px;
+  border-radius: var(--r-sm); border: 1px solid var(--color-border-strong);
+  background: var(--color-canvas); color: var(--color-ink);
+  font: inherit; font-size: var(--text-body); cursor: pointer; white-space: nowrap;
+  transition: transform var(--dur-fast) var(--ease-press);
 }
-.tst-dock-row { display: flex; align-items: center; gap: var(--space-sm); padding-block: var(--space-xs); }
+.tst-btn-quiet:active { transform: scale(0.97); }
+.tst-btn-quiet:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .tst-btn-quiet:hover { background: var(--color-surface-pearl); } }
 
-/* The panel under the strip. Closed, it is `visibility: hidden` — not only
-   transparent — so its fields leave the Tab order and the accessibility tree.
-   Closing is faster than opening, and visibility flips only after the fade. */
-.tst-dock-panel {
-  position: absolute;
-  inset-inline: 0;
-  top: 100%;
-  background: color-mix(in srgb, var(--color-canvas-parchment) 97%, transparent);
-  -webkit-backdrop-filter: var(--blur-frosted);
-  backdrop-filter: var(--blur-frosted);
-  border-bottom: 1px solid var(--color-hairline-rgba);
-  box-shadow: var(--shadow-pop);
-  opacity: 0;
-  transform: translateY(-8px);
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), visibility 0s linear var(--dur-fast);
+/* --------------------------------------------------------------- Top bar -- */
+.tst-bar { position: sticky; top: 0; z-index: 30; background: var(--color-canvas); border-bottom: 1px solid var(--color-hairline); }
+.tst-bar-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding-block: 14px; }
+.tst-bar-who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.tst-bar-label { font-size: var(--text-small); color: var(--color-ink-muted-48); line-height: 1.2; }
+.tst-bar-name { margin: 0; font-size: var(--text-title); font-weight: var(--fw-semibold); letter-spacing: var(--ls-caption); line-height: 1.3; color: var(--color-ink); }
+.tst-bar-end { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.tst-worker-chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; box-sizing: border-box;
+  border-radius: var(--r-pill); background: var(--color-canvas-parchment); color: var(--color-ink); font-size: var(--text-body);
 }
-.tst-dock-panel[data-open] {
-  opacity: 1;
-  transform: none;
-  visibility: visible;
-  pointer-events: auto;
-  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out), visibility 0s;
-}
-.tst-dock-panel-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding-block: 14px; }
+/* No active worker yet: the picker's edge in the warning tone, so it reads as "still to do". */
+.tst-worker-missing .sh-input-wrap { border-color: var(--color-status-late); }
 
-/* "שינוי עמדה ועובד" — the panel's toggle (aria-expanded). */
-.tst-dock-toggle {
-  all: unset;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding-inline: var(--space-xs);
-  border-radius: var(--r-sm);
-  font-size: var(--text-fine);
-  color: var(--color-ink-muted-48);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+.tst-counts { display: flex; align-items: baseline; gap: 6px; font-size: var(--text-body); color: var(--color-ink-muted-70); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tst-counts strong { font-size: var(--text-title); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.tst-sep { color: var(--color-ink-muted-40); }
+
+/* The scan field: always on screen, focused whenever no dialog is open. Ready = the blue ring. */
+.tst-scanbox { flex: 1 1 420px; min-width: 0; }
+.tst-scanbox-field {
+  box-sizing: border-box; display: flex; align-items: center; gap: 12px; height: 60px; padding-inline: 16px;
+  border-radius: var(--r-md); border: 2px solid var(--color-field-border); background: var(--color-canvas);
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, background var(--dur-fast) ease;
 }
-.tst-dock-toggle:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.tst-scanbox-field:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 4px var(--color-primary-soft); }
+.tst-scanbox-field[data-landed] { border-color: var(--color-status-approved); background: var(--color-success-bg); box-shadow: none; }
+.tst-scanbox-icon { flex-shrink: 0; color: var(--color-primary); }
+.tst-scanbox-field input {
+  flex: 1; min-width: 0; height: 52px; border: 0; outline: none; background: transparent;
+  font: inherit; font-size: var(--text-title); color: var(--color-ink); font-variant-numeric: tabular-nums;
+}
+.tst-scanbox-field input::placeholder { color: var(--color-ink-muted-48); }
+.tst-scanbox-landed { flex-shrink: 0; font-size: var(--text-body); font-weight: var(--fw-semibold); color: var(--color-success-ink); white-space: nowrap; }
+.tst-kbd { flex-shrink: 0; font-size: var(--text-small); color: var(--color-ink-muted-48); border: 1px solid var(--color-hairline); border-radius: var(--r-xs); padding: 2px 8px; }
+
+/* ----------------------------------------------------------------- Board -- */
+/* Tree + open node: a wrapping row, so on a narrow screen the tree stacks above the list. */
+.tst-board { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; padding-block: 24px 40px; }
+.tst-content { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+/* ------------------------------------------------------------------ Tree -- */
+.tst-tree { flex: 1 1 280px; max-width: 330px; box-sizing: border-box; background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--r-lg); padding: 12px; }
+@media (max-width: 899px) { .tst-tree { max-width: none; } }
+.tst-tree-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 12px; }
+.tst-tree-title { margin: 0; font-size: var(--text-lead); font-weight: var(--fw-semibold); }
+.tst-tree-label { font-size: var(--text-small); color: var(--color-ink-muted-48); padding: 16px 12px 6px; }
+.tst-tree-list, .tst-tree-ships { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tst-tree-ships { padding: 4px 22px 6px 0; }
+
+.tst-seg { display: inline-flex; background: var(--color-canvas-parchment); border-radius: var(--r-pill); padding: 3px; }
+.tst-seg > button { height: 36px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--color-ink-muted-70); font: inherit; font-size: var(--text-small); cursor: pointer; }
+.tst-seg > button[aria-pressed="true"] { background: var(--color-canvas); color: var(--color-ink); font-weight: var(--fw-semibold); }
+.tst-seg > button:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
+
+.tst-node {
+  box-sizing: border-box; width: 100%; min-height: 60px; display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+  border: 1px solid transparent; border-radius: var(--r-md); background: var(--color-canvas); color: var(--color-ink);
+  font: inherit; text-align: start; cursor: pointer;
+}
+.tst-node--all { min-height: 52px; gap: 12px; padding-inline: 12px; font-size: var(--text-lead); }
+.tst-node--ship { min-height: 56px; padding-inline: 12px; gap: 12px; }
+.tst-node[aria-current="true"] { background: var(--color-primary-tint); border-color: var(--color-primary-border); }
+.tst-node[aria-current="true"] .tst-node-title, .tst-node--all[aria-current="true"] { color: var(--color-primary); }
+.tst-node:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) {
-  .tst-dock-toggle:hover { color: var(--color-ink); background: color-mix(in srgb, var(--color-ink) 5%, transparent); }
+  .tst-node:hover:not([aria-current="true"]) { background: var(--color-surface-pearl); }
 }
-.tst-dock-chevron { transition: transform var(--dur-base) var(--ease-out); }
-.tst-dock-toggle[aria-expanded="true"] .tst-dock-chevron { transform: rotate(180deg); }
+.tst-node-chevron { flex-shrink: 0; color: var(--color-ink-muted-48); }
+.tst-node-main { flex: 1; min-width: 0; }
+.tst-node-code { display: block; font-size: var(--text-title); font-weight: var(--fw-bold); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tst-node-title { display: block; font-size: var(--text-body); font-weight: var(--fw-semibold); line-height: 1.3; }
+.tst-node--all .tst-node-title { font-size: var(--text-lead); display: inline; }
+.tst-node-sub { display: block; font-size: var(--text-body-sm); color: var(--color-ink-muted-48); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tst-node-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--text-small); color: var(--color-ink-muted-48); margin-top: 3px; }
+.tst-node-end { flex-shrink: 0; text-align: end; }
+.tst-node-wait { display: block; font-size: var(--text-small); color: var(--color-ink-muted-48); margin-top: 2px; white-space: nowrap; }
 
-/* Scan button: the ink `variant="dark"` button at the artboard's 44px / r10. */
-.sh-btn.tst-dock-scan { min-height: 44px; border-radius: 10px; padding-inline: 20px; }
+.tst-count { display: inline-block; box-sizing: border-box; min-width: 28px; padding: 2px 10px; border-radius: var(--r-pill); background: var(--color-canvas-parchment); color: var(--color-ink); font-size: var(--text-body-sm); font-weight: var(--fw-semibold); text-align: center; font-variant-numeric: tabular-nums; }
+.tst-count--light { background: var(--color-canvas); border: 1px solid var(--color-hairline); }
 
-/* ----------------------------------------------------------------- Queue -- */
-.sh-input-wrap.tst-filter { width: 300px; max-width: 56vw; min-height: 44px; }
-.sh-btn.tst-toolbar-btn { min-height: 44px; }
+.tst-progress { display: inline-block; height: 4px; border-radius: var(--r-pill); background: var(--color-hairline); overflow: hidden; vertical-align: middle; }
+.tst-progress > span { display: block; height: 100%; background: var(--color-status-approved); }
+.tst-progress--lg { height: 6px; }
 
-/* Row CTA ("התחל בדיקה" / "המשך בדיקה"): the artboard's 44px, r11 button. */
-.sh-btn.tst-cta { flex-shrink: 0; width: 120px; min-height: 44px; padding-inline: 0; border-radius: var(--r-md); }
+/* ----------------------------------------------------------- Open node -- */
+.tst-crumbs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--text-body); min-height: 28px; margin: 0; padding: 0; list-style: none; }
+.tst-crumbs button { border: 0; background: transparent; padding: 4px 2px; color: var(--color-primary); font: inherit; cursor: pointer; border-radius: var(--r-xs); }
+.tst-crumbs button:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .tst-crumbs button:hover { text-decoration: underline; } }
+.tst-crumbs [aria-current="page"] { color: var(--color-ink); font-weight: var(--fw-semibold); }
+.tst-crumb-sep { color: var(--color-ink-muted-40); }
+
+.tst-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.tst-head-title { margin: 0; font-size: var(--text-page); font-weight: var(--fw-semibold); letter-spacing: var(--ls-display); line-height: 1.2; color: var(--color-ink); }
+.tst-head-meta { font-size: var(--text-body); color: var(--color-ink-muted-70); margin-top: 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tst-head-actions { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.sh-btn.tst-next { min-height: 56px; padding-inline: 24px; border-radius: var(--r-pill); font-size: var(--text-lead); font-weight: var(--fw-semibold); }
+
+/* "מתעדכן…" beside the title while a refresh runs over a list that is
+   already on screen (the list itself stays, so the scroll position does too). */
+.tst-refreshing { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+
+/* ------------------------------------------------------------------ Rows -- */
+.tst-list { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--r-lg); overflow: hidden; }
+.tst-list-scroll { overflow-x: auto; }
+.tst-list-inner { min-width: 700px; }
+.tst-cols {
+  display: grid; gap: 14px; align-items: center; padding: 12px 18px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.2fr) 96px 84px 44px 132px;
+}
+.tst-list-head { font-size: var(--text-small); color: var(--color-ink-muted-48); border-bottom: 1px solid var(--color-hairline); padding-block: 10px; }
+.tst-row { min-height: 80px; box-sizing: border-box; padding-block: 14px; }
+/* Each row and sub-header: one line of the surface, a soft divider between. */
+.tst-line { border-bottom: 1px solid var(--color-divider-soft); }
+.tst-line:last-child { border-bottom: 0; }
+.tst-row-status { display: flex; align-items: center; gap: 6px; font-size: var(--text-body-sm); color: var(--color-ink-muted-70); margin-top: 2px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tst-row-place { font-size: var(--text-body-sm); color: var(--color-ink-muted-48); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tst-dot { width: 8px; height: 8px; border-radius: var(--r-pill); flex-shrink: 0; }
+.tst-row-type { font-size: var(--text-lead); font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tst-row-sub { font-size: var(--text-body-sm); color: var(--color-ink-muted-48); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tst-row-time { font-size: var(--text-lead); font-weight: var(--fw-semibold); color: var(--color-ink); }
+.sh-btn.tst-row-cta { min-height: 48px; min-width: 124px; border-radius: var(--r-pill); font-size: var(--text-body); font-weight: var(--fw-semibold); }
+
+/* A shipment's sub-header inside a customer's list. */
+.tst-group-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 20px; background: var(--color-surface-pearl); }
+.tst-group-title { font-size: var(--text-lead); font-weight: var(--fw-semibold); }
+.tst-group-meta { font-size: var(--text-body-sm); color: var(--color-ink-muted-48); display: inline-flex; align-items: center; gap: 8px; }
+.tst-group-open { margin-inline-start: auto; min-height: 44px; border: 0; background: transparent; color: var(--color-primary); font: inherit; font-size: var(--text-body); cursor: pointer; padding: 0 4px; border-radius: var(--r-xs); }
+.tst-group-open:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .tst-group-open:hover { text-decoration: underline; } }
+
 /* A finished row has nothing to press: a status, not a disabled button. */
 .tst-cta-done {
   box-sizing: border-box;
   flex-shrink: 0;
-  width: 120px;
-  min-height: 44px;
+  min-width: 124px;
+  min-height: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-pill);
   background: var(--color-canvas-parchment);
   color: var(--color-success-ink);
   font-size: var(--text-body);
@@ -116,26 +189,22 @@
   .sh-iconbtn.tst-pkg-btn:hover:not(:disabled) { background: var(--color-primary-soft); }
 }
 
-/* "מתעדכן…" beside the queue title while a refresh runs over a list that is
-   already on screen (the list itself stays, so the scroll position does too). */
-.tst-refreshing { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-fine); color: var(--color-ink-muted-48); }
-
 /* -------------------------------------------------------------- Scanning -- */
+/* A full-width band: one per scan outcome (the design's ScanStates). */
+.tst-band { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 20px; border-radius: var(--r-lg); border: 1px solid var(--color-hairline); background: var(--color-canvas); color: var(--color-ink); }
+.tst-band--info { background: var(--color-primary-tint); border-color: var(--color-primary-border); }
+.tst-band--warn { background: var(--color-warning-bg); border-color: var(--color-warning-border); }
+.tst-band-sub { font-size: var(--text-body); color: var(--color-ink-muted-70); }
+
+/* The scanned item, alone: the one card with the blue edge. */
+.tst-scanned { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; padding: 28px; border-radius: var(--r-lg); border: 2px solid var(--color-primary); background: var(--color-canvas); }
+.tst-scanned-type { font-size: 22px; font-weight: var(--fw-semibold); margin-top: 4px; }
+.tst-scanned-facts { display: flex; gap: 28px; flex-wrap: wrap; margin: 18px 0 0; }
+.tst-scanned-facts dt { font-size: var(--text-small); color: var(--color-ink-muted-48); }
+.tst-scanned-facts dd { margin: 0; font-size: 19px; }
+/* The screen's main button: ~20mm on a station touchscreen. */
+.sh-btn.tst-scanned-cta { min-height: 72px; border-radius: var(--r-pill); font-size: 22px; font-weight: var(--fw-semibold); }
+
 /* The scan dialog's field: a code, so LTR, kept at the reading edge. */
 .sh-input-wrap.tst-scan-field { min-height: 52px; }
 .sh-input-wrap.tst-scan-field > input { font-size: var(--text-lead); text-align: right; font-variant-numeric: tabular-nums; }
-
-/* Search / scan field + queue filters (one card above the queue). The field
-   is the 44px search pill; the filters are the dense comboboxes; the count
-   sits at the inline end. */
-.tst-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--r-card); padding: 14px 16px; margin-bottom: 22px; }
-.tst-scan { position: relative; flex: 1 1 340px; max-width: 520px; }
-.tst-scan > input { box-sizing: border-box; width: 100%; height: 44px; border: 1px solid var(--color-field-border); border-radius: 9999px; padding-inline: 44px 44px; font: inherit; font-size: var(--text-body); color: var(--color-ink); background: var(--color-canvas); }
-.tst-scan > input::placeholder { color: var(--color-ink-muted-48); }
-.tst-scan > input:focus { outline: none; border-color: var(--color-primary-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent); }
-.tst-scan-icon { position: absolute; inset-inline-start: 16px; top: 12px; pointer-events: none; color: var(--color-ink-muted-48); }
-.tst-scan-end { position: absolute !important; inset-inline-end: 6px; top: 6px; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; }
-.tst-clear { border: 0; background: transparent; color: var(--color-primary); font: inherit; font-size: var(--text-body-sm); padding: 8px 6px; border-radius: var(--r-sm, 8px); cursor: pointer; }
-.tst-clear:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
-.tst-filter-count { margin-inline-start: auto; font-size: var(--text-small); color: var(--color-ink-muted-48); font-variant-numeric: tabular-nums; white-space: nowrap; }
-@media (hover: hover) and (pointer: fine) { .tst-clear:hover { color: var(--color-primary-hover); text-decoration: underline; } }
