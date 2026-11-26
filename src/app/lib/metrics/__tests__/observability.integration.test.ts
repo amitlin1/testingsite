@@ -351,8 +351,8 @@ describe("stage 5 — GET /api/health/jobs answers managers only", { skip: dbSki
 
     assert.deepEqual(
       body.jobs.map((j: { jobName: string }) => j.jobName).sort(),
-      ["metrics-selfcheck", "rebuild-work-calendar", "release-stale-tests"],
-      "§10.1 — three scheduled jobs, and one that has never run must still be listed",
+      ["release-stale-tests"],
+      "the one scheduled job (the calendar is built by the app, not on a clock), listed even if it never ran",
     );
     for (const job of body.jobs) {
       assert.equal(typeof job.stale, "boolean");

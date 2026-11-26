@@ -12,6 +12,7 @@ import { withAuth, type RouteParams } from "@/lib/auth/withAuth";
 import { ACCESS } from "@/lib/auth/roles";
 import { HttpError, errorResponse } from "@/lib/http/errors";
 import { HISTORY_PRESET_MONTHS, METRICS_HEADER, isHistoryPreset } from "@/app/lib/dashboard/contract";
+import { ensureWorkCalendar } from "@/app/lib/metrics/ledger/calendar-sync";
 import { filtersFromSearchParams, type MetricFilters } from "@/app/lib/metrics/read/filters";
 import { resolvePeriod, toBusinessDay, type ResolvedPeriod } from "@/app/lib/metrics/read/period";
 
@@ -103,6 +104,9 @@ export function metricsRoute<M extends PeriodMode, P extends RouteParams = Recor
           mode === "window" ? requirePeriod(searchParams) : mode === "dialog" ? requireDialogPeriod(searchParams) : undefined
         ) as PeriodOf<M>;
         const filters: MetricFilters = { ...filtersFromSearchParams(searchParams), ...(historical ? { scope: "all" } : {}) };
+        // Every נטו figure is read off the work calendar. A no-op once it has
+        // been synced in this process (normally at server start, calendar-sync.ts).
+        await ensureWorkCalendar();
         const answer = await run({ searchParams, period, filters, params });
         return Response.json(answer.body, { headers: metricsHeaders(answer.period ?? period, answer) });
       } catch (error) {

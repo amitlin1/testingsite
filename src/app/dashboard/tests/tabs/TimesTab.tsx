@@ -28,6 +28,7 @@ import type { StationView } from "@/app/lib/dashboard/contract";
 import { formatCount, formatMinutes, isNil, toneText, waitAverageTone } from "../_lib/format";
 import { AVERAGE_TIMES_PERIODS, type AverageTimesPeriod } from "../_lib/state";
 import type { TabProps } from "./tabTypes";
+import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
 
 const PERIOD_LABEL: Record<AverageTimesPeriod, string> = {
   daily: "יומי",
@@ -129,7 +130,7 @@ export default function TimesTab({ api, data }: TabProps) {
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
       <DataCard
         chart
-        title="זמן המתנה מול זמן ביצוע"
+        title={<>זמן המתנה מול זמן ביצוע<ClockInfoIcon metric="wait" /></>}
         right={
           <>
             <Legend items={TIMES_LEGEND} />
@@ -163,7 +164,7 @@ export default function TimesTab({ api, data }: TabProps) {
 
       <DataCard
         panel
-        title="פירוט לפי עמדה · ממוצע בתקופה"
+        title={<>פירוט לפי עמדה · ממוצע בתקופה<ClockInfoIcon metric="offhours" /></>}
         right={
           <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
             {CLOCK_NOTE} · דלי נוצר רק אם נסגר בו משהו

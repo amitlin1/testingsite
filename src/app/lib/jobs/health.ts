@@ -1,6 +1,6 @@
 // The §10.2 "is this red?" rule and the GET /api/health/jobs payload — one
-// definition with three consumers: the nightly metrics-selfcheck job (which
-// records the verdict), the health endpoint, and the dashboard's health strip.
+// definition with three consumers: the metrics-selfcheck job (a manual tool,
+// which records the verdict), the health endpoint, and the dashboard's health strip.
 // Client-safe: no runtime import.
 
 /** One row of metrics_selfcheck(). NULL when the check has no answer. */
@@ -114,7 +114,9 @@ export function evaluateHealth(
 
   const horizon = selfcheckValue(checks, "calendar_horizon_days");
   if (horizon === null) {
-    reasons.push("אין גרסת לוח עבודה פעילה — work_seconds ייכתב ריק");
+    reasons.push(
+      "אין לוח שעות עבודה, ולכן הנטו לא מחושב. הוא נבנה בעליית השרת ובכל שמירה במסך שעות עבודה — אם ההודעה נשארת, הסיבה ביומן השרת (work calendar sync failed)",
+    );
   } else if (horizon < MIN_CALENDAR_HORIZON_DAYS) {
     reasons.push(`אופק לוח העבודה ${horizon} ימים (מתחת ל־${MIN_CALENDAR_HORIZON_DAYS})`);
   }

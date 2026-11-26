@@ -7,7 +7,7 @@ import {
   Queue as QueueIcon,
   Science as ScienceIcon,
 } from "@/components/ui/icons";
-import { useElapsedSeconds } from "../clock";
+import { useNetSeconds } from "../clock";
 
 /** "HH:MM" — the longest wait, without the seconds. */
 const hoursMinutesText = (seconds: number): string =>
@@ -52,7 +52,7 @@ export default function SummaryStrip({ stale, waiting, inTest, completedToday, l
   completedToday: number | null;
   longestWaitStart: string | null;
 }) {
-  const longestWait = useElapsedSeconds(longestWaitStart);
+  const longestWait = useNetSeconds(longestWaitStart);
   return (
     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", mb: "22px" }}>
       <SummaryTile
@@ -81,7 +81,7 @@ export default function SummaryStrip({ stale, waiting, inTest, completedToday, l
         iconBg="var(--color-warning-bg)"
         iconColor="var(--color-status-late)"
         value={!stale && longestWait != null ? hoursMinutesText(longestWait) : "—"}
-        label="המתנה הארוכה ביותר"
+        label="המתנה הארוכה ביותר · נטו"
         valueColor="var(--color-warning-ink)"
       />
     </Box>

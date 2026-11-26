@@ -20,6 +20,8 @@ import type { PackageView } from "@/app/lib/packages/contract";
 import type { ItemConnected, ItemDetail, ItemDetailResponse, ItemHistoryRow } from "@/app/lib/items/contract";
 import { READ_PER_VISIT } from "@/app/components/screenQuery";
 import ItemReportControl from "./ItemReportControl";
+import { ClockInfoButton, ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import { CLOCK_TEXT } from "@/app/lib/dashboard/work-clock";
 import "@/components/items.css";
 
 /*
@@ -294,16 +296,16 @@ export default function ItemHistoryPage() {
     });
 
     return [
-      { icon: <Clock size={20} strokeWidth={1.75} />, value: fmtElapsedLong(totalMs), label: "זמן כולל במערכת" },
+      { icon: <Clock size={20} strokeWidth={1.75} />, value: fmtElapsedLong(totalMs), label: "זמן כולל במערכת · ברוטו" },
       // <bdi>: a spaced "a / b" in an RTL run is shown reversed ("5 / 3").
       { icon: <Check size={20} strokeWidth={1.75} />, value: <bdi dir="ltr">{completedCount} / {totalSteps}</bdi>, label: "תחנות שהושלמו" },
-      { icon: <FlaskConical size={20} strokeWidth={1.75} />, value: measured.length ? fmtDur(cumNet) : EM_DASH, label: "זמן עיבוד מצטבר" },
+      { icon: <FlaskConical size={20} strokeWidth={1.75} />, value: measured.length ? fmtDur(cumNet) : EM_DASH, label: "זמן עיבוד מצטבר · נטו" },
       // The duration is the KPI; the station it belongs to rides in the label
       // so a long station name never wraps the value line.
       {
         icon: <BarChart3 size={20} strokeWidth={1.75} />,
         value: longestIdx === -1 ? EM_DASH : fmtDur(nets[longestIdx]),
-        label: longestIdx === -1 ? "התחנה הארוכה ביותר" : `התחנה הארוכה ביותר · ${stationNameOf(chron[longestIdx])}`,
+        label: longestIdx === -1 ? "התחנה הארוכה ביותר · נטו" : `התחנה הארוכה ביותר · נטו · ${stationNameOf(chron[longestIdx])}`,
       },
     ];
   }, [item, nowRef, chron, nets, totalSteps, stationNameOf]);
@@ -437,6 +439,7 @@ export default function ItemHistoryPage() {
             {totalSteps > 0 ? `שלב ${currentStep} מתוך ${totalSteps}` : "ללא מסלול בדיקה"}
             {item.item_type_desc ? ` · ${trim(item.item_type_desc)}` : ""}
           </span>
+          <ClockInfoButton metric="itemStep" />
           <ItemReportControl itemId={String(item.item_id)} />
         </div>
       </div>
@@ -495,7 +498,7 @@ export default function ItemHistoryPage() {
       <div className="items-history-cols" style={{ marginTop: "var(--space-ml)" }}>
         <SectionCard
           title="היסטוריית תחנות"
-          subtitle="לפי סדר כרונולוגי. משך העיבוד נטו של כל תחנה מוצג כפס להשוואה מהירה בין התחנות."
+          subtitle="לפי סדר כרונולוגי. משך העיבוד בכל תחנה מוצג בנטו — רק הזמן שבתוך שעות העבודה — כפס להשוואה מהירה בין התחנות. ההמתנה בתור מוצגת בברוטו, זמן אמיתי לפי השעון."
         >
           {chron.length === 0 ? (
             <div style={{ fontSize: "var(--text-small)", color: MUTED, paddingTop: "var(--space-xs)" }}>אין היסטוריה עדיין.</div>
@@ -577,13 +580,18 @@ export default function ItemHistoryPage() {
                           value={inProgress ? "בתהליך" : formatMoment(h.processing_end_time)}
                           color={inProgress ? BLUE : INK}
                         />
-                        <Timing label="המתנה בתור" value={fmtDur(wait)} color={BODY} />
+                        <Timing label="המתנה בתור · ברוטו" value={fmtDur(wait)} color={BODY} />
                       </div>
 
                       <div style={{ marginTop: "var(--space-md)" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                          <span style={{ fontSize: "var(--text-fine)", color: MUTED }}>משך עיבוד נטו</span>
-                          <span style={{ fontSize: "var(--text-small)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtDur(net)}</span>
+                          <span style={{ fontSize: "var(--text-fine)", color: MUTED }}>
+                            משך עיבוד נטו
+                            <ClockInfoIcon metric="itemStep" />
+                          </span>
+                          <span style={{ fontSize: "var(--text-small)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                            {net == null && h.processing_start_time && h.processing_end_time ? CLOCK_TEXT.missingWork : fmtDur(net)}
+                          </span>
                         </div>
                         <div aria-hidden style={{ height: 6, borderRadius: "var(--r-pill)", background: SOFT, overflow: "hidden" }}>
                           <div style={{ height: "100%", width: `${pct}%`, background: BLUE, borderRadius: "var(--r-pill)" }} />

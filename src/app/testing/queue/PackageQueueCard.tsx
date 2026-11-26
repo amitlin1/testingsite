@@ -8,7 +8,7 @@ import { ItemStatus } from "@/lib/item-status";
 import IdText from "@/app/components/IdText";
 import { AMBER, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, MUTED } from "@/components/ui/colors";
 import { seq2 } from "@/app/lib/packages/ids";
-import { useElapsedSeconds } from "../clock";
+import { useNetSeconds } from "../clock";
 import { StepBackButton } from "../stepBack";
 import "@/components/ui/controls.css";
 import "@/app/testing/package-stations.css";
@@ -48,7 +48,7 @@ export default function PackageQueueCard({ item, onBegin, starting, stepBackOf }
   const listId = React.useId();
   // In test: the button continues the wizard. The card owns its clock, so its tick redraws it only.
   const inTest = item.current_status === ItemStatus.InTest;
-  const wait = useElapsedSeconds(inTest ? item.processing_start_time : item.queue_start_time);
+  const wait = useNetSeconds(inTest ? item.processing_start_time : item.queue_start_time);
   const pkg = item.package;
   if (!pkg) return null;
   const role = packageRoleOf(item);
@@ -70,7 +70,7 @@ export default function PackageQueueCard({ item, onBegin, starting, stepBackOf }
         </div>
         <div style={{ textAlign: "center", flexShrink: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1, color: inTest ? BLUE : INK }}>{wait != null ? waitLabel(wait) : "—"}</div>
-          <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>{inTest ? "בבדיקה" : "בתור"}</div>
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>{inTest ? "בבדיקה · נטו" : "בתור · נטו"}</div>
         </div>
       </div>
       <div style={{ height: 1, background: HAIR_2 }} />

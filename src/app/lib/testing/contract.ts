@@ -81,6 +81,8 @@ export type StationHistoryRow = {
   queueStartTime: string | null;
   processingStartTime: string | null;
   processingEndTime: string | null;
+  /** Net (working-hours) seconds from processing start to end; null while running or with no calendar. */
+  netWorkSeconds: number | null;
   workerId: number | null;
   serialNo: string | null;
   makat: string;

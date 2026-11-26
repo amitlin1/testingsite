@@ -43,7 +43,17 @@ import {
   type HistoryPreset,
   type StationHistoryWire,
 } from "@/app/lib/dashboard/contract";
-import { EM_DASH, formatCount, formatMinutes, isNil, queueAgeTone, toneText, type DashTone } from "../_lib/format";
+import {
+  EM_DASH,
+  formatCount,
+  formatMinutes,
+  isNil,
+  queueAgeTone,
+  toneText,
+  workTwin,
+  type DashTone,
+} from "../_lib/format";
+import { CLOCK_TEXT } from "@/app/lib/dashboard/work-clock";
 import { foldWeekly } from "../_lib/history-fold";
 import { completionCurveRange } from "../_lib/query";
 import { failureMessage, metaOf } from "../_lib/useDashboardData";
@@ -418,6 +428,12 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
                 ]}
               />
             </div>
+            {/* Inside a modal Dialog the side panel cannot open, so the
+                definitions are said here, in one line. */}
+            <p style={{ margin: "0 0 6px", fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
+              <b>{CLOCK_TEXT.wall.label}</b> = {CLOCK_TEXT.wall.short} · <b>{CLOCK_TEXT.work.label}</b> ={" "}
+              {CLOCK_TEXT.work.short} (לפי מסך שעות עבודה)
+            </p>
             <ChartBody height={132}>
               {loading || !folded ? (
                 <Skeleton variant="rectangular" height={132} />
@@ -567,9 +583,9 @@ function useStatCells(target: HistoryTarget, points: HistoryPoint[] | null): Sta
         {
           label: "המתנה · ברוטו",
           value: formatMinutes(wall),
-          note: isNil(work)
+          note: isNil(wall)
             ? "התור של סוג העמדה"
-            : `נטו ${formatMinutes(work)} · התור של סוג העמדה`,
+            : `${workTwin(wall, work)} · התור של סוג העמדה`,
         },
         {
           // Q2א probes at 12:00 Asia/Jerusalem, so this is the last grid day's

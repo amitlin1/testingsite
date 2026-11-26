@@ -39,6 +39,8 @@ import {
 } from "../_lib/format";
 import { STUCK_HOURS_OPTIONS, type StuckHours } from "../_lib/state";
 import type { TabProps } from "./tabTypes";
+import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import { CLOCK_TEXT } from "@/app/lib/dashboard/work-clock";
 
 const THRESHOLDS: Array<{ value: string; label: string; hours: StuckHours }> = [
   ...STUCK_HOURS_OPTIONS.map((hours) => ({ value: String(hours), label: `${hours} ש׳+`, hours })),
@@ -145,7 +147,11 @@ export default function SlowItemsTab({ api, data }: TabProps) {
       sortValue: (r) => r.processingWorkMinutes,
       render: (r) => (
         <TwinDuration
-          value={formatMinutes(r.processingWorkMinutes)}
+          value={
+            r.processingWorkMinutes === null && r.processingTimeMinutes !== null
+              ? CLOCK_TEXT.missingWork
+              : formatMinutes(r.processingWorkMinutes)
+          }
           tone="muted"
           twin={
             r.processingWorkMinutes === null && r.processingTimeMinutes === null
@@ -177,7 +183,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
   return (
     <DataCard
       panel
-      title="פריטים שנתקעו"
+      title={<>פריטים שנתקעו<ClockInfoIcon metric="slowStep" /></>}
       subtitle="מסודר לפי שעון העבודה — מה המעבדה באמת בילתה בו"
       right={
         <>

@@ -9,6 +9,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
 } from "@/components/ui";
 import { formatDuration } from "@/app/lib/datetime";
+import { CLOCK_TEXT } from "@/app/lib/dashboard/work-clock";
 import { ItemStatus, toneOfStatus } from "@/lib/item-status";
 import { formatMoment } from "@/app/lib/datetime";
 import { StatusPill } from "@/components/DataTable";
@@ -172,7 +173,10 @@ export default function ItemDialog({
                         התחלה: {formatMoment(h.processing_start_time)}
                         {" • "}
                         סיום: {formatMoment(h.processing_end_time)}
-                        {duration !== null && duration > 0 && ` • משך עבודה נטו: ${formatDuration(duration, "long")}`}
+                        {/* Inside a Dialog the side panel cannot open, so the clock is named in words.
+                            0 is a real answer (the whole step fell outside working hours). */}
+                        {h.processing_start_time && h.processing_end_time &&
+                          ` • משך עבודה נטו (רק שעות עבודה): ${duration === null ? CLOCK_TEXT.missingWork : formatDuration(duration, "long")}`}
                       </Typography>
                     </div>
                   );

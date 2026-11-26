@@ -206,7 +206,7 @@ try {
     # Gate values (plan section 10.4 step 8): drift_open = 0,
     # intervals_missing_work_seconds = 0, calendar_horizon_days > 300,
     # calendar_sanity_net_minutes = 455. The calendar rows stay empty until
-    # the app server's rebuild-work-calendar job has run once.
+    # the app server has started once (it builds the calendar itself, calendar-sync.ts).
     Write-Host ""
     Write-Host "--- metrics_selfcheck() ---" -ForegroundColor Cyan
     Show-Sql "SELECT * FROM metrics_selfcheck();"

@@ -20,6 +20,7 @@ import DenseTable from "../_components/DenseTable";
 import { describeIgnoredFilters } from "../_lib/format";
 import { SHARED_QUEUE_NOTE, stationColumns, stationHistoryTarget, stationsEmpty } from "./stationColumns";
 import type { TabProps } from "./tabTypes";
+import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
 
 export default function StationsTab({ api, data, openHistory }: TabProps) {
   const live = data.get("stationsLive");
@@ -39,7 +40,7 @@ export default function StationsTab({ api, data, openHistory }: TabProps) {
       panel
       // Not "ניצולת": the card says on its face why no utilisation is shown,
       // so the title promises what the table holds — load and work hours.
-      title="עומס ושעות עבודה לפי עמדה"
+      title={<>עומס ושעות עבודה לפי עמדה<ClockInfoIcon metric="workHours" /></>}
       right={
         <>
           <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>

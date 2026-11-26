@@ -39,6 +39,7 @@ import SlowItemsTab, { passesThreshold } from "./tabs/SlowItemsTab";
 import StationsTab from "./tabs/StationsTab";
 import StatusTab from "./tabs/StatusTab";
 import TimesTab from "./tabs/TimesTab";
+import { ClockInfoProvider } from "@/app/components/ClockInfo/ClockInfo";
 import "./dashboard.css";
 
 const TAB_COMPONENTS: Record<TabKey, React.ComponentType<React.ComponentProps<typeof OverviewTab>>> = {
@@ -125,110 +126,114 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
   const removeChip = (key: FilterKey) => api.setFilter(key, EMPTY_FILTERS[key]);
 
   return (
-    <div className="dash-root" dir="rtl">
-      {/* The rail is the FIRST child on purpose: in an RTL flex row that places
-          it at the start edge — screen right, immediately inside the app shell's
-          own 56px rail — which is the order the design is laid out in. */}
-      <DashboardSidebar api={api} options={options} stuckCount={stuckCount} />
+    // One ברוטו / נטו panel for the whole dashboard (the header button and the
+    // icon beside every duration open it).
+    <ClockInfoProvider>
+      <div className="dash-root" dir="rtl">
+        {/* The rail is the FIRST child on purpose: in an RTL flex row that places
+            it at the start edge — screen right, immediately inside the app shell's
+            own 56px rail — which is the order the design is laid out in. */}
+        <DashboardSidebar api={api} options={options} stuckCount={stuckCount} />
 
-      <div className="dash-main" style={{ flex: 1, minWidth: 0, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-        <DashboardHeader
-          title={meta.title}
-          subtitle={meta.subtitle}
-          chips={chips}
-          onRemoveChip={removeChip}
-          lastUpdatedAt={data.lastUpdatedAt}
-          refreshing={data.refreshing}
-          onRefresh={data.refresh}
-        />
+        <div className="dash-main" style={{ flex: 1, minWidth: 0, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+          <DashboardHeader
+            title={meta.title}
+            subtitle={meta.subtitle}
+            chips={chips}
+            onRemoveChip={removeChip}
+            lastUpdatedAt={data.lastUpdatedAt}
+            refreshing={data.refreshing}
+            onRefresh={data.refresh}
+          />
 
-        {/* A refresh never blanks the body; this 2px bar is the only signal. */}
-        <div className={data.refreshing ? "dash-refresh-bar dash-refresh-bar--on" : "dash-refresh-bar"} aria-hidden>
-          <span />
-        </div>
-
-        {!rangeIsComplete(api.state) && (
-          <AmberNotice>בחר תאריך התחלה ותאריך סיום · עד אז הנתונים אינם מתעדכנים</AmberNotice>
-        )}
-
-        {capped && (
-          <CappedPeriodNotice lead="התקופה קוצרה על ידי השרת" from={capped.periodFrom} to={capped.periodTo} />
-        )}
-
-        {/* At 1100px and below the rail is gone and the tabs become a scrollable pill
-            row with the filters behind one button. */}
-        <MobileNav
-          tab={api.state.tab}
-          onSelect={api.setTab}
-          activeFilterCount={api.activeFilterCount}
-          onOpenFilters={() => setDrawerOpen(true)}
-        />
-
-        <TopStatsBar
-          kpis={kpis.data}
-          stations={stations.data}
-          stuckCount={stuckCount}
-          loading={kpis.loading}
-          onShowStuck={() => api.drillTo("slow", {}, { stuckHours: STUCK_HOURS })}
-        />
-
-        <Tab api={api} data={data} openHistory={setHistory} />
-      </div>
-
-      {drawerOpen && (
-        <div
-          onClick={() => setDrawerOpen(false)}
-          role="presentation"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1200,
-            background: "var(--color-scrim)",
-            display: "flex",
-            justifyContent: "flex-start",
-          }}
-        >
-          {/* A modal panel: Escape closes it, Tab stays inside it, and focus
-              returns to the button that opened it (useDrawerFocus). */}
-          <div
-            ref={drawerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="מקטעים ומסננים"
-            onClick={(event) => event.stopPropagation()}
-            style={{ height: "100%" }}
-          >
-            <DashboardSidebar
-              api={api}
-              options={options}
-              stuckCount={stuckCount}
-              drawer
-              onCloseDrawer={() => setDrawerOpen(false)}
-            />
+          {/* A refresh never blanks the body; this 2px bar is the only signal. */}
+          <div className={data.refreshing ? "dash-refresh-bar dash-refresh-bar--on" : "dash-refresh-bar"} aria-hidden>
+            <span />
           </div>
-        </div>
-      )}
 
-      {history && (
-        <HistoryOverlay
-          target={history}
-          onClose={() => setHistory(null)}
-          onApplyFilter={(target) => {
-            if (target.kind === "station") {
-              // The station dialog's CTA is a drilldown, not a filter: "show me
-              // what is stuck HERE" is the question a queue-age spike raises.
-              api.drillTo("slow", { testStationId: target.id });
-            } else if (target.kind === "shipment") {
-              api.setFilter("shipmentId", target.id);
-            } else if (target.kind === "customer") {
-              api.setFilter("customerId", target.id);
-            } else {
-              api.setFilter("itemTypeId", target.id);
-            }
-          }}
-        />
-      )}
-    </div>
+          {!rangeIsComplete(api.state) && (
+            <AmberNotice>בחר תאריך התחלה ותאריך סיום · עד אז הנתונים אינם מתעדכנים</AmberNotice>
+          )}
+
+          {capped && (
+            <CappedPeriodNotice lead="התקופה קוצרה על ידי השרת" from={capped.periodFrom} to={capped.periodTo} />
+          )}
+
+          {/* At 1100px and below the rail is gone and the tabs become a scrollable pill
+              row with the filters behind one button. */}
+          <MobileNav
+            tab={api.state.tab}
+            onSelect={api.setTab}
+            activeFilterCount={api.activeFilterCount}
+            onOpenFilters={() => setDrawerOpen(true)}
+          />
+
+          <TopStatsBar
+            kpis={kpis.data}
+            stations={stations.data}
+            stuckCount={stuckCount}
+            loading={kpis.loading}
+            onShowStuck={() => api.drillTo("slow", {}, { stuckHours: STUCK_HOURS })}
+          />
+
+          <Tab api={api} data={data} openHistory={setHistory} />
+        </div>
+
+        {drawerOpen && (
+          <div
+            onClick={() => setDrawerOpen(false)}
+            role="presentation"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1200,
+              background: "var(--color-scrim)",
+              display: "flex",
+              justifyContent: "flex-start",
+            }}
+          >
+            {/* A modal panel: Escape closes it, Tab stays inside it, and focus
+                returns to the button that opened it (useDrawerFocus). */}
+            <div
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="מקטעים ומסננים"
+              onClick={(event) => event.stopPropagation()}
+              style={{ height: "100%" }}
+            >
+              <DashboardSidebar
+                api={api}
+                options={options}
+                stuckCount={stuckCount}
+                drawer
+                onCloseDrawer={() => setDrawerOpen(false)}
+              />
+            </div>
+          </div>
+        )}
+
+        {history && (
+          <HistoryOverlay
+            target={history}
+            onClose={() => setHistory(null)}
+            onApplyFilter={(target) => {
+              if (target.kind === "station") {
+                // The station dialog's CTA is a drilldown, not a filter: "show me
+                // what is stuck HERE" is the question a queue-age spike raises.
+                api.drillTo("slow", { testStationId: target.id });
+              } else if (target.kind === "shipment") {
+                api.setFilter("shipmentId", target.id);
+              } else if (target.kind === "customer") {
+                api.setFilter("customerId", target.id);
+              } else {
+                api.setFilter("itemTypeId", target.id);
+              }
+            }}
+          />
+        )}
+      </div>
+    </ClockInfoProvider>
   );
 }
 

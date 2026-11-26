@@ -1,4 +1,4 @@
-import { requestCalendarRebuild } from "@/app/lib/metrics/ledger/work-calendar";
+import { requestCalendarRebuild } from "@/app/lib/metrics/ledger/calendar-sync";
 import { errorCode } from "@/lib/errors";
 import { HttpError, errorResponse } from "@/lib/http/errors";
 import { weekdayOf } from "@/lib/time/civil";
@@ -18,7 +18,7 @@ export async function answer(fallback: string, run: () => Promise<Response>): Pr
 }
 
 /** A write that moves the work calendar (defaults, overrides, holidays): answered like `answer`,
- *  and when it succeeded the ledger's calendar is rebuilt (fire-and-forget, work-calendar.ts). */
+ *  and when it succeeded the ledger's calendar is rebuilt and past net time recomputed (fire-and-forget, calendar-sync.ts). */
 export async function calendarWrite(fallback: string, write: () => Promise<Response>): Promise<Response> {
   const res = await answer(fallback, write);
   if (res.ok) requestCalendarRebuild();

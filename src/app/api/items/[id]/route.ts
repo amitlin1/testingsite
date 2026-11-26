@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { loadItemDetail } from "@/app/lib/items/read";
+import { ensureWorkCalendar } from "@/app/lib/metrics/ledger/calendar-sync";
 import { ledgerWrite } from "@/app/lib/metrics/ledger/schema-gate";
 import { idOfLabel } from "@/app/lib/packages/ids";
 import { deleteItem, editItem } from "@/app/lib/packages/item-writes";
@@ -13,6 +14,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     const itemId = idOfLabel((await params).id);
     if (itemId == null) return BAD_ID();
+    await ensureWorkCalendar(); // net_work_seconds is read off the work calendar
     return NextResponse.json(await loadItemDetail(itemId));
   } catch (error) {
     console.error("Error loading item:", error);

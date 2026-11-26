@@ -27,19 +27,27 @@ $prefix    = "testingsite-"
 # task name (without prefix) -> @{ bat = file; EveryMinutes = N } for a
 # repeating task, or @{ bat = file; DailyAt = "HH:mm" } for a daily one.
 #
-# These three are the whole schedule (plan §10.1). The periods are also the
-# staleness thresholds GET /api/health/jobs grades each job against (SCHEDULED_JOBS
-# in src/app/lib/jobs/jobRun.ts, "no success within 2x the period" = red tile),
-# so a period changed here must be changed there in the same commit.
+# This is the whole schedule (plan §10.1). The period is also the staleness
+# threshold GET /api/health/jobs grades the job against (SCHEDULED_JOBS in
+# src/app/lib/jobs/jobRun.ts, "no success within 2x the period" = red tile), so a
+# period changed here must be changed there in the same commit.
 #
-# metrics-selfcheck runs an hour AFTER rebuild-work-calendar on purpose: it heals
-# a short calendar horizon and then reconciles the ledger against the calendar,
-# which is wasted work if the nightly rebuild has not happened yet.
+# The work calendar (net time on the dashboard) is NOT scheduled here since
+# 2026-11-26: the app builds it itself when the server starts and after every
+# save on the work-hours screen (src/app/lib/metrics/ledger/calendar-sync.ts).
 $tasks = @(
     @{ Name = "release-stale-tests";   Bat = "run_release_stale_tests.bat";   EveryMinutes = 5 }
-    @{ Name = "rebuild-work-calendar"; Bat = "run_rebuild_work_calendar.bat"; DailyAt = "01:00" }
-    @{ Name = "metrics-selfcheck";     Bat = "run_metrics_selfcheck.bat";     DailyAt = "02:00" }
 )
+
+# Tasks this script registered in earlier releases and no longer owns.
+$retired = @("rebuild-work-calendar", "metrics-selfcheck")
+foreach ($name in $retired) {
+    $taskName = "$prefix$name"
+    try {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Stop
+        Write-Host "  removed retired task: $taskName" -ForegroundColor Green
+    } catch {}
+}
 
 foreach ($t in $tasks) {
     $taskName = "$prefix$($t.Name)"

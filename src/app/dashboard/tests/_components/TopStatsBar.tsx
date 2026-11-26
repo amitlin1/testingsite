@@ -23,7 +23,8 @@ import * as React from "react";
 import { Skeleton } from "@/components/ui";
 import { ArrowForward } from "@/components/ui/icons";
 import { boardSummary, type KpisView, type StationView } from "@/app/lib/dashboard/contract";
-import { STUCK_HOURS, formatCount, formatMinutes, isNil } from "../_lib/format";
+import { STUCK_HOURS, formatCount, formatMinutes, isNil, workTwin } from "../_lib/format";
+import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
 
 export interface TopStatsBarProps {
   kpis: KpisView | null;
@@ -36,6 +37,8 @@ export interface TopStatsBarProps {
 
 interface Cell {
   label: string;
+  /** A duration cell opens the ברוטו / נטו panel. */
+  info?: boolean;
   value: React.ReactNode;
   note: React.ReactNode;
 }
@@ -67,9 +70,8 @@ export default function TopStatsBar({
     {
       label: "המתנה · ברוטו",
       value: formatMinutes(kpis?.averageQueueTimeMinutes),
-      note: isNil(kpis?.averageQueueWorkMinutes)
-        ? ""
-        : `נטו ${formatMinutes(kpis?.averageQueueWorkMinutes)}`,
+      note: workTwin(kpis?.averageQueueTimeMinutes, kpis?.averageQueueWorkMinutes) ?? "",
+      info: true,
     },
     {
       label: "מסלולים שנסגרו",
@@ -107,6 +109,11 @@ export default function TopStatsBar({
         >
           <div style={{ fontSize: "var(--text-fine)", color: "var(--color-body-muted)", fontWeight: 600 }}>
             {cell.label}
+            {cell.info && (
+              <span className="clock-info-icon--on-dark">
+                <ClockInfoIcon metric="wait" />
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2 }}>
             <span

@@ -15,7 +15,7 @@ import { seq2 } from "@/app/lib/packages/ids";
 import type { QueueRow } from "@/app/lib/testing/contract";
 import { ItemStatus, TONE_DOT, isInTestStatus, isWaitingStatus, toneOfStatus } from "@/lib/item-status";
 import { formatDuration } from "@/app/lib/datetime";
-import { useElapsedSeconds } from "../clock";
+import { useNetSeconds } from "../clock";
 import "@/app/testing/station-popups.css";
 
 /**
@@ -42,7 +42,7 @@ export default function ItemCard({
 }) {
   const isInTest = isInTestStatus(item.current_status);
   const isWaiting = isWaitingStatus(item.current_status);
-  const elapsed = useElapsedSeconds(isInTest ? item.processing_start_time : isWaiting ? item.queue_start_time : null);
+  const elapsed = useNetSeconds(isInTest ? item.processing_start_time : isWaiting ? item.queue_start_time : null);
   // Package model: an item inside a box carries the box's view (siblings and
   // where each one is) — design/Testing Screen Packages.dc.html, item strip.
   const pkg = item.package_id != null ? item.package ?? null : null;

@@ -15,6 +15,7 @@ import * as React from "react";
 import { Chip } from "@/components/ui";
 import { useNow } from "@/lib/hooks/useNow";
 import { Download, Refresh } from "@/components/ui/icons";
+import { ClockInfoButton } from "@/app/components/ClockInfo/ClockInfo";
 import type { FilterChip, FilterKey } from "../_lib/filters";
 
 export interface DashboardHeaderProps {
@@ -82,6 +83,7 @@ export default function DashboardHeader({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <ClockInfoButton />
         <div
           style={{
             display: "flex",

@@ -35,6 +35,7 @@ import {
   workTwin,
 } from "../_lib/format";
 import type { TabProps } from "./tabTypes";
+import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
 
 export default function CustomersTab({ api, data, openHistory }: TabProps) {
   const customers = data.get("customers");
@@ -133,7 +134,7 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
   return (
     <DataCard
       panel
-      title="ביצועים לפי לקוח"
+      title={<>ביצועים לפי לקוח<ClockInfoIcon metric="routeTurnaround" /></>}
       right={
         <>
           <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>

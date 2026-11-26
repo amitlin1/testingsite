@@ -9,6 +9,7 @@ import type { MetricsSource } from "@/app/lib/dashboard/contract";
 import { BLUE, INK, MUTED, RED } from "@/components/ui/colors";
 import { TONE } from "@/components/ui/tones";
 import { BUSINESS_TZ } from "@/lib/time/civil";
+import { CLOCK_TEXT } from "@/app/lib/dashboard/work-clock";
 
 export const EM_DASH = "—";
 
@@ -32,13 +33,15 @@ export const toneMark = (tone: DashTone): string => DASH_TONE[tone].mark;
 export const toneText = (tone: DashTone): string => DASH_TONE[tone].text;
 
 /** The work clock printed under a wall figure (§16.1): `נטו …`, or null when the
- *  wall figure itself is unmeasured. */
+ *  wall figure itself is unmeasured. A wall figure with no work figure means the
+ *  work calendar was not built — said in words, not as a bare `נטו —`. */
 export function workTwin(
   wall: number | null | undefined,
   work: number | null | undefined,
   format: (v: number | null | undefined) => string = formatMinutes,
 ): string | null {
-  return isNil(wall) ? null : `נטו ${format(work)}`;
+  if (isNil(wall)) return null;
+  return isNil(work) ? CLOCK_TEXT.missingWork : `נטו ${format(work)}`;
 }
 
 export function isNil(v: number | null | undefined): v is null | undefined {

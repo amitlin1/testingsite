@@ -31,6 +31,7 @@ import { FinishedRouteDialog, LegacyNotice, ScanDialog, useScanLocate } from "./
 import { BoxItemStepBackProvider, StepBackDialogs, postStepBack, useStepBack } from "./stepBack";
 import { useTestWindow } from "./useTestWindow";
 import { NextStationDialog, ResearchDialog } from "./ResultDialogs";
+import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
 import "./testing.css";
 
 /** Every filter of the screen lives in the URL: a refresh keeps the station
@@ -269,7 +270,8 @@ function TestingPageView() {
                                 {packageLevel ? "מארזים בתור" : "התור לבדיקה"}
                             </Typography>
                             <Typography component="span" sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
-                                ממוינים לפי זמן המתנה — הממתין ביותר קודם
+                                ממוינים לפי זמן המתנה — הממתין ביותר קודם · הזמנים בנטו, רק בשעות העבודה
+                                <ClockInfoIcon metric="testingTimer" />
                             </Typography>
                             {/* A refresh over a list already on screen: a quiet note, not skeletons. */}
                             <span role="status" className="tst-refreshing">
@@ -345,7 +347,7 @@ function TestingPageView() {
                                 <Box sx={{ width: 38, flexShrink: 0, textAlign: "center" }}>תור</Box>
                                 <Box sx={{ flex: 1 }}>מזהה · דגם</Box>
                                 <Box sx={{ width: 150, flexShrink: 0 }}>שלב</Box>
-                                <Box sx={{ minWidth: 82, flexShrink: 0, textAlign: "center" }}>זמן</Box>
+                                <Box sx={{ minWidth: 82, flexShrink: 0, textAlign: "center" }}>זמן נטו</Box>
                                 <Box sx={{ width: 40, flexShrink: 0 }} />
                                 <Box sx={{ width: 120, flexShrink: 0 }} />
                             </Box>

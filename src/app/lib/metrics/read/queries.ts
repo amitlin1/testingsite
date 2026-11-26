@@ -844,7 +844,9 @@ SELECT
   avg(work_s) FILTER (WHERE is_research AND is_waiting) / 60          AS avg_research_wait_work_min,
   avg(wall_s) FILTER (WHERE is_research AND is_active_work) / 60      AS avg_research_wall_min,
   avg(work_s) FILTER (WHERE is_research AND is_active_work) / 60      AS avg_research_work_min,
-  sum(wall_s - COALESCE(work_s, 0))/60                                AS offhours_min,
+  -- No COALESCE on work_s: with no work calendar every work_s is NULL, and
+  -- treating it as 0 reported the WHOLE window as "outside working hours".
+  sum(wall_s - work_s)/60                                             AS offhours_min,
   count(DISTINCT unit_id)                                             AS units_touched,
   sum(work_s) FILTER (WHERE is_active_work AND NOT ${pkgDupActive()})      AS busy_work_seconds,
   (SELECT work_seconds_between($1::timestamptz, $2::timestamptz))     AS window_work_seconds
@@ -933,7 +935,9 @@ WITH cand AS (
   WHERE i.close_business_date BETWEEN $1::date AND $2::date
     AND i.closed_at IS NOT NULL AND i.is_trusted
     AND NOT ${pkgDupActive("i")}${intervalFilterSql("i", 3)}
-  ORDER BY i.work_seconds DESC NULLS LAST
+  -- wall breaks the tie: with no work calendar every work_seconds is NULL,
+  -- and ordering by it alone returned an arbitrary 500 (and an arbitrary 20).
+  ORDER BY i.work_seconds DESC NULLS LAST, i.wall_seconds DESC
   LIMIT 500
 )
 SELECT c.item_id, c.serial_no, it.makat, TRIM(it.model) AS model,
@@ -957,7 +961,7 @@ LEFT JOIN LATERAL (
   ORDER BY p.interval_id DESC
   LIMIT 1
 ) q ON true
-ORDER BY total_work_min DESC NULLS LAST
+ORDER BY total_work_min DESC NULLS LAST, total_wall_min DESC
 LIMIT LEAST($${limitOrdinal}::int, 100)`;
   return { sql, params: [from, to, ...intervalFilterParams(filters), Math.max(1, Math.trunc(limit))] };
 }

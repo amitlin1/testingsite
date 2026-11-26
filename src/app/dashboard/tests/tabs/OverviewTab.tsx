@@ -42,6 +42,7 @@ import {
 } from "../_lib/format";
 import { SHARED_QUEUE_NOTE, stationColumns, stationHistoryTarget, stationsEmpty } from "./stationColumns";
 import type { TabProps } from "./tabTypes";
+import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
 
 export default function OverviewTab({ api, data, openHistory }: TabProps) {
   const stations = data.get("stationsLive");
@@ -85,7 +86,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
 
       <DataCard
         panel
-        title="עומס לפי עמדה · עכשיו"
+        title={<>עומס לפי עמדה · עכשיו<ClockInfoIcon metric="queueAge" /></>}
         right={
           <>
             <Legend
@@ -116,7 +117,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
       <div className="dash-bottom" style={{ height: 230, flexShrink: 0, display: "flex", gap: 10 }}>
         <DataCard
           chart
-          title="זמנים ממוצעים · 14 ימים"
+          title={<>זמנים ממוצעים · 14 ימים<ClockInfoIcon metric="wait" /></>}
           right={<Legend items={TIMES_LEGEND} />}
           error={times.error}
           onRetry={data.refresh}

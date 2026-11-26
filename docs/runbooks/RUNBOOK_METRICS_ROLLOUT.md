@@ -142,7 +142,7 @@ cd db-server
 | הגשה מחזירה 500 עם `metrics_record does not exist` | ה‑image עלה לפני ה‑DB | להחזיר את ה‑image הקודם, להריץ את ה‑DB, ואז שוב |
 | `drift_open > 0` | כותב שמשנה `item_routes` בלי לפלוט אירוע | `SELECT * FROM metrics_drift WHERE resolved_at IS NULL` — ה‑`item_id` מוביל למסלול. **לא לאפס את הטבלה** |
 | מספר בדשבורד נראה שגוי | | `SELECT isi_rebuild_run(route_run_id) FROM route_run WHERE item_id = <id>;` — משחזר את הפריט מהאירועים. ה‑`EXCLUDE` מאמת את התוצאה |
-| `calendar_horizon_days` נמוך | ה‑cron של לוח השנה לא רץ | להריץ `rebuild-work-calendar`. ה‑selfcheck מרפא לבד מתחת ל‑60 יום |
+| `calendar_horizon_days` נמוך או ריק | הבנייה בתוך האפליקציה נכשלה (יומן השרת: `work calendar sync failed`) | לתקן את הסיבה ולהפעיל מחדש את שרת האפליקציה; או ידנית `POST /api/cron/rebuild-work-calendar` |
 | הדשבורד איטי | | אם `p95 > 2s` לאורך שבוע — זה הטריגר של נספח ה‑rollup היומי (§6.4). לא לפני |
 | **אחרי מיגרציה B** | אין rollback | **שחזור מגיבוי בלבד.** להחזיר את ה‑image לא מחזיר טבלה שנמחקה |
 

@@ -48,6 +48,8 @@ import {
   type DashTone,
 } from "../_lib/format";
 import type { TabProps } from "./tabTypes";
+import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import { CLOCK_TEXT, type ClockMetricKey } from "@/app/lib/dashboard/work-clock";
 
 function seriesFromHistory(rows: StatusHistoryView[], stateKeys: readonly StateKey[]): Array<number | null> {
   const keys: readonly string[] = stateKeys;
@@ -65,6 +67,15 @@ interface KpiCard {
   note: string;
   tone: DashTone;
   spark: Array<number | null>;
+  /** The duration cards open the ברוטו / נטו panel on their metric. */
+  info?: ClockMetricKey;
+}
+
+/** The second line of a duration card: its work twin — or why there is none. */
+function workNote(wall: number | null | undefined, work: number | null | undefined, gap: number | null): string {
+  if (isNil(wall)) return "אין מדידה בתקופה";
+  if (isNil(work)) return CLOCK_TEXT.missingWork;
+  return `נטו ${formatMinutes(work)}${isNil(gap) ? "" : ` · פער ${formatMinutes(gap)} מחוץ לשעות`}`;
 }
 
 export default function KpisTab({ data }: TabProps) {
@@ -93,22 +104,18 @@ export default function KpisTab({ data }: TabProps) {
     {
       label: "זמן המתנה ממוצע · ברוטו",
       value: formatMinutes(k?.averageQueueTimeMinutes),
-      note: isNil(k?.averageQueueWorkMinutes)
-        ? "אין מדידה בתקופה"
-        : `נטו ${formatMinutes(k?.averageQueueWorkMinutes)}${
-            isNil(queueGap) ? "" : ` · פער ${formatMinutes(queueGap)} מחוץ לשעות`
-          }`,
+      note: workNote(k?.averageQueueTimeMinutes, k?.averageQueueWorkMinutes, queueGap),
       tone: "muted",
       spark: timeRows.map((row) => row.avgWaitingMinutes),
+      info: "wait",
     },
     {
       label: "זמן ביצוע ממוצע · ברוטו",
       value: formatMinutes(k?.averageProcessingTimeMinutes),
-      note: isNil(k?.averageProcessingWorkMinutes)
-        ? "אין מדידה בתקופה"
-        : `נטו ${formatMinutes(k?.averageProcessingWorkMinutes)}`,
+      note: workNote(k?.averageProcessingTimeMinutes, k?.averageProcessingWorkMinutes, null),
       tone: "muted",
       spark: timeRows.map((row) => row.avgProcessingMinutes),
+      info: "processing",
     },
     {
       label: "מסלולים שנסגרו",
@@ -140,10 +147,13 @@ export default function KpisTab({ data }: TabProps) {
     {
       label: "העמדה העמוסה",
       value: k?.busiestStationName ?? EM_DASH,
-      note: isNil(k?.busiestStationWorkHours)
-        ? "אין שעות עבודה בתקופה"
-        : `${formatHours(k?.busiestStationWorkHours)} עבודה · ${formatCount(k?.busiestStationCount)} צעדים`,
+      note: !isNil(k?.busiestStationWorkHours)
+        ? `${formatHours(k?.busiestStationWorkHours)} עבודה · ${formatCount(k?.busiestStationCount)} צעדים`
+        : k?.busiestStationName
+          ? `${formatCount(k?.busiestStationCount)} צעדים · שעות נטו לא חושבו`
+          : "אין שעות עבודה בתקופה",
       tone: "muted",
+      info: "workHours",
       // No daily series exists for "which station was busiest", and a flat
       // placeholder line would read as "steady", which is a claim.
       spark: [],
@@ -187,6 +197,7 @@ export default function KpisTab({ data }: TabProps) {
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", fontWeight: 600 }}>
                 {card.label}
+                {card.info && <ClockInfoIcon metric={card.info} />}
               </div>
               <div
                 style={{

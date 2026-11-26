@@ -7,6 +7,7 @@ import { formatDateTime, formatDuration } from "@/app/lib/datetime";
 import type { StationHistoryRow } from "@/app/lib/testing/contract";
 import { READ_PER_VISIT } from "@/app/components/screenQuery";
 import { loadStationHistory } from "./api";
+import { CLOCK_TEXT } from "@/app/lib/dashboard/work-clock";
 
 const NO_ROWS: StationHistoryRow[] = [];
 
@@ -17,10 +18,10 @@ type StationHistoryDialogProps = {
   stationName: string | null;
 };
 
-/** "HH:MM:SS" from start to end; "—" without both, or when the end is before the start. */
-function durationText(startTime: string | null, endTime: string | null): string {
-  const ms = startTime && endTime ? new Date(endTime).getTime() - new Date(startTime).getTime() : NaN;
-  return Number.isNaN(ms) || ms < 0 ? "—" : formatDuration(ms);
+/** Net "HH:MM:SS" (working hours only, computed by the server); "—" while the step runs. */
+function durationText(e: StationHistoryRow): string {
+  if (!e.processingStartTime || !e.processingEndTime) return "—";
+  return e.netWorkSeconds == null ? CLOCK_TEXT.missingWork : formatDuration(e.netWorkSeconds * 1000);
 }
 
 // A muted secondary line under a cell's main value.
@@ -42,7 +43,7 @@ const COLUMNS: Column<StationHistoryRow>[] = [
   { key: "queue", header: "התחלת תור", nums: true, nowrap: true, cell: (e) => formatDateTime(e.queueStartTime) },
   { key: "start", header: "התחלת עיבוד", nums: true, nowrap: true, cell: (e) => formatDateTime(e.processingStartTime) },
   { key: "end", header: "סיום עיבוד", nums: true, nowrap: true, cell: (e) => formatDateTime(e.processingEndTime) },
-  { key: "duration", header: "משך זמן", nums: true, nowrap: true, cell: (e) => durationText(e.processingStartTime, e.processingEndTime) },
+  { key: "duration", header: "משך זמן (נטו)", nums: true, nowrap: true, cell: durationText },
   { key: "worker", header: "עובד", nowrap: true, cell: (e) => (e.workerId ? `עובד #${e.workerId}` : "—") },
 ];
 

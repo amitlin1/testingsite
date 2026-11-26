@@ -11,8 +11,10 @@ import type { Prisma } from "@prisma/client";
 import { prisma, type TransactionClient } from "@/lib/db";
 import type { JobStatus } from "./health";
 
-/** The scheduled jobs' names: job_run.job_name, their advisory-lock keys, and
- *  the /api/cron/<name> endpoints 8-register-tasks.ps1 calls. */
+/** The jobs' names: job_run.job_name, their advisory-lock keys, and their
+ *  /api/cron/<name> endpoints. Only release-stale-tests is scheduled from
+ *  outside (8-register-tasks.ps1); the calendar job runs inside the app
+ *  (calendar-sync.ts) and metrics-selfcheck is a manual tool. */
 export const JOB_NAMES = {
   releaseStaleTests: "release-stale-tests",
   rebuildWorkCalendar: "rebuild-work-calendar",
@@ -20,10 +22,12 @@ export const JOB_NAMES = {
 } as const;
 
 /**
- * The three scheduled jobs of §10.1, with the period 8-register-tasks.ps1
- * actually registers them at. `intervalSeconds` is not decoration: it is the
- * ×2 in the §10.2 staleness rule, so this table and the Task Scheduler
- * registration must be changed together.
+ * The jobs that run on a schedule, with the period 8-register-tasks.ps1
+ * registers them at. `intervalSeconds` is not decoration: it is the ×2 in the
+ * §10.2 staleness rule, so this table and the Task Scheduler registration must
+ * be changed together. The work calendar is not here since 2026-11-26: it is
+ * built by the app when something changes, not on a clock, so "late" has no
+ * meaning for it — its health is the calendar checks of metrics_selfcheck().
  */
 export const SCHEDULED_JOBS: ReadonlyArray<{
   name: string;
@@ -31,8 +35,6 @@ export const SCHEDULED_JOBS: ReadonlyArray<{
   intervalSeconds: number;
 }> = [
   { name: JOB_NAMES.releaseStaleTests, labelHe: "שחרור בדיקות תקועות", intervalSeconds: 5 * 60 },
-  { name: JOB_NAMES.rebuildWorkCalendar, labelHe: "בניית לוח שעות עבודה", intervalSeconds: 24 * 60 * 60 },
-  { name: JOB_NAMES.metricsSelfcheck, labelHe: "בדיקת תקינות מטריקות", intervalSeconds: 24 * 60 * 60 },
 ];
 
 /** What a job body reports about the work it did. */
@@ -48,9 +50,8 @@ export type JobOutcome<D extends object = object> =
   | { status: "skipped_overlap"; jobRunId: string; rowsAffected: null; detail: null };
 
 /**
- * The transaction budget of every job, and of rebuildWorkCalendar's own
- * transaction: the calendar rebuild is the longest thing any job does, and the
- * selfcheck can run it in-process as its self-heal step (§7.4).
+ * The transaction budget of every job: the calendar rebuild plus one batch of
+ * recomputed intervals is the longest thing any job does.
  */
 export const TX_OPTIONS = { timeout: 240_000, maxWait: 5_000 } as const;
 
@@ -61,8 +62,7 @@ export const TX_OPTIONS = { timeout: 240_000, maxWait: 5_000 } as const;
  */
 const ERROR_TEXT_LIMIT = 4000;
 
-/** The advisory-lock key of a job (§10.1). rebuildWorkCalendar takes the same
- *  key for a settings save, so a save and the nightly job never overlap. */
+/** The advisory-lock key of a job (§10.1): two runs of one job never overlap. */
 export function lockKey(jobName: string): string {
   return `job:${jobName}`;
 }
