@@ -24,7 +24,7 @@
 import * as React from "react";
 import type { Config } from "@measured/puck";
 import { FillValue, renderRichModel, isRichValue, type RichValue } from "./rich";
-import type { ReportRenderMeta, ReportSignerInfo, ReportStepResult, ReportTone, SignCell } from "./types";
+import type { ReportRenderMeta, ReportSignerInfo, ReportStepBack, ReportStepResult, ReportTone, SignCell } from "./types";
 import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND, REPORT_TONE_WORD, signCellsOf } from "./types";
 import { PASS_FAIL_WORD } from "@/app/lib/station-fields/labels";
 import { REPORT_FONTS, fontOf } from "./fonts";
@@ -251,6 +251,11 @@ function sampleResults(meta: ReportRenderMeta): ReportStepResult[] {
 
 /** The general template's editor has no route, so no steps to sample: two stations that show
  *  what the detail prints (a popup's component, a route field, a photo). */
+/** What the StepBacks block shows in the editor (the real ones print only on an item that went back). */
+const STEP_BACK_SAMPLE: ReportStepBack[] = [
+  { date: "01.01.2026", time: "10:30", fromStep: 3, toStep: 2, from: "בדיקה חשמלית", to: "בדיקה ויזואלית", worker: "שם העובד", workerNumber: "", reason: "סיבת ההחזרה כפי שהעובד כתב אותה" },
+];
+
 const GENERAL_SAMPLE: ReportStepResult[] = [
   { label: "עמדה ראשונה", fields: [["מק״ט שנסרק", "ערך"], ["שדה של המסלול", "ערך"]] },
   { label: "עמדה שנייה", fields: [["מק״ט שנסרק", "ערך"], ["משקל", "ערך"]] },
@@ -342,6 +347,10 @@ export interface ResultsTableProps extends WidthProp {
   showStation: boolean;
   showComments: boolean;
 }
+export interface StepBacksProps extends WidthProp {
+  /** Print "החזרות לבדיקה חוזרת" above the table. */
+  showTitle: boolean;
+}
 export interface StepFieldsProps extends WidthProp {
   /** The step uid. */
   step: string;
@@ -383,6 +392,7 @@ export interface PdfComponentProps {
   FieldLine: FieldLineProps;
   DetailsTable: DetailsTableProps;
   ResultsTable: ResultsTableProps;
+  StepBacks: StepBacksProps;
   StepFields: StepFieldsProps;
   StepDetails: StepDetailsProps;
   Photos: PhotosProps;
@@ -648,6 +658,46 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                       </tr>
                     ) : null}
                   </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </Block>
+        );
+      },
+    },
+
+    // Every time the item was sent back to the test before: when, from which step to which, who
+    // sent it back and why. Prints nothing for an item never sent back.
+    StepBacks: {
+      label: "החזרות לבדיקה חוזרת",
+      defaultProps: { showTitle: true, width: "full" },
+      render: ({ showTitle, width, puck }) => {
+        const meta = readMeta(puck);
+        const rows = meta.mode === "edit" ? STEP_BACK_SAMPLE : (meta.stepBacks ?? []);
+        if (rows.length === 0) return <Block width={width}><span /></Block>;
+        const place = (name: string, step: number | null) => (step != null ? `${step}. ${name || "—"}` : name || "—");
+        return (
+          <Block width={width}>
+            {showTitle ? <div className="pdf-stepbacks__title">החזרות לבדיקה חוזרת</div> : null}
+            <table className="pdf-table pdf-results pdf-stepbacks">
+              <thead>
+                <tr>
+                  <th style={{ width: "15%" }}>תאריך</th>
+                  <th style={{ width: "17%" }}>מ־</th>
+                  <th style={{ width: "17%" }}>חזר ל־</th>
+                  <th style={{ width: "16%" }}>הוחזר ע״י</th>
+                  <th>סיבה</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className="pdf-keep">
+                    <td><bdi>{r.date}{r.time ? ` ${r.time}` : ""}</bdi></td>
+                    <td className="pdf-results__step">{place(r.from, r.fromStep)}</td>
+                    <td className="pdf-results__step">{place(r.to, r.toStep)}</td>
+                    <td>{r.worker}{r.workerNumber ? <span className="pdf-results__note"> (<bdi>{r.workerNumber}</bdi>)</span> : null}</td>
+                    <td className="pdf-stepbacks__reason">{r.reason || <span className="pdf-results__empty">לא נרשמה סיבה</span>}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>

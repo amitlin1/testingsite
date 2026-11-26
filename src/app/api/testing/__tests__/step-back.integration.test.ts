@@ -2,8 +2,9 @@
 // route, waits there again, and the ledger counts it as that step's next attempt. Refused for an
 // item in test, a first step, a step back onto the box's own (package-level) step, a whole box,
 // and a stale card; two clicks never take an item back twice. An item that had reached the
-// closing station takes the box back to waiting for its items. Managers only: anyone else (or
-// no session) is refused before anything moves.
+// closing station takes the box back to waiting for its items. Managers and testers only: anyone
+// else (or no session) is refused before anything moves. A reason is required, and the ledger keeps
+// it with who sent the item back (the item report prints both).
 //
 // Runs ONLY when TEST_DATABASE_URL points at a throwaway database (the write-path harness).
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -47,9 +48,9 @@ describe(
       );
     });
 
-    const stepBack = async (itemId: number, currentRouteStep: number, actionId = randomUUID()) => {
+    const stepBack = async (itemId: number, currentRouteStep: number, actionId = randomUUID(), reason: unknown = "נמצאה תקלה, לבדוק שוב") => {
       const res = await POST(H.jsonRequest("/api/testing/step-back", {
-        itemId: String(itemId), currentRouteStep, workerId: H.WORKER_ID, workerName: H.WORKER_NAME, actionId,
+        itemId: String(itemId), currentRouteStep, reason, workerId: H.WORKER_ID, workerName: H.WORKER_NAME, actionId,
       }));
       return { status: res.status, body: await res.json() };
     };
@@ -83,6 +84,17 @@ describe(
       assert.equal(last.step_no, 1);
       assert.equal(last.payload.action, "step_back");
       assert.equal(last.payload.from_step, 2);
+      assert.equal(last.payload.reason, "נמצאה תקלה, לבדוק שוב", "the reason is kept for the report");
+      assert.equal(last.worker_id, H.WORKER_ID);
+      // The item's report lists it: who sent it back, from which step to which, and why.
+      const { loadReportSource } = await import("@/app/lib/item-report/source");
+      const backs = (await loadReportSource(BigInt(8101)))?.stepBacks ?? [];
+      assert.equal(backs.length, 1);
+      assert.deepEqual(
+        { fromStep: backs[0].fromStep, toStep: backs[0].toStep, worker: backs[0].worker, workerNumber: backs[0].workerNumber, reason: backs[0].reason },
+        { fromStep: 2, toStep: 1, worker: H.WORKER_NAME, workerNumber: String(H.WORKER_ID), reason: "נמצאה תקלה, לבדוק שוב" },
+      );
+      assert.ok(backs[0].from && backs[0].to, "the station types are named");
       const open = await H.openInterval(8101);
       assert.equal(open?.state_key, "queued");
       assert.equal(open?.step_no, 1);
@@ -97,12 +109,26 @@ describe(
       await assertNoDrift();
     });
 
-    it("managers only: a tester, a storekeeper and no session are refused, and the item stays", async () => {
+    it("no reason, no step back: an empty or missing reason is refused (400) and the item stays", async () => {
+      await H.seedItem({ itemId: 8105, itemTypeId: ITEM_TYPE_FUNC_TWICE, stationId: H.STATION_FUNC_A });
+      await pass(8105, H.STATION_FUNC_A);
+      const before = (await H.events(8105)).length;
+      for (const reason of [null, "", "   ", 7]) {
+        const r = await stepBack(8105, 2, randomUUID(), reason);
+        assert.equal(r.status, 400, JSON.stringify(r.body));
+      }
+      assert.equal((await stepBack(8105, 2, randomUUID(), "x".repeat(501))).status, 400, "too long");
+      const route = await H.routeRow(8105);
+      assert.deepEqual([route.current_route_step, route.current_status], [2, H.STATUS.queued]);
+      assert.equal((await H.events(8105)).length, before, "nothing written to the ledger");
+    });
+
+    it("managers and testers only: a storekeeper and no session are refused, and the item stays", async () => {
       await H.seedItem({ itemId: 8104, itemTypeId: ITEM_TYPE_FUNC_TWICE, stationId: H.STATION_FUNC_A });
       await pass(8104, H.STATION_FUNC_A);
       const before = (await H.events(8104)).length;
 
-      for (const [who, status] of [[signedIn("tester"), 403], [signedIn("storekeeper", "mashan"), 403], [null, 401]] as const) {
+      for (const [who, status] of [[signedIn("storekeeper", "mashan"), 403], [null, 401]] as const) {
         session = who;
         const r = await stepBack(8104, 2);
         assert.equal(r.status, status, JSON.stringify(r.body));
@@ -111,7 +137,7 @@ describe(
       assert.deepEqual([route.current_route_step, route.current_status], [2, H.STATUS.queued]);
       assert.equal((await H.events(8104)).length, before, "nothing written to the ledger");
 
-      session = signedIn("manager");
+      session = signedIn("tester");
       assert.equal((await stepBack(8104, 2)).status, 200);
       assert.equal((await H.routeRow(8104)).current_route_step, 1);
       await assertNoDrift();

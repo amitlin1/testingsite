@@ -91,7 +91,7 @@ test("filter options: distinct, by label, and a selected value that left the que
 test("step back: a waiting item past step 1 goes back to its previous item-level type, for a manager", () => {
   const types: TestStationType[] = [{ id: 10, name: "פתיחה", packageLevel: true }, { id: 20, name: "בדיקה" }, { id: 30, name: "אחרון" }];
   assert.deepEqual(queueItemStepBack(row(1, { current_route_step: 3 }), types, true), { itemId: "1", routeStep: 3, toName: "בדיקה", inBox: false });
-  assert.equal(queueItemStepBack(row(1, { current_route_step: 3 }), types, false), null, "managers only");
+  assert.equal(queueItemStepBack(row(1, { current_route_step: 3 }), types, false), null, "only who may step back");
   assert.equal(queueItemStepBack(row(1, { current_route_step: 2 }), types, true), null, "the step before is the box's");
   assert.equal(queueItemStepBack(row(1, { current_route_step: 1 }), types, true), null, "the first step");
   assert.equal(queueItemStepBack(row(1, { current_route_step: 3, current_status: ItemStatus.InTest }), types, true), null);
@@ -107,7 +107,7 @@ test("step back of a box item: it reached the closing and its step before is its
   const box = row(9, { is_package: true, route_steps: [10, 20, 30], current_route_step: 3 });
   assert.deepEqual(boxItemStepBack(it({}), true, { box }), { itemId: "1005", routeStep: 4, toName: "בדיקה", inBox: true, fromWizard: false });
   assert.deepEqual(boxItemStepBack(it({}), true, "wizard"), { itemId: "1005", routeStep: 4, toName: "בדיקה", inBox: true, fromWizard: true });
-  assert.equal(boxItemStepBack(it({}), false, { box }), null, "managers only");
+  assert.equal(boxItemStepBack(it({}), false, { box }), null, "only who may step back");
   assert.equal(boxItemStepBack(it({ arrived_at_closing: false }), true, "wizard"), null);
   assert.equal(boxItemStepBack(it({ prev_step_desc: null }), true, "wizard"), null);
   assert.equal(boxItemStepBack(it({ prev_step_package_level: true }), true, "wizard"), null);
@@ -123,7 +123,7 @@ test("step back right after a result: to the test just finished, unless it was t
   const type: TestStationType = { id: 20, name: "בדיקה" };
   const next = { nextStation: { testStationId: 5, testStationDesc: "אחרון", stationTypeId: 30, routeStep: 3 } };
   assert.deepEqual(afterResultStepBack(row(1, { current_route_step: 2 }), type, next, true), { itemId: "1", routeStep: 3, toName: "בדיקה", inBox: false });
-  assert.equal(afterResultStepBack(row(1), type, next, false), null, "managers only");
+  assert.equal(afterResultStepBack(row(1), type, next, false), null, "only who may step back");
   assert.equal(afterResultStepBack(row(1), type, { ...next, isLastStation: true }, true), null);
   assert.equal(afterResultStepBack(row(1), type, {}, true), null);
   assert.equal(afterResultStepBack(row(1), { ...type, packageLevel: true }, next, true), null);

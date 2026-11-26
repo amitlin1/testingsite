@@ -233,6 +233,10 @@ export const PDF_CSS = `
 .pdf-stephead { font-size: 10pt; margin: 6px 0 3px; }
 .pdf-placeholder { color: #aab1c0; border: 1px dashed #c4c9d4; padding: 10px; text-align: center; font-size: 9pt; }
 
+/* ---- the times the item went back to a test (StepBacks) ---- */
+.pdf-stepbacks__title { font-weight: 700; font-size: 11pt; margin: 2mm 0 1.5mm; break-after: avoid; page-break-after: avoid; }
+.pdf-stepbacks__reason { text-align: right !important; white-space: pre-wrap; }
+
 /* ---- the detail of every station (StepDetails) ---- */
 .pdf-stepdetail { margin: 0 0 4mm; }
 .pdf-stepdetail__head { display: flex; justify-content: space-between; align-items: baseline; gap: 6mm; flex-wrap: wrap; font-size: 11pt; border-bottom: .75pt solid #000; padding-bottom: 1mm; margin-bottom: 1.5mm; break-after: avoid; page-break-after: avoid; }

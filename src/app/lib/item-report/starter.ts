@@ -71,6 +71,8 @@ function blocks(prefix: string) {
         width: "full",
       },
     }),
+    /** The times the item went back to a test, with who and why — prints nothing when there were none. */
+    stepBacks: (): Block => ({ type: "StepBacks", props: { id: id("StepBacks"), showTitle: true, width: "full" } }),
     spacer: (): Block => ({ type: "Spacer", props: { id: id("Spacer"), height: 6 } }),
     /** One signature row: its role first, then the signer and the drawing. The closing row's role
      *  is the signer's own ("בודק" / "מנהל", kept when they sign — `roleKind: "role"`, with `role` as
@@ -104,7 +106,7 @@ export function officialStarterTemplate(): Data {
   const b = blocks("starter");
   return doc([
     b.section("פרטי הפריט"), b.details(),
-    b.section("תוצאות הבדיקות"), b.results(true),
+    b.section("תוצאות הבדיקות"), b.results(true), b.stepBacks(),
     b.section("סיכום"), b.summary(),
     b.section("אישור"), b.spacer(), ...b.signatures(),
   ]);
@@ -117,7 +119,7 @@ export function generalStarterTemplate(): Data {
   return doc([
     b.section("פרטי הפריט"), b.details(),
     b.section("תוצאות הבדיקות"), b.results(false),
-    b.section("פירוט לפי עמדה"), b.stepDetails(),
+    b.section("פירוט לפי עמדה"), b.stepDetails(), b.stepBacks(),
     b.section("סיכום"), b.summary(),
     b.section("אישור"), b.spacer(), ...b.signatures(),
   ]);

@@ -80,6 +80,24 @@ export interface ReportStepResult {
   fields: ReportFieldResult[];
 }
 
+/** One time the item was sent back to the test before ("חזרה לבדיקה הקודמת"): who sent it back,
+ *  when, from which step to which, and why. */
+export interface ReportStepBack {
+  /** dd.mm.yyyy */
+  date: string;
+  /** HH:mm */
+  time: string;
+  fromStep: number | null;
+  toStep: number | null;
+  /** The station types ("בדיקה חשמלית"); "" when unknown. */
+  from: string;
+  to: string;
+  worker: string;
+  workerNumber: string;
+  /** The worker's words. "" for a step back given before a reason was required. */
+  reason: string;
+}
+
 /**
  * A cell of a Signature block. The block is a single row of cells the author
  * orders freely: the drawn signature, any of the signer's auto-filled identity
@@ -126,6 +144,8 @@ export interface ReportRenderMeta {
   values: Record<string, string>;
   /** Every step the item passed, in route order (print only). */
   results: ReportStepResult[];
+  /** Every time the item was sent back to the test before, oldest first (print only). */
+  stepBacks?: ReportStepBack[];
   /** photo object key → image src (data URL in print). */
   photos: Record<string, string>;
   /** Signature image keyed by the Signature block's bind ("closing" / "final"). */

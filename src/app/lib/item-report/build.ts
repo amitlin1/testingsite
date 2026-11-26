@@ -150,6 +150,7 @@ export async function buildReportBody(src: ReportSource, opts: ReportOpts): Prom
     steps: [],
     values,
     results,
+    stepBacks: src.stepBacks ?? [],
     photos,
     signatures,
     signerMeta,

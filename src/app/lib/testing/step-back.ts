@@ -30,10 +30,14 @@ const MOVED = "הפריט זז בינתיים. רענן את התור ונסה �
  * showed: the UPDATE matches only that step and status, so two clicks never take the item back twice.
  *
  * Ledger: a "queued" transition at the earlier step, reason manual_override (payload.action =
- * "step_back") — the metrics count it as that step's next attempt. An item inside a box rechecks
+ * "step_back", payload.reason = the worker's words: why it goes back, required) — the metrics count
+ * it as that step's next attempt; the item report lists these, with who and why (item-report/source). An item inside a box rechecks
  * the box's gate in the same tx.
  */
-export function stepBack({ itemId, shownStep, actor }: { itemId: bigint; shownStep: number; actor: Actor }): Promise<StepBackAnswer> {
+/** The longest reason a step back takes (its words print on the item's report). */
+export const STEP_BACK_REASON_MAX = 500;
+
+export function stepBack({ itemId, shownStep, reason, actor }: { itemId: bigint; shownStep: number; reason: string; actor: Actor }): Promise<StepBackAnswer> {
   return prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<{
       item_type_id: number; route_number: number; current_status: number;
@@ -97,7 +101,7 @@ export function stepBack({ itemId, shownStep, actor }: { itemId: bigint; shownSt
 
     // Station NULL by construction for a waiting item (the fold takes the type from the run's
     // plan), as on a normal advance.
-    const payload = { action: "step_back", from_step: step, to_step: toStep, from_station_type_id: fromTypeId, to_station_type_id: toTypeId };
+    const payload = { action: "step_back", from_step: step, to_step: toStep, from_station_type_id: fromTypeId, to_station_type_id: toTypeId, reason };
     await recordTransition(tx, {
       key: { name: "step_back", actionId: actor.actionId, item: true },
       itemId,

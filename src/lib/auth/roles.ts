@@ -48,8 +48,8 @@ export const ACCESS = accessTable({
   deleteTakenInShipment: ["manager"],
   /** Create a box directly (POST /api/packages). */
   createPackage: ["manager"],
-  /** Step an item back to its previous test. */
-  stepBack: ["manager"],
+  /** Step an item back to its previous test (a reason is required). */
+  stepBack: ["manager", "tester"],
   /** Pick another worker than yourself: the testing page, shipments, item files. */
   actAsOtherWorker: ["manager"],
   /** File management (/files). */

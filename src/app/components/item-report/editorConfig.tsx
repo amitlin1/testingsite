@@ -31,7 +31,7 @@ type Align = "right" | "center" | "left";
 /** The palette's groups, in order (PageBreak is not in it — pages have their own controls). */
 export const PALETTE: { title: string; components: (keyof PdfComponentProps)[] }[] = [
   { title: "תוכן", components: ["Section", "Text", "DetailsTable", "FieldValue", "List", "Table"] },
-  { title: "תוצאות הבדיקות", components: ["ResultsTable", "StepDetails", "StepFields", "Photos"] },
+  { title: "תוצאות הבדיקות", components: ["ResultsTable", "StepDetails", "StepFields", "Photos", "StepBacks"] },
   { title: "חתימות וערכים", components: ["Signature", "FieldLine"] },
   { title: "מרווחים ומפרידים", components: ["Spacer", "Divider"] },
 ];
@@ -288,6 +288,7 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
         showComments: yesNo("עמודת הערות"),
       },
     },
+    StepBacks: { ...c.StepBacks, fields: { showTitle: yesNo("כותרת מעל הטבלה") } },
     StepFields: {
       ...c.StepFields,
       fields: {

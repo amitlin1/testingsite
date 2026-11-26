@@ -37,10 +37,10 @@ test("a mashan: of the settings, only work hours", () => {
   assert.deepEqual(okIn("mashan", SETTINGS.label), [labelOf("/settings/work-hours")]);
 });
 
-test("the actions: a tester starts tests and signs at the closing; a storekeeper only takes boxes in; a mashan neither", () => {
+test("the actions: a tester starts tests, steps items back and signs at the closing; a storekeeper only takes boxes in; a mashan neither", () => {
   const tester = new Set(okIn("tester", "פעולות"));
-  for (const l of ["התחלת בדיקה ושליחת תוצאה", "חתימה על הדוחות בסגירת מארז"]) assert.ok(tester.has(l), l);
-  for (const l of ["קליטת מארז מהמשלוח", "חזרה לבדיקה הקודמת", "עבודה בשם עובד אחר", "חתימה סופית על דוח פריט"]) assert.ok(!tester.has(l), l);
+  for (const l of ["התחלת בדיקה ושליחת תוצאה", "חזרה לבדיקה הקודמת", "חתימה על הדוחות בסגירת מארז"]) assert.ok(tester.has(l), l);
+  for (const l of ["קליטת מארז מהמשלוח", "עבודה בשם עובד אחר", "חתימה סופית על דוח פריט"]) assert.ok(!tester.has(l), l);
   assert.deepEqual(okIn("storekeeper", "פעולות"), ["קליטת מארז מהמשלוח"]);
   assert.deepEqual(okIn("mashan", "פעולות"), []);
 });

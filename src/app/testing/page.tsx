@@ -46,8 +46,8 @@ function TestingPageView() {
 
   const worker = useActiveWorker();
   const actor = { workerId: worker.workerId, workerName: worker.workerName };
-  // Managers only: the step-back route refuses anyone else (403), so no one else sees the button.
-  const isManager = hasAnyRole(useSession().data?.roles ?? [], ACCESS.stepBack);
+  // Managers and testers: the step-back route refuses anyone else (403), so no one else sees the button.
+  const canStepBack = hasAnyRole(useSession().data?.roles ?? [], ACCESS.stepBack);
 
   // The search / scan field and the three queue filters.
   const writeQ = React.useCallback((v: string) => setUrl({ q: v }), [setUrl]);
@@ -74,12 +74,12 @@ function TestingPageView() {
   // A start-test failure or a failed step back (the page's error toast).
   const [startError, setStartError] = React.useState<string | null>(null);
 
-  const win = useTestWindow({ station, stationType, actor, isManager, onRefresh: queue.refresh, onStartError: setStartError });
+  const win = useTestWindow({ station, stationType, actor, canStepBack, onRefresh: queue.refresh, onStartError: setStartError });
   const stepBack = useStepBack({ actor, onRefresh: queue.refresh, onError: setStartError, onClosingStopped: win.closingStopped });
   const askOf = (req: StepBackRequest | null) => (req ? () => stepBack.ask(req) : null);
   // "החזר" on a box item: from the closing queue card, and from inside the closing wizard.
-  const boxQueueStepBack = (box: QueueRow) => (it: PackageItemView) => askOf(boxItemStepBack(it, isManager, { box }));
-  const wizardStepBack = (it: PackageItemView) => askOf(boxItemStepBack(it, isManager, "wizard"));
+  const boxQueueStepBack = (box: QueueRow) => (it: PackageItemView) => askOf(boxItemStepBack(it, canStepBack, { box }));
+  const wizardStepBack = (it: PackageItemView) => askOf(boxItemStepBack(it, canStepBack, "wizard"));
   const [historyDialogOpen, setHistoryDialogOpen] = React.useState(false);
 
   const scan = useScanLocate({
@@ -180,7 +180,7 @@ function TestingPageView() {
     item,
     onBegin: win.begin,
     highlighted: item.item_id === highlightedItemId,
-    onStepBack: askOf(queueItemStepBack(item, stationTypes, isManager)) ?? undefined,
+    onStepBack: askOf(queueItemStepBack(item, stationTypes, canStepBack)) ?? undefined,
   });
 
   return (
@@ -413,7 +413,7 @@ function TestingPageView() {
             open={win.next.open}
             onClose={win.next.close}
             info={win.next.info}
-            postStepBack={(req) => postStepBack(req, actor, queue.refresh)}
+            postStepBack={(req, reason) => postStepBack(req, reason, actor, queue.refresh)}
         />
         <StepBackDialogs dialogs={stepBack.dialogs} />
         <ResearchDialog open={win.research.open} onClose={win.research.close} station={win.research.station} />
