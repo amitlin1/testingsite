@@ -30,4 +30,4 @@ export const POST = withAuth(async (req, { session }) => {
   } catch (error) {
     return errorResponse(error, "Failed to create the field set");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });

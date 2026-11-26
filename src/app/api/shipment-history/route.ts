@@ -60,4 +60,4 @@ export const POST = withAuth(async (request: NextRequest, { session }: WithAuthC
   } catch (error) {
     return errorResponse(error, "השליחה לא נשמרה — שגיאה בשרת");
   }
-}, { role: ACCESS.shipments });
+}, { perm: ACCESS.shipments });

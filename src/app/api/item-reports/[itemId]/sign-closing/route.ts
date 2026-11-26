@@ -12,4 +12,4 @@ export const runtime = "nodejs";
  * not lock the report while a final signature is still to come → { version } (0 = not frozen).
  * 409 when there is nothing to sign (not finished / no closing block / already signed / locked).
  */
-export const POST = signHandler(signClosingSignature, { role: ACCESS.reportClosingSign });
+export const POST = signHandler(signClosingSignature, { perm: ACCESS.reportClosingSign });

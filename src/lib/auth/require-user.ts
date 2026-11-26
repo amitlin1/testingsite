@@ -15,7 +15,7 @@
 //                    terminal RefreshAccessTokenError). The user's id (if the
 //                    app resolves one) may be null = authenticated-but-no-local-
 //                    row; that is NOT a dead session — the caller decides.
-//   requireRole()  → requireUser() + role check; redirects to /no-auth on a miss.
+//   requirePermission() → requireUser() + a permission check (can()); redirects to /no-auth on a miss.
 //
 // READS vs MUTATIONS: use these in MUTATING actions (a click expects an effect →
 // redirect on dead session). For READ-ONLY loaders, do NOT use requireUser —
@@ -26,7 +26,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentUser, type CurrentUser } from "./current-user";
-import { hasAnyRole, type AppRole } from "./roles";
+import { can, type Permission } from "./roles";
 import { SERVER_BASE_PATH, loginUrl, noAuthUrl } from "@/lib/base-path";
 
 async function loginRedirectTarget(): Promise<string> {
@@ -51,12 +51,12 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-/** requireUser() + a role gate. On a role miss, redirects to /no-auth. For a
- *  soft "missing role" message in an action, check the role inline and return a
+/** requireUser() + a permission gate. On a miss, redirects to /no-auth. For a
+ *  soft "missing permission" message in an action, check can() inline and return a
  *  FORBIDDEN result instead of calling this. */
-export async function requireRole(roles: readonly AppRole[]): Promise<CurrentUser> {
+export async function requirePermission(perm: Permission): Promise<CurrentUser> {
   const user = await requireUser();
-  if (!hasAnyRole(user.roles, roles)) {
+  if (!can(user.roles, perm)) {
     redirect(noAuthUrl());
   }
   return user;

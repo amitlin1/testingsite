@@ -113,6 +113,6 @@ export function metricsRoute<M extends PeriodMode, P extends RouteParams = Recor
         return errorResponse(error, failure);
       }
     },
-    { role: ACCESS.dashboard },
+    { perm: ACCESS.dashboard },
   );
 }

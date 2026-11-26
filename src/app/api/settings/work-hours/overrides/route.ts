@@ -23,7 +23,7 @@ export const GET = withAuth((req: NextRequest) => answer("שגיאה בטעינ�
     orderBy: { work_date: "asc" },
   });
   return NextResponse.json(rows.map(toOverride));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });
 
 /** Create-or-replace the single override for a date (unique per work_date). */
 export const POST = withAuth((req: NextRequest, { session }) => calendarWrite("שמירת החריגה נכשלה", async () => {
@@ -37,4 +37,4 @@ export const POST = withAuth((req: NextRequest, { session }) => calendarWrite("�
     create: { work_date: stringToDbDate(input.date), ...data, created_by: identityOf(session).username },
   });
   return NextResponse.json(toOverride(saved));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

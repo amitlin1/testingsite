@@ -378,6 +378,44 @@ export interface CompletionHistoryWire {
   [shipmentCode: string]: string | Record<string, { routed: number; finished: number }>;
 }
 
+/**
+ * GET summary — the managers' one-screen summary (/dashboard). `period` is the
+ * window served (X-Metrics-Period-* say the same); `now` ignores it. Every
+ * definition is in lib/metrics/read/summary.ts.
+ */
+export interface SummaryWire {
+  period: {
+    shipmentsIn: number;
+    shipmentsOut: number;
+    boxesIn: number;
+    boxesOut: number;
+    /** Items (never boxes) whose route closed in the window, by the report's overall verdict. */
+    itemsPassed: number;
+    itemsFailed: number;
+    /** Closed with no decided step: in neither percentage. */
+    itemsUndecided: number;
+    /** One decimal, over passed + failed; null when no item has a verdict. */
+    passPct: number | null;
+    failPct: number | null;
+    /** Boxes whose route closed in the window, and the ones both clocks could measure. */
+    boxesFinished: number;
+    boxesTimed: number;
+    /** Seconds: average opened → closed per box, over the SAME `boxesTimed` runs on both clocks. */
+    routeTime: ClockPair;
+  };
+  now: {
+    /** When the state was read. */
+    asOf: string;
+    shipmentsInWork: number;
+    shipmentsReady: number;
+    itemsTotal: number;
+    itemsWaiting: number;
+    itemsInWork: number;
+    itemsInResearch: number;
+    itemsReady: number;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Views — what the screens render
 // ---------------------------------------------------------------------------

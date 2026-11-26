@@ -21,7 +21,7 @@ export const GET = withAuth(
       return adminErrorResponse(e, "טעינת המשתמשים נכשלה");
     }
   },
-  { role: ACCESS.usersAdmin },
+  { perm: ACCESS.usersAdmin },
 );
 
 export const POST = withAuth(
@@ -34,5 +34,5 @@ export const POST = withAuth(
       return adminErrorResponse(e, "יצירת המשתמש נכשלה");
     }
   },
-  { role: ACCESS.usersAdmin },
+  { perm: ACCESS.usersAdmin },
 );

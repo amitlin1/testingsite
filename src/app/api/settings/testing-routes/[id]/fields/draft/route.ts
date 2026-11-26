@@ -20,7 +20,7 @@ export const PUT = withAuth<{ id: string }>(async (req, { session, params: { id 
   } catch (error) {
     return errorResponse(error, "Failed to save the fields draft");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });
 
 /**
  * DELETE /api/settings/testing-routes/[id]/fields/draft — "ביטול הטיוטה". Body { base_rev } →
@@ -33,4 +33,4 @@ export const DELETE = withAuth<{ id: string }>(async (req, { session, params: { 
   } catch (error) {
     return errorResponse(error, "Failed to discard the fields draft");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });

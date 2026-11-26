@@ -5,8 +5,7 @@
 // import these to mirror the same decision (canSeeInNav, the users page's role
 // panel).
 
-import type { AppRole } from "@/lib/auth/roles";
-import { ACCESS, hasAnyRole } from "@/lib/auth/roles";
+import { ACCESS, can, type Permission } from "@/lib/auth/roles";
 
 // Routes that don't require a session. /login and /no-auth MUST stay here, or
 // the middleware redirects them to themselves — an infinite loop.
@@ -48,58 +47,58 @@ export const PUBLIC_ROUTES: ReadonlyArray<{ path: string; under?: true }> = [
 const isPublic = (pathname: string): boolean =>
   PUBLIC_ROUTES.some((r) => pathname === r.path || (r.under === true && pathname.startsWith(r.path + "/")));
 
-// Path-prefix → required roles (ANY grants access). First match wins, so the
+// Path-prefix → the permission it needs (can(), roles.ts). First match wins, so the
 // more specific prefixes come first where they overlap. Routes NOT listed here
 // are open to ANY authenticated user (currently "/", "/items", "/packages").
 // Anything gated by DB state rather than a Keycloak role should NOT live here —
 // let any authed user through the middleware and gate inside the page/action.
 export const ROLE_PROTECTED: ReadonlyArray<{
   prefix: string;
-  any: readonly AppRole[];
+  perm: Permission;
 }> = [
   // User-management API — manager only (defense-in-depth; the handlers also
   // self-gate with withAuth). Listed first so it matches before anything else.
-  { prefix: "/api/users", any: ACCESS.usersAdmin },
+  { prefix: "/api/users", perm: ACCESS.usersAdmin },
   // Dashboard/analytics API — manager only, mirroring the /dashboard page rule
   // below. Until 2026-08 these 21 endpoints were reachable by ANY authenticated
   // session (the gate was on /dashboard only), exposing all customer analytics
   // to tester/storekeeper roles. Handlers also self-gate with withAuth.
-  { prefix: "/api/dashboard", any: ACCESS.dashboard },
+  { prefix: "/api/dashboard", perm: ACCESS.dashboard },
   // Testing API — the same roles as the /testing page below. Without it a
   // storekeeper, kept off the page, could still start a test or post a result
   // by calling these directly. Every caller is the testing page and its
   // wizards (plus the manager-only dashboard's station list).
-  { prefix: "/api/testing", any: ACCESS.testing },
+  { prefix: "/api/testing", perm: ACCESS.testing },
   // Box intake from its shipment — the shipments screen's roles.
   // Its undo, /api/packages/<id>/intake, can't be matched by prefix; both
   // handlers self-gate with withAuth.
-  { prefix: "/api/packages/intake", any: ACCESS.intake },
+  { prefix: "/api/packages/intake", perm: ACCESS.intake },
   // Work-hours API — admin + timekeeper (משאן). Handlers also self-gate with withAuth.
-  { prefix: "/api/settings/work-hours", any: ACCESS.workHours },
+  { prefix: "/api/settings/work-hours", perm: ACCESS.workHours },
   // Sources — not the tester's. Only the sources settings page reads this API.
-  { prefix: "/api/settings/sources", any: ACCESS.sourcesSettings },
+  { prefix: "/api/settings/sources", perm: ACCESS.sourcesSettings },
   // Settings pages — one rule per page, each naming who may open it. Pages
   // only: the intake and the queues still read routes / stations / statuses
   // through /api/settings/* (see the role plan).
-  { prefix: "/settings/users", any: ACCESS.usersAdmin },
-  { prefix: "/settings/customers", any: ACCESS.customersSettings },
-  { prefix: "/settings/item-types", any: ACCESS.itemTypesSettings },
-  { prefix: "/settings/packages", any: ACCESS.packagesSettings },
-  { prefix: "/settings/sources", any: ACCESS.sourcesSettings },
-  { prefix: "/settings/item-status", any: ACCESS.itemStatusSettings },
-  { prefix: "/settings/test-station-status", any: ACCESS.testStationStatusSettings },
-  { prefix: "/settings/test-stations", any: ACCESS.testStationsSettings },
-  { prefix: "/settings/testing-routes", any: ACCESS.fieldsEdit },
-  { prefix: "/settings/popup-templates", any: ACCESS.popupTemplatesSettings },
-  { prefix: "/settings/reference-items", any: ACCESS.referenceItemsSettings },
-  { prefix: "/settings/work-hours", any: ACCESS.workHours },
+  { prefix: "/settings/users", perm: ACCESS.usersAdmin },
+  { prefix: "/settings/customers", perm: ACCESS.customersSettings },
+  { prefix: "/settings/item-types", perm: ACCESS.itemTypesSettings },
+  { prefix: "/settings/packages", perm: ACCESS.packagesSettings },
+  { prefix: "/settings/sources", perm: ACCESS.sourcesSettings },
+  { prefix: "/settings/item-status", perm: ACCESS.itemStatusSettings },
+  { prefix: "/settings/test-station-status", perm: ACCESS.testStationStatusSettings },
+  { prefix: "/settings/test-stations", perm: ACCESS.testStationsSettings },
+  { prefix: "/settings/testing-routes", perm: ACCESS.fieldsEdit },
+  { prefix: "/settings/popup-templates", perm: ACCESS.popupTemplatesSettings },
+  { prefix: "/settings/reference-items", perm: ACCESS.referenceItemsSettings },
+  { prefix: "/settings/work-hours", perm: ACCESS.workHours },
   // Any settings page not listed above — manager only until it gets its own rule.
-  { prefix: "/settings", any: ACCESS.otherSettings },
+  { prefix: "/settings", perm: ACCESS.otherSettings },
   // Main sections — each role reaches its own area.
-  { prefix: "/testing", any: ACCESS.testing },
-  { prefix: "/shipments", any: ACCESS.shipments },
-  { prefix: "/dashboard", any: ACCESS.dashboard },
-  { prefix: "/files", any: ACCESS.files },
+  { prefix: "/testing", perm: ACCESS.testing },
+  { prefix: "/shipments", perm: ACCESS.shipments },
+  { prefix: "/dashboard", perm: ACCESS.dashboard },
+  { prefix: "/files", perm: ACCESS.files },
   // "/" and "/packages" (מארזים ופריטים) stay open to any authenticated user.
 ];
 
@@ -107,7 +106,7 @@ export type AccessVerdict =
   | { kind: "public" }
   | { kind: "needs-auth" }
   | { kind: "allowed" }
-  | { kind: "forbidden"; required: readonly AppRole[] };
+  | { kind: "forbidden"; required: Permission };
 
 /**
  * A data request (XHR / API fetch: answer JSON 401/403), not a navigation (answer a redirect).
@@ -161,11 +160,14 @@ export function resolveAccess(
   if (isPublic(pathname)) return { kind: "public" };
   if (!roles) return { kind: "needs-auth" };
 
-  for (const rule of ROLE_PROTECTED) {
-    if (pathname === rule.prefix || pathname.startsWith(rule.prefix + "/")) {
-      if (hasAnyRole(roles, rule.any)) return { kind: "allowed" };
-      return { kind: "forbidden", required: rule.any };
-    }
-  }
-  return { kind: "allowed" };
+  const perm = permissionForPath(pathname);
+  if (!perm || can(roles, perm)) return { kind: "allowed" };
+  return { kind: "forbidden", required: perm };
+}
+
+/** The permission a path needs — its ROLE_PROTECTED rule's; null when any signed-in user may open it.
+ *  @param pathname Already normalized — basePath stripped. */
+export function permissionForPath(pathname: string): Permission | null {
+  const rule = ROLE_PROTECTED.find((r) => pathname === r.prefix || pathname.startsWith(r.prefix + "/"));
+  return rule?.perm ?? null;
 }

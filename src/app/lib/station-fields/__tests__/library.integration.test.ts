@@ -694,7 +694,7 @@ describe(
       session = null;
       for (const w of writes) assert.deepEqual(await w.call(), { status: 401, body: { error: "Unauthorized" } }, w.name);
       session = signedIn("storekeeper", "mashan");
-      for (const w of writes) assert.deepEqual(await w.call(), { status: 403, body: { error: "Forbidden", required: ACCESS.fieldsEdit } }, w.name);
+      for (const w of writes) assert.deepEqual(await w.call(), { status: 403, body: { error: "Forbidden", required: ACCESS.fieldsEdit.role } }, w.name);
       assert.deepEqual({ libraries: await libraries(), revs: await revs() }, before, "nothing written");
 
       // Reads are not wrapped: the middleware signs them in, whatever the roles (spec §3.0).

@@ -1,14 +1,14 @@
 "use client";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { ACCESS, hasAnyRole } from "@/lib/auth/roles";
+import { ACCESS, can } from "@/lib/auth/roles";
 import { Tag } from "@/components/ui";
 import CrudTable, { Column } from "../components/CrudTable";
 
 export default function ItemTypesPage() {
   const { data: session } = useSession();
   // The storekeeper edits item types but not the packages screen — a plain tag then.
-  const packagesLink = hasAnyRole(session?.roles ?? [], ACCESS.packagesSettings);
+  const packagesLink = can(session?.roles, ACCESS.packagesSettings);
   const columns: Column[] = [
     { field: "item_type_id", headerName: "מזהה", width: 80 },
     { field: "item_type_desc", headerName: "תיאור סוג פריט" },

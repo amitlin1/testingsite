@@ -25,14 +25,16 @@ import {
   Avatar,
 } from "@/components/ui";
 import DataTable, { RowActions, IconAction, type Column } from "@/components/DataTable";
-import { Pencil, KeyRound, Ban, Power, Trash2, Unlock, Info, HelpCircle, type LucideIcon } from "lucide-react";
+import { Pencil, KeyRound, Ban, Power, Trash2, Unlock, Info, HelpCircle, ShieldCheck, type LucideIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import SettingsToolbar from "../components/SettingsToolbar";
 import RoleInfoDrawer from "./RoleInfoDrawer";
+import UserPermissionsDialog from "./UserPermissionsDialog";
 import { ROLE_DOT } from "./roleCapabilities";
 import { ApiError, getJson, sendJson } from "@/lib/api/client";
 import { useListQuery } from "@/lib/hooks/useListQuery";
 import { useSession } from "next-auth/react";
-import { APP_ROLES, ROLE_LABEL, type AppRole } from "@/lib/auth/roles";
+import { APP_ROLES, ROLE_LABEL, permissionByKey, type AppRole } from "@/lib/auth/roles";
 import { isSameAccount, type AdminUser, type UserStatus } from "@/lib/users/rules";
 import { useSettingsToast } from "../components/useSettingsToast";
 import "./users.css";
@@ -160,6 +162,23 @@ async function readUsers(): Promise<AdminUser[]> {
   return (await getJson<{ users?: AdminUser[] }>("/api/users")).users ?? [];
 }
 
+/** Each main role's bundle as Keycloak holds it (the perm-… roles), for the role panel. */
+async function readBundles(): Promise<Record<AppRole, string[]>> {
+  return (await getJson<{ bundles: Record<AppRole, string[]> }>("/api/users/role-bundles")).bundles;
+}
+
+/** "Some permissions taken away": beside the role tag of a user with no-… roles; opens their permissions. */
+function DeniedMark({ user, onOpen }: { user: AdminUser; onOpen: () => void }) {
+  const n = user.denied?.length ?? 0;
+  if (n === 0) return null;
+  const labels = user.denied.map((k) => permissionByKey(k).label);
+  return (
+    <button type="button" className="user-denied" onClick={onOpen} title={`הוסרו: ${labels.join(", ")}`}>
+      {n === 1 ? `בלי ${labels[0]}` : `הוסרו ${n} הרשאות`}
+    </button>
+  );
+}
+
 export default function UsersPage() {
   // Your own account: the API blocks self-demote/disable/delete (lockout guard);
   // reflect that in the UI so the action is disabled rather than failing.
@@ -173,6 +192,10 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = React.useState<"all" | AppRole>("all");
   // The role panel ("מה כל תפקיד יכול לעשות"); null = closed.
   const [infoRole, setInfoRole] = React.useState<AppRole | null>(null);
+  // The bundles Keycloak holds — read when the panel first opens.
+  const bundles = useQuery({ queryKey: ["role-bundles"], queryFn: readBundles, enabled: infoRole != null });
+  // One user's permissions dialog; null = closed.
+  const [permTarget, setPermTarget] = React.useState<AdminUser | null>(null);
 
   const notify = useSettingsToast({ duration: 5000 });
 
@@ -339,7 +362,14 @@ export default function UsersPage() {
       key: "role",
       header: "תפקיד",
       cell: (u) =>
-        u.role ? <RoleTag role={u.role} onInfo={() => setInfoRole(u.role)} /> : <span style={{ color: "var(--color-ink-muted-48)" }}>—</span>,
+        u.role ? (
+          <span className="user-role-cell">
+            <RoleTag role={u.role} onInfo={() => setInfoRole(u.role)} />
+            <DeniedMark user={u} onOpen={() => setPermTarget(u)} />
+          </span>
+        ) : (
+          <span style={{ color: "var(--color-ink-muted-48)" }}>—</span>
+        ),
     },
     {
       key: "status",
@@ -351,13 +381,16 @@ export default function UsersPage() {
       key: "__actions",
       header: "פעולות",
       align: "center",
-      width: 170,
+      width: 204,
       cell: (u) => {
         const action = STATUS_ACTION[u.status];
         return (
         <RowActions>
           <IconAction title={`ערוך את ${u.fullName || u.username}`} onClick={() => openEdit(u)}>
             <Pencil size={16} strokeWidth={1.75} />
+          </IconAction>
+          <IconAction title={`הרשאות של ${u.fullName || u.username}`} onClick={() => setPermTarget(u)}>
+            <ShieldCheck size={16} strokeWidth={1.75} />
           </IconAction>
           <IconAction title={`איפוס סיסמה ל${u.fullName || u.username}`} onClick={() => { setResetTarget(u); setResetPwd(generatePassword()); setResetError(""); }}>
             <KeyRound size={16} strokeWidth={1.75} />
@@ -631,6 +664,15 @@ export default function UsersPage() {
         onRoleChange={setInfoRole}
         onClose={() => setInfoRole(null)}
         people={peopleByRole}
+        bundles={bundles.data ?? null}
+        bundlesFailed={bundles.isError}
+      />
+
+      <UserPermissionsDialog
+        user={permTarget}
+        onClose={() => setPermTarget(null)}
+        onSaved={(message) => { notify(message); void load(); }}
+        onError={(message) => notify(message, "error")}
       />
     </div>
   );

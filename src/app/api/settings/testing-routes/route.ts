@@ -32,4 +32,4 @@ export const POST = withAuth(async (req) => {
   } catch (error) {
     return errorResponse(error, "Failed to create testing route");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });

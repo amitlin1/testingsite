@@ -9,4 +9,4 @@ export const runtime = "nodejs";
  * The approver's final signature on a finished item's report; freezes it → { version }.
  * 409 when there is nothing to sign (not finished / no signature block / signed).
  */
-export const POST = signHandler(signItemReport, { role: ACCESS.reportFinalSign });
+export const POST = signHandler(signItemReport, { perm: ACCESS.reportFinalSign });

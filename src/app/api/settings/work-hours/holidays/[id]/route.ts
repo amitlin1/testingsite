@@ -21,10 +21,10 @@ export const PUT = withAuth<{ id: string }>((req: NextRequest, { params }) => ca
     include: { type: { select: { name: true } } },
   }).catch(refusing({ P2025: notFound(), P2003: new HttpError(400, "סוג החופשה שנבחר אינו קיים") }));
   return NextResponse.json(toHoliday(saved));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });
 
 export const DELETE = withAuth<{ id: string }>((_req: NextRequest, { params }) => calendarWrite("מחיקת החופשה נכשלה", async () => {
   const id = requireDbId(params.id, BAD_ID);
   await prisma.department_holidays.delete({ where: { id } }).catch(refusing({ P2025: notFound() }));
   return NextResponse.json({ ok: true });
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

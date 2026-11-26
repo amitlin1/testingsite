@@ -19,11 +19,11 @@ export const PUT = withAuth<{ id: string }>((req: NextRequest, { params }) => ca
   const input = overrideInputOf(await readJsonObject(req, "קלט לא תקין"), dbDateToString(existing.work_date));
   const saved = await prisma.workday_overrides.update({ where: { id }, data: overrideColumns(input) });
   return NextResponse.json(toOverride(saved));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });
 
 /** "אפס לברירת מחדל" — remove the override for its date. */
 export const DELETE = withAuth<{ id: string }>((_req: NextRequest, { params }) => calendarWrite("מחיקת החריגה נכשלה", async () => {
   const id = requireDbId(params.id, BAD_ID);
   await prisma.workday_overrides.delete({ where: { id } });
   return NextResponse.json({ ok: true });
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

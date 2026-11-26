@@ -131,3 +131,43 @@
   .role-drawer__panel, .role-drawer__scrim { animation: none; }
 }
 
+
+/* --------------------------------------- per-user permissions (dialog) --- */
+.user-role-cell { display: inline-flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; }
+/* A user with permissions taken away: muted beside the role tag, opens their permissions. */
+.user-denied {
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: var(--text-fine);
+  color: var(--color-ink-muted-70);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.user-denied:hover { color: var(--color-ink); }
+.user-denied:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.role-drawer__source { color: var(--color-ink-muted-70); }
+
+.user-perms { display: flex; flex-direction: column; gap: var(--space-md); }
+.user-perms__note { margin: 0; font-size: var(--text-body-sm); line-height: 1.5; color: var(--color-ink-muted-70); }
+.user-perms__group { display: flex; flex-direction: column; gap: var(--space-xxs); }
+.user-perms__group-title { margin: 0; font-size: var(--text-body-sm); font-weight: var(--fw-bold); color: var(--color-ink); }
+.user-perms__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.user-perms__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-48);
+}
+.user-perms__item--on { color: var(--color-ink); }
+.user-perms__item:hover { background: var(--color-canvas-parchment); }
+.user-perms__label { flex: 1; min-width: 0; cursor: pointer; }
+.user-perms__state { font-size: var(--text-fine); color: var(--color-ink-muted-48); white-space: nowrap; }
+.user-perms__state--removed { color: var(--color-status-late); }

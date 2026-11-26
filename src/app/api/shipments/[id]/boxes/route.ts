@@ -31,4 +31,4 @@ export const POST = withAuth<{ id: string }>(async (_req: NextRequest, { params:
   } catch (error) {
     return errorResponse(error, "טעינת מארזי המשלוח נכשלה");
   }
-}, { role: ACCESS.shipments });
+}, { perm: ACCESS.shipments });

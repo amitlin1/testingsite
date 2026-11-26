@@ -1,7 +1,7 @@
 // The app's people, as Keycloak holds them: the shapes the users API and the workers directory answer
 // with, and the rules user administration enforces. Pure, so the screens read the same types the
 // API (src/app/api/users, src/app/api/workers-directory) builds.
-import { isAppRole, type AppRole } from "@/lib/auth/roles";
+import { isAppRole, isPermissionKey, type AppRole, type PermissionKey } from "@/lib/auth/roles";
 
 /** A row of GET /api/workers-directory: a person a "who did this" picker offers — an enabled user
  *  with a valid employee number. */
@@ -10,7 +10,7 @@ export interface DirectoryWorker {
   worker_id: number;
   /** fullNameOf the user. */
   worker_name: string;
-  /** Keycloak realm roles. */
+  /** Keycloak realm roles, bundles opened (main role, perm-…, no-…). */
   roles: string[];
 }
 
@@ -28,6 +28,8 @@ export interface AdminUser {
   enabled: boolean;
   createdTimestamp: number | null;
   role: AppRole | null;
+  /** Permissions taken away from this user alone (their no-… roles). */
+  denied: PermissionKey[];
   status: UserStatus;
 }
 
@@ -105,4 +107,18 @@ export function parseNewUser(body: Record<string, unknown> | null): CreateUserIn
     temporaryPassword,
     mustChangePassword: body?.mustChangePassword !== false,
   };
+}
+
+/** Permissions no user can have taken away alone: user management (taking it from a manager could
+ *  leave nobody able to manage users — the same lockout the last-manager guard prevents). To take
+ *  it away, change the user's main role. */
+export const UNDENIABLE: readonly PermissionKey[] = ["usersAdmin"];
+
+/** PUT /api/users/[id]/permissions's body { denied: [key…] } → the keys, each once; null when it is
+ *  not a list of permission keys or names one in UNDENIABLE. */
+export function parseDenied(body: Record<string, unknown> | null): PermissionKey[] | null {
+  const raw = body?.denied;
+  if (!Array.isArray(raw) || !raw.every(isPermissionKey)) return null;
+  const keys = [...new Set(raw)];
+  return keys.some((k) => UNDENIABLE.includes(k)) ? null : keys;
 }

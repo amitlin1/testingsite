@@ -1,6 +1,6 @@
 "use client";
 import { useSession } from "next-auth/react";
-import { ACCESS, hasAnyRole } from "@/lib/auth/roles";
+import { ACCESS, can } from "@/lib/auth/roles";
 import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
 
 /**
@@ -11,5 +11,5 @@ import { useTokenWorkerId } from "@/lib/hooks/useTokenWorkerId";
 export function useWorkerLock(): { tokenWorkerId: number | null; locked: boolean } {
   const tokenWorkerId = useTokenWorkerId();
   const { data: session } = useSession();
-  return { tokenWorkerId, locked: tokenWorkerId != null && !hasAnyRole(session?.roles ?? [], ACCESS.actAsOtherWorker) };
+  return { tokenWorkerId, locked: tokenWorkerId != null && !can(session?.roles, ACCESS.actAsOtherWorker) };
 }

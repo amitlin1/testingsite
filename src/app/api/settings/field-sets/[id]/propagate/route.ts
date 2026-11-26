@@ -22,4 +22,4 @@ export const POST = withAuth<{ id: string }>(async (req, { session, params: { id
   } catch (error) {
     return errorResponse(error, "Failed to propagate the field set");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });

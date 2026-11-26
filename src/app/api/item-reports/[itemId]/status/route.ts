@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ACCESS, hasAnyRole } from "@/lib/auth/roles";
+import { ACCESS, can } from "@/lib/auth/roles";
 import { getReportStatus } from "@/app/lib/item-report/lifecycle";
 import { withItemId } from "@/app/lib/item-report/http";
 import type { ReportStatusResponse } from "@/app/lib/item-report/contract";
@@ -16,8 +16,8 @@ export const GET = withItemId(async (_req, { session, itemId }) => {
     const roles = session.roles ?? [];
     const body: ReportStatusResponse = {
       ...status,
-      canSign: hasAnyRole(roles, ACCESS.reportFinalSign),
-      canSignClosing: hasAnyRole(roles, ACCESS.reportClosingSign),
+      canSign: can(roles, ACCESS.reportFinalSign),
+      canSignClosing: can(roles, ACCESS.reportClosingSign),
     };
     return NextResponse.json(body);
   } catch (e) {

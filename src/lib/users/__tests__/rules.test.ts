@@ -6,6 +6,7 @@ import {
   employeeNumberEdit,
   fullNameOf,
   isSameAccount,
+  parseDenied,
   isServiceAccount,
   isUserId,
   parseNewUser,
@@ -56,4 +57,14 @@ test("ids, service accounts, the signed-in account, the shown name", () => {
   assert.equal(fullNameOf({ username: "dana", firstName: "דנה", lastName: "כהן" }), "דנה כהן");
   assert.equal(fullNameOf({ username: "dana", firstName: "", lastName: "כהן" }), "כהן");
   assert.equal(fullNameOf({ username: "dana" }), "dana");
+});
+
+test("parseDenied: a list of permission keys, each once; never user management; anything else refused", () => {
+  assert.deepEqual(parseDenied({ denied: [] }), []);
+  assert.deepEqual(parseDenied({ denied: ["stepBack", "files", "stepBack"] }), ["stepBack", "files"]);
+  assert.equal(parseDenied({ denied: ["usersAdmin"] }), null);
+  assert.equal(parseDenied({ denied: ["no-step-back"] }), null);
+  assert.equal(parseDenied({ denied: "stepBack" }), null);
+  assert.equal(parseDenied({}), null);
+  assert.equal(parseDenied(null), null);
 });

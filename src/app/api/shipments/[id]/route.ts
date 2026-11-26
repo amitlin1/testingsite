@@ -56,7 +56,7 @@ export const PUT = withAuth<{ id: string }>(async (request: NextRequest, { sessi
   } catch (e) {
     return errorResponse(e, "השינויים לא נשמרו — שגיאה בשרת");
   }
-}, { role: ACCESS.shipments });
+}, { perm: ACCESS.shipments });
 
 export const DELETE = withAuth<{ id: string }>(async (_req: NextRequest, { params }) => {
   const shipmentId = parseDbId(params.id);
@@ -82,4 +82,4 @@ export const DELETE = withAuth<{ id: string }>(async (_req: NextRequest, { param
     if (e instanceof PackageError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });
     return errorResponse(e, "שגיאה בביצוע המחיקה");
   }
-}, { role: ACCESS.shipments });
+}, { perm: ACCESS.shipments });

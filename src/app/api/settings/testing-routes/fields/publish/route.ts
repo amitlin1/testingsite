@@ -21,4 +21,4 @@ export const POST = withAuth(async (req, { session }) => {
   } catch (error) {
     return errorResponse(error, "Failed to publish the fields");
   }
-}, { role: ACCESS.publish });
+}, { perm: ACCESS.publish });

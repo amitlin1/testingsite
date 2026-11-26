@@ -4,7 +4,10 @@
 // description, how much of the system it reaches, every capability (allowed
 // first-class, the rest muted with a lock) and the users who hold it. Opened
 // from a role tag in the table or from the link beside the role filter; the
-// tabs on top switch roles without closing it. Data: roleCapabilities.ts.
+// tabs on top switch roles without closing it. What a role reaches is its
+// bundle as Keycloak holds it (GET /api/users/role-bundles) — the default
+// bundle until that answers, or where the realm has none yet. Data:
+// roleCapabilities.ts.
 
 import * as React from "react";
 import { createPortal } from "react-dom";
@@ -19,9 +22,13 @@ export type RoleInfoDrawerProps = {
   onClose: () => void;
   /** Full names of the users per role (the page's loaded list). */
   people: Record<AppRole, string[]>;
+  /** Each role's bundle in Keycloak (perm-… roles); null until read. */
+  bundles: Record<AppRole, string[]> | null;
+  /** The bundles could not be read: the panel says it shows the defaults. */
+  bundlesFailed: boolean;
 };
 
-export default function RoleInfoDrawer({ role, onRoleChange, onClose, people }: RoleInfoDrawerProps) {
+export default function RoleInfoDrawer({ role, onRoleChange, onClose, people, bundles, bundlesFailed }: RoleInfoDrawerProps) {
   const titleId = React.useId();
   const panelRef = React.useRef<HTMLElement | null>(null);
   const closeRef = React.useRef<HTMLButtonElement | null>(null);
@@ -36,7 +43,14 @@ export default function RoleInfoDrawer({ role, onRoleChange, onClose, people }: 
   }, [open]);
 
   if (!open || typeof document === "undefined") return null;
-  const summary = summarizeRole(role);
+  const bundle = bundles?.[role] ?? [];
+  const summary = summarizeRole(role, bundle);
+  // Where the panel's answer comes from, when it is not Keycloak's bundle.
+  const source = bundlesFailed
+    ? "לא ניתן היה לקרוא את התפקידים מ-Keycloak — מוצגת ברירת המחדל."
+    : bundles && bundle.length === 0
+      ? "התפקיד עוד לא מוגדר כחבילת הרשאות ב-Keycloak — מוצגת ברירת המחדל עד להרצת סקריפט ההרשאות."
+      : null;
   const pct = summary.total ? Math.round((summary.allowed / summary.total) * 100) : 0;
   const members = people[role] ?? [];
 
@@ -89,6 +103,7 @@ export default function RoleInfoDrawer({ role, onRoleChange, onClose, people }: 
               {ROLE_LABEL[role]}
             </h2>
             <p className="role-drawer__desc">{ROLE_DESCRIPTION[role]}</p>
+            {source && <p className="role-drawer__desc role-drawer__source">{source}</p>}
           </div>
 
           <div className="role-drawer__reach">

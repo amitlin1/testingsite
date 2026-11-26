@@ -1,6 +1,6 @@
 import type { Session } from "next-auth";
 import { identityOf } from "@/lib/auth/identity";
-import { ACCESS, hasAnyRole } from "@/lib/auth/roles";
+import { ACCESS, can } from "@/lib/auth/roles";
 
 /**
  * Who a shipment worker field ("עובד מקבל" on a new / edited shipment, "עובד
@@ -24,7 +24,7 @@ export type ShipmentWorker = { id: number | null; name: string | null };
 
 /** May this login attribute a shipment to someone else? */
 export function picksShipmentWorker(session: Session | null | undefined): boolean {
-  return hasAnyRole(session?.roles ?? [], ACCESS.actAsOtherWorker);
+  return can(session?.roles, ACCESS.actAsOtherWorker);
 }
 
 export function resolveShipmentWorker(

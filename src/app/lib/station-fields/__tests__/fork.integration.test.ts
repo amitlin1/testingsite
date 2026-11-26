@@ -428,7 +428,7 @@ describe(
       session = null;
       assert.deepEqual(await httpFork(id, { body: { package_type_id: KIT } }), { status: 401, body: { error: "Unauthorized" } });
       session = signedIn("storekeeper", "mashan");
-      assert.deepEqual(await httpFork(id, { body: { package_type_id: KIT } }), { status: 403, body: { error: "Forbidden", required: ACCESS.fieldsEdit } });
+      assert.deepEqual(await httpFork(id, { body: { package_type_id: KIT } }), { status: 403, body: { error: "Forbidden", required: ACCESS.fieldsEdit.role } });
       assert.deepEqual(await footprint(), before, "nothing written");
 
       session = signedIn("tester");

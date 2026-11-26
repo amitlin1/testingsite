@@ -1,0 +1,265 @@
+/* The managers' summary (/dashboard): one screen, two bands, numbers only.
+   The top band follows the chosen window; the black band is the floor now.
+
+   FITTING ONE SCREEN IS STRUCTURAL. .sum-root is a size container (it is
+   exactly the app shell's content area), and every length on the page is a
+   multiple of one unit, --u, taken from BOTH of its sides: the page's content
+   is about 72u tall and about 175u wide (wide layout), so --u is the smaller of
+   "what the height allows" and "what the width allows". A short window shrinks
+   the page instead of cutting the black band; a wide one never overflows the
+   row. Each size has a px floor (legibility) and ceiling (calm on big screens);
+   the factors leave room for the floors. On a narrow shape the period cards
+   go 2×2, below 600px the page is a single scrolling column — a phone cannot hold
+   twelve numbers at a readable size, so there it scrolls on purpose.
+   Every colour is a token. */
+
+.sum-root {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  container: sum / size;
+  background: var(--color-surface-black);
+}
+
+.sum-page {
+  /* Wide: content ≈ 72u tall and ≈ 175u wide as measured (a percentage and a
+     duration set wider than their digit count suggests); 7.9px is the same
+     limit at the 1440px content lock. */
+  --u: min(1.15cqh, 0.55cqw, 7.9px);
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: clamp(13px, calc(var(--u) * 2), 17px);
+  line-height: var(--lh-body);
+  letter-spacing: var(--ls-body);
+}
+
+/* Spare height is shared by the two bands, each keeping its content centred,
+   so a tall screen gets air in both instead of a black void at the bottom. */
+.sum-band {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: calc(var(--u) * 2.2);
+}
+.sum-band--now { background: var(--color-surface-black); color: var(--color-on-dark); }
+
+.sum-wrap {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding-inline: clamp(12px, calc(var(--u) * 3), 40px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+}
+
+.sum-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: calc(var(--u) * 1.2) calc(var(--u) * 3);
+}
+.sum-head__text { display: flex; flex-direction: column; gap: calc(var(--u) * 0.4); }
+.sum-head__side { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--u) * 0.8); max-width: 100%; }
+.sum-head__side--row { flex-direction: row; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * 0.8) calc(var(--u) * 3); }
+
+.sum-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(18px, calc(var(--u) * 3.2), 30px);
+  font-weight: var(--fw-semibold);
+  line-height: 1.14;
+  letter-spacing: 0.196px;
+}
+.sum-sub { margin: 0; color: var(--color-ink-muted-48); }
+.sum-fine {
+  margin: 0;
+  padding-inline: var(--space-xxs);
+  font-size: clamp(12px, calc(var(--u) * 1.6), 14px);
+  line-height: 1.43;
+  letter-spacing: var(--ls-caption);
+  color: var(--color-ink-muted-48);
+}
+.sum-alert { color: var(--color-destructive); }
+
+/* The window switch: a white pill track, the chosen option in Action Blue. */
+.sum-seg {
+  display: flex;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  box-sizing: border-box;
+  padding: 3px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-pill);
+}
+.sum-seg__btn {
+  appearance: none;
+  flex: none;
+  min-height: clamp(32px, calc(var(--u) * 5.2), 44px);
+  padding: 0 clamp(10px, calc(var(--u) * 2), 18px);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: clamp(12px, calc(var(--u) * 1.75), 15px);
+  line-height: 1.29;
+  letter-spacing: var(--ls-caption);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.6, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.6, 1);
+}
+.sum-seg__btn:active { transform: scale(0.95); }
+.sum-seg__btn:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; }
+.sum-seg__btn[aria-pressed="true"] { background: var(--color-primary); color: var(--color-on-primary); font-weight: var(--fw-semibold); }
+@media (hover: hover) and (pointer: fine) {
+  .sum-seg__btn:not([aria-pressed="true"]):hover { background: var(--color-hairline-rgba); }
+  .sum-seg__btn[aria-pressed="true"]:hover { background: var(--color-primary-hover); }
+}
+
+/* The custom window: two native date fields, as on the detailed board. */
+.sum-dates { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * 0.8) calc(var(--u) * 1.6); }
+.sum-date {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.8);
+  font-size: clamp(12px, calc(var(--u) * 1.6), 14px);
+  letter-spacing: var(--ls-caption);
+  color: var(--color-ink-muted-48);
+}
+.sum-date__input {
+  box-sizing: border-box;
+  min-height: clamp(32px, calc(var(--u) * 5.2), 44px);
+  padding: 0 var(--space-sm);
+  font: inherit;
+  font-size: clamp(12px, calc(var(--u) * 1.75), 15px);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--r-field);
+}
+.sum-date__input:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 0; border-color: var(--color-primary-focus); }
+
+/* A finger needs the full 44px whatever the screen's size. */
+@media (pointer: coarse) {
+  .sum-seg__btn, .sum-date__input { min-height: 44px; }
+}
+
+/* Cards share a row by what they hold, measured in u: two short counts (29u),
+   two percentages (36u), two durations (58u); in the black band two counts
+   with a long label (39u) and five counts (89u). Basis 0, so the shares are
+   exact and the row never wraps in the wide layout. */
+.sum-row { display: flex; gap: calc(var(--u) * 2); }
+
+.sum-card {
+  flex: var(--share) 1 0;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 1.4);
+  padding: calc(var(--u) * 1.8) calc(var(--u) * 2.4);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: clamp(12px, calc(var(--u) * 2), 18px);
+}
+.sum-band--now .sum-card { background: var(--color-surface-tile-1); border-color: transparent; }
+.sum-card--count { --share: 29; }
+.sum-card--pct { --share: 36; }
+.sum-card--time { --share: 58; }
+.sum-card--ship { --share: 39; }
+.sum-card--items { --share: 89; }
+
+.sum-card__head { display: flex; align-items: center; gap: calc(var(--u) * 1.2); }
+.sum-card__head > svg { flex: none; width: clamp(18px, calc(var(--u) * 2.8), 26px); height: clamp(18px, calc(var(--u) * 2.8), 26px); }
+.sum-card__title {
+  margin: 0;
+  font-size: clamp(15px, calc(var(--u) * 2.4), 22px);
+  font-weight: var(--fw-semibold);
+  line-height: 1.19;
+  letter-spacing: 0.231px;
+}
+
+.sum-metrics { display: flex; gap: calc(var(--u) * 2); }
+.sum-metric { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: calc(var(--u) * 0.4); }
+.sum-metrics--spread { gap: calc(var(--u) * 3); }
+.sum-metrics--spread .sum-metric { flex: 0 1 auto; }
+
+.sum-num {
+  font-family: var(--font-display);
+  font-size: clamp(22px, calc(var(--u) * 6.2), 60px);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-hero);
+  letter-spacing: var(--ls-hero);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sum-unit {
+  margin-inline-start: calc(var(--u) * 0.6);
+  font-size: clamp(13px, calc(var(--u) * 2.3), 24px);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0;
+  color: var(--color-ink-muted-48);
+}
+.sum-unit:not(:last-child) { margin-inline-end: calc(var(--u) * 1.4); }
+/* "%" rides the number's left-to-right run, so in RTL it sits to the number's RIGHT: its gap is on its inline end. */
+.sum-unit--pct { margin-inline: 0 2px; }
+
+.sum-label { display: flex; align-items: center; gap: calc(var(--u) * 0.8); white-space: nowrap; }
+.sum-band--now .sum-sub,
+.sum-band--now .sum-fine,
+.sum-band--now .sum-label--muted { color: var(--color-body-muted); }
+.sum-card__foot {
+  margin: auto 0 0;
+  font-size: clamp(12px, calc(var(--u) * 1.6), 14px);
+  line-height: 1.43;
+  letter-spacing: var(--ls-caption);
+  color: var(--color-ink-muted-48);
+}
+
+.sum-dot { display: inline-block; flex: none; width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--color-primary-on-dark); }
+.sum-vrule { flex: none; width: 1px; align-self: stretch; background: var(--color-nav-divider); }
+
+.sum-link { display: inline-flex; align-items: center; min-height: 32px; color: var(--color-primary-on-dark); text-decoration: none; }
+.sum-link:hover { text-decoration: underline; }
+.sum-link:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 2px; border-radius: var(--r-xs); }
+
+/* Medium: the period cards go 2×2, so the page is ≈ 95u tall and ≈ 136u
+   wide (the black band's row). Chosen by SHAPE, not width: 2×2 gives the larger
+   unit exactly when min(0.95h, 0.72w) > min(1.15h, 0.55w), i.e. when the space
+   is narrower than 1.73 : 1 — a tablet, a square monitor, a half-screen
+   window. A wide but short window keeps one row. Under 760px wide one row
+   cannot hold its labels, whatever the height.
+   Written as two plain rules: the build's CSS minifier drops an `or` / range
+   container query without a word. */
+@container sum (max-aspect-ratio: 173/100) {
+  .sum-page { --u: min(0.95cqh, 0.72cqw, 9px); }
+  .sum-row--period { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container sum (max-width: 759px) {
+  .sum-page { --u: min(0.95cqh, 0.72cqw, 9px); }
+  .sum-row--period { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Phone: one column that scrolls; the two short count cards stay side by side. */
+@container sum (max-width: 599px) {
+  .sum-page { --u: min(1.4cqw, 7px); }
+  .sum-band { flex: none; }
+  .sum-band--now { flex: 1 0 auto; }
+  .sum-row--period .sum-card--pct,
+  .sum-row--period .sum-card--time { grid-column: 1 / -1; }
+  .sum-row--now { flex-direction: column; }
+  .sum-row--now .sum-card { flex: none; }
+  .sum-metrics--spread { flex-wrap: wrap; row-gap: calc(var(--u) * 2); }
+  .sum-vrule { display: none; }
+}

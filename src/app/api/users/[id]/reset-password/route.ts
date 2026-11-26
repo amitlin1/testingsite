@@ -27,5 +27,5 @@ export const PUT = withAuth<{ id: string }>(
       return adminErrorResponse(e, "הפעולה נכשלה. נסה שוב.");
     }
   },
-  { role: ACCESS.usersAdmin },
+  { perm: ACCESS.usersAdmin },
 );

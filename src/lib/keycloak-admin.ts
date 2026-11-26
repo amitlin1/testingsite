@@ -1,6 +1,9 @@
 // SERVER-ONLY Keycloak Admin REST client. Authenticated via the
 // `testing-admin-api` service account (client_credentials grant with
-// realm-management roles manage-users/view-users/query-users).
+// realm-management roles manage-users/view-users/query-users/view-realm). It
+// assigns roles to users but never creates or edits a role: the permission
+// roles and the main roles' bundles are made by scripts/ops/keycloak-permissions.mjs,
+// with the Keycloak admin's own login.
 //
 // NEVER import this into a client component — it holds the admin secret and
 // talks straight to Keycloak's admin API. Used by the /api/users/* route
@@ -9,7 +12,17 @@
 // reads and the item report, which name the workers on them.
 
 import { NextResponse } from "next/server";
-import { ADMIN_ROLE, isAppRole, type AppRole } from "@/lib/auth/roles";
+import {
+  ADMIN_ROLE,
+  APP_ROLES,
+  isAppRole,
+  isDenyRole,
+  isGrantRole,
+  permissionOfRole,
+  type AppRole,
+  type Permission,
+  type PermissionKey,
+} from "@/lib/auth/roles";
 import { workerIdOf } from "@/lib/auth/identity";
 import { adminApiBase, adminClient, internalIssuer } from "@/lib/auth/keycloak-env";
 import { HttpError, errorResponse } from "@/lib/http/errors";
@@ -172,10 +185,23 @@ async function findUserIdByUsername(username: string): Promise<string> {
   return u?.id ?? "";
 }
 
+/** The realm roles assigned to the user DIRECTLY: the main role, and any no-… / perm-… given to them alone. */
 async function getUserRealmRoles(id: string): Promise<KcRole[]> {
   const res = await kc(`/users/${id}/role-mappings/realm`);
   if (!res.ok) return [];
   return (await res.json()) as KcRole[];
+}
+
+/** Every realm role the user holds, bundles opened — what their token carries. */
+async function getUserEffectiveRealmRoles(id: string): Promise<KcRole[]> {
+  const res = await kc(`/users/${id}/role-mappings/realm/composite`);
+  if (!res.ok) throw failed("effectiveRoles", res);
+  return (await res.json()) as KcRole[];
+}
+
+/** The keys of the permissions taken away from a user: their direct no-… roles. */
+function deniedKeysOf(direct: readonly KcRole[]): PermissionKey[] {
+  return direct.filter((r) => isDenyRole(r.name)).flatMap((r) => permissionOfRole(r.name)?.key ?? []);
 }
 
 async function getBruteForceStatus(id: string): Promise<{ disabled: boolean }> {
@@ -216,6 +242,9 @@ export async function setUserRole(id: string, role: AppRole): Promise<void> {
     if (!add.ok) throw failed("addRole", add);
   }
   const stale = current.filter((r) => isAppRole(r.name) && r.name !== role);
+  // A new main role starts clean: the permissions taken away from the user under the old one go
+  // (they were decided against that role's bundle). Setting the role they already hold keeps them.
+  if (stale.length) stale.push(...current.filter((r) => isDenyRole(r.name)));
   if (stale.length) {
     const del = await kc(`/users/${id}/role-mappings/realm`, {
       method: "DELETE",
@@ -223,6 +252,71 @@ export async function setUserRole(id: string, role: AppRole): Promise<void> {
     });
     if (!del.ok) throw failed("removeRoles", del);
   }
+}
+
+// ---- permissions (perm-… / no-…, roles.ts) ----
+
+/** A user's permissions as Keycloak holds them. */
+export interface UserPermissions {
+  role: AppRole | null;
+  /** Every realm role their token carries (bundles opened) — what can() reads. */
+  effective: string[];
+  /** The permissions taken away from them alone (their direct no-… roles). */
+  denied: PermissionKey[];
+}
+
+export async function getUserPermissions(id: string): Promise<UserPermissions> {
+  const [direct, effective] = await Promise.all([getUserRealmRoles(id), getUserEffectiveRealmRoles(id)]);
+  return {
+    role: (direct.find((r) => isAppRole(r.name))?.name ?? null) as AppRole | null,
+    effective: effective.map((r) => r.name),
+    denied: deniedKeysOf(direct),
+  };
+}
+
+/**
+ * Take exactly these permissions away from the user: their no-… roles become this set (added and
+ * removed as needed; their main role and bundle untouched). A no-… role the realm does not have
+ * means the migration script has not run there: refused, nothing changed.
+ */
+export async function setUserDenied(id: string, denied: readonly Permission[]): Promise<void> {
+  const current = (await getUserRealmRoles(id)).filter((r) => isDenyRole(r.name));
+  const want = new Set(denied.map((p) => p.deny));
+  const remove = current.filter((r) => !want.has(r.name));
+  const addNames = [...want].filter((name) => !current.some((r) => r.name === name));
+  const add: KcRole[] = [];
+  for (const name of addNames) {
+    try {
+      add.push(await getRealmRole(name));
+    } catch {
+      throw new HttpError(409, `התפקיד "${name}" לא קיים ב-Keycloak — יש להריץ את סקריפט ההרשאות (scripts/ops/keycloak-permissions.ps1). לא בוצע שינוי.`);
+    }
+  }
+  if (add.length) {
+    const res = await kc(`/users/${id}/role-mappings/realm`, { method: "POST", body: JSON.stringify(add.map((r) => ({ id: r.id, name: r.name }))) });
+    if (!res.ok) throw failed("addDeny", res);
+  }
+  if (remove.length) {
+    const res = await kc(`/users/${id}/role-mappings/realm`, { method: "DELETE", body: JSON.stringify(remove.map((r) => ({ id: r.id, name: r.name }))) });
+    if (!res.ok) throw failed("removeDeny", res);
+  }
+}
+
+/**
+ * Each main role's bundle as Keycloak holds it: the perm-… roles of its composite. [] for a role
+ * that is not a bundle yet (the script has not run) — the screens then show the default bundle.
+ */
+export async function getRoleBundles(): Promise<Record<AppRole, string[]>> {
+  const entries = await Promise.all(
+    APP_ROLES.map(async (role): Promise<[AppRole, string[]]> => {
+      const res = await kc(`/roles/${encodeURIComponent(role)}/composites/realm`);
+      if (res.status === 404) return [role, []];
+      if (!res.ok) throw failed(`bundle ${role}`, res);
+      const roles = (await res.json()) as KcRole[];
+      return [role, roles.map((r) => r.name).filter(isGrantRole)];
+    }),
+  );
+  return Object.fromEntries(entries) as Record<AppRole, string[]>;
 }
 
 // ---- public API used by the route handlers ----
@@ -239,6 +333,7 @@ export async function getAdminUsers(search?: string): Promise<AdminUser[]> {
       u.enabled ? getBruteForceStatus(u.id) : Promise.resolve({ disabled: false }),
     ]);
     const role = (roles.find((r) => isAppRole(r.name))?.name ?? null) as AppRole | null;
+    const denied = deniedKeysOf(roles);
     const pending = (u.requiredActions ?? []).includes("UPDATE_PASSWORD");
     const status: UserStatus = !u.enabled
       ? "disabled"
@@ -257,6 +352,7 @@ export async function getAdminUsers(search?: string): Promise<AdminUser[]> {
       enabled: u.enabled,
       createdTimestamp: u.createdTimestamp ?? null,
       role,
+      denied,
       status,
     };
   });
@@ -390,7 +486,8 @@ export async function getWorkersDirectory(): Promise<DirectoryWorker[]> {
   const out = await mapWithConcurrency(users, 8, async (u): Promise<DirectoryWorker | null> => {
     const workerId = workerIdOf(u.attributes?.employeeNumber?.[0]);
     if (workerId == null) return null;
-    const roles = await getUserRealmRoles(u.id);
+    // Bundles opened: the pickers filter by permission (can()).
+    const roles = await getUserEffectiveRealmRoles(u.id).catch((): KcRole[] => []);
     return { worker_id: workerId, worker_name: fullNameOf(u), roles: roles.map((r) => r.name) };
   });
   return out

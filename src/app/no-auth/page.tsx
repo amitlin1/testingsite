@@ -1,4 +1,4 @@
-// Forbidden-landing page. The middleware (role-protected nav) and requireRole()
+// Forbidden-landing page. The middleware (role-protected nav) and requirePermission()
 // redirect here when an authenticated user lacks the required role. Must be a
 // PUBLIC route (see lib/routes.ts PUBLIC_ROUTES) so it always renders.
 //

@@ -27,7 +27,7 @@ import type { TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
-import { ACCESS, type AppRole } from "@/lib/auth/roles";
+import { ACCESS, type Permission } from "@/lib/auth/roles";
 import type { TransactionClient } from "@/lib/db";
 import * as H from "@/test-support/db-harness";
 import { giveUids, insertRoute, rejectsHttp } from "./helpers";
@@ -149,8 +149,9 @@ function scriptUidDraws(t: TestContext, suffixes: string[]): () => number {
 /** What the stubbed auth() answers: null = signed out. Set by the HTTP tests. */
 let session: unknown = null;
 
-/** A signed-in user with these roles; the names land in draft_updated_by / published_by(_name). */
-const signedIn = (...roles: AppRole[]) => ({
+/** A signed-in user with these roles (main roles, and no-… to take a permission away); the names
+ *  land in draft_updated_by / published_by(_name). */
+const signedIn = (...roles: string[]) => ({
   user: { preferredUsername: "fields-http", displayName: "Fields HTTP", name: "fields-http" },
   roles,
 });
@@ -1726,21 +1727,21 @@ describe(
     // status and body every refusal reaches the client with
     // -------------------------------------------------------------------------------------
 
-    it("http: every station-field write needs a session (401) and ACCESS.fieldsEdit (403, naming them) — publish ACCESS.publish — while reads stay open; nothing is written when refused", async () => {
+    it("http: every station-field write needs a session (401) and ACCESS.fieldsEdit (403, naming its role) — publish ACCESS.publish — while reads stay open; nothing is written when refused", async () => {
       const id = String(R.fields);
       const rev = await saveDraft(R.fields, config(itemStep(UID.f1, [LED])));
-      const writes: { name: string; roles: readonly AppRole[]; call: () => Promise<{ status: number; body: Json }> }[] = [
-        { name: "POST route", roles: ACCESS.fieldsEdit, call: () => httpCall(http.routes.POST, "POST", "/api/settings/testing-routes", {
+      const writes: { name: string; perm: Permission; call: () => Promise<{ status: number; body: Json }> }[] = [
+        { name: "POST route", perm: ACCESS.fieldsEdit, call: () => httpCall(http.routes.POST, "POST", "/api/settings/testing-routes", {
           body: { item_type_id: ITEM_TYPE_ROUTED, route_number: 1, route_steps: [H.TYPE_FUNC] } }) },
-        { name: "PUT route", roles: ACCESS.fieldsEdit, call: () => httpCall(http.route.PUT, "PUT", `/api/settings/testing-routes/${id}`, {
+        { name: "PUT route", perm: ACCESS.fieldsEdit, call: () => httpCall(http.route.PUT, "PUT", `/api/settings/testing-routes/${id}`, {
           body: { route_steps: [H.TYPE_FUNC, H.TYPE_FUNC] }, params: { id } }) },
-        { name: "PUT draft", roles: ACCESS.fieldsEdit, call: () => httpCall(http.draft.PUT, "PUT", `/api/settings/testing-routes/${id}/fields/draft`, {
+        { name: "PUT draft", perm: ACCESS.fieldsEdit, call: () => httpCall(http.draft.PUT, "PUT", `/api/settings/testing-routes/${id}/fields/draft`, {
           body: { config: config(itemStep(UID.f1, [LED, GND])), base_rev: rev }, params: { id } }) },
-        { name: "DELETE draft", roles: ACCESS.fieldsEdit, call: () => httpCall(http.draft.DELETE, "DELETE", `/api/settings/testing-routes/${id}/fields/draft`, {
+        { name: "DELETE draft", perm: ACCESS.fieldsEdit, call: () => httpCall(http.draft.DELETE, "DELETE", `/api/settings/testing-routes/${id}/fields/draft`, {
           body: { base_rev: rev }, params: { id } }) },
-        { name: "publish-preview", roles: ACCESS.fieldsEdit, call: () => httpCall(http.preview.POST, "POST", "/api/settings/testing-routes/fields/publish-preview", {
+        { name: "publish-preview", perm: ACCESS.fieldsEdit, call: () => httpCall(http.preview.POST, "POST", "/api/settings/testing-routes/fields/publish-preview", {
           body: { route_ids: [R.fields] } }) },
-        { name: "publish", roles: ACCESS.publish, call: () => httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", {
+        { name: "publish", perm: ACCESS.publish, call: () => httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", {
           body: { route_ids: [R.fields], base_revs: { [id]: rev }, apply_mode: "new_only" } }) },
       ];
       const routeBefore = await routeRow(R.fields);
@@ -1748,7 +1749,7 @@ describe(
       session = null;
       for (const w of writes) assert.deepEqual(await w.call(), { status: 401, body: { error: "Unauthorized" } }, w.name);
       session = signedIn("storekeeper", "mashan");
-      for (const w of writes) assert.deepEqual(await w.call(), { status: 403, body: { error: "Forbidden", required: w.roles } }, w.name);
+      for (const w of writes) assert.deepEqual(await w.call(), { status: 403, body: { error: "Forbidden", required: w.perm.role } }, w.name);
       assert.deepEqual(await routeRow(R.fields), routeBefore, "nothing written");
       assert.deepEqual(await H.q("SELECT 1 FROM testing_routes WHERE item_type_id = $1", [ITEM_TYPE_ROUTED]), [], "no route created");
       assert.deepEqual(await H.q("SELECT id FROM route_field_versions"), [], "nothing published");
@@ -1763,7 +1764,7 @@ describe(
       assert.deepEqual(read.body.draft, config(itemStep(UID.f1, [LED])));
     });
 
-    it("http: a tester may do every write; open decision §10.2-1 flipped the one-line way (ACCESS.publish = manager) leaves the tester the preview but not the publish, and the manager's publish records who published", async () => {
+    it("http: a tester may do every write; a tester whose publish is taken away (no-publish) keeps the preview but not the publish, and the manager's publish records who published", async () => {
       session = signedIn("tester");
       const created = await httpCall<{ test_route_id: number; step_uids: string[] }>(http.routes.POST, "POST", "/api/settings/testing-routes", {
         body: { item_type_id: ITEM_TYPE_ROUTED, route_number: 1, route_steps: [H.TYPE_FUNC, H.TYPE_FUNC] },
@@ -1792,21 +1793,16 @@ describe(
       assert.deepEqual(preview.body.base_revs, { [id]: 3 });
       const publishBody = { route_ids: [R.fields], base_revs: preview.body.base_revs, apply_mode: "new_only" };
 
-      const decided = [...ACCESS.publish];
-      (ACCESS.publish as AppRole[]).splice(0, ACCESS.publish.length, "manager");
-      try {
-        assert.deepEqual(
-          await httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", { body: publishBody }),
-          { status: 403, body: { error: "Forbidden", required: ["manager"] } },
-        );
-        assert.equal((await previewOf()).status, 200, "the preview stays with ACCESS.fieldsEdit");
-        session = signedIn("manager");
-        const published = await httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", { body: publishBody });
-        assert.equal(published.status, 200, JSON.stringify(published.body));
-        assert.deepEqual(published.body.versions, { [id]: 1 });
-      } finally {
-        (ACCESS.publish as AppRole[]).splice(0, ACCESS.publish.length, ...decided);
-      }
+      session = signedIn("tester", ACCESS.publish.deny);
+      assert.deepEqual(
+        await httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", { body: publishBody }),
+        { status: 403, body: { error: "Forbidden", required: ACCESS.publish.role } },
+      );
+      assert.equal((await previewOf()).status, 200, "the preview stays with ACCESS.fieldsEdit");
+      session = signedIn("manager");
+      const published = await httpCall(http.publish.POST, "POST", "/api/settings/testing-routes/fields/publish", { body: publishBody });
+      assert.equal(published.status, 200, JSON.stringify(published.body));
+      assert.deepEqual(published.body.versions, { [id]: 1 });
       assert.deepEqual(
         await H.one("SELECT published_by, published_by_name FROM route_field_versions WHERE test_route_id = $1 AND version = 1", [R.fields]),
         { published_by: "fields-http", published_by_name: "Fields HTTP" },

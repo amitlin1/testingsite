@@ -17,4 +17,4 @@ export const GET = withAuth(() => answer("שגיאה בטעינת שעות בר�
   for (const r of rows) byWeekday.set(r.weekday, toWeekdayDefault(r));
   const all = ([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((w) => byWeekday.get(w) ?? fallbackDefault(w));
   return NextResponse.json(all);
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

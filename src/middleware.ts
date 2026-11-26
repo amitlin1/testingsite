@@ -40,7 +40,7 @@ function isServerAction(req: NextRequest): boolean {
   // `next-action` header. Middleware CANNOT redirect a server action (a 3xx is
   // silently followed+discarded by the action's own fetch; a 401 throws inside
   // the action client) — so we let these through and the action's own
-  // requireUser()/requireRole() guard owns the dead-session redirect via an
+  // requireUser()/requirePermission() guard owns the dead-session redirect via an
   // in-action redirect() (x-action-redirect).
   return req.method === "POST" && req.headers.has("next-action");
 }
@@ -101,7 +101,7 @@ const handleSession = auth((req) => {
     return NextResponse.next();
   }
 
-  // Server Actions self-guard (requireUser/requireRole) and can't be redirected
+  // Server Actions self-guard (requireUser/requirePermission) and can't be redirected
   // from here. Let them through — the auth() wrapper already ran Layer-A and the
   // cookie-forwarding still applies on the pass-through, so a merely-expired
   // token is refreshed transparently; a dead session is redirected by the

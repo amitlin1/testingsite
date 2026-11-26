@@ -47,10 +47,10 @@ export const PUT = withRouteId(async (req, { session, routeId }) => {
   } catch (e) {
     return errorResponse(e, "Failed to save the report template");
   }
-}, { role: ACCESS.reportTemplate });
+}, { perm: ACCESS.reportTemplate });
 
 /** DELETE — the route goes back to the general template (final copies stay). */
 export const DELETE = withRouteId(async (_req, { routeId }) => {
   await prisma.report_templates.deleteMany({ where: { test_route_id: routeId } });
   return new NextResponse(null, { status: 204 });
-}, { role: ACCESS.reportTemplate });
+}, { perm: ACCESS.reportTemplate });

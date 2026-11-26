@@ -20,7 +20,7 @@ export const PUT = withAuth<{ id: string }>(async (req, { session, params: { id 
   } catch (error) {
     return errorResponse(error, "Failed to update testing route");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

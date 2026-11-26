@@ -21,7 +21,7 @@ export const PUT = withAuth<{ id: string }>(async (req, { session, params: { id 
   } catch (error) {
     return errorResponse(error, "Failed to save the option list");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });
 
 /** DELETE /api/settings/option-lists/[id] → { id, archived: true }; 409 IN_USE while it is used. */
 export const DELETE = withAuth<{ id: string }>(async (_req, { session, params: { id } }) => {
@@ -30,4 +30,4 @@ export const DELETE = withAuth<{ id: string }>(async (_req, { session, params: {
   } catch (error) {
     return errorResponse(error, "Failed to delete the option list");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });

@@ -21,4 +21,4 @@ export const POST = withAuth((req: NextRequest) => ledgerWrite("קליטת המ�
   if (packageId == null) return NextResponse.json({ error: "הברקוד שנסרק אינו מדבקת מארז" }, { status: 400 });
   await prisma.$transaction((tx) => intakeBox(tx, packageId));
   return NextResponse.json({ ok: true, package: await loadPackage(packageId) }, { status: 201 });
-}), { role: ACCESS.intake });
+}), { perm: ACCESS.intake });

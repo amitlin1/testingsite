@@ -34,11 +34,11 @@ export type NextStationInfo = {
  * is released back to waiting. A result, another station or another worker drops it; so does
  * leaving the page. `session` remounts the popup for every fresh start.
  */
-export function useTestWindow({ station, stationType, actor, isManager, onRefresh, onStartError }: {
+export function useTestWindow({ station, stationType, actor, canStepBack, onRefresh, onStartError }: {
   station: TestStation | null;
   stationType: TestStationType | null;
   actor: Actor;
-  isManager: boolean;
+  canStepBack: boolean;
   onRefresh: () => void;
   /** Shows a start-test failure in the page's error toast. */
   onStartError: (message: string) => void;
@@ -162,7 +162,7 @@ export function useTestWindow({ station, stationType, actor, isManager, onRefres
         nextStation: result.nextStation || undefined,
         finishedFromResearch: item.current_status === ItemStatus.InResearch && testData.finishRoute === true,
         finishedAtStep: item.current_route_step ?? undefined,
-        stepBack: stationType ? afterResultStepBack(item, stationType, result, isManager) : null,
+        stepBack: stationType ? afterResultStepBack(item, stationType, result, canStepBack) : null,
       });
       setResultSeq((n) => n + 1);
       setNextOpen(true);

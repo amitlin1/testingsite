@@ -36,4 +36,4 @@ export const GET = withAuth((req: NextRequest) => answer("שגיאה בטעינ�
   // `israeli` is returned too so the day-editor knows a date's underlying
   // nature (חג-מלא / חצי-יום / ערב-חג) even when an override masks it.
   return NextResponse.json({ from, to, days, israeli });
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

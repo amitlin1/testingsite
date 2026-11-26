@@ -94,4 +94,4 @@ export const POST = withAuth((req: NextRequest) => ledgerWrite("יצירת המ�
     items,
   }));
   return NextResponse.json({ ok: true, ...created }, { status: 201 });
-}), { role: ACCESS.createPackage });
+}), { perm: ACCESS.createPackage });

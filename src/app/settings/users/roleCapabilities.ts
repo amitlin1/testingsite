@@ -1,23 +1,21 @@
-// What each role may do — the "מה כל תפקיד יכול לעשות" panel on the users page — and how a role
-// is drawn there.
+// What each role may do — the "מה כל תפקיד יכול לעשות" panel on the users page, and the per-user
+// permissions dialog — and how a role is drawn there.
 //
 // Read from the rules that ENFORCE access, never retyped beside them, so the
 // panel cannot drift from what the system really allows:
-//   - screens, settings pages and API-gated actions → resolveAccess()
-//     (src/lib/routes.ts, the middleware's own table);
-//   - the screens and settings pages themselves → the navigation registry (src/app/navigation.ts);
+//   - screens and settings pages → the permission their path needs (permissionForPath, the
+//     middleware's own table in src/lib/routes.ts), named by the navigation registry
+//     (src/app/navigation.ts);
 //   - signing, publishing and the actions checked in code → their ACCESS entries.
-// Adding a capability here does not grant it; change the rule, the panel follows.
+// Whether a set of roles holds a permission is can() (src/lib/auth/roles.ts), the gates' own check.
 
-import { ACCESS, type AppRole } from "@/lib/auth/roles";
-import { resolveAccess } from "@/lib/routes";
+import { ACCESS, can, type AppRole, type Permission } from "@/lib/auth/roles";
+import { permissionForPath } from "@/lib/routes";
 import { SECTIONS, SETTINGS, SETTINGS_PAGES } from "@/app/navigation";
 
-export type Capability = { label: string; allowed: (role: AppRole) => boolean };
+/** One line of the panel. perm = null: open to every signed-in user. */
+export type Capability = { label: string; perm: Permission | null };
 export type CapabilityGroup = { title: string; items: Capability[] };
-
-/** The role may open this path (page or API) — the middleware's verdict. */
-const can = (path: string) => (role: AppRole) => resolveAccess(path, [role]).kind === "allowed";
 
 export const ROLE_DESCRIPTION: Record<AppRole, string> = {
   manager: "גישה מלאה לכל המערכת: ניהול משתמשים ולקוחות, לוח הניהול, ופעולות שרק מנהל רשאי לבצע.",
@@ -39,24 +37,25 @@ export const ROLE_DOT: Record<AppRole, string> = {
 export const CAPABILITY_GROUPS: CapabilityGroup[] = [
   {
     title: "מסכים",
-    items: SECTIONS.map((s) => ({ label: s.label, allowed: can(s.href) })),
+    items: SECTIONS.map((s) => ({ label: s.label, perm: permissionForPath(s.href) })),
   },
   {
     title: SETTINGS.label,
-    items: SETTINGS_PAGES.map((s) => ({ label: s.label, allowed: can(s.href) })),
+    items: SETTINGS_PAGES.map((s) => ({ label: s.label, perm: permissionForPath(s.href) })),
   },
   {
     title: "פעולות",
     items: [
-      { label: "קליטת מארז מהמשלוח", allowed: can("/api/packages/intake") },
-      { label: "התחלת בדיקה ושליחת תוצאה", allowed: can("/api/testing/results") },
-      { label: "חתימה על הדוחות בסגירת מארז", allowed: (r) => ACCESS.reportClosingSign.includes(r) },
-      { label: "חתימה סופית על דוח פריט", allowed: (r) => ACCESS.reportFinalSign.includes(r) },
-      { label: "פרסום שדות לעמדות", allowed: (r) => ACCESS.publish.includes(r) },
+      { label: "קליטת מארז מהמשלוח", perm: ACCESS.intake },
+      // The testing API's permission — the same one as the testing screen.
+      { label: "התחלת בדיקה ושליחת תוצאה", perm: permissionForPath("/api/testing/results") },
+      { label: "חתימה על הדוחות בסגירת מארז", perm: ACCESS.reportClosingSign },
+      { label: "חתימה סופית על דוח פריט", perm: ACCESS.reportFinalSign },
+      { label: "פרסום שדות לעמדות", perm: ACCESS.publish },
       // api/testing/step-back and its button.
-      { label: "חזרה לבדיקה הקודמת", allowed: (r) => ACCESS.stepBack.includes(r) },
+      { label: "חזרה לבדיקה הקודמת", perm: ACCESS.stepBack },
       // The worker pickers: testing page, shipments (useShipmentWorker), item files.
-      { label: "עבודה בשם עובד אחר", allowed: (r) => ACCESS.actAsOtherWorker.includes(r) },
+      { label: "עבודה בשם עובד אחר", perm: ACCESS.actAsOtherWorker },
     ],
   },
 ];
@@ -67,11 +66,12 @@ export type RoleSummary = {
   total: number;
 };
 
-export function summarizeRole(role: AppRole): RoleSummary {
+/** What a set of roles reaches, line by line. */
+export function summarize(roles: readonly string[]): RoleSummary {
   let allowed = 0;
   let total = 0;
   const groups = CAPABILITY_GROUPS.map((g) => {
-    const items = g.items.map((c) => ({ label: c.label, ok: c.allowed(role) }));
+    const items = g.items.map((c) => ({ label: c.label, ok: c.perm == null || can(roles, c.perm) }));
     const n = items.filter((i) => i.ok).length;
     allowed += n;
     total += items.length;
@@ -79,3 +79,31 @@ export function summarizeRole(role: AppRole): RoleSummary {
   });
   return { groups, allowed, total };
 }
+
+/**
+ * What a main role reaches. `bundle`: the perm-… roles its Keycloak bundle holds (GET
+ * /api/users/role-bundles); left out — or empty, a realm the migration script has not run on —
+ * the default bundle answers (can()).
+ */
+export function summarizeRole(role: AppRole, bundle: readonly string[] = []): RoleSummary {
+  return summarize([role, ...bundle]);
+}
+
+/** One switch of a user's permissions dialog: a permission, named by every panel line it covers
+ *  (the testing screen and "start a test" are one permission, so one switch), in the group of the
+ *  first of them. */
+export type PermissionSwitch = { perm: Permission; labels: string[]; group: string };
+
+/** The panel's permissions in its order, each once. Lines open to everyone have no switch. */
+export const PERMISSION_SWITCHES: PermissionSwitch[] = (() => {
+  const out: PermissionSwitch[] = [];
+  for (const g of CAPABILITY_GROUPS) {
+    for (const { label, perm } of g.items) {
+      if (!perm) continue;
+      const seen = out.find((s) => s.perm.key === perm.key);
+      if (seen) seen.labels.push(label);
+      else out.push({ perm, labels: [label], group: g.title });
+    }
+  }
+  return out;
+})();

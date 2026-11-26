@@ -4,7 +4,7 @@ import type { Data } from "@measured/puck";
 import type { Session } from "next-auth";
 import { withAuth, type WithAuthOptions } from "@/lib/auth/withAuth";
 import { actorFromSession, identityOf } from "@/lib/auth/identity";
-import { ACCESS, ROLE_LABEL } from "@/lib/auth/roles";
+import { APP_ROLES, ROLE_LABEL } from "@/lib/auth/roles";
 import { decodeImageDataUrl } from "@/lib/data-url";
 import { errorResponse } from "@/lib/http/errors";
 import { parseDbId, parseItemId, readJsonObject } from "@/lib/http/request";
@@ -44,10 +44,10 @@ export function decodePngSignature(value: unknown): Buffer | null {
 }
 
 /** The role a closing signature prints in its "תפקיד החותם" cell — of the signed-in user at the
- *  moment they sign: the first of ACCESS.reportClosingSign they hold (a manager who is a tester
- *  too prints "מנהל"); anyone else gets "". */
+ *  moment they sign: their main role (the first in APP_ROLES order, so a manager who is a tester
+ *  too prints "מנהל"); a user with none gets "". */
 function signerRoleLabel(roles: readonly string[]): string {
-  const role = ACCESS.reportClosingSign.find((r) => roles.includes(r));
+  const role = APP_ROLES.find((r) => roles.includes(r));
   return role ? ROLE_LABEL[role] : "";
 }
 

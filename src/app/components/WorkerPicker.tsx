@@ -4,6 +4,7 @@ import { Box, SearchableCombobox } from "@/components/ui";
 import { Person as PersonIcon } from "@/components/ui/icons";
 import { useWorkersDirectory } from "@/app/components/lookups";
 import type { DirectoryWorker } from "@/lib/users/rules";
+import { can, type Permission } from "@/lib/auth/roles";
 import "@/components/items.css";
 
 type WorkerPickerProps = {
@@ -21,9 +22,9 @@ type WorkerPickerProps = {
   /** Defaults to true. */
   fullWidth?: boolean;
   size?: "small" | "medium";
-  /** List only workers holding at least one of these roles (e.g. the roles a
-   *  screen is open to). The selected value still resolves from everyone. */
-  roles?: readonly string[];
+  /** List only workers who have this permission (e.g. the one a screen needs).
+   *  The selected value still resolves from everyone. */
+  perm?: Permission;
   /** Forwarded to the underlying combobox (e.g. to pin a hover panel open). */
   onOpen?: () => void;
   onClose?: () => void;
@@ -44,7 +45,7 @@ export default function WorkerPicker({
   disabled = false,
   fullWidth = true,
   size = "medium",
-  roles,
+  perm,
   onOpen,
   onClose,
 }: WorkerPickerProps) {
@@ -76,7 +77,7 @@ export default function WorkerPicker({
         id={inputId}
         size={size}
         disabled={disabled}
-        options={roles ? workers.filter((w) => w.roles.some((r) => roles.includes(r))) : workers}
+        options={perm ? workers.filter((w) => can(w.roles, perm)) : workers}
         getOptionLabel={(option) => option.worker_name}
         isOptionEqualToValue={(o, v) => o.worker_id === v.worker_id}
         value={workers.find((w) => w.worker_id === value) || null}

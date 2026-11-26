@@ -17,4 +17,4 @@ export const DELETE = withAuth<{ id: string }>((_req: NextRequest, { params: { i
   const packageId = packageIdParam(id);
   await prisma.$transaction((tx) => undoIntake(tx, packageId));
   return NextResponse.json({ ok: true });
-}), { role: ACCESS.intake });
+}), { perm: ACCESS.intake });

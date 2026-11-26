@@ -31,4 +31,4 @@ export const POST = withAuth(async (req, { session }) => {
   } catch (error) {
     return errorResponse(error, "Failed to create the option list");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });

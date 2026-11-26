@@ -78,7 +78,7 @@ export const PUT = withAuth<{ id: string }>(
       return adminErrorResponse(e, FAILED);
     }
   },
-  { role: ACCESS.usersAdmin },
+  { perm: ACCESS.usersAdmin },
 );
 
 export const DELETE = withAuth<{ id: string }>(
@@ -101,5 +101,5 @@ export const DELETE = withAuth<{ id: string }>(
       return adminErrorResponse(e, FAILED);
     }
   },
-  { role: ACCESS.usersAdmin },
+  { perm: ACCESS.usersAdmin },
 );

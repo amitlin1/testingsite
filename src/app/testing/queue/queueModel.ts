@@ -94,7 +94,7 @@ export function optionsOf(items: readonly QueueRow[], key: (it: QueueRow) => num
 }
 
 // ---- "חזרה לבדיקה הקודמת" (api/testing/step-back) -------------------------------------------
-// Who may send what back, decided here once: managers only (ACCESS.stepBack — the route answers
+// Who may send what back, decided here once: whoever holds ACCESS.stepBack (the route answers
 // anyone else 403 and checks everything again). Each rule answers the request, or null where the
 // button is not offered.
 
@@ -108,9 +108,9 @@ export type StepBackRequest = {
 
 /** A waiting queue item: back to the step before — not from the first step, not a box, and not
  *  when the step before is the whole box's (its opening). */
-export function queueItemStepBack(item: QueueRow, stationTypes: readonly TestStationType[], isManager: boolean): StepBackRequest | null {
+export function queueItemStepBack(item: QueueRow, stationTypes: readonly TestStationType[], canStepBack: boolean): StepBackRequest | null {
   const step = item.current_route_step ?? 1;
-  if (!isManager || item.current_status !== ItemStatus.Queued || item.is_package || step <= 1) return null;
+  if (!canStepBack || item.current_status !== ItemStatus.Queued || item.is_package || step <= 1) return null;
   const prevTypeId = item.route_steps?.[step - 2];
   const prev = prevTypeId != null ? stationTypes.find((t) => t.id === Number(prevTypeId)) : undefined;
   return prev && !prev.packageLevel ? { itemId: String(item.item_id), routeStep: step, toName: prev.name, inBox: false } : null;
@@ -119,8 +119,8 @@ export function queueItemStepBack(item: QueueRow, stationTypes: readonly TestSta
 /** An item of a box that reached its closing: back to the test before it, when that step is its own
  *  (not the box's opening). From the closing queue (`box`: the box's row) only while the box and the
  *  item still wait there; from the closing wizard ("wizard") its closing stops. */
-export function boxItemStepBack(it: PackageItemView, isManager: boolean, from: { box: QueueRow } | "wizard"): StepBackRequest | null {
-  if (!isManager || !it.arrived_at_closing || it.prev_step_desc == null || it.prev_step_package_level || it.current_route_step == null) return null;
+export function boxItemStepBack(it: PackageItemView, canStepBack: boolean, from: { box: QueueRow } | "wizard"): StepBackRequest | null {
+  if (!canStepBack || !it.arrived_at_closing || it.prev_step_desc == null || it.prev_step_package_level || it.current_route_step == null) return null;
   if (from !== "wizard") {
     const { box } = from;
     if (box.current_status !== ItemStatus.Queued || packageRoleOf(box) !== "closing" || it.current_status !== ItemStatus.Queued) return null;
@@ -132,9 +132,9 @@ export function boxItemStepBack(it: PackageItemView, isManager: boolean, from: {
  *  step it now waits at — not after its last step, not at a box's own station (opening / closing),
  *  not in research. */
 export function afterResultStepBack(
-  item: QueueRow, type: TestStationType, answer: { isLastStation?: boolean; nextStation?: NextStation | null }, isManager: boolean,
+  item: QueueRow, type: TestStationType, answer: { isLastStation?: boolean; nextStation?: NextStation | null }, canStepBack: boolean,
 ): StepBackRequest | null {
-  if (!isManager || type.packageLevel || item.current_status === ItemStatus.InResearch || answer.isLastStation || !answer.nextStation) return null;
+  if (!canStepBack || type.packageLevel || item.current_status === ItemStatus.InResearch || answer.isLastStation || !answer.nextStation) return null;
   return { itemId: String(item.item_id), routeStep: answer.nextStation.routeStep, toName: type.name, inBox: false };
 }
 

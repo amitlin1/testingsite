@@ -4,7 +4,7 @@ import { freezeReportIfFinal, signReportWithResult } from "@/app/lib/item-report
 import { actorOf, decodePngSignature } from "@/app/lib/item-report/http";
 import type { ResultAnswer } from "@/app/lib/testing/contract";
 import { resultInputOf, submitResult, whereItemIsNow, type ResultRequest } from "@/app/lib/testing/submit-result";
-import { ACCESS, hasAnyRole } from "@/lib/auth/roles";
+import { ACCESS, can } from "@/lib/auth/roles";
 import { isLiveSession } from "@/lib/auth/session";
 import { HttpError } from "@/lib/http/errors";
 import { readJsonObject } from "@/lib/http/request";
@@ -24,7 +24,7 @@ async function closingSigningOf(signature: unknown) {
   const png = decodePngSignature(signature);
   if (!png) throw new HttpError(400, "ReportSignature must be a PNG data URL");
   const session = await currentSession();
-  if (!isLiveSession(session) || !hasAnyRole(session.roles ?? [], ACCESS.reportClosingSign)) {
+  if (!isLiveSession(session) || !can(session.roles, ACCESS.reportClosingSign)) {
     throw new HttpError(403, "אין לך הרשאה לחתום על דוחות", { code: "REPORT_SIGN_FORBIDDEN" });
   }
   return { png, signer: actorOf(session) };

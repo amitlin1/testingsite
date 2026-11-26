@@ -33,4 +33,4 @@ export const PUT = withAuth<{ weekday: string }>((req: NextRequest, { session, p
   };
   const saved = await prisma.weekday_defaults.upsert({ where: { weekday }, update: columns, create: { weekday, ...columns } });
   return NextResponse.json(toWeekdayDefault(saved));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

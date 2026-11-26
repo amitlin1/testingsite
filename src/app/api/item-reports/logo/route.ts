@@ -36,4 +36,4 @@ export const POST = withAuth(async (req, { session }) => {
     checksum: stored.checksum, entityType: "report_logo", createdBy: actorOf(session).username,
   });
   return NextResponse.json({ key });
-}, { role: ACCESS.reportTemplate });
+}, { perm: ACCESS.reportTemplate });

@@ -18,7 +18,7 @@ export const GET = withAuth(() => answer("שגיאה בטעינת סוגי הח�
     orderBy: [{ is_system: "desc" }, { name: "asc" }],
   });
   return NextResponse.json(rows.map((r) => toHolidayType(r, r._count.holidays)));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });
 
 /** Add a user-defined category. A type's name is not in the work calendar: no rebuild. */
 export const POST = withAuth((req: NextRequest) => answer("יצירת הסוג נכשלה", async () => {
@@ -27,4 +27,4 @@ export const POST = withAuth((req: NextRequest) => answer("יצירת הסוג �
   if (existing) throw nameTaken();
   const created = await prisma.holiday_types.create({ data: { name, is_system: false } }).catch(refusing({ P2002: nameTaken() }));
   return NextResponse.json(toHolidayType(created, 0));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

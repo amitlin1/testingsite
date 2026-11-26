@@ -23,7 +23,7 @@ test("no session on a non-public route needs a login", () => {
   assert.deepEqual(resolveAccess("/api/users", null), { kind: "needs-auth" });
 });
 
-test("a role-protected route answers forbidden with the ACCESS set it requires", () => {
+test("a role-protected route answers forbidden with the permission it requires", () => {
   assert.deepEqual(resolveAccess("/api/users/abc", ["tester"]), { kind: "forbidden", required: ACCESS.usersAdmin });
   assert.deepEqual(resolveAccess("/settings/users", ["manager"]), { kind: "allowed" });
   assert.deepEqual(resolveAccess("/dashboard/tests/kpis", ["storekeeper"]), { kind: "forbidden", required: ACCESS.dashboard });
@@ -54,4 +54,11 @@ test("API paths and plain fetches are data requests; page and RSC navigations ar
   assert.equal(isDataRequest("/packages", h({ "sec-fetch-mode": "navigate" })), false);
   assert.equal(isDataRequest("/packages", h({ accept: "text/html,application/xhtml+xml" })), false);
   assert.equal(isDataRequest("/packages", h({ accept: "application/json" })), true);
+});
+
+test("a migrated token: the route opens by its perm-… role, and no-… closes it for one user", () => {
+  assert.equal(resolveAccess("/files", ["tester", "perm-testing", "perm-files"]).kind, "allowed");
+  assert.deepEqual(resolveAccess("/files", ["tester", "perm-testing", "perm-files", "no-files"]), { kind: "forbidden", required: ACCESS.files });
+  assert.equal(canSeeInNav("/files", ["tester", "perm-testing", "perm-files", "no-files"]), false);
+  assert.equal(canSeeInNav("/testing", ["tester", "perm-testing", "perm-files", "no-files"]), true);
 });

@@ -109,5 +109,5 @@ export const GET = withAuth(
       return res;
     }
   },
-  { role: ACCESS.healthJobs },
+  { perm: ACCESS.healthJobs },
 );

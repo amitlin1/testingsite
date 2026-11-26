@@ -26,7 +26,7 @@ export const PUT = withAuth<{ id: string }>((req: NextRequest, { params }) => an
   if (clash) throw new HttpError(400, "סוג בשם זה כבר קיים");
   const saved = await prisma.holiday_types.update({ where: { id }, data: { name } }).catch(refusing({ P2025: notFound() }));
   return NextResponse.json(toHolidayType(saved));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });
 
 /** Delete a category — blocked for system types and for any type in use. */
 export const DELETE = withAuth<{ id: string }>((_req: NextRequest, { params }) => answer("מחיקת הסוג נכשלה", async () => {
@@ -40,4 +40,4 @@ export const DELETE = withAuth<{ id: string }>((_req: NextRequest, { params }) =
   if (type._count.holidays > 0) throw new HttpError(400, ERR_TYPE_IN_USE);
   await prisma.holiday_types.delete({ where: { id } });
   return NextResponse.json({ ok: true });
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

@@ -51,7 +51,8 @@ export const SECTIONS = [
   // An item's pages (/items/…) are opened from here and lead back here.
   { href: "/packages", label: "מארזים ופריטים", icon: Inventory, claims: (p: string) => p.startsWith("/items/") },
   { href: "/testing", label: "מסך בדיקה", icon: Science },
-  { href: "/dashboard/tests", root: DASHBOARD_ROOT, label: "לוח ניהול", icon: Analytics },
+  // The managers' summary; its detailed board (/dashboard/tests) lights the same entry.
+  { href: DASHBOARD_ROOT, label: "לוח ניהול", icon: Analytics },
   { href: "/shipments", label: "משלוחים נכנסים", icon: LocalShipping },
   { href: "/files", label: "ניהול קבצים", icon: FolderCopy },
 ] as const satisfies readonly Section[];
@@ -129,7 +130,7 @@ export const PALETTE_DESTINATIONS: readonly PaletteDestination[] = [
   { id: "packages", label: "מארזים", sub: "רשימת המארזים וקליטת מארז", icon: Package, href: "/packages" },
   { id: "items", label: "ניהול פריטים", sub: "דוחות ורשימת פריטים", icon: LayoutDashboard, href: "/" },
   toPage("testing", "/testing", "תור העמדה ובדיקות פעילות", FlaskConical),
-  toPage("dashboard", "/dashboard/tests", "מדדים וניתוחים", LayoutDashboard),
+  toPage("dashboard", DASHBOARD_ROOT, "תמונת מצב, מדדים וניתוחים", LayoutDashboard),
   toPage("shipments", "/shipments", "קליטת משלוחים", Truck),
   toPage("files", "/files", "קבצים מצורפים", Folder),
   toPage("stations", "/settings/test-stations", "הגדרות · סוגי עמדות ועמדות", Monitor),

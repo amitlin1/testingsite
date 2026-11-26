@@ -70,4 +70,4 @@ export const POST = withAuth(async (request, { session }) => {
   } catch (error) {
     return errorResponse(error, "המשלוח לא נשמר — שגיאה בשרת");
   }
-}, { role: ACCESS.shipments });
+}, { perm: ACCESS.shipments });

@@ -55,4 +55,4 @@ export const PUT = withAuth(async (req, { session }) => {
   } catch (e) {
     return errorResponse(e, "Failed to save the general template");
   }
-}, { role: ACCESS.reportTemplate });
+}, { perm: ACCESS.reportTemplate });

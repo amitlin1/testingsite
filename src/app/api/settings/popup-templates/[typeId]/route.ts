@@ -42,7 +42,7 @@ export const PUT = withAuth<{ typeId: string }>(async (req, { session, params })
   } catch (error) {
     return errorResponse(error, "Failed to save the popup template");
   }
-}, { role: ACCESS.popupTemplatesSettings });
+}, { perm: ACCESS.popupTemplatesSettings });
 
 export const DELETE = withAuth<{ typeId: string }>(async (_req, { params }) => {
   try {
@@ -51,4 +51,4 @@ export const DELETE = withAuth<{ typeId: string }>(async (_req, { params }) => {
   } catch (error) {
     return errorResponse(error, "Failed to delete the popup template");
   }
-}, { role: ACCESS.popupTemplatesSettings });
+}, { perm: ACCESS.popupTemplatesSettings });

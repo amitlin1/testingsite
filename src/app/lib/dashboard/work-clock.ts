@@ -83,6 +83,7 @@ export type ClockMetricKey =
   | "queueAge"
   | "workHours"
   | "routeTurnaround"
+  | "boxRoute"
   | "slowStep"
   | "itemStep"
   | "itemTotal"
@@ -133,6 +134,12 @@ export const CLOCK_METRICS: readonly ClockMetric[] = [
     key: "routeTurnaround",
     title: "זמן ממוצע (לקוח / סוג פריט)",
     what: "מפתיחת המסלול של הפריט ועד שהמסלול נסגר — כל התחנות, כולל ההמתנות ביניהן. רק מסלולים שהסתיימו.",
+    clocks: "both",
+  },
+  {
+    key: "boxRoute",
+    title: "זמן מסלול למארז (לוח ניהול)",
+    what: "מכניסת המארז למסלול (עמדה 1) ועד שהמסלול שלו נסגר — כל התחנות, כולל ההמתנות ביניהן. ממוצע על המארזים שהמסלול שלהם הסתיים בטווח שנבחר.",
     clocks: "both",
   },
   {

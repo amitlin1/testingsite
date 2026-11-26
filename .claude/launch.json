@@ -2,17 +2,67 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "dev-local",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3000"
+      ],
+      "env": {
+        "IS_DEV": "1",
+        "AUTH_URL": "http://localhost:3000/api/auth",
+        "APP_PUBLIC_URL": "http://localhost:3000",
+        "APP_INTERNAL_URL": "http://host.docker.internal:3000",
+        "ONLYOFFICE_PUBLIC_URL": "http://localhost:8082",
+        "ONLYOFFICE_INTERNAL_URL": "http://localhost:8082",
+        "MINIO_PUBLIC_ENDPOINT": "http://localhost:9000"
+      },
+      "port": 3000
+    },
+    {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000,
       "autoPort": true
     },
     {
       "name": "dev-3000",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "-p", "3000"],
-      "env": { "AUTH_URL": "http://localhost:3000/api/auth" },
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3000"
+      ],
+      "env": {
+        "AUTH_URL": "http://localhost:3000/api/auth"
+      },
+      "port": 3000
+    },
+    {
+      "name": "dev-3000-pt-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/Admin/AppData/Local/Temp/claude/C--Users-Admin-Desktop-Amit-projects-testingsite/f2aecc41-620a-4a46-a0d1-814c0d71b995/scratchpad/dev-on-copy.mjs",
+        "testingsite_pt_dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "dev-3000-pt-mig",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/Admin/AppData/Local/Temp/claude/C--Users-Admin-Desktop-Amit-projects-testingsite/f2aecc41-620a-4a46-a0d1-814c0d71b995/scratchpad/dev-on-copy.mjs",
+        "testingsite_pt_mig"
+      ],
       "port": 3000
     }
   ]

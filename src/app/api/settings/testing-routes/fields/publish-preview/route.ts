@@ -20,4 +20,4 @@ export const POST = withAuth(async (req) => {
   } catch (error) {
     return errorResponse(error, "Failed to preview the publish");
   }
-}, { role: ACCESS.fieldsEdit });
+}, { perm: ACCESS.fieldsEdit });

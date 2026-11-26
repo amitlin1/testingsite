@@ -26,7 +26,7 @@ export const GET = withAuth((req: NextRequest) => answer("שגיאה בטעינ�
     orderBy: { start_date: "asc" },
   });
   return NextResponse.json(rows.map(toHoliday));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });
 
 /** Create an internal holiday. */
 export const POST = withAuth((req: NextRequest, { session }) => calendarWrite("יצירת החופשה נכשלה", async () => {
@@ -36,4 +36,4 @@ export const POST = withAuth((req: NextRequest, { session }) => calendarWrite("�
     include: { type: { select: { name: true } } },
   }).catch(refusing({ P2003: new HttpError(400, "סוג החופשה שנבחר אינו קיים") }));
   return NextResponse.json(toHoliday(created));
-}), { role: ACCESS.workHours });
+}), { perm: ACCESS.workHours });

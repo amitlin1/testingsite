@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 
 /**
  * POST /api/testing/step-back { itemId, currentRouteStep, workerId?, workerName?, actionId? } —
- * "חזרה לבדיקה הקודמת" on a queue card (lib/testing/step-back.ts). Managers only (ACCESS.stepBack):
+ * "חזרה לבדיקה הקודמת" on a queue card (lib/testing/step-back.ts). Only who holds ACCESS.stepBack:
  * anyone else gets 403 before anything is read, and the testing screen does not show them the button.
  */
 export const POST = withAuth((req) => ledgerWrite("שגיאה בהחזרת הפריט לעמדה הקודמת", async () => {
@@ -22,4 +22,4 @@ export const POST = withAuth((req) => ledgerWrite("שגיאה בהחזרת הפ�
     throw new HttpError(400, "itemId and currentRouteStep are required");
   }
   return NextResponse.json(await stepBack({ itemId, shownStep, actor: parseActor(body, "stepBack") }));
-}), { role: ACCESS.stepBack });
+}), { perm: ACCESS.stepBack });

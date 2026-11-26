@@ -263,8 +263,8 @@ export default function TestingDock({
               hideHeader
               size="small"
               disabled={workerLocked}
-              // Only who may test: the roles /testing is open to.
-              roles={ACCESS.testing}
+              // Only who may test: whoever holds the permission /testing needs.
+              perm={ACCESS.testing}
               placeholder={workerLocked ? "מזוהה מההתחברות" : "חפש עובד…"}
               onOpen={() => setWorkerOpen(true)}
               onClose={() => setWorkerOpen(false)}

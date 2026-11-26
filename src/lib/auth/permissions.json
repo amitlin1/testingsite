@@ -1,0 +1,38 @@
+{
+  "$comment": "Every permission of the app. Each one is a pair of Keycloak realm roles: grant + role (perm-step-back) and deny + role (no-step-back). bundles = the main roles whose Keycloak bundle (composite role) holds it on a fresh migration. Read by src/lib/auth/roles.ts and by scripts/ops/keycloak-permissions.mjs: change it here, then run the script (check, then apply).",
+  "grant": "perm-",
+  "deny": "no-",
+  "mainRoles": {
+    "manager": "מנהל",
+    "tester": "בודק",
+    "storekeeper": "מחסנאי",
+    "mashan": "משאן"
+  },
+  "permissions": {
+    "usersAdmin": { "role": "users-admin", "label": "משתמשים והרשאות", "bundles": ["manager"] },
+    "dashboard": { "role": "dashboard", "label": "לוח ניהול", "bundles": ["manager"] },
+    "healthJobs": { "role": "health-jobs", "label": "דוח תקינות העבודות ברקע", "bundles": ["manager"] },
+    "testing": { "role": "testing", "label": "מסך בדיקה, התחלת בדיקה ושליחת תוצאה", "bundles": ["manager", "tester"] },
+    "shipments": { "role": "shipments", "label": "משלוחים נכנסים", "bundles": ["manager", "storekeeper"] },
+    "intake": { "role": "intake", "label": "קליטת מארז מהמשלוח", "bundles": ["manager", "storekeeper"] },
+    "createPackage": { "role": "create-package", "label": "יצירת מארז ישירות", "bundles": ["manager"] },
+    "stepBack": { "role": "step-back", "label": "חזרה לבדיקה הקודמת", "bundles": ["manager", "tester"] },
+    "actAsOtherWorker": { "role": "act-as-other-worker", "label": "עבודה בשם עובד אחר", "bundles": ["manager"] },
+    "files": { "role": "files", "label": "ניהול קבצים", "bundles": ["manager", "tester", "mashan"] },
+    "workHours": { "role": "work-hours", "label": "שעות עבודה וחופשות", "bundles": ["manager", "mashan"] },
+    "fieldsEdit": { "role": "fields-edit", "label": "מסלולי בדיקה: שדות, תבניות דוח", "bundles": ["manager", "tester"] },
+    "publish": { "role": "publish", "label": "פרסום שדות לעמדות", "bundles": ["manager", "tester"] },
+    "reportClosingSign": { "role": "report-closing-sign", "label": "חתימה על הדוחות בסגירת מארז", "bundles": ["manager", "tester"] },
+    "reportFinalSign": { "role": "report-final-sign", "label": "חתימה סופית על דוח פריט", "bundles": ["manager"] },
+    "customersSettings": { "role": "settings-customers", "label": "לקוחות", "bundles": ["manager", "storekeeper"] },
+    "itemTypesSettings": { "role": "settings-item-types", "label": "סוגי פריטים", "bundles": ["manager", "tester", "storekeeper"] },
+    "packagesSettings": { "role": "settings-packages", "label": "מארזים", "bundles": ["manager", "tester"] },
+    "sourcesSettings": { "role": "settings-sources", "label": "ניהול מקורות", "bundles": ["manager", "storekeeper"] },
+    "itemStatusSettings": { "role": "settings-item-status", "label": "סטטוסי פריט", "bundles": ["manager", "tester"] },
+    "testStationStatusSettings": { "role": "settings-test-station-status", "label": "סטטוסי עמדת בדיקה", "bundles": ["manager", "tester"] },
+    "testStationsSettings": { "role": "settings-test-stations", "label": "עמדות בדיקה", "bundles": ["manager", "tester"] },
+    "popupTemplatesSettings": { "role": "settings-popup-templates", "label": "תבניות חלון", "bundles": ["manager", "tester"] },
+    "referenceItemsSettings": { "role": "settings-reference-items", "label": "פריטי ייחוס", "bundles": ["manager", "tester", "storekeeper"] },
+    "otherSettings": { "role": "settings-other", "label": "דפי הגדרות בלי הרשאה משלהם", "bundles": ["manager"] }
+  }
+}

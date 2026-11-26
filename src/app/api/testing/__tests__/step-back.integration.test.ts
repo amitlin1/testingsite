@@ -2,14 +2,15 @@
 // route, waits there again, and the ledger counts it as that step's next attempt. Refused for an
 // item in test, a first step, a step back onto the box's own (package-level) step, a whole box,
 // and a stale card; two clicks never take an item back twice. An item that had reached the
-// closing station takes the box back to waiting for its items. Managers only: anyone else (or
-// no session) is refused before anything moves.
+// closing station takes the box back to waiting for its items. Only who holds ACCESS.stepBack
+// (managers and testers by default, unless it was taken away from them — no-step-back): anyone
+// else (or no session) is refused before anything moves.
 //
 // Runs ONLY when TEST_DATABASE_URL points at a throwaway database (the write-path harness).
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "crypto";
-import type { AppRole } from "@/lib/auth/roles";
+import { ACCESS } from "@/lib/auth/roles";
 import * as H from "@/test-support/db-harness";
 import { stubSession } from "@/lib/auth/testing";
 
@@ -18,7 +19,7 @@ const ITEM_TYPE_FUNC_TWICE = 8;
 
 // The session withAuth sees.
 let session: unknown = null;
-const signedIn = (...roles: AppRole[]) => ({
+const signedIn = (...roles: string[]) => ({
   user: { preferredUsername: "step-back", displayName: "בודק", name: "step-back", employeeNumber: "9001" },
   roles,
 });
@@ -97,21 +98,29 @@ describe(
       await assertNoDrift();
     });
 
-    it("managers only: a tester, a storekeeper and no session are refused, and the item stays", async () => {
+    it("who holds step-back: a tester it was taken from (no-step-back), a storekeeper and no session are refused and the item stays; a tester may", async () => {
       await H.seedItem({ itemId: 8104, itemTypeId: ITEM_TYPE_FUNC_TWICE, stationId: H.STATION_FUNC_A });
       await pass(8104, H.STATION_FUNC_A);
       const before = (await H.events(8104)).length;
 
-      for (const [who, status] of [[signedIn("tester"), 403], [signedIn("storekeeper", "mashan"), 403], [null, 401]] as const) {
+      const refused = [
+        [signedIn("tester", ACCESS.stepBack.deny), 403],
+        // A migrated realm: the bundle without step-back.
+        [signedIn("tester", "perm-testing"), 403],
+        [signedIn("storekeeper", "mashan"), 403],
+        [null, 401],
+      ] as const;
+      for (const [who, status] of refused) {
         session = who;
         const r = await stepBack(8104, 2);
         assert.equal(r.status, status, JSON.stringify(r.body));
+        if (status === 403) assert.equal(r.body.required, ACCESS.stepBack.role);
       }
       const route = await H.routeRow(8104);
       assert.deepEqual([route.current_route_step, route.current_status], [2, H.STATUS.queued]);
       assert.equal((await H.events(8104)).length, before, "nothing written to the ledger");
 
-      session = signedIn("manager");
+      session = signedIn("tester", "perm-testing", ACCESS.stepBack.role);
       assert.equal((await stepBack(8104, 2)).status, 200);
       assert.equal((await H.routeRow(8104)).current_route_step, 1);
       await assertNoDrift();

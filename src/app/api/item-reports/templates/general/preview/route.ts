@@ -24,4 +24,4 @@ export const POST = withAuth(async (req) => {
   } catch (e) {
     return errorResponse(e, "Failed to render the preview");
   }
-}, { role: ACCESS.reportTemplate });
+}, { perm: ACCESS.reportTemplate });
