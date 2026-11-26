@@ -152,12 +152,13 @@ export default function ReferenceItemsPage() {
 
   const isPackage = !!selectedType?.is_package;
   const packageTypes = React.useMemo(() => itemTypes.filter((t) => t.is_package), [itemTypes]);
-  // Known only once the types are in: an item whose type is not a package type.
+  // Only with a package type selected, and only those of the types it holds (מארז מחשב → מחשב,
+  // עכבר, מקלדת) — known once its contents are in. No package type selected → none.
   const legacyItems = React.useMemo(() => {
-    if (legacy.status !== "ready" || itemTypes.length === 0) return [];
-    const packageIds = new Set(packageTypes.map((t) => t.item_type_id));
-    return legacy.items.filter((it) => !packageIds.has(it.item_type_id));
-  }, [legacy, itemTypes.length, packageTypes]);
+    if (legacy.status !== "ready" || lines.status !== "ready" || !isPackage) return [];
+    const contentTypes = new Set(lines.lines.map((l) => l.item_type_id));
+    return legacy.items.filter((it) => contentTypes.has(it.item_type_id));
+  }, [legacy, lines, isPackage]);
 
   // ---- derived: mutually-filtering SKU / manufacturer options --------------
   const skuOptions = React.useMemo(() => {
@@ -381,7 +382,7 @@ export default function ReferenceItemsPage() {
       )}
 
       {/* Older reference items of regular types: still used by the stations, view and delete only. */}
-      {legacy.status === "error" ? (
+      {legacy.status === "error" && isPackage ? (
         <div className="settings-card settings-error" style={{ marginTop: "var(--space-xl)" }}>
           <Alert severity="error">טעינת פריטי הייחוס הישנים נכשלה. בדוק את החיבור לשרת ונסה שוב.</Alert>
           <Button variant="outlined" color="inherit" size="small" onClick={loadLegacy}>נסה שוב</Button>
@@ -392,7 +393,7 @@ export default function ReferenceItemsPage() {
             פריטי ייחוס ישנים <span style={{ fontWeight: 400, color: MUTED, fontVariantNumeric: "tabular-nums" }}>· {legacyItems.length}</span>
           </h2>
           <p style={{ margin: "6px 0 0", fontSize: "var(--text-small)", color: MUTED, maxWidth: 640, lineHeight: 1.5 }}>
-            הוגדרו לסוג פריט רגיל, לפני שפריטי הייחוס עברו לייחוס המארז. העמדות עדיין משתמשות בהם, והם קודמים לפריט באותו מק״ט שבתוך ייחוס מארז. אפשר לצפות בהם ולמחוק אותם.
+            של הפריטים ש{typeName} מכיל. הוגדרו לסוג פריט רגיל, לפני שפריטי הייחוס עברו לייחוס המארז. העמדות עדיין משתמשות בהם, והם קודמים לפריט באותו מק״ט שבתוך ייחוס מארז. אפשר לצפות בהם ולמחוק אותם.
           </p>
           <div className="ri-grid">
             {legacyItems.map((it) => (
