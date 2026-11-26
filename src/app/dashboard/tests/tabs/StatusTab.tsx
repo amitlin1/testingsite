@@ -79,7 +79,7 @@ export default function StatusTab({ data }: TabProps) {
         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 9 }}>
           {statusPending &&
             [0, 1, 2, 3].map((i) => <Skeleton key={i} variant="text" height={14} width="100%" />)}
-          {slices.map((slice, index) => (
+          {slices.map((slice) => (
             <div
               key={slice.stateKey}
               style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-small)" }}
@@ -89,7 +89,7 @@ export default function StatusTab({ data }: TabProps) {
                   width: 9,
                   height: 9,
                   borderRadius: 2,
-                  background: stateColor(slice.stateKey, index),
+                  background: stateColor(slice.stateKey),
                   flexShrink: 0,
                 }}
               />

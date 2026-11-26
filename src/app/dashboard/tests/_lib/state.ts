@@ -12,18 +12,29 @@ export type DateRangePreset = (typeof DATE_RANGE_PRESETS)[number];
 export const AVERAGE_TIMES_PERIODS = ["daily", "monthly", "quarterly"] as const;
 export type AverageTimesPeriod = (typeof AVERAGE_TIMES_PERIODS)[number];
 
+// In rail order (the rail's first entry is a link to the main page,
+// /dashboard, not a tab). Two tabs are commented out on request (2026-11-26)
+// so they cannot be reached — their files are kept as they are:
+//   מדדים (kpis, tabs/KpisTab.tsx) — the main page took its place;
+//   התפלגות סטטוסים (status, tabs/StatusTab.tsx).
+// To bring one back, uncomment it here and the lines marked "kpis tab" /
+// "status tab" in DashboardSidebar.tsx, DashboardShell.tsx and
+// useDashboardData.ts.
 export const TAB_KEYS = [
+  // "kpis",
   "overview",
-  "kpis",
   "stations",
   "slow",
   "shipments",
   "times",
-  "status",
+  // "status",
   "customers",
   "types",
 ] as const;
 export type TabKey = (typeof TAB_KEYS)[number];
+
+/** The tab an empty URL opens — and the one that is never written to it. */
+export const DEFAULT_TAB: TabKey = "overview";
 
 export const STUCK_HOURS_OPTIONS = [24, 48, 72] as const;
 /** The slow-items threshold; null shows every row. */
@@ -55,7 +66,7 @@ function readStuck(raw: string | null): StuckHours {
 
 export function stateFromParams(sp: URLSearchParams, railOpen: boolean): DashboardState {
   return {
-    tab: oneOf(TAB_KEYS, sp.get("tab"), "overview"),
+    tab: oneOf(TAB_KEYS, sp.get("tab"), DEFAULT_TAB),
     datePreset: oneOf(DATE_RANGE_PRESETS, sp.get("range"), "today"),
     customStart: sp.get("start") ?? "",
     customEnd: sp.get("end") ?? "",
@@ -69,7 +80,7 @@ export function stateFromParams(sp: URLSearchParams, railOpen: boolean): Dashboa
 /** Only non-default values reach the URL, so a shared link stays readable. */
 export function paramsFromState(s: DashboardState): URLSearchParams {
   const p = new URLSearchParams();
-  if (s.tab !== "overview") p.set("tab", s.tab);
+  if (s.tab !== DEFAULT_TAB) p.set("tab", s.tab);
   if (s.datePreset !== "today") p.set("range", s.datePreset);
   if (s.datePreset === "custom") {
     if (s.customStart) p.set("start", s.customStart);

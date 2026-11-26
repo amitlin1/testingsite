@@ -32,7 +32,7 @@ export function ClosingBoxScan({ pkg, value, onChange, lookup, onSubmit, prev, s
     <ScanField
       label={PACKAGE_POPUP_TEXT.boxScanLabel} placeholder={PACKAGE_POPUP_TEXT.boxScanPlaceholder}
       value={value} onChange={onChange} lookup={lookup} onSubmit={onSubmit}
-      found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${pkg.items.length} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
+      found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${pkg.items.length} פריטים · ${pkg.customer_code ?? ""}`}
       missing={CLOSING_TEXT.boxScanMissing(pkg.item_type_desc)}
       prev={prev} filledNote={CLOSING_TEXT.boxScanFilled}
       suggestions={suggestions.skus} suggestionsLabel={closingSkusLabel(pkg, suggestions.fromOpening)} />

@@ -46,6 +46,7 @@ import {
 import {
   EM_DASH,
   formatCount,
+  formatDayTick,
   formatMinutes,
   isNil,
   queueAgeTone,
@@ -60,8 +61,15 @@ import { failureMessage, metaOf } from "../_lib/useDashboardData";
 import { CappedPeriodNotice } from "./AmberNotice";
 import { Legend } from "./DataCard";
 import Segmented from "./Segmented";
+import CardInfo from "./CardInfo";
+import { EXPLAIN } from "../_lib/explain";
 import { ChartBody } from "./charts/chartConfig";
-import HistoryDurationChart from "./charts/HistoryDurationChart";
+import DurationChart, {
+  DURATION_CHART_MODES,
+  durationLegend,
+  historyDurationRows,
+  type DurationChartMode,
+} from "./charts/DurationChart";
 import HistoryStateChart from "./charts/HistoryStateChart";
 import ShipmentCompletionChart from "./charts/ShipmentCompletionChart";
 import { STATE_COLOR } from "./charts/palette";
@@ -152,6 +160,8 @@ export interface HistoryOverlayProps {
 export default function HistoryOverlay({ target, onClose, onApplyFilter }: HistoryOverlayProps) {
   const config = KIND_CONFIG[target.kind];
   const [preset, setPreset] = React.useState<HistoryPreset>("alldays");
+  // The station's duration chart: bars by default, lines on the switch.
+  const [durationMode, setDurationMode] = React.useState<DurationChartMode>("bar");
   const [points, setPoints] = React.useState<HistoryPoint[] | null>(null);
   const [completion, setCompletion] = React.useState<CompletionPoint[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -418,15 +428,20 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
         {target.kind === "station" && (
           <section style={sectionStyle}>
             <div style={sectionHeadStyle}>
-              <h3 style={sectionTitleStyle}>זמנים שנסגרו באותו יום · שני שעונים</h3>
-              <Legend
-                items={[
-                  { color: "var(--dash-ramp-1)", label: "המתנה · ברוטו", line: true },
-                  { color: "var(--dash-ramp-1)", label: "המתנה · נטו", line: true, dashed: true },
-                  { color: "var(--color-ink-muted-48)", label: "ביצוע · ברוטו", line: true },
-                  { color: "var(--color-ink-muted-48)", label: "ביצוע · נטו", line: true, dashed: true },
-                ]}
-              />
+              <h3 style={sectionTitleStyle}>
+                זמנים שנסגרו באותו יום · בשעות
+                <CardInfo explain={EXPLAIN.stationDurations} />
+              </h3>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Legend items={durationLegend(durationMode)} />
+                <Segmented
+                  options={DURATION_CHART_MODES}
+                  value={durationMode}
+                  onChange={(value) => setDurationMode(value === "line" ? "line" : "bar")}
+                  padding="3px 10px"
+                  ariaLabel="סוג הגרף"
+                />
+              </div>
             </div>
             {/* Inside a modal Dialog the side panel cannot open, so the
                 definitions are said here, in one line. */}
@@ -440,7 +455,7 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
               ) : folded.length === 0 ? (
                 <EmptyHistory />
               ) : (
-                <HistoryDurationChart points={folded} />
+                <DurationChart rows={historyDurationRows(folded)} mode={durationMode} tick={formatDayTick} />
               )}
             </ChartBody>
           </section>
@@ -450,7 +465,10 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
           <section style={sectionStyle}>
             <div style={sectionHeadStyle}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 9, minWidth: 0 }}>
-                <h3 style={sectionTitleStyle}>אחוז השלמה לאורך זמן</h3>
+                <h3 style={sectionTitleStyle}>
+                  אחוז השלמה לאורך זמן
+                  <CardInfo explain={EXPLAIN.shipmentCompletion} />
+                </h3>
                 {/* The denominator MOVES with the day, so a dip is a real
                     event and not a glitch — it is said next to the chart and
                     not only in the footnote, because the footnote is a screen
@@ -459,12 +477,7 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
                   מסלול שנפתח מאוחר יותר מוריד את האחוז
                 </div>
               </div>
-              <Legend
-                items={[
-                  { color: "var(--dash-ramp-1)", label: "השלמה", line: true },
-                  { color: "var(--color-ink-muted-48)", label: "מסלולים שנפתחו · מצטבר", line: true },
-                ]}
-              />
+              <Legend items={[{ color: "var(--dash-ramp-1)", label: "השלמה", line: true }]} />
             </div>
             <ChartBody height={132}>
               {completion === null ? (

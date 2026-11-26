@@ -14,7 +14,7 @@ import type { ItemTypeLite, ItemTypeRow, SourceRow, StationRow, StationTypeOptio
  */
 
 export type Option = { value: string; label: string };
-export type ShipmentLite = { id: number; shipment_code: string; customer_name?: string | null; source_id: number | null; is_sent: boolean | null; shipment_sent_date: string | null };
+export type ShipmentLite = { id: number; shipment_code: string; customer_code?: string | null; customer_name?: string | null; source_id: number | null; is_sent: boolean | null; shipment_sent_date: string | null };
 
 /** The pickers' query keys. A key is the prefix of every narrower list of the same table. */
 export const LOOKUP_KEY = {
@@ -57,7 +57,10 @@ const LOOKUP = { staleTime: 5 * 60_000 };
 const freshness = (fresh: boolean) => (fresh ? { staleTime: 0, refetchOnWindowFocus: false } : LOOKUP);
 
 /** A customer as a picker shows it: "name (code)". */
-export const customerLabel = (c: { name: string; customer_code: string | null }) => (c.customer_code ? `${c.name} (${c.customer_code})` : c.name);
+/** How a customer is shown anywhere in the system: by its CODE only. The name is
+ *  seen on the customers settings page alone — workers know a customer by code
+ *  (Amit, 2026-11-26). */
+export const customerLabel = (c: { customer_code: string | null }) => c.customer_code?.trim() || "—";
 
 export function useCustomers<T = Customers[]>(select?: (rows: Customers[]) => T, { fresh = false } = {}) {
   return useQuery({ queryKey: LOOKUP_KEY.customers, ...freshness(fresh), queryFn: () => getArray<Customers>("/api/customers"), select });

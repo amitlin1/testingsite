@@ -57,7 +57,7 @@ export default function ItemTable() {
   const statusOpts = React.useMemo(() => statuses.map((s) => ({ value: String(s.id), label: s.label })), [statuses]);
   const typeOpts = React.useMemo(() => itemTypes.map((t) => ({ value: String(t.item_type_id), label: t.item_type_desc })), [itemTypes]);
   const shipOpts = React.useMemo(
-    () => shipments.map((s) => ({ value: String(s.id), label: `${s.shipment_code} · ${s.customer_name}` })),
+    () => shipments.map((s) => ({ value: String(s.id), label: `${s.shipment_code}${s.customer_code ? ` · ${s.customer_code.trim()}` : ""}` })),
     [shipments]
   );
 

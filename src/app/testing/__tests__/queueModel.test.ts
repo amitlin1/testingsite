@@ -20,6 +20,12 @@ const row = (id: number, over: Partial<QueueRow> = {}): QueueRow => ({
 const NO_FILTER = { q: "", customer: "", shipment: "", itype: "" };
 const ids = (rows: QueueRow[]) => rows.map((r) => r.item_id);
 
+test("a customer is found by its code, never by its name (the name is on the customers page only)", () => {
+  const items = [row(1, { customer_code: "410", customer_name: "מפעלי רדאר" })];
+  assert.deepEqual(ids(filterQueue(items, { ...NO_FILTER, q: "410" })), [1]);
+  assert.deepEqual(ids(filterQueue(items, { ...NO_FILTER, q: "רדאר" })), []);
+});
+
 test("the search matches the row's own ids and texts; a sourced label by its id part", () => {
   const items = [row(1111, { makat: "ABC-1" }), row(2222, { serial_no: "XY77" }), row(3333)];
   assert.deepEqual(ids(filterQueue(items, { ...NO_FILTER, q: "abc" })), [1111]);

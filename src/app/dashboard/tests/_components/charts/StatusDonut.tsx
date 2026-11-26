@@ -67,8 +67,8 @@ export default function StatusDonut({
               stroke={SEGMENT_SEPARATOR}
               strokeWidth={1}
             >
-              {data.map((slice, index) => (
-                <Cell key={slice.stateKey} fill={stateColor(slice.stateKey, index)} />
+              {data.map((slice) => (
+                <Cell key={slice.stateKey} fill={stateColor(slice.stateKey)} />
               ))}
             </Pie>
             <Tooltip

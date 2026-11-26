@@ -180,7 +180,8 @@ export interface SlowItemWire {
   _new_workerName: string | null;
   /** The owner at the time of the step, never the item's current owner. */
   _new_customerId: number | null;
-  _new_customerName: string | null;
+  /** The customer's CODE — the system never shows a customer's name outside the customers page. */
+  _new_customerCode: string | null;
   _new_queueWorkMinutes: number | null;
   _new_processingWorkMinutes: number | null;
   _new_totalWorkMinutes: number | null;

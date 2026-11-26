@@ -41,6 +41,12 @@ export function ClockInfoProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The screen's panel opener, or null outside a ClockInfoProvider (the
+ *  dashboard's card explanations link to it — dashboard/tests/_components/CardInfo). */
+export function useClockInfoOpen(): ((metric: ClockMetricKey) => void) | null {
+  return React.useContext(ClockInfoContext)?.open ?? null;
+}
+
 /** Opens the panel on `metric`; outside a provider it brings its own panel. */
 function useOpener(metric: ClockMetricKey) {
   const ctx = React.useContext(ClockInfoContext);

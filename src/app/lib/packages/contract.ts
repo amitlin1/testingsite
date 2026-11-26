@@ -136,13 +136,14 @@ export function itemMatches(it: Pick<PackageItemView, "item_id" | "serial_no" | 
   return it.item_id.includes(k) || hasText(it.serial_no, k) || hasText(it.makat, k);
 }
 
-/** A box answers a search by its own id, type, makat, shipment code or customer name. */
+/** A box answers a search by its own id, type, makat, shipment code or customer
+ *  CODE — never the name, which only the customers page shows. */
 export function packageOwnMatches(
-  v: Pick<PackageView, "item_id" | "item_type_desc" | "makat" | "shipment_code" | "customer_name">,
+  v: Pick<PackageView, "item_id" | "item_type_desc" | "makat" | "shipment_code" | "customer_code">,
   q: string,
 ): boolean {
   const k = searchKey(q);
-  return v.item_id.includes(k) || hasText(v.item_type_desc, k) || hasText(v.makat, k) || hasText(v.shipment_code, k) || hasText(v.customer_name, k);
+  return v.item_id.includes(k) || hasText(v.item_type_desc, k) || hasText(v.makat, k) || hasText(v.shipment_code, k) || hasText(v.customer_code, k);
 }
 
 /** A box answers a search by its own fields or one of its items'. */

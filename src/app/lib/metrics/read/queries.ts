@@ -900,7 +900,7 @@ export interface SlowStepRow {
    *  items.customer_id, which is the item's CURRENT owner and can disagree with
    *  the customer filter this very query was narrowed by. */
   customer_id: number | null;
-  customer_name: string | null;
+  customer_code: string | null;
   step_no: number;
   attempt_no: number;
   entry_reason: string;
@@ -941,7 +941,9 @@ WITH cand AS (
   LIMIT 500
 )
 SELECT c.item_id, c.serial_no, it.makat, TRIM(it.model) AS model,
-       c.customer_id, TRIM(cu.name) AS customer_name,
+       -- The customer CODE, never the name: inside the system a customer is
+       -- known by its code only (the name is on the customers page alone).
+       c.customer_id, TRIM(cu.customer_code) AS customer_code,
        c.step_no, c.attempt_no, c.entry_reason,
        TRIM(st.test_station_desc) AS station_name,
        -- worker_id as well as worker_name: §5.10 lists slow_item_worker_id as a
@@ -981,7 +983,7 @@ export async function slowSteps(
     makat: str(r.makat),
     model: str(r.model),
     customer_id: num(r.customer_id),
-    customer_name: str(r.customer_name),
+    customer_code: str(r.customer_code),
     step_no: cnt(r.step_no),
     attempt_no: cnt(r.attempt_no),
     entry_reason: String(r.entry_reason),

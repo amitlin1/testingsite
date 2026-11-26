@@ -97,7 +97,7 @@ test("decisionsOf: the closing step's decisions; anything else reads as none", (
 });
 
 const view = (o: Partial<PackageView>): PackageView => ({
-  item_id: "323011126000100", item_type_desc: "ערכה", makat: "MK-1", shipment_code: "SH-1", customer_name: "לקוח",
+  item_id: "323011126000100", item_type_desc: "ערכה", makat: "MK-1", shipment_code: "SH-1", customer_code: "410", customer_name: "לקוח",
   current_route_step: 1, is_finished: false, status: "queue", blocked_by: [], items: [], ...o,
 } as PackageView);
 
@@ -107,6 +107,9 @@ test("packageMatches: the box's own fields or an item's id, serial or makat, cas
   assert.ok(packageMatches(v, " ab-12 "));
   assert.ok(packageMatches(v, "000101"));
   assert.ok(!packageMatches(v, "zzz"));
+  // The customer by its code only — its name is on the customers page alone.
+  assert.ok(packageMatches(v, "410"));
+  assert.ok(!packageMatches(v, "לקוח"));
 });
 
 test("isAtOpening / waitsForItems / isPackageStatusKey", () => {

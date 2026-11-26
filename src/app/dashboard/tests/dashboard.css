@@ -34,6 +34,24 @@
   /* The neutral step. Was #dcdce2 (1.37:1 on white — the research band all but
      vanished on a white card); this clears the 3:1 a graphic needs. */
   --dash-ramp-5: #949499;
+
+  /* ONE HUE PER STATE (2026-11-26: five shades of one blue could not be told
+     apart). Each clears 3:1 on white, and every chart, legend and bar of the
+     board reads them from here (charts/palette.ts) — a state is the same
+     colour wherever it is drawn. Durations reuse the pair: waiting is the
+     queue's amber, processing the testing blue. */
+  --dash-state-testing: var(--color-primary);          /* בבדיקה      #0066cc */
+  --dash-state-queued: var(--color-status-late);       /* בתור        #d97706 */
+  --dash-state-waiting-items: #7c3aed;                 /* ממתין לפריטי המארז */
+  --dash-state-queued-research: #0d9488;               /* בתור למחקר */
+  --dash-state-in-research: #db2777;                   /* במחקר */
+  --dash-state-unmapped: #8e8e93;                      /* סטטוס לא מוכר */
+  --dash-series-finished: var(--color-status-approved); /* סיימו מסלול #1f8a5b */
+  /* The net (נטו) twin of a duration bar: the same hue, lighter — on white
+     this is exactly what a 45% fill of the hue looks like. */
+  --dash-wait-net: color-mix(in srgb, var(--dash-state-queued) 45%, white);
+  --dash-processing-net: color-mix(in srgb, var(--dash-state-testing) 45%, white);
+
   --dash-tint: var(--color-primary-soft);
   --dash-amber-ink: var(--color-warning-ink);   /* was #a86a1a: 4.04:1 on its tint */
   /* Amber as a FILL on a white card (the unmapped-status slice / band). */
@@ -618,3 +636,47 @@
     min-height: 44px;
   }
 }
+
+/* ---- "מה רואים כאן" popover (CardInfo) --------------------------------
+   Portaled to <body>, outside .dash-root, so it reads only app tokens. A
+   floating panel takes the product's floating shadow (--shadow-pop). */
+.dash-info-pop {
+  box-sizing: border-box;
+  width: 320px;
+  max-width: calc(100vw - 16px);
+  padding: 12px 14px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
+  font-family: var(--font-text);
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--color-ink);
+  text-align: start;
+}
+.dash-info-pop:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; }
+.dash-info-pop__title { font-size: var(--text-body-sm); font-weight: 700; margin-bottom: 4px; }
+.dash-info-pop__text { margin: 0; }
+.dash-info-pop__points {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+  color: var(--color-ink-muted-48);
+}
+.dash-info-pop__points li + li { margin-top: 2px; }
+.dash-info-pop__clocks {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-hairline);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.dash-info-pop__clocks p { margin: 0; }
+.dash-info-pop__clocks .dash-link { margin-top: 6px; }
+
+/* The rail's "עמוד ראשי" entry is a link (to /dashboard), styled as its tabs. */
+a.dash-nav-item,
+a.dash-icon-btn,
+a.dash-pill { text-decoration: none; }

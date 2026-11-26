@@ -15,15 +15,16 @@
 // intrinsic aspect ratio as its minimum and pushes the page into a scroll.
 
 import * as React from "react";
+import Link from "next/link";
 
 import { useMediaQuery } from "@/components/ui";
 import { FilterList } from "@/components/ui/icons";
 import { AmberNotice, CappedPeriodNotice } from "./_components/AmberNotice";
 import DashboardHeader from "./_components/DashboardHeader";
-import DashboardSidebar, { NAV_ITEMS } from "./_components/DashboardSidebar";
+import DashboardSidebar, { MAIN_PAGE, NAV_ITEMS } from "./_components/DashboardSidebar";
 import HistoryOverlay, { type HistoryTarget } from "./_components/HistoryOverlay";
 import TopStatsBar from "./_components/TopStatsBar";
-import { STUCK_HOURS, formatClock, formatLongDate } from "./_lib/format";
+import { STUCK_HOURS, formatLongDate } from "./_lib/format"; // + formatClock for the status tab
 import { EMPTY_FILTERS, activeChips, type FilterKey } from "./_lib/filters";
 import type { DashboardState, TabKey } from "./_lib/state";
 import { rangeIsComplete, useDashboardData } from "./_lib/useDashboardData";
@@ -32,24 +33,25 @@ import { useDashboardState } from "./_lib/useDashboardState";
 
 import CustomersTab from "./tabs/CustomersTab";
 import ItemTypesTab from "./tabs/ItemTypesTab";
-import KpisTab from "./tabs/KpisTab";
+// import KpisTab from "./tabs/KpisTab"; // kpis tab — hidden on request
 import OverviewTab from "./tabs/OverviewTab";
 import ShipmentsTab from "./tabs/ShipmentsTab";
 import SlowItemsTab, { passesThreshold } from "./tabs/SlowItemsTab";
 import StationsTab from "./tabs/StationsTab";
-import StatusTab from "./tabs/StatusTab";
+// import StatusTab from "./tabs/StatusTab"; // status tab — hidden on request
 import TimesTab from "./tabs/TimesTab";
 import { ClockInfoProvider } from "@/app/components/ClockInfo/ClockInfo";
+import { customerLabel } from "@/app/components/lookups";
 import "./dashboard.css";
 
 const TAB_COMPONENTS: Record<TabKey, React.ComponentType<React.ComponentProps<typeof OverviewTab>>> = {
+  // kpis: KpisTab, // kpis tab
   overview: OverviewTab,
-  kpis: KpisTab,
   stations: StationsTab,
   slow: SlowItemsTab,
   shipments: ShipmentsTab,
   times: TimesTab,
-  status: StatusTab,
+  // status: StatusTab, // status tab
   customers: CustomersTab,
   types: ItemTypesTab,
 };
@@ -96,17 +98,17 @@ export default function DashboardShell({ initial }: { initial?: Partial<Dashboar
     [slow.data],
   );
 
-  const chips = React.useMemo(
-    () =>
-      activeChips(api.state.filters, {
-        customer: options.customers.find((c) => c.id === api.state.filters.customerId)?.name,
-        shipment: options.shipments.find((s) => s.id === api.state.filters.shipmentId)?.shipment_code,
-        itemType: options.itemTypes.find((t) => t.id === api.state.filters.itemTypeId)?.name,
-        station: options.stations.find((s) => s.id === api.state.filters.testStationId)?.name,
-        stationType: options.stationTypes.find((s) => s.id === api.state.filters.testStationTypeId)?.name,
-      }),
-    [api.state.filters, options],
-  );
+  const chips = React.useMemo(() => {
+    const customer = options.customers.find((c) => c.id === api.state.filters.customerId);
+    return activeChips(api.state.filters, {
+      // A customer is named by its code (lookups.customerLabel).
+      customer: customer ? customerLabel(customer) : undefined,
+      shipment: options.shipments.find((s) => s.id === api.state.filters.shipmentId)?.shipment_code,
+      itemType: options.itemTypes.find((t) => t.id === api.state.filters.itemTypeId)?.name,
+      station: options.stations.find((s) => s.id === api.state.filters.testStationId)?.name,
+      stationType: options.stationTypes.find((s) => s.id === api.state.filters.testStationTypeId)?.name,
+    });
+  }, [api.state.filters, options]);
 
   const meta = tabMeta(api.state, {
     stations: stations.data?.length ?? null,
@@ -250,8 +252,9 @@ interface MetaCounts {
 
 function tabMeta(state: DashboardState, counts: MetaCounts): { title: string; subtitle: string } {
   switch (state.tab) {
-    case "kpis":
-      return { title: "מדדי ביצוע", subtitle: "מגמה מול התקופה הקודמת" };
+    // kpis tab — hidden on request (2026-11-26); its header was:
+    // case "kpis":
+    //   return { title: "מדדי ביצוע", subtitle: "מגמה מול התקופה הקודמת" };
     case "stations":
       return {
         title: "עומס עמדות",
@@ -275,16 +278,17 @@ function tabMeta(state: DashboardState, counts: MetaCounts): { title: string; su
       };
     case "times":
       return { title: "זמנים ממוצעים", subtitle: "המתנה מול ביצוע" };
-    case "status":
-      return {
-        title: "התפלגות סטטוסים",
-        subtitle:
-          counts.activeItems === null
-            ? "פריטים פעילים"
-            : `${counts.activeItems} פריטים פעילים${
-                counts.asOf ? ` · נכון ל-${formatClock(counts.asOf)}` : ""
-              }`,
-      };
+    // status tab — hidden on request (2026-11-26); its header was:
+    // case "status":
+    //   return {
+    //     title: "התפלגות סטטוסים",
+    //     subtitle:
+    //       counts.activeItems === null
+    //         ? "פריטים פעילים"
+    //         : `${counts.activeItems} פריטים פעילים${
+    //             counts.asOf ? ` · נכון ל-${formatClock(counts.asOf)}` : ""
+    //           }`,
+    //   };
     case "customers":
       return {
         title: "ביצועים לפי לקוח",
@@ -344,6 +348,12 @@ function MobileNav({
         className="dash-scroll"
         style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, overflowX: "auto", overflowY: "hidden", paddingBottom: 2 }}
       >
+        <Link href={MAIN_PAGE.href} className="dash-pill dash-tap">
+          <span className="dash-icon">
+            <MAIN_PAGE.Icon fontSize={14} aria-hidden />
+          </span>
+          {MAIN_PAGE.label}
+        </Link>
         {NAV_ITEMS.map((item) => {
           const active = item.key === tab;
           return (

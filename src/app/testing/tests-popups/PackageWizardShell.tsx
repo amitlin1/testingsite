@@ -69,7 +69,7 @@ export default function PackageWizardShell({
           <div className="pkg-wiz-sub" style={{ background: "var(--color-canvas)", border: `1px solid ${HAIR}`, borderRadius: 12, padding: "12px 13px", marginTop: 14 }}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: MUTED }}>{pkg.item_type_desc}</div>
             <div style={{ marginTop: 4 }}><IdText id={pkg.item_id} size={15} headColor={INK} /></div>
-            <div style={{ fontSize: 12, color: MUTED, marginTop: 5 }}>{pkg.customer_name ?? pkg.customer_code ?? ""} · משלוח {pkg.shipment_code ?? "—"} · {pkg.items.length} פריטים</div>
+            <div style={{ fontSize: 12, color: MUTED, marginTop: 5 }}>{pkg.customer_code ?? ""} · משלוח {pkg.shipment_code ?? "—"} · {pkg.items.length} פריטים</div>
           </div>
 
           {itemStepper && (

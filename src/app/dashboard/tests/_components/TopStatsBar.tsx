@@ -24,7 +24,8 @@ import { Skeleton } from "@/components/ui";
 import { ArrowForward } from "@/components/ui/icons";
 import { boardSummary, type KpisView, type StationView } from "@/app/lib/dashboard/contract";
 import { STUCK_HOURS, formatCount, formatMinutes, isNil, workTwin } from "../_lib/format";
-import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import CardInfo from "./CardInfo";
+import { EXPLAIN, type Explain } from "../_lib/explain";
 
 export interface TopStatsBarProps {
   kpis: KpisView | null;
@@ -37,8 +38,8 @@ export interface TopStatsBarProps {
 
 interface Cell {
   label: string;
-  /** A duration cell opens the ברוטו / נטו panel. */
-  info?: boolean;
+  /** The ⓘ: what the cell counts (and, on the duration, ברוטו / נטו). */
+  explain: Explain;
   value: React.ReactNode;
   note: React.ReactNode;
 }
@@ -57,11 +58,13 @@ export default function TopStatsBar({
   const cells: Cell[] = [
     {
       label: "בבדיקה עכשיו",
+      explain: EXPLAIN.stripInTest,
       value: formatCount(kpis?.itemsCurrentlyInTest),
       note: isNil(activeStations) ? "" : `${formatCount(activeStations)} עמדות`,
     },
     {
       label: "ממתינים",
+      explain: EXPLAIN.stripQueue,
       value: formatCount(kpis?.itemsCurrentlyInQueue),
       // `מזה`, not `ועוד`: itemsCurrentlyInQueue already counts `queued` AND
       // `queued_research`, so the pool is a breakdown of the number above it.
@@ -69,17 +72,19 @@ export default function TopStatsBar({
     },
     {
       label: "המתנה · ברוטו",
+      explain: EXPLAIN.stripWait,
       value: formatMinutes(kpis?.averageQueueTimeMinutes),
       note: workTwin(kpis?.averageQueueTimeMinutes, kpis?.averageQueueWorkMinutes) ?? "",
-      info: true,
     },
     {
       label: "מסלולים שנסגרו",
+      explain: EXPLAIN.stripClosed,
       value: formatCount(kpis?.totalItemsProcessed),
       note: isNil(kpis?.unitsTouched) ? "" : `${formatCount(kpis?.unitsTouched)} יחידות טופלו`,
     },
     {
       label: `תקועים ${STUCK_HOURS} ש׳+`,
+      explain: EXPLAIN.stripStuck,
       value: formatCount(stuckCount),
       note: (
         <button type="button" onClick={onShowStuck} className="dash-link dash-link--on-dark">
@@ -109,11 +114,9 @@ export default function TopStatsBar({
         >
           <div style={{ fontSize: "var(--text-fine)", color: "var(--color-body-muted)", fontWeight: 600 }}>
             {cell.label}
-            {cell.info && (
-              <span className="clock-info-icon--on-dark">
-                <ClockInfoIcon metric="wait" />
-              </span>
-            )}
+            <span className="clock-info-icon--on-dark">
+              <CardInfo explain={cell.explain} />
+            </span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 2 }}>
             <span

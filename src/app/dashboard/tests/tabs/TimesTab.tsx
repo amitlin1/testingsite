@@ -22,13 +22,19 @@ import DataCard, { Legend } from "../_components/DataCard";
 import DenseTable, { type Column } from "../_components/DenseTable";
 import EmptyChart from "../_components/EmptyChart";
 import Segmented from "../_components/Segmented";
-import { ChartBody } from "../_components/charts/chartConfig";
-import TimesLineChart, { TIMES_LEGEND } from "../_components/charts/TimesLineChart";
+import { ChartBody, bucketTick } from "../_components/charts/chartConfig";
+import DurationChart, {
+  DURATION_CHART_MODES,
+  averageTimesRows,
+  durationLegend,
+  type DurationChartMode,
+} from "../_components/charts/DurationChart";
 import type { StationView } from "@/app/lib/dashboard/contract";
 import { formatCount, formatMinutes, isNil, toneText, waitAverageTone } from "../_lib/format";
 import { AVERAGE_TIMES_PERIODS, type AverageTimesPeriod } from "../_lib/state";
 import type { TabProps } from "./tabTypes";
-import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import CardInfo from "../_components/CardInfo";
+import { EXPLAIN } from "../_lib/explain";
 
 const PERIOD_LABEL: Record<AverageTimesPeriod, string> = {
   daily: "יומי",
@@ -41,6 +47,9 @@ const CLOCK_NOTE = "שעון ברוטו = מה שהלקוח חווה · שעון
 export default function TimesTab({ api, data }: TabProps) {
   const times = data.get("times");
   const stations = data.get("stationsLive");
+  // Bars by default (2026-11-26); the switch beside the legend draws lines.
+  const [mode, setMode] = React.useState<DurationChartMode>("bar");
+  const timeRows = React.useMemo(() => averageTimesRows(times.data ?? []), [times.data]);
 
   const columns: Array<Column<StationView>> = [
     {
@@ -130,10 +139,18 @@ export default function TimesTab({ api, data }: TabProps) {
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
       <DataCard
         chart
-        title={<>זמן המתנה מול זמן ביצוע<ClockInfoIcon metric="wait" /></>}
+        title={<>זמן המתנה מול זמן ביצוע<CardInfo explain={EXPLAIN.timesChart} /></>}
+        subtitle="ממוצע בשעות"
         right={
           <>
-            <Legend items={TIMES_LEGEND} />
+            <Legend items={durationLegend(mode)} />
+            <Segmented
+              options={DURATION_CHART_MODES}
+              value={mode}
+              onChange={(value) => setMode(value === "line" ? "line" : "bar")}
+              padding="4px 12px"
+              ariaLabel="סוג הגרף"
+            />
             <Segmented
               options={AVERAGE_TIMES_PERIODS.map((period) => ({ value: period, label: PERIOD_LABEL[period] }))}
               value={api.state.period}
@@ -152,7 +169,11 @@ export default function TimesTab({ api, data }: TabProps) {
       >
         <ChartBody style={{ marginTop: 10 }}>
           {times.data && times.data.length > 0 ? (
-            <TimesLineChart data={times.data} granularity={api.state.period} />
+            <DurationChart
+              rows={timeRows}
+              mode={mode}
+              tick={(bucket) => bucketTick(bucket, api.state.period)}
+            />
           ) : (
             <EmptyChart
               loading={times.loading || (times.data === null && !times.error)}
@@ -164,7 +185,7 @@ export default function TimesTab({ api, data }: TabProps) {
 
       <DataCard
         panel
-        title={<>פירוט לפי עמדה · ממוצע בתקופה<ClockInfoIcon metric="offhours" /></>}
+        title={<>פירוט לפי עמדה · ממוצע בתקופה<CardInfo explain={EXPLAIN.timesTable} /></>}
         right={
           <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
             {CLOCK_NOTE} · דלי נוצר רק אם נסגר בו משהו

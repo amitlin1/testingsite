@@ -39,7 +39,8 @@ import {
 } from "../_lib/format";
 import { STUCK_HOURS_OPTIONS, type StuckHours } from "../_lib/state";
 import type { TabProps } from "./tabTypes";
-import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import CardInfo from "../_components/CardInfo";
+import { EXPLAIN } from "../_lib/explain";
 import { CLOCK_TEXT } from "@/app/lib/dashboard/work-clock";
 
 const THRESHOLDS: Array<{ value: string; label: string; hours: StuckHours }> = [
@@ -94,11 +95,11 @@ export default function SlowItemsTab({ api, data }: TabProps) {
     },
     {
       key: "customer",
-      header: "לקוח",
-      sortValue: (r) => r.customerName ?? "",
+      header: "קוד לקוח",
+      sortValue: (r) => r.customerCode ?? "",
       render: (r) => (
         <span style={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)" }}>
-          {r.customerName ?? EM_DASH}
+          {r.customerCode || EM_DASH}
         </span>
       ),
     },
@@ -183,7 +184,7 @@ export default function SlowItemsTab({ api, data }: TabProps) {
   return (
     <DataCard
       panel
-      title={<>פריטים שנתקעו<ClockInfoIcon metric="slowStep" /></>}
+      title={<>פריטים שנתקעו<CardInfo explain={EXPLAIN.slow} /></>}
       subtitle="מסודר לפי שעון העבודה — מה המעבדה באמת בילתה בו"
       right={
         <>

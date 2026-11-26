@@ -80,7 +80,7 @@ export default function StatusTrendChart({ data }: { data: StatusHistoryView[] }
             dataKey={state.key}
             name={state.label}
             stackId="s"
-            fill={stateColor(state.key, index)}
+            fill={stateColor(state.key)}
             // A 1px canvas line between stacked segments, so neighbouring ramp
             // steps never merge into one block.
             stroke={SEGMENT_SEPARATOR}

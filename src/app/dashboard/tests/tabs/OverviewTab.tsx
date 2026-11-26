@@ -5,10 +5,12 @@
 //
 // Top to bottom: the job-health strip (§16.5.1 — on an isolated LAN this
 // dashboard is the only alerting path, so the verdict is pinned above
-// everything else), the live station board, then a fixed 230px row of three
-// small widgets.
+// everything else), the live station board, then a fixed 230px row of two
+// small widgets (the 14-day average-times chart was removed on 2026-11-26 —
+// the זמנים ממוצעים tab is where times are read).
 //
-// `משלוחים בסיכון` ranks by completion ASCENDING, and a shipment whose
+// `משלוחים בסיכון` ranks by completion ASCENDING — a shipment has no due date,
+// so "at risk" means "least advanced", and the card's ⓘ says so — and a shipment whose
 // completion is `null` is NOT at the top of that list: null means nothing was
 // routed yet, which is an absence of work rather than a failure of it. Those
 // rows sort last.
@@ -24,12 +26,9 @@ import { Skeleton } from "@/components/ui";
 import { ArrowForward } from "@/components/ui/icons";
 import DataCard, { IgnoredFiltersPill, Legend } from "../_components/DataCard";
 import DenseTable from "../_components/DenseTable";
-import EmptyChart from "../_components/EmptyChart";
 import JobHealthStrip from "../_components/JobHealthStrip";
 import { FillBar } from "../_components/LoadBar";
 import StatusDonut from "../_components/charts/StatusDonut";
-import TimesLineChart, { TIMES_LEGEND } from "../_components/charts/TimesLineChart";
-import { ChartBody } from "../_components/charts/chartConfig";
 import { STATE_COLOR, stateColor } from "../_components/charts/palette";
 import {
   completionTone,
@@ -42,13 +41,13 @@ import {
 } from "../_lib/format";
 import { SHARED_QUEUE_NOTE, stationColumns, stationHistoryTarget, stationsEmpty } from "./stationColumns";
 import type { TabProps } from "./tabTypes";
-import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import CardInfo from "../_components/CardInfo";
+import { EXPLAIN } from "../_lib/explain";
 
 export default function OverviewTab({ api, data, openHistory }: TabProps) {
   const stations = data.get("stationsLive");
   const status = data.get("status");
   const shipments = data.get("shipments");
-  const times = data.get("timesShort");
   const jobs = data.get("jobs");
 
   const ignored = describeIgnoredFilters(stations.meta.ignoredFilters);
@@ -86,7 +85,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
 
       <DataCard
         panel
-        title={<>עומס לפי עמדה · עכשיו<ClockInfoIcon metric="queueAge" /></>}
+        title={<>עומס לפי עמדה · עכשיו<CardInfo explain={EXPLAIN.stationLoad} /></>}
         right={
           <>
             <Legend
@@ -117,27 +116,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
       <div className="dash-bottom" style={{ height: 230, flexShrink: 0, display: "flex", gap: 10 }}>
         <DataCard
           chart
-          title={<>זמנים ממוצעים · 14 ימים<ClockInfoIcon metric="wait" /></>}
-          right={<Legend items={TIMES_LEGEND} />}
-          error={times.error}
-          onRetry={data.refresh}
-          style={{ flex: 1, minWidth: 0 }}
-        >
-          <ChartBody style={{ marginTop: 8 }}>
-            {times.data && times.data.length > 0 ? (
-              <TimesLineChart data={times.data} granularity="daily" />
-            ) : (
-              <EmptyChart
-                loading={times.loading || (times.data === null && !times.error)}
-                failed={times.data === null && !!times.error}
-              />
-            )}
-          </ChartBody>
-        </DataCard>
-
-        <DataCard
-          chart
-          title="התפלגות סטטוסים"
+          title={<>התפלגות סטטוסים<CardInfo explain={EXPLAIN.statusDonut} /></>}
           right={
             asOf ? (
               <span style={{ fontSize: "var(--text-micro)", color: "var(--color-ink-muted-48)" }}>
@@ -147,7 +126,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
           }
           error={status.error}
           onRetry={data.refresh}
-          style={{ width: 230, flexShrink: 0, padding: "12px 14px" }}
+          style={{ width: 280, flexShrink: 0, padding: "12px 14px" }}
         >
           <div
             style={{
@@ -171,7 +150,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
             <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 5 }}>
               {statusPending &&
                 [0, 1, 2].map((i) => <Skeleton key={i} variant="text" height={12} width="100%" />)}
-              {slices.map((slice, index) => (
+              {slices.map((slice) => (
                 <div
                   key={slice.stateKey}
                   style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "var(--text-fine)" }}
@@ -182,7 +161,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
                       width: 8,
                       height: 8,
                       borderRadius: 2,
-                      background: stateColor(slice.stateKey, index),
+                      background: stateColor(slice.stateKey),
                       flexShrink: 0,
                     }}
                   />
@@ -198,7 +177,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
 
         <DataCard
           chart
-          title="משלוחים בסיכון"
+          title={<>משלוחים בסיכון<CardInfo explain={EXPLAIN.atRisk} /></>}
           right={
             <button type="button" onClick={() => api.setTab("shipments")} className="dash-link">
               הכל
@@ -207,7 +186,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
           }
           error={shipments.error}
           onRetry={data.refresh}
-          style={{ width: 250, flexShrink: 0, padding: "12px 14px" }}
+          style={{ flex: 1, minWidth: 0, padding: "12px 14px" }}
         >
           <div
             style={{
@@ -244,7 +223,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
                       kind: "shipment",
                       id: shipment.shipmentId,
                       title: shipment.shipmentCode,
-                      meta: shipment.customerName,
+                      meta: shipment.customerCode,
                     })
                   }
                 >
@@ -258,7 +237,7 @@ export default function OverviewTab({ api, data, openHistory }: TabProps) {
                     }}
                   >
                     <span style={{ fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {shipment.shipmentCode} · {shipment.customerName}
+                      {shipment.shipmentCode} · {shipment.customerCode}
                     </span>
                     <span style={{ color: toneText(tone), fontWeight: 600, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                       {formatPercent(shipment.completionPercentage)}

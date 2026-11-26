@@ -81,7 +81,8 @@ export type NewShipment = {
   poc_details?: string | null;
 };
 
-export type Customers = { id: number; name: string; customer_code: string };
+/** /api/customers: a customer as the system knows it — by code. The name is on the customers page only. */
+export type Customers = { id: number; customer_code: string };
 
 /** shipments.shipment_code is VARCHAR(20). */
 export const SHIPMENT_CODE_MAX = 20;

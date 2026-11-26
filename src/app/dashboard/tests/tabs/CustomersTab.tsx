@@ -13,6 +13,10 @@
 // filtered out here. A customer with nothing routed reads as an em dash in both
 // ratios — "0%" would be a claim about work never asked for.
 //
+// THE CUSTOMER IS ITS CODE (2026-11-26): the table shows `customer_code` only —
+// the name column repeated the same customer twice under two labels. The
+// history dialog opened from a row is titled by the code too.
+//
 // The date picker filters the `window*` fields only: the Q7 half (routed,
 // finished, live counts) is a state query with no window by design, which is
 // why the trend column compares the WINDOW's steps and not the standing totals.
@@ -35,7 +39,8 @@ import {
   workTwin,
 } from "../_lib/format";
 import type { TabProps } from "./tabTypes";
-import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import CardInfo from "../_components/CardInfo";
+import { EXPLAIN } from "../_lib/explain";
 
 export default function CustomersTab({ api, data, openHistory }: TabProps) {
   const customers = data.get("customers");
@@ -48,26 +53,11 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
 
   const columns: Array<Column<CustomerView>> = [
     {
-      key: "name",
-      header: "לקוח",
-      sortValue: (r) => r.customerName,
-      render: (r) => <span style={{ fontWeight: 600 }}>{r.customerName}</span>,
-    },
-    {
       key: "code",
-      header: "קוד",
-      secondary: true,
+      header: "קוד לקוח",
       sortValue: (r) => r.customerCode,
       render: (r) => (
-        <span
-          style={{
-            fontSize: "var(--text-small)",
-            color: "var(--color-ink-muted-48)",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {r.customerCode}
-        </span>
+        <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{r.customerCode || EM_DASH}</span>
       ),
     },
     {
@@ -134,7 +124,7 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
   return (
     <DataCard
       panel
-      title={<>ביצועים לפי לקוח<ClockInfoIcon metric="routeTurnaround" /></>}
+      title={<>ביצועים לפי לקוח<CardInfo explain={EXPLAIN.customers} /></>}
       right={
         <>
           <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
@@ -157,8 +147,7 @@ export default function CustomersTab({ api, data, openHistory }: TabProps) {
           openHistory({
             kind: "customer",
             id: row.customerId,
-            title: row.customerName,
-            meta: row.customerCode,
+            title: row.customerCode || EM_DASH,
           })
         }
         empty={{

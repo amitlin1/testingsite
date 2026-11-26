@@ -86,7 +86,7 @@ export default function PackagesBoard() {
   const all = React.useMemo(() => packages.data ?? [], [packages.data]);
   const shipmentList = React.useMemo(() => shipments.data ?? [], [shipments.data]);
   const shipmentOptions = React.useMemo<Option[]>(
-    () => shipmentList.map((s) => ({ value: String(s.id), label: `${s.shipment_code}${s.customer_name ? ` · ${s.customer_name}` : ""}${s.is_sent ? " · יצא" : ""}` })),
+    () => shipmentList.map((s) => ({ value: String(s.id), label: `${s.shipment_code}${s.customer_code ? ` · ${s.customer_code.trim()}` : ""}${s.is_sent ? " · יצא" : ""}` })),
     [shipmentList],
   );
   const selectedShipment = shipmentList.find((s) => String(s.id) === url.shipment) ?? null;

@@ -42,7 +42,7 @@ function blocks(prefix: string) {
           { label: "מק\"ט", value: v("item.makat") },
           { label: "דגם", value: v("item.model") },
           { label: "יצרן", value: v("item.manufacturer_name") },
-          { label: "לקוח", value: v("item.customer") },
+          { label: "קוד לקוח", value: v("item.customer") },
           { label: "מספר משלוח", value: v("item.shipment_code") },
           { label: "תאריך קליטה", value: v("item.created_at") },
           { label: "תאריך סיום הבדיקות", value: v("item.finished_at") },

@@ -46,6 +46,13 @@ test("every field survives a round trip through the URL", () => {
   assert.deepEqual(stateFromParams(new URLSearchParams(url), false), state);
 });
 
+test("the hidden tabs (מדדים, התפלגות סטטוסים) are not tabs: their links open the default tab", () => {
+  assert.equal(stateFromParams(new URLSearchParams("tab=status"), true).tab, "overview");
+  assert.equal(stateFromParams(new URLSearchParams("tab=kpis"), true).tab, "overview");
+  assert.equal(stateFromParams(new URLSearchParams("tab=shipments"), true).tab, "shipments");
+  assert.equal(paramsFromState({ ...DEFAULT_STATE, tab: "shipments" }).toString(), "tab=shipments");
+});
+
 test("'show every stuck item' is written as stuck=all", () => {
   const state: DashboardState = { ...DEFAULT_STATE, stuckHours: null };
   assert.equal(paramsFromState(state).toString(), "stuck=all");

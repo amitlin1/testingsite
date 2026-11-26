@@ -141,7 +141,7 @@ export default function PackageEditDialog({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 }}>
             <Field label="סוג מארז" value={pkg.item_type_desc} locked hint="נקבע בקליטה" weight={600} />
             <Field label="מסלול המארז" value={`מסלול ${pkg.route_number ?? DEFAULT_ROUTE_NUMBER}`} locked hint="נקבע בקליטה" weight={600} />
-            <Field label="לקוח" value={pkg.customer_name ?? pkg.customer_code ?? ""} locked hint="נקבע במשלוח" weight={600} />
+            <Field label="לקוח" value={pkg.customer_code ?? ""} locked hint="נקבע במשלוח" weight={600} />
             <Field label="משלוח" value={pkg.shipment_code ?? String(pkg.shipment_id)} locked weight={600} />
             <Field label="מק״ט" value={makat} onChange={setMakat} code />
             <Field label="דגם" value={model} onChange={setModel} hint="אופציונלי" />

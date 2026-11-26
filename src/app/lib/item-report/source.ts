@@ -26,7 +26,11 @@ async function loadItem(itemId: bigint): Promise<ItemFacts | null> {
            TRIM(i.manufacturer_name) AS manufacturer_name, i.manufacturer_no,
            i.package_id, i.package_seq::int AS package_seq,
            ir.item_type_id, TRIM(t.item_type_desc) AS item_type,
-           TRIM(c.name) AS customer, s.shipment_code,
+           -- The customer's CODE, never its name: inside the system (reports
+           -- included) a customer is known by code; the name is on the
+           -- customers page alone. The variable keeps its key, item.customer,
+           -- so every saved template goes on working.
+           TRIM(c.customer_code) AS customer, s.shipment_code,
            TRIM(pt.item_type_desc) AS package_type,
            ir.route_number, ir.created_at, ir.finished_at,
            TRIM(st.item_status_desc) AS status

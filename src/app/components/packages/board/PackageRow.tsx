@@ -338,7 +338,7 @@ export default function PackageRow({ pkg, expanded, onToggle, hit, hitItems, ite
         </div>
         <div style={{ minWidth: 0 }}>
           <div className="pb-cell-main">{pkg.item_type_desc}</div>
-          <div className="pb-cell-sub">{pkg.customer_name ?? pkg.customer_code ?? "—"} · <bdi dir="ltr">{pkg.shipment_code ?? "—"}</bdi></div>
+          <div className="pb-cell-sub">{pkg.customer_code ?? "—"} · <bdi dir="ltr">{pkg.shipment_code ?? "—"}</bdi></div>
         </div>
         <div>
           <MiniItems width={12} height={12} items={pkg.items.map((it) => ({ color: ITEM_STATES[it.state].color, title: `${seq2(it.package_seq)} · ${it.item_type_desc} · ${it.state_label}` }))} />

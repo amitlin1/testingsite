@@ -28,7 +28,7 @@ export function OpeningBoxScan({ pkg, itemCount, value, onChange, lookup, onSubm
     <ScanField
       label={PACKAGE_POPUP_TEXT.boxScanLabel} placeholder={PACKAGE_POPUP_TEXT.boxScanPlaceholder}
       value={value} onChange={onChange} lookup={lookup} onSubmit={onSubmit}
-      found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${itemCount} פריטים · ${pkg.customer_name ?? pkg.customer_code ?? ""}`}
+      found={(ref) => `זוהה ${pkg.item_type_desc}${ref.name ? ` · ${ref.name}` : ""} · ${itemCount} פריטים · ${pkg.customer_code ?? ""}`}
       missing={`לא נמצא פריט ייחוס של ${pkg.item_type_desc} עם המק״ט הזה — בדוק שזו הקופסה הנכונה. אפשר להמשיך, צילום הקופסה יהיה ללא ייחוס`}
       prev={prev}
       suggestions={suggestions} suggestionsLabel={`מק״טים מיוחסים ל־${pkg.item_type_desc}`} />

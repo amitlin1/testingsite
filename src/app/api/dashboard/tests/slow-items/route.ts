@@ -38,7 +38,7 @@ export const GET = metricsRoute("window", "Failed to fetch slow items", async ({
         _new_entryReason: r.entry_reason,
         _new_workerName: r.worker_name,
         _new_customerId: r.customer_id,
-        _new_customerName: r.customer_name,
+        _new_customerCode: r.customer_code,
         _new_queueWorkMinutes: r.queue_work_min,
         _new_processingWorkMinutes: r.test_work_min,
         _new_totalWorkMinutes: r.total_work_min,

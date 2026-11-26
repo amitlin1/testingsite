@@ -66,7 +66,7 @@ export default function PackageQueueCard({ item, onBegin, starting, stepBackOf }
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>{pkg.item_type_desc}</div>
           <div style={{ marginTop: 4 }}><IdText id={pkg.item_id} size={19} headColor={INK} letterSpacing=".3px" /></div>
-          <div style={{ fontSize: 13, color: INK_2, marginTop: 6 }}>{pkg.customer_name ?? pkg.customer_code ?? "—"} · משלוח {pkg.shipment_code ?? "—"}</div>
+          <div style={{ fontSize: 13, color: INK_2, marginTop: 6 }}>{pkg.customer_code ?? "—"} · משלוח {pkg.shipment_code ?? "—"}</div>
         </div>
         <div style={{ textAlign: "center", flexShrink: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1, color: inTest ? BLUE : INK }}>{wait != null ? waitLabel(wait) : "—"}</div>

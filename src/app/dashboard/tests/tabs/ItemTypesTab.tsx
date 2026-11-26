@@ -32,7 +32,8 @@ import {
   workTwin,
 } from "../_lib/format";
 import type { TabProps } from "./tabTypes";
-import { ClockInfoIcon } from "@/app/components/ClockInfo/ClockInfo";
+import CardInfo from "../_components/CardInfo";
+import { EXPLAIN } from "../_lib/explain";
 
 export default function ItemTypesTab({ api, data, openHistory }: TabProps) {
   const types = data.get("types");
@@ -112,7 +113,7 @@ export default function ItemTypesTab({ api, data, openHistory }: TabProps) {
   return (
     <DataCard
       panel
-      title={<>ביצועים לפי סוג פריט<ClockInfoIcon metric="routeTurnaround" /></>}
+      title={<>ביצועים לפי סוג פריט<CardInfo explain={EXPLAIN.types} /></>}
       right={
         <>
           <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>

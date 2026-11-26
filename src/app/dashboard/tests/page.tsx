@@ -3,7 +3,7 @@
 // a URL that is a projection of the state.
 // `useSearchParams` inside it needs a Suspense boundary, and `force-dynamic`
 // keeps the deep-link (`?tab=slow&customerId=4821`) meaningful on first paint
-// instead of serving a prerendered "overview".
+// instead of serving a prerendered main tab.
 
 import { Suspense } from "react";
 import type { Metadata } from "next";

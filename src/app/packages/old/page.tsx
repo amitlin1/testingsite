@@ -255,7 +255,7 @@ function PackagesPageInner() {
                       </td>
                       <td style={{ padding: "11px 12px", whiteSpace: "nowrap" }}>
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{p.item_type_desc}</div>
-                        <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{p.customer_name ?? p.customer_code ?? "—"} · {p.shipment_code ?? "—"}</div>
+                        <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{p.customer_code ?? "—"} · {p.shipment_code ?? "—"}</div>
                       </td>
                       <td style={{ padding: "11px 12px", fontSize: 14, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{p.items.length}</td>
                       <td style={{ padding: "11px 12px" }}>
@@ -303,7 +303,7 @@ function PackagesPageInner() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 11.5, color: MUTED, fontWeight: 600 }}>{sel.item_type_desc}</div>
                     <div style={{ marginTop: 3 }}><IdText id={sel.item_id} size={17} headColor={INK} letterSpacing=".4px" /></div>
-                    <div style={{ fontSize: 12.5, color: MUTED, marginTop: 5 }}>{sel.customer_name ?? sel.customer_code ?? "—"} · משלוח {sel.shipment_code ?? "—"} · {sel.status === "pending" ? "טרם נקלט" : `נקלט ${fmtDate(sel.created_at)}`}</div>
+                    <div style={{ fontSize: 12.5, color: MUTED, marginTop: 5 }}>{sel.customer_code ?? "—"} · משלוח {sel.shipment_code ?? "—"} · {sel.status === "pending" ? "טרם נקלט" : `נקלט ${fmtDate(sel.created_at)}`}</div>
                   </div>
                   <DotPill label={PKG_STATUS[sel.status].label} dot={PKG_STATUS[sel.status].dot} />
                 </div>

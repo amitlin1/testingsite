@@ -95,12 +95,12 @@ export default function PackageRelabelDialog({ open, onClose, packages, onPrinte
         <div className="no-print" role="group" aria-label="מארזים להדפסה" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 9 }}>
           {packages.map(({ pkg, legacyIds }, i) => (
             <div key={pkg.item_id} role="checkbox" aria-checked={on[i]} tabIndex={0}
-              aria-label={`${pkg.item_type_desc} · ${pkg.customer_name ?? pkg.customer_code ?? ""} · ${formatIdText(pkg.item_id)}`}
+              aria-label={`${pkg.item_type_desc} · ${pkg.customer_code ?? ""} · ${formatIdText(pkg.item_id)}`}
               onClick={() => toggle(i)} onKeyDown={pressKeys(() => toggle(i))}
               className="pkg-choice" style={{ display: "flex", alignItems: "center", gap: 13, borderRadius: 14, padding: "11px 14px" }}>
               <Tick on={on[i]} />
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{pkg.item_type_desc} · {pkg.customer_name ?? pkg.customer_code ?? ""}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{pkg.item_type_desc} · {pkg.customer_code ?? ""}</div>
                 <div style={{ fontSize: 11.5, color: MUTED, fontVariantNumeric: "tabular-nums", display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <span style={{ direction: "ltr", unicodeBidi: "isolate" }}>{formatIdText(pkg.item_id)}</span>
                   <span>מזהה ישן: <span style={{ direction: "ltr", unicodeBidi: "isolate" }}>{legacyIds.join(", ") || "—"}</span></span>

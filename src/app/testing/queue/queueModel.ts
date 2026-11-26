@@ -28,7 +28,7 @@ export function filterQueue(items: readonly QueueRow[], f: QueueFilters): QueueR
     (f.shipment === "" || String(item.shipment_id) === f.shipment) &&
     (f.itype === "" || String(item.item_type_id) === f.itype) &&
     (ql === "" ||
-      has(item.makat, ql) || has(item.serial_no, ql) || has(item.item_id, ql) || has(item.customer_name, ql) ||
+      has(item.makat, ql) || has(item.serial_no, ql) || has(item.item_id, ql) || has(item.customer_code, ql) ||
       has(item.shipment_code, ql) || has(item.item_type_desc, ql) || has(item.package_id, ql) ||
       isId(item.item_id) || isId(item.package_id) ||
       // An item row's `package` is its parent box: only a box row is found by its items.

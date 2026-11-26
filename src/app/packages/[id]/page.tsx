@@ -119,7 +119,7 @@ export default function PackagePage() {
             {/* The id is the page's heading (the artboard's h1). */}
             <h1 style={{ margin: "6px 0 0", fontSize: "inherit", fontWeight: "inherit" }}><IdText id={pkg.item_id} size={30} headColor={INK} weight={700} letterSpacing="-0.4px" /></h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap", fontSize: 13.5, color: INK_2 }}>
-              <span>{pkg.customer_name ?? pkg.customer_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
+              <span>{pkg.customer_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
               <span>משלוח {pkg.shipment_code ?? "—"}</span><span aria-hidden style={{ color: MUTED }}>·</span>
               <span>{pending ? "טרם נקלט" : `נקלט ${fmtDate(pkg.created_at)}`}</span><span aria-hidden style={{ color: MUTED }}>·</span>
               <span>{pkg.items.length} פריטים</span>

@@ -24,7 +24,7 @@ const LABEL_SIZES = [{ label: "57 × 32 מ״מ" }];
 type PackageLabelsDialogProps = {
   open: boolean;
   onClose: () => void;
-  pkg: Pick<PackageView, "item_id" | "item_type_desc" | "customer_name" | "customer_code" | "shipment_code" | "items">;
+  pkg: Pick<PackageView, "item_id" | "item_type_desc" | "customer_code" | "shipment_code" | "items">;
   /** The items to label, when not the box's as loaded (the opening station's own list). */
   items?: LabelItem[];
   onPrinted?: () => void;
@@ -47,7 +47,7 @@ export default function PackageLabelsDialog({ open, onClose, pkg, items: itemsOv
   const items: LabelItem[] = itemsOverride ?? pkg.items;
   const packageId = pkg.item_id;
   const packageType = pkg.item_type_desc;
-  const customerLine = `${pkg.customer_name ?? pkg.customer_code ?? ""} · משלוח ${pkg.shipment_code ?? ""}`;
+  const customerLine = `${pkg.customer_code ?? ""} · משלוח ${pkg.shipment_code ?? ""}`;
   const [boxOn, setBoxOn] = React.useState(boxFirst);
   const [itemsOn, setItemsOn] = React.useState<boolean[]>(() => items.map(() => true));
   const [copies, setCopies] = React.useState(1);

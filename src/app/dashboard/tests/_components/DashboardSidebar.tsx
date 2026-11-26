@@ -19,19 +19,22 @@
 // `aria-current="page"`; the switch is the app's ui Switch.
 
 import * as React from "react";
+import Link from "next/link";
 
+import { DASHBOARD_ROOT } from "@/app/navigation";
 import { DatePicker, Switch, SearchableCombobox } from "@/components/ui";
 import { useNow } from "@/lib/hooks/useNow";
 import {
   AccessTime,
-  BarChart,
+  // BarChart, // kpis tab
   Business,
   Category,
   ChevronLeft,
   ChevronRight,
   Dashboard,
-  DonutLarge,
+  // DonutLarge, // status tab
   FilterList,
+  Home,
   LocalShipping,
   Speed,
   Timer,
@@ -42,7 +45,7 @@ import {
   LEGACY_STATUS_LABEL_HE,
   type LegacyStatusFilter,
 } from "@/app/lib/metrics/vocabulary";
-import type { ShipmentLite } from "@/app/components/lookups";
+import { customerLabel, type ShipmentLite } from "@/app/components/lookups";
 import type { FilterKey } from "../_lib/filters";
 import { getDateRange } from "../_lib/query";
 import { DATE_RANGE_PRESETS, type DateRangePreset, type TabKey } from "../_lib/state";
@@ -50,14 +53,18 @@ import type { DashboardOptions } from "../_lib/useDashboardOptions";
 import type { DashboardStateApi } from "../_lib/useDashboardState";
 import Segmented from "./Segmented";
 
+/** The rail's first entry (2026-11-26, in place of the hidden מדדים tab): a link
+ *  out of the board to the managers' main page, not a tab of it. */
+export const MAIN_PAGE = { href: DASHBOARD_ROOT, label: "עמוד ראשי", Icon: Home } as const;
+
 export const NAV_ITEMS: Array<{ key: TabKey; label: string; Icon: SvgIconComponent }> = [
+  // { key: "kpis", label: "מדדים", Icon: BarChart }, // kpis tab — hidden on request; the main page took its place
   { key: "overview", label: "סקירה", Icon: Dashboard },
-  { key: "kpis", label: "מדדים", Icon: BarChart },
   { key: "stations", label: "עומס עמדות", Icon: Speed },
   { key: "slow", label: "פריטים איטיים", Icon: Timer },
   { key: "shipments", label: "משלוחים", Icon: LocalShipping },
   { key: "times", label: "זמנים ממוצעים", Icon: AccessTime },
-  { key: "status", label: "התפלגות סטטוס", Icon: DonutLarge },
+  // { key: "status", label: "התפלגות סטטוס", Icon: DonutLarge }, // status tab — hidden on request
   { key: "customers", label: "לקוחות", Icon: Business },
   { key: "types", label: "סוגי פריט", Icon: Category },
 ];
@@ -76,13 +83,13 @@ const STATUS_OPTIONS = LEGACY_STATUS_FILTERS.filter(
 
 /** Which contextual filters a tab appends (§6); `showAllHistory` is the shipment-status picker. */
 const EXTRAS: Record<TabKey, FilterKey[]> = {
+  // kpis: ["testStationTypeId", "status"], // kpis tab
   overview: ["testStationId", "status"],
-  kpis: ["testStationTypeId", "status"],
   stations: ["testStationTypeId", "testStationId", "workerId"],
   slow: ["testStationId", "itemSerial", "workerId"],
   shipments: ["showAllHistory"],
   times: ["testStationId", "testStationTypeId", "workerId"],
-  status: ["testStationId"],
+  // status: ["testStationId"], // status tab
   customers: ["status"],
   types: ["testStationId", "status"],
 };
@@ -146,6 +153,9 @@ export default function DashboardSidebar({
         </button>
         <div aria-hidden style={{ width: 24, height: 1, background: "var(--color-hairline)", margin: "6px 0" }} />
         <nav aria-label="מקטעי הלוח" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          <Link href={MAIN_PAGE.href} title={MAIN_PAGE.label} aria-label={MAIN_PAGE.label} className="dash-icon-btn">
+            <MAIN_PAGE.Icon fontSize={16} aria-hidden />
+          </Link>
           {NAV_ITEMS.map((item) => {
             const active = item.key === state.tab;
             const stuck = item.key === "slow" && (stuckCount ?? 0) > 0;
@@ -221,6 +231,12 @@ export default function DashboardSidebar({
       </div>
 
       <nav aria-label="מקטעי הלוח" style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <Link href={MAIN_PAGE.href} onClick={() => onCloseDrawer?.()} className="dash-nav-item dash-tap">
+          <span className="dash-icon">
+            <MAIN_PAGE.Icon fontSize={16} aria-hidden />
+          </span>
+          {MAIN_PAGE.label}
+        </Link>
         {NAV_ITEMS.map((item) => {
           const active = item.key === state.tab;
           return (
@@ -317,11 +333,11 @@ export default function DashboardSidebar({
 
         <ComboField
           id={id("customer")}
-          label="לקוח"
+          label="קוד לקוח"
           value={state.filters.customerId}
           onChange={(v) => setFilter("customerId", v)}
           placeholder="כל הלקוחות"
-          options={options.customers.map((c) => ({ id: c.id, name: c.name }))}
+          options={options.customers.map((c) => ({ id: c.id, name: customerLabel(c) }))}
         />
 
         <ComboField

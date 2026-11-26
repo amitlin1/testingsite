@@ -41,7 +41,7 @@ import {
   type StatusView,
 } from "@/app/lib/dashboard/contract";
 import type { JobsHealthPayload } from "@/app/lib/jobs/health";
-import { buildDashboardQueryParams, getDateRange, previousRange, rangeEndingAt } from "./query";
+import { buildDashboardQueryParams, getDateRange, previousRange } from "./query"; // + rangeEndingAt for the kpis / status tabs
 import type { DashboardState } from "./state";
 
 export const REFRESH_MS = 60_000;
@@ -188,7 +188,6 @@ export function endpointsFor(state: DashboardState): Partial<Record<ResourceKey,
   if (!range.startDate || !range.endDate) return { jobs: "/api/health/jobs" };
   const params = buildDashboardQueryParams(state.filters, range);
   const prevParams = buildDashboardQueryParams(state.filters, previousRange(range));
-  const shortParams = buildDashboardQueryParams(state.filters, rangeEndingAt(range.endDate, 14));
 
   const urls: Partial<Record<ResourceKey, string>> = {
     kpis: withParams("/api/dashboard/tests/kpis", params),
@@ -202,18 +201,20 @@ export function endpointsFor(state: DashboardState): Partial<Record<ResourceKey,
 
   switch (state.tab) {
     case "overview":
+      // No average-times chart here since 2026-11-26 (it lives on its own tab),
+      // so `timesShort` is no longer fetched.
       urls.status = withParams("/api/dashboard/tests/status-distribution", params);
       urls.shipments = withParams("/api/dashboard/tests/shipments", params);
-      urls.timesShort = withParams("/api/dashboard/tests/average-times", withPeriod(shortParams, "daily"));
       break;
-    case "kpis": {
-      urls.kpisPrev = withParams("/api/dashboard/tests/kpis", prevParams);
-      // §8.2's throughput chart is 20 working days of DAILY buckets.
-      const twenty = buildDashboardQueryParams(state.filters, rangeEndingAt(range.endDate, 28));
-      urls.times = withParams("/api/dashboard/tests/average-times", withPeriod(twenty, "daily"));
-      urls.statusHistory = withParams("/api/dashboard/tests/status-distribution/history", twenty);
-      break;
-    }
+    // kpis tab — hidden on request (2026-11-26):
+    // case "kpis": {
+    //   urls.kpisPrev = withParams("/api/dashboard/tests/kpis", prevParams);
+    //   // §8.2's throughput chart is 20 working days of DAILY buckets.
+    //   const twenty = buildDashboardQueryParams(state.filters, rangeEndingAt(range.endDate, 28));
+    //   urls.times = withParams("/api/dashboard/tests/average-times", withPeriod(twenty, "daily"));
+    //   urls.statusHistory = withParams("/api/dashboard/tests/status-distribution/history", twenty);
+    //   break;
+    // }
     case "stations":
       urls.stationsPrev = withParams("/api/dashboard/tests/by-station", prevParams);
       break;
@@ -223,10 +224,13 @@ export function endpointsFor(state: DashboardState): Partial<Record<ResourceKey,
     case "times":
       urls.times = withParams("/api/dashboard/tests/average-times", withPeriod(params, state.period));
       break;
-    case "status":
-      urls.status = withParams("/api/dashboard/tests/status-distribution", params);
-      urls.statusHistory = withParams("/api/dashboard/tests/status-distribution/history", shortParams);
-      break;
+    // status tab — hidden on request (2026-11-26):
+    // case "status": {
+    //   const shortParams = buildDashboardQueryParams(state.filters, rangeEndingAt(range.endDate, 14));
+    //   urls.status = withParams("/api/dashboard/tests/status-distribution", params);
+    //   urls.statusHistory = withParams("/api/dashboard/tests/status-distribution/history", shortParams);
+    //   break;
+    // }
     case "customers":
       urls.customers = withParams("/api/dashboard/tests/customer-performance", params);
       urls.customersPrev = withParams("/api/dashboard/tests/customer-performance", prevParams);

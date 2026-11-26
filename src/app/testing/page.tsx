@@ -54,7 +54,7 @@ function TestingPageView() {
   const writeQ = React.useCallback((v: string) => setUrl({ q: v }), [setUrl]);
   const [filterText, setFilterText] = useUrlTextField(url.q, writeQ);
   const filterRef = React.useRef<HTMLInputElement>(null);
-  const customerOptions = React.useMemo(() => optionsOf(items, (it) => it.customer_id, (it) => it.customer_name ?? it.customer_code, url.customer), [items, url.customer]);
+  const customerOptions = React.useMemo(() => optionsOf(items, (it) => it.customer_id, (it) => it.customer_code, url.customer), [items, url.customer]);
   const shipmentOptions = React.useMemo(() => optionsOf(items, (it) => it.shipment_id, (it) => it.shipment_code, url.shipment), [items, url.shipment]);
   const itemTypeOptions = React.useMemo(() => optionsOf(items, (it) => it.item_type_id, (it) => it.item_type_desc, url.itype), [items, url.itype]);
   const anyFilter = !!(filterText || url.customer || url.shipment || url.itype);

@@ -30,6 +30,8 @@ import {
   formatShortDate,
 } from "../_lib/format";
 import type { TabProps } from "./tabTypes";
+import CardInfo from "../_components/CardInfo";
+import { EXPLAIN } from "../_lib/explain";
 
 export function shipmentColumns(): Array<Column<ShipmentView>> {
   return [
@@ -45,9 +47,11 @@ export function shipmentColumns(): Array<Column<ShipmentView>> {
     },
     {
       key: "customer",
-      header: "לקוח",
-      sortValue: (r) => r.customerName,
-      render: (r) => <span style={{ fontSize: "var(--text-small)" }}>{r.customerName}</span>,
+      header: "קוד לקוח",
+      sortValue: (r) => r.customerCode,
+      render: (r) => (
+        <span style={{ fontSize: "var(--text-small)", fontVariantNumeric: "tabular-nums" }}>{r.customerCode || "—"}</span>
+      ),
     },
     {
       key: "date",
@@ -129,7 +133,7 @@ export default function ShipmentsTab({ api, data, openHistory }: TabProps) {
   return (
     <DataCard
       panel
-      title="התקדמות משלוחים פתוחים"
+      title={<>התקדמות משלוחים פתוחים<CardInfo explain={EXPLAIN.shipments} /></>}
       right={
         <>
           <span style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)" }}>
@@ -153,7 +157,7 @@ export default function ShipmentsTab({ api, data, openHistory }: TabProps) {
             kind: "shipment",
             id: row.shipmentId,
             title: row.shipmentCode,
-            meta: row.customerName,
+            meta: row.customerCode,
           })
         }
         empty={{

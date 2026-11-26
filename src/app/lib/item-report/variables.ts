@@ -41,6 +41,7 @@ export type ItemFacts = {
   package_seq: number | null;
   item_type_id: number;
   item_type: string | null;
+  /** The customer CODE (never the name — see source.ts). */
   customer: string | null;
   shipment_code: string | null;
   package_type: string | null;
@@ -84,7 +85,8 @@ const ITEM_VARS: readonly VarDef<ItemValueContext>[] = [
   { key: "manufacturer_name", label: "יצרן", value: ({ item }) => trimOrEmpty(item.manufacturer_name) },
   { key: "manufacturer_no", label: 'מק"ט יצרן', value: ({ item }) => trimOrEmpty(item.manufacturer_no) },
   { key: "item_type", label: "סוג פריט", value: ({ item }) => trimOrEmpty(item.item_type) },
-  { key: "customer", label: "לקוח", value: ({ item }) => trimOrEmpty(item.customer) },
+  // The customer CODE (source.ts) — a report never names the customer.
+  { key: "customer", label: "קוד לקוח", value: ({ item }) => trimOrEmpty(item.customer) },
   { key: "shipment_code", label: "מספר משלוח", value: ({ item }) => trimOrEmpty(item.shipment_code) },
   { key: "package_id", label: "מארז", value: ({ item }) => (item.package_id != null ? String(item.package_id) : "") },
   { key: "package_type", label: "סוג המארז", value: ({ item }) => trimOrEmpty(item.package_type) },
