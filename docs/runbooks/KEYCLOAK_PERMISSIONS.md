@@ -24,10 +24,10 @@
 
 ## המעבר בפרודקשן (פעם אחת)
 
-1. **לפני העלאת הגרסה החדשה**, על מכונת האפליקציה, מתוך התיקייה שבה נמצאים `keycloak-permissions.ps1`, `keycloak-permissions.mjs` ו-`permissions.json`:
+1. **לפני העלאת הגרסה החדשה**, על המכונה שבה רץ ה-container `keycloak` (מכונת האפליקציה), מתוך התיקייה שבה נמצאים `keycloak-permissions.ps1`, `keycloak-permissions.mjs` ו-`permissions.json`:
 
    ```powershell
-   .\keycloak-permissions.ps1 -Docker
+   .\keycloak-permissions.ps1
    ```
 
    זו בדיקה בלבד, ולא משנה כלום. הפלט צריך להציג בערך 50 תפקידים שייווצרו, ואת ארבע החבילות. אם `mashan` חסר ב-realm, הוא יופיע ברשימה וייווצר.
@@ -35,16 +35,16 @@
 2. ביצוע:
 
    ```powershell
-   .\keycloak-permissions.ps1 -Docker -Apply
+   .\keycloak-permissions.ps1 -Apply
    ```
 
    כדי להוריד כבר עכשיו חזרה לבדיקה לבודקים מסוימים:
 
    ```powershell
-   .\keycloak-permissions.ps1 -Docker -Apply -Deny "step-back=user1,user2"
+   .\keycloak-permissions.ps1 -Apply -Deny "step-back=user1,user2"
    ```
 
-   הסקריפט שואל את סיסמת מנהל ה-Keycloak (master), ובסוף בודק את עצמו ומדפיס "Done and verified".
+   לא צריך סיסמה ולא טוקן. בסוף הסקריפט בודק את עצמו ומדפיס "Done and verified".
 
 3. מעלים את הגרסה החדשה של האפליקציה.
 
@@ -54,17 +54,26 @@
 
 **אם הגרסה החדשה עלתה לפני הסקריפט:** שום דבר לא נשבר. טוקן בלי אף `perm-…` נענה לפי חבילת ברירת המחדל שבטבלה, כלומר בדיוק ההרשאות של היום. אבל אי אפשר להוריד הרשאה למשתמש עד שהסקריפט רץ, ועמוד המשתמשים יגיד זאת.
 
-### Docker או node
+### איך זה רץ בלי סיסמה
 
-`-Docker` מריץ את node מתוך ה-image של האפליקציה (`testingsite-next-app:latest`) על הרשת `shifthouse-network`, ומגיע ל-Keycloak בכתובת `http://keycloak:8080/auth`. לא צריך node על המכונה. על מכונת פיתוח עם node אפשר בלי `-Docker`, עם `-KeycloakUrl https://<host>/auth`.
+מי שיכול להריץ docker על המכונה של Keycloak כבר שולט בו בכל מקרה. לכן הסקריפט מבקש מ-Keycloak עצמו כניסת מנהל זמנית, בעזרת הפקודה המובנית `kc.sh bootstrap-admin service` בתוך ה-container `keycloak`:
+
+- **הכניסה:** service account בשם `perm-script-<זמן>`, עם סוד אקראי. הסוד קיים רק בתהליך של ה-PowerShell, ולא נכתב לדיסק או לשורת פקודה.
+- **העבודה:** node מתוך ה-image של האפליקציה (`testingsite-next-app:latest`) רץ על הרשת של Keycloak ופונה אליו בכתובת `http://keycloak:8080/auth`. לא צריך node על המכונה.
+- **בסוף:** הכניסה הזמנית נמחקת, גם אם ההרצה נכשלה באמצע. אם תהליך נקטע לגמרי ונשארה כניסה, ההרצה הבאה מוחקת אותה.
+- **זמן:** יצירת הכניסה לוקחת כ-15 שניות. Keycloak ממשיך לעבוד כרגיל בזמן הזה.
+
+שם ה-container שונה? `-Container <שם>`.
+
+**Keycloak על מכונה אחרת:** `-KeycloakUrl https://<host>/auth`. במקרה הזה נכנסים עם סיסמת מנהל ה-Keycloak (master), שהסקריפט שואל, ומריצים עם node מקומי או עם `-Docker`.
 
 ### למה סקריפט ולא SQL
 
 Keycloak מחזיק את המסד שלו בזיכרון ומנהל לבד את הסכמה שלו (בערך 100 טבלאות). כתיבה ישירה ב-SQL לא תיראה עד הפעלה מחדש, ועלולה להישבר בשדרוג. הסקריפט משתמש ב-Admin REST API.
 
-### למה סיסמת מנהל Keycloak ולא חשבון השירות של האפליקציה
+### למה לא חשבון השירות של האפליקציה
 
-חשבון השירות (`testing-admin-api`) מקצה תפקידים למשתמשים, אבל לא יוצר תפקידים ולא עורך חבילות, כי לשם כך צריך `manage-realm`, שזו כמעט שליטה מלאה ב-realm. כך זה נשאר.
+חשבון השירות (`testing-admin-api`) מקצה תפקידים למשתמשים, אבל לא יוצר תפקידים ולא עורך חבילות, כי לשם כך צריך `manage-realm`, שזו כמעט שליטה מלאה ב-realm. כך זה נשאר. הכניסה הזמנית של הסקריפט היא מנהל מלא, אבל היא קיימת רק בזמן ההרצה.
 
 ## מה הסקריפט עושה, ומה לא
 

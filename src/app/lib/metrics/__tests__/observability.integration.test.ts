@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool, types } from "pg";
 import { stubSession } from "@/lib/auth/testing";
+import { ACCESS } from "@/lib/auth/roles";
 import { LEDGER_TRUNCATE_LOCK } from "@/test-support/ledger-lock";
 
 // pg hands bigint (20) and numeric (1700) back as strings by default; every
@@ -336,11 +337,16 @@ describe("stage 5 — GET /api/health/jobs answers managers only", { skip: dbSki
     assert.equal((await getJobs()).status, 401);
   });
 
-  it("answers 403 for an authenticated non-manager, naming the role it requires", async () => {
+  it("answers 403 for an authenticated non-manager, naming the role that grants it (perm-health-jobs)", async () => {
     session = signedIn("tester");
     const res = await getJobs();
     assert.equal(res.status, 403);
-    assert.deepEqual((await res.json()).required, ["manager"]);
+    assert.equal((await res.json()).required, ACCESS.healthJobs.role);
+  });
+
+  it("answers 403 for a manager it was taken from (no-health-jobs)", async () => {
+    session = signedIn("manager", ACCESS.healthJobs.deny);
+    assert.equal((await getJobs()).status, 403);
   });
 
   it("answers 200 with the job list and the full selfcheck for a manager", async () => {

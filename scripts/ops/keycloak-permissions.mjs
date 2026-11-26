@@ -7,10 +7,13 @@
 //   node keycloak-permissions.mjs check  --url http://keycloak:8080/auth     (default: read only)
 //   node keycloak-permissions.mjs apply  --url http://keycloak:8080/auth [--deny step-back=user1,user2]
 //
-// Normally run through keycloak-permissions.ps1, which asks for the password and can run this
-// inside the app's image on a machine without node. The Keycloak ADMIN logs in (KC_ADMIN_PASSWORD,
-// --user, --admin-realm): the app's own service account may assign roles but not create them, and
-// stays that way.
+// Normally run through keycloak-permissions.ps1. On the machine Keycloak runs on, that one needs no
+// password: it has Keycloak itself create a temporary admin login (kc.sh bootstrap-admin service)
+// and runs this with it — --client-id, secret in KC_ADMIN_CLIENT_SECRET, --temp-client — and this
+// deletes that login at the end (and any left over by an earlier run that died). From elsewhere
+// the Keycloak admin logs in with a password (KC_ADMIN_PASSWORD, --user). Either way it is an
+// admin of the master realm: the app's own service account may assign roles but not create them,
+// and stays that way.
 //
 // What apply does — only ever ADDS, never touches a user it was not asked about:
 //   1. creates the roles the realm lacks: missing main roles, and every perm-… / no-… pair;
@@ -36,6 +39,8 @@ const { values: opt, positionals } = parseArgs({
     url: { type: "string" },
     realm: { type: "string", default: "testing" },
     user: { type: "string", default: "admin" },
+    "client-id": { type: "string" },
+    "temp-client": { type: "boolean", default: false },
     "admin-realm": { type: "string", default: "master" },
     table: { type: "string" },
     deny: { type: "string", multiple: true, default: [] },
@@ -45,9 +50,10 @@ const { values: opt, positionals } = parseArgs({
 });
 
 const USAGE = `usage: node keycloak-permissions.mjs [check|apply] --url <keycloak server, e.g. http://keycloak:8080/auth>
-         [--realm testing] [--user admin] [--admin-realm master] [--table permissions.json]
+         [--realm testing] [--admin-realm master] [--table permissions.json]
          [--deny <permission>=<user>,<user> ...] [--reset-bundles]
-  password: KC_ADMIN_PASSWORD`;
+  login: --user admin + KC_ADMIN_PASSWORD, or --client-id <id> + KC_ADMIN_CLIENT_SECRET
+         [--temp-client: delete that client at the end, and leftover perm-script-* clients]`;
 
 // A refusal: printed by main()'s catch, exit code 1. (Never process.exit() with fetch's sockets
 // open — on Windows node aborts on it.)
@@ -58,6 +64,10 @@ function fail(message) {
 
 const mode = positionals[0] ?? "check";
 const password = process.env.KC_ADMIN_PASSWORD;
+const clientSecret = process.env.KC_ADMIN_CLIENT_SECRET;
+const clientId = opt["client-id"];
+/** The temporary logins keycloak-permissions.ps1 creates are named so. */
+const TEMP_PREFIX = "perm-script-";
 
 // ---- the table (the app's own: src/lib/auth/permissions.json) --------------------------------
 
@@ -96,22 +106,29 @@ const UNDENIABLE = new Set(["usersAdmin"]);
 // Accept the server ("…/auth") or an issuer ("…/auth/realms/testing").
 const SERVER = opt.url.replace(/\/+$/, "").replace(/\/realms\/[^/]+$/, "");
 const ADMIN = `${SERVER}/admin/realms/${encodeURIComponent(opt.realm)}`;
+/** The admin realm's own admin API (where the temporary logins live). */
+const ADMIN_REALM_API = `${SERVER}/admin/realms/${encodeURIComponent(opt["admin-realm"])}`;
 let token = null;
 
 async function login() {
+  const form = clientId
+    ? { grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }
+    : { grant_type: "password", client_id: "admin-cli", username: opt.user, password };
+  const who = clientId ? `client "${clientId}"` : `"${opt.user}"`;
   const res = await fetch(`${SERVER}/realms/${encodeURIComponent(opt["admin-realm"])}/protocol/openid-connect/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "password", client_id: "admin-cli", username: opt.user, password }),
+    body: new URLSearchParams(form),
   }).catch((e) => fail(`cannot reach Keycloak at ${SERVER}: ${e.cause?.code ?? e.message}`));
-  if (!res.ok) fail(`login as "${opt.user}" in realm "${opt["admin-realm"]}" failed: ${res.status} ${await res.text().catch(() => "")}`);
+  if (!res.ok) fail(`login as ${who} in realm "${opt["admin-realm"]}" failed: ${res.status} ${await res.text().catch(() => "")}`);
   token = (await res.json()).access_token;
 }
 
-/** One admin call; a 401 (the admin token lives a minute) logs in again once. */
+/** One admin call (a path under the realm's admin API, or a full URL); a 401 (the admin token
+ *  lives a minute) logs in again once. */
 async function kc(method, p, body, retried = false) {
   if (!token) await login();
-  const res = await fetch(`${ADMIN}${p}`, {
+  const res = await fetch(p.startsWith("http") ? p : `${ADMIN}${p}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -121,6 +138,19 @@ async function kc(method, p, body, retried = false) {
     return kc(method, p, body, true);
   }
   return res;
+}
+
+/** The temporary logins (perm-script-…) in the admin realm: every one but ours, or ours too. */
+async function deleteTempClients({ includingOurs }) {
+  const res = await kc("GET", `${ADMIN_REALM_API}/clients?clientId=${encodeURIComponent(TEMP_PREFIX)}&search=true&max=100`);
+  if (!res.ok) return;
+  // Ours last: once it is gone, this login is too.
+  const clients = (await res.json()).sort((x, y) => (x.clientId === clientId) - (y.clientId === clientId));
+  for (const c of clients) {
+    if (!c.clientId.startsWith(TEMP_PREFIX) || (!includingOurs && c.clientId === clientId)) continue;
+    const del = await kc("DELETE", `${ADMIN_REALM_API}/clients/${c.id}`);
+    console.log(del.ok ? `  temporary login ${c.clientId} deleted` : `  WARNING: could not delete temporary login ${c.clientId} (${del.status})`);
+  }
 }
 
 async function json(method, p, body) {
@@ -271,11 +301,25 @@ async function main() {
     if (!opt.help) process.exitCode = 1;
     return;
   }
-  if (!password) fail("KC_ADMIN_PASSWORD is not set.");
+  if (clientId ? !clientSecret : !password) fail(clientId ? "KC_ADMIN_CLIENT_SECRET is not set." : "KC_ADMIN_PASSWORD is not set.");
   await login();
+  if (opt["temp-client"]) {
+    if (!clientId?.startsWith(TEMP_PREFIX)) fail(`--temp-client needs a --client-id starting with "${TEMP_PREFIX}"`);
+    try {
+      await deleteTempClients({ includingOurs: false });
+      await run();
+    } finally {
+      await deleteTempClients({ includingOurs: true });
+    }
+    return;
+  }
+  await run();
+}
+
+async function run() {
   const realm = await kc("GET", "");
   if (realm.status === 404) fail(`realm "${opt.realm}" does not exist at ${SERVER}`);
-  if (!realm.ok) fail(`reading realm "${opt.realm}": ${realm.status} — does "${opt.user}" administer it?`);
+  if (!realm.ok) fail(`reading realm "${opt.realm}": ${realm.status} — is this login an admin of it?`);
 
   const before = await plan();
   report(before);
