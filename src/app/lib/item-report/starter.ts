@@ -15,7 +15,7 @@
  */
 import type { Data } from "@measured/puck";
 import { DEFAULT_ROOT_PROPS } from "./document";
-import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, EXTERNAL_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 
 type Block = { type: string; props: Record<string, unknown> };
 
@@ -71,6 +71,8 @@ function blocks(prefix: string) {
         width: "full",
       },
     }),
+    /** The times the item went back to a test, with who and why — prints nothing when there were none. */
+    stepBacks: (): Block => ({ type: "StepBacks", props: { id: id("StepBacks"), showTitle: true, width: "full" } }),
     spacer: (): Block => ({ type: "Spacer", props: { id: id("Spacer"), height: 6 } }),
     /** One signature row: its role first, then the signer and the drawing. The closing row's role
      *  is the signer's own ("בודק" / "מנהל", kept when they sign — `roleKind: "role"`, with `role` as
@@ -90,9 +92,31 @@ function blocks(prefix: string) {
         width: "full",
       },
     }),
-    /** The closing signature, then the approver's final one. */
+    /** The external approver's row (`external`): printed only on a report they approved, in place of
+     *  the final one. No employee number — they are not a user. The role cell prints its text
+     *  ("גורם חיצוני") with the role / body they wrote under it. */
+    externalSignature: (): Block => ({
+      type: "Signature",
+      props: {
+        id: id("Signature"),
+        bind: EXTERNAL_SIGNATURE_BIND,
+        cells: [
+          { kind: "role", label: "תפקיד / גוף", text: "גורם חיצוני", weight: 1 },
+          { kind: "fullName", label: "שם ושם משפחה", text: "", weight: 1 },
+          { kind: "date", label: "תאריך", text: "", weight: 1 },
+          { kind: "signature", label: "חתימה", text: "", weight: 1 },
+        ],
+        width: "full",
+      },
+    }),
+    /** The closing signature, the approver's final one, and the external approver's that may stand
+     *  for it. */
     signatures(): Block[] {
-      return [this.signature(CLOSING_SIGNATURE_BIND, "בודק", "role"), this.signature(FINAL_SIGNATURE_BIND, "מאשר סופי")];
+      return [
+        this.signature(CLOSING_SIGNATURE_BIND, "בודק", "role"),
+        this.signature(FINAL_SIGNATURE_BIND, "מאשר סופי"),
+        this.externalSignature(),
+      ];
     },
   };
 }
@@ -104,7 +128,7 @@ export function officialStarterTemplate(): Data {
   const b = blocks("starter");
   return doc([
     b.section("פרטי הפריט"), b.details(),
-    b.section("תוצאות הבדיקות"), b.results(true),
+    b.section("תוצאות הבדיקות"), b.results(true), b.stepBacks(),
     b.section("סיכום"), b.summary(),
     b.section("אישור"), b.spacer(), ...b.signatures(),
   ]);
@@ -117,7 +141,7 @@ export function generalStarterTemplate(): Data {
   return doc([
     b.section("פרטי הפריט"), b.details(),
     b.section("תוצאות הבדיקות"), b.results(false),
-    b.section("פירוט לפי עמדה"), b.stepDetails(),
+    b.section("פירוט לפי עמדה"), b.stepDetails(), b.stepBacks(),
     b.section("סיכום"), b.summary(),
     b.section("אישור"), b.spacer(), ...b.signatures(),
   ]);

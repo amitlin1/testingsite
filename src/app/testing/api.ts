@@ -51,8 +51,8 @@ export async function releaseTest(itemId: number, stationId: number, actor: Acto
 }
 
 /** POST /api/testing/step-back. */
-export function stepBack(itemId: string, currentRouteStep: number, actor: Actor): Promise<StepBackAnswer> {
-  const body: StepBackBody = { itemId, currentRouteStep, ...actorBody(actor), actionId: newActionId() };
+export function stepBack(itemId: string, currentRouteStep: number, reason: string, actor: Actor): Promise<StepBackAnswer> {
+  const body: StepBackBody = { itemId, currentRouteStep, reason, ...actorBody(actor), actionId: newActionId() };
   return sendJson<StepBackAnswer>("/api/testing/step-back", "POST", body);
 }
 

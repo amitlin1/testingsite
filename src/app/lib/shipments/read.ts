@@ -143,7 +143,7 @@ export async function loadShipments() {
 /** A shipment's sends, newest first, each signature as its URL. */
 export async function loadShipmentSends(shipmentId: number): Promise<ShipmentSend[]> {
   const rows = await prisma.$queryRaw<(Omit<ShipmentSend, "sent_date"> & { sent_date: Date })[]>`
-    SELECT sh.log_id, sh.shipment_id, sh.sent_shipment_code, sh.sent_date, sh.sending_worker_id, sh.sending_worker_name,
+    SELECT sh.log_id, sh.shipment_id, sh.sent_date, sh.sending_worker_id, sh.sending_worker_name,
            sh.item_type_id, it.item_type_desc, sh.makat, sh.amount, sh.signature_path
     FROM shipment_history sh
     LEFT JOIN item_types it ON sh.item_type_id = it.item_type_id

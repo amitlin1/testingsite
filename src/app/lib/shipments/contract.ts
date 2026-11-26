@@ -132,7 +132,6 @@ export type BoxSync = {
 export type ShipmentSend = {
   log_id: number;
   shipment_id: number;
-  sent_shipment_code: string;
   sent_date: string;
   sending_worker_id: number | null;
   sending_worker_name: string | null;

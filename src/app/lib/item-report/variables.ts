@@ -59,7 +59,17 @@ export interface ReportFacts {
   generatedAt: Date;
   signature: GivenSignature | null;
   closingSignature: GivenSignature | null;
+  /** The external approver's (role = their role / body). */
+  externalSignature?: GivenSignature | null;
 }
+
+/** test_results.details key of a failed step an external approver passed (lifecycle approveExternal):
+ *  who approved, when, and the verdict the step had before. */
+export const EXTERNAL_APPROVAL_KEY = "external_approval";
+
+/** The overall verdict word: "תקין (אושר ע״י גורם חיצוני)" when a step passes only by an external
+ *  approval. */
+export const EXTERNALLY_APPROVED_VERDICT = `${PASS_FAIL_WORD.pass} (אושר ע״י גורם חיצוני)`;
 
 /** What the item.* variables are computed from: the item, and its steps for the overall verdict. */
 export interface ItemValueContext {
@@ -100,6 +110,7 @@ const ITEM_VARS: readonly VarDef<ItemValueContext>[] = [
     label: "תוצאה כוללת",
     value: ({ results, finished }) => {
       const overall = overallVerdict(results, finished);
+      if (overall === "pass" && results.some((r) => r.externallyApproved)) return EXTERNALLY_APPROVED_VERDICT;
       return overall ? PASS_FAIL_WORD[overall] : "";
     },
   },
@@ -112,6 +123,9 @@ const REPORT_VARS: readonly VarDef<ReportFacts>[] = [
   { key: "closing_signer", label: "החותם בסגירת המארז", value: (r) => r.closingSignature?.name ?? "" },
   { key: "closing_signer_role", label: "תפקיד החותם בסגירה", value: (r) => r.closingSignature?.role ?? "" },
   { key: "closing_signed_at", label: "תאריך החתימה בסגירה", value: (r) => (r.closingSignature ? formatDocDate(r.closingSignature.at) : "") },
+  { key: "external_signer", label: "גורם חיצוני שאישר", value: (r) => r.externalSignature?.name ?? "" },
+  { key: "external_signer_role", label: "תפקיד / גוף של הגורם החיצוני", value: (r) => r.externalSignature?.role ?? "" },
+  { key: "external_signed_at", label: "תאריך האישור החיצוני", value: (r) => (r.externalSignature ? formatDocDate(r.externalSignature.at) : "") },
 ];
 
 const STEP_ATTRS: readonly VarDef<ReportStepResult>[] = [
@@ -405,6 +419,43 @@ export function buildStepResults(
    *  does not keep key order, so the saved order is not the configured one. */
   fieldOrder?: ReadonlyMap<string, readonly string[]>,
 ): ReportStepResult[] {
+  const out: ReportStepResult[] = [];
+  for (const [uid, row] of latestStepRows(rows, route)) {
+    const d = isRecord(row.details) ? row.details : null;
+    const verdictNote = d && isRecord(d.verdict) && typeof d.verdict.note === "string" ? d.verdict.note : "";
+    const { date, time } = fmt(row.created_at);
+    const approved = !!d && isRecord(d[EXTERNAL_APPROVAL_KEY]);
+    const fields = orderFields(rowFields(d), fieldOrder?.get(uid));
+    out.push({
+      uid,
+      position: row.route_step,
+      stationType: row.station_type,
+      station: row.station,
+      worker: row.worker_name ?? (row.worker_id != null ? `#${row.worker_id}` : ""),
+      workerNumber: row.worker_id != null ? String(row.worker_id) : "",
+      date,
+      time,
+      verdict: rowVerdict(row, d),
+      result: row.result,
+      comments: row.comments || verdictNote || "",
+      // A step passed by an external approval: what failed in it prints "תקין *" too — the measured
+      // value stays as it was saved.
+      fields: approved ? fields.map((f) => (f.tone === "fail" ? { ...f, tone: "pass" as const, approved: true } : f)) : fields,
+      ...(approved ? { externallyApproved: true } : {}),
+    });
+  }
+  out.sort((a, b) => a.position - b.position || a.uid.localeCompare(b.uid));
+  return out;
+}
+
+/** The latest row of every route step that failed — what an external approval passes. */
+export function failedStepRows(rows: readonly ResultRow[], route: ResultsRoute): ResultRow[] {
+  return [...latestStepRows(rows, route).values()].filter((row) => rowVerdict(row, isRecord(row.details) ? row.details : null) === "fail");
+}
+
+/** step uid → the row the report prints for it: the latest, research benches and rows of another
+ *  route left out (buildStepResults). */
+function latestStepRows(rows: readonly ResultRow[], route: ResultsRoute): Map<string, ResultRow> {
   const latest = new Map<string, ResultRow>();
   const knownUids = new Set(route.step_uids);
   for (const row of rows) {
@@ -420,28 +471,7 @@ export function buildStepResults(
       latest.set(uid, row);
     }
   }
-  const out: ReportStepResult[] = [];
-  for (const [uid, row] of latest) {
-    const d = isRecord(row.details) ? row.details : null;
-    const verdictNote = d && isRecord(d.verdict) && typeof d.verdict.note === "string" ? d.verdict.note : "";
-    const { date, time } = fmt(row.created_at);
-    out.push({
-      uid,
-      position: row.route_step,
-      stationType: row.station_type,
-      station: row.station,
-      worker: row.worker_name ?? (row.worker_id != null ? `#${row.worker_id}` : ""),
-      workerNumber: row.worker_id != null ? String(row.worker_id) : "",
-      date,
-      time,
-      verdict: rowVerdict(row, d),
-      result: row.result,
-      comments: row.comments || verdictNote || "",
-      fields: orderFields(rowFields(d), fieldOrder?.get(uid)),
-    });
-  }
-  out.sort((a, b) => a.position - b.position || a.uid.localeCompare(b.uid));
-  return out;
+  return latest;
 }
 
 /** The overall verdict: fail as soon as any step failed; pass only once the
@@ -464,7 +494,7 @@ export function buildValues(itemCtx: ItemValueContext, report: ReportFacts): Rec
     for (const f of r.fields) {
       const fp = `field.${r.uid}.${f.id}`;
       values[fp] = f.value;
-      values[fp + ".status"] = f.tone ? REPORT_TONE_WORD[f.tone] : "";
+      values[fp + ".status"] = f.tone ? `${REPORT_TONE_WORD[f.tone]}${f.approved ? " *" : ""}` : "";
       values[fp + ".note"] = f.note ?? "";
     }
   }

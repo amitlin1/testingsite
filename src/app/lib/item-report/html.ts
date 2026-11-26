@@ -50,13 +50,16 @@ export function buildHtml(
     /** Embedded as the PDF's /Title (the browser tab title of the opened PDF). */
     title?: string;
     font: ReportFont;
+    /** More fonts to inline (a combined report whose templates use different ones). */
+    extraFonts?: readonly ReportFont[];
   },
 ): string {
+  const fonts = [...new Set([opts.font, ...(opts.extraFonts ?? [])])];
   const m = opts.marginMm ?? { top, right: side, bottom, left: side };
   const titleTag = opts.title ? `<title>${escapeHtml(opts.title)}</title>` : "";
   return (
     `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="utf-8"/>${titleTag}` +
-    `<style>${getFontFaceCss(opts.font)}\n` +
+    `<style>${fonts.map(getFontFaceCss).join("\n")}\n` +
     `@page{size:A4;margin:${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm;}\n` +
     `html,body{margin:0;padding:0;background:#fff;}\n` +
     `${PDF_CSS}</style></head><body>${bodyHtml}</body></html>`

@@ -1,8 +1,8 @@
 "use client";
 import React from "react";
 import { Undo2 } from "lucide-react";
-import { Typography, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, ConfirmDialog } from "@/components/ui";
-import { ArrowBack as ArrowBackIcon, CheckCircleOutline as CheckCircleOutlineIcon } from "@/components/ui/icons";
+import { Typography, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from "@/components/ui";
+import { ArrowBack as ArrowBackIcon, CheckCircleOutline as CheckCircleOutlineIcon, Undo as UndoIcon } from "@/components/ui/icons";
 import type { PackageItemView } from "@/app/lib/packages/contract";
 import { NO_SERVER_TEXT, failureText } from "@/app/components/failureText";
 import { ApiError } from "@/lib/api/client";
@@ -18,7 +18,7 @@ import "./station-popups.css";
 const STEP_BACK_FAILED = "שגיאה בהחזרת הפריט לעמדה הקודמת";
 
 /** The closing wizard's "החזר" for an item of its box: the page answers the click for each item
- *  that may go back (managers only; the closing stops, the wizard closes). */
+ *  that may go back (managers and testers; the closing stops, the wizard closes). */
 const BoxItemStepBack = React.createContext<((it: PackageItemView) => (() => void) | null) | undefined>(undefined);
 export const BoxItemStepBackProvider = BoxItemStepBack.Provider;
 export const useBoxItemStepBack = () => React.useContext(BoxItemStepBack);
@@ -40,10 +40,39 @@ export type StepBackOutcome =
   | { ok: true; stationName: string; routeStep: number; closingStopped: boolean }
   | { ok: false; error: string };
 
+/** The longest reason the field takes (the route's STEP_BACK_REASON_MAX). */
+const REASON_MAX = 500;
+
+/** "למה מחזירים?" — required: without words the item does not go back. Printed on the item's report
+ *  with who sent it back. */
+export function StepBackReasonField({ value, onChange, disabled, onSubmit }: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  /** Ctrl+Enter sends it. */
+  onSubmit?: () => void;
+}) {
+  return (
+    <TextField
+      label="סיבת ההחזרה (חובה)"
+      placeholder="למה הפריט חוזר לבדיקה? הסיבה תופיע בדוח הפריט."
+      value={value}
+      onChange={(e) => onChange(e.target.value.slice(0, REASON_MAX))}
+      onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && value.trim()) { e.preventDefault(); onSubmit?.(); } }}
+      multiline
+      minRows={3}
+      fullWidth
+      autoFocus
+      required
+      disabled={disabled}
+    />
+  );
+}
+
 /** POST api/testing/step-back: the answer, or the refusal in words. Any answer refreshes the queue. */
-export async function postStepBack(req: StepBackRequest, actor: Actor, onAnswered: () => void): Promise<StepBackOutcome> {
+export async function postStepBack(req: StepBackRequest, reason: string, actor: Actor, onAnswered: () => void): Promise<StepBackOutcome> {
   try {
-    const data = await stepBack(req.itemId, req.routeStep, actor);
+    const data = await stepBack(req.itemId, req.routeStep, reason.trim(), actor);
     onAnswered();
     return { ok: true, stationName: data.stationDesc || data.stationTypeDesc || req.toName, routeStep: data.routeStep, closingStopped: data.closingStopped };
   } catch (e) {
@@ -62,14 +91,17 @@ export function useStepBack({ actor, onRefresh, onError, onClosingStopped }: {
    *  back to waiting. */
   onClosingStopped: () => void;
 }) {
-  const [req, setReq] = React.useState<StepBackRequest | null>(null);
+  const [req, setReqState] = React.useState<StepBackRequest | null>(null);
+  const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  // Every question starts with an empty reason.
+  const setReq = (r: StepBackRequest | null) => { setReqState(r); setReason(""); };
   const [steppedBack, setSteppedBack] = React.useState<{ stationName: string; routeStep: number } | null>(null);
 
   const confirm = async () => {
-    if (!req || busy) return;
+    if (!req || busy || !reason.trim()) return;
     setBusy(true);
-    const out = await postStepBack(req, actor, onRefresh);
+    const out = await postStepBack(req, reason, actor, onRefresh);
     setBusy(false);
     setReq(null);
     if (!out.ok) { onError(out.error); return; }
@@ -81,7 +113,7 @@ export function useStepBack({ actor, onRefresh, onError, onClosingStopped }: {
     /** Ask about a request one of queueModel's step-back rules gave. */
     ask: (r: StepBackRequest) => setReq(r),
     open: req != null || steppedBack != null,
-    dialogs: { req, setReq, busy, confirm, steppedBack, setSteppedBack },
+    dialogs: { req, setReq, reason, setReason, busy, confirm, steppedBack, setSteppedBack },
   };
 }
 
@@ -113,20 +145,32 @@ export function SteppedBackPlace({ stationName, routeStep }: { stationName?: str
 
 /** The question and the answer. */
 export function StepBackDialogs({ dialogs }: { dialogs: ReturnType<typeof useStepBack>["dialogs"] }) {
-  const { req, setReq, busy, confirm, steppedBack, setSteppedBack } = dialogs;
+  const { req, setReq, reason, setReason, busy, confirm, steppedBack, setSteppedBack } = dialogs;
+  const cancel = () => { if (!busy) setReq(null); };
   return (
     <>
-    <ConfirmDialog
-        open={req != null}
-        title={`להחזיר את הפריט ל${req?.toName || "עמדה הקודמת"}?`}
-        message={req
-          ? `הפריט יחזור לשלב ${stepBackTo(req)} וימתין שם לבדיקה חוזרת.${req.fromWizard ? " סגירת המארז תיעצר, ומה שסומן באשף לא יישמר." : ""}${req.inBox ? " המארז יצא מתור הסגירה ויחכה לו, וכשהפריט יגיע שוב לסגירה המארז יחזור לתור." : ""} התוצאה הקודמת נשמרת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.`
-          : undefined}
-        confirmText="החזר"
-        busy={busy}
-        onConfirm={confirm}
-        onCancel={() => setReq(null)}
-    />
+    <Dialog open={req != null} onClose={cancel} maxWidth="xs" fullWidth>
+        <DialogTitle onClose={busy ? undefined : cancel}>
+            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                <UndoIcon fontSize={24} htmlColor="var(--color-primary)" aria-hidden />
+                {`להחזיר את הפריט ל${req?.toName || "עמדה הקודמת"}?`}
+            </Box>
+        </DialogTitle>
+        <DialogContent>
+            {req && (
+              <Typography sx={{ fontSize: "var(--text-body)" }}>
+                {`הפריט יחזור לשלב ${stepBackTo(req)} וימתין שם לבדיקה חוזרת.${req.fromWizard ? " סגירת המארז תיעצר, ומה שסומן באשף לא יישמר." : ""}${req.inBox ? " המארז יצא מתור הסגירה ויחכה לו, וכשהפריט יגיע שוב לסגירה המארז יחזור לתור." : ""} התוצאה הקודמת נשמרת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.`}
+              </Typography>
+            )}
+            <Box sx={{ mt: "14px" }}>
+                <StepBackReasonField value={reason} onChange={setReason} disabled={busy} onSubmit={confirm} />
+            </Box>
+        </DialogContent>
+        <DialogActions>
+            <Button variant="outlined" onClick={cancel} disabled={busy}>ביטול</Button>
+            <Button onClick={confirm} loading={busy} disabled={!reason.trim()}>החזר</Button>
+        </DialogActions>
+    </Dialog>
     <Dialog open={steppedBack != null} onClose={() => setSteppedBack(null)} maxWidth="xs" fullWidth>
         <DialogTitle onClose={() => setSteppedBack(null)}>
             <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>

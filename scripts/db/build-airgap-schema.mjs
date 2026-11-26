@@ -27,7 +27,7 @@ import crypto from "node:crypto";
 const CRLF = String.fromCharCode(13, 10);
 const LF = String.fromCharCode(10);
 
-const repoRoot = path.join(import.meta.dirname, "..");
+const repoRoot = path.join(import.meta.dirname, "..", "..");
 const migrationsDir = path.join(repoRoot, "prisma", "migrations");
 const outPath = path.join(
   repoRoot,

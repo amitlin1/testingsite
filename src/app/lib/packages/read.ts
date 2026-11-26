@@ -5,6 +5,7 @@ import {
   ITEM_STATE_LABEL, PACKAGE_STATUS_LABEL, packageMatches,
   type PackageItemView, type PackageStatusKey, type PackageTimelineEntry, type PackageView,
 } from "./contract";
+import { itemsAwaitingFinalSignature, itemsWithFailedResults } from "@/app/lib/item-report/lifecycle";
 import { arrivedAtClosing, atGateStep, blocksGate, decisionsOf, itemState, itemWhereText, packageStatus } from "./rules";
 
 /**
@@ -196,6 +197,7 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
         arrived_at_closing: arrivedAtClosing(m),
         prev_step_desc: m.prev_step_desc || null,
         prev_step_package_level: m.prev_step_package_level === true,
+        report_waits: null,
         pack_decision: decision?.decision ?? null,
         pack_note: decision?.note ?? null,
       };
@@ -243,6 +245,8 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       status_label: PACKAGE_STATUS_LABEL[status],
       items,
       finished_count: items.filter((it) => it.state === "done").length,
+      awaiting_final_signature: 0,
+      awaiting_external_approval: 0,
       blocked_by: blocked,
       template_snapshot: p.template_snapshot ?? null,
       opening_sku: p.opening_sku ?? null,
@@ -250,6 +254,21 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       cert_row_no: p.cert_row_no ?? null,
       cert_serial_no: p.cert_serial_no ?? null,
     });
+  }
+
+  // The closed boxes' items whose report waits for the final signature (the list's
+  // "ממתינים לחתימת מאשר"). Only closed boxes: the approver signs after the closing.
+  const closed = views.filter((v) => v.status === "done");
+  if (closed.length > 0) {
+    const awaiting = await itemsAwaitingFinalSignature(closed.flatMap((v) => v.items.map((it) => BigInt(it.item_id))));
+    // Of those, the ones that came out "לא תקין": an external approver may pass them ("ממתינים
+    // לאישור גורם חיצוני").
+    const failed = await itemsWithFailedResults([...awaiting].map((id) => BigInt(id)));
+    for (const v of closed) {
+      for (const it of v.items) it.report_waits = failed.has(it.item_id) ? "external" : awaiting.has(it.item_id) ? "sign" : null;
+      v.awaiting_final_signature = v.items.filter((it) => it.report_waits != null).length;
+      v.awaiting_external_approval = v.items.filter((it) => it.report_waits === "external").length;
+    }
   }
 
   let out = views;

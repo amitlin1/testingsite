@@ -24,8 +24,8 @@
 import * as React from "react";
 import type { Config } from "@measured/puck";
 import { FillValue, renderRichModel, isRichValue, type RichValue } from "./rich";
-import type { ReportRenderMeta, ReportSignerInfo, ReportStepResult, ReportTone, SignCell } from "./types";
-import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND, REPORT_TONE_WORD, signCellsOf } from "./types";
+import type { ReportRenderMeta, ReportSignerInfo, ReportStepBack, ReportStepResult, ReportTone, SignCell } from "./types";
+import { CLOSING_SIGNATURE_BIND, EXTERNAL_APPROVAL_FOOTNOTE, EXTERNAL_SIGNATURE_BIND, FINAL_SIGNATURE_BIND, REPORT_TONE_WORD, signCellsOf } from "./types";
 import { PASS_FAIL_WORD } from "@/app/lib/station-fields/labels";
 import { REPORT_FONTS, fontOf } from "./fonts";
 import { DEFAULT_ROOT_PROPS, WIDTH_MM, logoUrl, type HeaderSettings, type RootProps } from "./document";
@@ -103,18 +103,35 @@ function renderText(
     : renderRich(String(content ?? ""), values);
 }
 
-function VerdictChip({ verdict }: { verdict: "pass" | "fail" | null }) {
+/** `approved`: it passed by an external approval — marked "*" (EXTERNAL_APPROVAL_FOOTNOTE). */
+function VerdictChip({ verdict, approved }: { verdict: "pass" | "fail" | null; approved?: boolean }) {
   if (!verdict) return <span className="pdf-chip pdf-chip--none">—</span>;
   return (
     <span className={`pdf-chip pdf-chip--${verdict}`}>
-      {verdict === "pass" ? "✓" : "✕"} {PASS_FAIL_WORD[verdict]}
+      {verdict === "pass" ? "✓" : "✕"} {PASS_FAIL_WORD[verdict]}{approved ? <> <ApprovedMark /></> : null}
     </span>
   );
 }
 
-function ToneMark({ tone }: { tone: ReportTone | null }) {
+function ToneMark({ tone, approved }: { tone: ReportTone | null; approved?: boolean }) {
   if (!tone || tone === "neutral") return null;
-  return <span className={`pdf-chip pdf-chip--${tone}`}>{tone === "pass" ? "✓" : tone === "fail" ? "✕" : "!"} {REPORT_TONE_WORD[tone]}</span>;
+  return (
+    <span className={`pdf-chip pdf-chip--${tone}`}>
+      {tone === "pass" ? "✓" : tone === "fail" ? "✕" : "!"} {REPORT_TONE_WORD[tone]}{approved ? <> <ApprovedMark /></> : null}
+    </span>
+  );
+}
+
+/** The external approval's "*" — sized up: the David face draws it as a dot. */
+function ApprovedMark() {
+  return <span className="pdf-approved-mark">*</span>;
+}
+
+/** The "*" footnote under a table of steps, when one of them passed by an external approval. */
+function ApprovalFootnote({ rows }: { rows: readonly ReportStepResult[] }) {
+  return rows.some((r) => r.externallyApproved) ? (
+    <div className="pdf-approval-footnote"><ApprovedMark /> {EXTERNAL_APPROVAL_FOOTNOTE}</div>
+  ) : null;
 }
 
 /** The signer's identity fields a Signature cell can print (types.ts SignCell). */
@@ -140,6 +157,7 @@ function signerAttr(info: ReportSignerInfo | undefined, suffix: string): string 
 function signerLabel(bind: string, meta: ReportRenderMeta): string {
   if (bind === FINAL_SIGNATURE_BIND) return "חתימת מאשר הדוח (סופית)";
   if (bind === CLOSING_SIGNATURE_BIND) return "חתימת החותם בסגירת המארז";
+  if (bind === EXTERNAL_SIGNATURE_BIND) return "חתימת גורם חיצוני (רק בדוח שאושר חיצונית)";
   const step = /^step:(.+)$/.exec(bind);
   if (step) {
     const s = meta.steps.find((x) => x.uid === step[1]);
@@ -251,6 +269,11 @@ function sampleResults(meta: ReportRenderMeta): ReportStepResult[] {
 
 /** The general template's editor has no route, so no steps to sample: two stations that show
  *  what the detail prints (a popup's component, a route field, a photo). */
+/** What the StepBacks block shows in the editor (the real ones print only on an item that went back). */
+const STEP_BACK_SAMPLE: ReportStepBack[] = [
+  { date: "01.01.2026", time: "10:30", fromStep: 3, toStep: 2, from: "בדיקה חשמלית", to: "בדיקה ויזואלית", worker: "שם העובד", workerNumber: "", reason: "סיבת ההחזרה כפי שהעובד כתב אותה" },
+];
+
 const GENERAL_SAMPLE: ReportStepResult[] = [
   { label: "עמדה ראשונה", fields: [["מק״ט שנסרק", "ערך"], ["שדה של המסלול", "ערך"]] },
   { label: "עמדה שנייה", fields: [["מק״ט שנסרק", "ערך"], ["משקל", "ערך"]] },
@@ -342,6 +365,10 @@ export interface ResultsTableProps extends WidthProp {
   showStation: boolean;
   showComments: boolean;
 }
+export interface StepBacksProps extends WidthProp {
+  /** Print "החזרות לבדיקה חוזרת" above the table. */
+  showTitle: boolean;
+}
 export interface StepFieldsProps extends WidthProp {
   /** The step uid. */
   step: string;
@@ -383,6 +410,7 @@ export interface PdfComponentProps {
   FieldLine: FieldLineProps;
   DetailsTable: DetailsTableProps;
   ResultsTable: ResultsTableProps;
+  StepBacks: StepBacksProps;
   StepFields: StepFieldsProps;
   StepDetails: StepDetailsProps;
   Photos: PhotosProps;
@@ -626,7 +654,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                       {showStation ? <td>{r.station}</td> : null}
                       {showWorker ? <td>{r.worker}</td> : null}
                       {showDate ? <td><bdi>{r.date}{r.time ? ` ${r.time}` : ""}</bdi></td> : null}
-                      <td><VerdictChip verdict={r.verdict} /></td>
+                      <td><VerdictChip verdict={r.verdict} approved={r.externallyApproved} /></td>
                       {showComments ? <td className="pdf-results__note">{r.comments}</td> : null}
                     </tr>
                     {showFields && r.fields.filter((f) => !f.photos).length > 0 ? (
@@ -639,7 +667,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                               .map((f) => (
                                 <div key={f.id} className="pdf-results__field">
                                   <span className="pdf-results__flabel">{f.label}:</span>{" "}
-                                  <bdi>{f.value}</bdi> <ToneMark tone={f.tone} />
+                                  <bdi>{f.value}</bdi> <ToneMark tone={f.tone} approved={f.approved} />
                                   {f.note ? <span className="pdf-results__fnote"> ({f.note})</span> : null}
                                 </div>
                               ))}
@@ -648,6 +676,47 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                       </tr>
                     ) : null}
                   </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+            <ApprovalFootnote rows={rows} />
+          </Block>
+        );
+      },
+    },
+
+    // Every time the item was sent back to the test before: when, from which step to which, who
+    // sent it back and why. Prints nothing for an item never sent back.
+    StepBacks: {
+      label: "החזרות לבדיקה חוזרת",
+      defaultProps: { showTitle: true, width: "full" },
+      render: ({ showTitle, width, puck }) => {
+        const meta = readMeta(puck);
+        const rows = meta.mode === "edit" ? STEP_BACK_SAMPLE : (meta.stepBacks ?? []);
+        if (rows.length === 0) return <Block width={width}><span /></Block>;
+        const place = (name: string, step: number | null) => (step != null ? `${step}. ${name || "—"}` : name || "—");
+        return (
+          <Block width={width}>
+            {showTitle ? <div className="pdf-stepbacks__title">החזרות לבדיקה חוזרת</div> : null}
+            <table className="pdf-table pdf-results pdf-stepbacks">
+              <thead>
+                <tr>
+                  <th style={{ width: "15%" }}>תאריך</th>
+                  <th style={{ width: "17%" }}>מ־</th>
+                  <th style={{ width: "17%" }}>חזר ל־</th>
+                  <th style={{ width: "16%" }}>הוחזר ע״י</th>
+                  <th>סיבה</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className="pdf-keep">
+                    <td><bdi>{r.date}{r.time ? ` ${r.time}` : ""}</bdi></td>
+                    <td className="pdf-results__step">{place(r.from, r.fromStep)}</td>
+                    <td className="pdf-results__step">{place(r.to, r.toStep)}</td>
+                    <td>{r.worker}{r.workerNumber ? <span className="pdf-results__note"> (<bdi>{r.workerNumber}</bdi>)</span> : null}</td>
+                    <td className="pdf-stepbacks__reason">{r.reason || <span className="pdf-results__empty">לא נרשמה סיבה</span>}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -680,7 +749,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                 {r ? (
                   <span>
                     {" · "}{r.station}{" · "}{r.worker}{" · "}<bdi>{r.date}</bdi>{" "}
-                    <VerdictChip verdict={r.verdict} />
+                    <VerdictChip verdict={r.verdict} approved={r.externallyApproved} />
                   </span>
                 ) : null}
               </div>
@@ -706,12 +775,13 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                   <tr key={f.id} className="pdf-keep">
                     <td className="pdf-stepfields__label">{f.label}</td>
                     <td><bdi>{f.value}</bdi></td>
-                    <td><ToneMark tone={f.tone} /></td>
+                    <td><ToneMark tone={f.tone} approved={f.approved} /></td>
                     {showNotes ? <td className="pdf-results__note">{f.note ?? ""}</td> : null}
                   </tr>
                 ))}
               </tbody>
             </table>
+            {r ? <ApprovalFootnote rows={[r]} /> : null}
           </Block>
         );
       },
@@ -744,7 +814,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                     <strong><bdi>{r.position}</bdi>. {r.stationType}</strong>
                     <span className="pdf-stepdetail__meta">
                       {[r.station, r.worker].filter(Boolean).join(" · ")}{" · "}<bdi>{r.date}{r.time ? ` ${r.time}` : ""}</bdi>{" · "}
-                      <VerdictChip verdict={r.verdict} />
+                      <VerdictChip verdict={r.verdict} approved={r.externallyApproved} />
                     </span>
                   </div>
                   {fields.length > 0 ? (
@@ -753,7 +823,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                         {fields.map((f) => (
                           <tr key={f.id} className="pdf-keep">
                             <td className="pdf-stepfields__label" style={{ width: "38%" }}>{f.label}</td>
-                            <td><bdi>{f.value}</bdi> <ToneMark tone={f.tone} /></td>
+                            <td><bdi>{f.value}</bdi> <ToneMark tone={f.tone} approved={f.approved} /></td>
                             <td className="pdf-results__note" style={{ width: "28%" }}>{f.note ?? ""}</td>
                           </tr>
                         ))}
@@ -770,6 +840,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                 </div>
               );
             })}
+            <ApprovalFootnote rows={rows} />
           </Block>
         );
       },
@@ -818,6 +889,16 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
         const meta = readMeta(puck);
         const sig = meta.signatures[bind];
         const info = meta.signerMeta[bind];
+        const isExternal = bind === EXTERNAL_SIGNATURE_BIND;
+        // The external approver's row prints only on a report they approved, and there it stands for
+        // the final one, whose row then does not print. The editor shows both.
+        if (meta.mode !== "edit" && ((isExternal && !info) || (bind === FINAL_SIGNATURE_BIND && meta.signerMeta[EXTERNAL_SIGNATURE_BIND]))) {
+          return <Block width={width}><span /></Block>;
+        }
+        // Under the external row: their reason at the right, the manager who showed them the report at
+        // the left.
+        const reason = isExternal && info?.note ? `נימוק: ${info.note}` : "";
+        const presented = isExternal && info?.presentedBy ? `הוצג לגורם החיצוני ע״י המנהל ${info.presentedBy}.` : "";
         return (
           <Block width={width}>
             <div className="pdf-sigrow pdf-keep">
@@ -837,6 +918,14 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                   );
                 } else if (c.kind === "text") {
                   inner = <span>{renderRich(c.text ?? "", meta.values)}</span>;
+                } else if (isExternal && c.kind === "role") {
+                  // The cell's own text ("גורם חיצוני"), with the role / body they wrote under it.
+                  inner = (
+                    <span>
+                      {(c.text ?? "").trim() || "גורם חיצוני"}
+                      {info?.role ? <bdi className="pdf-sigrow__sub">{info.role}</bdi> : null}
+                    </span>
+                  );
                 } else {
                   // A role cell of a given signature that kept no role (signed before roles were
                   // kept, or a step's worker) prints the cell's own text, as plain text.
@@ -859,6 +948,12 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
                 );
               })}
             </div>
+            {reason || presented ? (
+              <div className="pdf-sigrow__note">
+                <span>{reason}</span>
+                {presented ? <span className="pdf-sigrow__presented">{presented}</span> : null}
+              </div>
+            ) : null}
           </Block>
         );
       },

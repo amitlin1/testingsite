@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { errorResponse } from "@/lib/http/errors";
 import { parseDbId } from "@/lib/http/request";
 import { withAuth } from "@/lib/auth/withAuth";
-import { ACCESS } from "@/lib/auth/roles";
+import { ACCESS, can } from "@/lib/auth/roles";
+import { metricsSchemaGate } from "@/app/lib/metrics/ledger/schema-gate";
 import { PackageError } from "@/app/lib/packages/errors";
 import { SHIPMENT_TX, deleteShipment, readDeclaredLines, readShipmentHeader, shipmentWorker, updateShipment } from "@/app/lib/shipments/save";
 import { deleteSignature } from "@/app/lib/shipments/signatures";
@@ -58,10 +59,25 @@ export const PUT = withAuth<{ id: string }>(async (request: NextRequest, { sessi
   }
 }, { perm: ACCESS.shipments });
 
-export const DELETE = withAuth<{ id: string }>(async (_req: NextRequest, { params }) => {
+/**
+ * DELETE /api/shipments/[id] — the shipment, its lines and its pending boxes.
+ * A box already taken in refuses it, unless a manager sends
+ * `{ with_taken_in: true }` (ACCESS.deleteTakenInShipment): then those boxes,
+ * their items and everything recorded on them go too (save.ts deleteShipment).
+ */
+export const DELETE = withAuth<{ id: string }>(async (req: NextRequest, { session, params }) => {
   const shipmentId = parseDbId(params.id);
   if (shipmentId == null) return notFound();
+  const withTakenIn = (await req.json().catch(() => null))?.with_taken_in === true;
+  if (withTakenIn && !can(session.roles, ACCESS.deleteTakenInShipment)) {
+    return NextResponse.json({ error: "רק מנהל יכול למחוק משלוח שנקלטו בו מארזים" }, { status: 403 });
+  }
   try {
+    // Their tests leave the metrics ledger (metrics_forget_item): refused while the DB is behind this image.
+    if (withTakenIn) {
+      const schemaDenied = await metricsSchemaGate();
+      if (schemaDenied) return schemaDenied;
+    }
     const shipment = await prisma.shipments.findUnique({ where: { id: shipmentId } });
     if (!shipment) return notFound();
     if (shipment.is_sent) return NextResponse.json({ error: "לא ניתן למחוק משלוח שנשלח" }, { status: 400 });
@@ -73,7 +89,7 @@ export const DELETE = withAuth<{ id: string }>(async (_req: NextRequest, { param
     });
     const signatures = [shipment.signature_path, ...sendSignatures.map((h) => h.signature_path)].filter((s): s is string => !!s);
 
-    await prisma.$transaction((tx) => deleteShipment(tx, shipmentId), SHIPMENT_TX);
+    await prisma.$transaction((tx) => deleteShipment(tx, shipmentId, { withTakenIn }), SHIPMENT_TX);
     for (const file of new Set(signatures)) await deleteSignature(shipmentId, file);
 
     return NextResponse.json({ message: "המשלוח נמחק בהצלחה" }, { status: 200 });

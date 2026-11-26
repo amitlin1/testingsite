@@ -219,6 +219,8 @@ export type ReleaseTestAnswer = { ok: true };
 export type StepBackBody = {
   itemId: string;
   currentRouteStep: number;
+  /** Why the item goes back — required; printed on its report. */
+  reason: string;
   workerId?: number;
   workerName?: string;
   actionId: string;

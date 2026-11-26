@@ -202,6 +202,15 @@ export const PDF_CSS = `
 .pdf-sigrow__box img { max-height: 50px; max-width: 100%; object-fit: contain; }
 .pdf-sigrow__box .pdf-fill { border-bottom: 0; min-width: 0; padding: 0; }
 .pdf-sigrow__cell .pdf-sign__label { margin-top: 2px; }
+/* the external approver's row: their role / body under the fixed text, then their reason and the
+   manager who showed them the report, under the row */
+.pdf-sigrow__sub { display: block; font-size: 8.5pt; }
+.pdf-sigrow__note { font-size: 9.5pt; margin: 1mm 0 0; display: flex; justify-content: space-between; align-items: baseline; gap: 6mm; }
+.pdf-sigrow__note > span:first-child { min-width: 0; }
+.pdf-sigrow__presented { flex-shrink: 0; margin-inline-start: auto; }
+/* "* נמצא לא תקין בבדיקה, ואושר כתקין ע״י גורם חיצוני." under a table of steps */
+.pdf-approval-footnote { font-size: 9pt; margin: 1mm 0 0; }
+.pdf-approved-mark { font-size: 1.45em; font-weight: 700; line-height: 0; vertical-align: -0.2em; }
 
 /* ---- misc ---- */
 .pdf-divider { border: 0; border-top: 1px solid #999; margin: 8px 0; }
@@ -232,6 +241,10 @@ export const PDF_CSS = `
 .pdf-stepfields__label { text-align: right !important; font-weight: 600; }
 .pdf-stephead { font-size: 10pt; margin: 6px 0 3px; }
 .pdf-placeholder { color: #aab1c0; border: 1px dashed #c4c9d4; padding: 10px; text-align: center; font-size: 9pt; }
+
+/* ---- the times the item went back to a test (StepBacks) ---- */
+.pdf-stepbacks__title { font-weight: 700; font-size: 11pt; margin: 2mm 0 1.5mm; break-after: avoid; page-break-after: avoid; }
+.pdf-stepbacks__reason { text-align: right !important; white-space: pre-wrap; }
 
 /* ---- the detail of every station (StepDetails) ---- */
 .pdf-stepdetail { margin: 0 0 4mm; }

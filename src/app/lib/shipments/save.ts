@@ -7,6 +7,7 @@ import { anyBoxTakenIn, dropPendingBoxesOfSentShipment, dropShipmentBoxes, syncS
 import { SHIPMENT_CODE_MAX, duplicateKey, type BoxSync } from "./contract";
 import { duplicateShipmentError, findDuplicateShipment, readShipmentLines, saveShipmentLines, type ShipmentLineInput } from "./lines";
 import { nonPackageTypeIds } from "./line-details";
+import { maxToSend, remainingLines, type DeclaredLine, type SentRow } from "./send";
 import { resolveShipmentWorker, type ShipmentWorker } from "./worker";
 
 /**
@@ -176,19 +177,37 @@ export async function updateShipment(
 }
 
 /** DELETE: the shipment with its lines and its pending boxes; a box already
- *  taken in refuses it (boxes.ts dropShipmentBoxes). */
-export async function deleteShipment(tx: TransactionClient, shipmentId: number): Promise<void> {
-  await dropShipmentBoxes(tx, shipmentId);
+ *  taken in refuses it, unless `withTakenIn` takes those too (boxes.ts dropShipmentBoxes). */
+export async function deleteShipment(tx: TransactionClient, shipmentId: number, opts: { withTakenIn?: boolean } = {}): Promise<void> {
+  await dropShipmentBoxes(tx, shipmentId, opts);
   await tx.shipment_items.deleteMany({ where: { shipment_id: shipmentId } });
   await tx.shipments.delete({ where: { id: shipmentId } });
 }
 
-export type ShipmentSendInput = {
-  shipmentId: number;
+export type ShipmentSendItem = { item_type_id?: number | null; makat?: string | null; amount?: number | null };
+
+/** One shipment of a send and the boxes it sends. */
+export type ShipmentSendLines = { shipmentId: number; items: ShipmentSendItem[] };
+
+/**
+ * The shipments a send (POST /api/shipment-history) names: `shipments: [{ shipment_id, items }]`
+ * when several go out under one outgoing code, or the older single `shipment_id` + `items`.
+ * Each named once, each with at least one line. In id order: each send locks its shipment
+ * (recordShipmentSend), and two sends that lock in the same order never deadlock.
+ */
+export function readShipmentSends(body: Record<string, unknown>): ShipmentSendLines[] {
+  const raw = Array.isArray(body.shipments) ? body.shipments as Record<string, unknown>[] : [{ shipment_id: body.shipment_id, items: body.items }];
+  const sends = raw.map((s) => ({ shipmentId: parseDbId(s?.shipment_id), items: s?.items }));
+  if (sends.length === 0 || sends.some((s) => s.shipmentId == null || !Array.isArray(s.items) || s.items.length === 0)) {
+    throw new HttpError(400, "חסרים פרטי השליחה: תאריך וכמויות");
+  }
+  if (new Set(sends.map((s) => s.shipmentId)).size !== sends.length) throw new HttpError(400, "משלוח מופיע פעמיים בשליחה");
+  return (sends as ShipmentSendLines[]).sort((a, b) => a.shipmentId - b.shipmentId);
+}
+
+export type ShipmentSendInput = ShipmentSendLines & {
   sentDate: Date;
-  sentShipmentCode: string;
   sender: ShipmentWorker;
-  items: { item_type_id?: number | null; makat?: string | null; amount?: number | null }[];
   signaturePath: string | null;
 };
 
@@ -197,26 +216,51 @@ export type ShipmentSendInput = {
  * shipment_history row per sent line (a line without a type or an amount is
  * skipped; the send popup leaves those out first), and once everything
  * declared went out the shipment closes and its pending boxes go.
+ * A line may send up to what its type and makat declared less what already
+ * went out (send.ts maxToSend — the popup's own limit); more is refused.
  */
 export async function recordShipmentSend(tx: TransactionClient, send: ShipmentSendInput): Promise<void> {
-  const { shipmentId, sentDate, sentShipmentCode, sender, signaturePath } = send;
+  const { shipmentId, sentDate, sender, signaturePath } = send;
+  // Locked, so two sends of one shipment count each other's boxes.
+  const [shipment] = await tx.$queryRaw<{ shipment_code: string; is_sent: boolean | null }[]>`
+    SELECT shipment_code, is_sent FROM shipments WHERE id = ${shipmentId} FOR UPDATE
+  `;
+  if (!shipment) throw new HttpError(404, "המשלוח לא נמצא");
+  if (shipment.is_sent) throw new HttpError(409, `המשלוח ${shipment.shipment_code} כבר נשלח`);
+
+  const lines = await tx.shipment_items.findMany({
+    where: { shipment_id: shipmentId },
+    select: { item_type_id: true, makat: true, quantity: true },
+    orderBy: { id: "asc" },
+  });
+  const declared: DeclaredLine[] = lines.flatMap((l) => (l.item_type_id == null ? [] : [{ ...l, item_type_id: l.item_type_id }]));
+  const sent: SentRow[] = await tx.shipment_history.findMany({
+    where: { shipment_id: shipmentId },
+    select: { item_type_id: true, makat: true, amount: true },
+  });
+
   for (const item of send.items) {
     if (!item.item_type_id || !item.amount) continue;
+    if (!Number.isInteger(item.amount) || item.amount < 0) throw new HttpError(400, "כמות מארזים לא תקינה");
+    const max = maxToSend(declared, sent, item.item_type_id, item.makat);
+    if (item.amount > max) {
+      throw new HttpError(409, `במשלוח ${shipment.shipment_code} אפשר לשלוח עוד ${max} מארזים מהסוג הזה`, { code: "SEND_OVER_DECLARED" });
+    }
     await tx.$executeRaw`
       INSERT INTO shipment_history
-       (shipment_id, sending_worker_id, sending_worker_name, sent_date, sent_shipment_code, item_type_id, makat, amount, signature_path)
-       VALUES (${shipmentId}, ${sender.id || null}, ${sender.name || null}, ${sentDate}::timestamp, ${sentShipmentCode}, ${item.item_type_id}, ${item.makat || null}, ${item.amount}, ${signaturePath})
+       (shipment_id, sending_worker_id, sending_worker_name, sent_date, item_type_id, makat, amount, signature_path)
+       VALUES (${shipmentId}, ${sender.id || null}, ${sender.name || null}, ${sentDate}::timestamp, ${item.item_type_id}, ${item.makat || null}, ${item.amount}, ${signaturePath})
     `;
+    sent.push({ item_type_id: item.item_type_id, makat: item.makat ?? null, amount: item.amount });
   }
 
-  const declared = await tx.$queryRaw<{ total: number }[]>`
-    SELECT COALESCE(SUM(quantity), 0)::int as total FROM shipment_items WHERE shipment_id = ${shipmentId}
-  `;
-  const sent = await tx.$queryRaw<{ total: number }[]>`
-    SELECT COALESCE(SUM(amount), 0)::int as total FROM shipment_history WHERE shipment_id = ${shipmentId}
-  `;
-  const totalDeclared = declared[0]?.total || 0;
-  if (totalDeclared > 0 && (sent[0]?.total || 0) >= totalDeclared) {
+  // Closed once every box declared went out — counted per type and makat, as a send is capped
+  // (two lines of one type and makat share one cap, so their sum is never reached); a shipment
+  // whose sends already reached its total before the cap closes too.
+  const totalDeclared = lines.reduce((n, l) => n + l.quantity, 0);
+  const totalSent = sent.reduce((n, r) => n + r.amount, 0);
+  const nothingLeft = declared.length > 0 && remainingLines(declared, sent).length === 0;
+  if (nothingLeft || (totalDeclared > 0 && totalSent >= totalDeclared)) {
     await tx.$executeRaw`UPDATE shipments SET is_sent = true, finished_at = ${sentDate}::timestamp WHERE id = ${shipmentId}`;
     await dropPendingBoxesOfSentShipment(tx, shipmentId);
   }

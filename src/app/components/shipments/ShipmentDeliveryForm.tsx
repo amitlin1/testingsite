@@ -5,8 +5,6 @@ import { REPORT_COLORS } from "@/app/components/reports/reportTheme";
 import { formatDocDate } from "@/app/lib/datetime";
 
 type ShipmentDeliveryFormProps = {
-    /** The outgoing shipment code (קוד משלוח יוצא). */
-    sentCode: string;
     /** YYYY-MM-DD, as the return dialog holds it. */
     sentDate: string;
     sourceShipmentCode: string;
@@ -22,11 +20,10 @@ type ShipmentDeliveryFormProps = {
  * the page one empty box for the receiver to sign by hand.
  */
 export const ShipmentDeliveryForm = React.forwardRef<HTMLDivElement, ShipmentDeliveryFormProps>(
-    ({ sentCode, sentDate, sourceShipmentCode, customerCode, itemsTotal }, ref) => (
-        <ReportPage ref={ref} titleHe="טופס מסירת משלוח" titleEn="SHIPMENT DELIVERY FORM" documentNumber={sentCode} fillPage>
+    ({ sentDate, sourceShipmentCode, customerCode, itemsTotal }, ref) => (
+        <ReportPage ref={ref} titleHe="טופס מסירת משלוח" titleEn="SHIPMENT DELIVERY FORM" documentNumber={sourceShipmentCode} fillPage>
             <ReportSection title="פרטי משלוח">
                 <FieldGrid large fields={[
-                    { label: "משלוח יוצא", value: sentCode || "—", mono: true },
                     { label: "תאריך שליחה", value: formatDocDate(sentDate) },
                     { label: "משלוח מקור", value: sourceShipmentCode || "—", mono: true },
                     { label: "קוד לקוח", value: customerCode || "—", mono: true },

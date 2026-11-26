@@ -81,7 +81,8 @@ export function queueRowOfCode(items: readonly QueueRow[], code: string): QueueR
 
 // ---- "חזרה לבדיקה הקודמת" (api/testing/step-back) -------------------------------------------
 // Who may send what back, decided here once: whoever holds ACCESS.stepBack (the route answers
-// anyone else 403 and checks everything again). Each rule answers the request, or null where the
+// anyone else 403 and checks everything again), always with a reason (stepBack.tsx asks it). Each
+// rule answers the request, or null where the
 // button is not offered.
 
 /** One item, one step back: the step it waits at now (the route moves it only from that step) and

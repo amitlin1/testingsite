@@ -21,7 +21,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const repoRoot = path.join(import.meta.dirname, "..");
+const repoRoot = path.join(import.meta.dirname, "..", "..");
 const migrationsDir = path.join(repoRoot, "prisma", "migrations");
 
 // Every migration whose name sorts AFTER this one is "new" and gets scanned.

@@ -10,12 +10,16 @@ import { readSchemaRef } from "@/app/lib/test-results/details";
 import { parseFieldsConfigOrNull } from "./catalog";
 import { isTemplate, templateHasContent } from "./template-utils";
 import { fieldOrderOf, type ItemFacts, type ResultRow } from "./variables";
+import type { ReportStepBack } from "./types";
+import { docDateParts } from "@/app/lib/datetime";
 
 export type ReportSource = {
   item: ItemFacts;
   route: { test_route_id: number; route_number: number; route_steps: number[]; step_uids: string[] } | null;
   template: Data | null;
   rows: ResultRow[];
+  /** Every time the item was sent back to the test before, oldest first. */
+  stepBacks?: ReportStepBack[];
   /** step uid → field ids in the order of the field config the rows were saved with. */
   fieldOrder?: Map<string, string[]>;
 };
@@ -60,18 +64,49 @@ async function loadRows(itemId: bigint): Promise<ResultRow[]> {
      WHERE tr.item_id = ${itemId}
      ORDER BY tr.created_at, tr.test_result_id`;
   const out = rows.map((r) => ({ ...r, created_at: r.created_at.toISOString() }));
-  // The ledger keeps the worker's name as it was; rows written without one
-  // fall back to today's directory (best-effort — a deleted user stays "#id").
-  if (out.some((r) => !r.worker_name && r.worker_id != null)) {
-    try {
-      const { getWorkersDirectory } = await import("@/lib/keycloak-admin");
-      const names = new Map((await getWorkersDirectory()).map((w) => [w.worker_id, w.worker_name]));
-      for (const r of out) if (!r.worker_name && r.worker_id != null) r.worker_name = names.get(r.worker_id) ?? null;
-    } catch (e) {
-      console.error("[item-report] workers directory unavailable — worker ids print as #id", e);
-    }
-  }
+  await fillWorkerNames(out);
   return out;
+}
+
+/** The ledger keeps the worker's name as it was; rows written without one fall back to today's
+ *  directory (best-effort — a deleted user stays "#id"). */
+async function fillWorkerNames(rows: { worker_id: number | null; worker_name: string | null }[]): Promise<void> {
+  if (!rows.some((r) => !r.worker_name && r.worker_id != null)) return;
+  try {
+    const { getWorkersDirectory } = await import("@/lib/keycloak-admin");
+    const names = new Map((await getWorkersDirectory()).map((w) => [w.worker_id, w.worker_name]));
+    for (const r of rows) if (!r.worker_name && r.worker_id != null) r.worker_name = names.get(r.worker_id) ?? null;
+  } catch (e) {
+    console.error("[item-report] workers directory unavailable — worker ids print as #id", e);
+  }
+}
+
+/** Every "חזרה לבדיקה הקודמת" of the item (the ledger's step_back transitions, lib/testing/step-back),
+ *  oldest first: who, when, from which step to which, and the reason they gave. */
+async function loadStepBacks(itemId: bigint): Promise<ReportStepBack[]> {
+  const rows = await prisma.$queryRaw<{
+    occurred_at: Date; worker_id: number | null; worker_name: string | null; reason: string | null;
+    from_step: number | null; to_step: number | null; from_type: string | null; to_type: string | null;
+  }[]>`
+    SELECT e.occurred_at, e.worker_id, e.worker_name, e.payload->>'reason' AS reason,
+           (e.payload->>'from_step')::int AS from_step, (e.payload->>'to_step')::int AS to_step,
+           TRIM(ft.test_type_desc) AS from_type, TRIM(tt.test_type_desc) AS to_type
+      FROM item_state_event e
+      LEFT JOIN test_stations_type ft ON ft.test_station_type_id = (e.payload->>'from_station_type_id')::int
+      LEFT JOIN test_stations_type tt ON tt.test_station_type_id = (e.payload->>'to_station_type_id')::int
+     WHERE e.item_id = ${itemId} AND e.kind = 'transition' AND e.payload->>'action' = 'step_back'
+     ORDER BY e.occurred_at, e.seq, e.event_id`;
+  await fillWorkerNames(rows);
+  return rows.map((r) => ({
+    ...docDateParts(r.occurred_at),
+    fromStep: r.from_step,
+    toStep: r.to_step,
+    from: r.from_type ?? "",
+    to: r.to_type ?? "",
+    worker: r.worker_name ?? (r.worker_id != null ? `#${r.worker_id}` : ""),
+    workerNumber: r.worker_id != null ? String(r.worker_id) : "",
+    reason: r.reason?.trim() ?? "",
+  }));
 }
 
 /** The field configs the rows were saved against (details.schema {route_id, v}). */
@@ -118,12 +153,27 @@ async function loadRouteAndTemplate(item: ItemFacts) {
       report_template: { select: { template: true } }, item_types: { select: { is_package: true } },
     },
   });
-  const raw = route?.report_template?.template;
-  const own = isTemplate(raw) && templateHasContent(raw) ? (raw as unknown as Data) : null;
   return {
     route: route ? { test_route_id: route.test_route_id, route_number: route.route_number, route_steps: route.route_steps, step_uids: route.step_uids } : null,
-    template: own ?? (route && !route.item_types.is_package ? await loadGeneralTemplate() : null),
+    template: await templateOfRoute(route, loadGeneralTemplate),
   };
+}
+
+/** The template a route's items are reported with: its own when it has content, else (not a kit's
+ *  box) the general one, loaded through `general` — the one rule, also for many routes at once. */
+export async function templateOfRoute(
+  route: { report_template: { template: unknown } | null; item_types: { is_package: boolean } } | null,
+  general: () => Promise<Data | null>,
+): Promise<Data | null> {
+  const raw = route?.report_template?.template;
+  if (isTemplate(raw) && templateHasContent(raw)) return raw as unknown as Data;
+  return route && !route.item_types.is_package ? general() : null;
+}
+
+/** The general template, read once for many items (memoised per call site). */
+export function generalTemplateOnce(): () => Promise<Data | null> {
+  let p: Promise<Data | null> | null = null;
+  return () => (p ??= loadGeneralTemplate());
 }
 
 /** `rows: false` skips the results (status checks need only the item + template). */
@@ -131,6 +181,6 @@ export async function loadReportSource(itemId: bigint, opts: { rows?: boolean } 
   const item = await loadItem(itemId);
   if (!item) return null;
   if (opts.rows === false) return { item, ...(await loadRouteAndTemplate(item)), rows: [] };
-  const [{ route, template }, rows] = await Promise.all([loadRouteAndTemplate(item), loadRows(itemId)]);
-  return { item, route, template, rows, fieldOrder: await loadFieldOrder(rows) };
+  const [{ route, template }, rows, stepBacks] = await Promise.all([loadRouteAndTemplate(item), loadRows(itemId), loadStepBacks(itemId)]);
+  return { item, route, template, rows, stepBacks, fieldOrder: await loadFieldOrder(rows) };
 }

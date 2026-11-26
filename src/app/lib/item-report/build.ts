@@ -12,23 +12,34 @@ import { renderPdf } from "./render";
 import { reportPhotoDataUrls } from "./photos";
 import { fontOf, type ReportFont } from "./fonts";
 import { renderTemplateBody } from "./render-react";
-import { isBundledLogo, pageChrome, rootPropsOf, type PageLine } from "./document";
+import { CLASSIFICATION_OPTIONS, isBundledLogo, pageChrome, rootPropsOf, type PageLine, type RootProps } from "./document";
 import { headerLogos, requiresClosingSignature, templateUsesPhotos } from "./template-utils";
 import { buildStepResults, buildValues, sampleValues, type GivenSignature } from "./variables";
-import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, EXTERNAL_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 import type { ReportRenderMeta, ReportSignerInfo, ReportStepResult, ReportVar } from "./types";
 import type { ReportSource } from "./source";
 
 /** A given signature: its drawing in MinIO, who signed (name, number), when, and — a closing one — the
  *  signer's "בודק" / "מנהל" ("" when not kept: the final one, or a closing signature from before roles
  *  were kept). */
-export type Signature = (GivenSignature & { key: string; number: string }) | null;
+export type Signature = (GivenSignature & { key: string; number: string; note?: string; presentedBy?: string }) | null;
 
 type BuiltReport = {
   html: string;
   font: ReportFont;
   headerLines?: PageLine[];
   footerLines?: PageLine[];
+  filename: string;
+};
+
+/** An item's report before it is wrapped in a document: the rendered body and the document
+ *  settings the wrapper and Chromium need (a kit's combined report joins several of these). */
+type ReportBody = {
+  body: string;
+  font: ReportFont;
+  root: RootProps;
+  marginMm?: { top: number; right: number; bottom: number; left: number };
+  title: string;
   filename: string;
 };
 
@@ -80,15 +91,39 @@ function stepResultsOf(src: ReportSource): ReportStepResult[] {
  */
 export async function buildReportHtml(
   src: ReportSource,
-  opts: { draft: boolean; signature: Signature; closingSignature?: Signature; values?: Record<string, string> },
+  opts: ReportOpts,
 ): Promise<BuiltReport> {
+  const r = await buildReportBody(src, opts);
+  const html = buildHtml(r.body, { marginMm: r.marginMm, title: r.title, font: r.font });
+  const { header, footer } = pageChrome(r.root);
+  return {
+    html,
+    font: r.font,
+    headerLines: header.length ? header : undefined,
+    footerLines: footer.length ? footer : undefined,
+    filename: r.filename,
+  };
+}
+
+type ReportOpts = {
+  draft: boolean;
+  signature: Signature;
+  closingSignature?: Signature;
+  /** An external approver's signature: it stands for the final one. */
+  externalSignature?: Signature;
+  values?: Record<string, string>;
+};
+
+/** The report's body, rendered — what buildReportHtml wraps, and what a kit's combined report joins. */
+export async function buildReportBody(src: ReportSource, opts: ReportOpts): Promise<ReportBody> {
   const template = src.template!;
   const results = stepResultsOf(src);
   const sig = opts.signature;
   const closingSig = opts.closingSignature ?? null;
+  const externalSig = opts.externalSignature ?? null;
   const values = opts.values ?? buildValues(
     { item: src.item, results, finished: src.item.finished_at != null },
-    { generatedAt: new Date(), signature: sig, closingSignature: closingSig },
+    { generatedAt: new Date(), signature: sig, closingSignature: closingSig, externalSignature: externalSig },
   );
 
   // Photos: only when the template prints them, each made small for the PDF (photos.ts).
@@ -100,19 +135,22 @@ export async function buildReportHtml(
 
   const signatures: Record<string, string> = {};
   const signerMeta: Record<string, ReportSignerInfo> = {};
-  for (const [bind, s] of [[FINAL_SIGNATURE_BIND, sig], [CLOSING_SIGNATURE_BIND, closingSig]] as const) {
+  for (const [bind, s] of [[FINAL_SIGNATURE_BIND, sig], [CLOSING_SIGNATURE_BIND, closingSig], [EXTERNAL_SIGNATURE_BIND, externalSig]] as const) {
     if (!s) continue;
     const url = await objectDataUrl(s.key);
     if (url) signatures[bind] = url;
-    signerMeta[bind] = { fullName: s.name, number: s.number, date: formatDocDate(s.at), role: s.role ?? "" };
+    signerMeta[bind] = {
+      fullName: s.name, number: s.number, date: formatDocDate(s.at), role: s.role ?? "",
+      ...(s.note ? { note: s.note } : {}), ...(s.presentedBy ? { presentedBy: s.presentedBy } : {}),
+    };
   }
   // The spot a draft waits for: the closing's while the item is still on its route (the closing
-  // signs it), else the final one.
+  // signs it), else the final one (unless an external approval stands for it).
   const highlightBind = !opts.draft
     ? undefined
     : src.item.finished_at == null && !closingSig && requiresClosingSignature(template)
       ? CLOSING_SIGNATURE_BIND
-      : !sig ? FINAL_SIGNATURE_BIND : undefined;
+      : !sig && !externalSig ? FINAL_SIGNATURE_BIND : undefined;
   for (const r of results) {
     signerMeta[`step:${r.uid}`] = { fullName: r.worker, number: r.workerNumber, date: r.date, station: r.station };
   }
@@ -123,6 +161,7 @@ export async function buildReportHtml(
     steps: [],
     values,
     results,
+    stepBacks: src.stepBacks ?? [],
     photos,
     signatures,
     signerMeta,
@@ -137,16 +176,48 @@ export async function buildReportHtml(
   // A frame is drawn by the page itself (pdf-styles), so the @page margins go.
   const marginMm = root.border && root.border !== "none" ? { top: 0, right: 0, bottom: 0, left: 0 } : undefined;
   const title = `דוח פריט ${src.item.item_id}${opts.draft ? " (טיוטה)" : ""}`;
-  const font = fontOf(root.font);
-  const html = buildHtml(body, { marginMm, title, font });
-  const { header, footer } = pageChrome(root);
   return {
-    html,
-    font,
-    headerLines: header.length ? header : undefined,
-    footerLines: footer.length ? footer : undefined,
+    body,
+    font: fontOf(root.font),
+    root,
+    marginMm,
+    title,
     filename: `item-${src.item.item_id}${opts.draft ? "-draft" : ""}.pdf`,
   };
+}
+
+/** The strictest classification of several reports ("" when none has one). */
+function strictestClassification(roots: readonly RootProps[]): string {
+  const rank = (c: string) => CLASSIFICATION_OPTIONS.findIndex((o) => o.value === c.trim());
+  return roots.map((r) => (r.classification || "").trim()).reduce((a, c) => (rank(c) > rank(a) ? c : a), "");
+}
+
+/**
+ * Several items' reports as ONE PDF (a kit's combined report): each report's body as it prints on
+ * its own — the same template, values, photos and signatures — one after another, each from a new
+ * page, in one Chromium render. The page settings (margins, footer, page numbers) are the first
+ * report's, the classification the strictest of them all; page numbers run through the whole
+ * document. A draft's "טיוטה" mark prints on its own report's first page only (on its own it
+ * repeats on every page — here that would mark the final reports beside it too).
+ */
+export async function renderCombinedPdf(parts: readonly ReportBody[], title: string): Promise<Buffer> {
+  if (parts.length === 0) throw new Error("renderCombinedPdf: no reports");
+  const first = parts[0];
+  const body =
+    // overflow:hidden: without it Chromium paints a sliver of the NEXT report's header logos at the
+    // bottom of a page when an absolutely placed draft mark sits in a box that runs over pages.
+    `<style>.pdf-bundle-item{position:relative;overflow:hidden;}` +
+    `.pdf-bundle-item+.pdf-bundle-item{break-before:page;page-break-before:always;}` +
+    `.pdf-bundle-item .pdf-draftmark{position:absolute;top:110mm;}</style>` +
+    parts.map((p) => `<div class="pdf-bundle-item">${p.body}</div>`).join("");
+  const fonts = [...new Set(parts.map((p) => p.font))];
+  const html = buildHtml(body, { marginMm: first.marginMm, title, font: first.font, extraFonts: fonts });
+  const { header, footer } = pageChrome({ ...first.root, classification: strictestClassification(parts.map((p) => p.root)) });
+  return renderPdf(html, {
+    headerLines: header.length ? header : undefined,
+    footerLines: footer.length ? footer : undefined,
+    font: first.font,
+  });
 }
 
 /** The report as a PDF (built, then rendered by Chromium). */

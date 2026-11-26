@@ -15,6 +15,7 @@
     "testing": { "role": "testing", "label": "מסך בדיקה, התחלת בדיקה ושליחת תוצאה", "bundles": ["manager", "tester"] },
     "shipments": { "role": "shipments", "label": "משלוחים נכנסים", "bundles": ["manager", "storekeeper"] },
     "intake": { "role": "intake", "label": "קליטת מארז מהמשלוח", "bundles": ["manager", "storekeeper"] },
+    "deleteTakenInShipment": { "role": "delete-taken-in-shipment", "label": "מחיקת משלוח שמארזיו כבר נקלטו, עם המארזים, הפריטים והבדיקות", "bundles": ["manager"] },
     "createPackage": { "role": "create-package", "label": "יצירת מארז ישירות", "bundles": ["manager"] },
     "stepBack": { "role": "step-back", "label": "חזרה לבדיקה הקודמת", "bundles": ["manager", "tester"] },
     "actAsOtherWorker": { "role": "act-as-other-worker", "label": "עבודה בשם עובד אחר", "bundles": ["manager"] },

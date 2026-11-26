@@ -16,6 +16,7 @@ import ItemFilesPanel from "@/app/components/ItemFilesPanel";
 import { ITEM_STATES, PKG_STATUS, fmtDate, fmtDateTime } from "@/app/components/packages/packageUi";
 import { AMBER, AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, GREEN, GREY, HAIR, HAIR_2, INK, INK_2, MUTED } from "@/components/ui/colors";
 import { seq2 } from "@/app/lib/packages/ids";
+import { withBasePath } from "@/lib/base-path";
 import "@/components/ui/controls.css";
 
 /** עמוד מארז — design/Packages.dc.html (isPage). */
@@ -128,6 +129,17 @@ export default function PackagePage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <DotPill label={st.label} dot={st.dot} size={13} />
             <button type="button" onClick={() => setLabelsOpen(true)} className="pkg-pill pkg-pill--ghost pkg-pill--sm" style={{ paddingInline: 16 }}>מדבקות</button>
+            {/* Every item's report in one PDF, built live (api/packages/[id]/report). */}
+            <button
+              type="button"
+              disabled={pkg.items.length === 0}
+              title={pkg.items.length === 0 ? "אין פריטים במארז" : "הדוחות של כל הפריטים במארז בקובץ PDF אחד"}
+              onClick={() => window.open(withBasePath(`/api/packages/${pkg.item_id}/report`), "_blank", "noopener")}
+              className="pkg-pill pkg-pill--ghost pkg-pill--sm"
+              style={{ paddingInline: 16 }}
+            >
+              דוח מאוחד
+            </button>
             <button type="button" onClick={() => setEditOpen(true)} className="pkg-pill pkg-pill--primary pkg-pill--sm" style={{ paddingInline: 18 }}>עריכת מארז</button>
           </div>
         </div>

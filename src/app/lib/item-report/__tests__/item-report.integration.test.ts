@@ -120,7 +120,7 @@ const itemStep = (uid: string, fields: Field[]): StepConfig =>
 const config = (...steps: StepConfig[]): RouteFieldsConfig => ({ schema: 1, steps: Object.fromEntries(steps.map((s) => [s.uid, s])) });
 
 /** Text blocks bound to the variables the tests read back out of the HTML. */
-function template(opts: { signature: boolean; closing?: boolean; marker?: string }): Data<Record<string, Record<string, unknown>>, RootProps> {
+function template(opts: { signature: boolean; closing?: boolean; external?: boolean; marker?: string }): Data<Record<string, Record<string, unknown>>, RootProps> {
   return {
     root: { props: { header: { show: true, org: "ORG", meta: "", title: "דוח בדיקה", subtitle: "", rightLogo: "", leftLogo: "" }, footer: { show: true, text: "", textAlign: "center", pageNumbers: true, pageNumberStyle: "of", pageNumberAlign: "center" }, border: "none", font: "david", classification: "בלמ\"ס" } },
     content: [
@@ -139,6 +139,9 @@ function template(opts: { signature: boolean; closing?: boolean; marker?: string
         : []),
       ...(opts.signature
         ? [{ type: "Signature", props: { id: "sg", bind: "final", width: "full", cells: [{ kind: "text", text: "FINAL-ROW" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } }]
+        : []),
+      ...(opts.external
+        ? [{ type: "Signature", props: { id: "sge", bind: "external", width: "full", cells: [{ kind: "role", text: "EXTERNAL-ROW" }, { kind: "fullName", label: "שם" }, { kind: "signature", label: "חתימה" }] } }]
         : []),
     ],
     zones: {},
@@ -171,6 +174,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     status: typeof import("../../../api/item-reports/[itemId]/status/route");
     sign: typeof import("../../../api/item-reports/[itemId]/sign/route");
     signClosing: typeof import("../../../api/item-reports/[itemId]/sign-closing/route");
+    approveExternal: typeof import("../../../api/item-reports/[itemId]/approve-external/route");
     template: typeof import("../../../api/item-reports/templates/[routeId]/route");
     preview: typeof import("../../../api/item-reports/templates/[routeId]/preview/route");
     logo: typeof import("../../../api/item-reports/logo/route");
@@ -192,6 +196,7 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
       status: await import("../../../api/item-reports/[itemId]/status/route"),
       sign: await import("../../../api/item-reports/[itemId]/sign/route"),
       signClosing: await import("../../../api/item-reports/[itemId]/sign-closing/route"),
+      approveExternal: await import("../../../api/item-reports/[itemId]/approve-external/route"),
       template: await import("../../../api/item-reports/templates/[routeId]/route"),
       preview: await import("../../../api/item-reports/templates/[routeId]/preview/route"),
       logo: await import("../../../api/item-reports/logo/route"),
@@ -903,6 +908,190 @@ describe("item PDF reports — template, draft, freeze at finish, signature, reo
     r = await sign(8005);
     assert.equal(r.status, 409);
     assert.equal(r.body.code, "ALREADY_SIGNED");
+  });
+
+  it("an external approval of a failed report: a manager only, name + signature; the failed step passes, the report locks with it in place of the final row", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    await saveTemplate(R.report, template({ signature: true, external: true }));
+    await seedReportItem(8020, v);
+    await finishRoute(8020, v);
+    const approve = (body: Record<string, unknown>, roles: AppRole[] = ["manager"]) => {
+      session = signedIn(...roles);
+      return call(api.approveExternal.POST, "/api/item-reports/8020/approve-external", json("POST", body), { itemId: "8020" });
+    };
+    const good = { name: "משה ברק", role: "נציג היצרן", note: "הקיבולת תקינה לפי היצרן", signature: PNG };
+
+    let st = await status(8020, signedIn("manager"));
+    assert.equal(st.state, "awaiting_signature");
+    assert.equal(st.failed, false);
+    let r = await approve(good);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "NOT_FAILED", "a report that passed has nothing to approve");
+
+    // Step a's result fails.
+    const stepA = await H.one<{ id: number }>(
+      `SELECT test_result_id AS id FROM test_results WHERE item_id = 8020 AND details->'schema'->>'step_uid' = $1 ORDER BY created_at DESC LIMIT 1`, [UID.a]);
+    await H.q(`UPDATE test_results SET passed = false, details = jsonb_set(details, '{verdict}', '{"ok":"fail","note":"קיבולת נמוכה"}') WHERE test_result_id = $1`, [stepA.id]);
+    st = await status(8020, signedIn("manager"));
+    assert.equal(st.failed, true);
+    assert.ok((await G.itemsAwaitingFinalSignature([BigInt(8020)])).has("8020"));
+    assert.ok((await G.itemsWithFailedResults([BigInt(8020)])).has("8020"), "the packages list: waits for an external approval");
+    let html = (await getHtml(8020)).body as string;
+    assert.match(html, /verdict=<span class="pdf-fill"><bdi>לא תקין</);
+    assert.match(html, /FINAL-ROW/);
+    assert.doesNotMatch(html, /EXTERNAL-ROW/, "the external row prints only once approved");
+
+    assert.equal((await approve(good, ["tester"])).status, 403);
+    assert.equal((await approve(good, ["storekeeper"])).status, 403);
+    assert.equal((await approve({ ...good, name: "  " })).status, 400, "a name is required");
+    assert.equal((await approve({ ...good, signature: "data:image/jpeg;base64,AAAA" })).status, 400, "PNG only");
+    assert.equal((await approve({ ...good, name: "x".repeat(201) })).status, 400);
+
+    r = await approve(good);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.version, 1);
+    assert.equal((r.body as { passed?: number }).passed, 1);
+
+    // The result itself passed, with the approval and what it was before kept.
+    const res = await H.one<{ passed: boolean; details: { verdict: { ok: string; note: string }; external_approval: Record<string, unknown> } }>(
+      "SELECT passed, details FROM test_results WHERE test_result_id = $1", [stepA.id]);
+    assert.equal(res.passed, true);
+    assert.equal(res.details.verdict.ok, "pass");
+    assert.equal(res.details.verdict.note, "קיבולת נמוכה", "the rest of the verdict stays");
+    assert.equal(res.details.external_approval.name, "משה ברק");
+    assert.equal(res.details.external_approval.presented_by_name, "רונית כהן");
+    assert.deepEqual(res.details.external_approval.previous, { passed: false, verdict: { ok: "fail", note: "קיבולת נמוכה" } });
+
+    const row = await reportRow(8020);
+    assert.equal(row.external_signed_by_name, "משה ברק");
+    assert.equal(row.external_signed_by_role, "נציג היצרן");
+    assert.equal(row.external_note, "הקיבולת תקינה לפי היצרן");
+    assert.equal(row.external_presented_by_name, "רונית כהן");
+    assert.ok(stored(row.external_signature_key));
+    assert.equal(row.signature_key, null, "no final signature");
+
+    st = await status(8020);
+    assert.equal(st.state, "final");
+    assert.equal(st.externalApprovedBy, "משה ברק");
+    assert.equal(st.externalApprovedRole, "נציג היצרן");
+    assert.equal(st.externalPresentedBy, "רונית כהן");
+    assert.equal(st.signedBy, null);
+    assert.equal((await getPdf(8020)).headers.get("x-report-final"), "1");
+    assert.equal((await G.itemsAwaitingFinalSignature([BigInt(8020)])).size, 0, "no longer waits for the approver");
+    assert.equal((await G.itemsWithFailedResults([BigInt(8020)])).size, 0, "nor for an external approval");
+
+    html = (await getHtml(8020)).body as string;
+    assert.match(html, /verdict=<span class="pdf-fill"><bdi>תקין \(אושר ע״י גורם חיצוני\)</);
+    assert.match(html, /תקין <span class="pdf-approved-mark">\*<\/span>/, "the passed step is marked");
+    assert.match(html, /נמצא לא תקין בבדיקה, ואושר כתקין ע״י גורם חיצוני/, "the footnote");
+    assert.match(html, /EXTERNAL-ROW/);
+    assert.match(html, /משה ברק/);
+    assert.match(html, /נציג היצרן/);
+    assert.match(html, /נימוק: הקיבולת תקינה לפי היצרן/);
+    assert.match(html, /הוצג לגורם החיצוני ע״י המנהל רונית כהן/);
+    assert.doesNotMatch(html, /FINAL-ROW/, "the final row gives way to it");
+    assert.doesNotMatch(html, /class="pdf-draftmark"/);
+
+    r = await approve(good);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "ALREADY_APPROVED");
+    r = await sign(8020);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "ALREADY_SIGNED", "no final signature after it");
+  });
+
+  it("an external approval waits for the closing signature when the template asks for it; then it locks with both", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    await saveTemplate(R.report, template({ signature: true, closing: true, external: true }));
+    await seedReportItem(8023, v);
+    await finishRoute(8023, v);
+    await H.q(`UPDATE test_results SET passed = false, details = jsonb_set(details, '{verdict}', '{"ok":"fail"}') WHERE item_id = 8023 AND details->'schema'->>'step_uid' = $1`, [UID.a]);
+    const approve = () => {
+      session = signedIn("manager");
+      return call(api.approveExternal.POST, "/api/item-reports/8023/approve-external", json("POST", { name: "משה", signature: PNG }), { itemId: "8023" });
+    };
+
+    let r = await approve();
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "CLOSING_MISSING", "the closing signature comes first");
+    assert.equal((await H.q("SELECT 1 FROM test_results WHERE item_id = 8023 AND passed = false")).length, 1, "nothing was passed");
+    assert.equal((await reportRow(8023))?.external_signature_key ?? null, null);
+
+    assert.equal((await signClosing(8023)).status, 200);
+    r = await approve();
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const st = await status(8023);
+    assert.equal(st.state, "final");
+    assert.ok(st.closingSignedBy && st.externalApprovedBy, "locked with both");
+  });
+
+  it("a closing signature missing on a report an external approval already locked can still be added: frozen again with both", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    // Approved without a closing signature (as before the closing one was required first).
+    await saveTemplate(R.report, template({ signature: true, external: true }));
+    await seedReportItem(8024, v);
+    await finishRoute(8024, v);
+    await H.q(`UPDATE test_results SET passed = false, details = jsonb_set(details, '{verdict}', '{"ok":"fail"}') WHERE item_id = 8024 AND details->'schema'->>'step_uid' = $1`, [UID.a]);
+    session = signedIn("manager");
+    let r = await call(api.approveExternal.POST, "/api/item-reports/8024/approve-external", json("POST", { name: "משה", signature: PNG }), { itemId: "8024" });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.version, 1);
+
+    await saveTemplate(R.report, template({ signature: true, closing: true, external: true }));
+    let st = await status(8024);
+    assert.equal(st.state, "final");
+    assert.equal(st.closingSignedBy, null);
+    assert.equal((await signClosing(8024, ["storekeeper"])).status, 403);
+    r = await signClosing(8024);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.version, 2, "frozen again");
+    st = await status(8024);
+    assert.ok(st.closingSignedBy && st.externalApprovedBy);
+    assert.equal(st.version, 2);
+    assert.match((await getHtml(8024)).body as string, /CLOSING-ROW/);
+    r = await signClosing(8024);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "ALREADY_SIGNED");
+
+    // A report locked by the final signature stays as it was.
+    await seedReportItem(8025, v);
+    await finishRoute(8025, v);
+    assert.equal((await sign(8025)).status, 200);
+    r = await signClosing(8025);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "ALREADY_FINAL");
+  });
+
+  it("an external approval needs a report still open: not after the final signature, not on a template without one", async () => {
+    const v = await publish(R.report, config(itemStep(UID.a, [VOLT, LED]), itemStep(UID.b, [CASE])));
+    const fail = (itemId: number) =>
+      H.q(`UPDATE test_results SET passed = false, details = jsonb_set(details, '{verdict}', '{"ok":"fail"}') WHERE item_id = $1 AND details->'schema'->>'step_uid' = $2`, [itemId, UID.a]);
+    const approve = (itemId: number) => {
+      session = signedIn("manager");
+      return call(api.approveExternal.POST, `/api/item-reports/${itemId}/approve-external`, json("POST", { name: "משה", signature: PNG }), { itemId: String(itemId) });
+    };
+
+    await saveTemplate(R.report, template({ signature: true, external: true }));
+    await seedReportItem(8021, v);
+    let r = await approve(8021);
+    assert.equal(r.body.code, "NOT_FINISHED");
+    await finishRoute(8021, v);
+    await fail(8021);
+    assert.equal((await sign(8021)).status, 200, "the approver signed it as it is");
+    r = await approve(8021);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "ALREADY_SIGNED");
+
+    // Without a final signature the report freezes at the finish: nothing left to approve.
+    await saveTemplate(R.report, template({ signature: false, external: true }));
+    await seedReportItem(8022, v);
+    await finishRoute(8022, v);
+    await waitForFrozen(8022);
+    await fail(8022);
+    r = await approve(8022);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, "ALREADY_FINAL");
+    assert.equal((await status(8022, signedIn("manager"))).failed, false, "the button does not show");
   });
 
   it("a template without a signature block cannot be signed", async () => {

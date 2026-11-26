@@ -58,7 +58,8 @@ function TestingPageView() {
 
   const worker = useActiveWorker();
   const actor = { workerId: worker.workerId, workerName: worker.workerName };
-  // Only who holds ACCESS.stepBack: the step-back route refuses anyone else (403), so no one else sees the button.
+  // Only who holds ACCESS.stepBack (by default managers and testers): the step-back route refuses
+  // anyone else (403), so no one else sees the button.
   const canStepBack = can(useSession().data?.roles, ACCESS.stepBack);
 
   // The scan / search field: typing narrows the tree and the rows; Enter (a scanner ends with it)
@@ -416,7 +417,7 @@ function TestingPageView() {
         open={win.next.open}
         onClose={win.next.close}
         info={win.next.info}
-        postStepBack={(req) => postStepBack(req, actor, queue.refresh)}
+        postStepBack={(req, reason) => postStepBack(req, reason, actor, queue.refresh)}
       />
       <StepBackDialogs dialogs={stepBack.dialogs} />
       <ResearchDialog open={win.research.open} onClose={win.research.close} station={win.research.station} />

@@ -58,10 +58,12 @@ export interface CheckboxProps {
   sx?: SxInput;
   className?: string;
   id?: string;
+  /** Its name for a screen reader, when no label names it (a table's pick column). */
+  "aria-label"?: string;
 }
 
 export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(function Checkbox(
-  { checked, defaultChecked, indeterminate, onChange, disabled, name, value, sx, style, className, id }: CheckboxProps & { style?: React.CSSProperties },
+  { checked, defaultChecked, indeterminate, onChange, disabled, name, value, sx, style, className, id, "aria-label": ariaLabel }: CheckboxProps & { style?: React.CSSProperties },
   ref,
 ) {
   const state = indeterminate ? "indeterminate" : checked;
@@ -69,6 +71,7 @@ export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(function Ch
     <RCheckbox.Root
       ref={ref}
       id={id}
+      aria-label={ariaLabel}
       checked={state as boolean | "indeterminate"}
       defaultChecked={defaultChecked}
       disabled={disabled}

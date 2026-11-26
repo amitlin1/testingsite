@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/icons";
 import type { ResearchStation } from "@/app/lib/testing/contract";
 import { stepBackTo, type StepBackRequest } from "./queue/queueModel";
-import { SteppedBackPlace, SteppedBackTitle, type StepBackOutcome } from "./stepBack";
+import { StepBackReasonField, SteppedBackPlace, SteppedBackTitle, type StepBackOutcome } from "./stepBack";
 import type { NextStationInfo } from "./useTestWindow";
 
 type NextStepBack =
@@ -28,14 +28,15 @@ export function NextStationDialog({ open, onClose, info, postStepBack }: {
   open: boolean;
   onClose: () => void;
   info: NextStationInfo | null;
-  postStepBack: (req: StepBackRequest) => Promise<StepBackOutcome>;
+  postStepBack: (req: StepBackRequest, reason: string) => Promise<StepBackOutcome>;
 }) {
   const [phase, setPhase] = React.useState<NextStepBack>({ phase: "idle" });
+  const [reason, setReason] = React.useState("");
   const req = info?.stepBack ?? null;
   const confirm = async () => {
-    if (!req || phase.phase === "busy") return;
+    if (!req || phase.phase === "busy" || !reason.trim()) return;
     setPhase({ phase: "busy" });
-    const out = await postStepBack(req);
+    const out = await postStepBack(req, reason);
     setPhase(out.ok ? { phase: "done", stationName: out.stationName, routeStep: out.routeStep } : { phase: "error", error: out.error });
   };
   return (
@@ -76,6 +77,9 @@ export function NextStationDialog({ open, onClose, info, postStepBack }: {
                     <Typography sx={{ fontSize: "var(--text-small)", color: "var(--color-ink-muted-48)", mt: "8px" }}>
                         התוצאה שנשמרה עכשיו נשארת בהיסטוריה, והבדיקה החדשה תחליף אותה בדוח.
                     </Typography>
+                    <Box sx={{ mt: "14px" }}>
+                        <StepBackReasonField value={reason} onChange={setReason} disabled={phase.phase === "busy"} onSubmit={confirm} />
+                    </Box>
                 </>
             ) : phase.phase === "done" ? (
                 <SteppedBackPlace stationName={phase.stationName} routeStep={phase.routeStep} />
@@ -110,12 +114,12 @@ export function NextStationDialog({ open, onClose, info, postStepBack }: {
             {phase.phase === "confirm" || phase.phase === "busy" ? (
                 <>
                     <Button variant="outlined" onClick={() => setPhase({ phase: "idle" })} disabled={phase.phase === "busy"}>ביטול</Button>
-                    <Button onClick={confirm} loading={phase.phase === "busy"}>החזר</Button>
+                    <Button onClick={confirm} loading={phase.phase === "busy"} disabled={!reason.trim()}>החזר</Button>
                 </>
             ) : (
                 <>
                     {phase.phase === "idle" && req && (
-                        <Button variant="outlined" startIcon={<UndoIcon sx={{ fontSize: 18 }} aria-hidden />} onClick={() => setPhase({ phase: "confirm" })}>
+                        <Button variant="outlined" startIcon={<UndoIcon sx={{ fontSize: 18 }} aria-hidden />} onClick={() => { setReason(""); setPhase({ phase: "confirm" }); }}>
                             חזרה לבדיקה הקודמת
                         </Button>
                     )}
