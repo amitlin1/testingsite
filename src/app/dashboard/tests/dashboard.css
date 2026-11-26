@@ -458,6 +458,12 @@
   border-color: var(--color-primary-focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 15%, transparent);
 }
+/* The rail's range field (ui/DatePicker, dense) carrying a picked range: the same
+   fill (not the bold — a full range only just fits the rail). */
+.sh-input-wrap.dash-date--set {
+  background: var(--color-primary-tint);
+  border-color: var(--color-primary-border);
+}
 .dash-field-label {
   display: block;
   margin-bottom: 4px;

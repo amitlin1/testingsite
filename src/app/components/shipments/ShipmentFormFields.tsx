@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { Controller, type Control, type FieldArrayWithId, type FieldErrors } from "react-hook-form";
-import { Alert, Button, FieldLabel, IconButton, SearchableCombobox, TextField } from "@/components/ui";
+import { Alert, Button, DatePicker, IconButton, SearchableCombobox, TextField } from "@/components/ui";
 import { Add as AddIcon, Delete as DeleteIcon, QrCodeScanner as QrCodeScannerIcon } from "@/components/ui/icons";
 import type { NewShipment } from "@/app/lib/shipments/contract";
 import type { DirectoryWorker } from "@/lib/users/rules";
@@ -64,27 +64,22 @@ export function ShipmentDateField({ control, fieldId, errors, disabled }: {
     disabled?: boolean;
 }) {
     return (
-        <div>
-            <FieldLabel required htmlFor={`${fieldId}-date`}>תאריך משלוח</FieldLabel>
-            <Controller
-                name="shipment_date"
-                control={control}
-                rules={{ required: "שדה חובה" }}
-                render={({ field: { onChange, value } }) => (
-                    <TextField
-                        id={`${fieldId}-date`}
-                        type="date"
-                        fullWidth
-                        size="small"
-                        disabled={disabled}
-                        value={value ? dateInputValue(value) : ""}
-                        onChange={(e) => onChange(e.target.value ? new Date(e.target.value) : null)}
-                        error={!!errors.shipment_date}
-                        helperText={errors.shipment_date?.message}
-                    />
-                )}
-            />
-        </div>
+        <Controller
+            name="shipment_date"
+            control={control}
+            rules={{ required: "שדה חובה" }}
+            render={({ field: { onChange, value } }) => (
+                <DatePicker
+                    id={`${fieldId}-date`}
+                    label="תאריך משלוח"
+                    required
+                    disabled={disabled}
+                    value={value ? dateInputValue(value) : ""}
+                    onChange={(iso) => onChange(iso ? new Date(iso) : null)}
+                    error={errors.shipment_date?.message}
+                />
+            )}
+        />
     );
 }
 

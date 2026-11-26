@@ -34,6 +34,8 @@ export { Autocomplete } from "./Autocomplete";
 export type { AutocompleteProps, OptionLiProps } from "./Autocomplete";
 export { default as SearchableCombobox } from "./SearchableCombobox";
 export { default as FieldLabel } from "./FieldLabel";
+export { DatePicker, formatIsoDate, parseHebrewDate } from "./DatePicker";
+export type { DatePickerProps, DateRange as DatePickerRange } from "./DatePicker";
 export { ListItemIcon, Collapse, Breadcrumbs } from "./Layout";
 export { Avatar, Stepper, Step, StepLabel } from "./Misc";
 

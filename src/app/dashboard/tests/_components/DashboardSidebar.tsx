@@ -20,7 +20,8 @@
 
 import * as React from "react";
 
-import { Switch, SearchableCombobox } from "@/components/ui";
+import { DatePicker, Switch, SearchableCombobox } from "@/components/ui";
+import { useNow } from "@/lib/hooks/useNow";
 import {
   AccessTime,
   BarChart,
@@ -43,6 +44,7 @@ import {
 } from "@/app/lib/metrics/vocabulary";
 import type { ShipmentLite } from "@/app/components/lookups";
 import type { FilterKey } from "../_lib/filters";
+import { getDateRange } from "../_lib/query";
 import { DATE_RANGE_PRESETS, type DateRangePreset, type TabKey } from "../_lib/state";
 import type { DashboardOptions } from "../_lib/useDashboardOptions";
 import type { DashboardStateApi } from "../_lib/useDashboardState";
@@ -107,6 +109,15 @@ export default function DashboardSidebar({
   // CSS below 1100px), so every id is per instance.
   const uid = React.useId();
   const id = (name: string) => `${uid}-${name}`;
+  // The range field shows the window in force: a preset's dates by this browser's
+  // calendar (0 on the server, so the field starts empty there and the first
+  // client paint agrees), or the custom range as picked.
+  const now = useNow(60_000);
+  const custom = state.datePreset === "custom";
+  const presetWindow = !custom && now ? getDateRange(state.datePreset, undefined, undefined, new Date(now)) : null;
+  const windowShown = custom
+    ? { from: state.customStart, to: state.customEnd }
+    : { from: presetWindow?.startDate ?? "", to: presetWindow?.endDate ?? "" };
 
   if (!open) {
     return (
@@ -292,26 +303,17 @@ export default function DashboardSidebar({
           />
         </div>
 
-        {state.datePreset === "custom" && (
-          <div style={{ display: "flex", gap: 6 }}>
-            <input
-              type="date"
-              value={state.customStart}
-              onChange={(e) => setCustomRange(e.target.value, state.customEnd)}
-              className={fieldClass(Boolean(state.customStart))}
-              style={{ flex: 1, fontVariantNumeric: "tabular-nums" }}
-              aria-label="מתאריך"
-            />
-            <input
-              type="date"
-              value={state.customEnd}
-              onChange={(e) => setCustomRange(state.customStart, e.target.value)}
-              className={fieldClass(Boolean(state.customEnd))}
-              style={{ flex: 1, fontVariantNumeric: "tabular-nums" }}
-              aria-label="עד תאריך"
-            />
-          </div>
-        )}
+        {/* The window the board shows, always: a preset's dates, or the range picked
+            here — picking or typing one makes it "מותאם"; a preset replaces it. */}
+        <DatePicker
+          mode="range"
+          dense
+          ariaLabel="טווח תאריכים"
+          wrapClassName={custom ? "dash-date--set" : undefined}
+          value={windowShown}
+          onChange={(r) => setCustomRange(r.from, r.to)}
+          clearable={false}
+        />
 
         <ComboField
           id={id("customer")}

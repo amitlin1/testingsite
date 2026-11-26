@@ -12,6 +12,7 @@ import {
     Alert,
     SearchableCombobox,
     FieldLabel,
+    DatePicker,
 } from "@/components/ui";
 import { Add as AddIcon, Delete as DeleteIcon, Print as PrintIcon } from "@/components/ui/icons";
 import { useReactToPrint } from "react-to-print";
@@ -331,25 +332,21 @@ export default function ShipmentSendPopup({
                             />
                         </div>
 
-                        <div>
-                            <FieldLabel required htmlFor={`${fieldId}-date`}>תאריך שליחה</FieldLabel>
-                            <Controller
-                                name="sent_date"
-                                control={control}
-                                rules={{ required: "שדה חובה" }}
-                                render={({ field }) => (
-                                    <TextField
-                                        {...field}
-                                        id={`${fieldId}-date`}
-                                        type="date"
-                                        fullWidth
-                                        size="small"
-                                        error={!!errors.sent_date}
-                                        helperText={errors.sent_date?.message}
-                                    />
-                                )}
-                            />
-                        </div>
+                        <Controller
+                            name="sent_date"
+                            control={control}
+                            rules={{ required: "שדה חובה" }}
+                            render={({ field }) => (
+                                <DatePicker
+                                    id={`${fieldId}-date`}
+                                    label="תאריך שליחה"
+                                    required
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    error={errors.sent_date?.message}
+                                />
+                            )}
+                        />
 
                         <Controller
                             name="sending_worker_id"

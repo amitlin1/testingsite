@@ -2,12 +2,13 @@
 import React, { useCallback, useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Alert, ConfirmDialog, Button, Chip, TextField, SearchableCombobox, FieldLabel, useToast } from "@/components/ui";
+import { Alert, ConfirmDialog, Button, Chip, TextField, SearchableCombobox, FieldLabel, DatePicker, useToast } from "@/components/ui";
 import { Search, Plus, X, Pencil, Trash2, Send, History, FileText, Barcode, Boxes } from "lucide-react";
 import DataTable, { StatusPill, RowActions, IconAction, ProgressCell, type Column } from "@/components/DataTable";
 import { Shipment, type DuplicateShipment } from "@/app/lib/shipments/contract";
 import { sameShipmentNumber } from "@/app/lib/itemQrParser";
 import { formatDate } from "@/app/lib/datetime";
+import { dateInputValue } from "@/app/lib/shipments/form";
 import ShipmentInsertPopup from "./ShipmentInsertPopup";
 import ShipmentUpdatePopup from "./ShipmentUpdatePopup";
 import ShipmentSendPopup from "./ShipmentSendPopup";
@@ -128,12 +129,12 @@ export default function ShipmentTable() {
             if (customerFilter) {
                 if (row.customer_code !== customerFilter) return false;
             }
-            // Date Range filter — on the receipt date the table shows.
-            if (startDate) {
-                if (new Date(receivedOf(row)) < new Date(startDate)) return false;
-            }
-            if (endDate) {
-                if (new Date(receivedOf(row)) > new Date(endDate)) return false;
+            // Date Range filter — on the receipt date the table shows (its day in
+            // Israel), both ends included.
+            if (startDate || endDate) {
+                const day = dateInputValue(receivedOf(row));
+                if (startDate && day < startDate) return false;
+                if (endDate && day > endDate) return false;
             }
             return true;
         });
@@ -364,28 +365,20 @@ export default function ShipmentTable() {
                         />
                     </div>
 
-                    <div style={{ minWidth: 150 }}>
-                        <FieldLabel htmlFor="shipments-from">מתאריך</FieldLabel>
-                        <TextField
-                            id="shipments-from"
-                            type="date"
-                            fullWidth
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            inputProps={{ style: { fontVariantNumeric: "tabular-nums" } }}
-                        />
-                    </div>
-                    <div style={{ minWidth: 150 }}>
-                        <FieldLabel htmlFor="shipments-to">עד תאריך</FieldLabel>
-                        <TextField
-                            id="shipments-to"
-                            type="date"
-                            fullWidth
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            inputProps={{ style: { fontVariantNumeric: "tabular-nums" } }}
-                        />
-                    </div>
+                    {/* one field for the range; one date alone is open-ended — from it on,
+                        or up to it (the switch beside the field) */}
+                    <DatePicker
+                        id="shipments-dates"
+                        mode="range"
+                        openEnded
+                        label="תאריך קבלה"
+                        className="shp-date-filter"
+                        value={{ from: startDate, to: endDate }}
+                        onChange={(r) => {
+                            setStartDate(r.from);
+                            setEndDate(r.to);
+                        }}
+                    />
 
                     {anyFilter && (
                         <Button variant="outlined" color="inherit" startIcon={<X size={15} strokeWidth={1.85} />} onClick={clearFilters}>

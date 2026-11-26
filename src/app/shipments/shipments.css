@@ -70,6 +70,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* the toolbar's receipt-date range: room for "01/11/2026 – 22/11/2026" */
+.shp-date-filter { flex: 0 1 auto; min-width: 270px; }
+.shp-date-filter .sh-date-row { flex-wrap: nowrap; }
+.shp-date-filter .sh-date-row > .sh-date { flex: 0 0 270px; }
+
 /* ---- popup forms ---------------------------------------------------------
    Two columns as in the artboard (three on the return form), one column on a
    phone-width screen. `--full` spans the row (contact details). */

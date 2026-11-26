@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Button, TextField } from "@/components/ui";
+import { Button, DatePicker, TextField } from "@/components/ui";
 import { sendJson } from "@/lib/api/client";
 import {
   ERR_HOLIDAY_RANGE,
@@ -114,18 +114,18 @@ export default function HolidayDialog({
         <TextField label="שם" required fullWidth value={name} onChange={(e) => setName(e.target.value)} inputProps={{ maxLength: 200 }} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14, marginBottom: 14 }}>
-        <TextField label="מתאריך" type="date" required fullWidth value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        <TextField
-          label="עד תאריך"
-          type="date"
+      {/* one field for the range: two clicks in the calendar, or the same day twice for one day */}
+      <div style={{ marginBottom: 14 }}>
+        <DatePicker
+          mode="range"
+          label="תאריכים"
           required
-          fullWidth
-          value={endDate}
-          inputProps={{ min: startDate || undefined }}
-          onChange={(e) => setEndDate(e.target.value)}
-          error={rangeErr}
-          helperText={rangeErr ? ERR_HOLIDAY_RANGE : undefined}
+          value={{ from: startDate, to: endDate }}
+          onChange={(r) => {
+            setStartDate(r.from);
+            setEndDate(r.to);
+          }}
+          error={rangeErr ? ERR_HOLIDAY_RANGE : undefined}
         />
       </div>
 

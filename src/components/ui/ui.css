@@ -251,6 +251,92 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-field-helper { font-size: 12px; margin-top: 6px; color: var(--color-ink-muted-48); }
 .sh-field-helper--error { color: var(--color-destructive); }
 
+/* -------------------------------------------------------- Date picker ----- */
+/* ui/DatePicker — the ExtraHours system's date field and calendar on this
+   app's tokens. A field to type in (DD/MM/YYYY; a range "01/12/2026 –
+   05/12/2026") with a calendar button at its end. The calendar: the week from
+   Sunday (א׳–ש׳), Friday and Saturday a shade lighter, today ringed in
+   primary, the chosen day filled, a range washed in primary-soft (and
+   previewed up to the day under the mouse while picking), holidays with an
+   amber dot and their name under the grid. */
+.sh-date-field { min-width: 0; }
+/* the field, and — an open-ended range with one date — the switch from it on / up to it */
+.sh-date-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.sh-date-row > .sh-date { flex: 1 1 160px; min-width: 0; }
+.sh-input-wrap.sh-date { gap: 4px; padding-inline-end: 4px; }
+/* the digits run left to right, aligned with the Hebrew fields */
+.sh-input-wrap.sh-date > input { direction: ltr; text-align: right; font-variant-numeric: tabular-nums; }
+.sh-date-toggle {
+  flex: none; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: var(--r-xs); background: none; color: var(--color-ink-muted-48); cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.sh-date-toggle[aria-expanded="true"] { background: var(--color-canvas-parchment); color: var(--color-primary); }
+@media (hover: hover) and (pointer: fine) {
+  .sh-date-toggle:hover:not(:disabled) { background: var(--color-canvas-parchment); color: var(--color-primary); }
+}
+.sh-date-toggle:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 0; }
+.sh-date-toggle:disabled { cursor: not-allowed; }
+/* the 34px field of the dense filter rails */
+/* (a range, "01/11/2026 – 22/11/2026", has to fit the rail's ~200px field) */
+.sh-input-wrap.sh-date--dense { min-height: 34px; gap: 0; padding-inline: 8px 2px; }
+.sh-input-wrap.sh-date--dense > input { padding: 0; font-size: var(--text-fine); }
+.sh-date--dense .sh-date-toggle { width: 28px; height: 28px; }
+
+/* The calendar: an AnchoredPopover (its own layer, above the popup dialogs). */
+.sh-cal {
+  box-sizing: border-box; width: 316px; padding: 14px;
+  background: var(--color-canvas); color: var(--color-ink);
+  border: 1px solid var(--color-hairline); border-radius: var(--r-md); box-shadow: var(--shadow-pop);
+  font-family: var(--font-text);
+  transform-origin: var(--radix-popover-content-transform-origin);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+@starting-style { .sh-cal { opacity: 0; transform: translateY(-4px) scale(.98); } }
+.sh-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.sh-cal-title { font-size: var(--text-body); font-weight: var(--fw-bold); }
+.sh-cal-nav { display: flex; gap: 2px; }
+.sh-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; }
+.sh-cal-dow { padding: 4px 0 6px; text-align: center; font-size: var(--text-fine); font-weight: var(--fw-bold); color: var(--color-ink-muted-48); }
+.sh-cal-dow[data-strong] { color: var(--color-ink); }
+.sh-cal-day {
+  position: relative; height: 38px; margin: 0; border: 0; border-radius: var(--r-xs); background: none;
+  color: var(--color-ink); font: inherit; font-size: var(--text-body-sm); font-weight: var(--fw-regular);
+  font-variant-numeric: tabular-nums; cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sh-cal-day:not([data-selected]):not([data-inrange]):hover:not(:disabled) { background: var(--color-canvas-parchment); }
+  .sh-cal-day[data-strong]:not([data-selected]):not([data-inrange]):hover:not(:disabled) { background: var(--color-hairline); }
+}
+.sh-cal-day[data-weekend] { color: var(--color-ink-muted-48); }
+/* a darker band, for days a screen is about (strongDays) */
+.sh-cal-day[data-strong] { background: var(--color-canvas-parchment); color: var(--color-ink); font-weight: var(--fw-bold); }
+.sh-cal-day[data-outside] { color: var(--color-ink-muted-40); font-weight: var(--fw-regular); }
+.sh-cal-day[data-today] { box-shadow: inset 0 0 0 1.5px var(--color-primary); font-weight: var(--fw-bold); }
+.sh-cal-day[data-inrange] { border-radius: 0; background: var(--color-primary-soft); color: var(--color-primary); }
+.sh-cal-day[data-selected] { border-radius: var(--r-xs); background: var(--color-primary); color: var(--color-on-primary); font-weight: var(--fw-bold); }
+.sh-cal-day[data-holiday]::after {
+  content: ""; position: absolute; bottom: 4px; inset-inline-start: 50%; width: 5px; height: 5px;
+  margin-inline-start: -2.5px; border-radius: 50%; background: var(--color-status-late);
+}
+.sh-cal-day[data-selected][data-holiday]::after { background: var(--color-on-primary); }
+.sh-cal-day:disabled { color: var(--color-ink-muted-40); text-decoration: line-through; cursor: not-allowed; }
+.sh-cal-day:focus-visible { outline: 2px solid var(--color-primary-focus); outline-offset: 1px; z-index: 1; }
+.sh-cal-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--color-divider-soft);
+}
+.sh-cal-note { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+.sh-cal-note::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--color-status-late); }
+.sh-cal-note span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-cal-actions { display: flex; gap: 4px; }
+.sh-cal-hint { font-size: var(--text-fine); color: var(--color-ink-muted-48); }
+/* one day of an open-ended range picked: the hint, and under it from it on / up to it */
+.sh-cal-foot--stack { flex-direction: column; align-items: stretch; gap: 6px; }
+@media (forced-colors: active) {
+  .sh-cal-day[data-selected], .sh-cal-day[data-inrange] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+}
+
 /* ------------------------------------------------------------- Select ----- */
 .sh-select-trigger {
   box-sizing: border-box;
