@@ -33,7 +33,7 @@ import { ReportKeys } from "@/lib/storage/keys";
 import { registerFileObject, markFileObjectDeleted } from "@/lib/file-registry";
 import { requiresClosingSignature, requiresFinalSignature, templateHasContent } from "./template-utils";
 import { buildReportBody, buildReportHtml, renderCombinedPdf, renderReportPdf, type Signature } from "./build";
-import { loadReportSource, type ReportSource } from "./source";
+import { generalTemplateOnce, loadReportSource, templateOfRoute, type ReportSource } from "./source";
 import type { ReportState, ReportStatus } from "./contract";
 
 async function loadReportRow(itemId: bigint) {
@@ -99,7 +99,10 @@ function signaturesOf(row: ReportRow | null, finishedAt: Date | null) {
   };
 }
 
-function stateOf(src: ReportSource, row: ReportRow | null): ReportStatus {
+/** What a report's state is read from: the item's finish and its template. */
+type StateSource = { item: { finished_at: Date | null }; template: ReportSource["template"] };
+
+function stateOf(src: StateSource, row: ReportRow | null): ReportStatus {
   const finished = src.item.finished_at != null;
   const hasTemplate = !!src.template && templateHasContent(src.template);
   const needsSignature = hasTemplate && requiresFinalSignature(src.template);
@@ -201,6 +204,40 @@ export async function getItemReport(itemId: bigint): Promise<ReportDocument> {
 
   const { bytes, filename } = await renderReportPdf(await full(), { draft: true, ...signaturesOf(row, head.item.finished_at) });
   return { kind: "pdf", bytes, final: false, version: 0, filename };
+}
+
+/**
+ * Of these items, those whose report waits for the final signature ("awaiting_signature" — the
+ * state the item page shows): finished, the template asks for it, not given and not frozen. In a
+ * few queries for all of them (the packages list asks for every closed box's items).
+ */
+export async function itemsAwaitingFinalSignature(itemIds: readonly bigint[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (itemIds.length === 0) return out;
+  const routes = await prisma.item_routes.findMany({
+    where: { item_id: { in: [...itemIds] }, finished_at: { not: null } },
+    select: { item_id: true, item_type_id: true, route_number: true, finished_at: true },
+  });
+  if (routes.length === 0) return out;
+  const pairs = [...new Map(routes.map((r) => [`${r.item_type_id}:${r.route_number}`, r])).values()];
+  const [testingRoutes, rows] = await Promise.all([
+    prisma.testing_routes.findMany({
+      where: { OR: pairs.map((r) => ({ item_type_id: r.item_type_id, route_number: r.route_number })) },
+      select: { item_type_id: true, route_number: true, report_template: { select: { template: true } }, item_types: { select: { is_package: true } } },
+    }),
+    prisma.item_reports.findMany({ where: { item_id: { in: routes.map((r) => r.item_id) } } }),
+  ]);
+  const general = generalTemplateOnce();
+  const templates = new Map<string, ReportSource["template"]>();
+  for (const tr of testingRoutes) templates.set(`${tr.item_type_id}:${tr.route_number}`, await templateOfRoute(tr, general));
+  const rowOf = new Map(rows.map((r) => [r.item_id.toString(), r]));
+  for (const r of routes) {
+    const template = templates.get(`${r.item_type_id}:${r.route_number}`) ?? null;
+    if (!template) continue;
+    const state = stateOf({ item: { finished_at: r.finished_at }, template }, rowOf.get(r.item_id.toString()) ?? null).state;
+    if (state === "awaiting_signature") out.add(r.item_id.toString());
+  }
+  return out;
 }
 
 type PackageReportDocument =

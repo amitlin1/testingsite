@@ -114,12 +114,27 @@ async function loadRouteAndTemplate(item: ItemFacts) {
       report_template: { select: { template: true } }, item_types: { select: { is_package: true } },
     },
   });
-  const raw = route?.report_template?.template;
-  const own = isTemplate(raw) && templateHasContent(raw) ? (raw as unknown as Data) : null;
   return {
     route: route ? { test_route_id: route.test_route_id, route_number: route.route_number, route_steps: route.route_steps, step_uids: route.step_uids } : null,
-    template: own ?? (route && !route.item_types.is_package ? await loadGeneralTemplate() : null),
+    template: await templateOfRoute(route, loadGeneralTemplate),
   };
+}
+
+/** The template a route's items are reported with: its own when it has content, else (not a kit's
+ *  box) the general one, loaded through `general` — the one rule, also for many routes at once. */
+export async function templateOfRoute(
+  route: { report_template: { template: unknown } | null; item_types: { is_package: boolean } } | null,
+  general: () => Promise<Data | null>,
+): Promise<Data | null> {
+  const raw = route?.report_template?.template;
+  if (isTemplate(raw) && templateHasContent(raw)) return raw as unknown as Data;
+  return route && !route.item_types.is_package ? general() : null;
+}
+
+/** The general template, read once for many items (memoised per call site). */
+export function generalTemplateOnce(): () => Promise<Data | null> {
+  let p: Promise<Data | null> | null = null;
+  return () => (p ??= loadGeneralTemplate());
 }
 
 /** `rows: false` skips the results (status checks need only the item + template). */

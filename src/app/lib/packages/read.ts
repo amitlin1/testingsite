@@ -5,6 +5,7 @@ import {
   ITEM_STATE_LABEL, PACKAGE_STATUS_LABEL, packageMatches,
   type PackageItemView, type PackageStatusKey, type PackageTimelineEntry, type PackageView,
 } from "./contract";
+import { itemsAwaitingFinalSignature } from "@/app/lib/item-report/lifecycle";
 import { arrivedAtClosing, atGateStep, blocksGate, decisionsOf, itemState, itemWhereText, packageStatus } from "./rules";
 
 /**
@@ -243,6 +244,7 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       status_label: PACKAGE_STATUS_LABEL[status],
       items,
       finished_count: items.filter((it) => it.state === "done").length,
+      awaiting_final_signature: 0,
       blocked_by: blocked,
       template_snapshot: p.template_snapshot ?? null,
       opening_sku: p.opening_sku ?? null,
@@ -250,6 +252,14 @@ export async function loadPackages(filters: PackageListFilters = {}): Promise<Pa
       cert_row_no: p.cert_row_no ?? null,
       cert_serial_no: p.cert_serial_no ?? null,
     });
+  }
+
+  // The closed boxes' items whose report waits for the final signature (the list's
+  // "ממתינים לחתימת מאשר"). Only closed boxes: the approver signs after the closing.
+  const closed = views.filter((v) => v.status === "done");
+  if (closed.length > 0) {
+    const awaiting = await itemsAwaitingFinalSignature(closed.flatMap((v) => v.items.map((it) => BigInt(it.item_id))));
+    for (const v of closed) v.awaiting_final_signature = v.items.filter((it) => awaiting.has(it.item_id)).length;
   }
 
   let out = views;

@@ -37,11 +37,14 @@ import "./board.css";
  */
 
 type TabKey = Stage | "all";
+/** In the order of the process (Stage). */
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "test", label: "בתהליך בדיקות" },
-  { key: "pending", label: "טרם נקלטו" },
-  { key: "done", label: "הושלמו · ממתינים ליציאה" },
   { key: "all", label: "הכל" },
+  { key: "pending", label: "טרם נקלטו" },
+  { key: "test", label: "בתהליך בדיקות" },
+  { key: "close", label: "ממתינים לחתימה וסגירה" },
+  { key: "sign", label: "הושלמו · ממתינים לחתימת מאשר" },
+  { key: "done", label: "הושלמו · ממתינים ליציאה" },
 ];
 
 const URL_DEFAULTS = { tab: "test", [PACKAGES_PARAMS.q]: "", customer: "", [PACKAGES_PARAMS.shipment]: "", type: "", step: "" };
@@ -138,7 +141,7 @@ export default function PackagesBoard() {
   }, [base, ql, searching, url.tab, sentView]);
 
   const counts = React.useMemo(() => {
-    const c: Record<TabKey, number> = { test: 0, pending: 0, done: 0, all: base.length };
+    const c: Record<TabKey, number> = { pending: 0, test: 0, close: 0, sign: 0, done: 0, all: base.length };
     for (const p of base) c[stageOf(p)]++;
     return c;
   }, [base]);

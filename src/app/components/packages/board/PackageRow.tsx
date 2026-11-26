@@ -21,8 +21,16 @@ type Item = PackageView["items"][number];
 const OFF = "var(--color-hairline)";
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
-export type Stage = "test" | "pending" | "done";
-export const stageOf = (p: PackageView): Stage => (p.status === "pending" ? "pending" : p.status === "done" ? "done" : "test");
+/** The list's tabs, in the order of the process: not taken in → in testing → at the closing (its
+ *  signature and "סגור מארז") → closed, reports waiting for the approver → ready to leave. */
+export type Stage = "pending" | "test" | "close" | "sign" | "done";
+export function stageOf(p: PackageView): Stage {
+  if (p.status === "pending") return "pending";
+  if (p.status === "done") return p.awaiting_final_signature > 0 ? "sign" : "done";
+  // Waiting for the closing, or being closed right now (in test at the route's last step).
+  if (p.status === "readyClose" || (p.status === "test" && p.route_length > 1 && p.current_route_step === p.route_length)) return "close";
+  return "test";
+}
 
 /** A box / item the testing screen has in a queue right now. */
 const pkgAtStation = (p: PackageView) => p.status === "queue" || p.status === "test" || p.status === "readyClose";
@@ -48,7 +56,12 @@ function pkgStepText(p: PackageView): { n: string; where: string } {
 
 function pkgNote(p: PackageView): { text: string; warn: boolean } {
   if (p.status === "pending") return { text: "ממתין לסריקה בקליטה", warn: false };
-  if (p.status === "done") return { text: p.closed_at ? `נסגר ${fmtDate(p.closed_at)}` : "נסגר", warn: false };
+  if (p.status === "done") {
+    const closed = p.closed_at ? `נסגר ${fmtDate(p.closed_at)}` : "נסגר";
+    return p.awaiting_final_signature > 0
+      ? { text: `${closed} · ${p.awaiting_final_signature} דוחות ממתינים לחתימת מאשר`, warn: true }
+      : { text: closed, warn: false };
+  }
   if (p.status === "waitItems" && p.blocked_by.length > 0) {
     return { text: `${p.blocked_by.length} פריטים עוד לא הגיעו לסגירה`, warn: true };
   }

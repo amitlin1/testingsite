@@ -102,6 +102,9 @@ export type PackageView = {
   status_label: string;
   items: PackageItemView[];
   finished_count: number;
+  /** A closed box: how many of its items' reports wait for the approver's final signature
+   *  (item-report "awaiting_signature"). 0 on a box not closed yet. */
+  awaiting_final_signature: number;
   /** Items that keep the box out of the closing queue, with where they are. */
   blocked_by: { item_id: string; package_seq: number | null; item_type_desc: string; station_name: string | null }[];
   template_snapshot: unknown;

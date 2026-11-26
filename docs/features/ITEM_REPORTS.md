@@ -183,6 +183,12 @@ box closed before the template had the block, or the closing had no "חתימה 
 
 ## The final signature
 
+The packages list (`/packages`) has a tab for the closed boxes whose items wait for it —
+"הושלמו · ממתינים לחתימת מאשר": `PackageView.awaiting_final_signature` counts the box's items in
+the state `awaiting_signature` (`itemsAwaitingFinalSignature` in `lifecycle.ts`, the same `stateOf`
+rule as the item page, in a few queries for every closed box). A closed box with none is "ממתינים
+ליציאה".
+
 On the item page, "חתימה סופית על הדוח" (`POST /api/item-reports/<id>/sign`, `signItemReport`):
 only `ACCESS.reportFinalSign`, once per finish — the one who signed at the closing may give it
 too. It freezes the report with both signatures on it.
