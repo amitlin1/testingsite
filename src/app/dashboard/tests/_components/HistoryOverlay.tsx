@@ -62,7 +62,7 @@ import { CappedPeriodNotice } from "./AmberNotice";
 import { Legend } from "./DataCard";
 import Segmented from "./Segmented";
 import CardInfo from "./CardInfo";
-import { EXPLAIN } from "../_lib/explain";
+import { EXPLAIN, type Explain } from "../_lib/explain";
 import { ChartBody } from "./charts/chartConfig";
 import DurationChart, {
   DURATION_CHART_MODES,
@@ -106,6 +106,8 @@ const KIND_CONFIG: Record<
     queueLabel: string;
     lineLabel: string;
     stateTitle: string;
+    /** The ⓘ beside the state chart's title. */
+    stateExplain: Explain;
     footnote: string;
     cta: string;
   }
@@ -116,6 +118,7 @@ const KIND_CONFIG: Record<
     queueLabel: "בתור של סוג העמדה",
     lineLabel: "טופל ביום · צעדים (סקאלה נפרדת)",
     stateTitle: "מצב העמדה לאורך זמן · תמונה יומית ב-12:00",
+    stateExplain: EXPLAIN.popStateStation,
     footnote:
       "יום ללא סגירה מוצג כפער בגרף, לא כאפס. התור שייך לסוג העמדה ומשותף לכל עמדות הסוג.",
     cta: "פתח פריטים איטיים בעמדה",
@@ -126,6 +129,7 @@ const KIND_CONFIG: Record<
     queueLabel: "בתור",
     lineLabel: "מסלולים שנסגרו · מצטבר",
     stateTitle: "התקדמות המשלוח לאורך זמן",
+    stateExplain: EXPLAIN.popStateShipment,
     footnote:
       "אחוז ההשלמה מחושב מול הפריטים שנפתח להם מסלול עד אותו יום — לא מול כמות המשלוח. פתיחת מסלול חדש מגדילה את המכנה, ולכן העקומה יכולה לרדת.",
     cta: "סנן את הלוח למשלוח",
@@ -136,6 +140,7 @@ const KIND_CONFIG: Record<
     queueLabel: "בתור",
     lineLabel: "מסלולים שנסגרו · מצטבר",
     stateTitle: "מצב הפריטים של הלקוח לאורך זמן",
+    stateExplain: EXPLAIN.popStateCustomer,
     footnote: "יום ללא סגירה מוצג כפער בגרף, לא כאפס.",
     cta: "סנן את הלוח ללקוח",
   },
@@ -145,6 +150,7 @@ const KIND_CONFIG: Record<
     queueLabel: "בתור",
     lineLabel: "מסלולים שנסגרו · מצטבר",
     stateTitle: "מצב סוג הפריט לאורך זמן",
+    stateExplain: EXPLAIN.popStateType,
     footnote: "יום ללא סגירה מוצג כפער בגרף, לא כאפס.",
     cta: "סנן את הלוח לסוג הפריט",
   },
@@ -372,6 +378,7 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
             >
               <div style={{ fontSize: "var(--text-fine)", color: "var(--color-ink-muted-48)", fontWeight: 600 }}>
                 {cell.label}
+                <CardInfo explain={cell.explain} panelLink={false} />
               </div>
               <div
                 style={{
@@ -400,7 +407,10 @@ export default function HistoryOverlay({ target, onClose, onApplyFilter }: Histo
 
         <section style={sectionStyle}>
           <div style={sectionHeadStyle}>
-            <h3 style={sectionTitleStyle}>{config.stateTitle}</h3>
+            <h3 style={sectionTitleStyle}>
+              {config.stateTitle}
+              <CardInfo explain={config.stateExplain} panelLink={false} />
+            </h3>
             <Legend
               items={[
                 { color: STATE_COLOR.queued, label: config.queueLabel },
@@ -563,6 +573,8 @@ function EmptyHistory() {
 
 interface StatCell {
   label: string;
+  /** The ⓘ beside the label: what the number counts. */
+  explain: Explain;
   value: string;
   unit?: string;
   note: string;
@@ -589,12 +601,14 @@ function useStatCells(target: HistoryTarget, points: HistoryPoint[] | null): Sta
       return [
         {
           label: "טופל בתקופה",
+          explain: EXPLAIN.popStationProcessed,
           value: formatCount(steps),
           unit: "צעדים",
           note: "כולל חזרות ממחקר",
         },
         {
           label: "המתנה · ברוטו",
+          explain: EXPLAIN.popStationWait,
           value: formatMinutes(wall),
           note: isNil(wall)
             ? "התור של סוג העמדה"
@@ -606,6 +620,7 @@ function useStatCells(target: HistoryTarget, points: HistoryPoint[] | null): Sta
           // station holds, so here `ועוד` is right — unlike the KPI card, whose
           // field already counts it in.
           label: "בבדיקה ביום האחרון",
+          explain: EXPLAIN.popStationInTest,
           value: formatCount(last?.test ?? null),
           note: `ועוד ${formatCount(last?.research ?? 0)} במחקר · תמונה ב-12:00`,
         },
@@ -617,6 +632,7 @@ function useStatCells(target: HistoryTarget, points: HistoryPoint[] | null): Sta
           // matching the board column that was just clicked, and it says "now"
           // on its face so nobody reads it as part of the series.
           label: "הוותיק בתור · כרגע",
+          explain: EXPLAIN.popStationOldest,
           value: isNil(age) ? EM_DASH : formatMinutes(age),
           note: "מי שממתין עכשיו",
           tone: queueAgeTone(age),
@@ -632,6 +648,7 @@ function useStatCells(target: HistoryTarget, points: HistoryPoint[] | null): Sta
     return [
       {
         label: "מסלולים שנסגרו",
+        explain: EXPLAIN.popClosed,
         value: formatCount(last?.line ?? null),
         note: "מצטבר עד סוף התקופה · סגירת מסלול בלבד",
       },
@@ -640,6 +657,7 @@ function useStatCells(target: HistoryTarget, points: HistoryPoint[] | null): Sta
         // Asia/Jerusalem on each civil day, so calling it "כרגע" would promise a
         // liveness the series does not have.
         label: "פתוחים ביום האחרון",
+        explain: EXPLAIN.popOpen,
         value: formatCount(open),
         note: `${formatCount(last?.queue ?? 0)} ממתינים · תמונה ב-12:00`,
         // Neutral: no threshold says this many open items is a warning.

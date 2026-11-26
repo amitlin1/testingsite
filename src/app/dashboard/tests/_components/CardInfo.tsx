@@ -5,7 +5,8 @@
 // ברוטו / נטו one and the role tag on the users page; it opens a small popover
 // rather than a side panel because the answer is short. A card that shows
 // durations also says in one line what ברוטו and נטו mean, and links to the
-// full panel (ClockInfo) when the screen has one.
+// full panel (ClockInfo) when the screen has one — not from inside a modal
+// dialog (the history pop-ups), which the side panel cannot open over.
 // Texts: ../_lib/explain.ts.
 
 import * as React from "react";
@@ -16,7 +17,7 @@ import { useClockInfoOpen } from "@/app/components/ClockInfo/ClockInfo";
 import { CLOCK_TEXT } from "@/app/lib/dashboard/work-clock";
 import type { Explain } from "../_lib/explain";
 
-export default function CardInfo({ explain }: { explain: Explain }) {
+export default function CardInfo({ explain, panelLink = true }: { explain: Explain; panelLink?: boolean }) {
   const [open, setOpen] = React.useState(false);
   const openClock = useClockInfoOpen();
   const titleId = React.useId();
@@ -59,7 +60,7 @@ export default function CardInfo({ explain }: { explain: Explain }) {
             <p>
               <b>{CLOCK_TEXT.work.label}</b> = {CLOCK_TEXT.work.short}.
             </p>
-            {openClock && (
+            {openClock && panelLink && (
               <button
                 type="button"
                 className="dash-link"
