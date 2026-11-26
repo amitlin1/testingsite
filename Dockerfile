@@ -59,7 +59,7 @@ FROM node:${NODE_VERSION}-bullseye-slim AS runner
 WORKDIR /app
 
 # Chromium renders the item PDF reports (src/app/lib/item-report/render.ts,
-# docs/ITEM_REPORTS.md). Installed at BUILD time, while the build machine is
+# docs/features/ITEM_REPORTS.md). Installed at BUILD time, while the build machine is
 # online — the image then carries it into the air-gap. Fonts are not needed:
 # the report HTML inlines the bundled Rubik (public/fonts).
 # Bullseye's LTS ended: deb.debian.org still serves the bullseye-security index

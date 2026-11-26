@@ -210,7 +210,7 @@ export default function StationTypesTable({ selectedId, onSelect }: StationTypes
                   )}
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-                  {/* The type's popup template (docs/popup-templates/PLAN.md step 1.6). */}
+                  {/* The type's popup template (docs/features/popup-templates/PLAN.md step 1.6). */}
                   <IconButton
                     size="small"
                     className="set-act"

@@ -50,7 +50,7 @@ export interface SearchItem {
   statusDesc: string | null;
   stationDesc: string | null;
   isFinished: boolean;
-  /** Package model (docs/packages/PLAN.md): this row is a box. */
+  /** Package model (docs/features/packages/PLAN.md): this row is a box. */
   isPackage: boolean;
   /** The box this item sits in (null for a box or a legacy loose item). */
   packageId: string | null;

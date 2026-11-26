@@ -1,4 +1,4 @@
-// Q1..Q8 — the ledger read path (§5.2..§5.9 of docs/dashboard-migration-plan-v2.md).
+// Q1..Q8 — the ledger read path (§5.2..§5.9 of docs/architecture/dashboard-migration-plan-v2.md).
 //
 // Every number the dashboard shows comes from here: item_state_interval and
 // route_run are the only sources, with no cache and no rollup table (§6 — the
@@ -41,7 +41,7 @@ import { buildCompletionSeries } from "./completion-series";
 import { cnt, guardRangeProbes, num, run, str, type Built, type MetricsClient } from "./sql";
 
 /**
- * Package model (docs/packages/PLAN.md §9, decision 13): at a PACKAGE-LEVEL
+ * Package model (docs/features/packages/PLAN.md §9, decision 13): at a PACKAGE-LEVEL
  * station (opening / closing) the box and every item inside it carry the same
  * testing interval — one physical session — so durations there are counted
  * ONCE, on the box. This predicate names the duplicate rows; every active-work

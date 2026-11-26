@@ -16,7 +16,7 @@ const ReportTemplateEditor = dynamic(() => import("./ReportTemplateEditor").then
 });
 
 /**
- * The report templates of a set of item routes (docs/ITEM_REPORTS.md): the general template's row,
+ * The report templates of a set of item routes (docs/features/ITEM_REPORTS.md): the general template's row,
  * then one row per route. Every item gets a report: its route's own template ("מותאמת") when it has
  * one, else the general template ("כללית").
  */

@@ -1,0 +1,198 @@
+# ===========================================
+# Docker Compose - PROD Server (Next.js + Nginx)
+# ===========================================
+#
+# Architecture: 2-server setup
+#   - DB server  : PostgreSQL + MinIO  (infra/docker/docker-compose.db.yml)
+#   - PROD server: Next.js  + Nginx    (this file)
+#
+# REQUIREMENTS:
+#   - Pre-built images must exist locally:
+#     - testingsite-next-app:latest
+#     - testingsite-nginx:latest
+#   - .env.prod file must exist (copy from config/env/env.prod.example)
+#   - DB server must be reachable (ports 5432 and 9000 open)
+#
+# Usage:
+#   cp config/env/env.prod.example .env.prod
+#   # Edit .env.prod – set DB_HOST and MINIO_ENDPOINT to the DB server IP
+#   docker compose -f infra/docker/docker-compose.yml up -d
+#
+# Build images (if not pre-built):
+#   docker compose -f infra/docker/docker-compose.yml build
+#
+# Config changes (no rebuild):
+#   # Edit .env.prod
+#   docker compose -f infra/docker/docker-compose.yml down
+#   docker compose -f infra/docker/docker-compose.yml up -d
+#
+# ===========================================
+
+# Project name pinned: these files moved from the repo root to infra/docker, and compose would otherwise
+# name the project after this folder, detaching the existing testingsite_* volumes.
+name: testingsite
+
+services:
+  # =========================================
+  # Next.js Application
+  # =========================================
+  next-app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      # No build args: the image is environment-NEUTRAL by design. Every URL the
+      # browser needs is resolved from the server env at request time, so the
+      # same image (and the same air-gap tar) runs in dev and in production.
+    image: testingsite-next-app:latest
+    container_name: next-app
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    restart: unless-stopped
+    env_file:
+      - ../../.env.prod
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      # Explicit timezone: dev runs on a Windows host already in Israel time,
+      # the container defaults to UTC. Every local `new Date()` bucketing in
+      # app code silently disagrees between the two without this.
+      - TZ=Asia/Jerusalem
+      # RUNTIME server-side env — read by Node.js at request time (config endpoint,
+      # callback handler, JWT signing). These do NOT need to be present at build.
+      # ONLYOFFICE_PUBLIC_URL doubles as the origin sent to the BROWSER: the
+      # /api/onlyoffice/config handler returns it so the editor knows where to
+      # load DocsAPI from. Change it here + restart; no rebuild.
+      - ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET}
+      - ONLYOFFICE_PUBLIC_URL=${ONLYOFFICE_PUBLIC_URL}
+      - ONLYOFFICE_INTERNAL_URL=${ONLYOFFICE_INTERNAL_URL}
+      - APP_PUBLIC_URL=${APP_PUBLIC_URL}
+    networks:
+      - prod-network
+    expose:
+      - "3000"
+    # No volumes: the app is stateless. All files (signatures + file manager)
+    # live in MinIO on the DB server. See docs/architecture/STORAGE.md.
+    healthcheck:
+      # Probe /api/health, NOT "/" — every app route is auth-gated and the
+      # middleware answers a cookie-less non-browser request with 401, which
+      # would mark a healthy container unhealthy and stop nginx from starting.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # =========================================
+  # Keycloak loopback bridge (single-machine deployments only)
+  # =========================================
+  # AUTH_KEYCLOAK_ISSUER must be ONE string that resolves identically for the
+  # browser and for next-app — Keycloak stamps `iss` from the request host, so a
+  # front-channel/back-channel hostname split makes token validation fail.
+  #
+  # Here Keycloak runs in its OWN compose project (infra/docker/docker-compose.keycloak.yml),
+  # published on the HOST at :8080. The browser reaches it as localhost:8080; a
+  # bridge-network container cannot ("localhost" is the container itself), and
+  # the host's LAN IP is blocked inbound by the Windows firewall.
+  #
+  # This sidecar shares next-app's NETWORK NAMESPACE (network_mode: service:) and
+  # listens on 127.0.0.1:8080 inside it, forwarding to the host. Result: inside
+  # next-app, http://localhost:8080 IS Keycloak — same URL the browser uses.
+  #
+  # On a real prod server Keycloak has its own public URL: point
+  # AUTH_KEYCLOAK_ISSUER at it and delete this service.
+  #
+  # NOTE: with network_mode: service:, Docker forbids `extra_hosts`, `networks`
+  # and `ports` on this container — host.docker.internal is injected by Docker
+  # Desktop, so no extra mapping is needed.
+  kc-bridge:
+    image: alpine/socat:latest
+    container_name: kc-bridge
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    restart: unless-stopped
+    network_mode: "service:next-app"
+    command: ["TCP-LISTEN:8080,fork,reuseaddr", "TCP:host.docker.internal:8080"]
+    depends_on:
+      - next-app
+
+  # =========================================
+  # OnlyOffice Document Server
+  # =========================================
+  # In-browser editor for .docx / .xlsx / .pptx attached to items.
+  # The browser loads DocsAPI from /onlyoffice/ (proxied by nginx); the
+  # editor talks back to /api/onlyoffice/callback/... to persist saves.
+  # JWT_SECRET must match ONLYOFFICE_JWT_SECRET in the next-app env.
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    container_name: onlyoffice
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    restart: unless-stopped
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=${ONLYOFFICE_JWT_SECRET}
+      - JWT_HEADER=Authorization
+    volumes:
+      - onlyoffice-data:/var/www/onlyoffice/Data
+      - onlyoffice-logs:/var/log/onlyoffice
+    networks:
+      - prod-network
+    # Exposed on the HOST as a separate port (not nginx-proxied at /onlyoffice/).
+    # The editor iframe needs same-origin access to /cache/, /coauthoring/,
+    # /web-apps/, etc. — OnlyOffice 9.x generates those URLs without honouring a
+    # sub-path prefix, so the proxy mount breaks per-document cache loads
+    # (Editor.bin). Running OnlyOffice on its own host port keeps all those
+    # internal URLs same-origin to OnlyOffice and avoids the rewrite mess.
+    ports:
+      - "${ONLYOFFICE_HOST_PORT:-8082}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # =========================================
+  # Nginx Reverse Proxy
+  # =========================================
+  nginx:
+    build:
+      context: ../nginx
+      dockerfile: Dockerfile
+    image: testingsite-nginx:latest
+    container_name: nginx
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    restart: unless-stopped
+    env_file:
+      - ../../.env.prod
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    networks:
+      - prod-network
+    depends_on:
+      next-app:
+        condition: service_healthy
+
+volumes:
+  onlyoffice-data:
+    driver: local
+  onlyoffice-logs:
+    driver: local
+
+networks:
+  prod-network:
+    driver: bridge
+    name: prod-network

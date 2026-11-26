@@ -1,6 +1,6 @@
 /**
  * Item report lifecycle — the state of an item's report, its signatures, and
- * the FREEZE (docs/ITEM_REPORTS.md).
+ * the FREEZE (docs/features/ITEM_REPORTS.md).
  *
  * Ported from ticketflow's generateTicketPdf (src/lib/pdf/generate.ts), whose
  * README explains why the final document is stored and never re-rendered: it is

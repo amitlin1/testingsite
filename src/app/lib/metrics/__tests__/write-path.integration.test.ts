@@ -1,4 +1,4 @@
-// Stage-3 write-path integration suite (docs/dashboard-migration-plan-v2.md
+// Stage-3 write-path integration suite (docs/architecture/dashboard-migration-plan-v2.md
 // §9.2ג — "ה־fold: לכל אחד מ־31 מסלולי הפליטה: שורת event, מצב ledger,
 // attempt_no, station_id, exit_reason").
 //
@@ -65,7 +65,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
   });
 
   // -------------------------------------------------------------------------
-  // #1 — create-package (docs/packages/PLAN.md §2, §6)
+  // #1 — create-package (docs/features/packages/PLAN.md §2, §6)
   // -------------------------------------------------------------------------
 
   it("#1 create-package emits item_created for the box and each item, opening their runs and queued intervals in the same tx", async () => {
@@ -201,7 +201,7 @@ describe("stage 3 — metrics write path", { skip: H.skipReason() }, () => {
   });
 
   // -------------------------------------------------------------------------
-  // Package routing (docs/packages/PLAN.md §4): group start / release, the
+  // Package routing (docs/features/packages/PLAN.md §4): group start / release, the
   // meeting point at the closing station, retype after opening.
   // -------------------------------------------------------------------------
 

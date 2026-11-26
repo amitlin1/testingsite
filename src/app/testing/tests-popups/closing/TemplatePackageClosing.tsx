@@ -32,7 +32,7 @@ import "@/components/ui/controls.css";
 import "@/app/testing/package-stations.css";
 
 /**
- * The box's closing run from its station type's template (docs/popup-templates/PLAN.md §5, step
+ * The box's closing run from its station type's template (docs/features/popup-templates/PLAN.md §5, step
  * 2.3): PackageCloseWizard's shell and parts — the label scan (starting from the one scanned at
  * the opening), the items and packing ("נארז", or a decision for an item that did not arrive), the
  * next stations — with the steps and the box's components taken from the template. A template made

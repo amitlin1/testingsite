@@ -15,7 +15,7 @@ import type { RouteRowJson, TemplateInfo } from "./wire";
  *   useOptionLists()          the shared option lists (archived ones are not listed)
  *   useFieldSets()            the field sets (archived ones are not listed)
  *   useRoutes()               every testing route: the pickers, the header's count, the usage chips
- *   usePopupTemplateTypes()   the station types with a popup template (docs/popup-templates/PLAN.md
+ *   usePopupTemplateTypes()   the station types with a popup template (docs/features/popup-templates/PLAN.md
  *                             §3.6): the preview draws their popup as the template's, the steps tab
  *                             flags a role the step's place does not call for
  */

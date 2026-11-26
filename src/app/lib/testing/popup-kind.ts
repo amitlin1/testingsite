@@ -12,7 +12,7 @@ import type { QueueRow, TestStationType } from "./contract";
  *   package   a box at a package-level station: the opening or the closing
  *             wizard by its place on the package route (placement.ts
  *             roleAtStep), from the type's package template when it has one
- *             (docs/packages/PLAN.md §4, docs/popup-templates/PLAN.md §5)
+ *             (docs/features/packages/PLAN.md §4, docs/features/popup-templates/PLAN.md §5)
  *   item      everything else: the type's popup template, or the code's popup
  *             (CODE_POPUPS; none = the plain report dialog). An item in
  *             research keeps the code's popup (popup-templates PLAN §7,

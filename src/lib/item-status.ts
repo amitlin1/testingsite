@@ -13,7 +13,7 @@ export const ItemStatus = {
   Done: 3,
   AwaitResearch: 4,
   InResearch: 5,
-  /** A box at its closing step while some of its items are still elsewhere (docs/packages/PLAN.md §4). */
+  /** A box at its closing step while some of its items are still elsewhere (docs/features/packages/PLAN.md §4). */
   AwaitPackageItems: 6,
 } as const;
 

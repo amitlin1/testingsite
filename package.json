@@ -14,9 +14,9 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
-    "db:baseline": "node scripts/baseline-prisma-migrations.mjs",
-    "db:airgap-schema": "node scripts/build-airgap-schema.mjs",
-    "db:check-migration": "node scripts/check-migration-safety.mjs"
+    "db:baseline": "node scripts/db/baseline-prisma-migrations.mjs",
+    "db:airgap-schema": "node scripts/db/build-airgap-schema.mjs",
+    "db:check-migration": "node scripts/db/check-migration-safety.mjs"
   },
   "dependencies": {
     "@hebcal/core": "^6.8.2",

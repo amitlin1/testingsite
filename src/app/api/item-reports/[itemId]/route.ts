@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/item-reports/[itemId] — the item's report as a PDF (docs/ITEM_REPORTS.md).
+ * GET /api/item-reports/[itemId] — the item's report as a PDF (docs/features/ITEM_REPORTS.md).
  * The final copy of a finished item is served byte-for-byte from MinIO; an item
  * still on its route (or waiting for the signature) gets a live draft.
  * ?html=1 — the live HTML instead (no Chromium), for the signing dialog's preview.

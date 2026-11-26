@@ -99,7 +99,7 @@ async function locateItem(itemId: bigint): Promise<Located> {
   }
 
   if (currentStatus === ItemStatus.AwaitPackageItems) {
-    // A box waiting for its items before the closing station (docs/packages/PLAN.md §4): which
+    // A box waiting for its items before the closing station (docs/features/packages/PLAN.md §4): which
     // items are still out, so the client says so instead of "no station".
     const gate = await computePackageGate(prisma, itemId);
     return {

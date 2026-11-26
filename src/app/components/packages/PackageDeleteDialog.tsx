@@ -11,7 +11,7 @@ import { formatId, seq2 } from "@/app/lib/packages/ids";
 /**
  * מחיקת מארז — design/Packages.dc.html (deleteOpen). Lists the items that go
  * with the box; the red button names their count. DELETE /api/packages/[id]
- * with cascade (docs/packages/PLAN.md §4).
+ * with cascade (docs/features/packages/PLAN.md §4).
  *
  * Not ConfirmDialog: the artboard's confirmation carries the item list and no
  * icon or footer band. It shares ConfirmDialog's rules instead — fixed (not

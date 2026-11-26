@@ -1,6 +1,6 @@
 /**
  * The package template (package_contents: which item types a box of a
- * package type holds, how many, on which route — docs/packages/PLAN.md §3) as
+ * package type holds, how many, on which route — docs/features/packages/PLAN.md §3) as
  * the settings screens receive it. Client-safe: no prisma, no server import.
  */
 

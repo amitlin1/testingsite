@@ -1,4 +1,4 @@
-// Stage-5 OBSERVABILITY suite (docs/dashboard-migration-plan-v2.md §10.1/§10.2):
+// Stage-5 OBSERVABILITY suite (docs/architecture/dashboard-migration-plan-v2.md §10.1/§10.2):
 // the runJob wrapper, the job_run audit surface, the metrics-selfcheck endpoint,
 // and the authorization of GET /api/health/jobs.
 //

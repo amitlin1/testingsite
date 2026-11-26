@@ -3,7 +3,7 @@ import { TransactionClient } from "@/lib/db";
 import { restartRoute } from "./lifecycle";
 
 /**
- * Send a whole box back to its opening station — docs/packages/PLAN.md §4,
+ * Send a whole box back to its opening station — docs/features/packages/PLAN.md §4,
  * "שינוי סוג": an item inside a package changed type after the box was
  * opened, so the intake that was done against the old type is void and the
  * package, with every item in it, starts over.

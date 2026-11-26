@@ -4,7 +4,7 @@ import type { PackageItemState, PackageStatusKey } from "./contract";
 /**
  * The package model's rules over a route row (item_routes) — pure, so the
  * write path, the read path and the tests ask the same questions the same way
- * (docs/packages/PLAN.md §4).
+ * (docs/features/packages/PLAN.md §4).
  */
 
 type RoutePos = { current_route_step: number | null; current_status: number | null; is_finished: boolean | null };

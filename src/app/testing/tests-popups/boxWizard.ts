@@ -10,7 +10,7 @@ import { nextStopOf, type NextStop } from "./nextStation";
 
 /**
  * What the four box wizards share without markup — the opening and the closing, each as the code's
- * wizard and as its template twin (docs/popup-templates/PLAN.md §5): their common words, and the
+ * wizard and as its template twin (docs/features/popup-templates/PLAN.md §5): their common words, and the
  * finish's per-item results.
  */
 

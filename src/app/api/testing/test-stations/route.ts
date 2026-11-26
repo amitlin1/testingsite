@@ -5,7 +5,7 @@ import { parseDbId } from "@/lib/http/request";
 export const runtime = "nodejs";
 
 /** GET /api/testing/test-stations?typeId — the stations of a type. E2E support: only
- *  scripts/e2e-packages reads it (the screens list stations through /api/stations). */
+ *  scripts/e2e reads it (the screens list stations through /api/stations). */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);

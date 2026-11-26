@@ -1,4 +1,4 @@
-// Item PDF reports (docs/ITEM_REPORTS.md) end to end, through the real handlers: an item runs
+// Item PDF reports (docs/features/ITEM_REPORTS.md) end to end, through the real handlers: an item runs
 // its route with station fields (/api/testing/start-test + /results), the report freezes when
 // the route finishes, the signature locks it, reopening makes it a draft again — and every
 // /api/item-reports handler as Next runs it (withAuth included).

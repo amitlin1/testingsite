@@ -56,22 +56,22 @@ next-env.d.ts
 *.zst
 *.cab
 
-# Air-gap docker image bundles (e.g. prod-deploy/**/images/*.tar)
+# Air-gap docker image bundles (e.g. deploy/**/images/*.tar)
 **/images/*.tar
 **/images/*.tar.gz
 
 # Vendored portable DBeaver shipped alongside the air-gap bundles: a third-party
 # binary distribution (~75 MB of JRE per copy), not project source.
-prod-deploy/*/dbeaver/
+deploy/*/dbeaver/
 
-# ---------- prod-deploy: everything that carries a real secret ----------
+# ---------- deploy: everything that carries a real secret ----------
 # The TEMPLATES are committed; the filled-in files never are.
-# (the filled-in prod-deploy/*/.env files are covered by the .env rules further
+# (the filled-in deploy/*/.env files are covered by the .env rules further
 # down, together with the negation that keeps the .env.template files tracked)
 #
-# Produced by scripts/export-keycloak-seed.ps1 — a full dump of the Keycloak
+# Produced by scripts/release/export-keycloak-seed.ps1 — a full dump of the Keycloak
 # database, containing password hashes and both client secrets.
-prod-deploy/db-server/keycloak-seed/keycloak-seed.sql
+deploy/db-server/keycloak-seed/keycloak-seed.sql
 
 # ---------- Disk / VM / container images ----------
 *.iso
@@ -111,11 +111,15 @@ prod-deploy/db-server/keycloak-seed/keycloak-seed.sql
 # ============================================================
 .env
 .env.*
+# The un-dotted copies at the root hold real values too; their templates are config/env/*.example.
+/env
+/env.prod
+/env.development
 # ...but the deployment TEMPLATES carry no secrets and MUST be committed - they
 # are the only documentation of what each server needs. This negation has to sit
 # AFTER the `.env.*` rule above: within one .gitignore the LAST matching pattern
 # wins, so a negation placed earlier is silently overridden.
-!prod-deploy/*/.env.template
+!deploy/*/.env.template
 *.pem
 *.key
 *.crt
@@ -144,9 +148,9 @@ nul
 /שיפור פרויקט עם design system (1)/
 /שיפור פרויקט עם design system (1)/
 
-# Audit output of scripts/convert-legacy-to-packages.mjs (old -> new id mapping per run)
-scripts/convert-legacy-*.json
-scripts/e2e-packages/.e2e-user.json
-scripts/e2e-packages/shots/
-scripts/e2e-packages/results.json
-scripts/e2e-packages/photo.png
+# Audit output of db/upgrades/2026-09-17-package-model/convert-legacy-to-packages.mjs (old -> new id mapping per run)
+db/upgrades/*/convert-legacy-*.json
+scripts/e2e/.e2e-user.json
+scripts/e2e/shots/
+scripts/e2e/results.json
+scripts/e2e/photo.png

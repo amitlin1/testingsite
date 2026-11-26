@@ -26,7 +26,7 @@ import { assertSerialsFree } from "./serials";
 import { boxRouteNumber } from "./template-wire";
 
 /**
- * The package write path — docs/packages/PLAN.md §2, §4, §6.
+ * The package write path — docs/features/packages/PLAN.md §2, §4, §6.
  *
  * createPackage: one box and everything inside it, in ONE transaction: the
  * daily counter, the package row, its route row, then each item with its own

@@ -2,7 +2,7 @@ import type { TransactionClient } from "@/lib/db";
 import { itemRouteMissingText } from "./template-wire";
 
 /**
- * Route-shape rules of the package model — docs/packages/PLAN.md §4.
+ * Route-shape rules of the package model — docs/features/packages/PLAN.md §4.
  *
  * A package route starts and ends at a package-level station type (opening,
  * closing) and has no package-level step in between. The route of every item

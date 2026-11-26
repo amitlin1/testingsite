@@ -14,7 +14,7 @@
 
 import type { NextRequest, NextFetchEvent } from "next/server";
 import { NextResponse } from "next/server";
-import { auth } from "@/../auth";
+import { auth } from "@/auth";
 import { DEV_AUTH_BYPASS } from "@/lib/auth/current-session";
 import { isDataRequest, resolveAccess } from "@/lib/routes";
 import { SERVER_BASE_PATH, loginUrl, noAuthUrl, stripBasePath } from "@/lib/base-path";

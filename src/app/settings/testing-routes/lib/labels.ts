@@ -636,7 +636,7 @@ export const EDITOR_UNDRAWN_TEXT = {
   // dialog's own labels ("תוצאת בדיקה", "עובד מבצע", "הערות נוספות", "שמור וסיים").
   lockedTopDialog: "תוצאת בדיקה · עובד מבצע",
   // the locked rows of a station whose popup is built from its station type's template
-  // (docs/popup-templates/PLAN.md §1.8): the template places the fields, so the rows name it, not
+  // (docs/features/popup-templates/PLAN.md §1.8): the template places the fields, so the rows name it, not
   // a fixed wizard. Not approved yet.
   lockedTopTemplate: "רכיבי תבנית החלון שלפני השדות · נקבעים בתבניות חלון",
   lockedBottomTemplate: "פסק דין · תמיד אחרון",

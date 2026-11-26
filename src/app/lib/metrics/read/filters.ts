@@ -1,4 +1,4 @@
-// The §5.1 filter block — written ONCE (docs/dashboard-migration-plan-v2.md).
+// The §5.1 filter block — written ONCE (docs/architecture/dashboard-migration-plan-v2.md).
 //
 // "One definition per metric" breaks the moment the filter set is retyped for
 // each query, so every ledger query (Q1, Q2, Q4, Q5, Q6, Q7, Q8) emits the
@@ -37,7 +37,7 @@ export interface MetricFilters {
   /** Matched against item_state_interval.exited_by_worker_id. */
   workerId?: number | null;
   itemSerial?: string | null;
-  /** Boxes only: exclude the items inside packages (docs/packages/PLAN.md §9, 13). */
+  /** Boxes only: exclude the items inside packages (docs/features/packages/PLAN.md §9, 13). */
   packagesOnly?: boolean;
   /** Status set, as metric_state keys. null/undefined = every state. */
   states?: readonly string[] | null;

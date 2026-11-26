@@ -43,7 +43,7 @@ export async function apiFetch(
     // can degrade to terminal even though the session was fine, so we'd redirect
     // on a transient. Rare (the proactive poll normally prevents reaching true
     // expiry). Retrying once before trusting a terminal report is an open owner
-    // decision (docs/untangle/DECISIONS.md, "Not done on purpose").
+    // decision (docs/decisions/untangle/DECISIONS.md, "Not done on purpose").
     redirectToLogin();
     return response;
   }

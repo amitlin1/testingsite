@@ -5,7 +5,7 @@ import { isPackageLevelStationType, loadPackageContext } from "@/app/lib/package
 import type { Actor } from "./actor";
 
 /**
- * A box's group (docs/packages/PLAN.md §4). At a package-level station (opening, closing) the box and
+ * A box's group (docs/features/packages/PLAN.md §4). At a package-level station (opening, closing) the box and
  * the items inside it are tested together, and package-level queues never list those items — so
  * whatever starts or stops the box's test starts or stops theirs, each item with its own ledger
  * event (a real testing interval per item, no synthetic pair).

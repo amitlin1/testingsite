@@ -1,6 +1,6 @@
 // The ledger's event_key bytes, for every key shape the write paths record. They are a contract
 // beyond this code: keys already stored must keep matching a retry of the same action, and
-// scripts/seed-dev-dataset.mjs reads the action id back out of them.
+// scripts/dev/seed-dev-dataset.mjs reads the action id back out of them.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { eventKeyOf, type EventKeyParts } from "../ledger/record";

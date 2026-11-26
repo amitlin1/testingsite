@@ -11,7 +11,7 @@ import { lintPopupTemplate, parsePopupTemplateConfig, parseTemplateBase } from "
 import type { TemplateIssue } from "./validate";
 
 /**
- * The popup templates in the database (docs/popup-templates/PLAN.md §3, step 1.2):
+ * The popup templates in the database (docs/features/popup-templates/PLAN.md §3, step 1.2):
  *
  *   station_popup_templates          the current template of a station type
  *   station_popup_template_versions  every saved config, by (type, version)

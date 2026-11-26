@@ -1,6 +1,6 @@
 -- ============================================================================
 -- Tier-1 backfill — seeds the metrics ledger from the live operational state
--- (spec: docs/dashboard-migration-plan-v2.md §8 שלב 4, trust policy §4.3).
+-- (spec: docs/architecture/dashboard-migration-plan-v2.md §8 שלב 4, trust policy §4.3).
 --
 -- Runs INSIDE 8-apply-metrics-ledger.ps1, immediately after Migration A
 -- (prisma/migrations/20260825000000_metrics_ledger_additive/migration.sql),

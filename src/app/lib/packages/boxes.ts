@@ -26,7 +26,7 @@ import { assertSerialsFree } from "./serials";
 import { workDoneOn } from "./untouched";
 
 /**
- * A box from the shipment to its opening (docs/packages/PLAN.md §6, as
+ * A box from the shipment to its opening (docs/features/packages/PLAN.md §6, as
  * changed on 2026-10-19 and 2026-10-27):
  *
  *   shipment saved  → syncShipmentBoxes: one PENDING box per declared unit of

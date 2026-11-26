@@ -223,7 +223,7 @@ export default function ItemCard({
         {/* Package slot — fixed width so the columns stay aligned. An item in a
             box gets the box icon; the menu lists the other items in the same
             package and where each one is (replaces the old parent/accessory
-            "connected items" menu — docs/packages/PLAN.md §9.14). */}
+            "connected items" menu — docs/features/packages/PLAN.md §9.14). */}
         {pkg ? (
             <IconButton
                 onClick={handleMenuClick}

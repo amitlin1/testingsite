@@ -1,7 +1,7 @@
 "use client";
 /**
  * Building blocks of the shipment documents (תעודות). Every one is a
- * <ReportPage> holding <ReportSection>s; see docs/REPORT_TEMPLATE.md for the
+ * <ReportPage> holding <ReportSection>s; see docs/features/REPORT_TEMPLATE.md for the
  * layout rules. (Item reports are the template-built PDFs of lib/item-report.)
  */
 import React from "react";

@@ -1,4 +1,4 @@
-// Stage-6 ENTITY-HISTORY suite (docs/dashboard-migration-plan-v2.md §5.3 Q2א /
+// Stage-6 ENTITY-HISTORY suite (docs/architecture/dashboard-migration-plan-v2.md §5.3 Q2א /
 // Q2ב, §5.0 the cross-cutting rules, §2.8 the two clocks, §3.1 unmapped, §8
 // stage 6).
 //

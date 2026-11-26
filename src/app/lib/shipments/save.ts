@@ -36,7 +36,7 @@ export function readShipmentHeader(body: Record<string, unknown>): ShipmentHeade
 
 /**
  * The declared lines, checked before anything is written. Package model
- * (docs/packages/PLAN.md §9.10): a shipment declares package TYPES only —
+ * (docs/features/packages/PLAN.md §9.10): a shipment declares package TYPES only —
  * the items inside a box are never declared per shipment.
  */
 export async function readDeclaredLines(body: Record<string, unknown>, shipmentCode: string): Promise<ShipmentLineInput[]> {

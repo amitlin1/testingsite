@@ -33,7 +33,7 @@ import { itemRouteMissingText } from "@/app/lib/packages/template-wire";
  *
  *   "חלקי המארז"  the kit route itself, then one row per template line (the item route it runs).
  *                 Each row is a link (?item={item_type_id}; none = the box), so the URL holds the
- *                 choice. A row whose saved route breaks the package rules (docs/packages/PLAN.md
+ *                 choice. A row whose saved route breaks the package rules (docs/features/packages/PLAN.md
  *                 §4, route-rules.ts) carries a warning with the reason.
  *   the editor    the steps of that route, as the old page edited them: the box edits
  *                 (package type, route number); an item edits (item type, the LINE's route_number),

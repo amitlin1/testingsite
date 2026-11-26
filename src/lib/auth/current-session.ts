@@ -1,5 +1,5 @@
 import type { Session } from "next-auth";
-import { auth } from "@/../auth";
+import { auth } from "@/auth";
 import { isDevAuthBypass } from "@/lib/auth/session";
 
 /** Dev mode: every request is signed in as one local user (see isDevAuthBypass). */

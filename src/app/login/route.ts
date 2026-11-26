@@ -12,7 +12,7 @@
 
 export const runtime = "nodejs";
 
-import { signIn } from "@/../auth";
+import { signIn } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { safeCallbackUrl } from "@/lib/base-path";
 import { authDebug } from "@/lib/auth/debug";

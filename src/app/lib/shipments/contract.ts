@@ -50,7 +50,7 @@ export type Shipment = {
   shipment_sent_date: string | null;
   is_sent?: boolean;
   finished_at?: string | null;
-  /** Package model (docs/packages/PLAN.md §9.10): the counters below count
+  /** Package model (docs/features/packages/PLAN.md §9.10): the counters below count
    *  BOXES of this shipment — declared (amount) / taken in (sampled) /
    *  started / finished / sent. */
   sampled_amount?: number;

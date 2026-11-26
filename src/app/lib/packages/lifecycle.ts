@@ -10,7 +10,7 @@ import { checkItemRouteAgainstPackage, checkPackageRoute, loadPackageLevelTypeId
 import { itemRouteNumber } from "./template-wire";
 
 /**
- * The life of a routed row — a box, or an item inside one (docs/packages/PLAN.md
+ * The life of a routed row — a box, or an item inside one (docs/features/packages/PLAN.md
  * §2, §4, §6). Every write path (createPackage, the intake, the opening, the
  * package reset, an item's retype and delete) goes through these steps, each
  * written once with the order of its statements, so the ledger sees every

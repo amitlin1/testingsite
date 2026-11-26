@@ -36,7 +36,7 @@ import "@/components/ui/controls.css";
 import "@/app/testing/package-stations.css";
 
 /**
- * The box's opening run from its station type's template (docs/popup-templates/PLAN.md §5, step
+ * The box's opening run from its station type's template (docs/features/popup-templates/PLAN.md §5, step
  * 2.2): PackageOpenWizard's shell and parts — the label scan against the package reference, the
  * contents and serials (OpeningContents), every item one by one, the labels, the next stations —
  * with the steps, the box's components and each item's flow (`item_flow`) taken from the

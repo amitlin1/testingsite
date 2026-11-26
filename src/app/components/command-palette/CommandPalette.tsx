@@ -321,7 +321,7 @@ function buildGroups(
   if (items.length) {
     const rows: PaletteItem[] = [];
     for (const it of items.slice(0, ITEM_ROWS_MAX)) {
-      // Package model (docs/packages/PLAN.md): a box and an item inside one
+      // Package model (docs/features/packages/PLAN.md): a box and an item inside one
       // carry a 15- (or older 16-) digit id whose two-digit suffix is the position — shown as
       // labelId with the suffix in bold; the box additionally gets the "מארז"
       // tag. A legacy loose item keeps the plain "#id" identity.

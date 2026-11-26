@@ -226,7 +226,7 @@ export type EditorPopover =
 
 // ---- the popup the station opens (spec §10.3 last row) -------------------------------------------
 /** What the worker's popup is: VerdictStation, PhotoStation, PopUpTestDialog, a package wizard, or
- *  the station type's popup template (docs/popup-templates/PLAN.md). */
+ *  the station type's popup template (docs/features/popup-templates/PLAN.md). */
 export type PopupKind = "verdict" | "photo" | "dialog" | "package" | "template";
 
 /** As the testing page decides it (lib/testing/popup-kind.ts): never a template at a package-level

@@ -5,7 +5,7 @@ import type { PopupTemplateConfig } from '@/app/lib/popup-templates/schema';
 import { codePopupKindOf } from '@/app/lib/testing/popup-kind';
 
 /**
- * Which stations take reference images, per item type (docs/popup-templates/PLAN.md §5ג): the
+ * Which stations take reference images, per item type (docs/features/popup-templates/PLAN.md §5ג): the
  * reference-items page lists them, in the order of the item's route, and uploads to each one. The
  * station type is the reference set — a station shows the images uploaded to its own type.
  *

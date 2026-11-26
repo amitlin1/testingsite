@@ -21,7 +21,7 @@ import type { NextStationResult, PackageGateAnswer, ResearchStation, ResultBody 
 /**
  * POST /api/testing/results: one result of one item at a station, and everything it moves — the
  * route, the research queue, the next station, the box gate — with its metrics ledger events
- * (docs/dashboard-migration-plan-v2.md §4.5: the call sites are numbered there).
+ * (docs/architecture/dashboard-migration-plan-v2.md §4.5: the call sites are numbered there).
  */
 
 /** A result as the route takes it, after the request's checks. */
@@ -221,7 +221,7 @@ async function submitInTx(tx: TransactionClient, r: ResultInput): Promise<Submit
 
   const inResearch = row.current_status === ItemStatus.InResearch;
 
-  // Package model (docs/packages/PLAN.md §4): is this row the box or an item inside one?
+  // Package model (docs/features/packages/PLAN.md §4): is this row the box or an item inside one?
   const pkgCtx = await loadPackageContext(tx, r.itemId);
   if (pkgCtx?.isPackage && r.sendToResearch === true) {
     // Research is for items. A box in research would strand its items at the opening station with
@@ -704,7 +704,7 @@ async function pickNextStation(s: Submit, m: Moved): Promise<NextStationResult> 
 }
 
 /**
- * The meeting point (docs/packages/PLAN.md §4), after every write above: an ITEM inside a box moved
+ * The meeting point (docs/features/packages/PLAN.md §4), after every write above: an ITEM inside a box moved
  * (advanced, finished, went to research) — its box may now be ready, or may have to keep waiting;
  * the BOX itself advanced onto a package-level step and is queued there — it waits (status 6) until
  * every item is present. Same transaction, so the box never commits in a status that disagrees with

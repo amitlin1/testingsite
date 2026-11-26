@@ -42,7 +42,7 @@ export async function GET(req: Request) {
 }
 
 /**
- * POST /api/packages — one box and everything inside it (docs/packages/PLAN.md
+ * POST /api/packages — one box and everything inside it (docs/features/packages/PLAN.md
  * §6), create-package.ts intakePackage.
  *
  * Body:

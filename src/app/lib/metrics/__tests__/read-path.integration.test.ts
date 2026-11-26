@@ -1,4 +1,4 @@
-// Stage-5 READ-PATH integration suite (docs/dashboard-migration-plan-v2.md
+// Stage-5 READ-PATH integration suite (docs/architecture/dashboard-migration-plan-v2.md
 // §5 the read path, §5.0 the cross-cutting rules, §2.8 the two clocks, §6.3 the
 // UI cap).
 //

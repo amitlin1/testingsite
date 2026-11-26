@@ -20,7 +20,7 @@ import type { StepList } from "../lib/editorModel";
 import { COMPONENT_SETTINGS_TEXT, EDITOR_TEXT, addKindText, componentSummary } from "../lib/labels";
 
 /**
- * The template's steps and their components (docs/popup-templates/PLAN.md step 1.6): one card per
+ * The template's steps and their components (docs/features/popup-templates/PLAN.md step 1.6): one card per
  * step (title, description, its components, the catalog's "+ …" buttons), one row per component
  * (its name, a summary, move / remove, and its settings when opened). Every issue of the template
  * shows where it is. Pure view over the draft: every edit goes through onChange with a new config.

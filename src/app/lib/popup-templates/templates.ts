@@ -5,7 +5,7 @@ import { COMPONENT_NAME, TEMPLATE_DEFAULTS } from "./labels";
 
 /**
  * Ids, a new component's defaults, and the templates that reproduce today's popups
- * (docs/popup-templates/PLAN.md §4, step 1.5): a station type seeded with one of these opens exactly
+ * (docs/features/popup-templates/PLAN.md §4, step 1.5): a station type seeded with one of these opens exactly
  * the popup it opened before, from the template. Titles use {עמדה}, as the popups use the station
  * type's name from the DB — no name lives here.
  */

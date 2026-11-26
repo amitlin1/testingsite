@@ -1,4 +1,4 @@
-// Integration suite for the popup-template store (docs/popup-templates/PLAN.md, step 1.2), against a
+// Integration suite for the popup-template store (docs/features/popup-templates/PLAN.md, step 1.2), against a
 // real database: save (create, new versions, conflicts, content issues, the base rules), the photo
 // groups a template's photo components own (created, linked, deactivated, taken), and delete
 // (groups released, the numbering carries on).

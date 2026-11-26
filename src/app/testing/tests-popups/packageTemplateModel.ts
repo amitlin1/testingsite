@@ -6,7 +6,7 @@ import type { RefSource, SavedWeight } from "@/app/lib/test-results/details";
 import { emptyRunState, savedComponents, storedPhotoKeys, weightOutcome, type TemplateRunState } from "./templateModel";
 
 /**
- * The package base's opening, run from a template (docs/popup-templates/PLAN.md §5, step 2.2) —
+ * The package base's opening, run from a template (docs/features/popup-templates/PLAN.md §5, step 2.2) —
  * pure, so the popup (TemplatePackageOpening.tsx) and the tests share it. The box's steps are the
  * template's steps; the "items" step runs every item through the template's item_flow. What the
  * results save keeps today's keys exactly (PLAN §5.2): packages/read.ts, the report and the

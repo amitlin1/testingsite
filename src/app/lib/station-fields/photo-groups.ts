@@ -4,7 +4,7 @@ import { fieldPhotoCode } from "./schema";
 import type { FieldId, RouteFieldsConfig, StepUid } from "./schema";
 
 /**
- * The photo groups of a route's photo fields (docs/popup-templates/PLAN.md §5א). A photo field owns
+ * The photo groups of a route's photo fields (docs/features/popup-templates/PLAN.md §5א). A photo field owns
  * its group: one photo_types row per route, step and field, code fieldPhotoCode(...), named
  * "{station type} · {field label}". Publishing creates the rows of the published config and renames
  * them after the field; a field that leaves the route keeps its row, so the photos it took keep

@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 /**
  * The boxes the production upgrade made out of legacy items
- * (scripts/prod-package-model). Their physical labels still carry the old
+ * (db/upgrades/2026-09-17-package-model). Their physical labels still carry the old
  * item ids until new ones are printed; the map is `legacy_id_map`
  * (lib/legacy-id-map.ts).
  *

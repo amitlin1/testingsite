@@ -38,7 +38,7 @@ export async function GET(_req: Request, { params }: Ctx) {
  * PATCH /api/packages/[id] — the open fields of a box: makat, model,
  * manufacturer, manufacturer no. Only the box row: its items keep theirs
  * (unlike the intake and the certificate-row binding, which copy them). Its
- * type, customer and shipment are locked (docs/packages/PLAN.md §4; design
+ * type, customer and shipment are locked (docs/features/packages/PLAN.md §4; design
  * "עריכת מארז"): a type sent here that differs answers 409. None of these
  * fields is frozen into the metrics ledger, so nothing there changes.
  */

@@ -1,5 +1,5 @@
 /**
- * Item / package identifiers — docs/packages/PLAN.md §2.
+ * Item / package identifiers — docs/features/packages/PLAN.md §2.
  *
  * A new-format id is a fixed 15-digit number:
  *

@@ -13,10 +13,6 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
-      ".tmp-testingsite-next-app/**",
-      // A design handoff (static .dc.html mockups and their support.js): never compiled, never
-      // imported by the app — not app code.
-      "route-fields-handoff/**",
     ],
   },
 ];

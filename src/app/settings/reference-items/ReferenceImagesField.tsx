@@ -11,7 +11,7 @@ import type { FormImage, StationsFor } from "./referenceForm";
 import Image from "next/image";
 
 /**
- * The images of a reference item's form, by station (docs/popup-templates/PLAN.md §5ג): the station
+ * The images of a reference item's form, by station (docs/features/popup-templates/PLAN.md §5ג): the station
  * type is the reference set — a station shows the worker the images uploaded to its own type.
  *
  * One section per station of the item's routes that shows reference images, in route order, each

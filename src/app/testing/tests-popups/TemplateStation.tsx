@@ -25,7 +25,7 @@ import {
 } from "./templateModel";
 
 /**
- * A station's test popup built from its station type's template (docs/popup-templates/PLAN.md
+ * A station's test popup built from its station type's template (docs/features/popup-templates/PLAN.md
  * §3, step 1.3): the same shell, SKU screen, photo uploader, instruction band and verdict card as
  * the code's popups (stationKit), assembled by the template's steps. The route's station fields
  * appear at the template's route_fields component, else before the verdict, exactly as in the

@@ -13,7 +13,7 @@ import { currentSession } from "@/lib/auth/current-session";
 export const runtime = "nodejs";
 
 /**
- * The closing's report signature (popup-templates report_sign, docs/ITEM_REPORTS.md), a PNG data
+ * The closing's report signature (popup-templates report_sign, docs/features/ITEM_REPORTS.md), a PNG data
  * URL: when this result finishes the item's route, its report gets it in this same request — so a
  * refresh can never leave the box closed and the report without it. It does not lock the report:
  * the approver's final signature does. A signature that cannot be used refuses the submit before it
@@ -73,7 +73,7 @@ export function POST(req: Request) {
     Object.assign(answer, await signReport());
 
     // The item may have just finished its route: freeze its PDF report now, while the data is
-    // exactly what it finished with (docs/ITEM_REPORTS.md). After the response and best-effort — it
+    // exactly what it finished with (docs/features/ITEM_REPORTS.md). After the response and best-effort — it
     // never delays or fails the submit. (Called directly, outside a request — the integration
     // tests — after() throws; the freeze then just runs detached.)
     try {

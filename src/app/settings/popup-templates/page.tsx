@@ -20,7 +20,7 @@ import { EDITOR_TEXT } from "./lib/labels";
 import "./popup-templates.css";
 
 /**
- * /settings/popup-templates — "תבניות חלון" (docs/popup-templates/PLAN.md step 1.6): the station
+ * /settings/popup-templates — "תבניות חלון" (docs/features/popup-templates/PLAN.md step 1.6): the station
  * types (master) and the selected type's template (detail). ?type= holds the selection, so a link
  * (the stations screen's "תבנית חלון") opens it. Leaving a draft with unsaved changes asks first.
  */

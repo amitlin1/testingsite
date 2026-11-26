@@ -1,7 +1,7 @@
 /**
  * The popup the code gives each station type today — one list for the testing page's registry
  * (tests-popups/mainPopUp.ts) and the seed that turns them into templates
- * (scripts/seed-popup-templates.ts, docs/popup-templates/PLAN.md step 1.5). Ids only: the popups
+ * (scripts/dev/seed-popup-templates.ts, docs/features/popup-templates/PLAN.md step 1.5). Ids only: the popups
  * take every title from the station type's name in the DB, so no station name lives here.
  *
  *   photo    the photo popup capturing the photo_types group `photoTypeId` (PhotoStation)

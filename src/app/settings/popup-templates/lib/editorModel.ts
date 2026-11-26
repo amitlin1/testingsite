@@ -13,7 +13,7 @@ import { OPENING_PHOTO_CODES } from "@/app/lib/popup-templates/codePopups";
 import type { CodePopup } from "@/app/lib/popup-templates/codePopups";
 
 /**
- * The template editor's edits (/settings/popup-templates, docs/popup-templates/PLAN.md steps 1.6
+ * The template editor's edits (/settings/popup-templates, docs/features/popup-templates/PLAN.md steps 1.6
  * and 2.5): pure and immutable — every function returns a new config, so the screen keeps the
  * draft in one state and compares it with what was saved.
  *

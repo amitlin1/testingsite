@@ -6,7 +6,7 @@ import { ItemStatus } from "@/lib/item-status";
 import { atGateStep, blocksGate } from "./rules";
 
 /**
- * The meeting point at the closing station — docs/packages/PLAN.md §4.
+ * The meeting point at the closing station — docs/features/packages/PLAN.md §4.
  *
  * A package sitting at a package-level step other than its first is either
  * "waiting" (status 2: every unfinished item inside it is at that step) or

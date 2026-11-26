@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 
 /**
- * Shipments declare package types only (docs/packages/PLAN.md §9.10): the
+ * Shipments declare package types only (docs/features/packages/PLAN.md §9.10): the
  * declared lines are boxes, the items inside a box never appear on the
  * shipment. Returns the ids in `lines` whose type is NOT a package type (or
  * does not exist) so the shipment APIs can refuse them with one clear error.

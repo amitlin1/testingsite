@@ -2,7 +2,7 @@ import type { PackageRole, TemplateComponent } from "@/app/lib/popup-templates/s
 import { COMPONENT_NAME } from "@/app/lib/popup-templates/labels";
 
 /**
- * Strings of the template editor (/settings/popup-templates, docs/popup-templates/PLAN.md steps 1.6
+ * Strings of the template editor (/settings/popup-templates, docs/features/popup-templates/PLAN.md steps 1.6
  * and 2.5).
  * No artboard draws this screen: every word is our own and awaits approval.
  */

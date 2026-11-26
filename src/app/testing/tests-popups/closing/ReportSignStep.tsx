@@ -8,7 +8,7 @@ import { AMBER_BG, AMBER_BORDER, AMBER_INK, BLUE, HAIR, INK, MUTED } from "@/com
 
 /**
  * "חתימה על הדוחות" — a closing template's last step (popup-templates schema `report_sign`,
- * docs/ITEM_REPORTS.md), the one its finish button ("סגור מארז") sits on: the reports of the items
+ * docs/features/ITEM_REPORTS.md), the one its finish button ("סגור מארז") sits on: the reports of the items
  * that finish their route at this closing and ask for the closing signature, each on screen, and
  * one signature for all of them. The signature travels with each item's closing result
  * (POST /api/testing/results `ReportSignature`), and the server records it in that same request —

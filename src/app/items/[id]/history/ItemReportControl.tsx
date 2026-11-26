@@ -11,7 +11,7 @@ import { closingMissingOnItemPage, type ReportState, type ReportStatusResponse }
 import { formatMoment } from "@/app/lib/datetime";
 
 /**
- * The item's PDF report on its history page (docs/ITEM_REPORTS.md):
+ * The item's PDF report on its history page (docs/features/ITEM_REPORTS.md):
  *   - "דוח PDF" opens the report — a draft while the item is on its route, the
  *     locked final copy once it finished (and was signed, when the template asks);
  *   - "חתימה סופית על הדוח" appears on a finished item whose template asks for

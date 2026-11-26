@@ -42,7 +42,7 @@ import type { ReferenceImageJson, ReferenceItemJson } from './wire';
  * is the reference set. The page lists the stations of the item's route and uploads to one; every
  * station shows the images of its own type (images_by_station). NULL = not assigned to a station
  * yet (an image of an older photo group no single station showed) — listed on the page with a
- * station to pick, shown at no station. docs/popup-templates/PLAN.md §5ג.
+ * station to pick, shown at no station. docs/features/popup-templates/PLAN.md §5ג.
  *
  * A reference item of a package type is a PACKAGE REFERENCE: besides the box
  * it holds one member reference item per content line (parent_reference_id),

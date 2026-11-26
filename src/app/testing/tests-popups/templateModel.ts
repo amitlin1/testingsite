@@ -8,7 +8,7 @@ import type { SavedComponent } from "@/app/lib/test-results/details";
 import type { Verdict } from "./shots";
 
 /**
- * The state of a popup built from a template (docs/popup-templates/PLAN.md §3, step 1.3) — pure, so
+ * The state of a popup built from a template (docs/features/popup-templates/PLAN.md §3, step 1.3) — pure, so
  * the popup (TemplateStation.tsx), the settings preview and the tests share it: what the worker
  * filled per component, what keeps a step from going on, where the route's fields appear, and the
  * `details` the result saves (PLAN §3.5).

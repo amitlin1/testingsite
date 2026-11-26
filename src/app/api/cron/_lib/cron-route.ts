@@ -1,5 +1,5 @@
 // The shell of a scheduled job's endpoint. The Windows Task Scheduler calls it
-// with the shared secret (prod-deploy/app-server/scheduler/*.bat, `curl --fail`),
+// with the shared secret (deploy/app-server/scheduler/*.bat, `curl --fail`),
 // so a healthy no-op — an overlap skip, a red selfcheck verdict — must still be
 // HTTP 200: any non-2xx shows in Task Scheduler as a failed task.
 

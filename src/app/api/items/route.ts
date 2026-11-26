@@ -14,7 +14,7 @@ export async function GET() {
 
 // Items are no longer created one at a time: every item lives inside a
 // package, and the box and its contents are created together by
-// POST /api/packages (docs/packages/PLAN.md §6). Answer 410 so an old client
+// POST /api/packages (docs/features/packages/PLAN.md §6). Answer 410 so an old client
 // gets a message instead of a silently different model.
 export async function POST() {
   return NextResponse.json(

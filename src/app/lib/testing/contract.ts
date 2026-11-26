@@ -21,7 +21,7 @@ export interface TestStationType {
   name: string;
   /** Opening / closing station type: the queue holds packages, not items. */
   packageLevel?: boolean;
-  /** Its popup template (docs/popup-templates/PLAN.md §3.6); null = the code's popup. */
+  /** Its popup template (docs/features/popup-templates/PLAN.md §3.6); null = the code's popup. */
   popupTemplate?: { base: string; version: number } | null;
 }
 
@@ -36,7 +36,7 @@ export type QueueRow = {
   serial_no: string | null;
   item_type_id: number | null;
   item_type_desc: string | null;
-  /** Package model (docs/packages/PLAN.md): this row IS a box — package-level queues list these. */
+  /** Package model (docs/features/packages/PLAN.md): this row IS a box — package-level queues list these. */
   is_package?: boolean;
   /** Position inside the box (01..99) when this row is an item in one. */
   package_seq?: number | null;
@@ -124,7 +124,7 @@ export type ResultBody = TestResultData & {
   CreatedAt?: string | null;
   /** Snapshot of the acting worker's display name for the metrics ledger. */
   WorkerName?: string;
-  /** The closing's report signature, a PNG data URL (docs/ITEM_REPORTS.md). */
+  /** The closing's report signature, a PNG data URL (docs/features/ITEM_REPORTS.md). */
   ReportSignature?: string;
 };
 
@@ -152,7 +152,7 @@ export type ResearchStation = {
   currentLoad: number;
 };
 
-/** The box gate after the result (docs/packages/PLAN.md §4). */
+/** The box gate after the result (docs/features/packages/PLAN.md §4). */
 export type PackageGateAnswer = { packageId: string; status: number | null; blockingItemIds: string[] };
 
 /** The answer of POST /api/testing/results. */

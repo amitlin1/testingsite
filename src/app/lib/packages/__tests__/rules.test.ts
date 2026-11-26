@@ -1,4 +1,4 @@
-// The package model's rules over route rows (docs/packages/PLAN.md §4) and the
+// The package model's rules over route rows (docs/features/packages/PLAN.md §4) and the
 // view rules the screens share (contract.ts), through their public functions.
 import { test } from "node:test";
 import assert from "node:assert/strict";

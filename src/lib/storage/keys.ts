@@ -1,8 +1,8 @@
 /**
  * The bucket's key layout: every family of object keys the app writes, in one
- * place (docs/STORAGE.md). Pure — no MinIO, no Node APIs — so routes, the
+ * place (docs/architecture/STORAGE.md). Pure — no MinIO, no Node APIs — so routes, the
  * browser and the tests all read the same rules. The .mjs scripts
- * (reconcile-file-registry, migrate-signatures-to-minio) cannot import
+ * (reconcile-file-registry) cannot import
  * TypeScript and copy the prefixes they need from here.
  */
 

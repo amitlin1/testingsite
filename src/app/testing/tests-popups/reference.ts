@@ -15,7 +15,7 @@ import type { RefSource } from "@/app/lib/test-results/details";
  */
 
 /** The reference images a lookup answered for one station type (imagesByStation): the station type
- *  is the reference set (docs/popup-templates/PLAN.md §5ג). */
+ *  is the reference set (docs/features/popup-templates/PLAN.md §5ג). */
 export function stationImagesOf(imagesByStation: unknown, stationTypeId: number): RefImg[] {
   if (imagesByStation == null || typeof imagesByStation !== "object") return [];
   const list = (imagesByStation as Record<string, unknown>)[String(stationTypeId)];

@@ -2,11 +2,11 @@ import { prisma } from "@/lib/db";
 
 /**
  * `legacy_id_map`: the old → new item ids the production package upgrade wrote
- * (scripts/prod-package-model), so a label printed before it still finds its
+ * (db/upgrades/2026-09-17-package-model), so a label printed before it still finds its
  * item. The table exists only where the upgrade ran, and a database upgraded
  * with the first version of the one-shot has it without `relabeled_at` (the
  * rebuilt one-shot adds it idempotently) — so it is probed before it is read
- * (docs/PRISMA_UNMANAGED_OBJECTS.md).
+ * (docs/architecture/PRISMA_UNMANAGED_OBJECTS.md).
  */
 export async function legacyIdMapShape(): Promise<{ exists: boolean; hasRelabeled: boolean }> {
   const probe = await prisma.$queryRaw<{ ok: boolean; col: boolean }[]>`

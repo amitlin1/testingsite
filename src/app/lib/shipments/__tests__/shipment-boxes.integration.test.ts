@@ -1,4 +1,4 @@
-// A shipment's boxes follow its lines (docs/packages/PLAN.md §6, 2026-10-27):
+// A shipment's boxes follow its lines (docs/features/packages/PLAN.md §6, 2026-10-27):
 // every box keeps the line — the certificate row — it was minted for, an edit
 // touches only the lines it changes, and the opening station's row scan puts
 // a box whose label was stuck on another row's box back on its row. Against a

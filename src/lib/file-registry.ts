@@ -8,7 +8,7 @@ import { BUCKET } from './storage';
  * truth for bytes. Every helper here is BEST-EFFORT — it swallows (and logs)
  * its errors so a registry hiccup can never break the primary operation
  * (saving a shipment, uploading a file). Drift is repaired by
- * `scripts/reconcile-file-registry.mjs`.
+ * `scripts/ops/reconcile-file-registry.mjs`.
  *
  * Row lifecycle:
  *   pending → active → deleted
@@ -122,7 +122,7 @@ export async function registerFileObject(input: RegisterInput): Promise<void> {
  * confirm step flips it to 'active' through registerFileObject(). The tags the
  * upload was requested with (station, photo type, owner) are stored here, so
  * the confirm only has to name the key. Rows that are never confirmed are
- * swept by scripts/reconcile-file-registry.mjs.
+ * swept by scripts/ops/reconcile-file-registry.mjs.
  */
 export async function registerPendingFileObject(input: RegisterInput): Promise<void> {
   try {

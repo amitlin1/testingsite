@@ -39,7 +39,7 @@ import "@/app/testing/package-stations.css";
  * photo → weigh each) → labels (one per item; the box wears its label since
  * the shipment) → done. On "הדפס וסיים" every item gets its own result at this
  * station and then the box does, all under one submit id
- * (docs/packages/PLAN.md §4). Reference images / weights come from what the
+ * (docs/features/packages/PLAN.md §4). Reference images / weights come from what the
  * worker scans: the box label is looked up among the package type's
  * reference items, each item's label among its own type's. A scan that finds
  * nothing warns and lets the worker go on without a reference. When the box

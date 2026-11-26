@@ -17,7 +17,7 @@ function typeIdOf(typeId: string): number {
 
 /**
  * /api/settings/popup-templates/[typeId] — a station type's popup template
- * (docs/popup-templates/PLAN.md §3, step 1.2).
+ * (docs/features/popup-templates/PLAN.md §3, step 1.2).
  *   GET     → PopupTemplateJson | 404 TEMPLATE_NOT_FOUND. Open to any signed-in user: the testing
  *             page reads it when the popup opens.
  *   PUT     { base, config, expected_version } → the saved template (a new version). Refusals in

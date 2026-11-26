@@ -12,7 +12,7 @@ import "@/app/testing/package-stations.css";
 /**
  * פריט שלא הגיע לסגירה — design/Package Stations.dc.html (decide). Two
  * choices and a mandatory note; the decision is recorded on the box's closing
- * result (docs/packages/PLAN.md §4, decision 5).
+ * result (docs/features/packages/PLAN.md §4, decision 5).
  *
  * Opens over the closing wizard (mounted after it, so it stacks above);
  * Escape closes this dialog only. Mounted per item it decides, so it opens

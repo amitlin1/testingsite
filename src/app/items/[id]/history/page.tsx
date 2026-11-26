@@ -181,7 +181,7 @@ export default function ItemHistoryPage() {
   const loading = pageQ.isPending || pageQ.isFetching;
   const item = data?.item ?? null;
   const history = data?.history ?? NO_HISTORY;
-  // The item's box (docs/packages/PLAN.md); null for a legacy loose item.
+  // The item's box (docs/features/packages/PLAN.md); null for a legacy loose item.
   const pkg = data?.pkg ?? null;
   const files = data?.files ?? NO_FILES;
   const workers = data?.workers ?? NO_WORKERS;

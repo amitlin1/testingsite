@@ -17,7 +17,7 @@ import "@/components/ui/controls.css";
  * at the top of the item dialog and the item history page. Tag + id + type +
  * status + link to the package page, the mini-items strip with "N/M סיימו",
  * and the siblings with the current one marked "הפריט הזה". An item without a
- * box never renders this (docs/packages/PLAN.md §9).
+ * box never renders this (docs/features/packages/PLAN.md §9).
  */
 export default function MyPackageCard({ pkg, currentItemId, title }: {
   pkg: PackageView;

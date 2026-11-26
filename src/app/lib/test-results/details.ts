@@ -4,7 +4,7 @@ import type { FieldValue, FieldsSchemaRef } from "@/app/lib/station-fields/schem
 /**
  * test_results.details — what a station's result saves: the keys the popups write
  * (src/app/testing/tests-popups), the station-fields block and its schema ref (route-fields spec
- * §3.4), a popup template's components (docs/popup-templates/PLAN.md §3.5). Written by the testing
+ * §3.4), a popup template's components (docs/features/popup-templates/PLAN.md §3.5). Written by the testing
  * popups; read by the item report and the package screens. Client-safe.
  */
 

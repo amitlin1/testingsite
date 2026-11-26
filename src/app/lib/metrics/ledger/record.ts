@@ -1,5 +1,5 @@
 // The single TypeScript entry point to the metrics ledger (§4.3 of
-// docs/dashboard-migration-plan-v2.md). Every emission goes through
+// docs/architecture/dashboard-migration-plan-v2.md). Every emission goes through
 // metrics_record() in the DB, which owns occurred_at (clock + per-item clamp),
 // idempotency (event_key), collision detection and run auto-open. Client
 // timestamps are NEVER sent — the DB assigns event time.
@@ -10,7 +10,7 @@ import type { MetricsReason, StateKey } from "../vocabulary";
 /**
  * Which parts make an event's key (§4.4: the key carries the transition's identity, not just the
  * human action), joined with ":" in this order — name, action, item, seq, a fresh uuid. These are
- * the bytes the ledger has always stored: scripts/seed-dev-dataset.mjs reads the action back out
+ * the bytes the ledger has always stored: scripts/dev/seed-dev-dataset.mjs reads the action back out
  * of them. (The reaper's released_stale keys are built in its own SQL.)
  */
 export type EventKeyParts = {

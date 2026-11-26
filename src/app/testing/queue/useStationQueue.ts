@@ -28,7 +28,7 @@ export function useStationQueue(stationId: number | null) {
     [stationLite],
   );
   const stationType = station ? stationTypes.find((t) => t.id === station.test_station_type_id) ?? null : null;
-  // Package model (docs/packages/PLAN.md §4): opening / closing station types queue boxes, not
+  // Package model (docs/features/packages/PLAN.md §4): opening / closing station types queue boxes, not
   // items (design/Testing Screen Packages.dc.html).
   const packageLevel = !!stationType?.packageLevel;
 

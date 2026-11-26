@@ -19,7 +19,7 @@ import "@/app/testing/station-popups.css";
 
 /**
  * The package wizards' markup parts: an admin's step of a template (TemplatePackageOpening,
- * TemplatePackageClosing — docs/popup-templates/PLAN.md §5) and the shots its photo components
+ * TemplatePackageClosing — docs/features/popup-templates/PLAN.md §5) and the shots its photo components
  * take, and the blocks the code's wizards draw the same way (the error band, the verdict, the
  * weighing, the checks).
  */

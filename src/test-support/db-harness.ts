@@ -1,6 +1,6 @@
 // Scratch-database harness for the integration suites that drive the real route
 // handlers and the package/item writes (first written for the write-path suite,
-// docs/dashboard-migration-plan-v2.md §9.2ג; now shared by the metrics, packages,
+// docs/architecture/dashboard-migration-plan-v2.md §9.2ג; now shared by the metrics, packages,
 // shipments, items, item-report, station-fields and testing suites).
 //
 // WHY a second connection: the suite drives the REAL route handlers, which go
@@ -513,7 +513,7 @@ export function releaseTest(body: Record<string, unknown>): Promise<HandlerResul
   return call<ReleaseTestBody>(h().releaseTest, "/api/testing/release-test", body);
 }
 
-/** PUT /api/items/[id] — the edit / retype path (docs/packages/PLAN.md §4). */
+/** PUT /api/items/[id] — the edit / retype path (docs/features/packages/PLAN.md §4). */
 export async function updateItem(itemId: number, body: Record<string, unknown>): Promise<HandlerResult<UpdateItemBody>> {
   const req = new Request(`http://localhost/api/items/${itemId}`, {
     method: "PUT",

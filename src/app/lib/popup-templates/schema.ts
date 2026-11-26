@@ -1,6 +1,6 @@
 /**
  * Popup templates — the envelope of a station's test popup, one per station type
- * (docs/popup-templates/PLAN.md §3). The admin assembles it from a closed catalog of
+ * (docs/features/popup-templates/PLAN.md §3). The admin assembles it from a closed catalog of
  * components; the design (shell, rail, buttons, colours) stays locked. The route's
  * station fields are not defined here: the `route_fields` component only says where
  * they appear.
@@ -164,7 +164,7 @@ export interface NotesComponent extends ComponentBase {
  *  arrival   "פריטים ואריזה" (closing): arrived → packed, not arrived → a decision with a note
  *  report_sign "חתימה על הדוחות" (closing, optional): the last step, the one the finish button is
  *            on — the items' PDF reports and one signature for all of them, sent with the
- *            closing's results (docs/ITEM_REPORTS.md). Required: the finish waits for it. */
+ *            closing's results (docs/features/ITEM_REPORTS.md). Required: the finish waits for it. */
 export interface SystemComponent extends ComponentBase { kind: "contents" | "items" | "labels" | "arrival" | "report_sign" }
 
 export type TemplateComponent =

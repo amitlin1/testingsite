@@ -42,7 +42,7 @@ export default function ItemTable() {
 
   const [selected, setSelected] = React.useState<ItemListRow | null>(null);
   const [editingItem, setEditingItem] = React.useState<ItemListRow | null>(null);
-  // Items are only ever created inside a box (docs/packages/PLAN.md §9), so
+  // Items are only ever created inside a box (docs/features/packages/PLAN.md §9), so
   // "הוסף" here means "קליטת מארז".
   const canIntake = useCanIntake();
   const [insertOpen, setInsertOpen] = React.useState(false);

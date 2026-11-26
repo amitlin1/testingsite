@@ -2,7 +2,7 @@
 //
 // A civil date carries no time of day and no zone, so its arithmetic runs on UTC
 // components and gives the same answer in every process timezone. The one zone
-// that matters is the business day's: §7.2 of docs/dashboard-migration-plan-v2.md
+// that matters is the business day's: §7.2 of docs/architecture/dashboard-migration-plan-v2.md
 // defines it as `(ts AT TIME ZONE 'Asia/Jerusalem')::date`, the same rule the
 // database's business_date(ts) applies. Intl carries the IANA rules, so the two
 // DST changes a year are never hardcoded as +02/+03.

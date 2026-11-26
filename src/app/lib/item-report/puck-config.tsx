@@ -720,7 +720,7 @@ export const puckConfig: Config<PdfComponentProps, RootProps> = {
     // Every station the item passed, in route order, each as its own part: a head (station ·
     // worker · date · verdict), what it saved (the popup's components and the route's fields),
     // the comments, and its photos. Binds no step, so the general template can use it on any
-    // route (docs/ITEM_REPORTS.md).
+    // route (docs/features/ITEM_REPORTS.md).
     StepDetails: {
       label: "פירוט לפי עמדה (כל העמדות)",
       defaultProps: { showPhotos: true, perRow: 3, height: 45, showComments: true, width: "full" },

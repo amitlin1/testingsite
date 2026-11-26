@@ -2,7 +2,7 @@ import { TEMPLATE_LIMITS } from "./schema";
 import type { ComponentKind } from "./schema";
 
 /**
- * Strings of the popup templates (docs/popup-templates/PLAN.md). No artboard draws the template
+ * Strings of the popup templates (docs/features/popup-templates/PLAN.md). No artboard draws the template
  * screen yet: every word here is our own and awaits approval. The worker-facing defaults repeat
  * today's popups word for word (tests-popups/PhotoStation.tsx, VerdictStation.tsx, stationKit.tsx),
  * so a seeded template looks exactly like the popup it replaces.

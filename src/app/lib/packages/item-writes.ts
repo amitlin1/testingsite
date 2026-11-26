@@ -57,7 +57,7 @@ export type ItemEditOutcome = { item_id: string; retyped: boolean; packageReset:
  * Changing the TYPE re-routes the row: a different type can have an entirely
  * different set of stations, so the steps already walked mean nothing on the
  * new route and the row restarts it (lifecycle.ts restartRoute). Package
- * model (docs/packages/PLAN.md §4, "שינוי סוג"):
+ * model (docs/features/packages/PLAN.md §4, "שינוי סוג"):
  *   - a PACKAGE never changes type (delete and re-create instead);
  *   - an item inside a box may not become a package type;
  *   - retyping an item while its box is still at the opening step restarts
@@ -177,7 +177,7 @@ async function retype(
 
 /**
  * Deletes a row and everything owned solely by it (lifecycle.ts
- * deleteItemRows). Package model (docs/packages/PLAN.md §4):
+ * deleteItemRows). Package model (docs/features/packages/PLAN.md §4):
  *   - deleting a PACKAGE deletes every item inside it (items.package_id → the
  *     box is a real FK, so it could not go alone anyway). Without `cascade`
  *     the items are reported back as a 409 so the UI can list them;

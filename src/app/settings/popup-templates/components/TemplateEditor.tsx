@@ -15,7 +15,7 @@ import { EDITOR_TEXT } from "../lib/labels";
 import { StepsEditor, VariablesHint } from "./StepsEditor";
 
 /**
- * One station type's template (docs/popup-templates/PLAN.md step 1.6): its state (none / the
+ * One station type's template (docs/features/popup-templates/PLAN.md step 1.6): its state (none / the
  * template / a new one not saved yet), the draft under edit, save (a new version; 409 when someone
  * saved meanwhile, 422 with the server's issues), "חזור לחלון של היום" (delete), and the preview —
  * the worker's popup itself (TemplatePopup in preview mode) over a sample item.

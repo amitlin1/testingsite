@@ -19,7 +19,7 @@
 //   no-op.
 
 import { NextRequest } from "next/server";
-import { handlers } from "@/../auth";
+import { handlers } from "@/auth";
 import { DEV_AUTH_BYPASS, devSession } from "@/lib/auth/current-session";
 import { SERVER_BASE_PATH as BASE } from "@/lib/base-path";
 

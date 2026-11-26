@@ -93,7 +93,7 @@ export function closingItemDetails(packageId: string, templateVersion: number | 
 }
 
 /** The done step's rows. The closing is the last step of the box's route and of its items'
- *  (docs/packages/PLAN.md §4), so this is normally one "no next station" line; a route drawn
+ *  (docs/features/packages/PLAN.md §4), so this is normally one "no next station" line; a route drawn
  *  otherwise names its station. */
 export function closingDoneRows(
   pkg: Pick<PackageView, "item_type_desc">,

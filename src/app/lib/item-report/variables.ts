@@ -300,7 +300,7 @@ function fieldValueRow(id: string, raw: unknown): ReportFieldResult | null {
   return { id, label: v.label || "שדה", value: f.value, tone: f.tone, ...(v.note ? { note: v.note } : {}), ...(f.photos ? { photos: f.photos } : {}) };
 }
 
-/** The fields of a row: a popup template's components (docs/popup-templates/PLAN.md §3.5), the
+/** The fields of a row: a popup template's components (docs/features/popup-templates/PLAN.md §3.5), the
  *  station-fields block or the documented `fields` array, and the keys the code popups save
  *  (refSource, weight, the photo blocks). */
 function rowFields(d: JsonObject | null): ReportFieldResult[] {
@@ -321,7 +321,7 @@ function rowFields(d: JsonObject | null): ReportFieldResult[] {
       if (row) out.push(row);
     }
   } else if (Array.isArray(d.fields)) {
-    // The legacy array (docs/REPORT_TEMPLATE.md): [{ label, value, unit?, passed? }, …]
+    // The legacy array (docs/features/REPORT_TEMPLATE.md): [{ label, value, unit?, passed? }, …]
     d.fields.forEach((raw, i) => {
       if (!isRecord(raw)) return;
       const label = typeof raw.label === "string" ? raw.label : `שדה ${i + 1}`;

@@ -3,7 +3,7 @@
  * print with lib/item-report/pdf-styles.
  * Colors are taken from the unit emblems (public/report-logos). Fonts are the
  * locally-bundled Rubik — the system is air-gapped, never load a web font here.
- * Design reference: docs/REPORT_TEMPLATE.md.
+ * Design reference: docs/features/REPORT_TEMPLATE.md.
  */
 
 export const REPORT_COLORS = {

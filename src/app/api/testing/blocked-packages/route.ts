@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 /**
  * GET /api/testing/blocked-packages?stationId — the boxes that are NOT in
  * this closing station's queue yet because some of their items are still
- * elsewhere (status 6, docs/packages/PLAN.md §4). The testing screen shows
+ * elsewhere (status 6, docs/features/packages/PLAN.md §4). The testing screen shows
  * them in the amber "ממתין לפריטי המארז" banner above the queue, with each
  * missing item and where it is. Empty for stations that are not
  * package-level.

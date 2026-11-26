@@ -64,7 +64,7 @@ export default function ShipmentInsertPopup({
     const customers = useCustomers().data ?? NO_CUSTOMERS;
     const workers = useWorkersDirectory().data ?? NO_WORKERS;
     const allTypes = useItemTypeRows().data;
-    // Package types only (docs/packages/PLAN.md §9.10) — a shipment declares boxes.
+    // Package types only (docs/features/packages/PLAN.md §9.10) — a shipment declares boxes.
     const itemTypes = useMemo(() => (allTypes ?? []).filter((t) => t.is_package === true), [allTypes]);
     const sources = useSources().data ?? NO_SOURCES;
     const fieldId = React.useId();

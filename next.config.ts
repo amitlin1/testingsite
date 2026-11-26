@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
 
-  // Item PDF reports (docs/ITEM_REPORTS.md) — the same settings ticketflow's
+  // Item PDF reports (docs/features/ITEM_REPORTS.md) — the same settings ticketflow's
   // PDF pipeline runs with:
   // puppeteer-core must not be bundled — it is required at runtime against the
   // system Chromium the Dockerfile installs in the runner stage — and Next's
@@ -29,11 +29,11 @@ const nextConfig: NextConfig = {
     // body, which then fails in a way that reads like a client bug and is not one.
     //
     // File uploads no longer pass through here at all: the browser POSTs them
-    // straight to MinIO with a presigned ticket (docs/STORAGE.md, "Direct
+    // straight to MinIO with a presigned ticket (docs/architecture/STORAGE.md, "Direct
     // uploads"), so the largest body left is the inline text editor's JSON
     // (MAX_TEXT_EDIT_SIZE_MB, 5) and a base64 signature. 25mb keeps 5x headroom
     // over that while bounding what one request can pin in memory. Aligned with
-    // nginx's `client_max_body_size 25m` (nginx/nginx.conf).
+    // nginx's `client_max_body_size 25m` (infra/nginx/nginx.conf).
     proxyClientMaxBodySize: "25mb",
   },
 };

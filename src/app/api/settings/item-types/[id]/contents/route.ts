@@ -7,7 +7,7 @@ import { parseDefaultRoute } from "@/app/lib/packages/template-wire";
 export const runtime = "nodejs";
 
 /**
- * Package contents (the template) of one package type — docs/packages/PLAN.md
+ * Package contents (the template) of one package type — docs/features/packages/PLAN.md
  * §3, lib/packages/template.ts. GET lists the lines with route warnings, PUT
  * replaces the whole list. The table's item-detail columns stay, unused; a
  * save leaves them NULL.

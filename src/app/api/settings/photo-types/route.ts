@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  * Active types only, unless `?all=1` — a test station keeps tagging its captures
  * with its group even after the type is hidden from the pickers.
  *
- * A group a popup template's photo component owns (docs/popup-templates/PLAN.md
+ * A group a popup template's photo component owns (docs/features/popup-templates/PLAN.md
  * §3.4) carries its station type: station_type_id / station_type_desc, so the
  * reference-items page can list it under its station. Both null = no owner.
  *

@@ -2,7 +2,7 @@ import type { PackageRole } from "./schema";
 
 /**
  * Where a package-level station type stands on the package routes, and so which role its template
- * plays there (docs/popup-templates/PLAN.md §5.1, decision 1): the last step of a package route of
+ * plays there (docs/features/popup-templates/PLAN.md §5.1, decision 1): the last step of a package route of
  * more than one step closes the box; every other step opens it. One rule for the seed, the template
  * editor, the routes page's warning and the testing screen's wizard (lib/testing/popup-kind.ts).
  *

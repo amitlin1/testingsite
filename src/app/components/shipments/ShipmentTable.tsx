@@ -237,7 +237,7 @@ export default function ShipmentTable() {
         },
         { key: "date", header: "תאריך קבלה", nums: true, nowrap: true, cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{formatDate(receivedOf(r))}</span> },
         { key: "worker", header: "עובד מקבל", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.recieving_worker_name || EM_DASH}</span> },
-        // Package model (docs/packages/PLAN.md §9.10): every count is boxes.
+        // Package model (docs/features/packages/PLAN.md §9.10): every count is boxes.
         { key: "amount", header: "מארזים שהוצהרו", align: "center", nums: true, cell: (r) => <span style={{ fontWeight: 700 }}>{r.amount}</span> },
         { key: "sampled", header: "נקלטו", align: "center", nums: true, cell: (r) => r.sampled_amount || 0 },
         { key: "started", header: "התחילו", align: "center", nums: true, cell: (r) => r.started_sampled_amount || 0 },

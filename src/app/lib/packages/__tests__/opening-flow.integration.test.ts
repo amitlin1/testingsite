@@ -1,5 +1,5 @@
 // The opening of a box from its shipment, end to end, against a real database
-// (docs/packages/PLAN.md §6): shipment line → pending box → intake → group
+// (docs/features/packages/PLAN.md §6): shipment line → pending box → intake → group
 // start → "תכולה וסריאליים" (PUT /api/packages/[id]/contents) → one result per
 // item and the box. Plus the ways it can be refused, the stale-test reaper in
 // the middle of a long opening, and a reopened wizard after the items were

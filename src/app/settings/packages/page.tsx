@@ -22,7 +22,7 @@ import {
 import "./packages-settings.css";
 
 /**
- * הגדרות → מארזים — docs/packages/PLAN.md §3, design
+ * הגדרות → מארזים — docs/features/packages/PLAN.md §3, design
  * claude-code-handoff/packages/design/Package Types Settings.dc.html.
  *
  * Top: every package type (an item type flagged is_package) with the size of

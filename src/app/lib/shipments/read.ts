@@ -48,7 +48,7 @@ type ShipmentListRow = Pick<
 
 /**
  * Every shipment with its lines and its box counters. Package model
- * (docs/packages/PLAN.md §9.10, §9.13): a shipment declares package types and
+ * (docs/features/packages/PLAN.md §9.10, §9.13): a shipment declares package types and
  * counts, so every counter counts BOXES (items.is_package, never the items
  * inside them):
  *   sampled  = boxes taken in for this shipment

@@ -33,7 +33,7 @@ import "@/app/testing/package-stations.css";
  * and packing (arrived → "נארז"; not arrived → an explicit decision with a
  * note) → packing checks → done. "סגור מארז" records one result per arrived
  * item and then the box's, whose details carry the decisions
- * (docs/packages/PLAN.md §4, decision 5; DESIGN_REVIEW.md).
+ * (docs/features/packages/PLAN.md §4, decision 5; DESIGN_REVIEW.md).
  *
  * The scan starts from the label scanned when the box was opened
  * (pkg.opening_sku) and, like the opening, is looked up among the package

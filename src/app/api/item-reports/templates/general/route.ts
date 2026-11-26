@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/item-reports/templates/general — the general template (docs/ITEM_REPORTS.md), what
+ * GET /api/item-reports/templates/general — the general template (docs/features/ITEM_REPORTS.md), what
  * it can bind (the item's and the report's variables; no step), and how many item routes use it.
  */
 export const GET = withAuth(async () => {
