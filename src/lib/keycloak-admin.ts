@@ -1,9 +1,10 @@
 // SERVER-ONLY Keycloak Admin REST client. Authenticated via the
 // `testing-admin-api` service account (client_credentials grant with
-// realm-management roles manage-users/view-users/query-users/view-realm). It
-// assigns roles to users but never creates or edits a role: the permission
-// roles and the main roles' bundles are made by scripts/ops/keycloak-permissions.mjs,
-// with the Keycloak admin's own login.
+// realm-management roles manage-users/view-users/query-users/view-realm, and
+// manage-realm for the managers' role editor — setRoleBundle). It assigns roles
+// to users and edits the main roles' bundles, but never creates a role: the
+// permission roles are made by scripts/ops/keycloak-permissions.mjs, which also
+// grants this account manage-realm.
 //
 // NEVER import this into a client component — it holds the admin secret and
 // talks straight to Keycloak's admin API. Used by the /api/users/* route
@@ -317,6 +318,41 @@ export async function getRoleBundles(): Promise<Record<AppRole, string[]>> {
     }),
   );
   return Object.fromEntries(entries) as Record<AppRole, string[]>;
+}
+
+/**
+ * Make a main role's bundle exactly these permissions: its perm-… composites are added and removed
+ * as needed (any other composite is left alone). Everyone holding the role gets the change at their
+ * next token refresh; the permissions taken away from one user (no-…) stay. Needs manage-realm.
+ */
+export async function setRoleBundle(role: AppRole, perms: readonly Permission[]): Promise<void> {
+  const res = await kc(`/roles/${encodeURIComponent(role)}/composites/realm`);
+  if (res.status === 404) throw new HttpError(409, `התפקיד "${role}" לא מוגדר ב-Keycloak — יש להריץ את סקריפט ההרשאות. לא בוצע שינוי.`);
+  if (!res.ok) throw failed(`bundle ${role}`, res);
+  const current = ((await res.json()) as KcRole[]).filter((r) => isGrantRole(r.name));
+  const want = new Set(perms.map((p) => p.role));
+  const remove = current.filter((r) => !want.has(r.name));
+  const add: KcRole[] = [];
+  for (const name of want) {
+    if (current.some((r) => r.name === name)) continue;
+    try {
+      add.push(await getRealmRole(name));
+    } catch {
+      throw new HttpError(409, `התפקיד "${name}" לא קיים ב-Keycloak — יש להריץ את סקריפט ההרשאות. לא בוצע שינוי.`);
+    }
+  }
+  const NO_RIGHT = "לחשבון השירות של המערכת אין הרשאה לערוך תפקידים (manage-realm) — יש להריץ את סקריפט ההרשאות.";
+  // Add before remove: a failure halfway leaves the role with more, never with nothing.
+  if (add.length) {
+    const r = await kc(`/roles/${encodeURIComponent(role)}/composites`, { method: "POST", body: JSON.stringify(add.map((x) => ({ id: x.id, name: x.name }))) });
+    if (r.status === 403) throw new HttpError(409, NO_RIGHT);
+    if (!r.ok) throw failed("addToBundle", r);
+  }
+  if (remove.length) {
+    const r = await kc(`/roles/${encodeURIComponent(role)}/composites`, { method: "DELETE", body: JSON.stringify(remove.map((x) => ({ id: x.id, name: x.name }))) });
+    if (r.status === 403) throw new HttpError(409, NO_RIGHT);
+    if (!r.ok) throw failed("removeFromBundle", r);
+  }
 }
 
 // ---- public API used by the route handlers ----

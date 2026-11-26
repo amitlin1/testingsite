@@ -516,7 +516,7 @@
     "requiredActions" : [ ],
     "realmRoles" : [ "default-roles-testing" ],
     "clientRoles" : {
-      "realm-management" : [ "manage-users", "view-users", "query-users", "view-realm" ]
+      "realm-management" : [ "manage-users", "view-users", "query-users", "view-realm", "manage-realm" ]
     },
     "notBefore" : 0,
     "groups" : [ ]

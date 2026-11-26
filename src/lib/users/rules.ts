@@ -122,3 +122,23 @@ export function parseDenied(body: Record<string, unknown> | null): PermissionKey
   const keys = [...new Set(raw)];
   return keys.some((k) => UNDENIABLE.includes(k)) ? null : keys;
 }
+
+/** Permissions a main role's bundle must always keep: the manager's user management (without it
+ *  nobody could manage users or permissions again — the same lockout the last-manager guard
+ *  prevents). */
+export const LOCKED_IN_BUNDLE: Partial<Record<AppRole, readonly PermissionKey[]>> = { manager: ["usersAdmin"] };
+
+/**
+ * PUT /api/users/role-bundles/[role]'s body { perms: [key…] } → the whole bundle, each key once; or
+ * why it is refused. Never empty: a role with no perm-… role at all would make its users' tokens
+ * look like a realm the migration script never ran on, and can() would hand them the defaults.
+ */
+export function parseBundle(role: AppRole, body: Record<string, unknown> | null): { keys: PermissionKey[] } | { error: string } {
+  const raw = body?.perms;
+  if (!Array.isArray(raw) || !raw.every(isPermissionKey)) return { error: "רשימת ההרשאות אינה תקינה" };
+  const keys = [...new Set(raw)];
+  if (keys.length === 0) return { error: "תפקיד חייב לכלול לפחות הרשאה אחת" };
+  const missing = (LOCKED_IN_BUNDLE[role] ?? []).filter((k) => !keys.includes(k));
+  if (missing.length) return { error: "לא ניתן להוריד מהמנהל את ניהול המשתמשים וההרשאות" };
+  return { keys };
+}

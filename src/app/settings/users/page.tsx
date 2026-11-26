@@ -26,7 +26,7 @@ import {
 } from "@/components/ui";
 import DataTable, { RowActions, IconAction, type Column } from "@/components/DataTable";
 import { Pencil, KeyRound, Ban, Power, Trash2, Unlock, Info, HelpCircle, ShieldCheck, type LucideIcon } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import SettingsToolbar from "../components/SettingsToolbar";
 import RoleInfoDrawer from "./RoleInfoDrawer";
 import UserPermissionsDialog from "./UserPermissionsDialog";
@@ -194,6 +194,7 @@ export default function UsersPage() {
   const [infoRole, setInfoRole] = React.useState<AppRole | null>(null);
   // The bundles Keycloak holds — read when the panel first opens.
   const bundles = useQuery({ queryKey: ["role-bundles"], queryFn: readBundles, enabled: infoRole != null });
+  const queryClient = useQueryClient();
   // One user's permissions dialog; null = closed.
   const [permTarget, setPermTarget] = React.useState<AdminUser | null>(null);
 
@@ -457,7 +458,7 @@ export default function UsersPage() {
           startIcon={<HelpCircle size={18} strokeWidth={1.75} aria-hidden />}
           onClick={() => setInfoRole(roleFilter === "all" ? "manager" : roleFilter)}
         >
-          מה כל תפקיד יכול לעשות?
+          הרשאות לפי תפקיד
         </Button>
       </SettingsToolbar>
 
@@ -666,6 +667,8 @@ export default function UsersPage() {
         people={peopleByRole}
         bundles={bundles.data ?? null}
         bundlesFailed={bundles.isError}
+        onSaved={(saved, message) => { queryClient.setQueryData(["role-bundles"], saved); notify(message); }}
+        onError={(message) => notify(message, "error")}
       />
 
       <UserPermissionsDialog

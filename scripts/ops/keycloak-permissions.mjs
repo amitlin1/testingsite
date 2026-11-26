@@ -12,8 +12,7 @@
 // and runs this with it — --client-id, secret in KC_ADMIN_CLIENT_SECRET, --temp-client — and this
 // deletes that login at the end (and any left over by an earlier run that died). From elsewhere
 // the Keycloak admin logs in with a password (KC_ADMIN_PASSWORD, --user). Either way it is an
-// admin of the master realm: the app's own service account may assign roles but not create them,
-// and stays that way.
+// admin of the master realm: the app's own service account cannot create roles.
 //
 // What apply does — only ever ADDS, never touches a user it was not asked about:
 //   1. creates the roles the realm lacks: missing main roles, and every perm-… / no-… pair;
@@ -22,7 +21,9 @@
 //      names. A bundle that was already filled is left as it is — someone may have changed it in
 //      Keycloak on purpose — and its differences from the table are only reported
 //      (--reset-bundles makes every bundle exactly the table's, adding and removing);
-//   3. --deny <permission>=<user>,<user> (repeatable): gives those users the no-… role.
+//   3. gives the app's service account (--service-client, testing-admin-api) the realm-management
+//      role manage-realm, which the managers' role editor needs to change a bundle;
+//   4. --deny <permission>=<user>,<user> (repeatable): gives those users the no-… role.
 // It runs check again at the end and fails if anything is still pending. Safe to run any number of
 // times. SQL into Keycloak's database is not an alternative: Keycloak caches it and owns its schema.
 
@@ -45,13 +46,14 @@ const { values: opt, positionals } = parseArgs({
     table: { type: "string" },
     deny: { type: "string", multiple: true, default: [] },
     "reset-bundles": { type: "boolean", default: false },
+    "service-client": { type: "string", default: "testing-admin-api" },
     help: { type: "boolean", short: "h", default: false },
   },
 });
 
 const USAGE = `usage: node keycloak-permissions.mjs [check|apply] --url <keycloak server, e.g. http://keycloak:8080/auth>
          [--realm testing] [--admin-realm master] [--table permissions.json]
-         [--deny <permission>=<user>,<user> ...] [--reset-bundles]
+         [--deny <permission>=<user>,<user> ...] [--reset-bundles] [--service-client testing-admin-api]
   login: --user admin + KC_ADMIN_PASSWORD, or --client-id <id> + KC_ADMIN_CLIENT_SECRET
          [--temp-client: delete that client at the end, and leftover perm-script-* clients]`;
 
@@ -227,13 +229,28 @@ async function plan() {
     }
   }
 
+  const service = await serviceAccountPlan();
+
   const unknown = [...roles.keys()].filter(
     (n) => (n.startsWith(table.grant) || n.startsWith(table.deny)) && !PERMS.some((p) => p.role === n || p.deny === n),
   );
-  return { create, bundles, denies, unknown };
+  return { create, bundles, denies, unknown, service };
 }
 
-const pendingOf = (pl) => pl.create.length + pl.bundles.reduce((n, b) => n + b.add.length + b.remove.length, 0) + pl.denies.length;
+/** The app's service account must hold realm-management's manage-realm (the role editor). */
+async function serviceAccountPlan() {
+  const name = opt["service-client"];
+  const [rm] = await json("GET", `/clients?clientId=realm-management`);
+  const [svc] = await json("GET", `/clients?clientId=${enc(name)}`);
+  if (!rm || !svc) return { name, missing: true };
+  const user = await json("GET", `/clients/${svc.id}/service-account-user`);
+  const held = (await json("GET", `/users/${user.id}/role-mappings/clients/${rm.id}/composite`)).map((r) => r.name);
+  if (held.includes("manage-realm")) return { name, ok: true };
+  return { name, grant: { userId: user.id, rmId: rm.id, role: await json("GET", `/clients/${rm.id}/roles/manage-realm`) } };
+}
+
+const pendingOf = (pl) =>
+  pl.create.length + pl.bundles.reduce((n, b) => n + b.add.length + b.remove.length, 0) + pl.denies.length + (pl.service.grant ? 1 : 0);
 
 function report(pl) {
   console.log(`\nRealm "${opt.realm}" at ${SERVER}  (table: ${tablePath})`);
@@ -248,6 +265,8 @@ function report(pl) {
     for (const r of b.keptOut) console.log(`    = ${r}  (default, but left out in Keycloak — kept; --reset-bundles adds it)`);
     for (const r of b.keptIn) console.log(`    = ${r}  (not a default, added in Keycloak — kept; --reset-bundles removes it)`);
   }
+  console.log(`\nService account ${pl.service.name} (the app's): ${
+    pl.service.missing ? "NOT FOUND — the role editor will not be able to save" : pl.service.ok ? "has manage-realm" : "+ manage-realm"}`);
   if (pl.denies.length) {
     console.log("\nPermissions to take away:");
     for (const d of pl.denies) console.log(`  + ${d.username} (${d.mainRole ?? "no main role"}): ${d.perm.deny}`);
@@ -274,6 +293,11 @@ async function apply(pl) {
       await json("DELETE", `/roles/${enc(b.name)}/composites`, b.remove.map((n) => ref(roles.get(n))));
       console.log(`  ${b.name}: -${b.remove.length}`);
     }
+  }
+  if (pl.service.grant) {
+    const g = pl.service.grant;
+    await json("POST", `/users/${g.userId}/role-mappings/clients/${g.rmId}`, [ref(g.role)]);
+    console.log(`  ${pl.service.name}: + manage-realm`);
   }
   for (const d of pl.denies) {
     await json("POST", `/users/${d.id}/role-mappings/realm`, [ref(roles.get(d.perm.deny))]);

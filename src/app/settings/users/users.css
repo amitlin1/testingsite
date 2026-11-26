@@ -171,3 +171,32 @@
 .user-perms__label { flex: 1; min-width: 0; cursor: pointer; }
 .user-perms__state { font-size: var(--text-fine); color: var(--color-ink-muted-48); white-space: nowrap; }
 .user-perms__state--removed { color: var(--color-status-late); }
+
+/* The role panel as the managers' role editor: a switch per line, and the save bar. */
+.role-drawer__edit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--text-body-sm);
+  color: var(--color-ink-muted-48);
+}
+.role-drawer__edit--on { color: var(--color-ink); }
+.role-drawer__edit:hover { background: var(--color-canvas-parchment); }
+.role-drawer__edit-label { flex: 1; min-width: 0; cursor: pointer; }
+.role-drawer__footer {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-canvas);
+  border-top: 1px solid var(--color-hairline);
+  box-shadow: 0 -4px 12px var(--color-hairline-rgba);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.role-drawer__footer .role-drawer__desc { margin: 0; color: var(--color-ink-muted-70); }
+.role-drawer__actions { display: flex; justify-content: flex-end; gap: var(--space-xs); }

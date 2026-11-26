@@ -6,6 +6,7 @@ import {
   employeeNumberEdit,
   fullNameOf,
   isSameAccount,
+  parseBundle,
   parseDenied,
   isServiceAccount,
   isUserId,
@@ -67,4 +68,16 @@ test("parseDenied: a list of permission keys, each once; never user management; 
   assert.equal(parseDenied({ denied: "stepBack" }), null);
   assert.equal(parseDenied({}), null);
   assert.equal(parseDenied(null), null);
+});
+
+test("parseBundle: the whole bundle, each key once; never empty; the manager keeps user management", () => {
+  assert.deepEqual(parseBundle("tester", { perms: ["testing", "files", "testing"] }), { keys: ["testing", "files"] });
+  assert.ok("error" in parseBundle("tester", { perms: [] }));
+  assert.ok("error" in parseBundle("tester", { perms: ["perm-testing"] }));
+  assert.ok("error" in parseBundle("tester", { perms: "testing" }));
+  assert.ok("error" in parseBundle("tester", null));
+  assert.ok("error" in parseBundle("manager", { perms: ["dashboard"] }));
+  assert.deepEqual(parseBundle("manager", { perms: ["usersAdmin"] }), { keys: ["usersAdmin"] });
+  // Another role may be given user management too.
+  assert.deepEqual(parseBundle("mashan", { perms: ["usersAdmin", "workHours"] }), { keys: ["usersAdmin", "workHours"] });
 });

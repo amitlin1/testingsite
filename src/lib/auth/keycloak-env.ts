@@ -15,7 +15,8 @@ export function isKeycloakConfigured(): boolean {
   return !!process.env.AUTH_KEYCLOAK_ID && !!process.env.AUTH_KEYCLOAK_SECRET && !!process.env.AUTH_KEYCLOAK_ISSUER;
 }
 
-/** The admin REST API's service account (realm-management roles manage/view/query-users). */
+/** The admin REST API's service account (realm-management roles manage/view/query-users,
+ *  view-realm, and manage-realm for the managers' role editor). */
 export function adminClient(): { id: string; secret: string } {
   return {
     id: process.env.KEYCLOAK_ADMIN_CLIENT_ID ?? "testing-admin-api",
