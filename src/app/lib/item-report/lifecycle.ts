@@ -32,7 +32,7 @@ import { getObjectBuffer, putObject, removeObject } from "@/lib/storage";
 import { ReportKeys } from "@/lib/storage/keys";
 import { registerFileObject, markFileObjectDeleted } from "@/lib/file-registry";
 import { requiresClosingSignature, requiresFinalSignature, templateHasContent } from "./template-utils";
-import { buildReportHtml, renderReportPdf, type Signature } from "./build";
+import { buildReportBody, buildReportHtml, renderCombinedPdf, renderReportPdf, type Signature } from "./build";
 import { loadReportSource, type ReportSource } from "./source";
 import type { ReportState, ReportStatus } from "./contract";
 
@@ -201,6 +201,47 @@ export async function getItemReport(itemId: bigint): Promise<ReportDocument> {
 
   const { bytes, filename } = await renderReportPdf(await full(), { draft: true, ...signaturesOf(row, head.item.finished_at) });
   return { kind: "pdf", bytes, final: false, version: 0, filename };
+}
+
+type PackageReportDocument =
+  | { kind: "not_found" }
+  | { kind: "not_a_package" }
+  | { kind: "no_reports" }
+  | { kind: "pdf"; bytes: Buffer; filename: string; items: number; drafts: number };
+
+/**
+ * A kit's combined report: the report of every item in the box, in the box's order (package_seq),
+ * one after another in ONE PDF. Each is built exactly as the item's own report from the same data
+ * (buildReportBody) — a final one with its signatures and no mark, one still a draft with its
+ * "טיוטה" mark. Items whose route has no report are left out. Rendered live on every download and
+ * never stored: an item's frozen copy stays its own record (getItemReport).
+ */
+export async function getPackageReport(packageId: bigint): Promise<PackageReportDocument> {
+  const [box] = await prisma.$queryRaw<{ is_package: boolean | null }[]>`
+    SELECT t.is_package FROM items i LEFT JOIN item_types t ON t.item_type_id = i.item_type_id
+     WHERE i.item_id = ${packageId}`;
+  if (!box) return { kind: "not_found" };
+  if (!box.is_package) return { kind: "not_a_package" };
+
+  const members = await prisma.items.findMany({
+    where: { package_id: packageId },
+    select: { item_id: true },
+    orderBy: [{ package_seq: { sort: "asc", nulls: "last" } }, { item_id: "asc" }],
+  });
+  const parts: Awaited<ReturnType<typeof buildReportBody>>[] = [];
+  let drafts = 0;
+  // One at a time: each item's photos are made small in Chromium, and a box can hold many items.
+  for (const { item_id } of members) {
+    const src = await loadReportSource(item_id);
+    if (!src?.template || !templateHasContent(src.template)) continue;
+    const row = await loadReportRow(item_id);
+    const draft = stateOf(src, row).state !== "final";
+    if (draft) drafts++;
+    parts.push(await buildReportBody(src, { draft, ...signaturesOf(row, src.item.finished_at) }));
+  }
+  if (parts.length === 0) return { kind: "no_reports" };
+  const bytes = await renderCombinedPdf(parts, `דוח מארז ${packageId}${drafts ? " (כולל טיוטות)" : ""}`);
+  return { kind: "pdf", bytes, filename: `package-${packageId}${drafts ? "-draft" : ""}.pdf`, items: parts.length, drafts };
 }
 
 /** The live HTML of the report (the signing previews). */

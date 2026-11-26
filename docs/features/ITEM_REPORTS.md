@@ -13,6 +13,7 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 |---|---|
 | Edit the general template / a route's template | הגדרות מערכת → מסלולי בדיקה → לשונית **דוח PDF** (the general template's row leads it) |
 | Download an item's report / give its final signature / a missing closing signature | היסטוריית פריט (`/items/<id>/history`) — the buttons under the status (`ItemReportControl.tsx`) |
+| A kit's combined report (every item's report in one PDF) | עמוד מארז (`/packages/<id>`) — "דוח מאוחד"; `GET /api/packages/<id>/report` (`getPackageReport` → `renderCombinedPdf`) |
 | Sign a kit's reports at its closing (the closing signature) | the closing template's "חתימה על הדוחות" step (`report_sign`) — see below |
 | Template components (shared by editor + server) | `src/app/lib/item-report/puck-config.tsx` (the print renders); the page, the document settings and what prints on every page: `document.ts` |
 | Variables: catalog + values | `src/app/lib/item-report/variables.ts` (pure, unit-tested) |
@@ -185,6 +186,22 @@ box closed before the template had the block, or the closing had no "חתימה 
 On the item page, "חתימה סופית על הדוח" (`POST /api/item-reports/<id>/sign`, `signItemReport`):
 only `ACCESS.reportFinalSign`, once per finish — the one who signed at the closing may give it
 too. It freezes the report with both signatures on it.
+
+## A kit's combined report — דוח מאוחד למארז
+
+"דוח מאוחד" on the kit's page downloads the report of every item in the box, in the box's order
+(`package_seq`), in ONE PDF (`getPackageReport` in `lifecycle.ts`, `renderCombinedPdf` in `build.ts`):
+
+- Each item's part is built by the same `buildReportBody` as its own report — its template, values,
+  photos and valid signatures. A final report prints without a mark, a draft with "טיוטה" — on its
+  own first page only (a fixed mark would repeat on every page of the file, the final ones too).
+- Each item starts on a new page; one Chromium render, no extra library. The page settings
+  (margins, footer, page numbers) are the first report's; page numbers run through the whole file;
+  the classification is the strictest of the items'.
+- Items whose route has no report are left out; none at all → 204.
+- Rendered live on every download and **never stored**. A finished item's frozen copy stays its
+  record: the combined report re-renders it from today's data (a template edited after the freeze
+  shows here, not in the item's own PDF).
 
 ## Storage
 
