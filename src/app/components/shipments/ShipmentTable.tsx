@@ -2,10 +2,12 @@
 import React, { useCallback, useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Alert, ConfirmDialog, Button, Chip, TextField, SearchableCombobox, FieldLabel, useToast } from "@/components/ui";
+import { useSession } from "next-auth/react";
+import { Alert, Button, Checkbox, Chip, TextField, SearchableCombobox, FieldLabel, useToast } from "@/components/ui";
 import { Search, Plus, X, Pencil, Trash2, Send, History, FileText, Barcode, Boxes } from "lucide-react";
 import DataTable, { StatusPill, RowActions, IconAction, ProgressCell, type Column } from "@/components/DataTable";
 import { Shipment, type DuplicateShipment } from "@/app/lib/shipments/contract";
+import { shipmentDeleteRule } from "@/app/lib/shipments/delete";
 import { sameShipmentNumber } from "@/app/lib/itemQrParser";
 import { formatDate } from "@/app/lib/datetime";
 import ShipmentInsertPopup from "./ShipmentInsertPopup";
@@ -15,8 +17,10 @@ import ShipmentHistoryPopup from "./ShipmentHistoryPopup";
 import { useReactToPrint } from "react-to-print";
 import { ShipmentPDFDocument, type ShipmentPdfData } from "./ShipmentPDFDocument";
 import ShipmentBarcodesDialog from "./ShipmentBarcodesDialog";
-import { NO_CONNECTION_TEXT, failureText } from "@/app/components/failureText";
-import { getArray, sendJson } from "@/lib/api/client";
+import ShipmentDeleteDialog from "./ShipmentDeleteDialog";
+import { returnable, useReturnPicker } from "./useReturnPicker";
+import { getArray } from "@/lib/api/client";
+import { ACCESS, hasAnyRole } from "@/lib/auth/roles";
 import { usePrintWhenReady } from "@/lib/hooks/usePrintWhenReady";
 import { LOOKUP_KEY, useCustomers } from "@/app/components/lookups";
 import { packagesShipmentHref } from "@/app/lib/links";
@@ -78,6 +82,8 @@ export default function ShipmentTable() {
     const loadShipments = () => void queryClient.invalidateQueries({ queryKey: LOOKUP_KEY.shipments });
     const customers = useCustomers().data;
     const toast = useToast();
+    const canDeleteTakenIn = hasAnyRole(useSession().data?.roles ?? [], ACCESS.deleteTakenInShipment);
+    const picker = useReturnPicker(rows);
 
     const [search, setSearch] = useState("");
     const [customerFilter, setCustomerFilter] = useState<string | null>(null);
@@ -88,10 +94,11 @@ export default function ShipmentTable() {
     const [insertOpen, setInsertOpen] = useState(false);
     const [updateOpen, setUpdateOpen] = useState(false);
     const [sendOpen, setSendOpen] = useState(false);
+    // Who the return dialog sends: the row's shipment, or the ones picked together.
+    const [sendTargets, setSendTargets] = useState<Shipment[]>(NO_ROWS);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [barcodesOpen, setBarcodesOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Shipment | null>(null);
-    const [deleting, setDeleting] = useState(false);
     const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
 
     const pdfRef = React.useRef<HTMLDivElement>(null);
@@ -193,37 +200,59 @@ export default function ShipmentTable() {
         loadShipments();
     };
 
-    // The server refuses a shipment that was sent or already has boxes
-    // (DELETE /api/shipments/[id]); the row says so before anyone tries.
-    const deleteBlockedReason = (s: Shipment): string | null =>
-        s.is_sent ? "לא ניתן למחוק משלוח שנשלח"
-            : (s.sampled_amount || 0) > 0 ? "לא ניתן למחוק משלוח שנקלטו בו מארזים"
-                : null;
+    // The server refuses a shipment that was sent, or one with boxes taken in
+    // unless a manager deletes it with them (DELETE /api/shipments/[id]); the
+    // row says so before anyone tries.
+    const deleteBlockedReason = (s: Shipment): string | null => {
+        const rule = shipmentDeleteRule(s, canDeleteTakenIn);
+        return rule.kind === "blocked" ? rule.reason : null;
+    };
 
-    const handleDelete = async () => {
-        if (!deleteTarget) return;
-        setDeleting(true);
-        try {
-            await sendJson(`/api/shipments/${deleteTarget.id}`, "DELETE");
-            toast.show(`משלוח ${deleteTarget.shipment_code} נמחק`, "success");
-            setDeleteTarget(null);
-            loadShipments();
-        } catch (error) {
-            toast.show(failureText(error, "שגיאה במחיקת המשלוח", NO_CONNECTION_TEXT), "error");
-        } finally {
-            setDeleting(false);
-        }
+    const openSend = (targets: Shipment[]) => {
+        setSendTargets(targets);
+        setSendOpen(true);
     };
 
     // A sent shipment is closed: no editing and no further returns
     // (PUT /api/shipments/[id] and POST /api/shipment-history refuse it too).
-    const handleRowClick = (row: Shipment) => {
+    const openEdit = (row: Shipment) => {
         if (row.is_sent) return;
         setSelectedShipment(row);
         setUpdateOpen(true);
     };
+    // While shipments are being picked to return, a click on the row picks it.
+    const handleRowClick = (row: Shipment) => (picker.active ? picker.toggle(row) : openEdit(row));
+
+    const shownReturnable = filteredRows.filter(returnable);
+    const pickedShown = shownReturnable.filter(picker.isPicked).length;
+
+    // Shown only while picking shipments to return together.
+    const pickColumn: Column<Shipment> = {
+        key: "pick", width: 44, align: "center",
+        header: (
+            <Checkbox
+                checked={shownReturnable.length > 0 && pickedShown === shownReturnable.length}
+                indeterminate={pickedShown > 0 && pickedShown < shownReturnable.length}
+                disabled={shownReturnable.length === 0}
+                onChange={() => picker.toggleAll(filteredRows)}
+                aria-label="בחירת כל המשלוחים המוצגים שלא נשלחו"
+            />
+        ),
+        cell: (r) => (
+            // The row's own click picks it too; the box stops its click so it is not counted twice.
+            <span onClick={(e) => e.stopPropagation()} title={returnable(r) ? undefined : "המשלוח כבר נשלח"}>
+                <Checkbox
+                    checked={picker.isPicked(r)}
+                    disabled={!returnable(r)}
+                    onChange={() => picker.toggle(r)}
+                    aria-label={`בחירת משלוח ${r.shipment_code} להחזרה`}
+                />
+            </span>
+        ),
+    };
 
     const columns: Column<Shipment>[] = [
+        ...(picker.active ? [pickColumn] : []),
         { key: "source", header: "מקור", cell: (r) => <span style={{ color: "var(--color-ink-muted-70)" }}>{r.source_desc || EM_DASH}</span> },
         { key: "code", header: "מס׳ משלוח", nums: true, bold: true, nowrap: true, cell: (r) => r.shipment_code },
         {
@@ -261,17 +290,24 @@ export default function ShipmentTable() {
             },
         },
         {
-            // Seven 32px actions and their gaps.
-            key: "actions", header: "פעולות", align: "center", width: 250,
+            key: "return", header: "החזר משלוח", align: "center", width: 96,
+            cell: (r) => (
+                <RowActions>
+                    <IconAction title={r.is_sent ? "המשלוח כבר נשלח" : "החזר משלוח"} disabled={!!r.is_sent} onClick={() => openSend([r])}><Send size={16} strokeWidth={1.75} /></IconAction>
+                </RowActions>
+            ),
+        },
+        {
+            // Six 32px actions and their gaps.
+            key: "actions", header: "פעולות", align: "center", width: 215,
             cell: (r) => (
                 <RowActions>
                     {/* Shortcut to the packages screen narrowed to this shipment. A sent
                         shipment's boxes are not on that screen otherwise; through this
                         link they show for their history. */}
                     <IconAction title={r.is_sent ? "מארזי המשלוח (יצא — לצפייה בהיסטוריה)" : "מארזי המשלוח"} onClick={() => router.push(packagesShipmentHref(r.id))}><Boxes size={16} strokeWidth={1.75} /></IconAction>
-                    <IconAction title={r.is_sent ? "המשלוח נשלח — לא ניתן לערוך" : "עריכת משלוח"} disabled={!!r.is_sent} onClick={() => handleRowClick(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
+                    <IconAction title={r.is_sent ? "המשלוח נשלח — לא ניתן לערוך" : "עריכת משלוח"} disabled={!!r.is_sent} onClick={() => openEdit(r)}><Pencil size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title={deleteBlockedReason(r) ?? "מחיקת משלוח"} danger disabled={deleteBlockedReason(r) != null} onClick={() => setDeleteTarget(r)}><Trash2 size={16} strokeWidth={1.75} /></IconAction>
-                    <IconAction title={r.is_sent ? "המשלוח כבר נשלח" : "החזר משלוח"} disabled={!!r.is_sent} onClick={() => { setSelectedShipment(r); setSendOpen(true); }}><Send size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title="היסטוריה" onClick={() => { setSelectedShipment(r); setHistoryOpen(true); }}><History size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title="הורד PDF" onClick={() => handlePDFClick(r)}><FileText size={16} strokeWidth={1.75} /></IconAction>
                     <IconAction title="הדפס מדבקות למארזי המשלוח" onClick={() => { setSelectedShipment(r); setBarcodesOpen(true); }}><Barcode size={16} strokeWidth={1.75} /></IconAction>
@@ -407,6 +443,41 @@ export default function ShipmentTable() {
                 )}
             </div>
 
+            {/* Returning several shipments together: the button starts picking
+                rows (a check box on each), the bar says what is picked and sends
+                them into one return (ShipmentSendPopup). */}
+            <div className="shp-return-bar" role={picker.active ? "status" : undefined}>
+                {picker.active ? (
+                    <>
+                        <span className="shp-return-bar__count">
+                            {picker.picked.length === 0 ? "סמנו את המשלוחים להחזרה" : `נבחרו ${picker.picked.length} משלוחים להחזרה`}
+                        </span>
+                        <Button
+                            size="small"
+                            startIcon={<Send size={15} strokeWidth={1.85} />}
+                            disabled={picker.picked.length === 0}
+                            onClick={() => openSend(picker.picked)}
+                        >
+                            החזר את המשלוחים שנבחרו
+                        </Button>
+                        <Button size="small" variant="outlined" color="inherit" onClick={picker.stop}>
+                            ביטול
+                        </Button>
+                    </>
+                ) : (
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<Send size={15} strokeWidth={1.85} />}
+                        disabled={!countsKnown || kpis.pending === 0}
+                        title={countsKnown && kpis.pending === 0 ? "אין משלוחים שלא נשלחו" : "בחירת כמה משלוחים והחזרתם יחד, באותו משלוח יוצא"}
+                        onClick={picker.start}
+                    >
+                        החזר משלוחים
+                    </Button>
+                )}
+            </div>
+
             {/* table — contained scroll, sticky header. A failed load replaces
                 it with the error and a retry; it is never shown as "no rows". */}
             {loadError && !loading ? (
@@ -422,8 +493,9 @@ export default function ShipmentTable() {
                     rows={filteredRows}
                     getRowKey={(r) => r.id}
                     onRowClick={handleRowClick}
-                    // A sent shipment has nothing to open: no pointer, no focus stop.
+                    // A sent shipment has nothing to open (or to pick): no pointer, no focus stop.
                     rowClickable={(r) => !r.is_sent}
+                    rowSelected={picker.active ? picker.isPicked : undefined}
                     loading={loading}
                     minWidth={1180}
                     maxHeight="calc(100vh - 240px)"
@@ -448,8 +520,11 @@ export default function ShipmentTable() {
             <ShipmentSendPopup
                 open={sendOpen}
                 onClose={() => setSendOpen(false)}
-                onSent={() => saved("המשלוח נשלח בהצלחה")}
-                shipment={selectedShipment}
+                onSent={() => {
+                    saved(sendTargets.length > 1 ? `${sendTargets.length} משלוחים נשלחו בהצלחה` : "המשלוח נשלח בהצלחה");
+                    picker.stop();
+                }}
+                shipments={sendTargets}
             />
 
             <ShipmentHistoryPopup
@@ -458,15 +533,14 @@ export default function ShipmentTable() {
                 shipment={selectedShipment}
             />
 
-            <ConfirmDialog
-                open={deleteTarget != null}
-                title="מחיקת משלוח"
-                message={deleteTarget ? `האם למחוק את משלוח ${deleteTarget.shipment_code}? פעולה זו אינה ניתנת לביטול.` : ""}
-                confirmText="מחק משלוח"
-                destructive
-                busy={deleting}
-                onConfirm={handleDelete}
-                onCancel={() => setDeleteTarget(null)}
+            <ShipmentDeleteDialog
+                shipment={deleteTarget}
+                canDeleteTakenIn={canDeleteTakenIn}
+                onClose={() => setDeleteTarget(null)}
+                onDeleted={() => {
+                    setDeleteTarget(null);
+                    loadShipments();
+                }}
             />
 
             <ShipmentBarcodesDialog

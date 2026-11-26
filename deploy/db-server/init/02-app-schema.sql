@@ -8,7 +8,7 @@
 -- against the application database. It is NOT idempotent — run it once, on an
 -- empty database.
 --
--- Migrations included (40):
+-- Migrations included (41):
 --   0_init
 --   20260217140614_add_poc_and_stokekeeper
 --   20260218000000_dashboard_optimization
@@ -49,6 +49,7 @@
 --   20261110120000_report_closing_signature
 --   20261110130000_report_templates_both_signatures
 --   20261119120000_report_closing_signer_role
+--   20261126120000_drop_sent_shipment_code
 -- ===========================================================================
 
 
@@ -1407,7 +1408,7 @@ ALTER TABLE "research_history" ALTER COLUMN "item_id" TYPE BIGINT;
 -- migration: 20260825000000_metrics_ledger_additive
 -- ---------------------------------------------------------------------------
 -- ============================================================================
--- Migration A — metrics ledger, ADDITIVE ONLY (spec: docs/architecture/dashboard-migration-plan-v2.md §3.0–§3.11, §8 שלב 2)
+-- Migration A — metrics ledger, ADDITIVE ONLY (spec: docs/dashboard-migration-plan-v2.md §3.0–§3.11, §8 שלב 2)
 --
 -- What this is: the complete CIL (Constrained Interval Ledger) schema — 9 new
 -- permanent tables, the fold functions, the drift scaffold (created DISABLED),
@@ -2248,7 +2249,7 @@ COMMENT ON COLUMN "test_stations_type"."stale_after_minutes" IS
 -- THE GATE (§8 stage 7): apply this ONLY after a full week in which
 -- metrics_selfcheck reported drift_open = 0 on every sample and Q3 matched
 -- station_live_counters. The gate is enforced by the operator running
--- deploy/db-server/scripts/9-apply-metrics-drop.ps1, which refuses to
+-- prod-deploy/db-server/scripts/9-apply-metrics-drop.ps1, which refuses to
 -- proceed until it has verified the ledger is populated, the drift table is
 -- empty, and the operator has confirmed the green week in writing.
 --
@@ -2350,7 +2351,7 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, public AS $$
   UNION ALL SELECT 'ledger_bytes', pg_total_relation_size('item_state_interval')::bigint, NULL;
 $$;
 -- 5. Schema version ----------------------------------------------------------
--- The app's refuse-to-serve gate (src/app/lib/metrics/ledger/schema-gate.ts) compares
+-- The app's refuse-to-serve gate (src/app/lib/metrics/schema-gate.ts) compares
 -- its required minimum against this. Bumping it here is what makes an old image
 -- pointed at a post-drop database fail loudly at the first write instead of
 -- calling a function that no longer exists.
@@ -2620,7 +2621,7 @@ END $$;
 -- migration: 20260915120000_package_model
 -- ---------------------------------------------------------------------------
 -- ===========================================================================
---  מודל המארזים — docs/features/packages/PLAN.md
+--  מודל המארזים — docs/packages/PLAN.md
 -- ===========================================================================
 --
 --  "פריט אב / פריט ילד" הופך ל"מארז / פריט במארז". המארז הוא הקופסה: שורת
@@ -2925,7 +2926,7 @@ BEGIN
 END $$;
 
 -- §6 גרסת סכמה ----------------------------------------------------------------
--- The app's write gate (src/app/lib/metrics/ledger/schema-gate.ts) requires 3 from
+-- The app's write gate (src/app/lib/metrics/schema-gate.ts) requires 3 from
 -- this image on: an older image would write parent_item_id / is_accessory
 -- into columns that no longer exist.
 UPDATE metrics_schema_version SET version = 3, applied_at = now() WHERE id = 1;
@@ -3038,7 +3039,7 @@ CREATE TABLE IF NOT EXISTS "field_sets" (
 ALTER TABLE "item_routes" ADD COLUMN IF NOT EXISTS "fields_version" INTEGER;
 
 -- §5 גרסת סכמה ----------------------------------------------------------------
--- The app's write gate (src/app/lib/metrics/ledger/schema-gate.ts) requires 4 from
+-- The app's write gate (src/app/lib/metrics/schema-gate.ts) requires 4 from
 -- this image on: result submits, intake, retype and package reset read or
 -- write item_routes.fields_version, so an older database would fail every one
 -- of them with a missing column. GREATEST: a re-run never lowers a later version.
@@ -3144,7 +3145,7 @@ ALTER TABLE "shipment_items" ADD COLUMN IF NOT EXISTS "cert_row_raw" TEXT;
 -- migration: 20261020120000_item_reports
 -- ---------------------------------------------------------------------------
 -- ============================================================================
--- Item reports (docs/features/ITEM_REPORTS.md): a PDF report per item, built from a
+-- Item reports (docs/ITEM_REPORTS.md): a PDF report per item, built from a
 -- per-route template with the results of every station the item passed.
 --
 --   report_templates  one Puck document per route (testing_routes)
@@ -3318,7 +3319,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "reference_items_parent_type_uq" ON "reference
 -- ---------------------------------------------------------------------------
 -- ============================================================================
 -- Popup templates: the envelope of a station's test popup, one per station
--- type (docs/features/popup-templates/PLAN.md §3).
+-- type (docs/popup-templates/PLAN.md §3).
 --
 -- station_popup_templates: the current template of a station type — its base
 -- ('item' / 'package'), the config (steps of components, validated by
@@ -3421,7 +3422,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "photo_types_component_uq" ON "photo_types"("t
 --   idx_items_serial_key — the serial rule (lib/packages/serials.ts) looks
 --     items up by UPPER(TRIM(serial_no)) on every pause in typing. An
 --     expression index Prisma cannot declare: guarded in
---     scripts/check-migration-safety.js and docs/architecture/PRISMA_UNMANAGED_OBJECTS.md.
+--     scripts/check-migration-safety.js and docs/PRISMA_UNMANAGED_OBJECTS.md.
 --
 -- The backfill links the boxes that exist by the same positional rule the
 -- previous code used, so nothing a worker sees changes: per shipment and
@@ -3488,7 +3489,7 @@ CREATE INDEX IF NOT EXISTS "idx_items_serial_key" ON "items" (UPPER(TRIM("serial
 -- migration: 20261029120000_field_photo_groups
 -- ---------------------------------------------------------------------------
 -- ============================================================================
--- Route photo fields own their photo groups (docs/features/popup-templates/PLAN.md §5א).
+-- Route photo fields own their photo groups (docs/popup-templates/PLAN.md §5א).
 --
 -- WHY: a photo field on the testing-routes page used to name a photo group
 -- the admin picked (PhotoField.photo_type), shared with whatever else used
@@ -3509,7 +3510,7 @@ CREATE INDEX IF NOT EXISTS "idx_items_serial_key" ON "items" (UPPER(TRIM("serial
 -- photos the new image tags are named in the item's history from the first
 -- shot. Nothing existing changes: no photo is re-tagged here. Moving the
 -- photos already taken through a field into its group is a separate, optional
--- step (db/upgrades/2026-10-29-field-photo-groups/2-*.sql).
+-- step (scripts/prod-field-photo-groups/2-*.sql).
 --
 -- Additive only: three nullable columns, one unique index, new rows. The
 -- previous image keeps working after it (it lists the new rows among the
@@ -3566,7 +3567,7 @@ ON CONFLICT DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- ============================================================================
 -- Reference images go by station type, not by photo group
--- (docs/features/popup-templates/PLAN.md §5ג).
+-- (docs/popup-templates/PLAN.md §5ג).
 --
 -- WHY: the reference-items page asked which photo group an image goes to
 -- ("צילום אריזה", "פירוק · תיעוד בתמונות", ...), and a station showed the
@@ -3596,7 +3597,7 @@ ON CONFLICT DO NOTHING;
 --     src/app/lib/popup-templates/placement.ts).
 -- A group no station shows, or more than one shows, leaves its images
 -- unassigned: the page offers the station to pick, so nothing has to be
--- uploaded again. db/upgrades/2026-10-29-reference-images-by-station/1-dry-run.sql
+-- uploaded again. scripts/prod-reference-images-by-station/1-dry-run.sql
 -- reports, before this runs, which images go where and which stay
 -- unassigned.
 --
@@ -3664,7 +3665,7 @@ CREATE INDEX IF NOT EXISTS "idx_reference_item_images_station" ON "reference_ite
 -- migration: 20261104120000_report_general_template
 -- ---------------------------------------------------------------------------
 -- ============================================================================
--- The general report template (docs/features/ITEM_REPORTS.md): every item gets a PDF
+-- The general report template (docs/ITEM_REPORTS.md): every item gets a PDF
 -- report. An item route with its own template (report_templates) uses it;
 -- every other item route uses this one. A kit's box gets no report.
 --
@@ -3703,7 +3704,7 @@ ON CONFLICT ("id") DO NOTHING;
 -- migration: 20261110120000_report_closing_signature
 -- ---------------------------------------------------------------------------
 -- ============================================================================
--- Two signatures on an item report (docs/features/ITEM_REPORTS.md):
+-- Two signatures on an item report (docs/ITEM_REPORTS.md):
 --
 --   the closing signature  given at the kit's closing, in the closing template's
 --                          "חתימה על הדוחות" step, before "סגור מארז". It is
@@ -3736,7 +3737,7 @@ ALTER TABLE "item_reports" ADD COLUMN IF NOT EXISTS "closing_signed_finished_at"
 -- migration: 20261110130000_report_templates_both_signatures
 -- ---------------------------------------------------------------------------
 -- ============================================================================
--- Every report template asks for both signatures (docs/features/ITEM_REPORTS.md):
+-- Every report template asks for both signatures (docs/ITEM_REPORTS.md):
 -- the closing signature (given at the kit's closing, before "סגור מארז") and the
 -- approver's final one (on the item page; it locks the report).
 --
@@ -3833,7 +3834,7 @@ DROP FUNCTION pg_temp.report_with_both_signatures(jsonb);
 -- migration: 20261119120000_report_closing_signer_role
 -- ---------------------------------------------------------------------------
 -- ============================================================================
--- The closing signature's row prints the signer's own role (docs/features/ITEM_REPORTS.md):
+-- The closing signature's row prints the signer's own role (docs/ITEM_REPORTS.md):
 -- "בודק" when a tester signed, "מנהל" when a manager did — taken from the
 -- signed-in user's roles at the moment they sign, and kept with the signature.
 --
@@ -3903,6 +3904,23 @@ UPDATE "report_templates"
  WHERE pg_temp.report_closing_role_cell("template"::jsonb) IS DISTINCT FROM "template"::jsonb;
 
 DROP FUNCTION pg_temp.report_closing_role_cell(jsonb);
+
+
+-- ---------------------------------------------------------------------------
+-- migration: 20261126120000_drop_sent_shipment_code
+-- ---------------------------------------------------------------------------
+-- ============================================================================
+-- The outgoing shipment code is gone: a return (shipment_history) is known by
+-- its shipment, date, sender and signature only. The return form no longer asks
+-- for it, and the history groups one send's lines by its signature file.
+--
+-- DESTRUCTIVE: the codes already typed into past returns are deleted with the
+-- column. The previous image writes the column (NOT NULL) on every return, so
+-- run this together with the new image — between the two, returns fail.
+-- Idempotent.
+-- ============================================================================
+
+ALTER TABLE "shipment_history" DROP COLUMN IF EXISTS "sent_shipment_code";
 
 
 -- ===========================================================================
@@ -4084,3 +4102,7 @@ INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
 SELECT gen_random_uuid()::text, '77e0570962546021882ce72aa00f70059ae3f1407a991d1cab7174ed730702be', now(), '20261119120000_report_closing_signer_role', now(), 1
 WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261119120000_report_closing_signer_role');
+INSERT INTO public._prisma_migrations
+       (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+SELECT gen_random_uuid()::text, '049f2989a68cfc6d35624ffbade213387e6b54a958d6b1601269d40cb6a45c78', now(), '20261126120000_drop_sent_shipment_code', now(), 1
+WHERE NOT EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '20261126120000_drop_sent_shipment_code');

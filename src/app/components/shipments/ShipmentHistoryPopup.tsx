@@ -71,12 +71,12 @@ export default function ShipmentHistoryPopup({
 
         history.forEach(log => {
             const dateStr = dateInputValue(log.sent_date);
-            const key = `${log.sent_shipment_code}_${dateStr}`;
+            // One send's lines share its signature file; a send without one, its date and sender.
+            const key = log.signature_path ?? `${dateStr}_${log.sending_worker_name ?? ""}`;
 
             if (!groups[key]) {
                 groups[key] = {
                     groupKey: key,
-                    sent_shipment_code: log.sent_shipment_code,
                     sent_date: log.sent_date,
                     // An unknown name is shown as "—", like every missing value.
                     sending_worker_name: log.sending_worker_name || EM_DASH,
@@ -110,7 +110,6 @@ export default function ShipmentHistoryPopup({
 
     const columns: Column<GroupedHistory>[] = [
         { key: "date", header: "תאריך", nums: true, nowrap: true, cell: (g) => formatDate(g.sent_date) },
-        { key: "code", header: "מס׳ משלוח", nums: true, bold: true, nowrap: true, cell: (g) => g.sent_shipment_code },
         { key: "worker", header: "עובד שולח", cell: (g) => g.sending_worker_name },
         {
             key: "items", header: "סוג מארז",

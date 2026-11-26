@@ -262,18 +262,34 @@ export async function deletePendingBoxes(tx: TransactionClient, ids: bigint[]): 
   if (ids.length > 0) await tx.items.deleteMany({ where: { item_id: { in: ids } } });
 }
 
-/** Removes a shipment's pending boxes; refuses while any box was taken in. */
-export async function dropShipmentBoxes(tx: TransactionClient, shipmentId: number): Promise<void> {
-  await tx.$queryRaw`SELECT item_id FROM items WHERE shipment_id = ${shipmentId} FOR UPDATE`;
-  const rows = await tx.$queryRaw<{ item_id: bigint; routed: boolean }[]>`
-    SELECT i.item_id, (ir.item_id IS NOT NULL) AS routed
-    FROM items i LEFT JOIN item_routes ir ON ir.item_id = i.item_id
-    WHERE i.shipment_id = ${shipmentId}
+/**
+ * Removes a shipment's boxes. Refuses while any box was taken in, unless
+ * `withTakenIn` (a manager's delete, ACCESS.deleteTakenInShipment): then the
+ * boxes taken in go too, with the items inside them and everything they own
+ * (lifecycle.ts forgetRouted — results, reports, route history, the ledger).
+ */
+export async function dropShipmentBoxes(tx: TransactionClient, shipmentId: number, opts: { withTakenIn?: boolean } = {}): Promise<void> {
+  // The items inside a box are its shipment's too; the package_id arm keeps one that says otherwise.
+  await tx.$queryRaw`
+    SELECT item_id FROM items
+    WHERE shipment_id = ${shipmentId} OR package_id IN (SELECT item_id FROM items WHERE shipment_id = ${shipmentId})
+    FOR UPDATE
   `;
-  if (rows.some((r) => r.routed)) {
-    throw new PackageError("SHIPMENT_TAKEN_IN", "לא ניתן למחוק משלוח שמארזים ממנו כבר נקלטו", 409);
+  const rows = await tx.$queryRaw<{ item_id: bigint; routed: boolean; in_box: boolean }[]>`
+    SELECT i.item_id, (ir.item_id IS NOT NULL) AS routed, (i.package_id IS NOT NULL) AS in_box
+    FROM items i LEFT JOIN item_routes ir ON ir.item_id = i.item_id
+    WHERE i.shipment_id = ${shipmentId} OR i.package_id IN (SELECT item_id FROM items WHERE shipment_id = ${shipmentId})
+  `;
+  const routed = rows.filter((r) => r.routed).map((r) => r.item_id);
+  if (routed.length > 0) {
+    if (!opts.withTakenIn) throw new PackageError("SHIPMENT_TAKEN_IN", "לא ניתן למחוק משלוח שמארזים ממנו כבר נקלטו", 409);
+    await forgetRouted(tx, routed);
   }
-  await deletePendingBoxes(tx, rows.map((r) => r.item_id));
+  // The items inside a box first: they hold the FK (package_id) to it.
+  for (const inBox of [true, false]) {
+    const ids = rows.filter((r) => r.in_box === inBox).map((r) => r.item_id);
+    if (ids.length > 0) await tx.items.deleteMany({ where: { item_id: { in: ids } } });
+  }
 }
 
 /** A shipment that went out takes no more intakes: its boxes still waiting

@@ -12,9 +12,8 @@ import {
 import { REPORT_COLORS } from '@/app/components/reports/reportTheme';
 import { formatDocDate } from '@/app/lib/datetime';
 
-/** One outgoing certificate: the sends ShipmentHistoryPopup groups under one sent code. */
+/** One outgoing certificate: the lines of one send, as ShipmentHistoryPopup groups them. */
 export type SentGroup = {
-    sent_shipment_code: string;
     sent_date: string;
     sending_worker_name: string;
     items: { item_type_desc: string | null; makat: string | null; amount: number }[];
@@ -36,7 +35,7 @@ export const ShipmentPDFDocument = React.forwardRef<HTMLDivElement, ShipmentPDFP
 
         const titleHe = isReceived ? 'תעודת קבלת משלוח' : 'תעודת משלוח';
         const titleEn = isReceived ? 'SHIPMENT RECEIPT CERTIFICATE' : 'SHIPMENT CERTIFICATE';
-        const shipmentCode: string | undefined = isReceived ? shipment.shipment_code : historyGroup?.sent_shipment_code;
+        const shipmentCode = shipment.shipment_code;
         const date = formatDocDate(isReceived ? shipment.shipment_date : historyGroup?.sent_date);
         const workerName: string | undefined = isReceived
             ? (shipment.recieving_worker_name ?? undefined)

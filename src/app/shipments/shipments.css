@@ -116,3 +116,30 @@
   .shp-items-row,
   .shp-items-row--wide { grid-template-columns: minmax(0, 1fr) 96px 32px; }
 }
+
+/* Returning several shipments together (ShipmentTable): the button above the
+   table, and while picking, the count and what to do with it. */
+.shp-return-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* the left side, in RTL */
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+.shp-return-bar__count {
+  font-size: var(--text-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One source shipment's part of a return of several (ShipmentSendLines). */
+.shp-send-group__title {
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-body);
+  color: var(--color-ink-muted-70);
+}
+.shp-send-group__title strong {
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}

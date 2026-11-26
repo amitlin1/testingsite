@@ -34,6 +34,14 @@ export function maxToSend(lines: DeclaredLine[], sent: SentRow[], typeId: number
   return Math.max(0, declared - sentOf(sent, typeId, makat));
 }
 
+/** Everything still to send: one line per type and makat, with as many boxes as may still go. */
+export function remainingLines(lines: DeclaredLine[], sent: SentRow[]): { item_type_id: number; makat: string | null; amount: number }[] {
+  const firsts = lines.filter((l, i) => declaredLineOf(lines, l.item_type_id, l.makat) === lines[i]);
+  return firsts
+    .map((l) => ({ item_type_id: l.item_type_id, makat: l.makat || null, amount: maxToSend(lines, sent, l.item_type_id, l.makat) }))
+    .filter((l) => l.amount > 0);
+}
+
 /** Each declared line with what went out of its type and makat. */
 export function sendProgress(lines: DeclaredLine[], sent: SentRow[]) {
   return lines.map((l) => ({ desc: l.item_type_desc, makat: l.makat, sent: sentOf(sent, l.item_type_id, l.makat), received: l.quantity }));

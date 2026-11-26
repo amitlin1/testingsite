@@ -85,6 +85,15 @@ html { scrollbar-color: var(--color-border-strong) transparent; }
 .sh-btn--contained.sh-btn--warning { background: var(--color-warning-ink); }
 @media (hover: hover) and (pointer: fine) { .sh-btn--contained.sh-btn--warning:hover:not(:disabled) { background: color-mix(in srgb, var(--color-warning-ink) 88%, black); } }
 .sh-btn--contained.sh-btn--inherit { background: var(--color-ink); color: var(--color-on-dark); }
+/* A coloured button that is disabled takes the one disabled look (.sh-btn:disabled) —
+   the colour rules above are as specific and come later, which left grey text on red.
+   While it works (loading → aria-busy) it keeps its colour. */
+.sh-btn--contained:is(.sh-btn--error, .sh-btn--success, .sh-btn--warning, .sh-btn--inherit):is(:disabled, [aria-disabled="true"]):not([aria-busy="true"]) {
+  background: var(--color-canvas-parchment);
+  color: var(--color-ink-muted-48);
+}
+.sh-btn--contained:is(.sh-btn--error, .sh-btn--success, .sh-btn--warning)[aria-busy="true"] { color: var(--color-on-primary); }
+.sh-btn--contained.sh-btn--inherit[aria-busy="true"] { color: var(--color-on-dark); }
 
 /* outlined (secondary) */
 .sh-btn--outlined {

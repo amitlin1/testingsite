@@ -44,6 +44,8 @@ export const ACCESS = accessTable({
   shipments: SHIPMENTS,
   /** Take a box in from its shipment, and undo that — the shipments screen's roles. */
   intake: SHIPMENTS,
+  /** Delete a shipment whose boxes were already taken in — with those boxes, their items and tests. */
+  deleteTakenInShipment: ["manager"],
   /** Create a box directly (POST /api/packages). */
   createPackage: ["manager"],
   /** Step an item back to its previous test. */

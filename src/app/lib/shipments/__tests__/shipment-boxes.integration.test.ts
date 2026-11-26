@@ -203,4 +203,56 @@ describe("shipment boxes follow their lines", { skip: H.skipReason() }, () => {
     assert.equal(await tx((t) => lines.findDuplicateShipment(t, "SHIP-1", H.CUSTOMER_ID, H.SHIPMENT_ID)), null, "a shipment is not its own duplicate");
     assert.equal(await tx((t) => lines.findDuplicateShipment(t, "SHIP-1", OTHER_CUSTOMER)), null, "another customer's certificate is another shipment");
   });
+
+  it("9. a shipment with boxes taken in: refused, unless deleted with them — boxes, their items and their routes", async () => {
+    await save([line(ROW1, { quantity: 2 })]);
+    const [b1] = await boxRows();
+    await tx((t) => boxes.intakeBox(t, BigInt(b1.item_id)));
+    const owned = () => H.q<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM items i WHERE i.shipment_id = $1 OR i.package_id = $2`, [H.SHIPMENT_ID, b1.item_id]);
+    assert.ok((await owned())[0].n > 2, "the box taken in holds its items");
+
+    await assert.rejects(tx((t) => saveMod.deleteShipment(t, H.SHIPMENT_ID)), (e) => errorCode(e) === "SHIPMENT_TAKEN_IN");
+    await tx((t) => saveMod.deleteShipment(t, H.SHIPMENT_ID, { withTakenIn: true }));
+
+    assert.equal((await owned())[0].n, 0, "every box and every item inside one is gone");
+    assert.equal((await H.q<{ n: number }>("SELECT COUNT(*)::int AS n FROM item_routes WHERE item_id = $1", [b1.item_id]))[0].n, 0);
+    assert.equal((await H.q<{ n: number }>("SELECT COUNT(*)::int AS n FROM shipments WHERE id = $1", [H.SHIPMENT_ID]))[0].n, 0);
+  });
+
+  it("10. a return sends up to what was declared less what went out, and closes the shipment once all went", async () => {
+    await save([line(ROW1, { quantity: 3 })]);
+    const send = (amount: number) => tx((t) => saveMod.recordShipmentSend(t, {
+      shipmentId: H.SHIPMENT_ID, items: [{ item_type_id: BOX_TYPE, makat: "111", amount }],
+      sentDate: new Date(), sender: { id: null, name: null }, signaturePath: null,
+    }));
+    const isSent = async () => (await H.q<{ is_sent: boolean }>("SELECT is_sent FROM shipments WHERE id = $1", [H.SHIPMENT_ID]))[0].is_sent;
+
+    await send(2);
+    assert.equal(await isSent(), false);
+    await assert.rejects(send(2), (e) => errorCode(e) === "SEND_OVER_DECLARED", "only one is left");
+    await send(1);
+    assert.equal(await isSent(), true);
+    await assert.rejects(send(1), /כבר נשלח/, "a sent shipment takes no more returns");
+  });
+
+  it("12. two lines of one type and makat share one cap — and the shipment still closes once it is reached", async () => {
+    await save([line(ROW1, { quantity: 2 }), line(ROW1, { quantity: 1, cert_row_no: "1b", cert_row_raw: null })]);
+    const send = (amount: number) => tx((t) => saveMod.recordShipmentSend(t, {
+      shipmentId: H.SHIPMENT_ID, items: [{ item_type_id: BOX_TYPE, makat: "111", amount }],
+      sentDate: new Date(), sender: { id: null, name: null }, signaturePath: null,
+    }));
+    await assert.rejects(send(3), (e) => errorCode(e) === "SEND_OVER_DECLARED");
+    await send(2);
+    const [row] = await H.q<{ is_sent: boolean }>("SELECT is_sent FROM shipments WHERE id = $1", [H.SHIPMENT_ID]);
+    assert.equal(row.is_sent, true, "nothing is left to send");
+  });
+
+  it("11. a send names its shipments once each, every one with lines; the older single body still reads", () => {
+    assert.deepEqual(saveMod.readShipmentSends({ shipment_id: 4, items: [{ amount: 1 }] }), [{ shipmentId: 4, items: [{ amount: 1 }] }]);
+    assert.equal(saveMod.readShipmentSends({ shipments: [{ shipment_id: 4, items: [{}] }, { shipment_id: 5, items: [{}] }] }).length, 2);
+    assert.throws(() => saveMod.readShipmentSends({ shipments: [{ shipment_id: 4, items: [{}] }, { shipment_id: 4, items: [{}] }] }), /פעמיים/);
+    assert.throws(() => saveMod.readShipmentSends({ shipments: [{ shipment_id: 4, items: [] }] }), /חסרים/);
+    assert.throws(() => saveMod.readShipmentSends({ shipments: [] }), /חסרים/);
+  });
 });

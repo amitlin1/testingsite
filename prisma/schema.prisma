@@ -313,7 +313,6 @@ model test_results {
 model shipment_history {
   log_id             Int         @id @default(autoincrement())
   shipment_id        Int
-  sent_shipment_code String
   sent_date          DateTime    @db.Timestamp(6)
   sending_worker_id  Int?
   // Keycloak display name at the time this row was written (worker_id is now
