@@ -1,7 +1,7 @@
-// The shell of a scheduled job's endpoint. The Windows Task Scheduler calls it
-// with the shared secret (deploy/app-server/scheduler/*.bat, `curl --fail`),
-// so a healthy no-op — an overlap skip, a red selfcheck verdict — must still be
-// HTTP 200: any non-2xx shows in Task Scheduler as a failed task.
+// The shell of a job's manual endpoint. Nothing calls these on a schedule any
+// more — the app runs its jobs itself (src/instrumentation.ts); an operator
+// calls one by hand with the shared secret (`curl.exe --fail`), so a healthy
+// no-op — an overlap skip, a red selfcheck verdict — must still be HTTP 200.
 
 import { cronSecretGuard } from "@/lib/auth/cron-secret";
 import { errorResponse } from "@/lib/http/errors";

@@ -75,11 +75,10 @@ foreach ($required in @(
     "db-server\metrics-ledger\migration.sql",
     "db-server\metrics-ledger\tier1_backfill.sql",
     "db-server\metrics-ledger\20260901000000_metrics_drop_snapshots.sql",
-    # The scheduled jobs: without these the app runs but nothing releases a
-    # stale test, extends the work calendar, or reports ledger health.
-    "app-server\scheduler\run_release_stale_tests.bat",
-    "app-server\scheduler\run_rebuild_work_calendar.bat",
-    "app-server\scheduler\run_metrics_selfcheck.bat"
+    # No scheduled-task .bat files any more: the app runs its own background
+    # jobs (src/instrumentation.ts). This script removes the tasks earlier
+    # releases registered on the app server, which would now fail every run.
+    "app-server\scripts\8-register-tasks.ps1"
 )) {
     if (-not (Test-Path (Join-Path $src $required))) { throw "Missing from the bundle: $required" }
 }

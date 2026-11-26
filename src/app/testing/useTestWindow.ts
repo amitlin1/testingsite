@@ -105,8 +105,8 @@ export function useTestWindow({ station, stationType, actor, canStepBack, onRefr
   };
 
   // Reverses start-test for a popup closed without a result. Fire-and-forget from the UI's side —
-  // the periodic release-stale-tests cron is the backstop if this fails too (closed tab, lost
-  // connection).
+  // the app's 5-minute abandoned-test release (lib/jobs/stale-tests-timer.ts) is the backstop if
+  // this fails too (closed tab, lost connection).
   const release = async (itemId: number, stationId: number) => {
     try {
       await releaseTest(itemId, stationId, actor);

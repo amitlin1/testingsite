@@ -86,7 +86,7 @@ job produces primary data; everything derives from the ledger written synchronou
 
 | Job | Role | If it doesn't run |
 |---|---|---|
-| release-stale-tests (5 min, exists today) | safety net; now also emits events | unchanged behavior |
+| release-stale-tests (in-app timer, every 5 min, since 2026-11-26) | safety net; now also emits events | unchanged behavior |
 | rebuild-work-calendar (in-app: at server start + on every work-hours save, not scheduled since 2026-11-26) | builds the calendar 5 years ahead and recomputes past net time | net time is NULL until it runs; nothing lost |
 | metrics-selfcheck (manual endpoint) | invariant checks + health report | the health tile reads the checks live |
 

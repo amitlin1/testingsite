@@ -1,93 +1,49 @@
 # ===========================================================================
-# APP SERVER - step 8: register (or re-register) all scheduled jobs
+# APP SERVER - step 8: remove the scheduled tasks earlier releases registered
 # ===========================================================================
 #   .\scripts\8-register-tasks.ps1        (run from an elevated PowerShell)
 #
-# Single source of truth for what runs on a schedule on this machine. Running
-# it again is safe: every task it owns is dropped and re-created, so a stale
-# registration from an earlier deployment cannot linger with old paths.
+# Since 2026-11-26 the app needs NO Windows scheduled task. Everything that
+# used to run from Task Scheduler runs inside the app server itself, started
+# when it boots (src/instrumentation.ts):
+#   - release-stale-tests    every 5 minutes, in-app timer (src/app/lib/jobs/stale-tests-timer.ts)
+#   - rebuild-work-calendar  at server start + after every work-hours save
+#                            (src/app/lib/metrics/ledger/calendar-sync.ts)
+#   - metrics-selfcheck      not needed on a schedule; a manual endpoint remains
 #
-# Tasks run as SYSTEM (no logged-on user needed). The .bat files read
-# CRON_SECRET from the deployment's .env themselves - nothing here depends on
-# user-hive environment variables.
-#
-# NOTE: the legacy snapshot jobs (run_daily_snapshot / run_monthly_snapshot)
-# are NOT registered here. The snapshot subsystem is being replaced; if this
-# machine still has such tasks from a manual registration, this script lists
-# them at the end so the operator can remove them deliberately.
+# This script only unregisters the testingsite-* tasks an earlier release put
+# here (their .bat files are gone, so they would fail every run). Running it
+# again is safe. The file keeps its name so existing deployment notes still
+# point at the right step.
 # ===========================================================================
 
 #Requires -RunAsAdministrator
 $ErrorActionPreference = "Stop"
 
-$root      = Split-Path -Parent $PSScriptRoot
-$scheduler = Join-Path $root "scheduler"
-$prefix    = "testingsite-"
+$prefix  = "testingsite-"
+$retired = @("release-stale-tests", "rebuild-work-calendar", "metrics-selfcheck")
 
-# task name (without prefix) -> @{ bat = file; EveryMinutes = N } for a
-# repeating task, or @{ bat = file; DailyAt = "HH:mm" } for a daily one.
-#
-# This is the whole schedule (plan §10.1). The period is also the staleness
-# threshold GET /api/health/jobs grades the job against (SCHEDULED_JOBS in
-# src/app/lib/jobs/jobRun.ts, "no success within 2x the period" = red tile), so a
-# period changed here must be changed there in the same commit.
-#
-# The work calendar (net time on the dashboard) is NOT scheduled here since
-# 2026-11-26: the app builds it itself when the server starts and after every
-# save on the work-hours screen (src/app/lib/metrics/ledger/calendar-sync.ts).
-$tasks = @(
-    @{ Name = "release-stale-tests";   Bat = "run_release_stale_tests.bat";   EveryMinutes = 5 }
-)
-
-# Tasks this script registered in earlier releases and no longer owns.
-$retired = @("rebuild-work-calendar", "metrics-selfcheck")
 foreach ($name in $retired) {
     $taskName = "$prefix$name"
     try {
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Stop
-        Write-Host "  removed retired task: $taskName" -ForegroundColor Green
-    } catch {}
-}
-
-foreach ($t in $tasks) {
-    $taskName = "$prefix$($t.Name)"
-    $batPath  = Join-Path $scheduler $t.Bat
-    if (-not (Test-Path $batPath)) { throw "Missing $batPath" }
-
-    # Drop a previous registration of ours, if any.
-    try { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Stop } catch {}
-
-    $action  = New-ScheduledTaskAction -Execute $batPath
-    if ($t.DailyAt) {
-        $trigger  = New-ScheduledTaskTrigger -Daily -At $t.DailyAt
-        $schedule = "daily at $($t.DailyAt)"
-    } else {
-        $trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-                    -RepetitionInterval (New-TimeSpan -Minutes $t.EveryMinutes)
-        $schedule = "every $($t.EveryMinutes) min"
+        Write-Host "  removed: $taskName" -ForegroundColor Green
+    } catch {
+        Write-Host "  not registered: $taskName" -ForegroundColor DarkGray
     }
-    $settings = New-ScheduledTaskSettingsSet `
-        -MultipleInstances IgnoreNew `
-        -ExecutionTimeLimit (New-TimeSpan -Minutes 10) `
-        -StartWhenAvailable
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
-        -Settings $settings -Principal $principal | Out-Null
-    Write-Host "  registered: $taskName  ($schedule -> $($t.Bat))" -ForegroundColor Green
 }
 
-# Surface leftovers the operator should look at.
+# Surface leftovers the operator should look at: anything else of ours, and the
+# legacy snapshot tasks some machines registered by hand.
 $leftovers = Get-ScheduledTask | Where-Object {
-    $_.TaskName -match "snapshot" -and $_.TaskName -notlike "$prefix*"
+    $_.TaskName -like "$prefix*" -or $_.TaskName -match "snapshot"
 }
 if ($leftovers) {
     Write-Host ""
-    Write-Host "NOTE: found scheduled tasks with 'snapshot' in the name that this" -ForegroundColor Yellow
-    Write-Host "script does not manage. The snapshot subsystem is being retired -" -ForegroundColor Yellow
-    Write-Host "confirm and remove them manually:" -ForegroundColor Yellow
+    Write-Host "NOTE: these scheduled tasks remain. The app needs none of them -" -ForegroundColor Yellow
+    Write-Host "confirm what they are and remove them manually:" -ForegroundColor Yellow
     $leftovers | ForEach-Object { Write-Host "  - $($_.TaskName)" -ForegroundColor Yellow }
 }
 
 Write-Host ""
-Write-Host "Done. Verify with:  Get-ScheduledTask -TaskName '$prefix*'" -ForegroundColor Cyan
+Write-Host "Done. The app server runs its own background jobs; no scheduled task is needed." -ForegroundColor Cyan

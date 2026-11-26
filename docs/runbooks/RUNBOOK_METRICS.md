@@ -13,22 +13,21 @@
   מסך "שעות עבודה" + חגי ישראל). הנטו נגזר מלוח העבודה הגרסתי `work_calendar_version` / `work_span`.
 - **מסנן שלא כובד** אינו נבלע: השרת מחזיר אותו ב־`X-Metrics-Ignored-Filters` והמסך מציג גלולה ענברית.
 
-## משימות מתוזמנות
+## משימות רקע
 
-נרשמות רק דרך `deploy/app-server/scripts/8-register-tasks.ps1` (רץ כ־SYSTEM, `CRON_SECRET` מה־`.env`);
-הקבצים `deploy/app-server/scheduler/*.bat` קוראים ל־endpoint עם `curl --fail`.
+מאז 2026-11-26 **אין משימות Windows מתוזמנות** — כל משימות הרקע רצות בתוך שרת האפליקציה ומתחילות כשהוא עולה
+(`src/instrumentation.ts`):
 
 | משימה | מתי | מה |
 |---|---|---|
-| `release-stale-tests` | כל 5 דקות | משחרר בדיקה שננטשה אחרי הסף של סוג העמדה (`stale_after_minutes`, 0 = לעולם לא) |
+| `release-stale-tests` | כל 5 דקות, טיימר בתוך האפליקציה (`src/app/lib/jobs/stale-tests-timer.ts`) | משחרר בדיקה שננטשה אחרי הסף של סוג העמדה (`stale_after_minutes`, 0 = לעולם לא) |
+| `rebuild-work-calendar` | בעליית השרת ומיד אחרי כל שמירה במסך שעות עבודה (`calendar-sync.ts`) | בונה את לוח שעות העבודה ומחשב מחדש את הנטו של העבר |
 
-כל הרצה משאירה שורה אחת ב־`job_run` (גם דילוג בגלל חפיפה — HTTP 200). דילוג אינו תקלה.
+כל הרצה משאירה שורה אחת ב־`job_run` (גם דילוג בגלל חפיפה). דילוג אינו תקלה.
 
-**לוח שעות העבודה (הנטו) אינו משימה מתוזמנת** מאז 2026-11-26: האפליקציה בונה אותו בעצמה כשהשרת עולה ומיד אחרי כל שמירה במסך
-שעות עבודה, ומחשבת מחדש את הנטו של העבר באותו רגע (`src/app/lib/metrics/ledger/calendar-sync.ts`, job `rebuild-work-calendar`).
-`8-register-tasks.ps1` מסיר את המשימות הישנות `rebuild-work-calendar` / `metrics-selfcheck` אם נרשמו. נקודות הקצה
-`/api/cron/rebuild-work-calendar` ו־`/api/cron/metrics-selfcheck` נשארו ככלי ידני.
-הסבר מלא ובדיקות לפרודקשן: [dashboard-times.md](../features/dashboard-times.md).
+`deploy/app-server/scripts/8-register-tasks.ps1` רק **מסיר** משימות `testingsite-*` שגרסאות קודמות רשמו (קובצי ה־`.bat` שלהן
+נמחקו). נקודות הקצה `/api/cron/release-stale-tests`, `/api/cron/rebuild-work-calendar` ו־`/api/cron/metrics-selfcheck`
+נשארו ככלי ידני (עם `x-cron-secret`). הסבר מלא על הנטו ובדיקות לפרודקשן: [dashboard-times.md](../features/dashboard-times.md).
 
 ## בריאות
 

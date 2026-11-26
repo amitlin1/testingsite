@@ -52,7 +52,8 @@ export const NAME_TAKEN = "NAME_TAKEN";
 
 /**
  * stale_after_minutes = minutes an item may sit in test / in research on a station of this type with
- * no result before /api/cron/release-stale-tests reverts it; 0 = never auto-release. A typed value:
+ * no result before the app's abandoned-test release (lib/jobs/release-stale-tests.ts) reverts it;
+ * 0 = never auto-release. A typed value:
  * undefined when blank, null when it is not a whole number >= 0.
  */
 export function readStaleAfterMinutes(raw: unknown): number | null | undefined {
