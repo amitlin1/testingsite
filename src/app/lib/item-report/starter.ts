@@ -15,7 +15,7 @@
  */
 import type { Data } from "@measured/puck";
 import { DEFAULT_ROOT_PROPS } from "./document";
-import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, EXTERNAL_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 
 type Block = { type: string; props: Record<string, unknown> };
 
@@ -92,9 +92,31 @@ function blocks(prefix: string) {
         width: "full",
       },
     }),
-    /** The closing signature, then the approver's final one. */
+    /** The external approver's row (`external`): printed only on a report they approved, in place of
+     *  the final one. No employee number — they are not a user. The role cell prints its text
+     *  ("גורם חיצוני") with the role / body they wrote under it. */
+    externalSignature: (): Block => ({
+      type: "Signature",
+      props: {
+        id: id("Signature"),
+        bind: EXTERNAL_SIGNATURE_BIND,
+        cells: [
+          { kind: "role", label: "תפקיד / גוף", text: "גורם חיצוני", weight: 1 },
+          { kind: "fullName", label: "שם ושם משפחה", text: "", weight: 1 },
+          { kind: "date", label: "תאריך", text: "", weight: 1 },
+          { kind: "signature", label: "חתימה", text: "", weight: 1 },
+        ],
+        width: "full",
+      },
+    }),
+    /** The closing signature, the approver's final one, and the external approver's that may stand
+     *  for it. */
     signatures(): Block[] {
-      return [this.signature(CLOSING_SIGNATURE_BIND, "בודק", "role"), this.signature(FINAL_SIGNATURE_BIND, "מאשר סופי")];
+      return [
+        this.signature(CLOSING_SIGNATURE_BIND, "בודק", "role"),
+        this.signature(FINAL_SIGNATURE_BIND, "מאשר סופי"),
+        this.externalSignature(),
+      ];
     },
   };
 }

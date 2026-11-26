@@ -19,7 +19,7 @@ import { ATTR_LABELS, SIGNER_ATTRS, puckConfig } from "@/app/lib/item-report/puc
 import type { PdfComponentProps, TableProps } from "@/app/lib/item-report/puck-config";
 import { CLASSIFICATION_OPTIONS, type RootProps } from "@/app/lib/item-report/document";
 import { REPORT_FONTS, type ReportFont } from "@/app/lib/item-report/fonts";
-import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "@/app/lib/item-report/types";
+import { CLOSING_SIGNATURE_BIND, EXTERNAL_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "@/app/lib/item-report/types";
 import type { ReportStepRef, ReportVar, SignCell } from "@/app/lib/item-report/types";
 import type { RichValue } from "@/app/lib/item-report/rich";
 import { RichTextField } from "./RichTextField";
@@ -316,6 +316,7 @@ export function buildEditorConfig(opts: { vars: ReportVar[]; steps: ReportStepRe
           [
             { value: CLOSING_SIGNATURE_BIND, label: "החותם בסגירת המארז (חתימה ידנית)" },
             { value: FINAL_SIGNATURE_BIND, label: "מאשר הדוח · חתימה סופית (חתימה ידנית, נועלת את הדוח)" },
+            { value: EXTERNAL_SIGNATURE_BIND, label: "גורם חיצוני · מאשר דוח לא תקין (מודפס רק כשאושר, במקום החתימה הסופית)" },
             ...steps.map((s) => ({ value: `step:${s.uid}`, label: `העובד · ${s.label}`, group: s.group })),
           ],
           "בחר/י חותם…",

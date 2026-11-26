@@ -14,6 +14,9 @@ export type ReportState =
 export interface ReportStatus {
   state: ReportState;
   finished: boolean;
+  /** Its overall verdict is "לא תקין" — read only while it waits for the final signature (false
+   *  otherwise): an external approval may then stand for that signature. */
+  failed: boolean;
   /** The template asks for the approver's final signature (it locks the report). */
   needsSignature: boolean;
   /** The final signature: who gave it, when. */
@@ -24,7 +27,25 @@ export interface ReportStatus {
   /** The closing signature: who gave it, when. */
   closingSignedBy: string | null;
   closingSignedAt: string | null;
+  /** An external approval (it stands for the final signature): who approved, their role / body,
+   *  when, and the manager who showed them the report. */
+  externalApprovedBy: string | null;
+  externalApprovedRole: string | null;
+  externalApprovedAt: string | null;
+  externalPresentedBy: string | null;
   version: number;
+}
+
+/** The item page offers "אישור גורם חיצוני": the report came out "לא תקין" and waits for the final
+ *  signature (a manager's — the same people). */
+export function externalApprovalOpen(s: ReportStatus): boolean {
+  return s.state === "awaiting_signature" && s.failed;
+}
+
+/** The external approval waits for the closing signature (the template asks for it and it was not
+ *  given): it comes first — the approval locks the report, and the closing spot would stay blank. */
+export function closingBlocksExternalApproval(s: ReportStatus): boolean {
+  return s.needsClosingSignature && !s.closingSignedBy;
 }
 
 /** GET /api/item-reports/[itemId]/status */
@@ -36,9 +57,15 @@ export interface ReportStatusResponse extends ReportStatus {
 }
 
 /** The item page: the report waits for its final signature and its closing one was never given —
- *  it can still be, after the fact. */
+ *  it can still be, after the fact. Also on a report an external approval locked without it (given
+ *  before the closing one was required first): it is added and the report frozen again. */
 export function closingMissingOnItemPage(s: ReportStatus): boolean {
-  return s.state === "awaiting_signature" && s.needsClosingSignature && !s.closingSignedBy;
+  return (s.state === "awaiting_signature" && s.needsClosingSignature && !s.closingSignedBy) || closingMissingAfterExternal(s);
+}
+
+/** An external approval locked the report while its closing signature was missing. */
+export function closingMissingAfterExternal(s: ReportStatus): boolean {
+  return s.state === "final" && !!s.externalApprovedBy && s.needsClosingSignature && !s.closingSignedBy;
 }
 
 /** The kit's closing: the report asks for the closing signature and is neither signed at the

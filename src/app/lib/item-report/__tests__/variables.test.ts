@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildCatalog, buildStepResults, buildValues, formatFieldValue, overallVerdict, rowStepUid,
+  EXTERNAL_APPROVAL_KEY, EXTERNALLY_APPROVED_VERDICT, failedStepRows,
 } from "../variables";
 import type { CatalogRoute, ItemFacts, ResultRow } from "../variables";
 import { headerLogos, requiresClosingSignature, requiresFinalSignature } from "../template-utils";
@@ -89,6 +90,35 @@ test("buildStepResults: latest row per step, route order, research and foreign r
   assert.equal(values["field.s_kit00001.f_w0000001"], "2 kg");
   assert.equal(values["field.s_kit00001.f_w0000001.status"], "לא תקין");
   assert.equal(values["field.s_kit00001.f_w0000001.note"], "כבד");
+});
+
+test("external approval: failedStepRows picks the latest failed rows; a passed-by-approval step prints תקין * and so do its failed fields", () => {
+  const failing = { fields: { f_cap00001: { t: "number", label: "קיבולת", value: 71, unit: "%", in_range: false } }, verdict: { ok: "fail" } };
+  const rows: ResultRow[] = [
+    row({ test_result_id: 1, route_step: 1, passed: false, created_at: "2026-10-01T08:00:00.000Z" }),
+    row({ test_result_id: 2, route_step: 1, passed: true, created_at: "2026-10-01T09:00:00.000Z" }), // re-run: passed
+    row({ test_result_id: 3, route_step: 2, passed: false, details: failing }),
+    row({ test_result_id: 4, route_step: 3, passed: true }),
+  ];
+  assert.deepEqual(failedStepRows(rows, ROUTE).map((r) => r.test_result_id), [3], "only the latest row of a step that still fails");
+
+  // What approveExternal leaves on that row.
+  const approved = rows.map((r) =>
+    r.test_result_id === 3
+      ? { ...r, passed: true, details: { ...failing, verdict: { ok: "pass" }, [EXTERNAL_APPROVAL_KEY]: { name: "משה ברק" } } }
+      : r,
+  );
+  assert.deepEqual(failedStepRows(approved, ROUTE), []);
+  const res = buildStepResults(approved, ROUTE, fmt);
+  assert.equal(res[1]!.verdict, "pass");
+  assert.equal(res[1]!.externallyApproved, true);
+  assert.deepEqual(res[1]!.fields, [{ id: "f_cap00001", label: "קיבולת", value: "71 %", tone: "pass", approved: true }], "the value stays, the mark passes");
+  assert.equal(res[0]!.externallyApproved, undefined);
+  const values = buildValues({ item: ITEM, results: res, finished: true }, { generatedAt: new Date(), signature: null, closingSignature: null });
+  assert.equal(values["item.verdict"], EXTERNALLY_APPROVED_VERDICT);
+  assert.equal(values["field.s_bbbbbbbb.f_cap00001.status"], "תקין *");
+  const plain = buildValues({ item: ITEM, results: buildStepResults(rows.filter((r) => r.test_result_id !== 3), ROUTE, fmt), finished: true }, { generatedAt: new Date(), signature: null, closingSignature: null });
+  assert.equal(plain["item.verdict"], "תקין", "no approval → the plain word");
 });
 
 test("buildStepResults: legacy popups' photos and weight become fields", () => {
@@ -222,6 +252,6 @@ test("generalStarterTemplate: binds only what every route has, prints each stati
   assert.equal(requiresFinalSignature(t), true);
   assert.equal(requiresClosingSignature(t), true);
   const sigs = t.content.filter((n) => n.type === "Signature");
-  assert.deepEqual(sigs.map((n) => n.props.bind), ["closing", "final"], "the closing row, then the final one");
+  assert.deepEqual(sigs.map((n) => n.props.bind), ["closing", "final", "external"], "the closing row, the final one, then the external approver's");
   assert.equal(templateUsesPhotos(t), true);
 });

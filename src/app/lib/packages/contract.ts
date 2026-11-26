@@ -63,6 +63,9 @@ export type PackageItemView = {
   prev_step_desc: string | null;
   /** That step is package-level (the box's opening): an item can't go back to it. */
   prev_step_package_level: boolean;
+  /** A closed box's item whose report waits: "external" — it came out "לא תקין" and waits for an
+   *  external approval; "sign" — for the approver's final signature; null otherwise. */
+  report_waits: "external" | "sign" | null;
   /** Closing decision recorded on the box for this item, when any. */
   pack_decision: "packed" | "packed_anyway" | "missing" | null;
   pack_note: string | null;
@@ -105,6 +108,9 @@ export type PackageView = {
   /** A closed box: how many of its items' reports wait for the approver's final signature
    *  (item-report "awaiting_signature"). 0 on a box not closed yet. */
   awaiting_final_signature: number;
+  /** Of those, how many came out "לא תקין" — an external approver may pass them (the list's
+   *  "ממתינים לאישור גורם חיצוני"). */
+  awaiting_external_approval: number;
   /** Items that keep the box out of the closing queue, with where they are. */
   blocked_by: { item_id: string; package_seq: number | null; item_type_desc: string; station_name: string | null }[];
   template_snapshot: unknown;

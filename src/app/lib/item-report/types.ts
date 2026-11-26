@@ -56,6 +56,9 @@ export interface ReportFieldResult {
   note?: string;
   /** Photo fields: MinIO object keys (resolved through meta.photos). */
   photos?: string[];
+  /** It was "לא תקין" and an external approver passed its step (ReportStepResult.externallyApproved):
+   *  the tone prints "תקין", marked "*". */
+  approved?: boolean;
 }
 
 /** The result of one station step the item passed. */
@@ -78,7 +81,13 @@ export interface ReportStepResult {
   result: number | null;
   comments: string;
   fields: ReportFieldResult[];
+  /** The step failed and an external approver passed it (test_results.details.external_approval):
+   *  its verdict prints "תקין *", with a footnote under the table. */
+  externallyApproved?: boolean;
 }
+
+/** The footnote under a table whose rows carry the external approval's "*" (printed before it). */
+export const EXTERNAL_APPROVAL_FOOTNOTE = "נמצא לא תקין בבדיקה, ואושר כתקין ע״י גורם חיצוני.";
 
 /** One time the item was sent back to the test before ("חזרה לבדיקה הקודמת"): who sent it back,
  *  when, from which step to which, and why. */
@@ -130,8 +139,13 @@ export interface ReportSignerInfo {
   date: string;
   station?: string;
   /** "בודק" / "מנהל" — the closing signer's role, kept with the signature. "" for a closing
-   *  signature given before roles were kept (the cell then prints its own text). */
+   *  signature given before roles were kept (the cell then prints its own text). The external
+   *  approver's role / body ("נציג היצרן"), "" when they gave none. */
   role?: string;
+  /** The external approver's reason, printed under their row. */
+  note?: string;
+  /** The external approval: the manager who showed them the report. */
+  presentedBy?: string;
 }
 
 export interface ReportRenderMeta {
@@ -170,3 +184,9 @@ export const FINAL_SIGNATURE_BIND = "final";
 /** The bind of the hand-drawn signature given at the kit's closing (popup-templates `report_sign`),
  *  before "סגור מארז". It does not lock the report: the final signature does. */
 export const CLOSING_SIGNATURE_BIND = "closing";
+
+/** The bind of an external approver's signature: someone outside the system who examined an item
+ *  whose report came out "לא תקין" and passed it, signing on a manager's screen. It stands for the
+ *  final signature — it locks the report — and its row prints only when it was given (the final
+ *  row then does not). */
+export const EXTERNAL_SIGNATURE_BIND = "external";

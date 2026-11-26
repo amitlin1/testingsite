@@ -22,11 +22,13 @@ const OFF = "var(--color-hairline)";
 const ICON = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 
 /** The list's tabs, in the order of the process: not taken in → in testing → at the closing (its
- *  signature and "סגור מארז") → closed, reports waiting for the approver → ready to leave. */
-export type Stage = "pending" | "test" | "close" | "sign" | "done";
+ *  signature and "סגור מארז") → closed, reports waiting for the approver — or, those that came out
+ *  "לא תקין", for an external approver → ready to leave. A box with both kinds waits for the external
+ *  approval first (its approval locks those reports; the approver signs the rest). */
+export type Stage = "pending" | "test" | "close" | "sign" | "external" | "done";
 export function stageOf(p: PackageView): Stage {
   if (p.status === "pending") return "pending";
-  if (p.status === "done") return p.awaiting_final_signature > 0 ? "sign" : "done";
+  if (p.status === "done") return p.awaiting_external_approval > 0 ? "external" : p.awaiting_final_signature > 0 ? "sign" : "done";
   // Waiting for the closing, or being closed right now (in test at the route's last step).
   if (p.status === "readyClose" || (p.status === "test" && p.route_length > 1 && p.current_route_step === p.route_length)) return "close";
   return "test";
@@ -58,9 +60,17 @@ function pkgNote(p: PackageView): { text: string; warn: boolean } {
   if (p.status === "pending") return { text: "ממתין לסריקה בקליטה", warn: false };
   if (p.status === "done") {
     const closed = p.closed_at ? `נסגר ${fmtDate(p.closed_at)}` : "נסגר";
-    return p.awaiting_final_signature > 0
-      ? { text: `${closed} · ${p.awaiting_final_signature} דוחות ממתינים לחתימת מאשר`, warn: true }
-      : { text: closed, warn: false };
+    if (p.awaiting_final_signature === 0) return { text: closed, warn: false };
+    // Which items, by their number in the box — not only how many.
+    const seqs = (w: Item["report_waits"]) => p.items.filter((it) => it.report_waits === w).map((it) => seq2(it.package_seq));
+    const external = seqs("external");
+    const sign = seqs("sign");
+    const parts = [
+      external.length === 1 ? `פריט ${external[0]} לא תקין · ממתין לאישור גורם חיצוני`
+        : external.length > 1 ? `פריטים ${external.join(", ")} לא תקינים · ממתינים לאישור גורם חיצוני` : "",
+      sign.length > 0 ? `${sign.length === 1 ? `פריט ${sign[0]}` : `פריטים ${sign.join(", ")}`} ממתינים לחתימת מאשר` : "",
+    ].filter(Boolean);
+    return { text: [closed, ...parts].join(" · "), warn: true };
   }
   if (p.status === "waitItems" && p.blocked_by.length > 0) {
     return { text: `${p.blocked_by.length} פריטים עוד לא הגיעו לסגירה`, warn: true };
@@ -96,6 +106,13 @@ function itemStepText(it: Item): { n: string; where: string } {
 
 const chipBg = (s: Item["state"]) =>
   s === "done" ? "var(--color-success-bg)" : s === "missing" ? "var(--color-danger-bg)" : s === "test" ? "var(--color-primary-soft)" : s === "queue" ? "var(--color-warning-bg)" : "var(--color-canvas-parchment)";
+
+/** What a closed box's item's report waits for, in the item's row: its pill, its square's colour in the
+ *  box row, and the chip behind its number. */
+const REPORT_WAITS: Record<NonNullable<Item["report_waits"]>, { label: string; dot: string; chip: string; title: string }> = {
+  external: { label: "לא תקין · ממתין לאישור גורם חיצוני", dot: RED, chip: "var(--color-danger-bg)", title: "הדוח יצא לא תקין, ממתין לאישור גורם חיצוני" },
+  sign: { label: "ממתין לחתימת מאשר", dot: AMBER, chip: "var(--color-warning-bg)", title: "הדוח ממתין לחתימת מאשר" },
+};
 
 function Segments({ colors, labels }: { colors: string[]; labels?: string }) {
   if (colors.length === 0) return <div className="pb-segs" aria-hidden><span className="pb-seg" /></div>;
@@ -218,10 +235,11 @@ function ItemLine({ pkg, it, hit, canEdit, onEdit, onBarcode }: {
 }) {
   const st = ITEM_STATES[it.state];
   const step = itemStepText(it);
+  const waits = it.report_waits ? REPORT_WAITS[it.report_waits] : null;
   return (
     <div className={`pb-irow${hit ? " pb-irow--hit" : ""}`} aria-current={hit ? "true" : undefined}>
       <div className="pb-igrid">
-        <span className="pb-seq" style={{ background: chipBg(it.state) }}>{seq2(it.package_seq)}</span>
+        <span className="pb-seq" style={{ background: waits ? waits.chip : chipBg(it.state) }}>{seq2(it.package_seq)}</span>
         <div style={{ minWidth: 0 }}>
           <div className="pb-cell-main">{it.item_type_desc}</div>
           <div className="pb-cell-sub"><IdText id={it.item_id} size={12} /></div>
@@ -232,8 +250,14 @@ function ItemLine({ pkg, it, hit, canEdit, onEdit, onBarcode }: {
         <div style={{ minWidth: 0 }}>
           <Segments colors={itemSegments(it)} labels={`${step.n} · ${step.where}`} />
           <div className="pb-step"><span className="pb-step-n">{step.n}</span> · {step.where}</div>
+          {waits ? (
+            // Straight to the item page, where its report is approved / signed.
+            <NextLink href={itemHistoryHref(it.item_id)} className="pb-report-link" title={waits.title}>
+              {it.report_waits === "external" ? "לאישור גורם חיצוני בדף הפריט ←" : "לחתימה בדף הפריט ←"}
+            </NextLink>
+          ) : null}
         </div>
-        <div><DotPill label={st.label} dot={st.color} /></div>
+        <div>{waits ? <DotPill label={waits.label} dot={waits.dot} /> : <DotPill label={st.label} dot={st.color} />}</div>
         <div className="pb-actions">
           {canEdit && <button type="button" className="pkg-iconbtn" title="עריכת פריט" aria-label={`עריכת פריט ${seq2(it.package_seq)}`} onClick={onEdit}><Pencil {...ICON} /></button>}
           {!pkg.shipment_is_sent && itemAtStation(it) && <TestingLink id={it.item_id} label="למסך הבדיקות, מסונן לפריט" />}
@@ -354,13 +378,20 @@ export default function PackageRow({ pkg, expanded, onToggle, hit, hitItems, ite
           <div className="pb-cell-sub">{pkg.customer_name ?? pkg.customer_code ?? "—"} · <bdi dir="ltr">{pkg.shipment_code ?? "—"}</bdi></div>
         </div>
         <div>
-          <MiniItems width={12} height={12} items={pkg.items.map((it) => ({ color: ITEM_STATES[it.state].color, title: `${seq2(it.package_seq)} · ${it.item_type_desc} · ${it.state_label}` }))} />
+          <MiniItems width={12} height={12} items={pkg.items.map((it) => {
+            const waits = it.report_waits ? REPORT_WAITS[it.report_waits] : null;
+            return {
+              color: waits ? waits.dot : ITEM_STATES[it.state].color,
+              title: `${seq2(it.package_seq)} · ${it.item_type_desc} · ${waits ? waits.title : it.state_label}`,
+            };
+          })} />
           <div className="pb-cell-sub" style={{ marginTop: 5 }}>{pkg.finished_count}/{pkg.items.length} סיימו</div>
         </div>
         <div style={{ minWidth: 0 }}>
           <Segments colors={pkgSegments(pkg)} labels={`${step.n} · ${step.where}`} />
           <div className="pb-step"><span className="pb-step-n">{step.n}</span> · <span style={{ fontWeight: 600 }}>{step.where}</span></div>
-          <div className="pb-cell-sub" style={{ color: note.warn ? "var(--color-warning-ink)" : undefined }}>{note.text}</div>
+          {/* A warning wraps instead of being cut: it names the items to act on. */}
+          <div className="pb-cell-sub" title={note.text} style={note.warn ? { color: "var(--color-warning-ink)", whiteSpace: "normal" } : undefined}>{note.text}</div>
         </div>
         <div>
           <DotPill label={readOnly ? "יצא במשלוח" : st.label} dot={readOnly ? "var(--color-ink-muted-48)" : st.dot} />

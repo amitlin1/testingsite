@@ -20,7 +20,7 @@ const item = (id: string, seq: number, over: Partial<PackageItemView> = {}): Pac
   item_id: id, package_seq: seq, item_type_id: 5, item_type_desc: "מחשב", serial_no: null, makat: null, model: null,
   manufacturer_name: null, manufacturer_no: null, current_status: 2, current_route_step: 1, route_length: 3, step_desc: null,
   is_finished: false, state: "waiting" as PackageItemView["state"], state_label: "", station_name: null, arrived_at_closing: false,
-  prev_step_desc: null, prev_step_package_level: false, pack_decision: null, pack_note: null, ...over,
+  prev_step_desc: null, prev_step_package_level: false, report_waits: null, pack_decision: null, pack_note: null, ...over,
 });
 
 // ---- the per-item results ----------------------------------------------------------------------

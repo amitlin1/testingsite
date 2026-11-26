@@ -510,6 +510,22 @@ model item_reports {
   closing_signed_at            DateTime? @db.Timestamptz(6)
   /// item_routes.finished_at the closing signature was given for.
   closing_signed_finished_at   DateTime? @db.Timestamp(6)
+  /// An external approver's signature on a report that came out "לא תקין": someone outside the
+  /// system (not a user) examined the item and passed it, signing on a manager's screen. It stands
+  /// for the final signature (it locks the report); the failed steps were passed with it
+  /// (test_results.details.external_approval).
+  external_signature_key       String?   @db.VarChar(1024)
+  /// The approver's name and role / body as they wrote them.
+  external_signed_by_name      String?   @db.Text
+  external_signed_by_role      String?   @db.Text
+  /// Their reason, optional.
+  external_note                String?   @db.Text
+  /// The manager who showed them the report (the signed-in user).
+  external_presented_by        String?   @db.VarChar(255)
+  external_presented_by_name   String?   @db.Text
+  external_signed_at           DateTime? @db.Timestamptz(6)
+  /// item_routes.finished_at the approval was given for.
+  external_signed_finished_at  DateTime? @db.Timestamp(6)
 }
 
 /// Immutable history of published field configs, one row per (route, version).

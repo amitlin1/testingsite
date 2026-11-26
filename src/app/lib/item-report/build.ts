@@ -15,14 +15,14 @@ import { renderTemplateBody } from "./render-react";
 import { CLASSIFICATION_OPTIONS, isBundledLogo, pageChrome, rootPropsOf, type PageLine, type RootProps } from "./document";
 import { headerLogos, requiresClosingSignature, templateUsesPhotos } from "./template-utils";
 import { buildStepResults, buildValues, sampleValues, type GivenSignature } from "./variables";
-import { CLOSING_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
+import { CLOSING_SIGNATURE_BIND, EXTERNAL_SIGNATURE_BIND, FINAL_SIGNATURE_BIND } from "./types";
 import type { ReportRenderMeta, ReportSignerInfo, ReportStepResult, ReportVar } from "./types";
 import type { ReportSource } from "./source";
 
 /** A given signature: its drawing in MinIO, who signed (name, number), when, and — a closing one — the
  *  signer's "בודק" / "מנהל" ("" when not kept: the final one, or a closing signature from before roles
  *  were kept). */
-export type Signature = (GivenSignature & { key: string; number: string }) | null;
+export type Signature = (GivenSignature & { key: string; number: string; note?: string; presentedBy?: string }) | null;
 
 type BuiltReport = {
   html: string;
@@ -105,7 +105,14 @@ export async function buildReportHtml(
   };
 }
 
-type ReportOpts = { draft: boolean; signature: Signature; closingSignature?: Signature; values?: Record<string, string> };
+type ReportOpts = {
+  draft: boolean;
+  signature: Signature;
+  closingSignature?: Signature;
+  /** An external approver's signature: it stands for the final one. */
+  externalSignature?: Signature;
+  values?: Record<string, string>;
+};
 
 /** The report's body, rendered — what buildReportHtml wraps, and what a kit's combined report joins. */
 export async function buildReportBody(src: ReportSource, opts: ReportOpts): Promise<ReportBody> {
@@ -113,9 +120,10 @@ export async function buildReportBody(src: ReportSource, opts: ReportOpts): Prom
   const results = stepResultsOf(src);
   const sig = opts.signature;
   const closingSig = opts.closingSignature ?? null;
+  const externalSig = opts.externalSignature ?? null;
   const values = opts.values ?? buildValues(
     { item: src.item, results, finished: src.item.finished_at != null },
-    { generatedAt: new Date(), signature: sig, closingSignature: closingSig },
+    { generatedAt: new Date(), signature: sig, closingSignature: closingSig, externalSignature: externalSig },
   );
 
   // Photos: only when the template prints them, each made small for the PDF (photos.ts).
@@ -127,19 +135,22 @@ export async function buildReportBody(src: ReportSource, opts: ReportOpts): Prom
 
   const signatures: Record<string, string> = {};
   const signerMeta: Record<string, ReportSignerInfo> = {};
-  for (const [bind, s] of [[FINAL_SIGNATURE_BIND, sig], [CLOSING_SIGNATURE_BIND, closingSig]] as const) {
+  for (const [bind, s] of [[FINAL_SIGNATURE_BIND, sig], [CLOSING_SIGNATURE_BIND, closingSig], [EXTERNAL_SIGNATURE_BIND, externalSig]] as const) {
     if (!s) continue;
     const url = await objectDataUrl(s.key);
     if (url) signatures[bind] = url;
-    signerMeta[bind] = { fullName: s.name, number: s.number, date: formatDocDate(s.at), role: s.role ?? "" };
+    signerMeta[bind] = {
+      fullName: s.name, number: s.number, date: formatDocDate(s.at), role: s.role ?? "",
+      ...(s.note ? { note: s.note } : {}), ...(s.presentedBy ? { presentedBy: s.presentedBy } : {}),
+    };
   }
   // The spot a draft waits for: the closing's while the item is still on its route (the closing
-  // signs it), else the final one.
+  // signs it), else the final one (unless an external approval stands for it).
   const highlightBind = !opts.draft
     ? undefined
     : src.item.finished_at == null && !closingSig && requiresClosingSignature(template)
       ? CLOSING_SIGNATURE_BIND
-      : !sig ? FINAL_SIGNATURE_BIND : undefined;
+      : !sig && !externalSig ? FINAL_SIGNATURE_BIND : undefined;
   for (const r of results) {
     signerMeta[`step:${r.uid}`] = { fullName: r.worker, number: r.workerNumber, date: r.date, station: r.station };
   }

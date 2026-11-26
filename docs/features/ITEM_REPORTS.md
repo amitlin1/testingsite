@@ -12,7 +12,7 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 | What | Where |
 |---|---|
 | Edit the general template / a route's template | הגדרות מערכת → מסלולי בדיקה → לשונית **דוח PDF** (the general template's row leads it) |
-| Download an item's report / give its final signature / a missing closing signature | היסטוריית פריט (`/items/<id>/history`) — the buttons under the status (`ItemReportControl.tsx`) |
+| Download an item's report / give its final signature / a missing closing signature / an external approval of a failed one | היסטוריית פריט (`/items/<id>/history`) — the buttons under the status (`ItemReportControl.tsx`) |
 | A kit's combined report (every item's report in one PDF) | עמוד מארז (`/packages/<id>`) — "דוח מאוחד"; `GET /api/packages/<id>/report` (`getPackageReport` → `renderCombinedPdf`) |
 | Sign a kit's reports at its closing (the closing signature) | the closing template's "חתימה על הדוחות" step (`report_sign`) — see below |
 | Template components (shared by editor + server) | `src/app/lib/item-report/puck-config.tsx` (the print renders); the page, the document settings and what prints on every page: `document.ts` |
@@ -27,8 +27,8 @@ printed to PDF by headless Chromium, stored in MinIO and frozen once final.
 | Starter / general template | `src/app/lib/item-report/starter.ts` (`officialStarterTemplate`, `generalStarterTemplate`) |
 | Editor UI | `src/app/components/item-report/` (mounted by the routes screen's `RouteReportTab`) |
 | APIs | `src/app/api/item-reports/` |
-| DB | `report_templates`, `item_reports` (migration `20261020120000_item_reports`); `report_general_template` (`20261104120000_report_general_template`); `item_reports.closing_*` (`20261110120000_report_closing_signature`); both signatures in every template (`20261110130000_report_templates_both_signatures`); the closing signer's role (`20261119120000_report_closing_signer_role`) |
-| Production SQL | `db/upgrades/2026-10-19-item-reports/1-item-reports.sql`, `db/upgrades/2026-11-05-report-general-template/1-report-general-template.sql`, `db/upgrades/2026-11-10-report-closing-signature/1-report-closing-signature.sql` + `2-report-templates-both-signatures.sql`, `db/upgrades/2026-11-19-report-closing-role/1-report-closing-role.sql` |
+| DB | `report_templates`, `item_reports` (migration `20261020120000_item_reports`); `report_general_template` (`20261104120000_report_general_template`); `item_reports.closing_*` (`20261110120000_report_closing_signature`); both signatures in every template (`20261110130000_report_templates_both_signatures`); the closing signer's role (`20261119120000_report_closing_signer_role`); the external approval (`item_reports.external_*` + the "גורם חיצוני" row in every template, `20261126140000_report_external_approval`) |
+| Production SQL | `db/upgrades/2026-10-19-item-reports/1-item-reports.sql`, `db/upgrades/2026-11-05-report-general-template/1-report-general-template.sql`, `db/upgrades/2026-11-10-report-closing-signature/1-report-closing-signature.sql` + `2-report-templates-both-signatures.sql`, `db/upgrades/2026-11-19-report-closing-role/1-report-closing-role.sql`, `db/upgrades/2026-11-26-report-external-approval/1-report-external-approval.sql` |
 
 ## The look — an official document
 
@@ -101,6 +101,8 @@ Ticketflow's blocks (טקסט, כותרת — numbered by default, ערך ממש
     "סגור מארז" (below). It is printed but never locks the report;
   - **מאשר הדוח · חתימה סופית** (`final`) — a hand-drawn signature given on the item page once the
     route finished. It locks the report;
+  - **גורם חיצוני · מאשר דוח לא תקין** (`external`) — an external approver's signature (below). Its
+    row prints only on a report they approved, and there the final row does not;
   - a step's worker — name / number / date, no drawn signature.
 
   The closing row's role is a **"תפקיד החותם"** cell (`kind: "role"`): the signer's role when they
@@ -187,11 +189,56 @@ The packages list (`/packages`) has a tab for the closed boxes whose items wait 
 "הושלמו · ממתינים לחתימת מאשר": `PackageView.awaiting_final_signature` counts the box's items in
 the state `awaiting_signature` (`itemsAwaitingFinalSignature` in `lifecycle.ts`, the same `stateOf`
 rule as the item page, in a few queries for every closed box). A closed box with none is "ממתינים
-ליציאה".
+ליציאה". A box one of whose waiting reports came out "לא תקין" is in "הושלמו · ממתינים לאישור גורם
+חיצוני" instead (`PackageView.awaiting_external_approval`, `itemsWithFailedResults` in `lifecycle.ts` —
+the same rule as the item page's button); its row's note counts both kinds.
 
 On the item page, "חתימה סופית על הדוח" (`POST /api/item-reports/<id>/sign`, `signItemReport`):
 only `ACCESS.reportFinalSign`, once per finish — the one who signed at the closing may give it
 too. It freezes the report with both signatures on it.
+
+## An external approval of a failed report — אישור גורם חיצוני
+
+A finished item whose report came out **"לא תקין"** may be passed by someone outside the system who
+examined it (a manufacturer's representative, an outside lab…). A manager shows them the report and
+they sign on the manager's screen: "אישור גורם חיצוני" on the item page, beside "חתימה סופית על הדוח"
+(`ExternalApprovalDialog` in `ItemReportControl.tsx`; `POST /api/item-reports/<id>/approve-external`,
+`approveExternal` in `lifecycle.ts`).
+
+- **Who / when**: `ACCESS.reportFinalSign` (a manager — the same people as the final signature), while
+  the report waits for the final signature and its overall verdict is "לא תקין"
+  (`ReportStatus.failed`, read only in that state; `externalApprovalOpen` in `contract.ts`). A template
+  without the final signature is frozen at the finish, so it has no such moment and no button. A
+  template that asks for the closing signature needs it **first** (409 `CLOSING_MISSING`,
+  `closingBlocksExternalApproval`): the approval locks the report, and the closing spot would stay
+  blank. The item page shows the button disabled with "יש לחתום עליה לפני אישור הגורם החיצוני" until
+  then. On the failed report "חתימה סופית על הדוח" does not show — the approval takes its place.
+  A report an external approval already locked **without** the closing signature (approved before
+  this rule, or before the template had the row) still offers "חתימה בסגירה" on the item page
+  (`closingMissingAfterExternal`): the signature is added and the report frozen again (a new version)
+  with both. A report the final signature locked stays as it was (409 `ALREADY_FINAL`).
+- **What they write**: their name and a drawn signature (required); their role / body and a reason
+  (optional). The signed-in manager is kept as the one who showed them the report.
+- **It overwrites the failure**, in one transaction: the latest row of every failed step
+  (`failedStepRows` in `variables.ts`) gets `passed = true` and `details.verdict.ok = "pass"` — so the
+  item's history and the metrics count it as passed — and `details.external_approval` keeps who
+  approved, when, the manager, and the verdict the row had before (`previous`). The measured values
+  in the row's fields are not changed.
+- **It stands for the final signature**: kept on `item_reports.external_*` for the finish it was given
+  for (as the other signatures), the report is frozen with it, and the final signature is refused after
+  it (409 `ALREADY_SIGNED`). The packages list no longer counts the item as waiting for the approver.
+- **In the PDF**: the overall verdict prints "תקין (אושר ע״י גורם חיצוני)"; every step it passed prints
+  "✓ תקין *" — and so do the fields that failed in it (the value as measured) — with the footnote
+  "* נמצא לא תקין בבדיקה, ואושר כתקין ע״י גורם חיצוני." under the results table, the station details
+  and a step's fields table; the **"גורם חיצוני"** signature row (bind `external`: role cell "גורם
+  חיצוני" with their role / body under it, name, date, signature) with their reason and the manager's
+  name under it; the "מאשר סופי" row does not print. `report.external_signer`,
+  `report.external_signer_role` and `report.external_signed_at` print the same in text.
+- **Templates**: the starters end with the external row after the final one, and migration
+  `20261126140000_report_external_approval` added it after the final row of every template that has one.
+  It prints nothing on a report nobody approved, so a template keeps one row for both cases.
+- **Reopen**: as the other signatures, the approval counts only for the finish it was given for. The
+  passed rows stay passed (they are the record); a step run again after the reopen prints its new row.
 
 ## A kit's combined report — דוח מאוחד למארז
 
@@ -224,6 +271,7 @@ Bucket `MINIO_BUCKET`, registered in `file_objects` (the keys: `ReportKeys` in `
 - Edit templates: `manager`, `tester` (as the station fields) — `ACCESS.reportTemplate`.
 - Sign at the kit's closing: `manager`, `tester` — `ACCESS.reportClosingSign`.
 - The final signature: `manager` — `ACCESS.reportFinalSign` (whoever signed at the closing too).
+- Show a failed report to an external approver (`approve-external`): the same `ACCESS.reportFinalSign`.
   (All in `src/lib/auth/roles.ts`.)
 - Download: any signed-in user.
 
@@ -245,7 +293,7 @@ Bucket `MINIO_BUCKET`, registered in `file_objects` (the keys: `ReportKeys` in `
 
 ## Deploy
 
-1. Run `db/upgrades/2026-10-19-item-reports/1-item-reports.sql`, then `db/upgrades/2026-11-05-report-general-template/1-report-general-template.sql`, then `db/upgrades/2026-11-10-report-closing-signature/1-report-closing-signature.sql` and `2-report-templates-both-signatures.sql` (the first additive; the second adds the closing signature row to every report template — the old image keeps working with both). Then, right before the new image, `db/upgrades/2026-11-19-report-closing-role/1-report-closing-role.sql` (a column + the closing row's role cell; the old image prints that cell empty until the new one is up).
+1. Run `db/upgrades/2026-10-19-item-reports/1-item-reports.sql`, then `db/upgrades/2026-11-05-report-general-template/1-report-general-template.sql`, then `db/upgrades/2026-11-10-report-closing-signature/1-report-closing-signature.sql` and `2-report-templates-both-signatures.sql` (the first additive; the second adds the closing signature row to every report template — the old image keeps working with both). Then, right before the new image, `db/upgrades/2026-11-19-report-closing-role/1-report-closing-role.sql` (a column + the closing row's role cell; the old image prints that cell empty until the new one is up). Then, also right before the new image, `db/upgrades/2026-11-26-report-external-approval/1-report-external-approval.sql` (the `external_*` columns + the "גורם חיצוני" row after the final row of every template; the old image prints that row as an empty signature row until the new one is up).
 2. Build the image — the Dockerfile now installs Chromium in the runner stage
    (`PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`).
 3. The new npm dependency `@measured/puck@0.20.2` must be in the offline npm cache

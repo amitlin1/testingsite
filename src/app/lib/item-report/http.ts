@@ -8,7 +8,7 @@ import { ACCESS, ROLE_LABEL } from "@/lib/auth/roles";
 import { decodeImageDataUrl } from "@/lib/data-url";
 import { errorResponse } from "@/lib/http/errors";
 import { parseDbId, parseItemId, readJsonObject } from "@/lib/http/request";
-import type { Signer } from "./lifecycle";
+import type { ExternalApproval, Signer } from "./lifecycle";
 import { isTemplate } from "./template-utils";
 
 type Ctx = { session: Session };
@@ -81,6 +81,27 @@ export function signHandler(
       return errorResponse(e, "Failed to sign the report");
     }
   }, options);
+}
+
+/** The longest name / role and reason an external approver may write. */
+const EXTERNAL_TEXT_MAX = 200;
+const EXTERNAL_NOTE_MAX = 2000;
+
+/** An external approval's body { name, role?, note?, signature } — the approval and the PNG, or the
+ *  400 to answer. */
+export async function readExternalApproval(req: Request): Promise<{ approval: ExternalApproval; png: Buffer } | { error: Response }> {
+  const body = await readJsonObject(req, "name and signature are required");
+  const bad = (error: string) => ({ error: NextResponse.json({ error }, { status: 400 }) });
+  const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const name = text(body.name);
+  const role = text(body.role);
+  const note = text(body.note);
+  if (!name) return bad("name is required");
+  if (name.length > EXTERNAL_TEXT_MAX || role.length > EXTERNAL_TEXT_MAX) return bad(`name and role are at most ${EXTERNAL_TEXT_MAX} characters`);
+  if (note.length > EXTERNAL_NOTE_MAX) return bad(`note is at most ${EXTERNAL_NOTE_MAX} characters`);
+  const png = decodePngSignature(body.signature);
+  if (!png) return bad(PNG_REQUIRED);
+  return { approval: { name, role, note }, png };
 }
 
 /** A template is a Puck document; anything bigger than this is not one somebody drew. */

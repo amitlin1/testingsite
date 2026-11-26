@@ -44,6 +44,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "test", label: "בתהליך בדיקות" },
   { key: "close", label: "ממתינים לחתימה וסגירה" },
   { key: "sign", label: "הושלמו · ממתינים לחתימת מאשר" },
+  { key: "external", label: "הושלמו · ממתינים לאישור גורם חיצוני" },
   { key: "done", label: "הושלמו · ממתינים ליציאה" },
 ];
 
@@ -141,7 +142,7 @@ export default function PackagesBoard() {
   }, [base, ql, searching, url.tab, sentView]);
 
   const counts = React.useMemo(() => {
-    const c: Record<TabKey, number> = { pending: 0, test: 0, close: 0, sign: 0, done: 0, all: base.length };
+    const c: Record<TabKey, number> = { pending: 0, test: 0, close: 0, sign: 0, external: 0, done: 0, all: base.length };
     for (const p of base) c[stageOf(p)]++;
     return c;
   }, [base]);

@@ -430,7 +430,9 @@ export default function ItemHistoryPage() {
             מעקב אחר כל שלב שהפריט עבר במערכת — מי ביצע, מתי וכמה זמן ארכה כל תחנה, לאיתור היכן נוצרה התקלה.
           </p>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--space-xs)", flexShrink: 0 }}>
+        {/* marginInlineStart auto: at the far (left) edge also when it wraps under the title — a
+            wrapped line starts at the right in RTL (four report buttons do not fit beside it). */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--space-xs)", flexShrink: 0, marginInlineStart: "auto" }}>
           {/* The one status palette (item-status), as in the items table. */}
           <StatusPill label={statusLabel} tone={toneOfStatus(statusId)} />
           <span style={{ fontSize: "var(--text-small)", color: MUTED, fontVariantNumeric: "tabular-nums" }}>

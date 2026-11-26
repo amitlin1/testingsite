@@ -34,7 +34,10 @@ import { registerFileObject, markFileObjectDeleted } from "@/lib/file-registry";
 import { requiresClosingSignature, requiresFinalSignature, templateHasContent } from "./template-utils";
 import { buildReportBody, buildReportHtml, renderCombinedPdf, renderReportPdf, type Signature } from "./build";
 import { generalTemplateOnce, loadReportSource, templateOfRoute, type ReportSource } from "./source";
-import type { ReportState, ReportStatus } from "./contract";
+import { EXTERNAL_APPROVAL_KEY, failedStepRows, type ResultRow } from "./variables";
+import { isRecord } from "@/lib/json-guards";
+import { Prisma } from "@prisma/client";
+import { closingBlocksExternalApproval, closingMissingAfterExternal, type ReportState, type ReportStatus } from "./contract";
 
 async function loadReportRow(itemId: bigint) {
   return prisma.item_reports.findUnique({ where: { item_id: itemId } });
@@ -66,7 +69,8 @@ const SIGNATURES = {
       signature_key: key, signed_by: signer.username, signed_by_name: signer.name || signer.username, signed_by_number: signer.number,
       signed_at: new Date(), signed_finished_at: finishedAt,
     }),
-    signedBy: (s: ReportStatus) => s.signedBy,
+    // An external approval stands for the final signature.
+    signedBy: (s: ReportStatus) => s.signedBy ?? s.externalApprovedBy,
     asked: (s: ReportStatus) => s.needsSignature,
     alreadySigned: "The report is already signed",
     noBlock: "The template has no signature to sign",
@@ -91,11 +95,23 @@ const SIGNATURES = {
   },
 } as const;
 
-/** Both signatures of the row that are valid for the item's current finish. */
+/** The external approval of the row, when it was given for this finish: the approver as a signature
+ *  (role = their role / body), their reason and the manager who showed them the report. */
+function externalSignatureOf(row: ReportRow, finishedAt: Date | null): Signature {
+  if (!row.external_signature_key || !row.external_signed_at || !sameInstant(row.external_signed_finished_at, finishedAt)) return null;
+  return {
+    key: row.external_signature_key, name: row.external_signed_by_name ?? "", number: "", at: row.external_signed_at,
+    role: row.external_signed_by_role ?? "", note: row.external_note ?? "",
+    presentedBy: row.external_presented_by_name || row.external_presented_by || "",
+  };
+}
+
+/** Every signature of the row that is valid for the item's current finish. */
 function signaturesOf(row: ReportRow | null, finishedAt: Date | null) {
   return {
     signature: row ? SIGNATURES.final.given(row, finishedAt) : null,
     closingSignature: row ? SIGNATURES.closing.given(row, finishedAt) : null,
+    externalSignature: row ? externalSignatureOf(row, finishedAt) : null,
   };
 }
 
@@ -107,7 +123,7 @@ function stateOf(src: StateSource, row: ReportRow | null): ReportStatus {
   const hasTemplate = !!src.template && templateHasContent(src.template);
   const needsSignature = hasTemplate && requiresFinalSignature(src.template);
   const needsClosingSignature = hasTemplate && requiresClosingSignature(src.template);
-  const { signature: sig, closingSignature: closingSig } = signaturesOf(row, src.item.finished_at);
+  const { signature: sig, closingSignature: closingSig, externalSignature: externalSig } = signaturesOf(row, src.item.finished_at);
   // A copy frozen for THIS finish is the final document whatever the template
   // says now — edited (a signature block added later) or deleted.
   const frozen = isFrozenFor(row, src.item.finished_at);
@@ -117,26 +133,38 @@ function stateOf(src: StateSource, row: ReportRow | null): ReportStatus {
       ? "no_template"
       : !finished
         ? "in_progress"
-        : needsSignature && !sig
+        : needsSignature && !sig && !externalSig
           ? "awaiting_signature"
           : "final";
   return {
     state,
     finished,
+    failed: false,
     needsSignature,
     signedBy: sig?.name ?? null,
     signedAt: sig ? sig.at.toISOString() : null,
     needsClosingSignature,
     closingSignedBy: closingSig?.name ?? null,
     closingSignedAt: closingSig ? closingSig.at.toISOString() : null,
+    externalApprovedBy: externalSig?.name ?? null,
+    externalApprovedRole: externalSig?.role || null,
+    externalApprovedAt: externalSig ? externalSig.at.toISOString() : null,
+    externalPresentedBy: externalSig?.presentedBy || null,
     version: frozen ? row.version : 0,
   };
 }
 
 export async function getReportStatus(itemId: bigint): Promise<ReportStatus | null> {
-  const src = await loadReportSource(itemId, { rows: false });
-  if (!src) return null;
-  return stateOf(src, await loadReportRow(itemId));
+  const head = await loadReportSource(itemId, { rows: false });
+  if (!head) return null;
+  const status = stateOf(head, await loadReportRow(itemId));
+  // Whether it failed matters only while it waits for the final signature (an external approval
+  // may stand for it then) — the results are read only for that.
+  if (status.state === "awaiting_signature") {
+    const src = await loadReportSource(itemId);
+    status.failed = !!src?.route && failedStepRows(src.rows, src.route).length > 0;
+  }
+  return status;
 }
 
 type ReportDocument =
@@ -240,6 +268,54 @@ export async function itemsAwaitingFinalSignature(itemIds: readonly bigint[]): P
   return out;
 }
 
+/**
+ * Of these items, those whose results came out "לא תקין": the latest row of a route step failed
+ * (failedStepRows — the rule of the report's overall verdict and of an external approval). In a few
+ * queries for all of them (the packages list asks it of the items that wait for the final signature:
+ * their reports may be passed by an external approver — "ממתינים לאישור גורם חיצוני").
+ */
+export async function itemsWithFailedResults(itemIds: readonly bigint[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (itemIds.length === 0) return out;
+  const routes = await prisma.item_routes.findMany({
+    where: { item_id: { in: [...itemIds] } },
+    select: { item_id: true, item_type_id: true, route_number: true },
+  });
+  if (routes.length === 0) return out;
+  const pairs = [...new Map(routes.map((r) => [`${r.item_type_id}:${r.route_number}`, r])).values()];
+  const [testingRoutes, rows] = await Promise.all([
+    prisma.testing_routes.findMany({
+      where: { OR: pairs.map((r) => ({ item_type_id: r.item_type_id, route_number: r.route_number })) },
+      select: { item_type_id: true, route_number: true, route_steps: true, step_uids: true },
+    }),
+    prisma.$queryRaw<{ item_id: bigint; test_result_id: number; route_number: number; route_step: number; station_is_research: boolean; passed: boolean | null; details: unknown; created_at: Date }[]>`
+      SELECT tr.item_id, tr.test_result_id, tr.route_number, tr.route_step,
+             COALESCE(ts.is_research, false) AS station_is_research, tr.passed, tr.details, tr.created_at
+        FROM test_results tr
+        LEFT JOIN test_stations ts ON ts.test_station_id = tr.test_station_id
+       WHERE tr.item_id IN (${Prisma.join(routes.map((r) => r.item_id))})`,
+  ]);
+  const routeOf = new Map(testingRoutes.map((t) => [`${t.item_type_id}:${t.route_number}`, t]));
+  const rowsOf = new Map<string, ResultRow[]>();
+  for (const r of rows) {
+    const id = r.item_id.toString();
+    const list = rowsOf.get(id) ?? [];
+    list.push({
+      test_result_id: r.test_result_id, route_number: r.route_number, route_step: r.route_step,
+      station: "", station_type: "", station_is_research: r.station_is_research,
+      worker_id: null, worker_name: null, passed: r.passed, result: null, comments: null,
+      details: r.details, created_at: r.created_at.toISOString(),
+    });
+    rowsOf.set(id, list);
+  }
+  for (const r of routes) {
+    const route = routeOf.get(`${r.item_type_id}:${r.route_number}`);
+    const id = r.item_id.toString();
+    if (route && failedStepRows(rowsOf.get(id) ?? [], route).length > 0) out.add(id);
+  }
+  return out;
+}
+
 type PackageReportDocument =
   | { kind: "not_found" }
   | { kind: "not_a_package" }
@@ -338,8 +414,11 @@ async function sign(kind: SignKind, itemId: bigint, png: Buffer, signer: Signer)
   if (!status.finished) throw refuse(409, "NOT_FINISHED", "The item has not finished its route");
   if (k.signedBy(status)) throw refuse(409, "ALREADY_SIGNED", k.alreadySigned);
   if (!k.asked(status)) throw refuse(409, "NO_SIGNATURE_BLOCK", k.noBlock);
-  // Frozen for this finish (e.g. frozen before the template gained the block): it stays as it was.
-  if (status.version > 0) throw refuse(409, "ALREADY_FINAL", "The report is already final");
+  // Frozen for this finish (e.g. frozen before the template gained the block): it stays as it was —
+  // except a closing signature missing on a report an external approval locked (given before the
+  // closing one was required first): it is added, and the report frozen again with both.
+  const closingAfterExternal = kind === "closing" && closingMissingAfterExternal(status);
+  if (status.version > 0 && !closingAfterExternal) throw refuse(409, "ALREADY_FINAL", "The report is already final");
 
   const key = await storeSignature(itemId, png, signer);
   const columns = k.columns(key, signer, src.item.finished_at);
@@ -361,6 +440,92 @@ export const signItemReport = (itemId: bigint, png: Buffer, signer: Signer) => s
  * frozen with it.
  */
 export const signClosingSignature = (itemId: bigint, png: Buffer, signer: Signer) => sign("closing", itemId, png, signer);
+
+/** What an external approver writes: their name (required), their role / body and reason (optional). */
+export type ExternalApproval = { name: string; role: string; note: string };
+
+/**
+ * An external approval of a finished item whose report came out "לא תקין" (docs/features/ITEM_REPORTS.md):
+ * someone outside the system examined it and passes it, signing on the screen of the manager who
+ * shows them the report (`manager`, the signed-in user). In one transaction:
+ *   - the latest row of every failed step is passed (passed = true, details.verdict.ok = "pass"), with
+ *     details.external_approval keeping who approved and the verdict it had before;
+ *   - the approval is kept on item_reports for this finish.
+ * It stands for the final signature: the report is frozen with it → { version, passed: rows passed }.
+ * Only while the report waits for the final signature: a template without one is frozen at the finish.
+ */
+export async function approveExternal(
+  itemId: bigint,
+  png: Buffer,
+  approval: ExternalApproval,
+  manager: Signer,
+): Promise<{ version: number; passed: number }> {
+  const src = await loadReportSource(itemId);
+  if (!src) throw refuse(404, "NOT_FOUND", "Item not found");
+  const status = stateOf(src, await loadReportRow(itemId));
+  if (status.state === "no_template") throw refuse(409, "NO_TEMPLATE", "The item's route has no report template");
+  if (!status.finished) throw refuse(409, "NOT_FINISHED", "The item has not finished its route");
+  if (status.externalApprovedBy) throw refuse(409, "ALREADY_APPROVED", "The report is already approved externally");
+  if (status.signedBy) throw refuse(409, "ALREADY_SIGNED", "The report is already signed");
+  if (status.state !== "awaiting_signature") throw refuse(409, "ALREADY_FINAL", "The report is already final");
+  const failed = src.route ? failedStepRows(src.rows, src.route) : [];
+  if (failed.length === 0) throw refuse(409, "NOT_FAILED", "The report did not come out failed");
+  // The closing signature comes first: the approval locks the report, and after the lock its spot
+  // would stay blank for good.
+  if (closingBlocksExternalApproval(status)) throw refuse(409, "CLOSING_MISSING", "The closing signature must be given first");
+
+  const key = await storeSignature(itemId, png, manager);
+  const at = new Date();
+  const finishedAt = src.item.finished_at;
+  await prisma.$transaction(async (tx) => {
+    // One approval per finish: the item's route row is the lock, and what was checked above is
+    // checked again under it.
+    const [route] = await tx.$queryRaw<{ finished_at: Date | null }[]>`
+      SELECT finished_at FROM item_routes WHERE item_id = ${itemId} FOR UPDATE`;
+    const current = await tx.item_reports.findUnique({ where: { item_id: itemId } });
+    if (!sameInstant(route?.finished_at, finishedAt)) throw refuse(409, "NOT_FINISHED", "The item's route changed meanwhile");
+    if (current && externalSignatureOf(current, finishedAt)) throw refuse(409, "ALREADY_APPROVED", "The report is already approved externally");
+    if (current && (SIGNATURES.final.given(current, finishedAt) || isFrozenFor(current, finishedAt))) {
+      throw refuse(409, "ALREADY_FINAL", "The report is already final");
+    }
+    for (const r of failed) {
+      const d = isRecord(r.details) ? r.details : {};
+      const details = {
+        ...d,
+        verdict: { ...(isRecord(d.verdict) ? d.verdict : {}), ok: "pass" },
+        [EXTERNAL_APPROVAL_KEY]: {
+          at: at.toISOString(),
+          name: approval.name,
+          role: approval.role || null,
+          note: approval.note || null,
+          presented_by: manager.username,
+          presented_by_name: manager.name || null,
+          previous: { passed: r.passed, verdict: d.verdict ?? null },
+        },
+      };
+      await tx.test_results.update({
+        where: { test_result_id: r.test_result_id },
+        data: { passed: true, details: details as Prisma.InputJsonValue },
+      });
+    }
+    const columns = {
+      external_signature_key: key,
+      external_signed_by_name: approval.name,
+      external_signed_by_role: approval.role || null,
+      external_note: approval.note || null,
+      external_presented_by: manager.username,
+      external_presented_by_name: manager.name || manager.username,
+      external_signed_at: at,
+      external_signed_finished_at: finishedAt,
+    };
+    await tx.item_reports.upsert({ where: { item_id: itemId }, create: { item_id: itemId, ...columns }, update: columns });
+  });
+
+  // Frozen from the results as they are now (passed), with the approval on it.
+  const next = await loadReportRow(itemId);
+  const { version } = await freeze((await loadReportSource(itemId)) ?? src, next);
+  return { version, passed: failed.length };
+}
 
 /**
  * Sign the report at the closing with a result that has just been saved (popup-templates
