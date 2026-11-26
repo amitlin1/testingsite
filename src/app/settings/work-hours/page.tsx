@@ -58,13 +58,12 @@ function recordDateLabel(r: MonthRecord): string {
   return sm === em ? `${sd}–${ed}.${sm}` : `${sd}.${sm}–${ed}.${em}`;
 }
 
-/** The body of a GET; null (logged) for an error answer. No answer at all still throws. */
+/** The body of a GET; null for an error answer (a role without access gets 403s here). No answer at all still throws. */
 async function readOrNull<T>(url: string): Promise<T | null> {
   try {
     return await getJson<T>(url);
   } catch (e) {
     if (!(e instanceof ApiError)) throw e;
-    console.error(`work-hours: ${url} answered ${e.status}`);
     return null;
   }
 }
@@ -80,8 +79,7 @@ async function readStatic(): Promise<{
       readOrNull<DepartmentHoliday[]>("/api/settings/work-hours/holidays"),
     ]);
     return { defaults, types, holidays };
-  } catch (e) {
-    console.error("work-hours: reading the settings failed", e);
+  } catch {
     return null;
   }
 }
@@ -96,8 +94,7 @@ async function readMonth(from: string, to: string): Promise<{
       readOrNull<WorkdayOverride[]>(`/api/settings/work-hours/overrides?from=${from}&to=${to}`),
     ]);
     return { calendar, overrides };
-  } catch (e) {
-    console.error("work-hours: reading the month failed", e);
+  } catch {
     return null;
   }
 }

@@ -157,3 +157,16 @@ Each area also does its Comments sweep, and its Tests sweep last.
   e2e (scripts/e2e-packages, all 8 suites): 145/145 checks with the same outcome; 33/35 failure messages identical —
   the other 2 show /api/workers-directory requested twice instead of three times (shared React Query fetch).
   The e2e failures on both sides come from the environment (no Keycloak → workers-directory 502; demo data ≠ pkgtest).
+- **UI parity check (2026-11-25), main vs branch, dev mode, fresh identical DB clones, one server at a time.**
+  Manager: every page × 5 widths (1920/1440/1280/1100/900) + every button/tab/combobox clicked from a fresh load =
+  519 screenshots; tester and storekeeper: every page at 1440 = 51 each. Clock-dependent text masked, animations and
+  the caret off, iframes compared by content hash.
+  Result: 0 text differences, 0 differences in the set of buttons per page, 0 native dialogs / new windows that
+  differ. 387/519 manager screenshots pixel-identical (main vs itself across two runs: 346/519). The rest: ≤2/255 on
+  antialiased icon / rounded-corner edge pixels (same DOM, every computed property, same composited layers —
+  repaint timing), Next's dev-tools badge (dev only), and screens main itself varies on (clock, the random temporary
+  password). Two causes found and fixed on the branch: the inline `style` on `<body>` that the refactor had dropped
+  (restored — it changed edge-pixel rounding), and work-hours page reads that logged `console.error` on a 403 for
+  roles without access (back to silent, as on main). Two tester-role differences were a cold server finishing async
+  panels late; warm, they are pixel-identical to main.
+- Open bugs, owner decisions and every behavior difference: **docs/untangle/OWNER-LIST.md** (Hebrew).

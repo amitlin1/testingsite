@@ -31,6 +31,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         suppressHydrationWarning
         className={`${rubik.className} ${rubik.variable}`}
+        style={{
+          margin: 0,
+          minHeight: "100vh",
+          overflowX: "hidden",
+          backgroundColor: "var(--color-canvas-parchment)",
+        }}
       >
         <Providers>
           <AppShell>{children}</AppShell>
